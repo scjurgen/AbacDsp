@@ -36,6 +36,11 @@ package_add_test(AudioTests
 package_add_test(FiltersTests
         Filters/OnePoleFilter_test.cpp
 )
+
+package_add_test(NaiveGeneratorsTests
+        NaiveGenerators/NaiveGenerators_test.cpp
+)
+
 package_add_test(ParametersTests
         Parameters/LinearParameterTest.cpp
 )

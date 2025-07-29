@@ -6,7 +6,7 @@
 #include <numeric>
 #include <vector>
 
-namespace AbacadDsp
+namespace AbacDsp
 {
 
 class RmsFollower
@@ -99,8 +99,7 @@ class RmsFollower
     {
         m_currentSum -= std::accumulate(m_movingWindow.data() + m_readHead,
                                         m_movingWindow.data() + m_readHead + numSamples, static_cast<Precision>(0));
-        std::transform(buffer, buffer + numSamples, m_movingWindow.data() + m_writeHead,
-                       [](const auto value)
+        std::transform(buffer, buffer + numSamples, m_movingWindow.data() + m_writeHead, [](const auto value)
                        { return static_cast<Precision>((value * value) * static_cast<float>(sizeFactor)); });
         m_currentSum += std::accumulate(m_movingWindow.data() + m_writeHead,
                                         m_movingWindow.data() + m_writeHead + numSamples, static_cast<Precision>(0));

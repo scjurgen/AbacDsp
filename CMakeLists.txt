@@ -19,7 +19,10 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     add_compile_options(-fcolor-diagnostics)
 endif ()
 
+include_directories(src/includes)
+include_directories(3rdparty/AudioFile)
 add_executable(${PROJECT_NAME} main.cpp)
+
 add_subdirectory(3rdparty)
 option(PACKAGE_TESTS "Build the tests" ON)
 if(PACKAGE_TESTS)

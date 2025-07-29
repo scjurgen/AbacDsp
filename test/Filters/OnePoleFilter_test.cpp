@@ -7,90 +7,52 @@
 #include <array>
 #include <cmath>
 
-#include "NaiveGenerators/Sine.h"
+#include "NaiveGenerators/Generator.h"
 
-template <AbacadDsp::OnePoleFilterCharacteristic Characteristic>
+template <AbacDsp::OnePoleFilterCharacteristic Characteristic>
 void testFilterMagnitude(float sampleRate)
 {
-    //for (float cf = 50; cf <= 12800; cf *= 1.2f) // cutoff
+    for (float cf = 50; cf <= 16000; cf *= 1.2f)
     {
-        float cf = 200;
-        for (float hz = 50; hz <= 12800; hz *= 1.2f) // test frequency
+        // Allow wider max dB error at higher cutoffs,
+        // since digital/analog deviation and fast-wave settling errors both grow with cf/sampleRate.
+
+        const auto maxDt = 12 * (cf / sampleRate);
+
+        for (float hz = 50; hz <= 16000; hz *= 1.2f)
         {
-            AbacadDsp::OnePoleFilter<Characteristic, false> sut{sampleRate};
+            AbacDsp::OnePoleFilter<Characteristic, false> sut{sampleRate};
             sut.setCutoff(static_cast<float>(cf));
             std::vector<float> wave(4000);
-            SineWave sineWave{sampleRate, static_cast<float>(hz)};
+            NaiveDsp::Generator<NaiveDsp::Wave::Sine> sineWave{sampleRate, hz};
             sineWave.render(wave.begin(), wave.end());
             sut.processBlock(wave.data(), wave.data(), wave.size());
 
             // pick values from within to account for settling values
-            const auto [minV, maxV] = std::minmax_element(wave.begin() + wave.size() / 2, wave.end());
-            auto maxValue = std::max(std::abs(*minV), std::abs(*maxV));
-            auto db = std::log10(std::abs(maxValue)) * 20.0f;
-
-            auto magnitude = sut.magnitude(static_cast<float>(hz));
-            auto expectedDb = std::log10(magnitude) * 20.0;
-            auto maxDt = 3.1f;
-            // std::cout << cf << "\t" << hz << "\t" << db << "\t" << expectedDb << "\n";
+            const auto halfSize = wave.size() / 2;
+            const auto [minV, maxV] = std::minmax_element(wave.begin() + halfSize, wave.end());
+            const auto maxValue = std::max(std::abs(*minV), std::abs(*maxV));
+            const auto db = std::log10(std::abs(maxValue)) * 20.0f;
+            const auto magnitude = sut.magnitude(static_cast<float>(hz));
+            const auto expectedDb = std::log10(magnitude) * 20.0;
             EXPECT_NEAR(db, expectedDb, maxDt) << "fail with cf:" << cf << " and f:" << hz;
         }
     }
 }
 
-template <AbacadDsp::OnePoleFilterCharacteristic Characteristic>
-void find3(float sampleRate)
-{
-    float lastHz = 20;
-    float lastFdbk = 1.f;
-    for (float hz = lastHz; hz <= 24020; hz *= std::pow(2, 1.f / 12.f)) // test frequency
-    {
-        std::cout << log(hz) / log(2) << "\t";
-        for (float fdbk = lastFdbk; fdbk > 0.54; fdbk = fdbk * 0.99999f)
-        {
-            AbacadDsp::OnePoleFilter<Characteristic, false> sut{sampleRate};
-            // sut.setCutoff(static_cast<float>(cf));
-            sut.setFeedback(fdbk);
-            std::vector<float> wave(8000);
-            SineWave sineWave{sampleRate, static_cast<float>(hz)};
-            sineWave.render(wave.begin(), wave.end());
-            sut.processBlock(wave.data(), wave.data(), wave.size());
-
-            // pick values from within to account for settling values
-            const auto [minV, maxV] = std::minmax_element(wave.begin() + wave.size() / 2, wave.end());
-            auto maxValue = std::max(std::abs(*minV), std::abs(*maxV));
-            auto db = std::log10(std::abs(maxValue)) * 20.0f;
-            auto magnitude = sut.magnitude(static_cast<float>(hz));
-            if (db < -3.0)
-            {
-                std::cout << sut.feedback() << std::endl;
-                lastFdbk = fdbk;
-                break;
-            }
-            // EXPECT_NEAR(db, expectedDb, maxDt) << "fail with cf:" << cf << " and f:" << hz;
-        }
-    }
-}
-
-
 TEST(DspOnePoleFilterTest, LowPassMatchTheoreticalMagnitudes)
 {
-    testFilterMagnitude<AbacadDsp::OnePoleFilterCharacteristic::LowPass>(48000.f);
-}
-
-TEST(DspOnePoleFilterTest, HighPassCheck)
-{
-    // find3<AbacadDsp::OnePoleFilterCharacteristic::HighPass>(48000.f);
+    testFilterMagnitude<AbacDsp::OnePoleFilterCharacteristic::LowPass>(48000.f);
 }
 
 TEST(DspOnePoleFilterTest, HighPassMatchTheoreticalMagnitudes)
 {
-    testFilterMagnitude<AbacadDsp::OnePoleFilterCharacteristic::HighPass>(48000.f);
+    testFilterMagnitude<AbacDsp::OnePoleFilterCharacteristic::HighPass>(48000.f);
 }
 
 TEST(DspOnePoleFilterTest, AllPassMatchTheoreticalMagnitudes)
 {
-    testFilterMagnitude<AbacadDsp::OnePoleFilterCharacteristic::AllPass>(48000.f);
+    testFilterMagnitude<AbacDsp::OnePoleFilterCharacteristic::AllPass>(48000.f);
 }
 
 TEST(DspOnePoleFilterTest, MultiChannelLowPassMatchTheoreticalMagnitudes)
@@ -102,11 +64,11 @@ TEST(DspOnePoleFilterTest, MultiChannelLowPassMatchTheoreticalMagnitudes)
     {
         for (size_t hz = 50; hz <= 12800; hz *= 2) // test frequency
         {
-            AbacadDsp::MultiChannelOnePoleFilter<AbacadDsp::OnePoleFilterCharacteristic::LowPass, false, NumChannels>
-                sut{sampleRate};
+            AbacDsp::MultiChannelOnePoleFilter<AbacDsp::OnePoleFilterCharacteristic::LowPass, NumChannels> sut{
+                sampleRate};
             sut.setCutoff(static_cast<float>(cf));
             std::vector<float> wave(4000 * NumChannels);
-            SineWave sineWave{sampleRate, static_cast<float>(hz)};
+            NaiveDsp::Generator<NaiveDsp::Wave::Sine> sineWave{sampleRate, static_cast<float>(hz)};
             sineWave.render(wave.begin(), wave.end(), NumChannels);
             sut.processBlock(wave.data(), wave.size() / NumChannels);
 
@@ -141,8 +103,7 @@ TEST(DspOnePoleFilterTest, MultiChannelIndependence)
     float sampleRate = 48000.f;
     float cutoff = 1000.f;
 
-    AbacadDsp::MultiChannelOnePoleFilter<AbacadDsp::OnePoleFilterCharacteristic::LowPass, false, NumChannels> sut{
-        sampleRate};
+    AbacDsp::MultiChannelOnePoleFilter<AbacDsp::OnePoleFilterCharacteristic::LowPass, NumChannels> sut{sampleRate};
     sut.setCutoff(cutoff);
 
     std::vector<float> input(1000 * NumChannels, 0.0f);
