@@ -116,14 +116,18 @@ class OnePoleFilter : public OnePoleBase<OnePoleFilter<FilterCharacteristic, Cla
             float out = this->m_fdbk * in + m_v;
             m_v = in - this->m_fdbk * out;
             if constexpr (ClampValues)
+            {
                 m_v = std::clamp(m_v, -1.f, 1.f);
+            }
             return out;
         }
         if constexpr (FilterCharacteristic == OnePoleFilterCharacteristic::LowPass)
         {
             m_v = in + this->m_fdbk * (m_v - in);
             if constexpr (ClampValues)
+            {
                 m_v = std::clamp(m_v, -1.f, 1.f);
+            }
             return m_v;
         }
         if constexpr (FilterCharacteristic == OnePoleFilterCharacteristic::HighPass)
