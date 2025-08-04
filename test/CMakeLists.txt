@@ -34,11 +34,17 @@ package_add_test(AudioTests
 )
 
 package_add_test(FiltersTests
+        Filters/Biquad_test.cpp
+        Filters/LadderFilter_test.cpp
         Filters/OnePoleFilter_test.cpp
 )
 
 package_add_test(NaiveGeneratorsTests
         NaiveGenerators/NaiveGenerators_test.cpp
+)
+
+package_add_test(NumbersTests
+        Numbers/Conversions_test.cpp
 )
 
 package_add_test(ParametersTests

@@ -7,22 +7,48 @@
 
 namespace AbacDsp
 {
-
+/**
+ * @brief First-order (one-pole) filters N.B.: there are 2 slightly difference Highpass versions.
+ */
 enum class OnePoleFilterCharacteristic
 {
+    /**
+     * @brief One-pole lowpass (leaky integrator).
+     * Smooths/suppresses high frequencies; output is a classic exponential low-pass.
+     */
     LowPass,
+
+    /**
+     * @brief Canonical one-pole highpass (textbook digital HPF).
+     * Includes normalization for flat (0dB) gain at Nyquist and −3dB at cutoff.
+     * Use when accurate separation and maximum high-frequency energy are desired.
+     */
     HighPass,
-    AllPass
+
+    /**
+     * @brief Allpass: passes all frequencies with unity magnitude.
+     * Alters only phase, common for phase shaping or in delay/reverb networks.
+     */
+    AllPass,
+
+    /**
+     * @brief Leaky highpass (input minus lowpass).
+     * Computes y[n] = x[n] − lowpass(x[n]), an alternate highpass structure.
+     * Simpler, but high-frequency gain is always slightly less than 0dB; output rolls off slightly at Nyquist—unlike the canonical HighPass.
+     */
+    HighPassLeaky
 };
+
 
 template <typename Derived, OnePoleFilterCharacteristic FilterCharacteristic>
 class OnePoleBase
 {
-  public:
-    void setSampleRate(const float sr) noexcept
+public:
+    explicit OnePoleBase(const float sr)
+        : m_sampleRate(sr)
     {
-        m_sampleRate = sr;
     }
+
     void setCutoff(const float cutoff) noexcept
     {
         m_cutoff = cutoff;
@@ -70,14 +96,21 @@ class OnePoleBase
                 std::sqrt(1.0 + x * x - 2.0 * x * std::cos(2.0 * std::numbers::pi_v<double> * hz / m_sampleRate));
             return static_cast<float>(numerator / denominator);
         }
+        if constexpr (FilterCharacteristic == OnePoleFilterCharacteristic::HighPassLeaky)
+        {
+            const double fdbk = m_fdbk;
+            const double omega = 2.0 * std::numbers::pi_v<double> * hz / m_sampleRate;
+            const double numerator = 2.0 * fdbk * std::sin(omega * 0.5);
+            const double denominator = std::sqrt(1.0 + fdbk * fdbk - 2.0 * fdbk * std::cos(omega));
+            return static_cast<float>(numerator / denominator);
+        }
         if constexpr (FilterCharacteristic == OnePoleFilterCharacteristic::HighPass)
         {
-            const double x = std::exp(-2.0 * std::numbers::pi_v<double> * m_cutoff / m_sampleRate);
-            const double numerator = 1.0 - x;
-            const double denominator =
-                std::sqrt(1.0 + x * x - 2.0 * x * std::cos(2.0 * std::numbers::pi_v<double> * hz / m_sampleRate));
-            const double lowpassMag = numerator / denominator;
-            return static_cast<float>(std::sqrt(1.0 - lowpassMag * lowpassMag));
+            const double a0 = 0.5 * (1.0 + m_fdbk);
+            const double omega = 2.0 * std::numbers::pi_v<double> * hz / m_sampleRate;
+            const double numerator = 2.0 * a0 * std::sin(omega * 0.5);
+            const double denominator = std::sqrt(1.0 + m_fdbk * m_fdbk - 2.0 * m_fdbk * std::cos(omega));
+            return static_cast<float>(numerator / denominator);
         }
         if constexpr (FilterCharacteristic == OnePoleFilterCharacteristic::AllPass)
         {
@@ -91,7 +124,7 @@ class OnePoleBase
         static_cast<Derived*>(this)->resetImpl();
     }
 
-  protected:
+protected:
     float m_sampleRate{48000.0f};
     float m_cutoff{100.0f};
     float m_fdbk{0.0f};
@@ -102,11 +135,14 @@ class OnePoleBase
 template <OnePoleFilterCharacteristic FilterCharacteristic, bool ClampValues = false>
 class OnePoleFilter : public OnePoleBase<OnePoleFilter<FilterCharacteristic, ClampValues>, FilterCharacteristic>
 {
-  public:
-    explicit OnePoleFilter(const float sampleRate, const float cutoff = 100.0f) noexcept
+public:
+    explicit OnePoleFilter(float sampleRate,
+                           float cutoff = 1000.0f,
+                           float gainDb = 0.0f) noexcept(false)
+        : OnePoleBase<OnePoleFilter, FilterCharacteristic>(sampleRate)
     {
-        this->m_sampleRate = sampleRate;
         this->setCutoff(cutoff);
+        resetImpl();
     }
 
     float step(const float in) noexcept
@@ -142,6 +178,15 @@ class OnePoleFilter : public OnePoleBase<OnePoleFilter<FilterCharacteristic, Cla
             }
             return out;
         }
+        if constexpr (FilterCharacteristic == OnePoleFilterCharacteristic::HighPassLeaky)
+        {
+            m_v = in + this->m_fdbk * (m_v - in);
+            if constexpr (ClampValues)
+            {
+                m_v = std::clamp(m_v, -1.f, 1.f);
+            }
+            return in - m_v;
+        }
         return 0.0f;
     }
 
@@ -151,7 +196,10 @@ class OnePoleFilter : public OnePoleBase<OnePoleFilter<FilterCharacteristic, Cla
         {
             return;
         }
-        std::transform(inPlace, inPlace + numSamples, inPlace, [this](const float x) { return this->step(x); });
+        std::transform(inPlace, inPlace + numSamples, inPlace, [this](const float x)
+        {
+            return this->step(x);
+        });
     }
 
     void processBlock(const float* in, float* out, const size_t numSamples) noexcept
@@ -161,7 +209,10 @@ class OnePoleFilter : public OnePoleBase<OnePoleFilter<FilterCharacteristic, Cla
             std::copy_n(in, numSamples, out);
             return;
         }
-        std::transform(in, in + numSamples, out, [this](const float x) { return this->step(x); });
+        std::transform(in, in + numSamples, out, [this](const float x)
+        {
+            return this->step(x);
+        });
     }
 
     void resetImpl() noexcept
@@ -169,7 +220,7 @@ class OnePoleFilter : public OnePoleBase<OnePoleFilter<FilterCharacteristic, Cla
         m_v = 0.0f;
     }
 
-  private:
+private:
     float m_v{0.0f};
     float m_x1{0.f};
 };
@@ -180,8 +231,9 @@ template <OnePoleFilterCharacteristic FilterCharacteristic, bool ClampValues = f
 class OnePoleFilterStereo
     : public OnePoleBase<OnePoleFilterStereo<FilterCharacteristic, ClampValues>, FilterCharacteristic>
 {
-  public:
+public:
     explicit OnePoleFilterStereo(const float sampleRate, const float cutoff = 100.0f) noexcept
+        : OnePoleBase<OnePoleFilterStereo, FilterCharacteristic>(sampleRate)
     {
         this->m_sampleRate = sampleRate;
         this->setCutoff(cutoff);
@@ -257,10 +309,11 @@ class OnePoleFilterStereo
         m_x1[0] = m_x1[1] = 0.0f;
     }
 
-  private:
+private:
     std::array<float, 2> m_v{};
     std::array<float, 2> m_x1{};
 };
+
 
 // --- Arbitrary channel count version (MultiChannel) ---
 template <OnePoleFilterCharacteristic FilterCharacteristic, size_t NumChannels, bool ClampValues = false>
@@ -268,8 +321,9 @@ class MultiChannelOnePoleFilter
     : public OnePoleBase<MultiChannelOnePoleFilter<FilterCharacteristic, ClampValues, NumChannels>,
                          FilterCharacteristic>
 {
-  public:
+public:
     explicit MultiChannelOnePoleFilter(const float sampleRate, const float cutoff = 100.0f) noexcept
+        : OnePoleBase<MultiChannelOnePoleFilter, FilterCharacteristic>(sampleRate)
     {
         this->m_sampleRate = sampleRate;
         this->setCutoff(cutoff);
@@ -347,9 +401,8 @@ class MultiChannelOnePoleFilter
         m_x1.fill(0.0f);
     }
 
-  private:
+private:
     std::array<float, NumChannels> m_v{};
     std::array<float, NumChannels> m_x1{};
 };
-
 } // namespace AbacDsp
