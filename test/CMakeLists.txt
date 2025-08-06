@@ -33,6 +33,10 @@ package_add_test(AudioTests
         Audio/FixedSizeProcessorTest.cpp
 )
 
+package_add_test(DelayTests
+        Delays/TapeDelay_test.cpp
+)
+
 package_add_test(FiltersTests
         Filters/Biquad_test.cpp
         Filters/LadderFilter_test.cpp
@@ -45,6 +49,7 @@ package_add_test(NaiveGeneratorsTests
 
 package_add_test(NumbersTests
         Numbers/Conversions_test.cpp
+        Numbers/Interpolation_test.cpp
 )
 
 package_add_test(ParametersTests
