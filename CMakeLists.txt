@@ -21,14 +21,15 @@ endif ()
 
 include_directories(src/includes)
 include_directories(3rdparty/AudioFile)
+
 add_executable(${PROJECT_NAME} main.cpp)
 
 add_subdirectory(3rdparty)
+
 option(PACKAGE_TESTS "Build the tests" ON)
 if(PACKAGE_TESTS)
     enable_testing()
-
     add_subdirectory(test)
 endif()
 
-
+add_subdirectory(explore)

@@ -6,14 +6,14 @@
 
 namespace AbacDsp
 {
-template <size_t NumChannels, size_t MAXSIZE, size_t OVERSAMPLE>
+template <size_t NumChannels, size_t MAXSIZE>
     requires(NumChannels > 0 && MAXSIZE > 10)
-class TapeDelay
+class NaiveTapeDelay
 {
   public:
-    explicit TapeDelay(const float sampleRate)
+    explicit NaiveTapeDelay(const float sampleRate)
         : m_sampleRate(sampleRate)
-        , m_buffer((MAXSIZE + 6) * NumChannels * OVERSAMPLE, 0.f)
+        , m_buffer((MAXSIZE + 6) * NumChannels, 0.f)
     {
     }
 
@@ -47,20 +47,20 @@ class TapeDelay
 
     void advanceHeads()
     {
-        if (++m_headWrite >= MAXSIZE * OVERSAMPLE)
+        if (++m_headWrite >= MAXSIZE)
         {
             m_headWrite = 0;
         }
 
-        if (++m_headReadMain >= MAXSIZE * OVERSAMPLE)
+        if (++m_headReadMain >= MAXSIZE)
         {
             m_headReadMain = 0;
         }
 
         m_headRead += m_readAdvance;
-        if (m_headRead >= MAXSIZE * OVERSAMPLE)
+        if (m_headRead >= MAXSIZE)
         {
-            m_headRead -= MAXSIZE * OVERSAMPLE;
+            m_headRead -= MAXSIZE;
         }
     }
 
@@ -75,7 +75,7 @@ class TapeDelay
 
             if (m_headWrite < 6) // wrap to end of buffer for interpolation.
             {
-                const size_t padIndex = m_headWrite + MAXSIZE * OVERSAMPLE;
+                const size_t padIndex = m_headWrite + MAXSIZE;
                 m_buffer[padIndex * NumChannels + c] = m_buffer[idx];
             }
         }
@@ -90,7 +90,7 @@ class TapeDelay
     }
 
     float m_sampleRate;
-    size_t m_headWrite{MAXSIZE * OVERSAMPLE / 8};
+    size_t m_headWrite{MAXSIZE / 8};
     float m_headRead{};
     size_t m_headReadMain{};
     float m_readAdvance{1.f};

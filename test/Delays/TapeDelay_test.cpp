@@ -1,19 +1,21 @@
 #include "gtest/gtest.h"
 
 #include <cmath>
-#include "Delays/TapeDelay.h"
+#include "Delays/NaiveTapeDelay.h"
 
 TEST(TapeDelayTests, simpleVersion)
 {
-    AbacDsp::TapeDelay<2, 100> sut{48000.f};
-    std::array feed{1.f, -1.f};
+    AbacDsp::NaiveTapeDelay<2, 100> sut{48000.f};
+    constexpr std::array feedFirst{1.f, -1.f};
+    constexpr std::array feedSecond{-1.f, 1.f};
     std::array eat{0.f, 0.f};
     sut.setFeedFactor(1.f);
-    sut.setHoldFactor(1.f);
-    sut.setFeedbackFactor(1.f);
-    sut.step(feed.data(), eat.data());
+    sut.setHoldFactor(0.45f);
+    sut.setFeedbackFactor(0.45f);
+    sut.step(feedFirst.data(), eat.data());
+    sut.step(feedSecond.data(), eat.data());
     std::array feedNothing{0.f, 0.f};
-    for (size_t i = 0; i < 250; ++i)
+    for (size_t i = 0; i < 2450; ++i)
     {
         sut.step(feedNothing.data(), eat.data());
         std::cout << i << "\t" << eat[0] << "\t " << eat[1] << std::endl;
