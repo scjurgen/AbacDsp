@@ -1,0 +1,12 @@
+#pragma once
+
+#include "SincFilter.h"
+
+/*
+{{CommentSection}}
+*/
+
+ const OT::DSP::SincFilter::InitParam init_/*cycles*/_/*N*/ = {
+     /*N*/,  // increment
+     {/*FIR_Coefficients*/}
+ };

@@ -34,7 +34,9 @@ package_add_test(AudioTests
 )
 
 package_add_test(DelayTests
-        Delays/TapeDelay_test.cpp
+        Delays/NaiveTapeDelay_test.cpp
+        Delays/VariSpeedTapeDelay_test.cpp
+
 )
 
 package_add_test(FiltersTests
@@ -53,6 +55,10 @@ package_add_test(NumbersTests
 )
 
 package_add_test(ParametersTests
-        Parameters/LinearParameterTest.cpp
+        Parameters/LinearParameter_test.cpp
+)
+
+package_add_test(SamplerateTests
+        Samplerate/Samplerate_test.cpp
 )
 

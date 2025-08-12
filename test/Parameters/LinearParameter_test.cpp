@@ -3,7 +3,7 @@
 
 #include "Parameters/LinearParameter.h" // Assume this is the header file for our parameter class
 
-class LinearParameterTest : public ::testing::Test
+class LinearParameter_test : public ::testing::Test
 {
 protected:
     LinearParameter sut;
@@ -18,12 +18,12 @@ protected:
     }
 };
 
-TEST_F(LinearParameterTest, InitialValue)
+TEST_F(LinearParameter_test, InitialValue)
 {
     EXPECT_FLOAT_EQ(0.0f, sut.getValue());
 }
 
-TEST_F(LinearParameterTest, SetValue)
+TEST_F(LinearParameter_test, SetValue)
 {
     sut.setValue(50.0f);
     for (int i = 0; i < 96000; ++i)
@@ -33,7 +33,7 @@ TEST_F(LinearParameterTest, SetValue)
     EXPECT_FLOAT_EQ(50.0f, sut.getValue());
 }
 
-TEST_F(LinearParameterTest, SetValueOutOfRange)
+TEST_F(LinearParameter_test, SetValueOutOfRange)
 {
     sut.setValue(150.0f);
     for (int i = 0; i < 96000; ++i)
@@ -50,7 +50,7 @@ TEST_F(LinearParameterTest, SetValueOutOfRange)
     EXPECT_FLOAT_EQ(0.0f, sut.getValue());
 }
 
-TEST_F(LinearParameterTest, Smoothing)
+TEST_F(LinearParameter_test, Smoothing)
 {
     sut.setValue(100.0f);
     float expectedStep = 100.0f / (96000.0f * 1.0f);
@@ -61,7 +61,7 @@ TEST_F(LinearParameterTest, Smoothing)
     EXPECT_NEAR(100 * expectedStep, sut.getValue(), 0.001f);
 }
 
-TEST_F(LinearParameterTest, SmoothingWithHalf)
+TEST_F(LinearParameter_test, SmoothingWithHalf)
 {
     sut.setTransitionTime(1.f);
     sut.forceValue(99.f);
@@ -77,7 +77,7 @@ TEST_F(LinearParameterTest, SmoothingWithHalf)
     EXPECT_NEAR(100.f - 0.0005f, sut.getValue(), 0.001f);
 }
 
-TEST_F(LinearParameterTest, Moniker)
+TEST_F(LinearParameter_test, Moniker)
 {
     EXPECT_EQ("TestParam", sut.getMoniker());
 
@@ -85,7 +85,7 @@ TEST_F(LinearParameterTest, Moniker)
     EXPECT_EQ("NewMoniker", sut.getMoniker());
 }
 
-class LinearParameterTransitionTest : public LinearParameterTest, public ::testing::WithParamInterface<float>
+class LinearParameterTransitionTest : public LinearParameter_test, public ::testing::WithParamInterface<float>
 {
 };
 

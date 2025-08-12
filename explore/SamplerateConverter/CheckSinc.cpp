@@ -1,4 +1,3 @@
-
 #include "Samplerate/SrConverter.h"
 #include "AudioFile.h"
 #include "SaveAsWave.h"
@@ -22,14 +21,15 @@
 #include "Samplerate/sinc_3_128.h"
 #include "Samplerate/sinc_2_128.h"
 
-namespace AbacadDsp
+namespace AbacDsp
 {
-const std::vector<SincFilter> sincFilterSet{
-    SincFilter{init_69_768}, SincFilter{init_33_512}, SincFilter{init_21_512}, SincFilter{init_13_256},
-    SincFilter{init_11_128}, SincFilter{init_8_128},  SincFilter{init_7_128},  SincFilter{init_6_128},
-    SincFilter{init_5_128},  SincFilter{init_4_128},  SincFilter{init_3_128},  SincFilter{init_2_128},
-};
+    const std::vector<SincFilter> sincFilterSet{
+        SincFilter{init_69_768}, SincFilter{init_33_512}, SincFilter{init_21_512}, SincFilter{init_13_256},
+        SincFilter{init_11_128}, SincFilter{init_8_128}, SincFilter{init_7_128}, SincFilter{init_6_128},
+        SincFilter{init_5_128}, SincFilter{init_4_128}, SincFilter{init_3_128}, SincFilter{init_2_128},
+    };
 }
+
 #define BUFFER_LEN 512
 
 typedef struct
@@ -43,14 +43,14 @@ typedef struct
 {
     AudioCbData sf;
     int freq_point;
-    AbacadDsp::SrConverter srConverter;
+    AbacDsp::SrConverter srConverter;
 } SrConverterCbData;
 
 static SrConverterCbData dataProvider{};
 
 static long sampleRateConverterInputCb(void* cb_data, float** audio)
 {
-    AudioCbData* data = (AudioCbData*) cb_data;
+    AudioCbData* data = (AudioCbData*)cb_data;
     int readFrames = 0;
     *audio = &data->m_buffer[0];
     if (data->currentIndex >= data->audioFile.getNumSamplesPerChannel())
@@ -145,7 +145,7 @@ void Usage(const std::string& program)
                              " --ratio <ratio>"
                              " --sincindex <index>",
                              " --compare <compare.wav>", program)
-              << std::endl;
+        << std::endl;
 }
 
 
@@ -183,7 +183,7 @@ int main(int argc, char* argv[])
             try
             {
                 ratio = std::stof(argv[++i]);
-                if (ratio < 1.0f / AbacadDsp::SrConvertMaxRatio || ratio > AbacadDsp::SrConvertMaxRatio)
+                if (ratio < 1.0f / AbacDsp::SrConvertMaxRatio || ratio > AbacDsp::SrConvertMaxRatio)
                 {
                     throw std::out_of_range("Ratio out of range.");
                 }

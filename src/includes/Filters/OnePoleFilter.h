@@ -318,7 +318,7 @@ private:
 // --- Arbitrary channel count version (MultiChannel) ---
 template <OnePoleFilterCharacteristic FilterCharacteristic, size_t NumChannels, bool ClampValues = false>
 class MultiChannelOnePoleFilter
-    : public OnePoleBase<MultiChannelOnePoleFilter<FilterCharacteristic, ClampValues, NumChannels>,
+    : public OnePoleBase<MultiChannelOnePoleFilter<FilterCharacteristic, NumChannels, ClampValues>,
                          FilterCharacteristic>
 {
 public:

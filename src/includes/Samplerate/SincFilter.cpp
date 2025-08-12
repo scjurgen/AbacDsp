@@ -13,7 +13,7 @@
 #include "sinc_3_128.h"
 #include "sinc_2_128.h"
 
-namespace AbacadDsp
+namespace AbacDsp
 {
 const std::vector<SincFilter> sincFilterSet{
     SincFilter{init_69_768},

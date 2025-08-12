@@ -362,8 +362,7 @@ TEST(DspBiquadFilterTest, chebyshevFilterType1LowpassMono)
 {
     constexpr auto sampleRate{48000.0f};
 
-    AbacDsp::ChebyshevBiquad sut;
-    sut.setSampleRate(sampleRate);
+    AbacDsp::ChebyshevBiquad sut(sampleRate);
 
     for (size_t order = 1; order < 10; ++order)
     {
@@ -412,8 +411,7 @@ TEST(DspBiquadFilterTest, chebyshevFilterType1HighpassMono)
     for (size_t order = 1; order < 10; ++order)
     {
         constexpr auto sampleRate{48000.0f};
-        AbacDsp::ChebyshevBiquad sut;
-        sut.setSampleRate(sampleRate);
+        AbacDsp::ChebyshevBiquad sut(sampleRate);
         sut.computeType1(order, 1000.f, 6, false);
         std::vector<float> wave(48000, 0);
         std::vector<float> out(48000, 0);
@@ -455,8 +453,7 @@ TEST(DspBiquadFilterTest, chebyshevFilterType2LowpassMono)
     for (size_t order = 8; order < 10; ++order)
     {
         constexpr auto sampleRate{48000.0f};
-        AbacDsp::ChebyshevBiquad sut;
-        sut.setSampleRate(sampleRate);
+        AbacDsp::ChebyshevBiquad sut(sampleRate);
         sut.computeType2(order, 1000, 3, true);
 
         std::vector<float> wave(48000, 0);
@@ -500,8 +497,7 @@ TEST(DspBiquadFilterTest, chebyshevFilterType2HighpassMono)
     for (size_t order = 8; order < 10; ++order)
     {
         constexpr auto sampleRate{48000.0f};
-        AbacDsp::ChebyshevBiquad sut;
-        sut.setSampleRate(sampleRate);
+        AbacDsp::ChebyshevBiquad sut(sampleRate);
         sut.computeType2(order, 1000, 3, false);
 
 
@@ -545,8 +541,7 @@ TEST(DspBiquadFilterTest, chebyshevFilterType1LowpassStereo)
 {
     constexpr auto sampleRate{48000.0f};
 
-    AbacDsp::ChebyshevBiquad sut;
-    sut.setSampleRate(sampleRate);
+    AbacDsp::ChebyshevBiquad sut(sampleRate);
 
     for (size_t order = 1; order < 10; ++order)
     {
@@ -597,8 +592,7 @@ TEST(DspBiquadFilterTest, chebyshevFilterType1HighpassStereo)
     for (size_t order = 1; order < 10; ++order)
     {
         constexpr auto sampleRate{48000.0f};
-        AbacDsp::ChebyshevBiquad sut;
-        sut.setSampleRate(sampleRate);
+        AbacDsp::ChebyshevBiquad sut(sampleRate);
         sut.computeType1(order, 1000.f, 6, false);
         std::vector<float> wave(48000, 0);
         std::vector<float> left(48000, 0);
@@ -640,8 +634,7 @@ TEST(DspBiquadFilterTest, chebyshevFilterType2LowpassStereo)
     for (size_t order = 8; order < 10; ++order)
     {
         constexpr auto sampleRate{48000.0f};
-        AbacDsp::ChebyshevBiquad sut;
-        sut.setSampleRate(sampleRate);
+        AbacDsp::ChebyshevBiquad sut(sampleRate);
         sut.computeType2(order, 1000, 3, true);
         std::vector<float> wave(48000, 0);
         std::vector<float> left(48000, 0);
@@ -685,8 +678,7 @@ TEST(DspBiquadFilterTest, chebyshevFilterType2HighpassStereo)
     for (size_t order = 8; order < 10; ++order)
     {
         constexpr auto sampleRate{48000.0f};
-        AbacDsp::ChebyshevBiquad sut;
-        sut.setSampleRate(sampleRate);
+        AbacDsp::ChebyshevBiquad sut(sampleRate);
         sut.computeType2(order, 1000, 3, false);
         std::vector<float> wave(48000, 0);
         std::vector<float> left(48000, 0);
@@ -746,7 +738,7 @@ TEST(DspBiquadFilterTest, checkCoefficientsType1LowPass)
         {0.00090879137860611f, 0.0018175827572122f, 0.00090879137860611f, -1.9759397506714f, 0.97957491874695f},
         {0.00013712796499021f, 0.00027425592998043f, 0.00013712796499021f, -1.9768172502518f, 0.97736573219299f},
     }};
-    AbacDsp::ChebyshevBiquad sut;
+    AbacDsp::ChebyshevBiquad sut{48000.f};
     sut.computeType1(10, 1000, 3, true);
     EXPECT_EQ(sut.elements(), 5);
     for (size_t i = 0; i < sut.elements(); ++i)
@@ -770,7 +762,7 @@ TEST(DspBiquadFilterTest, checkCoefficientsType1HighPass)
         {0.93601679801941f, -1.8720335960388f, 0.93601679801941f, -1.8344408273697f, 0.90962678194046f},
         {0.67223185300827f, -1.3444637060165f, 0.67223185300827f, -1.1655949354172f, 0.52333217859268f},
     }};
-    AbacDsp::ChebyshevBiquad sut;
+    AbacDsp::ChebyshevBiquad sut(48000.f);
     sut.computeType1(10, 1000, 3, false);
     EXPECT_EQ(sut.elements(), 5);
     for (size_t i = 0; i < sut.elements(); ++i)
@@ -794,7 +786,7 @@ TEST(DspBiquadFilterTest, checkCoefficientsType2LowPass)
         {0.92060536146164f, -1.7660242319107f, 0.92060530185699f, -1.8344397544861f, 0.90962624549866f},
         {0.59890443086624f, -0.84006577730179f, 0.59890443086624f, -1.1655919551849f, 0.52333503961563f},
     }};
-    AbacDsp::ChebyshevBiquad sut;
+    AbacDsp::ChebyshevBiquad sut(48000.f);
     sut.computeType2(10, 1000, 3, true);
     EXPECT_EQ(sut.elements(), 5);
     for (size_t i = 0; i < sut.elements(); ++i)
@@ -818,7 +810,7 @@ TEST(DspBiquadFilterTest, checkCoefficientsType2HighPass)
         {0.98975425958633f, -1.9760061502457f, 0.98975425958633f, -1.9759398698807f, 0.97957497835159f},
         {0.98864996433258f, -1.9768840074539f, 0.98864978551865f, -1.9768177270889f, 0.97736620903015f},
     }};
-    AbacDsp::ChebyshevBiquad sut;
+    AbacDsp::ChebyshevBiquad sut(48000.f);
     sut.computeType2(10, 1000, 3, false);
     EXPECT_EQ(sut.elements(), 5);
     for (size_t i = 0; i < sut.elements(); ++i)
@@ -834,7 +826,7 @@ TEST(DspBiquadFilterTest, checkCoefficientsType2HighPass)
 
 TEST(DISABLED_DspBiquadFilterTest, coefficientTables)
 {
-    AbacDsp::ChebyshevBiquad sut;
+    AbacDsp::ChebyshevBiquad sut(48000.f);
     sut.computeType1(10, 1000, 3, true);
     sut.printCoefficients();
     sut.computeType1(10, 1000, 3, false);
@@ -843,4 +835,61 @@ TEST(DISABLED_DspBiquadFilterTest, coefficientTables)
     sut.printCoefficients();
     sut.computeType2(10, 1000, 3, false);
     sut.printCoefficients();
+}
+
+
+TEST(DISABLED_DspBiquadFilterTest, chebyType1LowPassTable)
+{
+    constexpr auto sampleRate{48000.0f};
+
+    AbacDsp::ChebyshevBiquad sut(sampleRate);
+
+    std::vector<float> freqs;
+    for (float hz = 1.f; hz < sampleRate / 2; hz *= pow(2.f, 1.f / 36.f))
+    {
+        freqs.push_back(hz);
+    }
+
+    const size_t numOrders = 10;
+    const size_t numFreqs = freqs.size();
+
+    std::vector results(numFreqs, std::vector<float>(numOrders));
+
+    std::vector wave(48000, 0.f);
+    std::vector out(48000, 0.f);
+    std::cout << "running " << std::endl;
+    for (size_t orderIdx = 0; orderIdx < numOrders; ++orderIdx)
+    {
+        const size_t order = orderIdx + 1;
+        std::cout << "computing order " << order << std::endl;
+        sut.computeType1(order, 1000, 0.1, true);
+
+        for (size_t freqIdx = 0; freqIdx < numFreqs; ++freqIdx)
+        {
+            float hz = freqs[freqIdx];
+
+            renderWithSineWave(wave, sampleRate, hz);
+            sut.processBlock(wave.data(), out.data(), wave.size());
+
+            const auto [minV, maxV] = std::minmax_element(out.begin() + out.size() / 2, out.end());
+            const auto maxValue = std::max(std::abs(*minV), std::abs(*maxV));
+            const auto db = std::log10(maxValue) * 20.0f;
+
+            results[freqIdx][orderIdx] = db;
+        }
+    }
+
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "Freq(Hz)";
+    for (size_t order = 1; order <= numOrders; ++order)
+        std::cout << "\tOrder " << order;
+    std::cout << '\n';
+
+    for (size_t freqIdx = 0; freqIdx < numFreqs; ++freqIdx)
+    {
+        std::cout << freqs[freqIdx];
+        for (size_t orderIdx = 0; orderIdx < numOrders; ++orderIdx)
+            std::cout << '\t' << results[freqIdx][orderIdx];
+        std::cout << '\n';
+    }
 }

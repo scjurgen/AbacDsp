@@ -486,6 +486,11 @@ private:
 class ChebyshevBiquad
 {
 public:
+    ChebyshevBiquad(const float sampleRate)
+        : m_sampleRate(sampleRate)
+    {
+    }
+
     static constexpr auto MAX_ORDER = 12u;
 
     struct Coefficients
@@ -493,11 +498,6 @@ public:
         float b0, b1, b2;
         float a1, a2;
     };
-
-    void setSampleRate(const float sampleRate)
-    {
-        m_sampleRate = sampleRate;
-    }
 
     void assignToBiquads()
     {
@@ -511,6 +511,7 @@ public:
         }
     }
 
+private:
     struct InitialFactors
     {
         float fC, beta, a;
@@ -531,6 +532,7 @@ public:
                               std::log(1.f / eps + std::sqrt(1.f / (eps * eps) + 1)) / static_cast<float>(order)};
     }
 
+public:
     void computeType1(const size_t order, const float fc, const float ripple, const bool isLowPass)
     {
         m_isLowPass = isLowPass;
@@ -551,8 +553,8 @@ public:
             }
             else
             {
-                fZPole = (std::complex<float>{beta - fZPole.real(), -fZPole.imag()}) /
-                         (std::complex<float>{1 - beta * fZPole.real(), -beta * fZPole.imag()});
+                fZPole = (std::complex{beta - fZPole.real(), -fZPole.imag()}) /
+                         (std::complex{1 - beta * fZPole.real(), -beta * fZPole.imag()});
                 fZZero = {1, 0};
                 fDCPoleDistance = isOdd
                                       ? sqrt(std::norm(std::complex<float>{-1, 0} - fZPole)) / 2
@@ -758,6 +760,11 @@ public:
         }
     }
 
+    void processBlock(float* inPlace, const size_t numSamples)
+    {
+        processBlock(inPlace, inPlace, numSamples);
+    }
+
     void processBlock(const float* in, float* out, const size_t numSamples)
     {
         if (m_isOdd)
@@ -767,24 +774,25 @@ public:
                 process1stOrder(0, in, out, numSamples);
                 return;
             }
-            else
-            {
-                processElement(0, in, out, numSamples);
-                for (size_t i = 1; i < m_elements - 1; ++i)
-                {
-                    processElement(i, out, out, numSamples);
-                }
-                process1stOrder(m_elements - 1, out, out, numSamples);
-            }
-        }
-        else
-        {
             processElement(0, in, out, numSamples);
-            for (size_t i = 1; i < m_elements; ++i)
+            for (size_t i = 1; i < m_elements - 1; ++i)
             {
                 processElement(i, out, out, numSamples);
             }
+            process1stOrder(m_elements - 1, out, out, numSamples);
+            return;
         }
+
+        processElement(0, in, out, numSamples);
+        for (size_t i = 1; i < m_elements; ++i)
+        {
+            processElement(i, out, out, numSamples);
+        }
+    }
+
+    void processBlockStereo(float* leftInplace, float* rightInPlace, const size_t numSamples)
+    {
+        processBlockStereo(leftInplace, rightInPlace, leftInplace, rightInPlace, numSamples);
     }
 
     void processBlockStereo(const float* left, const float* right, float* leftOut, float* rightOut,
@@ -812,17 +820,6 @@ public:
         }
     }
 
-    void processBlockStereoOld(const float* left, const float* right, float* outLeft, float* outRight,
-                               const size_t numSamples)
-    {
-        m_biquads[0][0].processBlock(left, outLeft, numSamples);
-        m_biquads[1][0].processBlock(right, outRight, numSamples);
-        for (size_t i = 1; i < m_elements; ++i)
-        {
-            m_biquads[0][i].processBlock(outLeft, outLeft, numSamples);
-            m_biquads[1][i].processBlock(outRight, outRight, numSamples);
-        }
-    }
 
     auto getMagnitudeInDb(const float cf) const
     {

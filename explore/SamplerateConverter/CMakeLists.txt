@@ -8,3 +8,9 @@ include_directories("${PROJECT_SOURCE_DIR}/src/includes")
 add_executable(SamplerateConverter CheckSinc.cpp
         ${PROJECT_SOURCE_DIR}/src/includes/Samplerate/SrConverter.cpp
 )
+
+
+add_executable(VariSinc VariSinc.cpp
+        ${PROJECT_SOURCE_DIR}/src/includes/Samplerate/SrConverter.cpp
+)
+

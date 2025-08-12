@@ -2,12 +2,11 @@
 
 #include <vector>
 
-namespace AbacadDsp
+namespace AbacDsp
 {
-
 class SincFilter
 {
-  public:
+public:
     struct InitParam
     {
         int increment;
@@ -16,10 +15,10 @@ class SincFilter
 
     explicit SincFilter(const InitParam& sincParam) noexcept
         : m_increment(sincParam.increment)
-        , m_sizeInterleaved(1 + (sincParam.coeffs.size() - 1) / sincParam.increment)
-        , m_halfCoeffWidth(sincParam.coeffs.size() - 2)
-        , m_coeffs(sincParam.coeffs)
-        , m_coeffsDelta(
+          , m_sizeInterleaved(1 + (sincParam.coeffs.size() - 1) / sincParam.increment)
+          , m_halfCoeffWidth(sincParam.coeffs.size() - 2)
+          , m_coeffs(sincParam.coeffs)
+          , m_coeffsDelta(
               [this]()
               {
                   std::vector<float> delta(m_coeffs.size());
@@ -30,8 +29,8 @@ class SincFilter
                   delta[m_coeffs.size() - 1] = 0.f - m_coeffs[m_coeffs.size() - 1];
                   return delta;
               }())
-        , m_interleavedCoeffs(createInterleavedCoeffs())
-        , m_interleavedCoeffsDelta(createInterleavedDeltas())
+          , m_interleavedCoeffs(createInterleavedCoeffs())
+          , m_interleavedCoeffsDelta(createInterleavedDeltas())
     {
         if (const auto delta = m_interleavedCoeffs.size() % m_increment; delta != 0)
         {
@@ -93,6 +92,7 @@ class SincFilter
             }
         }
     }
+
     template <size_t NumChannels>
     void processFixDown(const size_t items, const float* buffer, const float fraction, const size_t idx,
                         float* result) const noexcept
@@ -132,7 +132,7 @@ class SincFilter
         }
     }
 
-  private:
+private:
     [[nodiscard]] std::vector<float> createInterleavedCoeffs() noexcept
     {
         std::vector coeffs(m_sizeInterleaved * m_increment, 0.f);
@@ -171,5 +171,5 @@ class SincFilter
     std::vector<float> m_interleavedCoeffsDelta{};
 };
 
-extern const std::vector<SincFilter> sincFilterSet;
+// extern const std::vector<SincFilter> sincFilterSet;
 }

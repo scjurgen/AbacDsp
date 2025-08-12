@@ -8,6 +8,7 @@ tmp
 .build*
 packages
 *.tar.gz
+*.wav
 __pycache__
 # Prerequisites
 *.d

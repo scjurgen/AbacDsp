@@ -3,7 +3,7 @@
 #include <cmath>
 #include "Delays/NaiveTapeDelay.h"
 
-TEST(TapeDelayTests, simpleVersion)
+TEST(NaiveTapeDelayTests, simpleVersion)
 {
     AbacDsp::NaiveTapeDelay<2, 100> sut{48000.f};
     constexpr std::array feedFirst{1.f, -1.f};
@@ -15,7 +15,7 @@ TEST(TapeDelayTests, simpleVersion)
     sut.step(feedFirst.data(), eat.data());
     sut.step(feedSecond.data(), eat.data());
     std::array feedNothing{0.f, 0.f};
-    for (size_t i = 0; i < 2450; ++i)
+    for (size_t i = 0; i < 50; ++i)
     {
         sut.step(feedNothing.data(), eat.data());
         std::cout << i << "\t" << eat[0] << "\t " << eat[1] << std::endl;
