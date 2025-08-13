@@ -1,4 +1,4 @@
-#include "Samplerate/SrConverter.h"
+#include "Samplerate/SrPullConverter.h"
 #include "AudioFile.h"
 #include "SaveAsWave.h"
 #include "FftSmall.h"
@@ -23,11 +23,11 @@
 
 namespace AbacDsp
 {
-    const std::vector<SincFilter> sincFilterSet{
-        SincFilter{init_69_768}, SincFilter{init_33_512}, SincFilter{init_21_512}, SincFilter{init_13_256},
-        SincFilter{init_11_128}, SincFilter{init_8_128}, SincFilter{init_7_128}, SincFilter{init_6_128},
-        SincFilter{init_5_128}, SincFilter{init_4_128}, SincFilter{init_3_128}, SincFilter{init_2_128},
-    };
+const std::vector<SincFilter> sincFilterSet{
+    SincFilter{init_69_768}, SincFilter{init_33_512}, SincFilter{init_21_512}, SincFilter{init_13_256},
+    SincFilter{init_11_128}, SincFilter{init_8_128},  SincFilter{init_7_128},  SincFilter{init_6_128},
+    SincFilter{init_5_128},  SincFilter{init_4_128},  SincFilter{init_3_128},  SincFilter{init_2_128},
+};
 }
 
 #define BUFFER_LEN 512
@@ -50,7 +50,7 @@ static SrConverterCbData dataProvider{};
 
 static long sampleRateConverterInputCb(void* cb_data, float** audio)
 {
-    AudioCbData* data = (AudioCbData*)cb_data;
+    AudioCbData* data = (AudioCbData*) cb_data;
     int readFrames = 0;
     *audio = &data->m_buffer[0];
     if (data->currentIndex >= data->audioFile.getNumSamplesPerChannel())
@@ -145,7 +145,7 @@ void Usage(const std::string& program)
                              " --ratio <ratio>"
                              " --sincindex <index>",
                              " --compare <compare.wav>", program)
-        << std::endl;
+              << std::endl;
 }
 
 

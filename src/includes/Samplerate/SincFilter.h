@@ -4,9 +4,22 @@
 
 namespace AbacDsp
 {
+/**
+ * @brief High-performance, polyphase FIR sinc filter for sample-rate conversion and fractional delay.
+ *
+ * Implements a windowed-sinc interpolation kernel with precomputed coefficient deltas
+ * for fast linear interpolation at arbitrary fractional sample positions.
+ * Coefficients are stored in an interleaved phase layout for cache-friendly  access.
+ * Supports forward/reverse traversal and compile-time channel configuration.
+ */
 class SincFilter
 {
-public:
+  public:
+    /**
+     * @brief Parameters for sinc filter initialization.
+     * @param increment Stride between phases in the coefficient table.
+     * @param coeffs FIR kernel coefficients (half of a symmetric sinc window).
+     */
     struct InitParam
     {
         int increment;
@@ -15,10 +28,11 @@ public:
 
     explicit SincFilter(const InitParam& sincParam) noexcept
         : m_increment(sincParam.increment)
-          , m_sizeInterleaved(1 + (sincParam.coeffs.size() - 1) / sincParam.increment)
-          , m_halfCoeffWidth(sincParam.coeffs.size() - 2)
-          , m_coeffs(sincParam.coeffs)
-          , m_coeffsDelta(
+        , m_sizeInterleaved(1 + (sincParam.coeffs.size() - 1) / sincParam.increment)
+        , m_halfCoeffWidth(sincParam.coeffs.size() - 2)
+        , m_coeffs(sincParam.coeffs)
+        , m_coeffsDelta(
+              // Precompute deltas for fractional interpolation and interleaved phase tables.
               [this]()
               {
                   std::vector<float> delta(m_coeffs.size());
@@ -29,8 +43,8 @@ public:
                   delta[m_coeffs.size() - 1] = 0.f - m_coeffs[m_coeffs.size() - 1];
                   return delta;
               }())
-          , m_interleavedCoeffs(createInterleavedCoeffs())
-          , m_interleavedCoeffsDelta(createInterleavedDeltas())
+        , m_interleavedCoeffs(createInterleavedCoeffs())
+        , m_interleavedCoeffsDelta(createInterleavedDeltas())
     {
         if (const auto delta = m_interleavedCoeffs.size() % m_increment; delta != 0)
         {
@@ -132,8 +146,8 @@ public:
         }
     }
 
-private:
-    [[nodiscard]] std::vector<float> createInterleavedCoeffs() noexcept
+  private:
+    [[nodiscard]] std::vector<float> createInterleavedCoeffs() const noexcept
     {
         std::vector coeffs(m_sizeInterleaved * m_increment, 0.f);
         for (size_t i = 0; i < m_increment; ++i)
@@ -147,7 +161,7 @@ private:
         return coeffs;
     }
 
-    [[nodiscard]] std::vector<float> createInterleavedDeltas() noexcept
+    [[nodiscard]] std::vector<float> createInterleavedDeltas() const noexcept
     {
         std::vector coeffs(m_sizeInterleaved * m_increment, 0.f);
         for (int i = 0; i < m_increment; ++i)
@@ -161,7 +175,6 @@ private:
         return coeffs;
     }
 
-
     const int m_increment{};
     const int m_sizeInterleaved{};
     const size_t m_halfCoeffWidth{};
@@ -171,5 +184,4 @@ private:
     std::vector<float> m_interleavedCoeffsDelta{};
 };
 
-// extern const std::vector<SincFilter> sincFilterSet;
 }

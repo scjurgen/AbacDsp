@@ -11,6 +11,16 @@ namespace AbacDsp
 {
 constexpr int SrConvertMaxRatio = 16;
 
+struct SrConverterData
+{
+    const float* dataIn;
+    float* dataOut;
+    long inputFrames, outputFrames;
+    long inputFramesConsumed, outputFramesGenerated;
+    bool endOfInput;
+    float ratio;
+};
+
 class SrPullConverter
 {
     static constexpr size_t MAXCHANNELS = 2;
@@ -19,13 +29,7 @@ class SrPullConverter
     using ProcessCallback = std::function<long(float**, size_t numChannels)>;
     using DataCallback = std::function<long(void*, float**)>;
 
-    enum class Type
-    {
-        SINC,
-        INTERPOLATE,
-    };
-
-    SrPullConverter(const std::shared_ptr<SincFilter> sincFilter)
+    explicit SrPullConverter(const std::shared_ptr<SincFilter>& sincFilter)
         : m_bufferSize(sincFilter->getBufferSize(SrConvertMaxRatio, MAXCHANNELS))
         , m_buffer(m_bufferSize)
         , m_sincFilter(sincFilter)
@@ -41,7 +45,7 @@ class SrPullConverter
         m_bufferRealEnd = -1;
         m_lastPosition = 0.0;
         m_lastRatio = 0.0;
-        std::fill(m_buffer.begin(), m_buffer.end(), 0);
+        std::ranges::fill(m_buffer, 0);
     }
 
     size_t fetchBlock(const float currentRatio, float* data, const size_t numSamples, const size_t numChannels,
@@ -374,24 +378,14 @@ class SrPullConverter
         m_lastRatio = lastRatio;
     }
 
-  private:
     DataCallback m_cb;
     void* m_userCbData;
     long m_savedFrames;
     const float* m_savedData;
 
-    struct
-    {
-      public:
-        const float* dataIn;
-        float* dataOut;
-        long inputFrames, outputFrames;
-        long inputFramesConsumed, outputFramesGenerated;
-        bool endOfInput;
-        float ratio;
-    } srData;
 
-  private:
+    SrConverterData srData;
+
     float m_lastRatio{};
     float m_lastPosition{};
     long m_inCount{}, m_usedCount{};
@@ -716,16 +710,7 @@ class SrPushConverter
     void* m_userCbData;
     long m_savedFrames;
     const float* m_savedData;
-
-    struct
-    {
-        const float* dataIn;
-        float* dataOut;
-        long inputFrames, outputFrames;
-        long inputFramesConsumed, outputFramesGenerated;
-        bool endOfInput;
-        float ratio;
-    } srData;
+    SrConverterData srData;
 
     float m_lastRatio{};
     float m_lastPosition{};
