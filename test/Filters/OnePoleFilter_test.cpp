@@ -8,8 +8,30 @@
 #include <cmath>
 
 #include "NaiveGenerators/Generator.h"
+namespace AbacDsp::Test
+{
 
-template <AbacDsp::OnePoleFilterCharacteristic Characteristic>
+
+template <OnePoleFilterCharacteristic Characteristic>
+void testFilterPolarity(const float expected)
+{
+    OnePoleFilter<Characteristic> sut{48000.f};
+    sut.setCutoff(static_cast<float>(1000.f));
+    const auto result = sut.step(1);
+    EXPECT_NEAR(result, expected, 1E-5f);
+}
+
+TEST(DspOnePoleFilterTest, polarityAllPass)
+{
+    testFilterPolarity<OnePoleFilterCharacteristic::HighPass>(0.938653f);
+    testFilterPolarity<OnePoleFilterCharacteristic::LowPass>(0.122694f);
+    testFilterPolarity<OnePoleFilterCharacteristic::HighPassLeaky>(0.877306f);
+    // phase inversion!
+    testFilterPolarity<OnePoleFilterCharacteristic::AllPass>(-0.876976f);
+}
+
+
+template <OnePoleFilterCharacteristic Characteristic>
 void testFilterMagnitude(float sampleRate)
 {
     for (float cf = 50; cf <= 16000; cf *= 1.2f)
@@ -24,7 +46,7 @@ void testFilterMagnitude(float sampleRate)
             AbacDsp::OnePoleFilter<Characteristic, false> sut{sampleRate};
             sut.setCutoff(static_cast<float>(cf));
             std::vector<float> wave(4000);
-            NaiveDsp::Generator<NaiveDsp::Wave::Sine> sineWave{sampleRate, hz};
+            Generator<Wave::Sine> sineWave{sampleRate, hz};
             sineWave.render(wave.begin(), wave.end());
             sut.processBlock(wave.data(), wave.data(), wave.size());
 
@@ -42,22 +64,22 @@ void testFilterMagnitude(float sampleRate)
 
 TEST(DspOnePoleFilterTest, LowPassMatchTheoreticalMagnitudes)
 {
-    testFilterMagnitude<AbacDsp::OnePoleFilterCharacteristic::LowPass>(48000.f);
+    testFilterMagnitude<OnePoleFilterCharacteristic::LowPass>(48000.f);
 }
 
 TEST(DspOnePoleFilterTest, HighPassMatchTheoreticalMagnitudes)
 {
-    testFilterMagnitude<AbacDsp::OnePoleFilterCharacteristic::HighPass>(48000.f);
+    testFilterMagnitude<OnePoleFilterCharacteristic::HighPass>(48000.f);
 }
 
 TEST(DspOnePoleFilterTest, HighPassLeakyMatchTheoreticalMagnitudes)
 {
-    testFilterMagnitude<AbacDsp::OnePoleFilterCharacteristic::HighPassLeaky>(48000.f);
+    testFilterMagnitude<OnePoleFilterCharacteristic::HighPassLeaky>(48000.f);
 }
 
 TEST(DspOnePoleFilterTest, AllPassMatchTheoreticalMagnitudes)
 {
-    testFilterMagnitude<AbacDsp::OnePoleFilterCharacteristic::AllPass>(48000.f);
+    testFilterMagnitude<OnePoleFilterCharacteristic::AllPass>(48000.f);
 }
 
 //
@@ -129,3 +151,4 @@ TEST(DspOnePoleFilterTest, AllPassMatchTheoreticalMagnitudes)
 //         EXPECT_LT(input[i + 1], 0.0f);
 //     }
 // }
+}

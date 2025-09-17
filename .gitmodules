@@ -4,3 +4,9 @@
 [submodule "3rdparty/AudioFile"]
 	path = 3rdparty/AudioFile
 	url = https://github.com/adamstark/AudioFile.git
+[submodule "3rdparty/JUCE"]
+	path = 3rdparty/JUCE
+	url = https://github.com/juce-framework/JUCE.git
+[submodule "3rdparty/pffft"]
+	path = 3rdparty/pffft
+	url = https://github.com/marton78/pffft.git

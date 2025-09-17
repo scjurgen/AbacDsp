@@ -1,16 +1,18 @@
-#include "FftSmall.h"
 
-#include "DSP/Synthesiser/WaveTableOscillator.h"
+#include "WaveTables/WaveTableOscillator.h"
 
 #include "gtest/gtest.h"
 
 #include <numbers>
 #include <vector>
 
+namespace AbacDsp::Test
+{
+
 
 TEST(WaveTableStorageTest, wavetableStorageSingle)
 {
-    AbacDsp::WaveTableSet& wtbl = AbacDsp::WaveTableStore::getTableSet(AbacDsp::BasicWave::Saw);
+    WaveTableSet& wtbl = WaveTableStore::getTableSet(BasicWave::Saw);
     EXPECT_EQ(wtbl.tables.size(), 16);
     EXPECT_EQ(wtbl.getIndexByFrequency(0.0001f), 0);
     EXPECT_EQ(wtbl.getIndexByFrequency(0.001f), 2);
@@ -28,9 +30,9 @@ TEST(WaveTableStorageTest, checkLevels)
         1.32851e-05f, // N.B.: the white noise level is low and gets in the osc a special treatment
         1.03345f,     0.865603f,
     };
-    for (size_t idx = 0; idx < static_cast<size_t>(AbacDsp::BasicWave::Last); ++idx)
+    for (size_t idx = 0; idx < static_cast<size_t>(BasicWave::Last); ++idx)
     {
-        AbacDsp::WaveTableSet& vwtbl = AbacDsp::WaveTableStore::getTableSet(static_cast<AbacDsp::BasicWave>(idx));
+        WaveTableSet& vwtbl = WaveTableStore::getTableSet(static_cast<BasicWave>(idx));
 
         float absMax = 0;
         for (size_t j = 0; j < vwtbl.tables.size(); ++j)
@@ -42,4 +44,5 @@ TEST(WaveTableStorageTest, checkLevels)
         }
         EXPECT_NEAR(expected[idx], absMax, 1E-4f);
     }
+}
 }

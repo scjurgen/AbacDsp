@@ -5,13 +5,15 @@
 #include <cmath>
 
 #include "NaiveGenerators/Generator.h"
-
+namespace AbacDsp::Test
+{
 constexpr float tolerance = 1e-4f;
 constexpr float sampleRate = 48000.0f;
 
+
 TEST(NaiveGenerator, Sine_GeneratesSineWave)
 {
-    using SineGen = NaiveDsp::Generator<NaiveDsp::Wave::Sine>;
+    using SineGen = Generator<Wave::Sine>;
     SineGen gen(sampleRate, 440.0f);
 
     // First sample should be zero (phase = 0)
@@ -20,13 +22,13 @@ TEST(NaiveGenerator, Sine_GeneratesSineWave)
 
     // Next sample (move slightly along sine curve, phase increases)
     float v1 = gen.step();
-    float expected = std::sinf((440.0f / sampleRate) * 2.0f * std::numbers::pi_v<float>);
+    float expected = std::sin((440.0f / sampleRate) * 2.0f * std::numbers::pi_v<float>);
     EXPECT_NEAR(v1, expected, tolerance);
 }
 
 TEST(NaiveGenerator, Saw_GeneratesSawWave)
 {
-    using SawGen = NaiveDsp::Generator<NaiveDsp::Wave::Saw>;
+    using SawGen = Generator<Wave::Saw>;
     SawGen gen(sampleRate, 440.0f);
 
     float values[10];
@@ -41,7 +43,7 @@ TEST(NaiveGenerator, Saw_GeneratesSawWave)
 
 TEST(NaiveGenerator, Triangle_RangeAndSymmetry)
 {
-    using TriGen = NaiveDsp::Generator<NaiveDsp::Wave::Triangle>;
+    using TriGen = Generator<Wave::Triangle>;
     TriGen gen(sampleRate, 440.0f);
 
     float minValue = 1.0f, maxValue = -1.0f;
@@ -57,7 +59,7 @@ TEST(NaiveGenerator, Triangle_RangeAndSymmetry)
 
 TEST(NaiveGenerator, Square_OnlyPlusMinusOne)
 {
-    using SqrGen = NaiveDsp::Generator<NaiveDsp::Wave::Square>;
+    using SqrGen = Generator<Wave::Square>;
     SqrGen gen(sampleRate, 440.0f);
 
     for (int i = 0; i < 100; ++i)
@@ -69,7 +71,7 @@ TEST(NaiveGenerator, Square_OnlyPlusMinusOne)
 
 TEST(NaiveGenerator, RenderMonoBuffer)
 {
-    using SineGen = NaiveDsp::Generator<NaiveDsp::Wave::Sine>;
+    using SineGen = Generator<Wave::Sine>;
     SineGen gen(sampleRate, 1000.0f);
 
     std::array<float, 48> buffer{}; // 1ms at 48kHz
@@ -82,7 +84,7 @@ TEST(NaiveGenerator, RenderMonoBuffer)
 
 TEST(NaiveGenerator, RenderStereoBuffer)
 {
-    using TriGen = NaiveDsp::Generator<NaiveDsp::Wave::Triangle>;
+    using TriGen = Generator<Wave::Triangle>;
     TriGen gen(sampleRate, 330.0f);
 
     std::array<float, 20> buffer{};
@@ -97,7 +99,7 @@ TEST(NaiveGenerator, RenderStereoBuffer)
 
 TEST(NaiveGenerator, RenderThrowsOnInvalidChannels)
 {
-    using SineGen = NaiveDsp::Generator<NaiveDsp::Wave::Sine>;
+    using SineGen = Generator<Wave::Sine>;
     SineGen gen(sampleRate, 100.0f);
 
     std::array<float, 32> buffer{};
@@ -110,7 +112,7 @@ TEST(NaiveGenerator, RenderThrowsOnInvalidChannels)
 
 TEST(NaiveGenerator, Noise_NoiseIsNotConstant)
 {
-    using NoiseGen = NaiveDsp::Generator<NaiveDsp::Wave::Noise>;
+    using NoiseGen = Generator<Wave::Noise>;
     NoiseGen gen(sampleRate, 500.0f);
 
     float first = gen.step();
@@ -124,4 +126,5 @@ TEST(NaiveGenerator, Noise_NoiseIsNotConstant)
         }
     }
     EXPECT_FALSE(allSame);
+}
 }

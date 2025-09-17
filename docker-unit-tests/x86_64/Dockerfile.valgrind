@@ -1,0 +1,11 @@
+FROM debian:12.11-slim
+
+WORKDIR /build
+
+RUN apt-get update --yes && \
+    apt-get install --yes --force-yes build-essential wget valgrind ninja-build git libglib2.0-dev
+
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.31.8/cmake-3.31.8-linux-x86_64.tar.gz && \
+    tar xfz cmake-3.31.8-linux-x86_64.tar.gz -C /usr/local --strip-components 1 && \
+    rm cmake-3.31.8-linux-x86_64.tar.gz
+
