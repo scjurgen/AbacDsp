@@ -1,0 +1,15 @@
+// clang-format off
+#pragma once
+
+#include "SincFilter.h"
+
+/*
+{{CommentSection}}*/
+
+
+ const AbacDsp::SincFilter::InitParam sinc/*cycles*/ =
+ {
+     /*N*/,
+     {
+ /*FIR_Coefficients*/}
+ };
