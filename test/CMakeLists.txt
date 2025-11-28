@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.21)
 
 set(CMAKE_CXX_STANDARD 20)
 include(GoogleTest)
-
+set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" "-V")
+enable_testing()
 # Add pffft as a static library from submodule
 set(PFFFT_DIR "${PROJECT_SOURCE_DIR}/3rdparty/pffft")
 
@@ -116,7 +117,7 @@ add_custom_target(unit_tests
 )
 
 add_custom_target(run_unit_tests
-        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+        COMMAND ${CMAKE_CTEST_COMMAND} -V --output-on-failure
         DEPENDS unit_tests
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Building and running all unit tests"

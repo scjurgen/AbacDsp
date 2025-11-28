@@ -11,8 +11,10 @@ namespace AbacDsp
 class FlutterLfo
 {
   public:
-
-
+    float qcos(const float r)
+    {
+        return std::cos(r);
+    }
     explicit FlutterLfo(const float sampleRate, const float frequencyMultiplier, const float amplitude,
                         const float phaseOffset)
         : m_frequencyMultiplier(std::abs(frequencyMultiplier / sampleRate))

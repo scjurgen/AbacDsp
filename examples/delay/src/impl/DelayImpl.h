@@ -11,7 +11,7 @@ template <size_t BlockSize>
 class DelayImpl final : public EffectBase
 {
   public:
-    using Delay = AbacDsp::OuModDelay<48000 * 4>;
+    using Delay = AbacDsp::OuModDelay<4 * 48000>;
     using LowPass = AbacDsp::OnePoleFilter<AbacDsp::OnePoleFilterCharacteristic::LowPass>;
     using HighPass = AbacDsp::OnePoleFilter<AbacDsp::OnePoleFilterCharacteristic::HighPass>;
     using AllPass = AbacDsp::OnePoleFilter<AbacDsp::OnePoleFilterCharacteristic::AllPass>;
@@ -23,6 +23,7 @@ class DelayImpl final : public EffectBase
         , m_highPass{AbacDsp::constructArray<HighPass, 2>(sampleRate)}
         , m_allPass{AbacDsp::constructArray<AllPass, 2>(sampleRate)}
     {
+        setTimeInMs(200);
         for (auto& f : m_lowPass)
         {
             f.setCutoff(16000);

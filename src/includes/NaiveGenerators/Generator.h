@@ -6,7 +6,13 @@
 #include <random>
 #include <stdexcept>
 #include <vector>
+
 #include "Filters/OnePoleFilter.h"
+
+/*
+ * Don't use these generators for production code
+ * intended use is in unit-tests or documentation
+ */
 
 namespace AbacDsp
 {
@@ -41,25 +47,25 @@ class Generator
     {
         if constexpr (Style == Wave::Sine)
         {
-            float v = std::sin(m_phase * 2.0f * std::numbers::pi_v<float>);
+            const auto v = std::sin(m_phase * 2.0f * std::numbers::pi_v<float>);
             advancePhase();
             return v;
         }
         else if constexpr (Style == Wave::Saw)
         {
-            float v = 2.0f * (m_phase - 0.5f);
+            const auto v = 2.0f * (m_phase - 0.5f);
             advancePhase();
             return v;
         }
         else if constexpr (Style == Wave::Triangle)
         {
-            float v = 2.0f * std::abs(2.0f * (m_phase - std::floor(m_phase + 0.5f))) - 1.0f;
+            const auto v = 2.0f * std::abs(2.0f * (m_phase - std::floor(m_phase + 0.5f))) - 1.0f;
             advancePhase();
             return v;
         }
         else if constexpr (Style == Wave::Square)
         {
-            float v = m_phase < 0.5f ? 1.0f : -1.0f;
+            const auto v = m_phase < 0.5f ? 1.0f : -1.0f;
             advancePhase();
             return v;
         }
@@ -67,7 +73,7 @@ class Generator
         {
             std::uniform_real_distribution dist(-1.0f, 1.0f);
             m_lowpass.setCutoff(m_frequency);
-            float filtered = m_lowpass.step(dist(m_rng));
+            const auto filtered = m_lowpass.step(dist(m_rng));
             advancePhase();
             return filtered;
         }
@@ -83,9 +89,13 @@ class Generator
     void renderWithFrequency(FloatIt begin, FloatIt end, const float frequency, const size_t numChannels = 1)
     {
         if (numChannels == 0)
+        {
             throw std::invalid_argument("numChannels can not be 0");
+        }
         if (const auto count = static_cast<size_t>(std::distance(begin, end)); count % numChannels != 0)
+        {
             throw std::invalid_argument("Iterator range size must be a multiple of numChannels");
+        }
         m_frequency = frequency;
         m_advance = m_frequency / m_sampleRate;
         while (begin != end)
@@ -110,6 +120,6 @@ class Generator
 
     float m_sampleRate, m_frequency, m_phase, m_advance, m_lastNoise;
     std::mt19937 m_rng;
-    AbacDsp::OnePoleFilter<AbacDsp::OnePoleFilterCharacteristic::LowPass, false> m_lowpass;
+    OnePoleFilter<OnePoleFilterCharacteristic::LowPass, false> m_lowpass;
 };
 }

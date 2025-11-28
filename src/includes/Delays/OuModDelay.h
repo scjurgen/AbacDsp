@@ -6,8 +6,9 @@
 #include "Modulation/Wow.h"
 
 #include <algorithm>
-#include <vector>
 #include <cmath>
+#include <vector>
+
 
 namespace AbacDsp
 {
@@ -36,23 +37,24 @@ class OuModDelay
         , m_wow(sampleRate / WowStep)
         , m_rdHd(sampleRate)
     {
-        m_wow.setDepth(0.1f);
-        m_wow.setRate(0.25f);
-        m_wow.setDrift(0.1f);
-        m_wow.setVariance(0.1f);
+        m_wow.setDepth(1.f);
+        setModDepth(1.f);
+        setModSpeed(0.25f);
+        setModDrift(0.1f);
+        setModVariance(0.1f);
     }
 
     void setWidthInMsecs(const float milliseconds)
     {
         auto newSize = std::clamp<size_t>(getSamplesPerMillisecond(milliseconds, m_sampleRate, MaxSizeInSamples), 48u,
                                           MaxSizeInSamples - 1);
-        m_rdHd.setNewDelta(newSize, 2.f, 4000);
+        m_rdHd.setNewDelta(newSize);
     }
 
     void setSize(const size_t newSize)
     {
-        const auto mSize = std::max(newSize, MaxSizeInSamples - 1);
-        m_rdHd.setNewDelta(mSize, 2.f, 4000);
+        const auto mSize = std::min(newSize, MaxSizeInSamples - 1);
+        m_rdHd.setNewDelta(mSize);
     }
 
     void setFeedback(const float gain)
@@ -69,11 +71,13 @@ class OuModDelay
 
     void setModDepth(const float depth) noexcept
     {
-        m_wow.setDepth(depth);
+        m_modDepth = depth;
+        // m_wow.setDepth(depth);
     }
 
     void setModSpeed(const float speedHz) noexcept
     {
+        m_wowSpeed = speedHz;
         m_wow.setRate(speedHz);
     }
 
@@ -89,20 +93,41 @@ class OuModDelay
 
     int m_wowCount{WowStep - 1};
     float m_lastWow{0.f};
-
+    float m_lastDhead{0};
     float step(const float in) noexcept
     {
         if (--m_wowCount <= 0)
         {
-            m_lastWow = (m_wow.step() - 1) * 100.f;
+            m_lastWow = m_modDepth * m_wow.stepNormalized() * 10000.f / m_wowSpeed;
+            if (m_lastWow < -m_rdHd.getCurrentDelta())
+            {
+                m_lastWow = -m_rdHd.getCurrentDelta();
+            }
             m_wowCount = WowStep;
         }
-
-
-        float dHead = m_rdHd.step(m_headWrite) + m_lastWow;
+        const auto hd = m_rdHd.step(m_headWrite);
+        float dHead = hd + m_lastWow;
         if (dHead >= MaxSizeInSamples)
         {
             dHead -= MaxSizeInSamples;
+        }
+        if (dHead < 0)
+        {
+            dHead += MaxSizeInSamples;
+        }
+        if (in != 0.f)
+        {
+            // std::cout << m_headWrite << "\t" << hd << "\t" << dHead << "\n";
+        }
+        float delta = std::abs(m_lastDhead - dHead);
+        if (delta > 3 && delta < MaxSizeInSamples - 3)
+        {
+            // std::cout << "***** " << m_lastDhead << "\t" << dHead << "\t" << m_lastWow << std::endl;
+        }
+        m_lastDhead = dHead;
+        if (dHead < 0 || dHead >= MaxSizeInSamples)
+        {
+            // std::cout << "### " << dHead << std::endl;
         }
         float intTailPosition;
         const auto fraction = modff(dHead, &intTailPosition);
@@ -120,6 +145,7 @@ class OuModDelay
         m_headWrite++;
         if (m_headWrite >= MaxSizeInSamples)
         {
+            static int cnt = 0;
             m_headWrite = 0;
         }
         return ret;
@@ -137,8 +163,10 @@ class OuModDelay
   private:
     float m_sampleRate{48000.0f};
     float m_feedback{0};
+    float m_modDepth{0.f};
     size_t m_headWrite{0};
     float m_decayMsecs{100};
+    float m_wowSpeed{0.25f};
     // adapt soft buffersize *speed up/down*
 
     FracReadHead<MaxSizeInSamples> m_rdHd;

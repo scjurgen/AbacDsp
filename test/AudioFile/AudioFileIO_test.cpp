@@ -13,7 +13,7 @@ TEST(AudioFileIO, monoWaveFile)
 {
     std::vector<uint8_t> waveTarget;
     std::vector<float> someAudio{1.f, 0.1f, -1.f, -0.1f};
-    AudioUtility::FileOut::saveMonoToMemory(waveTarget, someAudio, 48000.f);
+    AudioUtility::SaveWav::saveMonoToMemory(waveTarget, someAudio, 48000.f);
 
     ASSERT_GE(waveTarget.size(), 44u);
 
@@ -63,7 +63,7 @@ TEST(AudioFileIO, stereoWaveFile)
     std::vector<uint8_t> waveTarget;
     std::vector<float> leftAudio{1.f, 0.1f, -1.f, -0.1f};
     std::vector<float> rightAudio{0.5f, -0.5f, 0.8f, -0.8f};
-    AudioUtility::FileOut::saveStereoToMemory(waveTarget, leftAudio, rightAudio, 48000.f);
+    AudioUtility::SaveWav::saveStereoToMemory(waveTarget, leftAudio, rightAudio, 48000.f);
 
     ASSERT_GE(waveTarget.size(), 44u);
 
@@ -113,7 +113,7 @@ TEST(AudioFileIO, stereoChannelDataIntegrity)
     std::vector<uint8_t> waveTarget;
     std::vector<float> leftAudio{1.f, 0.f};
     std::vector<float> rightAudio{0.f, 1.f};
-    AudioUtility::FileOut::saveStereoToMemory(waveTarget, leftAudio, rightAudio, 48000.f);
+    AudioUtility::SaveWav::saveStereoToMemory(waveTarget, leftAudio, rightAudio, 48000.f);
 
     ASSERT_GE(waveTarget.size(), 44u);
 
@@ -139,8 +139,8 @@ TEST(AudioFileIO, differentSampleRates)
     std::vector<float> monoAudio{1.f, -1.f};
     std::vector<float> leftAudio{0.5f, -0.5f};
     std::vector<float> rightAudio{-0.5f, 0.5f};
-    AudioUtility::FileOut::saveMonoToMemory(monoTarget44k, monoAudio, 44100.f);
-    AudioUtility::FileOut::saveStereoToMemory(stereoTarget96k, leftAudio, rightAudio, 96000.f);
+    AudioUtility::SaveWav::saveMonoToMemory(monoTarget44k, monoAudio, 44100.f);
+    AudioUtility::SaveWav::saveStereoToMemory(stereoTarget96k, leftAudio, rightAudio, 96000.f);
 
     const uint32_t sampleRate44k = *reinterpret_cast<const uint32_t*>(monoTarget44k.data() + 24);
     EXPECT_EQ(sampleRate44k, 44100u);
@@ -162,8 +162,8 @@ TEST(AudioFileIO, emptyAudioHandling)
     std::vector<uint8_t> monoTarget, stereoTarget;
     std::vector<float> emptyAudio;
 
-    AudioUtility::FileOut::saveMonoToMemory(monoTarget, emptyAudio, 48000.f);
-    AudioUtility::FileOut::saveStereoToMemory(stereoTarget, emptyAudio, emptyAudio, 48000.f);
+    AudioUtility::SaveWav::saveMonoToMemory(monoTarget, emptyAudio, 48000.f);
+    AudioUtility::SaveWav::saveStereoToMemory(stereoTarget, emptyAudio, emptyAudio, 48000.f);
 
     ASSERT_GE(monoTarget.size(), 44u);
     ASSERT_GE(stereoTarget.size(), 44u);

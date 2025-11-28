@@ -93,7 +93,7 @@ target_include_directories("${PROJECT_NAME}" PUBLIC ../../src/includes)
 target_include_directories("${PROJECT_NAME}" PRIVATE ${PFFFT_DIR})
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles} ${PFFFT_DIR}/pffft.c)
-set_target_properties("${PROJECT_NAME}" PROPERTIES FOLDER "")
+set_property(TARGET "${PROJECT_NAME}" PROPERTY FOLDER "Sampleplayer")
 
 # Fix source_group to use correct root path for this project
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src PREFIX "" FILES ${SourceFiles})

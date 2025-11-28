@@ -15,5 +15,5 @@ int main()
     lowpass.setCutoff(500.f);
     lowpass.processBlock(data.data(), data.size());
 
-    AudioUtility::FileOut::MonoToAudioFile(data, sampleRate).save("check.wav");
+    // AudioUtility::FileOut::MonoToAudioFile(data, sampleRate).save("check.wav");
 }

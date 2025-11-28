@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.21)
 
+set_property(GLOBAL PROPERTY USE_FOLDERS YES)
+
 set(PROJECT_NAME "AbacDsp")
 file(STRINGS VERSION CURRENT_VERSION)
+
 
 project(${PROJECT_NAME} VERSION ${CURRENT_VERSION})
 
@@ -18,10 +21,10 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 endif ()
 
 # Option to build only DSP tests (for Docker/Valgrind)
-option(BUILD_ONLY_TESTS "Build only tests without JUCE examples" OFF)
+option(BUILD_FULL_PROJECT "Build all, test and JUCE examples" OFF)
 include_directories(3rdparty/AudioFile)
 
-if (NOT BUILD_ONLY_TESTS)
+if (BUILD_FULL_PROJECT)
     # Add JUCE first - this prevents duplicate target errors
     add_subdirectory(3rdparty/JUCE)
 
@@ -43,6 +46,7 @@ endif ()
 add_subdirectory(3rdparty/googletest EXCLUDE_FROM_ALL)
 
 option(PACKAGE_TESTS "Build the tests" ON)
+
 if (PACKAGE_TESTS)
     # Prevent CTest from creating dashboard targets but keep DartConfiguration.tcl
     set_property(GLOBAL PROPERTY CTEST_TARGETS_ADDED 1)
@@ -60,12 +64,12 @@ if (PACKAGE_TESTS)
     add_subdirectory(test)
 endif ()
 
-option(PERFORMANCE_TESTS "Build performance tests" ON)
+option(PERFORMANCE_TESTS "Build performance tests" OFF)
 if (PERFORMANCE_TESTS)
 add_subdirectory(documentation/Reverbs/FDN)
 endif()
 
-option(EXPLORE_STUFF "Explore" ON)
+option(EXPLORE_STUFF "Explore" OFF)
 if (EXPLORE_STUFF)
     add_subdirectory(documentation/Filters/BandpassImpulses)
     add_subdirectory(documentation/VelvetNoise)

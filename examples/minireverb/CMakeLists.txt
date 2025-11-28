@@ -60,7 +60,7 @@ list(FILTER SourceFiles EXCLUDE REGEX ".*GenericImpl\\.h$")
 target_include_directories("${PROJECT_NAME}" PUBLIC ../../src/includes)
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
-set_target_properties("${PROJECT_NAME}" PROPERTIES FOLDER "")
+set_property(TARGET "${PROJECT_NAME}" PROPERTY FOLDER "MiniReverb")
 
 # Fix source_group to use correct root path for this project
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src PREFIX "" FILES ${SourceFiles})

@@ -27,4 +27,23 @@ TEST(OuModDelayTest, simpleFeedAndEat)
     EXPECT_GT(sut.step(0), 0.5f);
     EXPECT_LT(sut.step(0), 0.f);
 }
+
+TEST(OuModDelayTest, wrapProblem)
+{
+    OuModDelay<300> sut(48000.f);
+    sut.setModDrift(0.f);
+    sut.setModVariance(0.f);
+    sut.setModSpeed(30.f);
+    sut.setSize(100);
+    sut.setModDepth(1.f);
+    for (size_t i = 0; i < 500100; ++i)
+    {
+        sut.step(0);
+    }
+    sut.step(1);
+    for (size_t i = 0; i < 4000; ++i)
+    {
+        sut.step(0);
+    }
+}
 }
