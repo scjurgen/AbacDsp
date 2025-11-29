@@ -1,22 +1,29 @@
 #pragma once
 
-#include <cmath>
 #include <algorithm>
-#include <iostream>
+#include "Numbers/EasyingFunctions.h"
 
 namespace AbacDsp
 {
 
-template <size_t WrapSize>
+enum class TransitionPhase
+{
+    Idle,
+    Ramping
+};
+
+/**
+ * @brief Fractional read head with smooth delta transitions.
+ *
+ * Manages a read head position that can smoothly transition between different delta values
+ * relative to a reference position. Supports two smoothing profiles:
+ * - Quadratic (parabolic): More aggressive acceleration profile
+ * - Quartic: Smoother easing in and out with gentler transitions
+ */
+template <size_t WrapSize, bool quartic = false>
 class FracReadHead
 {
   public:
-    enum class TransitionPhase
-    {
-        Idle,
-        Ramping
-    };
-
     explicit FracReadHead(const float sampleRate) noexcept
         : m_sampleRate(sampleRate)
     {
@@ -49,11 +56,9 @@ class FracReadHead
 
         m_targetDelta = newTargetDelta;
         m_reducingDelta = deltaDifference > 0;
-
-        m_maxAdvance = m_reducingDelta ? (2.0f - maxAdvance) : maxAdvance;
+        m_maxAdvance = m_reducingDelta ? (1 / maxAdvance) : maxAdvance;
 
         const float advanceDeviation = m_maxAdvance - 1.0f;
-
         m_totalSteps = static_cast<size_t>(std::ceil(std::abs(1.5f * deltaDifference / advanceDeviation)));
 
         if (m_totalSteps == 0)
@@ -61,20 +66,39 @@ class FracReadHead
 
         m_currentPhase = TransitionPhase::Ramping;
         m_currentStep = 0;
-
-        std::cout << "setNewDelta: current=" << currentDelta << " target=" << newTargetDelta
-                  << " maxAdvance=" << m_maxAdvance << " steps=" << m_totalSteps << "\n";
     }
 
+    /**
+     * @brief Advances read head position using smooth interpolation toward target delta.
+     *
+     * During ramping phase, applies either:
+     * - Quadratic: 2nd-degree polynomial for parabolic interpolation
+     * - Quartic: 4th-degree smoothstep for sharper acceleration profile
+     *
+     * The advance rate modulates from 1.0 toward maxAdvance, creating a bell-curve profile.
+     * Once target delta is reached, snaps position to exact target and enters idle phase.
+     * Handles deferred delta changes queued during ramping.
+     *
+     * @param referencePosition Reference position (typically write head) for delta calculation.
+     * @return Current fractional read head position (wrapped to [0, WrapSize)).
+     */
     float step(const float referencePosition) noexcept
     {
         m_referencePosition = referencePosition;
 
         if (m_currentPhase == TransitionPhase::Ramping)
         {
-            const double progress = static_cast<double>(m_currentStep) / static_cast<double>(m_totalSteps);
-            const double deviation = (m_maxAdvance - 1.0) * 4.0 * (progress - progress * progress);
-            m_advance = 1.0 + deviation;
+            const auto progress = static_cast<double>(m_currentStep) / static_cast<double>(m_totalSteps);
+            const auto c = m_maxAdvance - 1.0;
+
+            if constexpr (quartic)
+            {
+                m_advance = Easying::smoothStep4(progress, c);
+            }
+            else
+            {
+                m_advance = Easying::smoothStep2(progress, c);
+            }
 
             m_position += m_advance;
             m_currentStep++;
@@ -83,18 +107,6 @@ class FracReadHead
             {
                 m_currentPhase = TransitionPhase::Idle;
                 m_advance = 1.0;
-
-                const float deltaBeforeSnap = getCurrentDelta();
-
-                float targetPosition = m_referencePosition - m_targetDelta;
-                m_position = std::fmod(targetPosition + WrapSize, static_cast<double>(WrapSize));
-
-                const float deltaAfterSnap = getCurrentDelta();
-                const float error = std::abs(deltaAfterSnap - deltaBeforeSnap);
-
-                std::cout << "Ramp complete: deltaBeforeSnap=" << deltaBeforeSnap
-                          << " deltaAfterSnap=" << deltaAfterSnap << " target=" << m_targetDelta << " error=" << error
-                          << "\n";
 
                 if (m_scheduled.hasNewValues)
                 {
@@ -133,21 +145,28 @@ class FracReadHead
         return static_cast<float>(m_position);
     }
 
+    [[nodiscard]] TransitionPhase getCurrentPhase() const noexcept
+    {
+        return m_currentPhase;
+    }
+
+    [[nodiscard]] size_t totalSteps() const noexcept
+    {
+        return m_totalSteps;
+    }
+
   private:
     float m_sampleRate;
     double m_position{0.0};
     double m_advance{1.0};
-
     float m_targetDelta{0.0f};
     float m_maxAdvance{1.5f};
     size_t m_totalSteps{0};
-
     TransitionPhase m_currentPhase{TransitionPhase::Idle};
     size_t m_currentStep{0};
     bool m_reducingDelta{false};
-
     float m_referencePosition{0.0f};
     Scheduled m_scheduled{false, 0.0f, 0.0f};
 };
 
-} // namespace AbacDsp
+}

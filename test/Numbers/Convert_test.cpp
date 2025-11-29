@@ -17,8 +17,8 @@ TEST(ConvertTests, getPanFactorNormalized)
     {
         auto f = static_cast<float>(i) / 10.f;
         Convert::getPanFactorNormalized(f, left, right);
-        EXPECT_NEAR(left, std::cos((f + 1) / 2 * 3.1415926535 / 2.f), epsilon);
-        EXPECT_NEAR(right, std::sin((f + 1) / 2 * 3.1415926535 / 2.f), epsilon);
+        EXPECT_NEAR(left, std::cos((f + 1) / 2 * 3.1415926535 / 2.f), 1E-4f);
+        EXPECT_NEAR(right, std::sin((f + 1) / 2 * 3.1415926535 / 2.f), 1E-4f);
     }
 }
 

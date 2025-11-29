@@ -1,13 +1,82 @@
 #pragma once
 
+#include <charconv>
+#include <cmath>
 #include <iostream>
+#include <iomanip>
 #include <sstream>
 #include <vector>
-#include <iomanip>
-#include <cmath>
 
 namespace CreateExpectedSet
 {
+
+inline std::string format_float(const float value, const int precision)
+{
+    if (std::isnan(value))
+    {
+        return "nan";
+    }
+    if (std::isinf(value))
+    {
+        return value < 0 ? "-inf" : "inf";
+    }
+    if (value == 0.0f)
+    {
+        return "0";
+    }
+
+    const auto abs_val = std::abs(value);
+    const int exponent = static_cast<int>(std::floor(std::log10(abs_val)));
+
+    if (exponent >= -1 && exponent < precision)
+    {
+        char buffer[32];
+        auto [ptr, ec] =
+            std::to_chars(buffer, buffer + sizeof(buffer), value, std::chars_format::fixed, precision - exponent - 1);
+        if (ec != std::errc())
+        {
+            return "";
+        }
+
+        std::string result(buffer, ptr);
+        const auto dot_pos = result.find('.');
+        if (dot_pos != std::string::npos)
+        {
+            result.erase(result.find_last_not_of('0') + 1);
+            if (result.back() == '.')
+                result += '0';
+        }
+        return result;
+    }
+
+    const float mantissa = value / std::pow(10.0f, static_cast<float>(exponent));
+
+    char mantissa_buffer[32];
+    auto [m_ptr, m_ec] = std::to_chars(mantissa_buffer, mantissa_buffer + sizeof(mantissa_buffer), mantissa,
+                                       std::chars_format::fixed, precision - 1);
+    if (m_ec != std::errc())
+    {
+        return "";
+    }
+
+    std::string mantissa_str(mantissa_buffer, m_ptr);
+    const auto dot_pos = mantissa_str.find('.');
+    if (dot_pos != std::string::npos)
+    {
+        const auto last_nonzero = mantissa_str.find_last_not_of('0');
+        if (mantissa_str[last_nonzero] == '.')
+        {
+            mantissa_str.erase(dot_pos);
+        }
+        else
+        {
+            mantissa_str.erase(last_nonzero + 1);
+        }
+    }
+
+    return mantissa_str + "e" + (exponent < 0 ? "-" : "+") + std::to_string(std::abs(exponent));
+}
+
 
 inline void toStream(std::ostream& os, const std::vector<float>& data, int precision = 6, int columnsPerRow = 8)
 {
@@ -16,9 +85,11 @@ inline void toStream(std::ostream& os, const std::vector<float>& data, int preci
     for (size_t i = 0; i < data.size(); ++i)
     {
         if (i % columnsPerRow == 0)
+        {
             os << "\n    ";
+        }
 
-        float value = data[i];
+        const auto value = data[i];
 
         // Check if value is integral
         if (std::floor(value) == value && std::abs(value) < 1e7f)
@@ -35,20 +106,8 @@ inline void toStream(std::ostream& os, const std::vector<float>& data, int preci
         }
         else
         {
-            std::ostringstream temp;
-            temp << std::scientific << std::setprecision(precision) << value;
-            std::string str = temp.str();
-
-            // Ensure 'E' is uppercase and append 'f' suffix
-            size_t e_pos = str.find('e');
-            if (e_pos != std::string::npos)
-            {
-                str[e_pos] = 'E';
-            }
-            str += 'f';
-
-            // Output
-            os << str;
+            os << format_float(value, precision);
+            os << 'f';
         }
 
         if (i < data.size() - 1)

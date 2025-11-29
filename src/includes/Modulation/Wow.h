@@ -75,7 +75,7 @@ class Wow
         m_driftRate = std::clamp(rateHz, 0.01f, 0.5f);
     }
 
-    float stepNormalized() noexcept
+    float step() noexcept
     {
         if (!m_varianceSmoothed.hasStoppedSmoothing())
         {

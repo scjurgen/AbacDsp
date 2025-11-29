@@ -98,7 +98,7 @@ class OuModDelay
     {
         if (--m_wowCount <= 0)
         {
-            m_lastWow = m_modDepth * m_wow.stepNormalized() * 10000.f / m_wowSpeed;
+            m_lastWow = m_modDepth * m_wow.step() * 10000.f / m_wowSpeed;
             if (m_lastWow < -m_rdHd.getCurrentDelta())
             {
                 m_lastWow = -m_rdHd.getCurrentDelta();
