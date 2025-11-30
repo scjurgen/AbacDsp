@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Numbers/Approximation.h"
+
+
 #include <array>
 #include <numbers>
 #include <cmath>
@@ -11,10 +14,11 @@ namespace AbacDsp
 class FlutterLfo
 {
   public:
-    float qcos(const float r)
-    {
-        return std::cos(r);
-    }
+    // float qcos(const float r)
+    // {
+    //     return std::cos(r * 3.1415926535f * 2.f);
+    // }
+
     explicit FlutterLfo(const float sampleRate, const float frequencyMultiplier, const float amplitude,
                         const float phaseOffset)
         : m_frequencyMultiplier(std::abs(frequencyMultiplier / sampleRate))
@@ -46,7 +50,7 @@ class FlutterLfo
         {
             m_phase -= 2.0f;
         }
-        return m_amplitude * qcos(m_phase);
+        return m_amplitude * Approximation::remezFullCosP6<Approximation::DomainMinusOneToOne>(m_phase);
     }
 
   private:

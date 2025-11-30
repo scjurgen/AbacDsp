@@ -9,12 +9,11 @@ class FlutterLfoTest : public ::testing::Test
 {
   protected:
     static constexpr float kSampleRate = 48000.0f;
-    static constexpr float kTolerance = 1e-6f;
+    static constexpr float kTolerance = 1e-5f;
 
     void SetUp() override {}
 };
 
-// Test: Phase initialization and wrapping behavior
 TEST_F(FlutterLfoTest, PhaseInitializationAndWrapping)
 {
     // Test phase wrapping during construction
@@ -32,7 +31,6 @@ TEST_F(FlutterLfoTest, PhaseInitializationAndWrapping)
     EXPECT_LE(output2, 1.0f);
 }
 
-// Test: Reset behavior maintains initial phase
 TEST_F(FlutterLfoTest, ResetRestoresInitialPhase)
 {
     constexpr float phaseOffset = 1.f / 3.f;
@@ -55,11 +53,10 @@ TEST_F(FlutterLfoTest, ResetRestoresInitialPhase)
     EXPECT_FLOAT_EQ(initialOutput, resetOutput);
 }
 
-// Test: Output amplitude scaling
 TEST_F(FlutterLfoTest, AmplitudeScaling)
 {
     constexpr float amplitude = 0.5f;
-    FlutterLfo lfo(kSampleRate, 1.0f, amplitude, 0.0f);
+    FlutterLfo lfo(kSampleRate, 10.0f, amplitude, 0.0f);
 
     // Step through multiple samples to find min/max
     float minOutput = lfo.step(10.f);
