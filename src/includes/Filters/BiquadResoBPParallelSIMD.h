@@ -1,54 +1,44 @@
 #pragma once
 
-#include <algorithm>
+#include "Helpers/PlatformIntrinsics.h"
 #include <array>
 #include <cmath>
 #include <numbers>
-
-#include <vector>
-#include <simd/simd.h>
-// #if defined(SIMD_NEON)
-// #include <arm_neon.h>
-// #elif defined(SIMD_AVX)
-// #include <immintrin.h>
-// #elif defined(SIMD_SSE2)
-// #include <emmintrin.h>
-// #endif
+#include <algorithm>
 
 namespace AbacDsp
 {
+
 /*
  * Using size greater equal 40 NumElements, there are huge differences (on ARM and Intel)
-* ARM factor per samples:
-  Par Simd  4                   5.82x
-  Par Simd  8                   2.89x
-  Par Simd  12                  1.93x
-  Par Simd  16                  3.40x
-  Par Simd  20                  3.43x
-  Par Simd  24                  3.43x
-  Par Simd  32                  3.54x
-  ---
-  Par Simd  40                  1.00x
-  Par Simd  48                  1.03x
-  Par Simd  100                 1.00x
-  Par Simd  5000                1.06x
-  Par Simd  10000               1.08x
-
-Intel actually good at 32 :
-  Par Simd  4                   2.21x
-  Par Simd  8                   1.12x
-  Par Simd  12                  1.00x
-  Par Simd  16                  2.55x
-  Par Simd  20                  2.55x
-  Par Simd  24                  2.53x
----
-  Par Simd  32                  1.10x
-  Par Simd  40                  1.10x
-  Par Simd  48                  1.12x
-  Par Simd  100                 1.11x
-  Par Simd  5000                1.13x
-  Par Simd  10000               1.10x
-
+ * ARM factor per samples:
+ * Par Simd 4   5.82x
+ * Par Simd 8   2.89x
+ * Par Simd 12  1.93x
+ * Par Simd 16  3.40x
+ * Par Simd 20  3.43x
+ * Par Simd 24  3.43x
+ * Par Simd 32  3.54x
+ * ---
+ * Par Simd 40   1.00x
+ * Par Simd 48   1.03x
+ * Par Simd 100  1.00x
+ * Par Simd 5000 1.06x
+ * Par Simd 10000 1.08x
+ *
+ * Intel actually good at 32:
+ * Par Simd 4   2.21x
+ * Par Simd 8   1.12x
+ * Par Simd 12  1.00x
+ * Par Simd 16  2.55x
+ * Par Simd 20  2.55x
+ * Par Simd 24  2.53x
+ * Par Simd 32  1.10x
+ * Par Simd 40  1.10x
+ * Par Simd 48  1.12x
+ * Par Simd 100 1.11x
+ * Par Simd 5000 1.13x
+ * Par Simd 10000 1.10x
  */
 
 template <size_t NumElements, size_t BlockSize>
@@ -80,24 +70,22 @@ class BiquadResoBpParallelSIMD
         m_sampleRate = sampleRate;
     }
 
-    void setByDecay(const size_t mainIndex, const size_t index, const float frequency, const float t)
+    void setByDecay(const size_t mainIndex, const size_t index, const float frequency, const float t) noexcept
     {
         constexpr auto k = 0.1447648273f;
         float Q = std::numbers::pi_v<float> * frequency * t * k;
         computeCoefficients(mainIndex, index, frequency, Q);
     }
 
-    void setDecay(const size_t mainIndex, const size_t index, const float t)
+    void setDecay(const size_t mainIndex, const size_t index, const float t) noexcept
     {
         constexpr auto k = 0.1447648273f;
         const float Q = std::numbers::pi_v<float> * m_frequency[mainIndex] * t * k;
         const auto kqCl = m_K[mainIndex] / std::max(Q, 0.01f);
         const auto norm = 1.f / (1 + kqCl + m_kSquare[mainIndex]);
-
         m_cf[mainIndex][index].b0 = kqCl * norm;
         m_cf[mainIndex][index].a1 = 2 * (m_kSquare[mainIndex] - 1) * norm;
         m_cf[mainIndex][index].a2 = (1 - kqCl + m_kSquare[mainIndex]) * norm;
-
         updateSoACoefficients(mainIndex, index);
     }
 
@@ -108,14 +96,11 @@ class BiquadResoBpParallelSIMD
         m_Fc[mainIndex] = frequency / m_sampleRate;
         m_K[mainIndex] = std::tan(std::numbers::pi_v<float> * m_Fc[mainIndex]);
         m_kSquare[mainIndex] = m_K[mainIndex] * m_K[mainIndex];
-
         const auto kqCl = m_K[mainIndex] / std::max(Q, 0.01f);
         const auto norm = 1.f / (1 + kqCl + m_kSquare[mainIndex]);
-
         m_cf[mainIndex][index].b0 = kqCl * norm;
         m_cf[mainIndex][index].a1 = 2 * (m_kSquare[mainIndex] - 1) * norm;
         m_cf[mainIndex][index].a2 = (1 - kqCl + m_kSquare[mainIndex]) * norm;
-
         updateSoACoefficients(mainIndex, index);
     }
 
@@ -128,6 +113,7 @@ class BiquadResoBpParallelSIMD
 
         for (size_t g = 0; g < NumSimdGroups; ++g)
         {
+#if defined(USE_SIMD_FRAMEWORK)
             const simd_float4 b0 = m_currentSet ? m_b0_set1[g] : m_b0_set0[g];
             const simd_float4 a1 = m_currentSet ? m_a1_set1[g] : m_a1_set0[g];
             const simd_float4 a2 = m_currentSet ? m_a2_set1[g] : m_a2_set0[g];
@@ -137,20 +123,57 @@ class BiquadResoBpParallelSIMD
                 const simd_float4 input = simd_make_float4(in[s], in[s], in[s], in[s]);
                 const simd_float4 b0s = input * b0;
                 const simd_float4 out = b0s + m_z0[g];
-
                 m_z0[g] = m_z1[g] - a1 * out;
                 m_z1[g] = -b0s - a2 * out;
-
                 outBuffer[s] += simd_reduce_add(out);
             }
+#elif defined(USE_X86_INTRINSICS)
+            const __m128 b0 = m_currentSet ? m_b0_set1[g] : m_b0_set0[g];
+            const __m128 a1 = m_currentSet ? m_a1_set1[g] : m_a1_set0[g];
+            const __m128 a2 = m_currentSet ? m_a2_set1[g] : m_a2_set0[g];
+
+            for (size_t s = 0; s < BlockSize; ++s)
+            {
+                const __m128 input = _mm_set1_ps(in[s]);
+                const __m128 b0s = _mm_mul_ps(input, b0);
+                const __m128 out = _mm_add_ps(b0s, m_z0[g]);
+                m_z0[g] = _mm_sub_ps(m_z1[g], _mm_mul_ps(a1, out));
+                m_z1[g] = _mm_sub_ps(_mm_mul_ps(_mm_set1_ps(-1.f), b0s), _mm_mul_ps(a2, out));
+
+                __m128 shuf = _mm_movehdup_ps(out);
+                __m128 sums = _mm_add_ps(out, shuf);
+                __m128 shuf2 = _mm_movehl_ps(sums, sums);
+                __m128 result = _mm_add_ss(sums, shuf2);
+                outBuffer[s] += _mm_cvtss_f32(result);
+            }
+#else
+            for (size_t s = 0; s < BlockSize; ++s)
+            {
+                for (size_t lane = 0; lane < 4; ++lane)
+                {
+                    const size_t filterIdx = g * 4 + lane;
+                    if (filterIdx < NumElements)
+                    {
+                        const float b0_scalar = m_cf[filterIdx][m_currentSet].b0;
+                        const float a1_scalar = m_cf[filterIdx][m_currentSet].a1;
+                        const float a2_scalar = m_cf[filterIdx][m_currentSet].a2;
+                        const float b0s = in[s] * b0_scalar;
+                        const float out = b0s + m_z[filterIdx][0];
+                        m_z[filterIdx][0] = m_z[filterIdx][1] - a1_scalar * out;
+                        m_z[filterIdx][1] = -b0s - a2_scalar * out;
+                        outBuffer[s] += out;
+                    }
+                }
+            }
+#endif
         }
     }
+
 
     void reset(const size_t mainIndex, const float v1 = 0.f, const float v2 = 0.f) noexcept
     {
         m_z[mainIndex][0] = v1;
         m_z[mainIndex][1] = v2;
-
         const size_t groupIndex = mainIndex / 4;
         const size_t laneIndex = mainIndex % 4;
         m_z0[groupIndex][laneIndex] = v1;
@@ -163,16 +186,14 @@ class BiquadResoBpParallelSIMD
         const auto b0 = static_cast<double>(m_cf[mainIndex][subIndex].b0);
         const auto a1 = static_cast<double>(m_cf[mainIndex][subIndex].a1);
         const auto a2 = static_cast<double>(m_cf[mainIndex][subIndex].a2);
-
-        const auto phi = 4 * std::pow(std::sin(2 * std::numbers::pi_v<double> * hz / sampleRate / 2), 2);
+        const auto phi = 4 * std::pow(std::sin(2 * std::numbers::pi * hz / sampleRate / 2), 2);
         const auto db =
             10 * std::log10(std::pow((b0 + 0 + -b0), 2) + (b0 * -b0 * phi - (0 * (b0 + -b0) + 4 * b0 * -b0)) * phi) -
             10 * std::log10(std::pow((1.f + a1 + a2), 2) + (a2 * phi - (a1 * (1 + a2) + 4 * a2)) * phi);
-
         return static_cast<float>(db);
     }
 
-    void damp(const bool damp)
+    void damp(const bool damp) noexcept
     {
         m_currentSet = damp ? 1 : 0;
     }
@@ -187,16 +208,14 @@ class BiquadResoBpParallelSIMD
         {
             m_inActiveCount[mainIndex]++;
         }
-
         return m_inActiveCount[mainIndex] < 32;
     }
 
   private:
-    void updateSoACoefficients(const size_t mainIndex, const size_t index)
+    void updateSoACoefficients(const size_t mainIndex, const size_t index) noexcept
     {
         const size_t groupIndex = mainIndex / 4;
         const size_t laneIndex = mainIndex % 4;
-
         if (index == 0)
         {
             m_b0_set0[groupIndex][laneIndex] = m_cf[mainIndex][0].b0;
@@ -219,9 +238,9 @@ class BiquadResoBpParallelSIMD
     std::array<float, NumElements> m_Fc{};
     std::array<float, NumElements> m_K{};
     std::array<float, NumElements> m_kSquare{};
-
     size_t m_currentSet{};
 
+#if defined(USE_SIMD_FRAMEWORK)
     alignas(16) std::array<simd_float4, NumSimdGroups> m_b0_set0{};
     alignas(16) std::array<simd_float4, NumSimdGroups> m_b0_set1{};
     alignas(16) std::array<simd_float4, NumSimdGroups> m_a1_set0{};
@@ -230,6 +249,16 @@ class BiquadResoBpParallelSIMD
     alignas(16) std::array<simd_float4, NumSimdGroups> m_a2_set1{};
     alignas(16) std::array<simd_float4, NumSimdGroups> m_z0{};
     alignas(16) std::array<simd_float4, NumSimdGroups> m_z1{};
+#elif defined(USE_X86_INTRINSICS)
+    alignas(16) std::array<__m128, NumSimdGroups> m_b0_set0{};
+    alignas(16) std::array<__m128, NumSimdGroups> m_b0_set1{};
+    alignas(16) std::array<__m128, NumSimdGroups> m_a1_set0{};
+    alignas(16) std::array<__m128, NumSimdGroups> m_a1_set1{};
+    alignas(16) std::array<__m128, NumSimdGroups> m_a2_set0{};
+    alignas(16) std::array<__m128, NumSimdGroups> m_a2_set1{};
+    alignas(16) std::array<__m128, NumSimdGroups> m_z0{};
+    alignas(16) std::array<__m128, NumSimdGroups> m_z1{};
+#endif
 };
 
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Helpers/PlatformIntrinsics.h"
 #include <array>
 
 namespace AbacDsp
@@ -27,8 +28,36 @@ inline void hadamardWalsh4(const std::array<float, 4>& input, std::array<float, 
     hadamardWalsh4(input.data(), output.data());
 }
 
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
-#include <immintrin.h>
+#if defined(USE_SIMD_FRAMEWORK)
+
+inline void hadamardWalsh4_simd(const float* input, float* output) noexcept
+{
+    simd_float4 v0 = simd_make_float4(input[0], input[1], input[2], input[3]);
+
+    // Stage 1: stride 1 - pair-wise add/sub
+    simd_float4 s1_lo = simd_make_float4(v0.x, v0.x, v0.z, v0.z);
+    simd_float4 s1_hi = simd_make_float4(v0.y, v0.y, v0.w, v0.w);
+    simd_float4 t1_0 = s1_lo + s1_hi * simd_make_float4(1.f, -1.f, 1.f, -1.f);
+
+    // Stage 2: stride 2
+    simd_float4 s2_lo = simd_make_float4(t1_0.x, t1_0.y, t1_0.x, t1_0.y);
+    simd_float4 s2_hi = simd_make_float4(t1_0.z, t1_0.w, t1_0.z, t1_0.w);
+    simd_float4 add_0 = s2_lo + s2_hi;
+    simd_float4 sub_0 = s2_lo - s2_hi;
+
+    simd_float4 out_0 = simd_make_float4(add_0.x, add_0.y, sub_0.x, sub_0.y);
+    output[0] = out_0.x;
+    output[1] = out_0.y;
+    output[2] = out_0.z;
+    output[3] = out_0.w;
+}
+
+inline void hadamardWalsh4_simd(const std::array<float, 4>& input, std::array<float, 4>& output) noexcept
+{
+    hadamardWalsh4_simd(input.data(), output.data());
+}
+
+#elif defined(USE_X86_INTRINSICS)
 
 inline void hadamardWalsh4_simd(const float* input, float* output) noexcept
 {
@@ -54,45 +83,18 @@ inline void hadamardWalsh4_simd(const std::array<float, 4>& input, std::array<fl
     hadamardWalsh4_simd(input.data(), output.data());
 }
 
-#elif defined(__aarch64__) || defined(_M_ARM64)
-#include <arm_neon.h>
+#else
 
 inline void hadamardWalsh4_simd(const float* input, float* output) noexcept
 {
-    alignas(16) static constexpr float sign_mask[4] = {1.0f, -1.0f, 1.0f, -1.0f};
-    float32x4_t sign = vld1q_f32(sign_mask);
-
-    float32x4_t v0 = vld1q_f32(&input[0]);
-
-    // Stage 1
-    float32x2_t v0_lo = vget_low_f32(v0);
-    float32x2_t v0_hi = vget_high_f32(v0);
-    float32x4_t s1_lo_0 = vcombine_f32(vdup_lane_f32(v0_lo, 0), vdup_lane_f32(v0_hi, 0));
-    float32x4_t s1_hi_0 = vcombine_f32(vdup_lane_f32(v0_lo, 1), vdup_lane_f32(v0_hi, 1));
-    float32x4_t t1_0 = vaddq_f32(s1_lo_0, vmulq_f32(s1_hi_0, sign));
-
-    // Stage 2
-    float32x2_t t1_0_lo = vget_low_f32(t1_0);
-    float32x2_t t1_0_hi = vget_high_f32(t1_0);
-    float32x4_t s2_lo_0 = vcombine_f32(vdup_lane_f32(t1_0_lo, 0), vdup_lane_f32(t1_0_lo, 1));
-    float32x4_t s2_hi_0 = vcombine_f32(vdup_lane_f32(t1_0_hi, 0), vdup_lane_f32(t1_0_hi, 1));
-    float32x4_t add_0 = vaddq_f32(s2_lo_0, s2_hi_0);
-    float32x4_t sub_0 = vsubq_f32(s2_lo_0, s2_hi_0);
-    float32x4_t out_0 = vuzpq_f32(add_0, sub_0).val[0];
-
-    vst1q_f32(&output[0], out_0);
+    hadamardWalsh4(input, output);
 }
 
 inline void hadamardWalsh4_simd(const std::array<float, 4>& input, std::array<float, 4>& output) noexcept
 {
-    hadamardWalsh4_simd(input.data(), output.data());
+    hadamardWalsh4(input, output);
 }
 
-#else
-inline void hadamardWalsh4_simd(const std::array<float, 4>& input, std::array<float, 4>& output) noexcept
-{
-    hadamardWalsh4(input.data(), output.data());
-}
 #endif
 
-} // namespace AbacDsp
+}

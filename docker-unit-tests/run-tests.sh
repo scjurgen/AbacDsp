@@ -2,5 +2,3 @@
 
 cd /build
 ctest -V -T MemCheck
-
-

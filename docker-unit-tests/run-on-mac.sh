@@ -41,5 +41,7 @@ runOnDocker
 
 echo "Hints for debugging and checking logs: "
 echo "# docker exec -it abacdsp bash"
-echo "# - logs: cat /build/Testing/Temporary/Memory*"
-echo "# - /root/project/docker-unit-tests/build-tests.sh"
+echo "# LOGS:     cat /build/Testing/Temporary/Memory*"
+echo "# BUILD:    /root/project/docker-unit-tests/build-tests.sh"
+echo "# VALGRIND: ctest -T memcheck -R DSPUnitTests -D GTEST_FILTER=KarplusStrongWavesynthTest.frequencyTest
+"

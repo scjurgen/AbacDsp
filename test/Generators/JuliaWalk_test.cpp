@@ -37,9 +37,9 @@ TEST(JuliaWalk, walk)
     sut.setJy(0);
     sut.setJxRad(2.f);
     sut.setJyRad(2.f);
-    for (size_t i = 0; i < 1000; ++i)
-    {
-        std::cout << i << "\t" << sut.next() << "\n";
-    }
+    // for (size_t i = 0; i < 1000; ++i)
+    // {
+    //     std::cout << i << "\t" << sut.next() << "\n";
+    // }
 }
 }

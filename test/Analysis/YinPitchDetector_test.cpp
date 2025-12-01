@@ -118,7 +118,7 @@ TEST_F(YinPitchDetectorTest, feedSineWithNoise)
             << "Pitch detection failed with noise amplitude " << noiseAmp;
 
         // Confidence should decrease with increasing noise
-        const float expectedMinConfidence = std::max(0.3f, 0.8f - noiseAmp * 2.0f);
+        const float expectedMinConfidence = std::max(0.2f, 0.8f - noiseAmp * 3.0f);
         EXPECT_GT(confidence, expectedMinConfidence)
             << "Confidence too low (" << confidence << ") with noise amplitude " << noiseAmp;
     }

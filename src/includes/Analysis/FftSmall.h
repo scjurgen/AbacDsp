@@ -14,6 +14,14 @@
 /*
  * BasicFFT (allocates heap while computing)
  * KissFft (I guess save)
+ *
+ *
+ *
+ * N.B.: for efficient fft use pffft (pretty fast fft) License Permissive, BSD‑style (no copyleft)
+ * or use fftw3 (limited license, bit probelmatic: under its default GPLv2+ license,
+ * is not suitable for a proprietary closed‑source plugin unless you are prepared to:
+ *    - release the plugin under GPL and ship its source, or
+ *    - purchase a commercial FFTW license from MIT
  */
 
 namespace AbacDsp

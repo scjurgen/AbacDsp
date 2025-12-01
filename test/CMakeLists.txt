@@ -4,10 +4,9 @@ set(CMAKE_CXX_STANDARD 20)
 include(GoogleTest)
 set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" "-V")
 enable_testing()
-# Add pffft as a static library from submodule
+
 set(PFFFT_DIR "${PROJECT_SOURCE_DIR}/3rdparty/pffft")
 
-# Check which pffft files exist
 if(EXISTS "${PFFFT_DIR}/pffft_common.c")
     set(PFFFT_SOURCES ${PFFFT_DIR}/pffft.c ${PFFFT_DIR}/pffft_common.c)
 else()
@@ -20,12 +19,10 @@ set_target_properties(pffft_lib PROPERTIES
         POSITION_INDEPENDENT_CODE ON
         FOLDER "Dependencies")
 
-# Create static library from implementation files
 file(GLOB_RECURSE LIB_SOURCES
         CONFIGURE_DEPENDS
         "${PROJECT_SOURCE_DIR}/src/includes/**/*.cpp")
 
-# Only create library if we have implementation files
 if (LIB_SOURCES)
     add_library(audio_dsp_lib STATIC ${LIB_SOURCES})
     target_include_directories(audio_dsp_lib PUBLIC
@@ -36,6 +33,10 @@ if (LIB_SOURCES)
 
     target_compile_features(audio_dsp_lib PUBLIC cxx_std_20)
 
+    if (NOT APPLE)
+        target_compile_options(audio_dsp_lib PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-msse3>)
+    endif ()
+
     message(STATUS "Created audio_dsp_lib with ${CMAKE_MATCH_COUNT} source files")
     foreach (source ${LIB_SOURCES})
         message(STATUS "  - ${source}")
@@ -44,7 +45,6 @@ else ()
     message(STATUS "No implementation files found, library will be header-only")
 endif ()
 
-# Updated macro that links against the library
 macro(package_add_test TESTNAME)
     if (${ARGC} EQUAL 2)
         if (IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${ARGV1}")
@@ -67,6 +67,9 @@ macro(package_add_test TESTNAME)
 
     if (TARGET audio_dsp_lib)
         target_link_libraries(${TESTNAME} audio_dsp_lib pffft_lib gtest gmock gtest_main)
+        if (NOT APPLE)
+            target_compile_options(${TESTNAME} PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-msse3>)
+        endif ()
     else ()
         target_link_libraries(${TESTNAME} pffft_lib gtest gmock gtest_main)
         target_include_directories(${TESTNAME} PRIVATE

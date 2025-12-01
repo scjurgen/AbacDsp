@@ -2,9 +2,10 @@
 
 #include "Numbers/Interpolation.h"
 #include "Audio/FixedSizeProcessor.h"
+
 #include <algorithm>
-#include <vector>
 #include <cmath>
+#include <vector>
 
 namespace AbacDsp
 {
@@ -150,7 +151,7 @@ class ModulatingDelayPitchedAdjust
     template <size_t blockSize>
     void blockFill(const float* in, float* out)
     {
-        for (uint32_t pos = 0; pos < blockSize; pos++)
+        for (size_t pos = 0; pos < blockSize; pos++)
         {
             out[pos] = step(in[pos]);
         }

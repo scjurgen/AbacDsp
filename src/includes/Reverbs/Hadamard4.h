@@ -1,18 +1,43 @@
 #pragma once
 
+#include "Helpers/PlatformIntrinsics.h"
 #include <array>
 
 namespace AbacDsp
 {
 
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+inline void hadamardFeed4(const std::array<float, 4>& col, std::array<float, 4>& sum) noexcept
+{
+    sum[0] = col[0] + col[1] + col[2] + col[3];
+    sum[1] = col[0] - col[1] + col[2] - col[3];
+    sum[2] = col[0] + col[1] - col[2] - col[3];
+    sum[3] = col[0] - col[1] - col[2] + col[3];
+}
 
-#include <immintrin.h>
+#if defined(USE_SIMD_FRAMEWORK)
 
 inline void hadamardFeed4_simd(const float* col, float* sum) noexcept
 {
-    const __m128 v0 = _mm_load_ps(&col[0]);
+    simd_float4 v0 = simd_make_float4(col[0], col[1], col[2], col[3]);
 
+    simd_float4 all_pos = simd_make_float4(1.0f, 1.0f, 1.0f, 1.0f);
+    simd_float4 alt_pn = simd_make_float4(1.0f, -1.0f, 1.0f, -1.0f);
+    simd_float4 pp_nn = simd_make_float4(1.0f, 1.0f, -1.0f, -1.0f);
+    simd_float4 p_nnp = simd_make_float4(1.0f, -1.0f, -1.0f, 1.0f);
+
+    auto hsum = [](simd_float4 v) -> float { return simd_reduce_add(v); };
+
+    sum[0] = hsum(v0 * all_pos);
+    sum[1] = hsum(v0 * alt_pn);
+    sum[2] = hsum(v0 * pp_nn);
+    sum[3] = hsum(v0 * p_nnp);
+}
+
+#elif defined(USE_X86_INTRINSICS)
+
+inline void hadamardFeed4_simd(const float* col, float* sum) noexcept
+{
+    const __m128 v0 = _mm_loadu_ps(&col[0]);
     const __m128 all_pos = _mm_set_ps(1.0f, 1.0f, 1.0f, 1.0f);
     const __m128 alt_pn = _mm_set_ps(-1.0f, 1.0f, -1.0f, 1.0f);
     const __m128 pp_nn = _mm_set_ps(-1.0f, -1.0f, 1.0f, 1.0f);
@@ -33,43 +58,13 @@ inline void hadamardFeed4_simd(const float* col, float* sum) noexcept
     sum[3] = hsum(_mm_mul_ps(v0, p_nnp));
 }
 
-#elif defined(__aarch64__) || defined(_M_ARM64)
-
-#include <arm_neon.h>
+#else
 
 inline void hadamardFeed4_simd(const float* col, float* sum) noexcept
 {
-    const float32x4_t v0 = vld1q_f32(&col[0]);
-
-    const float32x4_t all_pos = vdupq_n_f32(1.0f);
-    const float alt_pn_data[4] = {1.0f, -1.0f, 1.0f, -1.0f};
-    const float pp_nn_data[4] = {1.0f, 1.0f, -1.0f, -1.0f};
-    const float p_nnp_data[4] = {1.0f, -1.0f, -1.0f, 1.0f};
-
-    const float32x4_t alt_pn = vld1q_f32(alt_pn_data);
-    const float32x4_t pp_nn = vld1q_f32(pp_nn_data);
-    const float32x4_t p_nnp = vld1q_f32(p_nnp_data);
-
-    auto hsum = [](float32x4_t v) -> float
-    {
-        float32x2_t sum = vadd_f32(vget_low_f32(v), vget_high_f32(v));
-        return vget_lane_f32(vpadd_f32(sum, sum), 0);
-    };
-
-    sum[0] = hsum(vmulq_f32(v0, all_pos));
-    sum[1] = hsum(vmulq_f32(v0, alt_pn));
-    sum[2] = hsum(vmulq_f32(v0, pp_nn));
-    sum[3] = hsum(vmulq_f32(v0, p_nnp));
+    hadamardFeed4(*reinterpret_cast<const std::array<float, 4>*>(col), *reinterpret_cast<std::array<float, 4>*>(sum));
 }
 
 #endif
-
-inline void hadamardFeed4(const std::array<float, 4>& col, std::array<float, 4>& sum) noexcept
-{
-    sum[0] = col[0] + col[1] + col[2] + col[3];
-    sum[1] = col[0] - col[1] + col[2] - col[3];
-    sum[2] = col[0] + col[1] - col[2] - col[3];
-    sum[3] = col[0] - col[1] - col[2] + col[3];
-}
 
 }

@@ -10,13 +10,14 @@ No dependencies for the dsp code it self (examples and unit-test have submodules
 - googletest
 - Audiofile
 - juce v8
+- pfft
 
 ### Class design
 
 - float based unless we really need precision for iterative algorithms
 - mostly templates based for adaptive code and better optimisations.
 - classes should ctor with the samplerate
-- blockoperations of BlockSize=8 Samples for better compiler optimisations
+- blockoperations of BlockSize=8 or 16 Samples for better compiler optimisations
 - operations on simple buffer design with interleaved or mono array
 - raw float operations allowed but with BlockSize only
 - testability
