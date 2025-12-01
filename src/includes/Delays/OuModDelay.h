@@ -105,6 +105,7 @@ class OuModDelay
             }
             m_wowCount = WowStep;
         }
+
         const auto hd = m_rdHd.step(m_headWrite);
         float dHead = hd + m_lastWow;
         if (dHead >= MaxSizeInSamples)
@@ -148,6 +149,7 @@ class OuModDelay
             static int cnt = 0;
             m_headWrite = 0;
         }
+        return m_lastWow;
         return ret;
     }
 

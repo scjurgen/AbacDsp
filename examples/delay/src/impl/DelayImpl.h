@@ -158,7 +158,7 @@ class DelayImpl final : public EffectBase
                 out(i, c) = value * m_wetGain + m_dryGain * dry;
             }
         }
-        m_visualWavedata[m_currentSample] = (out(0, 0) + out(0, 1)) * 0.5f;
+        m_visualWavedata[m_currentSample] = out(0, 0);
         m_currentSample++;
         if (m_currentSample >= m_visualWavedata.size())
         {

@@ -42,10 +42,19 @@ class OrnsteinUhlenbeckProcess
     float step() noexcept
     {
         const auto dW = m_normalDist(m_rng);
-        // OU process: dx = θ(μ - x)dt + σ√dt * dW
-        const auto theta = m_sigma * 20.0f + 1.0f; // Mean reversion rate
-        const auto mu = m_sigma;                   // Long-term mean
-        m_x += theta * (mu - m_x) * m_dt + m_sigma * m_sqrtDt * dW;
+        if constexpr (false)
+        {
+            // OU process: dx = θ(μ - x)dt + σ√dt * dW
+            const auto theta = m_sigma * 20.0f + 1.0f; // Mean reversion rate
+            const auto mu = m_sigma;                   // Long-term mean
+            m_x += theta * (mu - m_x) * m_dt + m_sigma * m_sqrtDt * dW;
+        }
+        else
+        {
+            constexpr auto mu = 0.0f;    // Zero-centered noise
+            constexpr auto theta = 2.0f; // Fixed, moderate reversion rate
+            m_x += theta * (mu - m_x) * m_dt + m_sigma * m_sqrtDt * dW;
+        }
         return m_x;
     }
 

@@ -257,7 +257,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             [](float value, float) { return juce::String(value, 1) + " %"; }));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("modSpeed", 1), "Modulation speed",
-            juce::NormalisableRange<float>(0.05, 20, 0.1, 0.3, false), 0.25, juce::String("Modulation speed"),
+            juce::NormalisableRange<float>(0.05, 20, 0.001, 0.3, false), 0.25, juce::String("Modulation speed"),
             juce::AudioProcessorParameter::genericParameter,
             [](float value, float) { return juce::String(value, 1) + " Hz"; }));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(

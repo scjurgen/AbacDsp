@@ -50,7 +50,7 @@ TEST(FracReadHeadTest, adjustNearing)
         {
             delta += WrapSize;
         }
-        EXPECT_GE(delta, 1.f) << "failed at " << i;
+        EXPECT_GE(delta, 1.0f) << "failed at " << i;
 
         previous = p;
         EXPECT_TRUE(sut.isAdjusting()) << "failed at " << i;
@@ -135,7 +135,7 @@ TEST(FracReadHeadTest, adjustNearingQuartic)
         {
             delta += WrapSize;
         }
-        EXPECT_GE(delta, 1.f) << "failed at " << i;
+        EXPECT_GE(delta, 1.0f) << "failed at " << i;
 
         previous = p;
         EXPECT_TRUE(sut.isAdjusting()) << "failed at " << i;

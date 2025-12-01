@@ -19,7 +19,7 @@ TEST(DispersionDelayTest, dispersionUp)
     sut.step(1);
     for (size_t i = 0; i < 100; ++i)
     {
-        EXPECT_EQ(sut.step(0), 0.f) << "failed at " << i;
+        EXPECT_EQ(sut.step(0), 0.0f) << "failed at " << i;
     }
     EXPECT_LT(sut.step(0), -0.99f);
 }
@@ -36,7 +36,7 @@ TEST(DispersionDelayTest, simpleFeedAndEat)
     sut.step(1);
     for (size_t i = 0; i < 100; ++i)
     {
-        EXPECT_EQ(sut.step(0), 0.f) << "failed at " << i;
+        EXPECT_EQ(sut.step(0), 0.0f) << "failed at " << i;
     }
     EXPECT_LT(sut.step(0), -0.1f);
     EXPECT_GT(sut.step(0), 0.98f);
@@ -55,7 +55,7 @@ TEST(DispersionDelayTest, changeDelayTime)
     sut.step(1);
     for (size_t i = 0; i < 100; ++i)
     {
-        EXPECT_NEAR(sut.step(0), 0.f, 1E-5f) << "failed at " << i;
+        EXPECT_NEAR(sut.step(0), 0.0f, 1E-5f) << "failed at " << i;
     }
     EXPECT_GT(sut.step(0), 0.5f);
     EXPECT_GT(sut.step(0), 0.6f);
@@ -65,7 +65,7 @@ TEST(DispersionDelayTest, changeDelayTime)
     }
     for (size_t i = 0; i < 69; ++i)
     {
-        EXPECT_NEAR(sut.step(0), 0.f, 1E-5f) << "failed at " << i;
+        EXPECT_NEAR(sut.step(0), 0.0f, 1E-5f) << "failed at " << i;
     }
     sut.setSize(150);
     sut.step(1);
