@@ -15,6 +15,7 @@
 #include "impl/SamplePlayer.h"
 #include "impl/FileIo.h"
 
+#include <unistd.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 
 class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::AudioProcessorValueTreeState::Listener
@@ -108,22 +109,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 
     void releaseResources() override
     {
-        std::cout << "releaseResources: Called on shutdown" << std::endl;
-
-        if (m_fileIo.areParametersModified())
-        {
-            std::cout << "releaseResources: Parameters modified, prompting for save" << std::endl;
-
-            int result = juce::NativeMessageBox::showYesNoBox(
-                juce::MessageBoxIconType::QuestionIcon, "Save Parameters",
-                "Parameters have changed. Do you want to save before exiting?", nullptr, nullptr);
-            if (result == 1)
-            {
-                std::cout << "Saving data\n";
-                m_fileIo.forceSave();
-            }
-        }
-
         pluginRunner = nullptr;
     }
 
@@ -424,7 +409,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             return;
         }
 
-
         if (parameterID == "subset")
         {
             if (parameterID == "subset")
@@ -441,7 +425,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                         .withButton("Yes")
                         .withButton("No")
                         .withIconType(juce::MessageBoxIconType::QuestionIcon),
-                    [this, pi = m_patchIndex](int result) { handlePatchChangeAsync(pi, result == 0); });
+                    [this, pIdx = m_patchIndex](int result) { handlePatchChangeAsync(pIdx, result == 0); });
             }
             else
             {

@@ -63,6 +63,7 @@ class CustomRotaryDial : public juce::Component
     CustomRotaryDial(Component* /*parent = nullptr*/)
         : m_slider(&m_label)
     {
+        m_slider.setBufferedToImage(true);
         addAndMakeVisible(m_slider);
         m_slider.setSliderStyle(juce::Slider::SliderStyle::RotaryHorizontalVerticalDrag);
         m_slider.setTextBoxStyle(juce::Slider::TextEntryBoxPosition::TextBoxBelow, false, 80,

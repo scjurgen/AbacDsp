@@ -167,9 +167,28 @@ void modelSimD()
     statsAll.printHorizontalSummary(std::cout, "All Frequencies");
 }
 
+
+void pumpBiquad()
+{
+    AbacDsp::BiquadResoBP bp{48000};
+    bp.setByDecay(0, 1000, 0.1);
+    bp.step(1.f);
+    for (size_t i = 0; i < 4800; ++i)
+    {
+        const auto value = bp.step(0);
+    }
+    bp.reset(0.5f, -0.5f);
+    for (size_t i = 0; i < 4800; ++i)
+    {
+        const auto value = bp.step(0);
+        std::cout << i << "\t" << value << std::endl;
+    }
+}
+
 int main(int /*ac*/, char* /*av*/[])
 {
     // checkCompensationModelForMaxValues();
     // checkCompensationModelForWaveExcitation();
-    modelSimD();
+    // modelSimD();
+    pumpBiquad();
 }

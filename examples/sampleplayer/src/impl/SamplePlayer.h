@@ -1,9 +1,8 @@
 #pragma once
 
-#include "EffectBase.h"
-#include "Analysis/Spectrogram.h"
 #include "Audio/AudioBuffer.h"
 #include "AudioFile/LoadOgg.h"
+#include "EffectBase.h"
 #include "Helpers/ConstructArray.h"
 #include "SamplerateConverter/ConvertSampleBuffer.h"
 #include "Sampler/SamplePlayerBasic.h"
@@ -11,17 +10,16 @@
 #include "AmbientReverb.h"
 
 #include <nlohmann/json.hpp>
-#include <fstream>
 
+#include <atomic>
 #include <cassert>
-#include <cstdint>
-
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <functional>
-#include <atomic>
-#include <thread>
+#include <fstream>
 #include <mutex>
+#include <thread>
 
 static std::string baseFolder{"/Users/scjurgen/projects/"};
 
@@ -147,58 +145,81 @@ class SamplePlayer final : public EffectBase
     void loadSet(std::array<std::shared_ptr<std::vector<float>>, 20>& tempSamples, const size_t baseIdx,
                  const std::string& folder, const char letter)
     {
+        const auto t0 = std::chrono::high_resolution_clock::now();
+
+        std::array<std::thread, 10> threads;
         for (size_t i = 0; i < 10; ++i)
         {
-            if (m_shouldTerminate.load())
-            {
-                return;
-            }
+            threads[i] = std::thread(
+                [this, &tempSamples, baseIdx, folder, letter, i]()
+                {
+                    if (m_shouldTerminate.load())
+                        return;
 
-            std::stringstream ss;
-            ss << baseFolder << "mynoise/" << folder << "/" << i << letter << ".ogg";
-            loadSample(tempSamples, baseIdx, baseIdx + i, ss.str());
+                    std::stringstream ss;
+                    ss << baseFolder << "mynoise/" << folder << "/" << i << letter << ".ogg";
+                    loadSample(tempSamples, baseIdx, baseIdx + i, ss.str());
+                });
         }
+
+        for (auto& t : threads)
+        {
+            if (t.joinable())
+                t.join();
+        }
+
+        const auto t1 = std::chrono::high_resolution_clock::now();
+        const auto elapsed = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+        size_t totalSamples = 0;
+        for (size_t i = baseIdx; i < baseIdx + 10; ++i)
+        {
+            if (tempSamples[i])
+                totalSamples += tempSamples[i]->size();
+        }
+
+        const double totalMB = (totalSamples * sizeof(float)) / (1024.0 * 1024.0);
+        std::cout << "loadSet (" << letter << "): " << elapsed << " ms, " << totalMB << " MB\n";
     }
 
     void loadSample(std::array<std::shared_ptr<std::vector<float>>, 20>& tempSamples, const size_t baseIdx,
                     const size_t index, const std::string& fname)
     {
         const auto t0 = std::chrono::high_resolution_clock::now();
-
         if (std::vector<float> sampleTmp; AudioUtility::LoadOgg::loadStereoInterleavedFromFile(fname, sampleTmp))
         {
             if (m_shouldTerminate.load())
-            {
                 return;
-            }
 
             const auto t1 = std::chrono::high_resolution_clock::now();
             const auto loadTime = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
             std::vector<float> sampleTmpSRC;
-            const auto ratio = sampleRate() / static_cast<float>(AudioUtility::LoadOgg::getSampleRate(fname));
+            const auto originalSR = AudioUtility::LoadOgg::getSampleRate(fname);
+            const auto ratio = sampleRate() / static_cast<float>(originalSR);
+
+            std::string resampleInfo;
             if (ratio != 1.f)
             {
                 AbacDsp::ConvertSampleBuffer::convert<2>(ratio, sampleTmp, sampleTmpSRC);
-
                 if (m_shouldTerminate.load())
-                {
                     return;
-                }
 
                 const auto t2 = std::chrono::high_resolution_clock::now();
                 const auto resampleTime = std::chrono::duration<double, std::milli>(t2 - t1).count();
-
+                resampleInfo = " (resampled from " + std::to_string(originalSR) +
+                               " Hz, resample: " + std::to_string(resampleTime) + " ms)";
                 tempSamples[index] = std::make_shared<std::vector<float>>(sampleTmpSRC);
-                std::cout << "Loaded " << sampleTmpSRC.size() / 2 / sampleRate() << " seconds from " << fname
-                          << " (load: " << loadTime << " ms, resample: " << resampleTime << " ms)\n";
             }
             else
             {
+                resampleInfo = "";
                 tempSamples[index] = std::make_shared<std::vector<float>>(sampleTmp);
-                std::cout << "Loaded " << sampleTmp.size() / 2 / sampleRate() << " seconds from " << fname
-                          << " (load: " << loadTime << " ms)\n";
             }
+
+            const double sizeMB = (tempSamples[index]->size() * sizeof(float)) / (1024.0 * 1024.0);
+            std::cout << "Loaded " << sampleTmp.size() / 2 / sampleRate() << " seconds from " << fname << " (" << sizeMB
+                      << " MB, load: " << loadTime << " ms)" << resampleInfo << "\n";
 
             if (baseIdx == 0 && tempSamples[index] != nullptr)
             {
@@ -212,7 +233,6 @@ class SamplePlayer final : public EffectBase
             std::cout << "couldn't read " << fname << "\n";
         }
     }
-
 
     void setType(const size_t idx)
     {
@@ -368,6 +388,7 @@ class SamplePlayer final : public EffectBase
         m_smplPlayer[index].setPlaybackRate(std::pow(2.f, semitones / 12.f));
     }
 
+
     void setPitch1(const float semitones)
     {
         setPitch(0, semitones);
@@ -408,6 +429,7 @@ class SamplePlayer final : public EffectBase
     {
         setPitch(9, semitones);
     }
+
     void checkDone()
     {
         auto samples = m_samples.load();
@@ -491,6 +513,7 @@ class SamplePlayer final : public EffectBase
 
         AtomicSampleArray(const AtomicSampleArray&) = delete;
         AtomicSampleArray& operator=(const AtomicSampleArray&) = delete;
+
         void store(const std::array<std::shared_ptr<std::vector<float>>, 20>& samples)
         {
             std::lock_guard<std::mutex> lock(m_mutex);

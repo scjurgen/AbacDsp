@@ -6,6 +6,7 @@
 #include <random>
 #include "Filters/BiquadResoBP.h"
 #include "Excitation.h"
+#include "Numbers/Convert.h"
 
 template <size_t BlockSize, size_t NumElements>
 class ResoGenerator
@@ -147,6 +148,11 @@ class ResoGenerator
         {
             std::ranges::fill(m_triggerWait, 0);
         }
+    }
+
+    void pitchBend(size_t fromFrequency, size_t toFrequency, const float cents)
+    {
+        const auto factor = Convert::centsToRelativePitch<float>(cents);
     }
 
   private:

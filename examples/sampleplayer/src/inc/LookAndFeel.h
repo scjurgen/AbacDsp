@@ -85,7 +85,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         constexpr auto statusOutlineThickness = 2.5f;
         constexpr auto extraMargin = 2.0f;
         constexpr auto strokeSliderBase = 1.5f;
-        constexpr auto strokeSliderRange = 4.5f;
+        constexpr auto strokeSliderRange = 1.5f;
         // constexpr auto handThickness = 3.0f;
 
         auto rect = juce::Rectangle<float>(rx, ry, rw, rw);
@@ -96,20 +96,32 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
 
         slider.isEnabled() ? g.setColour(backgroundDarkGrey) : g.setColour(backgroundDarkGreyDisabled);
         juce::Path bgPath;
+        // shade
+        const auto gradientDistance = radius * 0.5f;
+        float angleLight = -0.4f;
+        const auto gradStart_x = cx + std::cos(angleLight - juce::MathConstants<float>::pi / 2.0f) * gradientDistance;
+        const auto gradStart_y = cy + std::sin(angleLight - juce::MathConstants<float>::pi / 2.0f) * gradientDistance;
+        const auto gradEnd_x = cx + std::cos(angleLight + juce::MathConstants<float>::pi / 2.0f) * gradientDistance;
+        const auto gradEnd_y = cy + std::sin(angleLight + juce::MathConstants<float>::pi / 2.0f) * gradientDistance;
+
+        slider.isEnabled() ? g.setGradientFill(juce::ColourGradient(backgroundMidGrey, gradStart_x, gradStart_y,
+                                                                    gradientDarkGrey, gradEnd_x, gradEnd_y, false))
+                           : g.setColour(gradientDarkGreyDisabled);
+        g.fillEllipse(rect.reduced(extraMargin + statusOutlineThickness + bedOutline + bedThickness));
+
+        // back ground (270 deg)
         bgPath.addCentredArc(cx, cy, radius - extraMargin, radius - extraMargin, 0.0f, rotaryStartAngle, rotaryEndAngle,
                              true);
         g.strokePath(bgPath, juce::PathStrokeType(strokeSliderBase));
 
         slider.isEnabled() ? g.setColour(statusOutline) : g.setColour(statusOutlineDisabled);
+        // value
         juce::Path statusRingPath;
         statusRingPath.addCentredArc(cx, cy, radius - extraMargin, radius - extraMargin, 0.0f, zeroAngle, angle, true);
         g.strokePath(statusRingPath, juce::PathStrokeType(strokeSliderRange));
 
-        slider.isEnabled() ? g.setGradientFill(juce::ColourGradient(backgroundMidGrey, rx + rw / 2, ry,
-                                                                    gradientDarkGrey, rx + rw / 2, ry + rw, false))
-                           : g.setColour(gradientDarkGreyDisabled);
-        g.fillEllipse(rect.reduced(extraMargin + statusOutlineThickness + bedOutline + bedThickness));
 
+        // hand as point
         juce::Path dialPointerPath;
         dialPointerPath.addEllipse(-strokeSliderRange, -radius + 12.0f, strokeSliderRange * 2, strokeSliderRange * 2);
         dialPointerPath.applyTransform(juce::AffineTransform::rotation(angle).translated(cx, cy));
@@ -179,7 +191,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
 
     void positionComboBoxText(juce::ComboBox& box, juce::Label& label) override
     {
-        label.setBounds(1, 1, box.getWidth()-30, box.getHeight() - 2);
+        label.setBounds(1, 1, box.getWidth() - 30, box.getHeight() - 2);
         label.setFont(getComboBoxFont(box));
     }
 
