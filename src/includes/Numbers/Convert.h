@@ -63,6 +63,11 @@ static T noteToFrequency(const T note, const T orchestraTuning = 440.f)
 {
     return orchestraTuning * std::exp2((note - static_cast<T>(69)) / static_cast<T>(12));
 }
+template <std::floating_point T>
+static T noteToFrequency(const int note, const T orchestraTuning = 440.f)
+{
+    return orchestraTuning * std::exp2((static_cast<T>(note) - static_cast<T>(69)) / static_cast<T>(12));
+}
 
 template <std::floating_point T>
 static T noteIntervalToRatio(const T interval)

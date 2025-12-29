@@ -53,7 +53,7 @@ class SvfResoBP
     void pitchBend(const float cents) noexcept
     {
         m_pitchBend = cents;
-        recomputeCoefficientsWithBend();
+        recomputeCoefficientsWithBend(m_currentSet);
     }
 
     void computeCoefficients(const size_t index, const float frequency,
@@ -63,7 +63,7 @@ class SvfResoBP
         m_pitchBend = 0.f;
         const float k = 1.f / std::max(Q, 0.01f);
         m_cf[index].k = k;
-        recomputeCoefficientsWithBend();
+        recomputeCoefficientsWithBend(index);
     }
 
     void updateK(const size_t index, const float Q) noexcept
@@ -162,18 +162,18 @@ class SvfResoBP
     }
 
   private:
-    void recomputeCoefficientsWithBend() noexcept
+    void recomputeCoefficientsWithBend(const size_t index) noexcept
     {
         constexpr float centsToOctave = 1.f / 1200.f;
         const float ratio = std::exp2f(m_pitchBend * centsToOctave);
         const float bendFrequency = m_frequency * ratio;
         const float g = std::tan(std::numbers::pi_v<float> * bendFrequency / m_sampleRate);
-        const float k = m_cf[0].k;
+        const float k = m_cf[index].k;
         const float denom = 1.f / (1.f + g * (g + k));
-        m_cf[0].g = g;
-        m_cf[0].a1 = denom;
-        m_cf[0].a2 = g * denom;
-        m_cf[0].a3 = g * m_cf[0].a2;
+        m_cf[index].g = g;
+        m_cf[index].a1 = denom;
+        m_cf[index].a2 = g * denom;
+        m_cf[index].a3 = g * m_cf[0].a2;
     }
 
     float m_sampleRate{48000.f};
