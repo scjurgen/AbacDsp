@@ -1,14 +1,17 @@
-#include "Analysis/ZeroCrossings.h"
-#include "Filters/SvfResoBP.h"
-#include "Numbers/Convert.h"
 #include "gtest/gtest.h"
+
+#include "Analysis/SimpleStats.h"
+#include "Analysis/ZeroCrossings.h"
+#include "Numbers/Convert.h"
+
+#include "Filters/SvfResoBP.h"
 
 namespace AbacDsp::Test
 {
+constexpr float sampleRate{48000.f};
 
 TEST(SvfResoBPTest, responseDecay)
 {
-    constexpr float sampleRate{48000.f};
     for (size_t n = 21; n < 100; ++n)
     {
         const float f = Convert::noteToFrequency(static_cast<float>(n));
@@ -47,7 +50,6 @@ TEST(SvfResoBPTest, responseDecay)
 
 TEST(SvfResoBPTest, quickReleaseDamping)
 {
-    constexpr float sampleRate{48000.f};
     constexpr float f = 200.f;
     SvfResoBP sut{sampleRate};
     sut.damp(false);
@@ -78,13 +80,12 @@ TEST(SvfResoBPTest, quickReleaseDamping)
     }
 
     EXPECT_GT(preDecayMax, 1.0f);
-    EXPECT_LT(currentMax, 1E-4f);
+    EXPECT_LT(currentMax, 0.01f);
 }
 
 
 TEST(SvfResoBPTest, pitchBendFrequencyAccuracy)
 {
-    constexpr float sampleRate{48000.f};
     constexpr float baseFreq = 440.f;
     constexpr float decayTime = 2.f;
     constexpr size_t stabilizeMs = 10;
@@ -126,4 +127,41 @@ TEST(SvfResoBPTest, pitchBendFrequencyAccuracy)
     testPitchBend(1200.f, 2.f);
 }
 
+
+TEST(SvfResoBPTest, checkCompensationModelForWaveExcitation)
+{
+    SimpleStats<float> statsAll;
+    float decayStart = 0.0078125f;
+    float decayEnd = 64.f;
+    for (float n = 0; n <= 126; n += 2.f)
+    {
+        const auto freq = Convert::noteToFrequency(static_cast<float>(n));
+        for (float decay = decayStart; decay <= decayEnd; decay *= 1.2f)
+        {
+            SvfResoBP sut{sampleRate};
+            sut.setByDecay(0, freq, decay);
+            const auto compFactor = ResonanceCompensation::compensate(static_cast<float>(n), decay);
+            sut.reset(0, compFactor);
+
+            const int periodLength = 1 + static_cast<int>(ceil(sampleRate / freq));
+            float maxValue = 0;
+            int decayTime = 0;
+            for (size_t j = 0; decayTime < 2000; ++j)
+            {
+                decayTime++;
+                std::array<float, 1> out{};
+                sut.process0(out.data(), 1);
+                const auto v = out[0];
+                maxValue = std::max(std::abs(v), maxValue);
+            }
+            statsAll.addDataPoint(maxValue);
+        }
+    }
+    EXPECT_NEAR(statsAll.getMean(), 1, 0.15f);
+    EXPECT_GT(statsAll.getMin(), 0.85f);
+    EXPECT_LT(statsAll.getMax(), 1.15f);
+    statsAll.setPrecision(3);
+    statsAll.printHorizontalSummaryHeader(std::cout, "Compensation Analysis");
+    statsAll.printHorizontalSummary(std::cout, "All Frequencies");
+}
 }

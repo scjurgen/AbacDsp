@@ -11,9 +11,11 @@ namespace AbacDsp::Test
 
 class MockSampleProducer
 {
-public:
+  public:
     explicit MockSampleProducer(float frequency, float sampleRate = 48000.0f)
-        : m_frequency(frequency), m_sampleRate(sampleRate), m_sampleCount(0)
+        : m_frequency(frequency)
+        , m_sampleRate(sampleRate)
+        , m_sampleCount(0)
     {
     }
 
@@ -39,7 +41,7 @@ public:
         return true;
     }
 
-private:
+  private:
     float m_frequency;
     float m_sampleRate;
     size_t m_sampleCount;
@@ -47,7 +49,7 @@ private:
 
 class ResamplingPitchShifterTest : public ::testing::Test
 {
-protected:
+  protected:
     static constexpr float sampleRate{48000.0f};
     static constexpr float frequency{440.0f};
 
@@ -181,8 +183,7 @@ TEST_F(ResamplingPitchShifterTest, StereoSymmetry)
 
     for (size_t i = 0; i < bufferSize; ++i)
     {
-        EXPECT_NEAR(leftOut[i], rightOut[i], 0.001f)
-            << "Stereo channels should be identical at sample " << i;
+        EXPECT_NEAR(leftOut[i], rightOut[i], 0.001f) << "Stereo channels should be identical at sample " << i;
     }
 }
 
@@ -227,4 +228,4 @@ TEST_F(ResamplingPitchShifterTest, VariablePitchRatio)
         << "Pitch ratio change should affect output frequency proportionally";
 }
 
-} // namespace AbacDsp::Test
+}

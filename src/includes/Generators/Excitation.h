@@ -14,10 +14,11 @@ class WindowFunctions
     static std::vector<T> hannWindow(size_t N)
     {
         std::vector<T> window(N);
+        constexpr T pi2 = 2 * std::numbers::pi_v<T>;
         for (size_t i = 0; i < N; ++i)
         {
             T w = static_cast<T>(i) / static_cast<T>(N - 1);
-            window[i] = T(0.5) * (T(1) - std::cos(T(2.0) * std::numbers::pi_v<T> * w));
+            window[i] = T(0.5) * (T(1) - std::cos(pi2 * w));
         }
         return window;
     }
@@ -25,6 +26,9 @@ class WindowFunctions
     template <typename T>
     static void blackmanHarrisWindow(std::span<T> x)
     {
+        constexpr T pi2 = 2 * std::numbers::pi_v<T>;
+        constexpr T pi4 = 4 * std::numbers::pi_v<T>;
+        constexpr T pi6 = 6 * std::numbers::pi_v<T>;
         const T a0 = 0.35875;
         const T a1 = 0.48829;
         const T a2 = 0.14128;
@@ -32,9 +36,7 @@ class WindowFunctions
         for (size_t i = 0; i < x.size(); i++)
         {
             T w = static_cast<T>(i) / static_cast<T>(x.size() - 1);
-            x[i] *= a0 - a1 * std::cos(T(2.0) * std::numbers::pi_v<T> * w) +
-                    a2 * std::cos(T(4.0) * std::numbers::pi_v<T> * w) +
-                    a3 * std::cos(T(6.0) * std::numbers::pi_v<T> * w);
+            x[i] *= a0 - a1 * std::cos(pi2 * w) + a2 * std::cos(pi4 * w) + a3 * std::cos(pi6 * w);
         }
     }
 };
@@ -88,7 +90,7 @@ class Excitation
         return m_noise;
     }
 
-    size_t getPatternLength() const noexcept
+    [[nodiscard]] size_t getPatternLength() const noexcept
     {
         return m_sineLength;
     }
@@ -98,7 +100,7 @@ class Excitation
         m_noiseFactor = std::clamp(noiseFactor, 0.0f, 1.0f);
     }
 
-    float getNoiseFactor() const noexcept
+    [[nodiscard]] float getNoiseFactor() const noexcept
     {
         return m_noiseFactor;
     }
@@ -111,7 +113,7 @@ class Excitation
   private:
     void generateSineWave()
     {
-        const float periodsInPattern = 2.0f;
+        constexpr float periodsInPattern = 2.0f;
         const float phaseIncrement =
             periodsInPattern * 2.0f * std::numbers::pi_v<float> / static_cast<float>(m_sineLength);
         for (size_t i = 0; i < m_sineLength; ++i)

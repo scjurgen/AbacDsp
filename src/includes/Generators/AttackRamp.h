@@ -133,4 +133,4 @@ class AttackRamp
     }
 };
 
-} // namespace AbacDsp
+}

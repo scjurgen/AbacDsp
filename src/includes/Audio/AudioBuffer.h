@@ -315,4 +315,4 @@ using QuadAudioBuffer = AudioBuffer<4, NumFrames>;
 template <size_t NumFrames>
 using CH51AudioBuffer = AudioBuffer<6, NumFrames>;
 
-} // namespace AbacDsp
+}

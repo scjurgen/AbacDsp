@@ -5,7 +5,8 @@
 #include <functional>
 #include <numbers>
 #include <random>
-
+namespace AbacDsp
+{
 struct Harmonic
 {
     float f;
@@ -321,5 +322,6 @@ inline auto prime_harmonics()
                                        199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281};
         return primes[overtoneNum % primes.size()];
     };
+}
 }
 }

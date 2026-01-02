@@ -4,11 +4,14 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <random>
 
 #include "Filters/SvfResoBP.h"
-#include "PingExcitation.h"
 #include "HarmonicGenerator.h"
+#include "Numbers/Convert.h"
 
+namespace AbacDsp
+{
 /*
  * Resonance generator processor:
  * - generates a list of frequencies when triggered.
@@ -22,7 +25,6 @@ class ResoGenerator
   public:
     explicit ResoGenerator(const float sampleRate)
         : m_sampleRate(sampleRate)
-        , m_excitation(1024)
     {
         for (auto& f : m_bq)
         {
@@ -30,19 +32,11 @@ class ResoGenerator
         }
     }
 
-    void setExcitationNoise(const float value) noexcept
-    {
-        m_excitation.setNoise(value);
-    }
+    void setExcitationNoise(const float value) noexcept {}
 
     void setSoftExcitation(const float value) noexcept
     {
         m_softExcitation = value;
-        // decide:
-        // - how to excitate? add noise? multiply residual?
-        // implement:
-        // - range of excitation (m_minRangeExcitation, m_maxRangeExcitation) could be a curve of strength?
-        // - set excitation level for processBlock to apply (best would be continued excitation?)
     }
 
     void setAttack(const float attackMs) noexcept
@@ -57,18 +51,16 @@ class ResoGenerator
 
         for (size_t i = 0; i < lastElement; ++i)
         {
-            m_trigger[i] = static_cast<float>(m_excitation.getPatternLength() - 1);
+            m_trigger[i] = 1;
             m_frequencies[i] = frequencyList[i].f;
-            m_triggerGain[i] = frequencyList[i].gain * logisticCompensation(frequencyList[i].f);
+
+            m_triggerGain[i] = frequencyList[i].gain *
+                               AbacDsp::ResonanceCompensation::compensate(
+                                   Convert::frequencyToNote<float>(frequencyList[i].f), frequencyList[i].decay);
             m_triggerWait[i] = frequencyList[i].delay;
             m_activeState[i] = m_triggerWait[i] == 0 ? 1 : 2;
             m_bq[i].setByDecay(0, frequencyList[i].f, frequencyList[i].decay);
             m_bq[i].setByDecay(1, frequencyList[i].f, frequencyList[i].decay);
-
-            const auto patternLength = static_cast<float>(m_excitation.getPatternLength());
-            constexpr float periodsInPattern = 2.0f;
-            const float samplesForTwoPeriods = (periodsInPattern / frequencyList[i].f) * m_sampleRate;
-            m_phaseAdvance[i] = patternLength / samplesForTwoPeriods;
         }
         cntActive = lastElement;
     }
@@ -87,14 +79,6 @@ class ResoGenerator
                 m_activeState[j] = m_bq[j].isActive() ? 1 : 0;
             }
         }
-    }
-
-    static float logisticCompensation(const float frequency) noexcept
-    {
-        const auto power = std::pow(frequency / 95.18412f, 1.189401f);
-        const auto numerator = 1.f + power;
-        const auto denominator = 0.8258689f + 0.006020447f * power;
-        return numerator / denominator;
     }
 
     [[nodiscard]] std::array<float, NumElements> getFrequencies() const noexcept
@@ -128,10 +112,7 @@ class ResoGenerator
 
     void processBlock(std::array<float, BlockSize>& out) noexcept
     {
-        for (size_t i = 0; i < BlockSize; ++i)
-        {
-            out[i] = 0.f;
-        }
+        std::ranges::fill(out, 0.f);
 
         if (!cntActive)
         {
@@ -155,19 +136,21 @@ class ResoGenerator
                 {
                     if (m_trigger[j] > 0.0f)
                     {
-                        const auto excitationValue = m_excitation.getInterpolatedValue(m_trigger[j]);
-                        const auto v = m_triggerGain[j] * excitationValue;
-                        out[i] += m_bq[j].step(v);
-                        m_trigger[j] -= m_phaseAdvance[j];
-
-                        if (m_trigger[j] <= 0.0f)
-                        {
-                            m_triggerGain[j] = 0.f;
-                        }
+                        m_bq[j].reset(0, m_triggerGain[j]);
+                        m_trigger[j] = 0;
                     }
                     else
                     {
-                        out[i] += m_bq[j].step(0.f);
+                        if (m_softExcitation)
+                        {
+                            std::uniform_real_distribution uniform(-m_softExcitation, m_softExcitation);
+
+                            out[i] += m_bq[j].step(uniform(m_rng));
+                        }
+                        else
+                        {
+                            out[i] += m_bq[j].step0();
+                        }
                     }
                 }
             }
@@ -200,8 +183,8 @@ class ResoGenerator
     int m_minMidiNote{0};
     int m_stepsPerSemitone{12};
     float m_softExcitation{0.f};
+    mutable std::mt19937 m_rng{std::random_device{}()};
     std::array<float, NumElements> m_frequencies{};
-    Excitation m_excitation;
     alignas(64) std::array<AbacDsp::SvfResoBP, NumElements> m_bq{};
     alignas(64) std::array<int32_t, NumElements> m_triggerWait{};
     alignas(64) std::array<float, NumElements> m_trigger{};
@@ -209,3 +192,4 @@ class ResoGenerator
     alignas(64) std::array<float, NumElements> m_phaseAdvance{};
     alignas(64) std::array<int32_t, NumElements> m_activeState{};
 };
+}

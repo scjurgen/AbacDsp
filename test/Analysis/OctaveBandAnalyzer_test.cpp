@@ -260,4 +260,4 @@ TEST_F(OctaveBandAnalyzerTest, AmplitudeScaling)
     EXPECT_NEAR(peak2 / peak1, 2.0f, 0.3f);
 }
 
-} // namespace AbacDsp::Test
+}

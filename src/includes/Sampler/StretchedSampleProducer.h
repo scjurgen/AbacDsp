@@ -360,4 +360,4 @@ class StretchedSampleProducer
     size_t m_samplesToSkip{0};
 };
 
-} // namespace AbacDsp
+}

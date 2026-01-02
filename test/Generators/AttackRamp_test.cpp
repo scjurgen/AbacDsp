@@ -86,4 +86,4 @@ TEST_F(AttackRampTest, BecomesActiveAfterRamp)
     EXPECT_TRUE(ramp.isActive());
 }
 
-} // namespace AbacDsp::test
+}
