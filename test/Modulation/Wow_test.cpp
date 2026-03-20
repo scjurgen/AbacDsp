@@ -137,12 +137,12 @@ TEST_F(WowTest, VarianceAffectsVariability)
     // Test with low variance
     m_wow->setVariance(0.0f);
     settle(3000);
-    const auto lowVarianceResults = generateSteps(100000);
+    const auto lowVarianceResults = generateSteps(1000000);
     const auto lowVarianceStats = computeStats(lowVarianceResults);
 
     // Test with very high variance
     m_wow->setVariance(2.0f);
-    const auto highVarianceResults = generateSteps(100000);
+    const auto highVarianceResults = generateSteps(1000000);
     const auto highVarianceStats = computeStats(highVarianceResults);
     // Higher variance should result in greater standard deviation
     EXPECT_GT(highVarianceStats.stddev, lowVarianceStats.stddev);

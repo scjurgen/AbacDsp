@@ -1,23 +1,21 @@
 #pragma once
 
-#include "Numbers/Approximation.h"
+#include "DSP/AudioAlgorithms.h"
 
 
 #include <array>
 #include <numbers>
 #include <cmath>
+#include "DSP/SmoothingParameter.h"
 
-#include "Parameters/SmoothingParameter.h"
-#include "Numbers/Approximation.h"
-
-namespace AbacDsp
+namespace OT::DSP
 {
 
 class FlutterLfo
 {
   public:
-    explicit FlutterLfo(const float sampleRate, const float frequencyMultiplier, const float amplitude = 1,
-                        const float phaseOffset = 0)
+    explicit FlutterLfo(const float sampleRate, const float frequencyMultiplier, const float amplitude,
+                        const float phaseOffset)
         : m_frequencyMultiplier(frequencyMultiplier / sampleRate)
         , m_amplitude(amplitude)
         , m_phase(phaseOffset)
@@ -29,21 +27,10 @@ class FlutterLfo
         m_phase = 0.0f;
     }
 
-    static float fastCos(const float x) noexcept
-    {
-        // 1 - 6 * x^2 / (pi^2) + 4 * x^3 / (|pi^3|)
-        constexpr float c1 = 0.60792710185403f; // 6/π²
-        constexpr float c2 = 0.12900613773279f; // 4/π³
-        const auto xSquare = x * x;
-        const auto xCube = xSquare * x;
-        return 1 - c1 * xSquare + c2 * std::abs(xCube);
-    }
-
     float step(const float baseFrequency) noexcept
     {
-        const auto phaseInc = std::numbers::pi_v<float> * 2.0f * baseFrequency * m_frequencyMultiplier;
-
-        m_phase += phaseInc;
+        const auto angleDelta = std::numbers::pi_v<float> * 2.0f * baseFrequency * m_frequencyMultiplier;
+        m_phase += angleDelta;
 
         constexpr float pi = std::numbers::pi_v<float>;
         while (m_phase > pi)
@@ -54,7 +41,7 @@ class FlutterLfo
         {
             m_phase += 2.0f * pi;
         }
-        return m_amplitude * Approximation::remezFullCosP6<Approximation::DomainMinusPiToPi>(m_phase);
+        return m_amplitude * Engine::AudioAlgorithms::fastCos(m_phase);
     }
 
   private:
@@ -68,8 +55,9 @@ class Flutter
   public:
     explicit Flutter(const float sampleRate)
         : m_sampleRate(sampleRate)
-        , m_lfos({FlutterLfo(sampleRate, 1.0f, 1.0f, 0.0f), FlutterLfo(sampleRate, 2.0f, 0.3f, 13.0f / 4.0f),
-                  FlutterLfo(sampleRate, 3.0f, 0.2f, -1.f / 10.0f)})
+        , m_lfos({FlutterLfo(sampleRate, 1.0f, 1.0f, 0.0f),
+                  FlutterLfo(sampleRate, 2.0f, 0.3f, 13.0f * std::numbers::pi_v<float> / 4.0f),
+                  FlutterLfo(sampleRate, 3.0f, 0.2f, -std::numbers::pi_v<float> / 10.0f)})
     {
         m_rateSmoothed.newTransition(0.3f, defaultSmoothingTime, m_sampleRate, true);
         m_depthSmoothed.newTransition(0.0f, defaultSmoothingTime, m_sampleRate, true);
@@ -110,6 +98,9 @@ class Flutter
         {
             flutterValue += lfo.step(m_flutterFreq);
         }
+
+        // Convert to speed ratio: 1.0 = normal speed
+        // Scale depth to produce realistic flutter variations (typically ±0.01% to ±1%)
         return 1.0f + m_depth * flutterValue;
     }
 

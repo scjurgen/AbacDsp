@@ -1,5 +1,5 @@
 #include "NonLinear/SimpleHysteresis.h"
-#include "Analysis/FftSmall.h"
+#include "Analysis/FftMisc.h"
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"

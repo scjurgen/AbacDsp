@@ -9,224 +9,175 @@
 namespace AbacDsp::Test
 {
 
-namespace
+class OrnsteinUhlenbeckProcessTest : public ::testing::Test
 {
-constexpr auto kSampleRate{48000.f};
-constexpr auto kSamplesToProcess{7'654'321u};
-constexpr auto kEpsilonMean{1E-3f};
-constexpr auto kEpsilonVariance{5E-1f};
-constexpr auto kSmallSampleSize{1000u};
-}
-
-TEST(OrnsteinUhlenbeckProcessTest, driftStatistics)
-{
-    OrnsteinUhlenbeckProcess sut(kSampleRate);
-    sut.seed(42);
-    SimpleStats<float> stats;
-    sut.setSigma(0.5f);
-
-    for (size_t i = 0; i < kSamplesToProcess; ++i)
+  protected:
+    void SetUp() override
     {
-        stats.addDataPoint(sut.step());
+        m_ouProcess = std::make_unique<OrnsteinUhlenbeckProcess>(m_sampleRate);
     }
 
-    EXPECT_NEAR(stats.getMean(), 0.5f, kEpsilonMean);
-}
+    float m_sampleRate{48000.0f};
+    std::unique_ptr<OrnsteinUhlenbeckProcess> m_ouProcess;
 
-TEST(OrnsteinUhlenbeckProcessTest, meanReversionProperty)
+    static constexpr float m_tolerance = 1e-6f;
+    static constexpr int m_numSamples = 4800;
+};
+
+
+TEST_F(OrnsteinUhlenbeckProcessTest, ZeroVarianceProducesConstantOutput)
 {
-    OrnsteinUhlenbeckProcess sut(kSampleRate);
-    sut.seed(42);
-    SimpleStats<float> stats;
-    constexpr auto sigma = 0.3f;
-    sut.setSigma(sigma);
+    m_ouProcess->seed(42u);
+    constexpr float zeroSigma = 0.0f;
+    m_ouProcess->setSigma(zeroSigma);
 
-    for (size_t i = 0; i < kSamplesToProcess; ++i)
+    // Burn-in until process converges to zero
+    for (int i = 0; i < m_numSamples * 1000; ++i)
     {
-        stats.addDataPoint(sut.step());
-    }
-
-    // Test that mean converges to mu (which equals sigma in the implementation)
-    EXPECT_NEAR(stats.getMean(), sigma, kEpsilonMean);
-
-    // Test that variance is reasonable for a mean-reverting process
-    EXPECT_GT(stats.getVariance(), 0.0);
-    EXPECT_LT(stats.getVariance(), 10.0 * sigma * sigma);
-}
-
-TEST(OrnsteinUhlenbeckProcessTest, differentSigmaValues)
-{
-    constexpr std::array<float, 4> sigmaValues{0.1f, 0.5f, 1.0f, 2.0f};
-
-    for (const auto sigma : sigmaValues)
-    {
-        OrnsteinUhlenbeckProcess sut(kSampleRate);
-        sut.seed(42);
-        SimpleStats<float> stats;
-        sut.setSigma(sigma);
-
-        for (size_t i = 0; i < kSamplesToProcess; ++i)
+        if (std::abs(m_ouProcess->step()) < 0.0001f)
         {
-            stats.addDataPoint(sut.step());
+            break;
         }
-
-        EXPECT_NEAR(stats.getMean(), sigma, kEpsilonMean) << "Failed for sigma=" << sigma;
-        EXPECT_GT(stats.getStdDev(), 0.0) << "Failed for sigma=" << sigma;
     }
-}
-
-TEST(OrnsteinUhlenbeckProcessTest, resetFunctionality)
-{
-    OrnsteinUhlenbeckProcess sut(kSampleRate);
-    sut.seed(42);
-    sut.setSigma(1.0f);
-
-    // Generate some values to move away from initial state
-    for (size_t i = 0; i < 100; ++i)
-    {
-        sut.step();
-    }
-
-    // Reset and check that the next value starts from a reset state
-    sut.reset();
-    const auto firstValue = sut.step();
-
-    // After reset, the process should start with small values due to x=0 initial condition
-    EXPECT_LT(std::abs(firstValue), 5.0f);
-}
-
-TEST(OrnsteinUhlenbeckProcessTest, seedReproducibility)
-{
-    constexpr auto testSeed = 42u;
-    constexpr auto testSigma = 0.7f;
-
-    OrnsteinUhlenbeckProcess sut1(kSampleRate);
-    OrnsteinUhlenbeckProcess sut2(kSampleRate);
-
-    sut1.seed(testSeed);
-    sut1.setSigma(testSigma);
-
-    sut2.seed(testSeed);
-    sut2.setSigma(testSigma);
-
-    std::vector<float> sequence1;
-    std::vector<float> sequence2;
-
-    for (size_t i = 0; i < kSmallSampleSize; ++i)
-    {
-        sequence1.push_back(sut1.step());
-        sequence2.push_back(sut2.step());
-    }
-
-    // Sequences should be identical with the same seed
-    for (size_t i = 0; i < kSmallSampleSize; ++i)
-    {
-        EXPECT_FLOAT_EQ(sequence1[i], sequence2[i]) << "Mismatch at index " << i;
-    }
-}
-
-TEST(OrnsteinUhlenbeckProcessTest, autocorrelationProperty)
-{
-    OrnsteinUhlenbeckProcess sut(kSampleRate);
-    sut.seed(42);
-    sut.setSigma(0.5f);
 
     std::vector<float> samples;
-    samples.reserve(kSmallSampleSize);
-
-    for (size_t i = 0; i < kSmallSampleSize; ++i)
+    samples.reserve(m_numSamples);
+    for (int i = 0; i < m_numSamples; ++i)
     {
-        samples.push_back(sut.step());
+        samples.push_back(m_ouProcess->step());
     }
 
-    // Calculate lag-1 autocorrelation
-    const auto mean = std::accumulate(samples.begin(), samples.end(), 0.0f) / samples.size();
-
-    auto numerator = 0.0f;
-    auto denominator = 0.0f;
-
-    for (size_t i = 0; i < samples.size() - 1; ++i)
+    for (const float sample : samples)
     {
-        const auto x_i = samples[i] - mean;
-        const auto x_i1 = samples[i + 1] - mean;
-        numerator += x_i * x_i1;
-        denominator += x_i * x_i;
+        EXPECT_NEAR(sample, 0.0f, 0.01f) << "Sample should be close to zero with zero sigma";
     }
-
-    const auto autocorr = numerator / denominator;
-
-    // Ornstein-Uhlenbeck process should show positive autocorrelation
-    EXPECT_GT(autocorr, 0.0f);
-    EXPECT_LT(autocorr, 1.0f);
 }
 
-TEST(OrnsteinUhlenbeckProcessTest, boundedness)
+TEST_F(OrnsteinUhlenbeckProcessTest, HigherVarianceProducesLargerFluctuations)
 {
-    OrnsteinUhlenbeckProcess sut(kSampleRate);
-    sut.seed(42);
-    constexpr auto sigma = 1.0f;
-    sut.setSigma(sigma);
+    constexpr float lowSigma = 0.1f;
+    constexpr float highSigma = 0.8f;
+    constexpr auto seed = 42u;
 
-    SimpleStats<float> stats;
-    for (size_t i = 0; i < kSamplesToProcess; ++i)
+    auto computeStdDev = [](const std::vector<float>& data) -> float
     {
-        stats.addDataPoint(sut.step());
-    }
-
-    // Values should be reasonably bounded due to mean reversion
-    const auto range = stats.getRange();
-    EXPECT_LT(range, 50.0f * sigma);
-
-    // Check that extreme values are rare (most values within reasonable bounds)
-    const auto mean = stats.getMean();
-    const auto stddev = stats.getStdDev();
-    const auto lowerBound = mean - 4.0 * stddev;
-    const auto upperBound = mean + 4.0 * stddev;
-
-    EXPECT_GT(stats.getMin(), lowerBound - 1.0f);
-    EXPECT_LT(stats.getMax(), upperBound + 1.0f);
-}
-
-TEST(OrnsteinUhlenbeckProcessTest, differentSampleRates)
-{
-    constexpr std::array<float, 3> sampleRates{22050.f, 48000.f, 96000.f};
-    constexpr auto sigma = 0.5f;
-
-    for (const auto sampleRate : sampleRates)
-    {
-        OrnsteinUhlenbeckProcess sut(sampleRate);
-        sut.seed(42);
-        sut.setSigma(sigma);
-
-        SimpleStats<float> stats;
-
-        for (size_t i = 0; i < kSamplesToProcess; ++i)
+        const float mean = std::accumulate(data.begin(), data.end(), 0.0f) / data.size();
+        float sumSquaredDiffs = 0.0f;
+        for (const float value : data)
         {
-            stats.addDataPoint(sut.step());
+            const float diff = value - mean;
+            sumSquaredDiffs += diff * diff;
         }
+        return std::sqrt(sumSquaredDiffs / data.size());
+    };
 
-        EXPECT_NEAR(stats.getMean(), sigma, kEpsilonMean * 2) << "Failed for sample rate=" << sampleRate;
-        EXPECT_GT(stats.getStdDev(), 0.04f);
-        EXPECT_LT(stats.getRange(), 1.f) << "Failed for sample rate=" << sampleRate;
-    }
-}
-
-TEST(OrnsteinUhlenbeckProcessTest, zenoSigmaBehavior)
-{
-    OrnsteinUhlenbeckProcess sut(kSampleRate);
-    sut.seed(42);
-    sut.setSigma(0.0f);
-
-    SimpleStats<float> stats;
-
-    for (size_t i = 0; i < kSmallSampleSize; ++i)
+    m_ouProcess->reset(seed);
+    m_ouProcess->setSigma(lowSigma);
+    std::vector<float> lowSigmaSamples;
+    lowSigmaSamples.reserve(m_numSamples);
+    for (int i = 0; i < m_numSamples; ++i)
     {
-        stats.addDataPoint(sut.step());
+        lowSigmaSamples.push_back(m_ouProcess->step());
     }
 
-    // With sigma=0, the process should converge to 0 (no noise)
-    EXPECT_NEAR(stats.getMean(), 0.0f, 1E-7f);
-    EXPECT_NEAR(stats.getStdDev(), 0.0f, 1E-7f);
+    m_ouProcess->reset(seed);
+    m_ouProcess->setSigma(highSigma);
+    std::vector<float> highSigmaSamples;
+    highSigmaSamples.reserve(m_numSamples);
+    for (int i = 0; i < m_numSamples; ++i)
+    {
+        highSigmaSamples.push_back(m_ouProcess->step());
+    }
+
+    const float lowStdDev = computeStdDev(lowSigmaSamples);
+    const float highStdDev = computeStdDev(highSigmaSamples);
+
+    EXPECT_GT(highStdDev, lowStdDev) << "Higher sigma should produce larger fluctuations. "
+                                     << "Low sigma std dev: " << lowStdDev << ", High sigma std dev: " << highStdDev;
 }
+
+TEST_F(OrnsteinUhlenbeckProcessTest, ResetClearsState)
+{
+    constexpr float sigma = 0.6f;
+    constexpr auto seed = 4242u;
+    m_ouProcess->setSigma(sigma);
+
+    // Advance to arbitrary state, then reset
+    for (int i = 0; i < 1234; ++i)
+    {
+        m_ouProcess->step();
+    }
+    m_ouProcess->reset(seed);
+    const float outputAfterReset = m_ouProcess->step();
+
+    // Fresh instance from same seed should match
+    m_ouProcess->reset(seed);
+    const float outputFresh = m_ouProcess->step();
+
+    EXPECT_FLOAT_EQ(outputAfterReset, outputFresh);
+}
+
+
+TEST_F(OrnsteinUhlenbeckProcessTest, OutputRemainsConfined)
+{
+    m_ouProcess->seed(789u);
+    constexpr float highSigma = 1.0f;
+    m_ouProcess->setSigma(highSigma);
+
+    constexpr int burnInSamples = 2000;
+    for (int i = 0; i < burnInSamples; ++i)
+    {
+        m_ouProcess->step();
+    }
+
+    // Calculate theoretical steady-state bounds from OU parameters
+    constexpr float theta = highSigma * 20.0f + 1.0f;
+    constexpr float mu = highSigma;
+    const float steadyStateStd = std::sqrt((highSigma * highSigma) / (2.0f * theta));
+
+    // 3-sigma bound (99.7% confidence)
+    const float theoreticalUpperBound = std::abs(mu) + 3.0f * steadyStateStd;
+    const float theoreticalLowerBound = std::abs(mu) - 3.0f * steadyStateStd;
+
+#if NDEBUG
+    constexpr size_t Slices{1000};
+#else
+    constexpr size_t Slices{10};
+#endif
+
+    for (size_t i = 0; i < m_numSamples * Slices; ++i)
+    {
+        const float sample = m_ouProcess->step();
+        EXPECT_GT(sample, theoreticalLowerBound) << "Output below 3-sigma bound at sample " << i;
+        EXPECT_LT(sample, theoreticalUpperBound) << "Output above 3-sigma bound at sample " << i;
+    }
+}
+
+
+TEST_F(OrnsteinUhlenbeckProcessTest, MeanReversionBehavior)
+{
+    m_ouProcess->seed(42u);
+    constexpr float targetMean = 0.7f;
+
+    std::vector<float> longSequence;
+    longSequence.resize(m_numSamples * 5);
+    m_ouProcess->setSigma(targetMean);
+    // Burn-in to reach steady state
+    for (size_t i = 0; i < longSequence.size(); ++i)
+    {
+        m_ouProcess->step();
+    }
+    for (float& sample : longSequence)
+    {
+        sample = m_ouProcess->step();
+    }
+
+    const float mean =
+        std::accumulate(longSequence.begin(), longSequence.end(), 0.0f) / static_cast<float>(longSequence.size());
+
+    EXPECT_NEAR(mean, targetMean, 0.07f) << "Long-term mean should approach the target mean due to mean reversion. "
+                                         << "Actual mean: " << mean << ", Expected: " << targetMean;
+}
+
 
 }

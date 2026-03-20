@@ -5,7 +5,7 @@
 #include <thread>
 #include <vector>
 
-#include "Analysis/FftSmall.h"
+#include "Analysis/FftMisc.h"
 
 namespace AbacDsp
 {

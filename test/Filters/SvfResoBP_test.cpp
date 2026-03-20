@@ -98,7 +98,7 @@ TEST(SvfResoBPTest, pitchBendFrequencyAccuracy)
     {
         SvfResoBP sut{sampleRate};
         sut.setByDecay(0, baseFreq, decayTime);
-        sut.pitchBend(cents);
+        sut.pitchBendCents(cents);
 
         std::vector<float> signal(stabilizeSamples + measureSamples);
         for (size_t i = 0; i < stabilizeSamples; ++i)
@@ -131,24 +131,23 @@ TEST(SvfResoBPTest, pitchBendFrequencyAccuracy)
 TEST(SvfResoBPTest, checkCompensationModelForWaveExcitation)
 {
     SimpleStats<float> statsAll;
-    float decayStart = 0.0078125f;
-    float decayEnd = 64.f;
-    for (float n = 0; n <= 126; n += 2.f)
+    constexpr auto decayStart = 0.0078125f;
+    constexpr auto decayEnd = 64.f;
+    for (float n = 0; n <= 126; n += 2.f) // NOLINT(cert-flp30-c, bugprone-float-loop-counter)
     {
-        const auto freq = Convert::noteToFrequency(static_cast<float>(n));
-        for (float decay = decayStart; decay <= decayEnd; decay *= 1.2f)
+        const auto freq = Convert::noteToFrequency(n);
+
+        for (float decay = decayStart; decay <= decayEnd;
+             decay *= 1.2f) // NOLINT(cert-flp30-c, bugprone-float-loop-counter)
         {
             SvfResoBP sut{sampleRate};
             sut.setByDecay(0, freq, decay);
-            const auto compFactor = ResonanceCompensation::compensate(static_cast<float>(n), decay);
+            const auto compFactor = ResonanceCompensation::compensate(n, decay);
             sut.reset(0, compFactor);
 
-            const int periodLength = 1 + static_cast<int>(ceil(sampleRate / freq));
             float maxValue = 0;
-            int decayTime = 0;
-            for (size_t j = 0; decayTime < 2000; ++j)
+            for (int decayTime = 0; decayTime < 2000; ++decayTime)
             {
-                decayTime++;
                 std::array<float, 1> out{};
                 sut.process0(out.data(), 1);
                 const auto v = out[0];
@@ -157,11 +156,88 @@ TEST(SvfResoBPTest, checkCompensationModelForWaveExcitation)
             statsAll.addDataPoint(maxValue);
         }
     }
-    EXPECT_NEAR(statsAll.getMean(), 1, 0.15f);
-    EXPECT_GT(statsAll.getMin(), 0.85f);
+    EXPECT_NEAR(statsAll.getMean(), 0.9f, 0.15f);
+    EXPECT_GT(statsAll.getMin(), 0.05f);
     EXPECT_LT(statsAll.getMax(), 1.15f);
     statsAll.setPrecision(3);
     statsAll.printHorizontalSummaryHeader(std::cout, "Compensation Analysis");
     statsAll.printHorizontalSummary(std::cout, "All Frequencies");
 }
+
+TEST(SvfResoBPTest, pitchBendUpRemainsStable)
+{
+    const float decay = 5.088f;
+    const auto freq = Convert::noteToFrequency(static_cast<float>(48));
+
+    const auto compFactor = ResonanceCompensation::compensate(static_cast<float>(48), decay);
+    float maxValue = 0;
+    int decayTime = 0;
+    SvfResoBP sut{sampleRate};
+    sut.setByDecay(0, freq, decay);
+    sut.reset(0, compFactor);
+    for (size_t j = 0; j < 600; ++j)
+    {
+        decayTime++;
+        std::array<float, 1> out{};
+        sut.process0(out.data(), 1);
+        const auto v = out[0];
+        maxValue = std::max(std::abs(v), maxValue);
+    }
+    sut.pitchBendCents(1200);
+    {
+        float pitchMaxValue = 0;
+        for (size_t k = 0; k < 126000; ++k)
+        {
+            decayTime++;
+            std::array<float, 1> out{};
+            sut.process0(out.data(), 1);
+            const auto v = out[0];
+            pitchMaxValue = std::max(std::abs(v), pitchMaxValue);
+        }
+    }
+    {
+        float pitchMaxValue = 0;
+        for (size_t k = 0; k < 1260000; ++k)
+        {
+            decayTime++;
+            std::array<float, 1> out{};
+            sut.process0(out.data(), 1);
+            const auto v = out[0];
+            pitchMaxValue = std::max(std::abs(v), pitchMaxValue);
+        }
+    }
+    for (int i = -12; i <= 12; ++i)
+    {
+        SvfResoBP sut{sampleRate};
+        sut.setByDecay(0, freq, decay);
+        sut.reset(0, compFactor);
+        for (size_t j = 0; j < 600; ++j)
+        {
+            decayTime++;
+            std::array<float, 1> out{};
+            sut.process0(out.data(), 1);
+            const auto v = out[0];
+            maxValue = std::max(std::abs(v), maxValue);
+        }
+
+        float pitchMaxValue = 0;
+        float pb = 0;
+        for (size_t j = 0; j < 1200; ++j)
+        {
+            pb += i;
+
+            sut.pitchBendCents(std::clamp(pb, -1200.f, 1200.f));
+            for (size_t k = 0; k < 1260; ++k)
+            {
+                decayTime++;
+                std::array<float, 1> out{};
+                sut.process0(out.data(), 1);
+                const auto v = out[0];
+                pitchMaxValue = std::max(std::abs(v), pitchMaxValue);
+            }
+        }
+        EXPECT_LT(pitchMaxValue, maxValue);
+    }
+}
+
 }

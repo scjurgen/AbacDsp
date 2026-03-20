@@ -15,8 +15,6 @@
  * BasicFFT (allocates heap while computing)
  * KissFft (I guess save)
  *
- *
- *
  * N.B.: for efficient fft use pffft (pretty fast fft) License Permissive, BSD‑style (no copyleft)
  * or use fftw3 (limited license, bit probelmatic: under its default GPLv2+ license,
  * is not suitable for a proprietary closed‑source plugin unless you are prepared to:
@@ -88,7 +86,11 @@ class BasicFFT
     template <typename WindowTag>
     static void applyWindow(std::valarray<std::complex<double>>& x)
     {
-        if constexpr (std::is_same_v<WindowTag, FftHannWindow>)
+        if constexpr (std::is_same_v<WindowTag, FftRectangularWindow>)
+        {
+            // No window for rectangular window
+        }
+        else if constexpr (std::is_same_v<WindowTag, FftHannWindow>)
         {
             hannWindow(x);
         }
@@ -96,10 +98,7 @@ class BasicFFT
         {
             flatTopWindow(x);
         }
-        else if constexpr (std::is_same_v<WindowTag, FftRectangularWindow>)
-        {
-            // No windowing applied for rectangular window
-        }
+
         else if constexpr (std::is_same_v<WindowTag, FftBlackmanWindow>)
         {
             blackmanWindow(x);
@@ -169,9 +168,9 @@ class FFTResponse
     static std::vector<float> generateNoiseSignal(const size_t NumFrames)
     {
         std::minstd_rand generator(31);
-        std::uniform_real_distribution<float> dist(-1.f, 1.f);
+        std::uniform_real_distribution dist(-1.f, 1.f);
         std::vector<float> signal(NumFrames);
-        std::generate(signal.begin(), signal.end(), [&generator, &dist]() { return dist(generator); });
+        std::ranges::generate(signal, [&generator, &dist]() { return dist(generator); });
         return signal;
     }
 
@@ -199,7 +198,11 @@ class FFTResponse
             }
         }
         const auto maxit = max_element(sumUp.begin(), sumUp.end());
-        const float normFactor = 1.f / (*maxit);
+        if (*maxit == 0.f)
+        {
+            return sumUp;
+        }
+        const float normFactor = 1.f / *maxit;
         for (float& i : sumUp)
         {
             i *= normFactor;
@@ -220,13 +223,18 @@ class FFTResponse
                                              float minValue)
     {
         FrequencySlice slice{};
-        auto lastNonZero = std::find_if(binFrequency.rbegin(), binFrequency.rend(), [](float f) { return f != 0.0f; });
-        auto firstGreaterThan =
-            std::find_if(binFrequency.begin(), binFrequency.end(), [minValue](float f) { return f > minValue; });
+        const auto lastNonZero = std::find_if(binFrequency.rbegin(), binFrequency.rend(),
+                                              [](const float f)
+                                              {
+                                                  // better compare
+                                                  return f != 0.0f;
+                                              });
+        const auto firstGreaterThan =
+            std::ranges::find_if(binFrequency, [minValue](const float f) { return f > minValue; });
         if (lastNonZero != binFrequency.rend() && firstGreaterThan != binFrequency.end())
         {
-            size_t start = std::distance(binFrequency.begin(), firstGreaterThan);
-            size_t end = binFrequency.size() - std::distance(binFrequency.rbegin(), lastNonZero);
+            auto start = std::distance(binFrequency.begin(), firstGreaterThan);
+            auto end = binFrequency.size() - std::distance(binFrequency.rbegin(), lastNonZero);
             if (start < end)
             {
                 slice.bins = std::vector<float>(binSum.begin() + start, binSum.begin() + end);
@@ -631,7 +639,7 @@ class HannWindowMagnitudesFft
     void compute(const std::vector<float>& src, std::vector<float>& dst)
     {
         std::transform(src.begin(), src.end(), window.begin(), tmpIn.begin(),
-                       [](float s, float w) { return std::complex<float>(s * w, 0.0f); });
+                       [](const float s, const float w) { return std::complex(s * w, 0.0f); });
         fft.compute(tmpIn.data(), tmpOut.data());
         realDataToMagnitude(dst);
     }

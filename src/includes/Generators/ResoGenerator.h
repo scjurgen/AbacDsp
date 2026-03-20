@@ -10,6 +10,8 @@
 #include "HarmonicGenerator.h"
 #include "Numbers/Convert.h"
 
+#include <iostream>
+
 namespace AbacDsp
 {
 /*
@@ -36,7 +38,8 @@ class ResoGenerator
 
     void setSoftExcitation(const float value) noexcept
     {
-        m_softExcitation = value;
+        m_softExcitation = std::clamp(value, 0.f, 1.f);
+        std::cout << m_softExcitation << std::endl;
     }
 
     void setAttack(const float attackMs) noexcept
@@ -98,16 +101,18 @@ class ResoGenerator
         }
     }
 
-    void pitchBend(const size_t minNote, const size_t maxNote, const float normalized) noexcept
+    void pitchBendCents(const size_t minNote, const size_t maxNote, const float cents) noexcept
     {
         // const int minIndex = (static_cast<int>(minNote) - m_minMidiNote) * m_stepsPerSemitone;
         // const int maxIndex = (static_cast<int>(maxNote) - m_minMidiNote) * m_stepsPerSemitone;
         // const int startIdx = std::max(0, minIndex);
         // const int endIdx = std::min(static_cast<int>(NumElements) - 1, maxIndex);
-        for (int index = 0; index < cntActive; ++index)
-        {
-            m_bq[index].pitchBend(normalized);
-        }
+
+        m_bq[0].pitchBendCents(cents);
+        // for (int index = 0; index < cntActive; ++index)
+        // {
+        //     m_bq[index].pitchBend(normalized);
+        // }
     }
 
     void processBlock(std::array<float, BlockSize>& out) noexcept

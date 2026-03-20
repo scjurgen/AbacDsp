@@ -25,7 +25,7 @@ TEST(WaveTableStorageTest, wavetableStorageSingle)
 TEST(WaveTableStorageTest, checkLevels)
 {
     std::vector<float> expected = {
-        0.707281f,    0.865605f, 1.05304f, 0.924317f, 0.636625f, 1.21355f, 2.56014f,
+        0.707281f,    0.865605f, 1.05304f, 0.924317f, 0.636625f, 1.21588f, 2.569484f,
         1.30268e-05f, // N.B.: Noise floor for triggering filter resonance
         1.32851e-05f, // N.B.: the white noise level is low and gets in the osc a special treatment
         1.03345f,     0.865603f,

@@ -27,7 +27,7 @@ void resoVoiceVolume()
                 decays.push_back(dc);
             }
             sut.setAttack(0.f);
-            Harmonic harmonics{frequency, 1.f, dc, 0};
+            AbacDsp::Harmonic harmonics{frequency, 1.f, dc, 0};
             sut.runHarmonicList(&harmonics, 1);
             float locMax = 0;
             for (size_t j = 0; j < 48000 / 16; ++j)

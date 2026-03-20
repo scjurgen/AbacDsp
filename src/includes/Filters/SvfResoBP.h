@@ -102,8 +102,11 @@ class SvfResoBP
         m_sampleRate = sampleRate;
     }
 
+
     void setByDecay(const size_t index, const float frequency, const float t)
     {
+        m_frequency = frequency;
+        m_decayT = t;
         m_decayMax = static_cast<int>(m_sampleRate * t);
         constexpr auto k = 0.1447648273f;
         float Q = std::numbers::pi_v<float> * frequency * t * k;
@@ -112,13 +115,14 @@ class SvfResoBP
 
     void setDecay(const size_t index, const float t)
     {
+        m_decayT = t;
         m_decayMax = static_cast<int>(m_sampleRate * t * 0.001f);
         constexpr auto k = 0.1447648273f;
         const float Q = std::numbers::pi_v<float> * m_frequency * t * k;
         updateK(index, Q);
     }
 
-    void pitchBend(const float cents) noexcept
+    void pitchBendCents(const float cents) noexcept
     {
         m_pitchBend = cents;
         recomputeCoefficientsWithBend(m_currentSet);
@@ -162,8 +166,8 @@ class SvfResoBP
         const float v3 = -m_z[1];
         const float v1 = cf.a1 * m_z[0] + cf.a2 * v3;
         const float v2 = m_z[1] + cf.a2 * m_z[0] + cf.a3 * v3;
-        m_z[0] = 2.f * v1 - m_z[0];
-        m_z[1] = 2.f * v2 - m_z[1];
+        m_z[0] = std::clamp(2.f * v1 - m_z[0], -1000.f, 1000.f);
+        m_z[1] = std::clamp(2.f * v2 - m_z[1], -1000.f, 1000.f);
         return cf.k * v1;
     }
 
@@ -201,6 +205,7 @@ class SvfResoBP
 
     void damp(const bool damp) noexcept
     {
+        // std::cout << damp << std::endl;
         m_currentSet = damp ? 1 : 0;
     }
 
@@ -235,10 +240,16 @@ class SvfResoBP
         constexpr float centsToOctave = 1.f / 1200.f;
         const float ratio = std::exp2f(m_pitchBend * centsToOctave);
         const float bendFrequency = m_frequency * ratio;
+
         const float g = std::tan(m_piDivSampleRate * bendFrequency);
-        const float k = m_cf[index].k;
-        const float denom = 1.f / (1.f + g * (g + k));
         m_cf[index].g = g;
+
+        constexpr float decayConst = 0.1447648273f;
+        const float Q = std::numbers::pi_v<float> * bendFrequency * m_decayT * decayConst;
+        const float k = 1.f / std::max(Q, 0.01f);
+        m_cf[index].k = k;
+
+        const float denom = 1.f / (1.f + g * (g + k));
         m_cf[index].a1 = denom;
         m_cf[index].a2 = g * denom;
         m_cf[index].a3 = g * m_cf[0].a2;
@@ -249,6 +260,7 @@ class SvfResoBP
     size_t m_currentSet{0};
     int m_decayCount{0};
     int m_decayMax{0};
+    float m_decayT{0};
     int m_inActiveCount{0};
     std::array<BandPassCoefficients, 2> m_cf{};
     std::array<float, 2> m_z{};

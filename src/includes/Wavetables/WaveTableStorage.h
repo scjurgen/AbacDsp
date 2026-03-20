@@ -1,5 +1,5 @@
 #pragma once
-#include "Analysis/FftSmall.h"
+#include "Analysis/FftMisc.h"
 
 #include <array>
 #include <algorithm>
@@ -107,19 +107,29 @@ class WaveTableStore
         switch (wave)
         {
             case BasicWave::Sine:
-                std::ranges::generate(waveData, [n = 0]() mutable
-                                      { return std::sin(2.0f * std::numbers::pi_v<float> * (n++) / tableSize); });
+                std::ranges::generate(waveData,
+                                      [n = 0]() mutable
+                                      {
+                                          const float phase = static_cast<float>(n) / static_cast<float>(tableSize);
+                                          ++n;
+                                          return std::sin(2.0f * std::numbers::pi_v<float> * phase);
+                                      });
                 break;
             case BasicWave::RectifiedSine:
-                std::ranges::generate(
-                    waveData, [n = 0]() mutable
-                    { return std::abs(std::sin(2.0f * std::numbers::pi_v<float> * (n++) / tableSize)); });
+                std::ranges::generate(waveData,
+                                      [n = 0]() mutable
+                                      {
+                                          const float phase = static_cast<float>(n) / static_cast<float>(tableSize);
+                                          ++n;
+                                          return std::abs(std::sin(2.0f * std::numbers::pi_v<float> * phase));
+                                      });
                 break;
             case BasicWave::Triangle:
                 std::ranges::generate(waveData,
                                       [n = 0]() mutable
                                       {
-                                          const float phase = n++ / static_cast<float>(tableSize);
+                                          const float phase = static_cast<float>(n) / static_cast<float>(tableSize);
+                                          n++;
                                           return 2.0f * std::abs(2.0f * phase - 1.0f) - 1.0f;
                                       });
                 break;
@@ -127,31 +137,41 @@ class WaveTableStore
                 std::ranges::generate(waveData,
                                       [n = 0]() mutable
                                       {
-                                          const float phase = n++ / static_cast<float>(tableSize);
+                                          const float phase = static_cast<float>(n) / static_cast<float>(tableSize);
+                                          n++;
                                           return std::abs(2.0f * std::abs(2.0f * phase - 1.0f) - 1.0f);
                                       });
                 break;
             case BasicWave::Saw:
-                std::ranges::generate(waveData, [n = 0]() mutable
-                                      { return -1.0f + 2.0f * (n++ / static_cast<float>(tableSize)); });
+                std::ranges::generate(waveData,
+                                      [n = 0]() mutable
+                                      {
+                                          const float phase = static_cast<float>(n) / static_cast<float>(tableSize);
+                                          ++n;
+                                          return -1.0f + 2.0f * phase;
+                                      });
                 break;
             case BasicWave::SharkFin:
                 std::ranges::generate(waveData,
                                       [n = 0]() mutable
                                       {
-                                          const float phase = n++ / static_cast<float>(tableSize);
+                                          const float phase = static_cast<float>(n) / static_cast<float>(tableSize);
+                                          ++n;
                                           return phase < 0.04f ? -1.0f + 2.0f * (phase / 0.04f)
                                                                : 1.0f - 2.0f * ((phase - 0.04f) / 0.96f);
                                       });
                 break;
             case BasicWave::Square:
-                std::ranges::generate(waveData, [n = 0]() mutable { return (n++ < tableSize / 2) ? 1.0f : -1.0f; });
+                std::ranges::generate(waveData, [n = 0]() mutable
+                                      { return (n++ < static_cast<int>(tableSize / 2)) ? 1.0f : -1.0f; });
                 break;
             case BasicWave::Pulse:
-                std::ranges::generate(waveData, [n = 0]() mutable { return (n++ < 0.2f * tableSize) ? 1.0f : -1.0f; });
+                std::ranges::generate(waveData, [n = 0]() mutable
+                                      { return (n++ < static_cast<int>(0.2f * tableSize)) ? 1.0f : -1.0f; });
                 break;
             case BasicWave::Pulse1:
-                std::ranges::generate(waveData, [n = 0]() mutable { return (n++ < 0.05f * tableSize) ? 1.0f : -1.0f; });
+                std::ranges::generate(waveData, [n = 0]() mutable
+                                      { return (n++ < static_cast<int>(0.05f * tableSize)) ? 1.0f : -1.0f; });
                 break;
 
             case BasicWave::NoiseFloor:

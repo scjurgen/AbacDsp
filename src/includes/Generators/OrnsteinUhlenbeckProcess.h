@@ -1,30 +1,27 @@
 #pragma once
 
-#include <algorithm>
-#include <cmath>
-#include <numbers>
-#include <numeric>
 #include <random>
+#include <cmath>
 
 namespace AbacDsp
 {
+
 /**
- * @brief Ornstein-Uhlenbeck process generator for creating correlated noise sequences.
+ * @brief Correlated noise generator using the Ornstein-Uhlenbeck process.
  *
- * Implements a continuous-time stochastic process that exhibits mean reversion,
+ * Continuous-time stochastic process that exhibits mean reversion,
  * commonly used for modeling random fluctuations with temporal correlation.
- * The process is discretized for digital audio processing.
  *
- * see also https://en.wikipedia.org/wiki/Ornstein–Uhlenbeck_process
+ * @see https://en.wikipedia.org/wiki/Ornstein-Uhlenbeck_process
  */
 class OrnsteinUhlenbeckProcess
 {
   public:
     explicit OrnsteinUhlenbeckProcess(const float sampleRate)
-        : m_sqrtDt(1.0f / std::sqrt(sampleRate))
-        , m_dt(1.0f / sampleRate)
-        , m_x(0.0f)
+        : m_dt(1 / sampleRate)
+        , m_sqrtDt(std::sqrt(m_dt))
         , m_normalDist(0.0f, 1.0f / 2.33f)
+        , m_x(0.0f)
     {
     }
 
@@ -37,39 +34,46 @@ class OrnsteinUhlenbeckProcess
     void setSigma(const float sigma) noexcept
     {
         m_sigma = sigma;
+        m_theta = m_sigma * 20.0f + 1.0f;
+        m_mu = m_sigma;
     }
 
+    /** @brief Advance Ornstein-Uhlenbeck process by one discrete time step.
+     *
+     *  dx = theta(mu - x)dt + sigma*sqrt(dt)*dW
+     *  @return Current process value x.
+     */
     float step() noexcept
     {
         const auto dW = m_normalDist(m_rng);
-        if constexpr (false)
-        {
-            // OU process: dx = θ(μ - x)dt + σ√dt * dW
-            const auto theta = m_sigma * 20.0f + 1.0f; // Mean reversion rate
-            const auto mu = m_sigma;                   // Long-term mean
-            m_x += theta * (mu - m_x) * m_dt + m_sigma * m_sqrtDt * dW;
-        }
-        else
-        {
-            constexpr auto mu = 0.0f;    // Zero-centered noise
-            constexpr auto theta = 2.0f; // Fixed, moderate reversion rate
-            m_x += theta * (mu - m_x) * m_dt + m_sigma * m_sqrtDt * dW;
-        }
+        m_x += m_theta * (m_mu - m_x) * m_dt + m_sigma * m_sqrtDt * dW;
         return m_x;
     }
 
+    /** @brief Resets x to 0; RNG state is preserved. */
     void reset() noexcept
     {
         m_x = 0.0f;
     }
 
+    /** @brief Resets x to 0 and reseeds the RNG. */
+    void reset(const std::mt19937::result_type seed) noexcept
+    {
+        m_x = 0.0f;
+        m_rng.seed(seed);
+        m_normalDist.reset();
+    }
+
   private:
-    const float m_sqrtDt;
     const float m_dt;
+    const float m_sqrtDt;
+    float m_sigma{0.0f};
+    float m_theta{1.0f};
+    float m_mu{0.0f};
     float m_x;
-    float m_sigma{0.f};
 
     std::mt19937 m_rng{std::random_device{}()};
     std::normal_distribution<float> m_normalDist;
 };
-}
+
+} // namespace AbacDsp
