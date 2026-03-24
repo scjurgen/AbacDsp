@@ -20,7 +20,7 @@ class WowTest : public ::testing::Test
   protected:
     void SetUp() override
     {
-        m_wow = std::make_unique<AbacDsp::Wow>(m_sampleRate);
+        m_wow = std::make_unique<Wow>(m_sampleRate);
     }
 
     void TearDown() override
@@ -198,7 +198,7 @@ TEST_F(WowTest, DriftAffectsFrequencyStability)
 
 TEST_F(WowTest, BoundaryValues)
 {
-    for (std::vector<float> testValues = {0.0f, 0.001f, 0.999f, 1.0f}; float rate : testValues)
+    for (std::vector testValues = {0.0f, 0.001f, 0.999f, 1.0f}; auto rate : testValues)
     {
         for (float depth : testValues)
         {

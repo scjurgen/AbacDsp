@@ -360,4 +360,4 @@ TEST(WindowedMagnitudesFftTest, BlackmanWindowPeakBin)
     EXPECT_EQ(static_cast<size_t>(std::distance(dst.begin(), std::max_element(dst.begin(), dst.end()))), expected);
 }
 
-} // namespace AbacDsp::Test
+}

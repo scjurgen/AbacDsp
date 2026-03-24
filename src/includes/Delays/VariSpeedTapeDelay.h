@@ -4,28 +4,23 @@
 #include <random>
 #include <vector>
 
-#include "DSP/Samplerate/SrPushConverter.h"
-#include "DSP/Numbers/MultichannelInterpolation.h"
-#include "DSP/SmoothingParameter.h"
+#include "SamplerateConverter/SrPushConverter.h"
+#include "Numbers/MultichannelInterpolation.h"
+#include "Parameters/SmoothingParameter.h"
 
-#include "DSP/Filter/Biquad.h"
-#include "DSP/Filter/PinkFilter.h"
+#include "Helpers/ConstructArray.h"
 
-#include "utility/makearray.h"
+#include "Modulation/Flutter.h"
+#include "Modulation/Wow.h"
 
-#include "Flutter.h"
-#include "Wow.h"
+#include "Numbers/TimeDistanceSmoother.h"
 
-#include "TimeDistanceSmoother.h"
-
-namespace OT::DSP
+namespace AbacDsp
 {
-template <size_t BufferSize, size_t NumChannels, size_t InternalBlockSize>
+template <size_t BufferSize, size_t NumChannels, size_t NumReadHeads, size_t TileSize>
 class VariSpeedTapeDelay
 {
   public:
-    static constexpr size_t NumReadHeads{4};
-    // future parameters, these could be parametrized if needed
     static constexpr auto accelPerSec = 6.f; // max ratio units per second (acceleration)
     static constexpr auto brakePerSec = 3.f; // max ratio units per second (braking)
     static constexpr auto NoisePeakQ = 0.1f;
@@ -35,24 +30,18 @@ class VariSpeedTapeDelay
     VariSpeedTapeDelay(const float sampleRate, const std::shared_ptr<SincFilter>& filterSet)
         : m_sampleRate(sampleRate)
         , m_buffer((BufferSize + 6) * NumChannels, 0)
-        , m_tapeDefectsBuffer((BufferSize + 6) * NumChannels, 0)
-        , m_rdhd{Utility::makeArray<TimeDistanceSmoother, NumReadHeads>(sampleRate)}
-
+        , m_rdhd{constructArray<TimeDistanceSmoother<double>, NumReadHeads>(static_cast<double>(sampleRate))}
         , m_tmpOutput(static_cast<size_t>(sampleRate), 0)
         , m_srConverter(filterSet)
-        , m_biquad{Utility::makeArray<PeakBiquad, NumChannels>(sampleRate)}
-        , m_flutter(sampleRate / InternalBlockSize)
-        , m_wow(sampleRate / InternalBlockSize)
+        , m_flutter(sampleRate / TileSize)
+        , m_wow(sampleRate / TileSize)
     {
-        setTapeDefects(.02f);
         for (size_t i = 0; i < NumReadHeads; ++i)
         {
             m_rdhd[i].setWrapPosition(BufferSize);
             m_rdhd[i].setCorrectionTime(.005f);
             setReadHead(i, (i + 1) * 4800, true);
         }
-        m_biquad[0].computeCoefficients(5000, 0.f, NoisePeakQ);
-        m_biquad[1].computeCoefficients(5000, 0.f, NoisePeakQ);
         m_flutter.setRate(.4f);
         m_flutter.setDepth(0.1f);
         m_wow.setRate(0.4f);
@@ -61,55 +50,38 @@ class VariSpeedTapeDelay
         m_wow.setDrift(0.05f);
     }
 
-    void setTapeDefects(const float pinkNoiseLevel) noexcept
-    {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_real_distribution<float> distribution(-1.0f, 1.0f);
-
-        std::generate(m_tapeDefectsBuffer.begin(), m_tapeDefectsBuffer.end(),
-                      [&]() mutable
-                      {
-                          const float white = distribution(gen);
-                          return pinkNoiseLevel * m_pink.step(white);
-                      });
-        std::copy_n(m_tapeDefectsBuffer.begin(), 6 * NumChannels,
-                    m_tapeDefectsBuffer.begin() + NumChannels * BufferSize);
-    }
-
-    void readBlock(const size_t hdIdx, std::array<float, NumChannels * InternalBlockSize>& out) noexcept
+    void readBlock(const size_t hdIdx, std::array<float, NumChannels * TileSize>& out) noexcept
     {
         m_rdhd[hdIdx].setCurrentWritePosition(m_writeHead, m_ratio.getLastValue());
-        for (size_t i = 0; i < InternalBlockSize; ++i)
+        for (size_t i = 0; i < TileSize; ++i)
         {
             m_rdhd[hdIdx].advancePosition();
 
             const size_t indexBuffer = std::floor(m_rdhd[hdIdx].getPosition());
             const float fraction = m_rdhd[hdIdx].getPosition() - static_cast<float>(indexBuffer);
-            std::array<float, NumChannels> tmp[2]{};
-            TapeInterpolation::bspline_65x(&m_buffer[indexBuffer * NumChannels], tmp[0].data(), fraction);
-            // clamp for the loop time tape
+            std::array<float, NumChannels> tmp{};
+            TapeInterpolation::catmullRom(&m_buffer[indexBuffer * NumChannels], tmp.data(), fraction);
+            // the last head is the total looptime
             const size_t sosHeadIndex =
                 std::max<size_t>(1000, static_cast<size_t>(m_rdhd[NumReadHeads - 1].getCurrentDelta()));
             const size_t wrappedIndex = indexBuffer % (sosHeadIndex > 0 ? sosHeadIndex : indexBuffer);
-            DefectsInterpolation::linearPt2(&m_tapeDefectsBuffer[wrappedIndex * NumChannels], tmp[1].data(), fraction);
             for (size_t c = 0; c < NumChannels; ++c)
             {
-                out[i * NumChannels + c] = tmp[0][c] + m_tapeNoiseFactor * m_biquad[c].step(tmp[1][c]);
+                out[i * NumChannels + c] = tmp[c];
             }
         }
     }
 
-    void process(const std::array<float, NumChannels * InternalBlockSize>& in) noexcept
+    void feed(const std::array<float, NumChannels * TileSize>& in) noexcept
     {
         const auto w = m_wow.step();
         const auto f = m_flutter.step();
-        const auto ratio = m_ratio.getValue(InternalBlockSize) * w * f;
+        const auto ratio = m_ratio.getValue(TileSize) * w * f;
 
         m_input = in.data();
-        m_inputSize = InternalBlockSize;
+        m_inputSize = TileSize;
         const auto producedFrames =
-            m_srConverter.fetchBlock(ratio, m_input, InternalBlockSize, m_tmpOutput.data(), m_tmpOutput.size());
+            m_srConverter.fetchBlock(ratio, m_input, TileSize, m_tmpOutput.data(), m_tmpOutput.size());
         if (producedFrames > 0)
         {
             writeToRingBuffer(m_tmpOutput.data(), producedFrames);
@@ -137,7 +109,7 @@ class VariSpeedTapeDelay
     {
         // acceleration and braking model based on exponential model (doubling speed is always same time)
         const auto ctRatio = std::clamp(targetRatio, 0.001f, 8.f);
-        const auto last = m_ratio.getLastValue();
+        const auto last = std::clamp(m_ratio.getLastValue(), 0.001f, 8.f);
         const auto delta = std::abs(std::log2(ctRatio / last));
         const auto rate = ctRatio > last ? accelPerSec : brakePerSec;
         const auto transitionTime = delta / rate;
@@ -156,19 +128,6 @@ class VariSpeedTapeDelay
     const std::vector<float>& getBuffer() const noexcept
     {
         return m_buffer;
-    }
-
-    void setTapeNoiseFactor(const float v) noexcept
-    {
-        m_tapeNoiseFactor = v;
-    }
-
-    void setTapeNoiseDistribution(const float v) noexcept
-    {
-        const float peak = std::sqrt(v) * 5.f;
-        const float f = 5000.f - v * 3700.f;
-        m_biquad[0].computeCoefficients(f, peak, NoisePeakQ);
-        m_biquad[1].computeCoefficients(f, peak, NoisePeakQ);
     }
 
     void setFlutterDepth(const float value) noexcept
@@ -238,12 +197,11 @@ class VariSpeedTapeDelay
 
   protected:
     std::vector<float> m_buffer;
-    std::vector<float> m_tapeDefectsBuffer;
 
   private:
     LinearSmoothing m_ratio{1.f};
 
-    std::array<TimeDistanceSmoother, 4> m_rdhd;
+    std::array<TimeDistanceSmoother<double>, NumReadHeads> m_rdhd;
 
     size_t m_writeHead{};
 
@@ -251,9 +209,6 @@ class VariSpeedTapeDelay
     size_t m_inputSize{0};
     std::vector<float> m_tmpOutput;
     SrPushConverter<NumChannels> m_srConverter;
-    PinkFilter m_pink;
-    float m_tapeNoiseFactor{0.f};
-    std::array<PeakBiquad, NumChannels> m_biquad;
     Flutter m_flutter;
     Wow m_wow;
     float m_ratioTarget{1.f};

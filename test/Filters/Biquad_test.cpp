@@ -1,5 +1,7 @@
 
 #include "Filters/Biquad.h"
+#include "Filters/BiquadReference.h"
+#include "Generators/ReferenceWave.h"
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
@@ -17,23 +19,6 @@ constexpr double maxDeltaDb = 0.1; // N.B.: be hard on the quality of Biquads fi
 constexpr double StrongQvalue{10.0};         // absurdly high
 constexpr double StandardQValue{0.70710678}; // standard value for -3dB at cutoff
 constexpr double WeakQValue(0.2);            // absurdly low
-
-
-void renderWithSineWave(std::vector<float>& target, const double sampleRate, const double frequency)
-{
-    double phase = 0.0;
-    const double advance = frequency / sampleRate;
-
-    for (size_t frameIdx = 0; frameIdx < target.size(); ++frameIdx)
-    {
-        target[frameIdx] = static_cast<float>(sin(phase * M_PI * 2));
-        phase += advance;
-        if (phase > 1.0)
-        {
-            phase -= 1.0;
-        }
-    }
-}
 
 
 class TestBiquadFilterSet
@@ -215,7 +200,7 @@ TEST_P(DspBiquadFilterTests, allMagnitudesMono)
                 {
                     wave.resize(5000);
                 }
-                renderWithSineWave(wave, sampleRate, hz);
+                renderReferenceSineWave(wave, sampleRate, hz);
                 sut.processBlock(wave.data(), wave.data(), wave.size());
                 const auto [minV, maxV] = std::minmax_element(wave.begin() + wave.size() / 2, wave.end());
                 const auto maxValue = std::max(std::abs(*minV), std::abs(*maxV));
@@ -370,7 +355,7 @@ TEST_P(DspBiquadFilterTests, allMagnitudesStereo)
                 left.resize(qFactor > 0.8 ? 48000 : 5000);  // strong q needs more time to settle due to resonance
                 right.resize(qFactor > 0.8 ? 48000 : 5000); // strong q needs more time to settle due to resonance
 
-                renderWithSineWave(wave, sampleRate, hz);
+                renderReferenceSineWave(wave, sampleRate, hz);
                 sut.processBlock(wave.data(), wave.data(), left.data(), right.data(), wave.size());
 
 
@@ -547,7 +532,7 @@ float calculateDbFromBuffer(const std::vector<float>& buffer)
 void testSingleFrequency(ChebyshevBiquad& sut, TestBuffers& buffers, float frequency, bool isStereo, int order,
                          bool checkRipple = false)
 {
-    renderWithSineWave(buffers.wave, kSampleRate, frequency);
+    renderReferenceSineWave(buffers.wave, kSampleRate, frequency);
 
     const std::vector<float>* targetBuffer;
 
@@ -586,7 +571,7 @@ void testSingleFrequency(ChebyshevBiquad& sut, TestBuffers& buffers, float frequ
 
 void testInitialFrequency(ChebyshevBiquad& sut, TestBuffers& buffers, float testFrequency, bool isStereo)
 {
-    renderWithSineWave(buffers.wave, kSampleRate, testFrequency);
+    renderReferenceSineWave(buffers.wave, kSampleRate, testFrequency);
 
     const std::vector<float>* targetBuffer;
 
@@ -682,4 +667,35 @@ TEST(DspBiquadFilterTest, chebyshevFilterType2HighpassStereo)
     runFilterTest([](ChebyshevBiquad& sut, int order) { sut.computeType2(order, 1000, kRipple, false); }, true, false,
                   500.0f);
 }
+
+
+TEST(DspBiquadFilterTest, PeakFilter)
+{
+    const auto qFactor = 1.0 / std::numbers::sqrt2;
+    const auto cf = 100.0f;
+    const auto peakGain = 5.f;
+
+    constexpr auto sampleRate{48000.0};
+
+    PeakBiquad sut{sampleRate};
+    float hz = {};
+    for (size_t i = 0; i < 10; ++i)
+    {
+        hz = 50 * pow(1.5, i);
+        sut.computeCoefficients(cf, peakGain, qFactor);
+
+        std::vector<float> wave(15000, 0);
+        AbacDsp::renderReferenceSineWave(wave, sampleRate, hz);
+        sut.processBlock(wave.data(), wave.data(), wave.size());
+        const auto [minV, maxV] = std::minmax_element(wave.begin() + wave.size() / 2, wave.end());
+        const auto maxValue = std::max(std::abs(*minV), std::abs(*maxV));
+        const auto db = std::log10(maxValue) * 20.0f;
+
+        BiquadReference ft{sampleRate, BiquadFilterType::Peak};
+        ft.calculateCoefficients(cf, qFactor, peakGain);
+        const auto expectedDb = ft.magnitude(hz);
+        EXPECT_NEAR(db, expectedDb, maxDeltaDb);
+    }
+}
+
 }

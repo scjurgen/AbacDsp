@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-#include "SincFilter.h"
+#include "../Filters/Sinc/SincFilter.h"
 
 namespace AbacDsp
 {

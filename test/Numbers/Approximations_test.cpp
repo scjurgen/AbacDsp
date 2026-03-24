@@ -1,6 +1,7 @@
 #include "Numbers/Approximation.h"
 
 #include <gtest/gtest.h>
+
 #include <cmath>
 #include <numbers>
 
@@ -179,4 +180,4 @@ INSTANTIATE_TEST_SUITE_P(
         ApproxTestCase{"FullCosAbsFoldP6_MinusPiToPi", 7e-5f, false, false, FuncVariant::AbsFold, 6}),
     [](const ::testing::TestParamInfo<ApproxTestCase>& info) { return info.param.m_name; });
 
-} // namespace AbacDsp::Test
+}

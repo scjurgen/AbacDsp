@@ -2,13 +2,11 @@
 
 #include "Numbers/Approximation.h"
 
-
 #include <array>
 #include <numbers>
 #include <cmath>
 
 #include "Parameters/SmoothingParameter.h"
-#include "Numbers/Approximation.h"
 
 namespace AbacDsp
 {

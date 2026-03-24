@@ -1,27 +1,13 @@
-#include "NonLinear/SimpleHysteresis.h"
+
 #include "Analysis/FftMisc.h"
+#include "NonLinear/SimpleHysteresis.h"
+#include "Generators/ReferenceWave.h"
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
 
 namespace AbacDsp::Test
 {
-void renderWithSineWave(std::vector<float>& target, const double sampleRate, const double frequency)
-{
-    double phase = 0.0;
-    const double advance = frequency / sampleRate;
-
-    for (size_t frameIdx = 0; frameIdx < target.size(); ++frameIdx)
-    {
-        target[frameIdx] = static_cast<float>(sin(phase * M_PI * 2));
-        phase += advance;
-        if (phase > 1.0)
-        {
-            phase -= 1.0;
-        }
-    }
-}
-
 
 TEST(SimpleHysteresisTest, checkNonLinearity)
 {
@@ -33,7 +19,7 @@ TEST(SimpleHysteresisTest, checkNonLinearity)
     AbacDsp::SimpleHysteresis sut{sampleRate};
     sut.setFrequencyResponse(a, d);
     std::vector<float> sutBuffer(20000);
-    renderWithSineWave(sutBuffer, sampleRate, f);
+    renderReferenceSineWave(sutBuffer, sampleRate, f);
     constexpr size_t windowSize{4096};
     const size_t windowStart{sutBuffer.size() - windowSize};
     std::transform(sutBuffer.begin(), sutBuffer.end(), sutBuffer.begin(),
@@ -65,7 +51,7 @@ TEST(SimpleHysteresisTest, checkNeutralOnZero)
     AbacDsp::SimpleHysteresis sut{sampleRate};
     sut.setFrequencyResponse(a, d);
     std::vector<float> sutBuffer(20000);
-    renderWithSineWave(sutBuffer, sampleRate, f);
+    renderReferenceSineWave(sutBuffer, sampleRate, f);
     constexpr size_t windowSize{4096};
     const size_t windowStart{sutBuffer.size() - windowSize};
     std::transform(sutBuffer.begin(), sutBuffer.end(), sutBuffer.begin(),

@@ -12,7 +12,7 @@ namespace AbacDsp
 {
 
 /**
- * @brief Tape wow effect processor that simulates analog tape speed variations.
+ * @brief Tape WOW effect processor that simulates analog tape speed variations.
  *
  * Generates pitch modulation characteristic of vintage tape machines by combining
  * sinusoidal modulation with correlated noise from an Ornstein-Uhlenbeck process.
@@ -43,7 +43,7 @@ class Wow
     void seed(const std::mt19937::result_type seed) noexcept
     {
         m_rng.seed(seed);
-        m_ouProcess.seed(seed);
+        m_ouProcess.seed(seed + 1); // Use different seed for OU process
     }
 
     void setRate(const float v) noexcept
@@ -53,7 +53,7 @@ class Wow
 
     void setDepth(const float v) noexcept
     {
-        m_depth = v;
+        m_depth = std::pow(v, 3.0f);
     }
 
     void setVariance(const float v) noexcept
@@ -75,6 +75,7 @@ class Wow
         m_driftRate = std::clamp(rateHz, 0.01f, 0.5f);
     }
 
+    // use sparingly, this stuff is CPU heavy
     float step() noexcept
     {
         if (!m_varianceSmoothed.hasStoppedSmoothing())
@@ -108,7 +109,9 @@ class Wow
         const auto ouValue = m_ouProcess.step();
         const auto filteredOU = m_lowpass.step(ouValue);
 
-        const auto currentDelay = depth * (std::sin(m_phase) + filteredOU);
+        // Generate wow modulation (in milliseconds)
+        const auto maxDelayMs = depth * 10.0f;
+        const auto currentDelay = maxDelayMs * (std::sin(m_phase) + filteredOU);
 
         // Calculate derivative for speed factor
         // Speed factor = 1 + d(delay)/dt
@@ -116,13 +119,7 @@ class Wow
         const auto delayDerivative = (currentDelay - m_previousDelay) * m_sampleRate / 1000.0f;
         m_previousDelay = currentDelay;
 
-        m_lastValue = delayDerivative;
-        return m_lastValue;
-    }
-
-    [[nodiscard]] float getLast() const noexcept
-    {
-        return m_lastValue;
+        return 1.0f + delayDerivative;
     }
 
   private:
@@ -133,22 +130,19 @@ class Wow
 
     LinearSmoothing m_rateSmoothed;
     float m_depth{1.f};
-    //    LinearSmoothing m_depthSmoothed;
     LinearSmoothing m_varianceSmoothed;
-    float m_drift{};
+    float m_drift{0.f};
 
-    float m_phase{0.0f};
-    float m_driftPhase{0.0f};         // Separate phase for drift oscillation
-    float m_driftRate{0.1f};          // Drift frequency in Hz
-    float m_driftState{0.0f};         // Current drift state (random walk)
-    float m_driftTimeConstant{20.0f}; // Time constant for drift evolution (~20-50 seconds)
+    float m_phase{0.f};
+    float m_driftRate{0.1f};         // Drift frequency in Hz
+    float m_driftState{0.f};         // Current drift state (random walk)
+    float m_driftTimeConstant{20.f}; // Time constant for drift evolution (~20-50 seconds)
 
-    float m_amp{0.0f};
-    float m_previousDelay{0.0f};
-    float m_lastValue{1};
+    float m_amp{0.f};
+    float m_previousDelay{0.f};
 
-    OnePoleFilter<OnePoleFilterCharacteristic::LowPass, false> m_lowpass;
-    OnePoleFilter<OnePoleFilterCharacteristic::LowPass, false> m_depthLowpass;
+    OnePoleFilter<OnePoleFilterCharacteristic::LowPass> m_lowpass;
+    OnePoleFilter<OnePoleFilterCharacteristic::LowPass> m_depthLowpass;
     OrnsteinUhlenbeckProcess m_ouProcess;
 
     std::mt19937 m_rng;

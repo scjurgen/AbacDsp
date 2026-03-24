@@ -895,4 +895,61 @@ class ChebyshevBiquad
     std::array<std::array<Biquad<BiquadFilterType::FreeCoefficients>, MAX_ORDER / 2 + 1>, 2> m_biquads;
     std::array<Biquad<BiquadFilterType::FreeCoefficients>, 2> m_biquadSinglePole;
 };
+
+class PeakBiquad
+{
+  public:
+    explicit PeakBiquad(const float sampleRate)
+        : m_sampleRate(sampleRate)
+    {
+    }
+
+
+    void computeCoefficients(const float frequency, const float peakGain, float Q)
+    {
+        const auto Fc = frequency / m_sampleRate;
+        const auto V = powf(10.f, fabs(peakGain) / 20.0f);
+        const auto K = tanf(std::numbers::pi * Fc);
+        const auto KSquare = K * K;
+        if (Q <= 0)
+        {
+            Q = 0.01f;
+        }
+        if (peakGain >= 0)
+        {
+            const auto norm = 1 / (1 + 1 / Q * K + KSquare);
+            m_b0 = (1 + V / Q * K + KSquare) * norm;
+            m_b2 = (1 - V / Q * K + KSquare) * norm;
+            m_a2 = (1 - 1 / Q * K + KSquare) * norm;
+            m_b1 = 2 * (KSquare - 1) * norm;
+        }
+        else
+        {
+            const auto norm = 1 / (1 + V / Q * K + KSquare);
+            m_b0 = (1 + 1 / Q * K + KSquare) * norm;
+            m_b2 = (1 - 1 / Q * K + KSquare) * norm;
+            m_a2 = (1 - V / Q * K + KSquare) * norm;
+            m_b1 = 2 * (KSquare - 1) * norm;
+        }
+    }
+
+    float step(const float in)
+    {
+        m_z[2] = in * m_b0 + m_z[1];
+        m_z[1] = m_b1 * (in - m_z[2]) + m_z[0];
+        m_z[0] = in * m_b2 - m_a2 * m_z[2];
+        return m_z[2];
+    }
+
+    void processBlock(const float* in, float* out, const size_t numSamples)
+    {
+        std::transform(in, in + numSamples, out, [this](const float v) { return step(v); });
+    }
+
+  private:
+    const float m_sampleRate;
+    float m_b0{1.f}, m_b1{0.f}, m_b2{0.f}, m_a2{0.f};
+    std::array<float, 3> m_z{};
+};
+
 }

@@ -1,41 +1,78 @@
-# Generating Filter Coefficients
+# Sinc Filter Generator
 
-The scripts below are used in [GNU Octave][GNU Octave] which should be available
-on most platforms including Linux, Mac and Windows.
+Generates windowed-sinc FIR filter coefficients and writes them into a C++ header
+using a template file. Translated from the original Octave implementation.
 
-On Debian: `sudo apt install octave octave-signal`.
+## Requirements
 
-On Mac OSX use brew: `brew install octave`.
+`Python 3.10+`
 
-Run octave and install the packages with:
-```
-# octave
-pkg install -forge control signal
-```
+## Setup
 
-Filter coefficients can be generated as follows by running the `octave` command
-in the same directory as the scripts and this readme file. It will generate automatically 
-an include file containing the coefficients.
+Create and activate a virtual environment:
 
-```
-octave:1> pkg load signal
-octave:2> f = make_filter (8, 128, 100.3);
+    python3 -m venv .venv
 
-These have been tried and are ok:
+    # Linux / macOS
+    source .venv/bin/activate
 
-f = make_filter(2, 128, 27.2); # FIR multiplies: 7.92188
-f = make_filter(3, 128, 44.3); # FIR multiplies: 12.8906
-f = make_filter(4, 128, 55.0); # FIR multiplies: 17.5469
-f = make_filter(5, 128, 77.6); # FIR multiplies: 22.9844
-f = make_filter(6, 128, 87.2); # FIR multiplies: 27.6094
-f = make_filter(7, 128, 90.0); # FIR multiplies: 31.7969
-f = make_filter(8, 128, 100.0); # FIR multiplies: 36.4375
-f = make_filter(11, 128, 160.0); # FIR multiplies: 52.25
-f = make_filter(13, 256, 180.0); # FIR multiplies: 61.6094
-f = make_filter(21, 512, 180.0); # FIR multiplies: 93.9414
-f = make_filter(33, 512, 170.0); # FIR multiplies: 141.543
-f = make_filter(69, 768, 170.0); # FIR multiplies: 286.305
-```
+    # Windows
+    .venv\Scripts\activate
 
+Install dependencies:
+    
+    pip install --upgrade pip
+    pip install -r requirements.txt
 
-[GNU Octave]: https://www.gnu.org/software/octave/
+To deactivate the environment when done:
+
+    deactivate
+
+## Usage
+
+Place SincFilter.class.template in the working directory, then call make_filter
+from your script:
+
+    from make_filter import make_filter
+    half_coeffs = make_filter(cycles=8, increment=4, atten=100.0)
+
+This produces a Sinc<cycles>.h file in the working directory.
+
+## Parameters
+
+    cycles      float   Number of sinc lobes (controls filter length)
+    increment   int     Interpolation/decimation factor
+    atten       float   Target stop-band attenuation in dB
+
+## How it works
+
+The generator produces a one-sided (half) set of FIR coefficients for a
+windowed-sinc low-pass filter, ready to embed directly in a C++ header.
+
+Step 1 - Filter generation (_generate_filter)
+A symmetric sinc kernel of length N is computed, where N is derived from
+the number of lobe cycles, the interpolation factor (increment), and an
+internal fudge factor that controls the transition band width. A Kaiser
+window is applied to the kernel to achieve the target stop-band attenuation,
+and the result is normalised to unity DC gain.
+
+Step 2 - Filter measurement (_measure_filter)
+The filter magnitude response is evaluated via a large FFT (400 000 points).
+Three values are extracted: stop-band attenuation, the normalised frequency
+at which the stop band begins, and the normalised -3 dB frequency.
+
+Step 3 - Bisection optimisation (make_filter)
+The fudge factor is tuned by bisection between 1.0 and 1.25 until the
+stop-band start frequency converges to 0.5 / increment (the Nyquist of the
+decimated rate) within 1e-10. This maximises the usable pass-band width
+for the given attenuation and filter length.
+
+Step 4 - Coefficient extraction
+Only the second half of the symmetric filter is retained. The array is
+padded with trailing zeros to align its length to a multiple of 4,
+suitable for SIMD processing.
+
+Step 5 - Header generation
+The half-coefficients are written as C++ float literals into an
+AbacDsp::SincFilter::InitParam initialiser, with a comment block
+summarising the filter characteristics.
