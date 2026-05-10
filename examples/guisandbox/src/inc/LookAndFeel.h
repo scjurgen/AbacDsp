@@ -6,7 +6,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
 {
   private:
     const juce::String mainFont{"Futura"};
-    const float fontHeight{Constants::Text::fontHeight};
+    const float fontHeight{GuiConstants::instance().text.fontHeight};
     juce::Colour backgroundDarkGrey, backgroundDarkGreyDisabled;
     juce::Colour backgroundMidGrey;
     juce::Colour statusOutline, statusOutlineDisabled;
@@ -17,20 +17,20 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
     GuiLookAndFeel()
         : mainFontDefinition(juce::FontOptions(mainFont, fontHeight, juce::Font::plain))
     {
-        backgroundDarkGrey = juce::Colour(Constants::Colors::bg_DarkGrey);
-        backgroundDarkGreyDisabled = juce::Colour(Constants::Colors::bg_DarkGrey).withAlpha(0.35f);
-        backgroundMidGrey = juce::Colour(Constants::Colors::bg_MidGrey);
-        statusOutline = juce::Colour(Constants::Colors::statusOutline);
-        statusOutlineDisabled = juce::Colour(Constants::Colors::statusOutline).withAlpha(0.35f);
-        gradientDarkGrey = juce::Colour(Constants::Colors::gd_DarkGreyStart);
-        gradientDarkGreyDisabled = juce::Colour(Constants::Colors::gd_DarkGreyStart).withAlpha(0.35f);
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey);
+        backgroundDarkGreyDisabled = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey).withAlpha(0.35f);
+        backgroundMidGrey = juce::Colour(GuiConstants::instance().colors.bg_MidGrey);
+        statusOutline = juce::Colour(GuiConstants::instance().colors.statusOutline);
+        statusOutlineDisabled = juce::Colour(GuiConstants::instance().colors.statusOutline).withAlpha(0.35f);
+        gradientDarkGrey = juce::Colour(GuiConstants::instance().colors.gd_DarkGreyStart);
+        gradientDarkGreyDisabled = juce::Colour(GuiConstants::instance().colors.gd_DarkGreyStart).withAlpha(0.35f);
     }
 
     void drawLabel(juce::Graphics& g, juce::Label& label) override
     {
         auto area = label.getLocalBounds();
 
-        g.setColour(label.findColour(juce::Label::textColourId));
+        g.setColour(juce::Colour(GuiConstants::instance().colors.statusOutline));
         g.setFont(juce::FontOptions(mainFont, fontHeight, juce::Font::plain));
         g.setFont(fontHeight);
 
@@ -179,7 +179,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
 
     void positionComboBoxText(juce::ComboBox& box, juce::Label& label) override
     {
-        label.setBounds(1, 1, box.getWidth()-30, box.getHeight() - 2);
+        label.setBounds(1, 1, box.getWidth() - 30, box.getHeight() - 2);
         label.setFont(getComboBoxFont(box));
     }
 

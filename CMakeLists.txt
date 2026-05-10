@@ -34,8 +34,8 @@ if (BUILD_FULL_PROJECT)
     # EXAMPLES - only when building full project
     add_subdirectory(examples/delay)
     add_subdirectory(examples/guisandbox)
-    add_subdirectory(examples/juliasynth)
     add_subdirectory(examples/minireverb)
+    add_subdirectory(examples/plaingain)
     add_subdirectory(examples/sampleplayer)
 else ()
     # For tests-only builds, just include DSP headers

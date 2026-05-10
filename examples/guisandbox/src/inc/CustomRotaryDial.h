@@ -66,7 +66,7 @@ class CustomRotaryDial : public juce::Component
         addAndMakeVisible(m_slider);
         m_slider.setSliderStyle(juce::Slider::SliderStyle::RotaryHorizontalVerticalDrag);
         m_slider.setTextBoxStyle(juce::Slider::TextEntryBoxPosition::TextBoxBelow, false, 80,
-                                 static_cast<int>(Constants::Text::labelHeight));
+                                 static_cast<int>(GuiConstants::instance().text.labelHeight));
         m_slider.setPopupDisplayEnabled(false, false, nullptr, 0);
 
         addAndMakeVisible(m_label);

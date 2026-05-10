@@ -909,7 +909,7 @@ class PeakBiquad
     {
         const auto Fc = frequency / m_sampleRate;
         const auto V = powf(10.f, fabs(peakGain) / 20.0f);
-        const auto K = tanf(std::numbers::pi * Fc);
+        const auto K = tanf(std::numbers::pi_v<float> * Fc);
         const auto KSquare = K * K;
         if (Q <= 0)
         {

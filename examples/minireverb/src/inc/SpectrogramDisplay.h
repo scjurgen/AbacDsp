@@ -18,8 +18,8 @@ class SpectrogramBackground : public juce::Component
   public:
     SpectrogramBackground()
     {
-        backgroundLightGrey = juce::Colour(Constants::Colors::bg_LightGrey);
-        backgroundApp = juce::Colour(Constants::Colors::bg_App);
+        backgroundLightGrey = juce::Colour(GuiConstants::instance().colors.bg_LightGrey);
+        backgroundApp = juce::Colour(GuiConstants::instance().colors.bg_App);
         setBufferedToImage(true);
     }
 
@@ -116,7 +116,7 @@ class SpectrogramDisplay : public juce::Component
     {
         addAndMakeVisible(spectrogramBg);
         addAndMakeVisible(spectrogramImage);
-        backgroundDarkGrey = juce::Colour(Constants::Colors::bg_DarkGrey);
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey);
     }
 
     void paint(juce::Graphics& g) override

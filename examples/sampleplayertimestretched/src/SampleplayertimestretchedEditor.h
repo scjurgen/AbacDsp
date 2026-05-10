@@ -17,14 +17,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
         : AudioProcessorEditor(&p)
         , processorRef(p)
         , valueTreeState(vts)
-        , backgroundApp(juce::Colour(Constants::Colors::bg_App))
+        , backgroundApp(juce::Colour(GuiConstants::instance().colors.bg_App))
     {
         setLookAndFeel(&m_laf);
         initWidgets();
         setResizable(true, true);
-        setResizeLimits(Constants::InitJuce::WindowWidth, Constants::InitJuce::WindowHeight, 4000, 3000);
-        setSize(Constants::InitJuce::WindowWidth, Constants::InitJuce::WindowHeight);
-        startTimerHz(Constants::InitJuce::TimerHertz);
+        setResizeLimits(GuiConstants::instance().init.WindowWidth, GuiConstants::instance().init.WindowHeight, 4000,
+                        3000);
+        setSize(GuiConstants::instance().init.WindowWidth, GuiConstants::instance().init.WindowHeight);
+        startTimerHz(GuiConstants::instance().init.TimerHertz);
     }
 
     ~AudioPluginAudioProcessorEditor() override
@@ -40,15 +41,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
 #pragma GCC diagnostic ignored "-Wfloat-conversion"
     void resized() override
     {
-        auto area = getLocalBounds().reduced(static_cast<int>(Constants::Margins::big));
+        auto area = getLocalBounds().reduced(static_cast<int>(GuiConstants::instance().margins.big));
 
         // auto generated
-        // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
-        const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
+        // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(GuiConstants::instance().margins.small);
+        const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(GuiConstants::instance().margins.medium);
         std::vector<juce::Rectangle<int>> areas(2);
         const auto colWidth = area.getWidth() / 10;
-        areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-        areas[1] = area.reduced(Constants::Margins::small);
+        areas[0] = area.removeFromLeft(colWidth * 1).reduced(GuiConstants::instance().margins.small);
+        areas[1] = area.reduced(GuiConstants::instance().margins.small);
 
         {
             juce::FlexBox box;
@@ -57,12 +58,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
             box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
             box.items.add(juce::FlexItem(volDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(typeDrop)
-                              .withWidth(Constants::Text::labelWidth)
-                              .withHeight(Constants::Text::labelHeight)
+                              .withWidth(GuiConstants::instance().text.labelWidth)
+                              .withHeight(GuiConstants::instance().text.labelHeight)
                               .withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(subsetDrop)
-                              .withWidth(Constants::Text::labelWidth)
-                              .withHeight(Constants::Text::labelHeight)
+                              .withWidth(GuiConstants::instance().text.labelWidth)
+                              .withHeight(GuiConstants::instance().text.labelHeight)
                               .withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(positionDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(advanceDial).withFlex(1).withMargin(knobMarginSmall));

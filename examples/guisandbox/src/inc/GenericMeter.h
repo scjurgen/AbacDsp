@@ -9,8 +9,8 @@ class GaugeBackground : public juce::Component
   public:
     GaugeBackground()
     {
-        backgroundLightGrey = juce::Colour(Constants::Colors::bg_LightGrey);
-        backgroundApp = juce::Colour(Constants::Colors::bg_App);
+        backgroundLightGrey = juce::Colour(GuiConstants::instance().colors.bg_LightGrey);
+        backgroundApp = juce::Colour(GuiConstants::instance().colors.bg_App);
         setBufferedToImage(true);
     }
 
@@ -31,17 +31,17 @@ class GaugeBackground : public juce::Component
         repaint();
     }
 
-    void drawIndicators(juce::Graphics& /*g*/, const float /*minValue*/, const float /*maxValue*/) const
+    void drawIndicators(juce::Graphics& g, const float /*minValue*/, const float /*maxValue*/) const
     {
         // g.setColour(juce::Colour(0xff202020));
-        // const auto height = static_cast<float>(getHeight());
-        // const auto width = static_cast<float>(getWidth());
-        //
-        // for (float db = minValue; db <= maxValue; db += 6)
-        // {
-        //     float y = juce::jmap(db, minValue, maxValue, height, 0.0f);
-        //     g.drawLine(0, y, width, y, 1.0f);
-        // }
+        const auto height = static_cast<float>(getHeight());
+        const auto width = static_cast<float>(getWidth());
+
+        for (float db = minValue; db <= maxValue; db += 6)
+        {
+            float y = juce::jmap(db, minValue, maxValue, height, 0.0f);
+            g.drawLine(0, y, width, y, 1.0f);
+        }
     }
 
   private:
@@ -53,9 +53,7 @@ class GaugeBackground : public juce::Component
 class GaugeValue : public juce::Component
 {
   public:
-    GaugeValue()
-    {
-    }
+    GaugeValue() {}
 
     void paint(juce::Graphics& g) override
     {
@@ -113,7 +111,7 @@ class GaugeValue : public juce::Component
             g.fillRect(columnBounds);
             float visibleHeight = juce::jmap(std::clamp(linValue, 0.f, 100.f), 0.f, 100.f, 0.0f, height);
 
-            g.setColour(juce::Colour(Constants::Colors::bg_App));
+            g.setColour(juce::Colour(GuiConstants::instance().colors.bg_App));
             columnBounds.expand(1, 0);
             g.fillRect(columnBounds.withBottom(height - visibleHeight));
         }
@@ -130,7 +128,7 @@ class Gauge : public juce::Component
     {
         addAndMakeVisible(gaugeBg);
         addAndMakeVisible(gaugeValue);
-        backgroundDarkGrey = juce::Colour(Constants::Colors::bg_DarkGrey);
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey);
     }
 
     void paint(juce::Graphics& g) override

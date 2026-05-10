@@ -13,6 +13,7 @@
 #include "UiElements.h"
 
 #include "impl/DelayImpl.h"
+#include "impl/FileIo.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -39,6 +40,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         , m_envInput{AbacDsp::RmsFollower(10000), AbacDsp::RmsFollower(10000)}
         , m_envOutput{AbacDsp::RmsFollower(10000), AbacDsp::RmsFollower(10000)}
         , m_spectrogram{}
+        , m_patchIndex(0, 0)
     {
         m_parameters.addParameterListener("gain", this);
         m_parameters.addParameterListener("dry", this);
@@ -50,12 +52,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("allPass", this);
         m_parameters.addParameterListener("modDepth", this);
         m_parameters.addParameterListener("modSpeed", this);
-        m_parameters.addParameterListener("modVariance", this);
-        m_parameters.addParameterListener("modDrift", this);
+
+        m_fileIo.initialize(m_patchIndex);
     }
     ~AudioPluginAudioProcessor() override = default;
 
-    void prepareToPlay(double sampleRate, int samplesPerBlock) override
+    void prepareToPlay(const double sampleRate, const int samplesPerBlock) override
     {
         pluginRunner = std::make_unique<DelayImpl<NumSamplesPerBlock>>(static_cast<float>(sampleRate));
         m_sampleRate = static_cast<size_t>(sampleRate);
@@ -73,10 +75,27 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
 
         juce::ignoreUnused(samplesPerBlock);
+        m_fileIo.enable();
     }
 
     void releaseResources() override
     {
+        std::cout << "releaseResources: Called on shutdown" << std::endl;
+
+        if (m_fileIo.areParametersModified())
+        {
+            std::cout << "releaseResources: Parameters modified, prompting for save" << std::endl;
+
+            int result = juce::NativeMessageBox::showYesNoBox(
+                juce::MessageBoxIconType::QuestionIcon, "Save Parameters",
+                "Parameters have changed. Do you want to save before exiting?", nullptr, nullptr);
+            if (result == 1)
+            {
+                std::cout << "Saving data\n";
+                m_fileIo.forceSave();
+            }
+        }
+
         pluginRunner = nullptr;
     }
 
@@ -174,10 +193,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             case 0:
                 return {"Program 0"};
-            case 1:
-                return {"Program 1"};
-            case 2:
-                return {"Program 2"};
             default:
                 return {"Program unknown"};
         }
@@ -238,12 +253,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             [](float value, float) { return juce::String(value, 1) + " %"; }));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("lowPass", 1), "Low pass cutoff",
-            juce::NormalisableRange<float>(10, 20000, 1, 0.3, false), 12000, juce::String("Low pass cutoff"),
+            juce::NormalisableRange<float>(100, 20000, 1, 0.3, false), 12000, juce::String("Low pass cutoff"),
             juce::AudioProcessorParameter::genericParameter,
             [](float value, float) { return juce::String(value, 0) + " Hz"; }));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("highPass", 1), "High pass cutoff",
-            juce::NormalisableRange<float>(10, 20000, 1, 0.3, false), 50, juce::String("High pass cutoff"),
+            juce::NormalisableRange<float>(100, 20000, 1, 0.3, false), 50, juce::String("High pass cutoff"),
             juce::AudioProcessorParameter::genericParameter,
             [](float value, float) { return juce::String(value, 0) + " Hz"; }));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -257,19 +272,9 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             [](float value, float) { return juce::String(value, 1) + " %"; }));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("modSpeed", 1), "Modulation speed",
-            juce::NormalisableRange<float>(0.05, 20, 0.001, 0.3, false), 0.25, juce::String("Modulation speed"),
+            juce::NormalisableRange<float>(0.05, 20, 0.1, 0.3, false), 0.25, juce::String("Modulation speed"),
             juce::AudioProcessorParameter::genericParameter,
             [](float value, float) { return juce::String(value, 1) + " Hz"; }));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("modVariance", 1), "Modulation Variance",
-            juce::NormalisableRange<float>(0.0, 100.0, 1.0, 1.0, false), 10, juce::String("Modulation Variance"),
-            juce::AudioProcessorParameter::genericParameter,
-            [](float value, float) { return juce::String(value, 0) + " %"; }));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("modDrift", 1), "Modulation Drift",
-            juce::NormalisableRange<float>(0.0, 100.0, 1.0, 1.0, false), 10, juce::String("Modulation Drift"),
-            juce::AudioProcessorParameter::genericParameter,
-            [](float value, float) { return juce::String(value, 0) + " %"; }));
 
         return {params.begin(), params.end()};
     }
@@ -281,6 +286,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             return;
         }
+
+
         static const std::map<juce::String, std::function<void(AudioPluginAudioProcessor&, float)>> parameterMap{
             {"gain", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setGain(v); }},
             {"dry", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setDry(v); }},
@@ -292,9 +299,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             {"allPass", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setAllPass(v); }},
             {"modDepth", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setModDepth(v); }},
             {"modSpeed", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setModSpeed(v); }},
-            {"modVariance",
-             [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setModVariance(v); }},
-            {"modDrift", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setModDrift(v); }},
 
         };
         if (auto it = parameterMap.find(parameterID); it != parameterMap.end())
@@ -302,6 +306,88 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             it->second(*this, newValue);
         }
     }
+
+    // Helper to handle patch change after dialog response
+    void handlePatchChangeAsync(const std::vector<int>& newPatchIndex, bool shouldSave)
+    {
+        if (shouldSave)
+        {
+            m_fileIo.forceSave();
+        }
+
+        loadPatchDirect(newPatchIndex);
+    }
+
+    void loadPatchDirect(const std::vector<int>& patchIndex)
+    {
+        m_fileIo.loadPatchDirect(patchIndex);
+        m_fileIo.loadPatchDirect(patchIndex);
+        const auto& params = m_fileIo.getCurrentParameters();
+
+        // Apply loaded parameters to APVTS (triggers UI update)
+        if (auto* p = m_parameters.getParameter("gain"))
+        {
+            const auto& range = m_parameters.getParameterRange("gain");
+            float normalized = range.convertTo0to1(params.gain);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("dry"))
+        {
+            const auto& range = m_parameters.getParameterRange("dry");
+            float normalized = range.convertTo0to1(params.dry);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("wet"))
+        {
+            const auto& range = m_parameters.getParameterRange("wet");
+            float normalized = range.convertTo0to1(params.wet);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("timeInMs"))
+        {
+            const auto& range = m_parameters.getParameterRange("timeInMs");
+            float normalized = range.convertTo0to1(params.timeInMs);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("feedback"))
+        {
+            const auto& range = m_parameters.getParameterRange("feedback");
+            float normalized = range.convertTo0to1(params.feedback);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("lowPass"))
+        {
+            const auto& range = m_parameters.getParameterRange("lowPass");
+            float normalized = range.convertTo0to1(params.lowPass);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("highPass"))
+        {
+            const auto& range = m_parameters.getParameterRange("highPass");
+            float normalized = range.convertTo0to1(params.highPass);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("allPass"))
+        {
+            const auto& range = m_parameters.getParameterRange("allPass");
+            float normalized = range.convertTo0to1(params.allPass);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("modDepth"))
+        {
+            const auto& range = m_parameters.getParameterRange("modDepth");
+            float normalized = range.convertTo0to1(params.modDepth);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("modSpeed"))
+        {
+            const auto& range = m_parameters.getParameterRange("modSpeed");
+            float normalized = range.convertTo0to1(params.modSpeed);
+            p->setValueNotifyingHost(normalized);
+        }
+    }
+
+
     void computeCpuLoad(std::chrono::nanoseconds elapsed, size_t numSamples)
     {
         samplesProcessed += numSamples;
@@ -410,5 +496,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     std::array<AbacDsp::RmsFollower, 2> m_envInput;
     std::array<AbacDsp::RmsFollower, 2> m_envOutput;
     AbacDsp::SimpleSpectrogram m_spectrogram;
+    std::vector<int> m_patchIndex;
+    FileIo m_fileIo;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessor)
 };

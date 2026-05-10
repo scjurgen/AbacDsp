@@ -208,9 +208,9 @@ class MelSpectroGram
     std::vector<float> m_fftBuffer;
     std::vector<float> m_magnitudes;
     HannWindowMagnitudesFft m_fft;
-    size_t m_fftLength{1024};
+    size_t m_fftLength{2048};
     size_t m_slices{1920};
-    float m_windowForward{0.5f};
+    float m_windowForward{0.75f};
     size_t m_currentSlice{0};
     size_t m_bufferIndex{0};
     // fft async
@@ -220,6 +220,22 @@ class MelSpectroGram
     std::atomic<size_t> m_queueTail{0};
     std::atomic<bool> m_shouldExit{false};
     std::thread m_workerThread;
+};
+
+struct SpectrumImageSet
+{
+    size_t activeSlice;
+    size_t width;
+    size_t height;
+    const float* data;
+    float sampleRate;
+    unsigned fftLength;
+    float windowForwardRatio; // hop / fftLength — for time axis labelling
+
+    [[nodiscard]] size_t size() const
+    {
+        return width * height;
+    }
 };
 
 class SpectrogramBase
@@ -239,13 +255,28 @@ class SpectrogramBase
         m_workerThread.join();
     }
 
+    void setSampleRate(const float sr)
+    {
+        m_sampleRate = sr;
+    }
+
     void setFftLength(const unsigned N)
     {
         m_fftLength = N;
+        m_forwardLength = static_cast<unsigned>(N * m_windowForwardRatio);
         m_fft.resize(m_fftLength);
-        m_buffer.resize(m_fftLength);
-        m_fftBuffer.resize(m_fftLength);
-        m_magnitudes.resize(m_fftLength / 2);
+        m_buffer.resize(m_fftLength, 0.f);
+        m_fftBuffer.resize(m_fftLength, 0.f);
+        m_magnitudes.resize(m_fftLength / 2, 0.f);
+        m_bufferIndex = 0;
+        onFftLengthChanged();
+    }
+
+    // ratio in (0, 1) — fraction of fftLength advanced per frame
+    void setWindowForward(const float ratio)
+    {
+        m_windowForwardRatio = std::clamp(ratio, 0.01f, 0.99f);
+        m_forwardLength = static_cast<unsigned>(m_fftLength * m_windowForwardRatio);
     }
 
     void processBlock(const float* in, const unsigned numSamples)
@@ -265,14 +296,16 @@ class SpectrogramBase
 
   protected:
     virtual void onNewFFTData(const std::vector<float>& magnitudes) = 0;
+    virtual void onFftLengthChanged() {}
 
     float m_sampleRate{48000.f};
+    float m_windowForwardRatio{1.f / 3.f};
     std::vector<float> m_buffer;
     std::vector<float> m_fftBuffer;
     std::vector<float> m_magnitudes;
     HannWindowMagnitudesFft m_fft;
     unsigned m_fftLength{1024};
-    unsigned m_forwardLength{341}; // 33%
+    unsigned m_forwardLength{341};
     unsigned m_bufferIndex{0};
 
   private:
@@ -291,8 +324,7 @@ class SpectrogramBase
     void advanceWindow()
     {
         const auto samplesToKeep = m_fftLength - m_forwardLength;
-        const auto index = m_forwardLength;
-        std::copy(m_buffer.begin() + index, m_buffer.end(), m_buffer.begin());
+        std::copy(m_buffer.begin() + m_forwardLength, m_buffer.end(), m_buffer.begin());
         m_bufferIndex = samplesToKeep;
     }
 
@@ -324,64 +356,50 @@ class SpectrogramBase
     std::thread m_workerThread;
 };
 
-struct SpectrumImageSet
-{
-    size_t activeSlice;
-    size_t width;
-    size_t height;
-    const float* data;
-
-    [[nodiscard]] size_t size() const
-    {
-        return width * height;
-    }
-};
-
 class SimpleSpectrogram : public SpectrogramBase
 {
   public:
     SimpleSpectrogram()
         : m_slices{1920}
         , m_currentSlice{0}
-        , m_spectrogram(m_fftLength / 2 * m_slices)
+        , m_spectrogram(m_fftLength / 2 * m_slices, 0.f)
     {
     }
 
     [[nodiscard]] SpectrumImageSet getImageSet() const
     {
-        return {m_currentSlice, m_slices, m_fftLength / 2, m_spectrogram.data()};
+        return {m_currentSlice, m_slices,    m_fftLength / 2,     m_spectrogram.data(),
+                m_sampleRate,   m_fftLength, m_windowForwardRatio};
+    }
+
+    void setSlices(const size_t cnt)
+    {
+        m_slices = cnt;
+        m_currentSlice = std::clamp(m_currentSlice, size_t{0}, cnt);
+        m_spectrogram.resize(m_fftLength / 2 * m_slices, 0.f);
     }
 
   protected:
-    void onSlicesChanged()
+    void onFftLengthChanged() override
     {
-        m_spectrogram.resize(m_fftLength / 2 * m_slices);
-    }
-
-    void onFftLengthChanged()
-    {
-        m_spectrogram.resize(m_fftLength / 2 * m_slices);
+        m_spectrogram.resize(m_fftLength / 2 * m_slices, 0.f);
     }
 
     void onNewFFTData(const std::vector<float>& magnitudes) override
     {
-        if (m_spectrogram.size() == 0)
+        if (m_spectrogram.empty())
         {
             return;
         }
+
         std::copy_n(magnitudes.data(), magnitudes.size(), &m_spectrogram[m_currentSlice * (m_fftLength / 2)]);
         m_currentSlice++;
         if (m_currentSlice >= m_slices)
         {
             m_currentSlice = 0;
         }
-        std::fill_n(&m_spectrogram[m_currentSlice * (m_fftLength / 2)], magnitudes.size(), 1.f);
-    }
 
-    void setSlices(size_t cnt)
-    {
-        m_slices = cnt;
-        m_currentSlice = std::clamp<size_t>(m_currentSlice, 0u, cnt);
+        std::fill_n(&m_spectrogram[m_currentSlice * (m_fftLength / 2)], magnitudes.size(), 1.f);
     }
 
   private:
@@ -389,7 +407,6 @@ class SimpleSpectrogram : public SpectrogramBase
     size_t m_currentSlice;
     std::vector<float> m_spectrogram;
 };
-
 
 class FloatingHorizonFFTImage : public SpectrogramBase
 {

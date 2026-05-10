@@ -13,8 +13,8 @@ class MeterBackground : public juce::Component
         maxValue = 0;
         step = 20;
         mode = 3;
-        backgroundLightGrey = juce::Colour(Constants::Colors::bg_LightGrey);
-        backgroundApp = juce::Colour(Constants::Colors::bg_App);
+        backgroundLightGrey = juce::Colour(GuiConstants::instance().colors.bg_LightGrey);
+        backgroundApp = juce::Colour(GuiConstants::instance().colors.bg_App);
         setBufferedToImage(true);
     }
 
@@ -102,7 +102,7 @@ class MeterNeedle : public juce::Component
         maxValue = 0;
         sAngle = 0.0f;
         eAngle = 0.0f;
-        statusOutline = juce::Colour(Constants::Colors::statusOutline);
+        statusOutline = juce::Colour(GuiConstants::instance().colors.statusOutline);
     }
 
     void paint(juce::Graphics& g) override
@@ -200,7 +200,7 @@ class Meter : public juce::Component
         addAndMakeVisible(needle);
         addAndMakeVisible(modeBox);
 
-        backgroundDarkGrey = juce::Colour(Constants::Colors::bg_DarkGrey);
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey);
     }
 
     void paint(juce::Graphics& g) override

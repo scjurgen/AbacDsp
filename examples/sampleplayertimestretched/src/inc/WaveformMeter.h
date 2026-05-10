@@ -87,7 +87,7 @@ class WaveformGauge : public juce::Component
     {
         addAndMakeVisible(gaugeBg);
         addAndMakeVisible(gaugeValue);
-        backgroundDarkGrey = juce::Colour(Constants::Colors::bg_DarkGrey);
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey);
     }
 
     void paint(juce::Graphics& g) override
