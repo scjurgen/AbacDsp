@@ -4,7 +4,7 @@
 #include <juce_graphics/juce_graphics.h>
 
 #include "Analysis/Spectrogram.h"
-#include "../GuiConstants.h"
+#include "GuiConstants.h"
 
 /*
  * TODO:
@@ -40,9 +40,9 @@ class SpectrogramBackground : public juce::Component
 class SpectrogramValue : public juce::Component
 {
   public:
-    SpectrogramValue()
+    SpectrogramValue(const GuiConstants::GradientPreset lutPreset)
     {
-        GuiConstants::buildLut(GuiConstants::GradientPreset::Heat, m_lut);
+        GuiConstants::buildLut(lutPreset, m_lut);
     }
 
     void paint(juce::Graphics& g) override
@@ -147,8 +147,7 @@ class SpectrogramOverlay : public juce::Component
         const float logMax = std::log2(nyquist);
 
         static constexpr float kGridHz[] = {20.f, 50.f, 100.f, 200.f, 500.f, 1000.f, 2000.f, 5000.f, 10000.f, 20000.f};
-
-        g.setFont(juce::Font(12.f));
+        g.setFont(juce::FontOptions(12.f));
 
         for (const float hz : kGridHz)
         {
@@ -167,7 +166,7 @@ class SpectrogramOverlay : public juce::Component
             const juce::String label =
                 hz >= 1000.f ? juce::String(static_cast<int>(hz / 1000)) + "k" : juce::String(static_cast<int>(hz));
 
-            const int lx = 2;
+            constexpr int lx = 2;
             const int ly = static_cast<int>(y) - 11;
 
             g.setColour(labelBgColour);
@@ -179,7 +178,7 @@ class SpectrogramOverlay : public juce::Component
 
         const float hopSamples = static_cast<float>(m_fftLength) * m_windowForwardRatio;
         const float totalDuration = static_cast<float>(m_slices) * hopSamples / m_sampleRate;
-        const float xPerSecond = w / totalDuration;
+        // const float xPerSecond = w / totalDuration;
 
         g.setColour(labelColour.withAlpha(0.30f));
         for (float t = 1.f; t < totalDuration; t += 1.f)
@@ -201,7 +200,8 @@ class SpectrogramOverlay : public juce::Component
 class SpectrogramDisplay : public juce::Component
 {
   public:
-    SpectrogramDisplay()
+    SpectrogramDisplay(GuiConstants::GradientPreset lutPreset)
+        : spectrogramImage(lutPreset)
     {
         addAndMakeVisible(spectrogramBg);
         addAndMakeVisible(spectrogramImage);

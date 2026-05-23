@@ -1,0 +1,47 @@
+{
+  "name": "guisandbox",
+  "displayname": "guisandbox",
+  "color": "Chorus",
+  "micro": 40,
+  "minor": 1,
+  "major": 0,
+  "plugintype" : "Sandbox",
+  "shortdescription" : "Whatever this will become",
+  "description": [
+    "✨ Whatever this will become\n"
+  ],
+  "CPP":
+  {
+    "CLASS_NAME": "GuiSandBox<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/GuiSandBox.h",
+    "PROCMODE": "Stereo-Stereo"
+  },
+  "midi-ports-in": [{"name":  "MidiIn", "symbol": "midiIn"}],
+  "midi-ports-out": [{"name":  "MidiOut", "symbol": "midiOut"}],
+  "audio-ports-in": [{ "name": "In L", "symbol":  "in[0]"}, { "name": "In R", "symbol":  "in[1]"}],
+  "audio-ports-out": [{ "name": "Out L", "symbol":  "out[0]"}, { "name": "Out R", "symbol":  "out[1]"}],
+  "transport": [{"name": "transport", "symbol":  "transport"}],
+  "ports-control":
+  [
+    {"short": "SUB", "type":"drop", "display": "Patch", "symbol": "patch", "default": 0, "listitems": "Patch {}", "count": 10, "patch": true},
+    {"short": "SUBP", "type":"drop", "display": "Sub patch", "symbol": "subPatch", "default": 0, "listitems": "Sub {}", "count": 10, "patch": true},
+    {"short": "ONF", "type":"switch", "display": "Power", "symbol": "onOff", "default": 0 },
+    {"short": "INP", "type":"dial", "display": "Input", "symbol": "input", "default": 2, "range": [0,50,0.1,1,false], "precision":2, "unit": "dB" },
+    {"short": "DPT", "type":"dial", "display": "Depth", "symbol": "modulationDepth", "default": 2, "range": [1,50,0.01,0.8,false], "precision":2,"unit": "ms" },
+    {"short": "MIX", "type":"dial", "display": "Mix", "symbol": "mix", "default": 0.0, "range": [-100,100,1,1,false], "precision":1, "unit": ""},
+    {"short": "DNS", "type":"dial", "display": "Density", "symbol": "density", "default": 1, "range": [1,12,0.01,1,false], "precision":1, "unit": "" },
+    {"short": "THR", "type":"dial", "display": "Threshold", "symbol": "threshold", "default": 1, "range": [1,12,0,1,false], "precision":4, "unit": "" },
+    {"short": "KNE", "type":"dial", "display": "Knee", "symbol": "knee", "default": 1, "range": [1, 12, 0.01, 1, false], "precision":2, "unit": "dB" },
+    {"short": "DIV1", "type":"label", "display": "-- drop this too ----", "symbol": "div1"},
+    {"short": "DIV2", "type":"label", "display": "DropIt!", "symbol": "div2"},
+    {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1200",
+    "WINDOW_HEIGHT": "800",
+    "type": "||||",
+    "composition": "C=(1:2:2:8) A1=(LVL*2400, CPU*2400) A2=(SUB, SUBP, ONF, MIX, DIV2, DPT, KNE) A3=(INP, DIV1, DNS,THR) A4=(FFT*2000))"
+  }
+}

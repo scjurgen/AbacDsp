@@ -1,0 +1,84 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+**AbacDsp** is a header-only C++20 DSP library for audio processing. The core library in `src/includes/` has zero external dependencies. JUCE is only used for the example plugins in `examples/`.
+
+## Build Commands
+
+```bash
+# Tests only (default, no JUCE needed)
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake --build . --target run_unit_tests
+
+# Full project with JUCE examples
+cmake -DBUILD_FULL_PROJECT=ON -DCMAKE_BUILD_TYPE=Release ..
+cmake --build .
+
+# Run tests via Docker with Valgrind (auto-detects ARM64/x86_64)
+./docker-unit-tests/run-on-mac.sh
+```
+
+Key CMake options: `BUILD_FULL_PROJECT` (OFF), `PACKAGE_TESTS` (ON), `PERFORMANCE_TESTS` (OFF), `EXPLORE_STUFF` (OFF).
+
+## Running a Single Test
+
+Tests use GoogleTest. After building:
+```bash
+ctest -V --output-on-failure -R <TestName>
+```
+
+Check test coverage against source files:
+```bash
+./check_test_coverage.sh
+```
+
+## Architecture
+
+### Core Library (`src/includes/`)
+
+Header-only, organized by DSP domain:
+- `Analysis/` — FFT (via pffft), Yin pitch detection, spectrogram, envelope follower
+- `Filters/` — Biquad (all types), ladder, SVF bandpass, one-pole
+- `Reverbs/` — FDN with Hadamard mixing; 4/8/16/32 delay line variants
+- `Generators/` / `NaiveGenerators/` — Band-limited and naive waveform generators
+- `Delays/` — Delay lines with interpolation
+- `Modulation/` — Wow/flutter modulation
+- `Parameters/` — Parameter smoothing and ramping
+- `Numbers/` — Math utilities: interpolation, easing, dB/frequency conversions
+- `Wavetables/` — Wavetable oscillators
+- `Diffuser/` — Schroeder diffusers, allpass chains
+
+### Key Design Patterns
+
+**Block-based processing:** Classes operate on fixed block sizes via template parameter. Use `std::array<float, BlockSize>` rather than raw pointers. Block sizes of 8–16 samples are typical for SIMD optimization.
+
+**Template-heavy:** Filter type, wave shape, etc. are template parameters for zero-cost abstractions:
+```cpp
+Biquad<BiquadFilterType::LowPass> lp(44100.0f);
+```
+
+**Constructor takes sample rate:** All stateful processors are initialized with `float sampleRate`. No separate `prepare()` call needed.
+
+**No `.cpp` files in core:** Everything is in headers. The optional `audio_dsp_lib` CMake target compiles any implementation `.cpp` files found in subdirectories for compile-time optimization.
+
+### Tests (`test/`)
+
+Test files follow `*_test.cpp` naming and mirror the `src/includes/` structure. CMake auto-discovers them. 64 test files across 18 categories.
+
+### Examples (`examples/`)
+
+JUCE-based audio plugin examples. Each example is self-contained with its own CMakeLists.txt. Key ones: `plaingain` (passthrough with metering), `guisandbox` (UI experimentation), `minireverb` (FDN reverb demo).
+
+### Third-Party (`3rdparty/`)
+
+All are git submodules: `googletest`, `JUCE` (v8), `AudioFile` (WAV I/O), `pffft` (SIMD FFT).
+
+## Code Style
+
+- C++20, `-Wall -Wextra`, clang-format configured (`.clang-format` present)
+- Float-based by default; templates used for type flexibility
+- Block operations preferred over sample-by-sample for performance

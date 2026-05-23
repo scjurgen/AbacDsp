@@ -21,10 +21,38 @@ set_property(GLOBAL PROPERTY USE_FOLDERS YES)
 
 option(JUCE_ENABLE_MODULE_SOURCE_GROUPS "Show all module sources in IDE projects" ON)
 
+include(FetchContent)
+FetchContent_Declare(
+        nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.11.3
+        GIT_SHALLOW TRUE
+)
+
 # Only add JUCE if not already available (standalone build)
 if (NOT TARGET juce::juce_core)
     add_subdirectory(../../3rdparty/JUCE ${CMAKE_CURRENT_BINARY_DIR}/JUCE)
 endif ()
+
+include(FetchContent)
+FetchContent_Declare(
+        nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.11.3
+        GIT_SHALLOW TRUE
+)
+
+set(PLIST_EXTRAS_CONTENT [=[
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>This app requires microphone access for audio input.</string>
+</dict>
+</plist>
+]=])
 
 juce_add_plugin("${PROJECT_NAME}"
         VERSION "0.0.0"
@@ -34,9 +62,10 @@ juce_add_plugin("${PROJECT_NAME}"
         COMPANY_WEBSITE "https://krachpedale.de"
         COMPANY_EMAIL "info@krachpedale.de"
         BUNDLE_ID de.krachpedale.guisandbox
+        PLIST_TO_MERGE "${PLIST_EXTRAS_CONTENT}"
         IS_SYNTH  FALSE
         NEEDS_MIDI_INPUT FALSE
-        NEEDS_MIDI_OUTPUT {NeedsMidiOutput
+        NEEDS_MIDI_OUTPUT FALSE
         IS_MIDI_EFFECT FALSE
         EDITOR_WANTS_KEYBOARD_FOCUS FALSE
         COPY_PLUGIN_AFTER_BUILD TRUE
@@ -60,7 +89,7 @@ list(FILTER SourceFiles EXCLUDE REGEX ".*GenericImpl\\.h$")
 target_include_directories("${PROJECT_NAME}" PUBLIC ../../src/includes)
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
-set_property(TARGET "${PROJECT_NAME}" PROPERTY FOLDER "GuisandBox")
+set_target_properties("${PROJECT_NAME}" PROPERTIES FOLDER "")
 
 # Fix source_group to use correct root path for this project
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src PREFIX "" FILES ${SourceFiles})
@@ -96,6 +125,7 @@ target_link_libraries("${PROJECT_NAME}"
         PRIVATE
         GuisandboxAssets
         ${JUCE_DEPENDENCIES}
+        nlohmann_json::nlohmann_json
         PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags

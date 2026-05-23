@@ -1,0 +1,32 @@
+{
+  "name": "plaingain",
+  "plugintype": "Gain",
+  "color": "Analyser",
+  "shortdescription" : "Just a plain gain with latency",
+  "description": [
+    "✨ Just a plain gain with latency\n"
+  ],
+  "ports-control":
+  [
+    {"short": "SUB", "type": "drop", "display": "Subset", "symbol": "subset", "default": 0, "patch": true, "listitems": "#{}", "count": 5},
+    {"short": "GAIN", "type":"dial", "display": "Gain", "symbol": "gain", "default": 0, "range": [-60,60, 0.1, 1,false], "precision": 1, "unit": "dB" },
+    {"short": "LOW", "type":"dial", "display": "Low", "symbol": "lowShelving", "default": 0, "range": [-24,24, 0.1, 1,false], "precision": 1, "unit": "dB" },
+    {"short": "HIGH", "type":"dial", "display": "High", "symbol": "highShelving", "default": 0, "range": [-24,24, 0.1, 1,false], "precision": 1, "unit": "dB" },
+    {"short": "LAT", "type": "dial", "display": "Latency", "symbol": "latency", "default": 0, "range": [0, 100, 0.1, 0.25, false], "precision": 1, "unit": "ms"},
+    {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"},
+    {"short": "SIG", "type":"gauge", "gaugetype" : "signal", "display": "Signal", "symbol": "signal"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "800",
+    "WINDOW_HEIGHT": "600",
+    "type": "|||",
+    "composition": "C=(1:1:5) A1=(SUB,LAT,LVL*400) A2=(GAIN, LOW, HIGH) A3=(FFT%1, SIG%1))"
+  },
+  "CPP":
+  {
+    "CLASS_NAME": "GainImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/GainImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

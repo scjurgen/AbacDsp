@@ -1,0 +1,64 @@
+{
+  "name": "pingsynth",
+  "displayname": "Ping Synth",
+  "status": "beta",
+  "plugintype": "InstrumentPlugin",
+  "lookAndFeel": "LookAndFeel.h",
+  "color": "#eeeeee",
+  "boxy": "boxy",
+  "plugintype-see-also": "http://lv2plug.in/ns/lv2core#InstrumentPlugin",
+  "micro": 127,
+  "minor": 1,
+  "major": 0,
+  "shortdescription": "Just an explorer for ping synth",
+  "description": ["✨ Just an explorer for ping synth."],
+  "midi-ports-in": [],
+  "midi-ports-out": [],
+  "audio-ports-in": [{ "name": "in", "symbol":  "in"}],
+  "audio-ports-out": [{ "name": "left", "symbol":  "left"},{ "name": "right", "symbol":  "right"}],
+  "ports-control":
+  [
+    {"short": "VOL", "type": "dial", "display": "Vol", "symbol": "vol", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "REV", "type": "dial", "display": "Reverb", "symbol": "reverbLevel", "default": -24, "range": [-120, 0, 1, 1, false], "precision": 0, "unit": "dB"},
+    {"short": "DCY", "type": "dial", "display": "Decay", "symbol": "decay", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "RNDEX", "type": "dial", "display": "Rand Excitation", "symbol": "randExcitation", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "SFTEX", "type": "dial", "display": "Soft Excitation", "symbol": "softExcitation", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "DCYSK", "type": "dial", "display": "Decay Skew", "symbol": "decaySkew", "default": 0, "range": [-100, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "ODDS", "type": "dial", "display": "Odds", "symbol": "oddsOvertones", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "ODDSSK", "type": "dial", "display": "Odds Skew", "symbol": "skewOddOvertones", "default": 0, "range": [-100, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "ODDSRD", "type": "dial", "display": "Rand Odds", "symbol": "randOdds", "default": 0, "range": [0, 100, 1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "EVEN", "type": "dial", "display": "Evens", "symbol": "evenOvertones", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "EVENSK", "type": "dial", "display": "Evens Skew", "symbol": "evenSkew", "default": 0, "range": [-100, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "EVENRD", "type": "dial", "display": "Rand Evens", "symbol": "randEvens", "default": 0, "range": [0, 100, 1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "PIAN", "type": "dial", "display": "Piano Stretch", "symbol": "pianoStretch", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "PIANSK", "type": "dial", "display": "Piano Skew", "symbol": "skewPiano", "default": 0, "range": [-100, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "PIANRD", "type": "dial", "display": "Rand Piano", "symbol": "randPiano", "default": 0, "range": [0, 100, 1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "SPRD", "type": "dial", "display": "Spread", "symbol": "spread", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "SPRDRD", "type": "dial", "display": "Rand Spread", "symbol": "randSpread", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "PWRRD", "type": "dial", "display": "Rand Power", "symbol": "randPower", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "SPRKT", "type": "dial", "display": "Sparkle Time", "symbol": "sparkleTime", "default": 0, "range": [-1000, 1000, 0.1, 1, false], "precision": 1, "unit": "ms"},
+    {"short": "SPRRD", "type": "dial", "display": "Sparkle Rand", "symbol": "sparkleRand", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "MINOV", "type": "dial", "display": "Min Overtones", "symbol": "minOvertones", "default": 5, "range": [1, 100, 1, 1, false], "precision": 1, "unit": ""},
+    {"short": "MAXOV", "type": "dial", "display": "Max Overtones", "symbol": "maxOvertones", "default": 10, "range": [1, 100, 1, 1, false], "precision": 1, "unit": ""},
+    {"short": "MINPB", "type": "dial", "display": "Min PB note", "symbol": "minPbNote", "default": 25, "range": [1, 127, 1, 1, false], "precision": 1, "unit": ""},
+    {"short": "MAXPB", "type": "dial", "display": "Max PB note", "symbol": "maxPbNote", "default": 120, "range": [1, 127, 1, 1, false], "precision": 1, "unit": ""},
+    {"short": "RANGPB", "type": "dial", "display": "Range PB", "symbol": "rangePb", "default": 2, "range": [0, 24, 1, 1, false], "precision": 1, "unit": ""},
+
+    {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1200",
+    "WINDOW_HEIGHT": "800",
+    "type": "||||||",
+     "composition": "C=(1:2:2:2:2:6) A1=(VOL,REV,LVL*200,CPU*200) A2=(SFTEX, MINOV,MAXOV,SPRKT,SPRRD,MINPB) A3=(RNDEX,ODDS,EVEN,PIAN,SPRD,MAXPB) A4=(DCY,ODDSSK,EVENSK,PIANSK,SPRDRD,RANGPB) A5=(DCYSK,ODDSRD,EVENRD,PIANRD,PWRRD) A6=(FFT%1))",
+     "#composition": "C=(1:2:2:2:6) A1=(VOL,REV,LVL*200,CPU*200) A2=(RNDEX,DCY,DCYSK,SPRD,MINOV, MAXOV) A3=(ODDS,ODDSSK,EVEN,EVENSK) A4=(PIAN,SPRDRD,PWRRD,SPRKT,SPRRD) A5=(FFT%1))"
+  },
+  "CPP":
+  {
+    "CLASS_NAME": "PingSynthExplorerPedal<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/PingSynthExplorerPedal.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

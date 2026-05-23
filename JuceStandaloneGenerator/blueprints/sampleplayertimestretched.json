@@ -1,0 +1,44 @@
+{
+  "name": "sampleplayertimestretched",
+  "displayname": "SamplePlayerTimeStretched",
+  "status": "beta",
+  "plugintype": "InstrumentPlugin",
+  "lookAndFeel": "LookAndFeel.h",
+  "color": "#eeaaff",
+  "boxy": "boxy",
+  "plugintype-see-also": "http://lv2plug.in/ns/lv2core#InstrumentPlugin",
+  "micro": 127,
+  "minor": 1,
+  "major": 0,
+  "shortdescription": "Just an explorer for MPE reso synth",
+  "description": ["✨ Just an explorer for MPE reso synth."],
+  "midi-ports-in": [],
+  "midi-ports-out": [],
+  "audio-ports-in": [{ "name": "in", "symbol":  "in"}],
+  "audio-ports-out": [{ "name": "left", "symbol":  "left"},{ "name": "right", "symbol":  "right"}],
+  "ports-control":
+  [
+    {"short": "VOL", "type": "dial", "display": "Vol", "symbol": "vol", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "TYPE", "type": "drop", "display": "Sample", "symbol": "type", "default": 0,
+      "listitems": ["Sample1", "Sample2", "Sample3", "Sample4" ]},
+    {"short": "SUB", "type": "drop", "display": "Subset", "symbol": "subset", "default": 0, "patch": true, "listitems": "#{}", "count": 20},
+    {"short": "POS", "type": "dial", "display": "Position", "symbol": "position", "default": 0, "range": [0, 100, 0.01, 1, false], "precision": 2, "unit": "%"},
+    {"short": "ADV", "type": "dial", "display": "Advance", "symbol": "advance", "default": 1, "range": [0.1, 10, 0.01, 0.25, false], "precision": 2, "unit": "x"},
+    {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%"},
+    {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%"},
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1200",
+    "WINDOW_HEIGHT": "850",
+    "type": "||",
+     "composition": "C=(1:9) A1=(VOL, TYPE, SUB, POS, ADV, LVL*100, CPU*100) A2=(FFT%1))"
+  },
+  "CPP":
+  {
+    "CLASS_NAME": "SamplePlayerTimeStretched<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/SamplePlayerTimeStretched.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}
+

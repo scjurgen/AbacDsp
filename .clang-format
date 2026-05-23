@@ -13,6 +13,7 @@ AllowShortCompoundRequirementOnASingleLine: true
 AllowShortFunctionsOnASingleLine: Empty
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
+InsertBraces:    true
 AlwaysBreakAfterDefinitionReturnType: None
 AlwaysBreakAfterReturnType: None
 AlwaysBreakBeforeMultilineStrings: false
@@ -49,12 +50,12 @@ ExperimentalAutoDetectBinPacking: false
 FixNamespaceComments: false
 ForEachMacros:   [ foreach, Q_FOREACH, BOOST_FOREACH ]
 IncludeCategories:
-  - Regex:           '^"(llvm|llvm-c|clang|clang-c)/'
-    Priority:        2
-  - Regex:           '^(<|"(gtest|isl|json)/)'
-    Priority:        3
-  - Regex:           '.*'
+  - Regex:           '^<'
     Priority:        1
+  - Regex:           '^"(gtest|gmock|AudioFile)/'
+    Priority:        2
+  - Regex:           '.*'
+    Priority:        3
 IndentCaseLabels: true
 IndentRequiresClause: true
 IndentWidth:     4
@@ -77,7 +78,8 @@ PointerAlignment: Left
 ReflowComments:  true
 RequiresClausePosition: OwnLine
 RequiresExpressionIndentation: OuterScope
-SortIncludes:    false
+SortIncludes:    CaseSensitive
+IncludeBlocks:   Regroup
 SpaceAfterCStyleCast: true
 SpaceBeforeAssignmentOperators: true
 SpaceBeforeParens: ControlStatements

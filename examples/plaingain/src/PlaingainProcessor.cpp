@@ -10,8 +10,7 @@
 
 juce::AudioProcessorEditor* AudioPluginAudioProcessor::createEditor()
 {
-    GuiConstants::setPreset(GuiConstants::GradientPreset::Heat);
-
+    GuiConstants::setPreset(CLutPreset);
     return new AudioPluginAudioProcessorEditor(*this, m_parameters);
 }
 

@@ -1,0 +1,55 @@
+{
+  "name": "tapedelay",
+  "displayname": "Tapedelay",
+  "status": "beta",
+  "plugintype": "Delay",
+  "lookAndFeel": "inc/LookAndFeel.h",
+  "color": "Delay",
+  "micro": 1,
+  "minor": 0,
+  "major": 0,
+  "shortdescription" : "Tape delay",
+  "description": ["✨ Tape delay\n"],
+  "transport": [{"name": "transport", "symbol":  "transport"}],
+  "ports-control":
+  [
+    {"short": "FEED", "type":"dial", "display": "Feed", "symbol": "feedGain", "default": 0, "range": [-60,12,0.1,1,false], "precision":1, "unit": "dB" },
+
+    {"short": "SPD", "type": "dial", "display": "Tape speed", "symbol": "tapeSpeed", "default": 7.5, "range": [0.5, 60.0, 0.1, 1.0, false], "precision": 0, "unit": "IPS"},
+    {"short": "WOW", "type": "dial", "display": "WOW", "symbol": "wow", "default": 0, "range": [0, 1, 0.01, 1.0, false], "precision": 0, "unit": ""},
+    {"short": "HST", "type": "dial", "display": "Hysteresis", "symbol": "hysteresis", "default": 0, "range": [0, 1, 0.01, 1.0, false], "precision": 0, "unit": ""},
+    {"short": "SAT", "type": "dial", "display": "Saturation", "symbol": "saturation", "default": 0, "range": [0, 1, 0.01, 1.0, false], "precision": 0, "unit": ""},
+    {"short": "NFLR", "type": "dial", "display": "Noise floor", "symbol": "noiseFloor", "default": 0, "range": [0, 1, 0.01, 1.0, false], "precision": 0, "unit": ""},
+    {"short": "NSDP", "type": "dial", "display": "Noise distribution", "symbol": "noiseDistribution", "default": 0, "range": [0, 1, 0.01, 1.0, false], "precision": 0, "unit": ""},
+
+    {"short": "DEL1", "type": "dial", "display": "Delay time 1", "symbol": "delayTime1", "default": 200, "range": [0, 1000, 0.1, 0.4, false], "precision": 0, "unit": "ms"},
+    {"short": "DEL2", "type": "dial", "display": "Delay time 2", "symbol": "delayTime2", "default": 100, "range": [0, 1000, 0.1, 0.4, false], "precision": 0, "unit": "ms"},
+    {"short": "DEL3", "type": "dial", "display": "Delay time 3", "symbol": "delayTime3", "default": 100, "range": [0, 1000, 0.1, 0.4, false], "precision": 0, "unit": "ms"},
+    {"short": "DEL4", "type": "dial", "display": "Tape time 4", "symbol": "delayTime4", "default": 2000, "range": [1000, 10000, 0.1, 0.4, false], "precision": 0, "unit": "ms"},
+    {"short": "DLVL1", "type": "dial", "display": "Delay level 1", "symbol": "delayLevel1", "default": 0, "range": [-72, 12, 0.1, 1.0, false], "precision": 0, "unit": "dB"},
+    {"short": "DLVL2", "type": "dial", "display": "Delay level 2", "symbol": "delayLevel2", "default": -6, "range": [-72, 12, 0.1, 1.0, false], "precision": 0, "unit": "dB"},
+    {"short": "DLVL3", "type": "dial", "display": "Delay level 3", "symbol": "delayLevel3", "default": -12, "range": [-72, 12, 0.1, 1.0, false], "precision": 0, "unit": "dB"},
+    {"short": "DLVL4", "type": "dial", "display": "Delay level 4", "symbol": "delayLevel4", "default": -18, "range": [-72, 12, 0.1, 1.0, false], "precision": 0, "unit": "dB"},
+    {"short": "FDBK1", "type": "dial", "display": "Feedback 1", "symbol": "feedback1", "default": 0, "range": [0, 1, 0.01, 1.0, false], "precision": 0, "unit": ""},
+    {"short": "FDBK2", "type": "dial", "display": "Feedback 2", "symbol": "feedback2", "default": 0, "range": [0, 1, 0.01, 1.0, false], "precision": 0, "unit": ""},
+    {"short": "FDBK3", "type": "dial", "display": "Feedback 3", "symbol": "feedback3", "default": 0, "range": [0, 1, 0.01, 1.0, false], "precision": 0, "unit": ""},
+    {"short": "FDBK4", "type": "dial", "display": "Feedback 4", "symbol": "feedback4", "default": 0, "range": [0, 1, 0.01, 1.0, false], "precision": 0, "unit": ""},
+
+    {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu"},
+    {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"},
+    {"short": "SIG", "type":"gauge", "gaugetype" : "signal", "display": "Signal", "symbol": "signal"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1400",
+    "WINDOW_HEIGHT": "900",
+    "type": "|=5",
+    "composition": "R=(1:1:1:1:2) C=(1:12) A1=(FEED, LVL*500,CPU*200) A2=(SPD, WOW, SAT) A3=(HST, NFLR, NSDP) A4=(DEL1,DLVL1,FDBK1, DEL2,DLVL2,FDBK2) A5=(DEL3,DLVL3,FDBK3, DEL4,DLVL4,FDBK4) A6=(FFT,SIG)"
+  },
+  "CPP":
+  {
+    "CLASS_NAME": "TapeDelay<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/TapeDelay.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

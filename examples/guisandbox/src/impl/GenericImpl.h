@@ -13,7 +13,7 @@ template <size_t BlockSize>
 class GenericImpl final : public EffectBase
 {
   public:
-    GenericImpl(const float sampleRate)
+    explicit GenericImpl(const float sampleRate)
         : EffectBase(sampleRate)
     {
     }
@@ -45,10 +45,6 @@ class GenericImpl final : public EffectBase
     {
         m_knee = std::pow(10.f, value / 20.f);
     }
-    void setDropIt(const size_t value)
-    {
-        m_dropIt = value;
-    }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
@@ -60,12 +56,11 @@ class GenericImpl final : public EffectBase
     }
 
   private:
-    size_t m_onOff{};
+    bool m_onOff{};
     float m_input{};
     float m_modulationDepth{};
     float m_mix{};
     float m_density{};
     float m_threshold{};
     float m_knee{};
-    bool m_dropIt{};
 };

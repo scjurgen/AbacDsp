@@ -1,0 +1,42 @@
+{
+  "name": "MPEss",
+  "displayname": "MPEsssss",
+  "status": "beta",
+  "plugintype": "InstrumentPlugin",
+  "lookAndFeel": "LookAndFeel.h",
+  "color": "#eeaaff",
+  "boxy": "boxy",
+  "plugintype-see-also": "http://lv2plug.in/ns/lv2core#InstrumentPlugin",
+  "micro": 127,
+  "minor": 1,
+  "major": 0,
+  "shortdescription": "Just an explorer for MPE reso synth",
+  "description": ["✨ Just an explorer for MPE reso synth."],
+  "midi-ports-in": [],
+  "midi-ports-out": [],
+  "audio-ports-in": [{ "name": "in", "symbol":  "in"}],
+  "audio-ports-out": [{ "name": "left", "symbol":  "left"},{ "name": "right", "symbol":  "right"}],
+  "ports-control":
+  [
+    {"short": "PTCH", "type": "dial", "display": "Patch", "symbol": "patch", "default": 0, "range": [0, 10, 1, 1, false], "precision": 0, "unit": "#"},
+    {"short": "FEED", "type": "dial", "display": "Feed", "symbol": "feed", "default": 0, "range": [0, 100, 1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "VOL", "type": "dial", "display": "Vol", "symbol": "vol", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "REV", "type": "dial", "display": "Reverb", "symbol": "reverbLevel", "default": -24, "range": [-120, 0, 1, 1, false], "precision": 0, "unit": "dB"},
+    {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1200",
+    "WINDOW_HEIGHT": "800",
+    "type": "||",
+     "composition": "C=(1:9) A1=(PTCH,FEED,VOL,REV,LVL*100,CPU*100)  A2=(FFT%1))"
+  },
+  "CPP":
+  {
+    "CLASS_NAME": "MPEssss<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/MPEssss.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}
+

@@ -9,6 +9,8 @@
 
 #include "UiElements.h"
 
+constexpr auto CLutPreset = GuiConstants::GradientPreset::Inferno;
+
 //==============================================================================
 class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce::Timer
 {
@@ -41,16 +43,16 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
 #pragma GCC diagnostic ignored "-Wfloat-conversion"
     void resized() override
     {
-        auto area = getLocalBounds().reduced(static_cast<int>(GuiConstants::instance().margins.big));
+        auto area = getLocalBounds().reduced(static_cast<int>(Constants::Margins::big));
 
         // auto generated
-        // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(GuiConstants::instance().margins.small);
-        const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(GuiConstants::instance().margins.medium);
+        // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
+        const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
         std::vector<juce::Rectangle<int>> areas(3);
         const auto colWidth = area.getWidth() / 7;
-        areas[0] = area.removeFromLeft(colWidth * 1).reduced(GuiConstants::instance().margins.small);
-        areas[1] = area.removeFromLeft(colWidth * 1).reduced(GuiConstants::instance().margins.small);
-        areas[2] = area.reduced(GuiConstants::instance().margins.small);
+        areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+        areas[1] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+        areas[2] = area.reduced(Constants::Margins::small);
 
         {
             juce::FlexBox box;
@@ -58,8 +60,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
             box.flexDirection = juce::FlexBox::Direction::column;
             box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
             box.items.add(juce::FlexItem(subsetDrop)
-                              .withWidth(GuiConstants::instance().text.labelWidth)
-                              .withHeight(GuiConstants::instance().text.labelHeight)
+                              .withFlex(0)
+                              .withWidth(areas[1].toFloat().getWidth())
+                              .withHeight(Constants::Text::labelHeight)
                               .withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(latencyDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(levelGauge).withHeight(400).withMargin(knobMarginSmall));
@@ -89,9 +92,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
 
     void timerCallback() override
     {
-        levelGauge.update(processorRef.getInputDbLoad(), processorRef.getOutputDbLoad());
-        spectrogramGauge.update(processorRef.getSpectrogram());
-        signalGauge.update(processorRef.getWaveDataToShow());
+        if (processorRef.hasRunner())
+        {
+            levelGauge.update(processorRef.getInputDbLoad(), processorRef.getOutputDbLoad());
+            spectrogramGauge.update(processorRef.getSpectrogram());
+            signalGauge.update(processorRef.getWaveDataToShow());
+        }
     }
 
     void initWidgets()
@@ -133,7 +139,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
     CustomRotaryDial highShelvingDial{this};
     CustomRotaryDial latencyDial{this};
     Gauge levelGauge{};
-    SpectrogramDisplay spectrogramGauge{};
+    SpectrogramDisplay spectrogramGauge{CLutPreset};
     WaveformGauge signalGauge{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)

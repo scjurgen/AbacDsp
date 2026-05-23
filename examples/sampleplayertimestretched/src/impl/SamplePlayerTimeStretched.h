@@ -15,7 +15,7 @@ template <size_t BlockSize>
 class SamplePlayerTimeStretched final : public EffectBase
 {
   public:
-    SamplePlayerTimeStretched(const float sampleRate)
+    exokicit SamplePlayerTimeStretched(const float sampleRate)
         : EffectBase(sampleRate)
         , m_producer(sampleRate)
         , m_player(&m_producer, 4096)

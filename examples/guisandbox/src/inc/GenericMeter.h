@@ -1,6 +1,7 @@
 #pragma once
+#include "GuiConstants.h"
 
-#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_gui_basics/juce_gui_basics.h>
 
 #include <vector>
 
@@ -9,7 +10,6 @@ class GaugeBackground : public juce::Component
   public:
     GaugeBackground()
     {
-        backgroundLightGrey = juce::Colour(GuiConstants::instance().colors.bg_LightGrey);
         backgroundApp = juce::Colour(GuiConstants::instance().colors.bg_App);
         setBufferedToImage(true);
     }
@@ -17,12 +17,8 @@ class GaugeBackground : public juce::Component
     void paint(juce::Graphics& g) override
     {
         const auto bounds = GaugeArea.toFloat();
-
         g.setColour(backgroundApp);
         g.fillRoundedRectangle(bounds, 1);
-
-        g.setColour(backgroundLightGrey);
-        drawIndicators(g, minValue, maxValue);
     }
 
     void resized() override
@@ -31,23 +27,9 @@ class GaugeBackground : public juce::Component
         repaint();
     }
 
-    void drawIndicators(juce::Graphics& g, const float /*minValue*/, const float /*maxValue*/) const
-    {
-        // g.setColour(juce::Colour(0xff202020));
-        const auto height = static_cast<float>(getHeight());
-        const auto width = static_cast<float>(getWidth());
-
-        for (float db = minValue; db <= maxValue; db += 6)
-        {
-            float y = juce::jmap(db, minValue, maxValue, height, 0.0f);
-            g.drawLine(0, y, width, y, 1.0f);
-        }
-    }
-
   private:
     juce::Rectangle<int> GaugeArea;
-    juce::Colour backgroundLightGrey, backgroundApp;
-    float minValue{-60.f}, maxValue{12.f};
+    juce::Colour backgroundApp;
 };
 
 class GaugeValue : public juce::Component
@@ -88,27 +70,25 @@ class GaugeValue : public juce::Component
     void redrawValue(juce::Graphics& g, const juce::Rectangle<float>& bounds) const
     {
         constexpr size_t pad = 4;
-        constexpr float s = 4.0f;
-        constexpr uint32_t alpha = 0x88000000;
         const float height = bounds.getHeight() - pad * 2;
         const float width = bounds.getWidth() - pad * 2;
         const float channelWidth = width / static_cast<float>(values.size());
-        juce::Rectangle<float> meterBounds(pad, pad, channelWidth, height);
-        juce::ColourGradient gradient(juce::Colour(alpha | 0x00FF00), meterBounds.getBottomLeft(),
-                                      juce::Colour(alpha | 0xFF0088), meterBounds.getTopLeft(), false);
-        gradient.addColour(juce::jmap(70.0f - s, 0.0f, 100.0f, 0.0f, 1.0f), juce::Colour(alpha | 0x00FF00));
-        gradient.addColour(juce::jmap(70.0f + s, 0.0f, 100.0f, 0.0f, 1.0f), juce::Colour(alpha | 0xFFFF00));
-        gradient.addColour(juce::jmap(85.0f - s, 0.0f, 100.0f, 0.0f, 1.0f), juce::Colour(alpha | 0xFFFF00));
-        gradient.addColour(juce::jmap(85.0f + s, 0.0f, 100.0f, 0.0f, 1.0f), juce::Colour(alpha | 0xFF0000));
+        const juce::Rectangle<float> meterBounds(pad, pad, channelWidth, height);
 
         for (size_t i = 0; i < values.size(); ++i)
         {
             constexpr float padC = 2;
             juce::Rectangle<float> columnBounds{meterBounds.getX() + i * channelWidth + padC, meterBounds.getY(),
                                                 channelWidth - padC * 2, height};
-            float linValue = std::clamp(values[i], -84.f, 12.f) + 84;
+
+            auto gradient = GuiConstants::instance().getGradient();
+            gradient.point1 = columnBounds.getBottomLeft();
+            gradient.point2 = columnBounds.getTopLeft();
+
             g.setGradientFill(gradient);
             g.fillRect(columnBounds);
+
+            float linValue = std::clamp(values[i], -84.f, 12.f) + 84;
             float visibleHeight = juce::jmap(std::clamp(linValue, 0.f, 100.f), 0.f, 100.f, 0.0f, height);
 
             g.setColour(juce::Colour(GuiConstants::instance().colors.bg_App));
@@ -121,6 +101,34 @@ class GaugeValue : public juce::Component
     std::vector<float> values;
 };
 
+class GaugeIndicators : public juce::Component
+{
+  public:
+    GaugeIndicators()
+    {
+        setInterceptsMouseClicks(false, false);
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        const auto height = static_cast<float>(getHeight());
+        const auto width = static_cast<float>(getWidth());
+
+        for (float db = minValue_; db <= maxValue_; db += 6)
+        {
+            const float y = juce::jmap(db, minValue_, maxValue_, height, 0.0f);
+            const bool isZero = (std::abs(db) < 0.01f);
+
+            g.setColour(isZero ? juce::Colours::white.withAlpha(0.75f) : juce::Colours::white.withAlpha(0.30f));
+
+            g.drawLine(0, y, width, y, isZero ? 1.5f : 1.0f);
+        }
+    }
+
+  private:
+    float minValue_{-60.f}, maxValue_{12.f};
+};
+
 class Gauge : public juce::Component
 {
   public:
@@ -128,6 +136,7 @@ class Gauge : public juce::Component
     {
         addAndMakeVisible(gaugeBg);
         addAndMakeVisible(gaugeValue);
+        addAndMakeVisible(gaugeIndicators);
         backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey);
     }
 
@@ -142,9 +151,10 @@ class Gauge : public juce::Component
     void resized() override
     {
         auto bounds = getLocalBounds();
-        bounds.removeFromTop(20); // Space for label
+        bounds.removeFromTop(20);
         gaugeBg.setBounds(bounds);
         gaugeValue.setBounds(bounds);
+        gaugeIndicators.setBounds(bounds);
     }
 
     void update(const std::vector<float>& values)
@@ -159,13 +169,13 @@ class Gauge : public juce::Component
 
     void update(const float left, const float right)
     {
-        std::vector values = {left, right};
+        std::vector<float> values = {left, right};
         gaugeValue.update(values);
     }
 
     void update(std::pair<float, float> inLevel, std::pair<float, float> outLevel)
     {
-        std::vector values = {inLevel.first, inLevel.second, outLevel.first, outLevel.second};
+        std::vector<float> values = {inLevel.first, inLevel.second, outLevel.first, outLevel.second};
         gaugeValue.update(values);
     }
 
@@ -178,6 +188,7 @@ class Gauge : public juce::Component
   private:
     GaugeBackground gaugeBg;
     GaugeValue gaugeValue;
+    GaugeIndicators gaugeIndicators;
     juce::Colour backgroundDarkGrey;
     juce::String m_label;
 };

@@ -223,18 +223,14 @@ class FFTResponse
                                              float minValue)
     {
         FrequencySlice slice{};
-        const auto lastNonZero = std::find_if(binFrequency.rbegin(), binFrequency.rend(),
-                                              [](const float f)
-                                              {
-                                                  // better compare
-                                                  return f != 0.0f;
-                                              });
+        const auto lastNonZero =
+            std::find_if(binFrequency.rbegin(), binFrequency.rend(), [](const float f) { return f != 0.0f; });
         const auto firstGreaterThan =
             std::ranges::find_if(binFrequency, [minValue](const float f) { return f > minValue; });
         if (lastNonZero != binFrequency.rend() && firstGreaterThan != binFrequency.end())
         {
-            auto start = std::distance(binFrequency.begin(), firstGreaterThan);
-            auto end = binFrequency.size() - std::distance(binFrequency.rbegin(), lastNonZero);
+            const auto start = std::distance(binFrequency.begin(), firstGreaterThan);
+            const auto end = std::distance(binFrequency.begin(), lastNonZero.base());
             if (start < end)
             {
                 slice.bins = std::vector<float>(binSum.begin() + start, binSum.begin() + end);
@@ -262,7 +258,7 @@ class FFTResponse
         {
             const auto f = sampleRate / static_cast<float>(windowSize) * static_cast<float>(i);
             auto bin = static_cast<unsigned>(std::round(std::log(f) / std::log(2.0f) * binsPerOctave));
-            if (binFrequency[bin] == 0)
+            if (binFrequency[bin] == 0.f)
             {
                 binFrequency[bin] = f;
             }

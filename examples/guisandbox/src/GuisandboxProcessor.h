@@ -13,8 +13,11 @@
 #include "UiElements.h"
 
 #include "impl/GuiSandBox.h"
+#include "impl/FileIo.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
+
+const auto CLutPreset{GuiConstants::GradientPreset::Heat};
 
 class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::AudioProcessorValueTreeState::Listener
 {
@@ -39,7 +42,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         , m_envInput{AbacDsp::RmsFollower(10000), AbacDsp::RmsFollower(10000)}
         , m_envOutput{AbacDsp::RmsFollower(10000), AbacDsp::RmsFollower(10000)}
         , m_spectrogram{}
+        , m_patchIndex(2, 0)
     {
+        m_parameters.addParameterListener("patch", this);
+        m_parameters.addParameterListener("subPatch", this);
         m_parameters.addParameterListener("onOff", this);
         m_parameters.addParameterListener("input", this);
         m_parameters.addParameterListener("modulationDepth", this);
@@ -47,11 +53,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("density", this);
         m_parameters.addParameterListener("threshold", this);
         m_parameters.addParameterListener("knee", this);
-        m_parameters.addParameterListener("dropIt", this);
+
+        m_fileIo.initialize(m_patchIndex);
     }
     ~AudioPluginAudioProcessor() override = default;
 
-    void prepareToPlay(double sampleRate, int samplesPerBlock) override
+    void prepareToPlay(const double sampleRate, const int samplesPerBlock) override
     {
         pluginRunner = std::make_unique<GuiSandBox<NumSamplesPerBlock>>(static_cast<float>(sampleRate));
         m_sampleRate = static_cast<size_t>(sampleRate);
@@ -69,10 +76,27 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
 
         juce::ignoreUnused(samplesPerBlock);
+        m_fileIo.enable();
     }
 
     void releaseResources() override
     {
+        std::cout << "releaseResources: Called on shutdown" << std::endl;
+
+        if (m_fileIo.areParametersModified())
+        {
+            std::cout << "releaseResources: Parameters modified, prompting for save" << std::endl;
+
+            int result = juce::NativeMessageBox::showYesNoBox(
+                juce::MessageBoxIconType::QuestionIcon, "Save Parameters",
+                "Parameters have changed. Do you want to save before exiting?", nullptr, nullptr);
+            if (result == 1)
+            {
+                std::cout << "Saving data\n";
+                m_fileIo.forceSave();
+            }
+        }
+
         pluginRunner = nullptr;
     }
 
@@ -170,10 +194,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             case 0:
                 return {"Program 0"};
-            case 1:
-                return {"Program 1"};
-            case 2:
-                return {"Program 2"};
             default:
                 return {"Program unknown"};
         }
@@ -212,7 +232,17 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     {
         std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("onOff", 1), "✨", 0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("patch", 1), "Patch",
+            juce::StringArray{"Patch 1", "Patch 2", "Patch 3", "Patch 4", "Patch 5", "Patch 6", "Patch 7", "Patch 8",
+                              "Patch 9", "Patch 10"},
+            0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("subPatch", 1), "Sub patch",
+            juce::StringArray{"Sub 1", "Sub 2", "Sub 3", "Sub 4", "Sub 5", "Sub 6", "Sub 7", "Sub 8", "Sub 9",
+                              "Sub 10"},
+            0));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("onOff", 1), "Power", 0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("input", 1), "Input", juce::NormalisableRange<float>(0, 50, 0.1, 1, false), 2,
             juce::String("Input"), juce::AudioProcessorParameter::genericParameter,
@@ -237,8 +267,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::ParameterID("knee", 1), "Knee", juce::NormalisableRange<float>(1, 12, 0.01, 1, false), 1,
             juce::String("Knee"), juce::AudioProcessorParameter::genericParameter,
             [](float value, float) { return juce::String(value, 2) + " dB"; }));
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(
-            juce::ParameterID("dropIt", 1), "Dropit", juce::StringArray{"item 1", "item 2", "item 3"}, 1));
 
         return {params.begin(), params.end()};
     }
@@ -250,6 +278,40 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             return;
         }
+
+
+        if (parameterID == "patch" || parameterID == "subPatch")
+        {
+            if (parameterID == "patch")
+            {
+                m_patchIndex[0] = static_cast<int>(newValue);
+            }
+            if (parameterID == "subPatch")
+            {
+                m_patchIndex[1] = static_cast<int>(newValue);
+            }
+
+            if (m_fileIo.areParametersModified())
+            {
+                juce::NativeMessageBox::showAsync(
+                    juce::MessageBoxOptions()
+                        .withTitle("Save Parameters")
+                        .withMessage("Parameters have changed, do you want to save before loading new patch?")
+                        .withButton("Yes")
+                        .withButton("No")
+                        .withIconType(juce::MessageBoxIconType::QuestionIcon),
+                    [this, pi = m_patchIndex](int result) { handlePatchChangeAsync(pi, result == 0); });
+            }
+            else
+            {
+                loadPatchDirect(m_patchIndex);
+            }
+        }
+        else
+        {
+            m_fileIo.updateParameter(parameterID.toStdString(), newValue);
+        }
+
         static const std::map<juce::String, std::function<void(AudioPluginAudioProcessor&, float)>> parameterMap{
             {"onOff",
              [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setOnOff(static_cast<bool>(v)); }},
@@ -260,8 +322,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             {"density", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setDensity(v); }},
             {"threshold", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setThreshold(v); }},
             {"knee", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setKnee(v); }},
-            {"dropIt", [](const AudioPluginAudioProcessor& p, const float v)
-             { p.pluginRunner->setDropIt(static_cast<size_t>(v)); }},
 
         };
         if (auto it = parameterMap.find(parameterID); it != parameterMap.end())
@@ -269,6 +329,70 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             it->second(*this, newValue);
         }
     }
+
+    // Helper to handle patch change after dialog response
+    void handlePatchChangeAsync(const std::vector<int>& newPatchIndex, bool shouldSave)
+    {
+        if (shouldSave)
+        {
+            m_fileIo.forceSave();
+        }
+
+        loadPatchDirect(newPatchIndex);
+    }
+
+    void loadPatchDirect(const std::vector<int>& patchIndex)
+    {
+        m_fileIo.loadPatchDirect(patchIndex);
+        m_fileIo.loadPatchDirect(patchIndex);
+        const auto& params = m_fileIo.getCurrentParameters();
+
+        // Apply loaded parameters to APVTS (triggers UI update)
+        if (auto* p = m_parameters.getParameter("onOff"))
+        {
+            const auto& range = m_parameters.getParameterRange("onOff");
+            float normalized = range.convertTo0to1(params.onOff);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("input"))
+        {
+            const auto& range = m_parameters.getParameterRange("input");
+            float normalized = range.convertTo0to1(params.input);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("modulationDepth"))
+        {
+            const auto& range = m_parameters.getParameterRange("modulationDepth");
+            float normalized = range.convertTo0to1(params.modulationDepth);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("mix"))
+        {
+            const auto& range = m_parameters.getParameterRange("mix");
+            float normalized = range.convertTo0to1(params.mix);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("density"))
+        {
+            const auto& range = m_parameters.getParameterRange("density");
+            float normalized = range.convertTo0to1(params.density);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("threshold"))
+        {
+            const auto& range = m_parameters.getParameterRange("threshold");
+            float normalized = range.convertTo0to1(params.threshold);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("knee"))
+        {
+            const auto& range = m_parameters.getParameterRange("knee");
+            float normalized = range.convertTo0to1(params.knee);
+            p->setValueNotifyingHost(normalized);
+        }
+    }
+
+
     void computeCpuLoad(std::chrono::nanoseconds elapsed, size_t numSamples)
     {
         samplesProcessed += numSamples;
@@ -373,5 +497,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     std::array<AbacDsp::RmsFollower, 2> m_envInput;
     std::array<AbacDsp::RmsFollower, 2> m_envOutput;
     AbacDsp::SimpleSpectrogram m_spectrogram;
+    std::vector<int> m_patchIndex;
+    FileIo m_fileIo;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessor)
 };

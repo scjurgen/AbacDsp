@@ -1,0 +1,39 @@
+{
+  "name": "klangprisma",
+  "displayname": "Klang Prisma",
+  "color": "Analyser",
+  "shortdescription" : "Spektrum analyser",
+  "description": [
+    "✨ Spektrum analyser\n"
+  ],
+  "midi-in": true,
+  "midi-out": false,
+  "audio-in": true,
+  "audio-out": true,
+  "transport": false,
+  "parameters":
+  [
+    {"short": "GAIN", "type":"dial", "display": "Gain", "symbol": "gain", "default": 0, "range": [-60,60,0.1,1,false], "precision":1, "unit": "dB" }
+  ],
+  "gauges":
+  [
+    {"short": "CPU", "type" : "cpuload", "display": "CPU", "symbol": "cpu"},
+    {"short": "LVL", "type" : "levels", "display": "Level", "symbol": "level" },
+    {"short": "FFT", "type" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"},
+    {"short": "SIG", "type" : "signal", "display": "Signal", "symbol": "signal"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "800",
+    "WINDOW_HEIGHT": "600",
+    "type": "||",
+    "columnspaging": "C=(1:13)",
+    "group 1": "GAIN, LVL*200, CPU*200",
+    "group 2": "FFT%1, SIG%1"
+  },
+  "CPP":
+  {
+    "CLASS_NAME": "GenericImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/GenericImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

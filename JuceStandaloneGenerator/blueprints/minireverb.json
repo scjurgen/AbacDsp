@@ -1,0 +1,53 @@
+{
+  "name": "minireverb",
+  "displayname": "Mini Reverb",
+  "status": "beta",
+  "plugintype": "ReverbPlugin",
+  "color": "#ee77cc",
+  "boxy": "boxy",
+  "plugintype-see-also": "http://lv2plug.in/ns/lv2core#ReverbPlugin",
+  "micro": 127,
+  "minor": 1,
+  "major": 0,
+  "description": ["✨ Just a small Reverb. "],
+  "ports-control":
+  [
+    {"short": "ORD", "type": "drop", "display": "Order", "symbol": "order", "default": 8, "listitems": ["4","8","12","16","20","24","32","48","64"]},
+    {"short": "DRY", "type": "dial", "display": "Dry", "symbol": "dry", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "WET", "type": "dial", "display": "Wet", "symbol": "wet", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "WIDE", "type": "dial", "display": "Stereo Width", "symbol": "stereoWidth", "default": 100, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": ""},
+    {"short": "SMSZ", "type": "dial", "display": "Base size", "symbol": "baseSize", "default": 10, "range": [1.0, 600, 0.01, 0.5, false], "precision": 2, "unit": "m"},
+    {"short": "SZFC", "type": "dial", "display": "Size Factor", "symbol": "sizeFactor", "default": 3.1, "range": [1.0, 20, 0.01, 1.0, false], "precision": 2, "unit": "x"},
+    {"short": "BLG", "type": "dial", "display": "Bulge", "symbol": "bulge", "default":0, "range": [-1, 1, 0.01, 1, false], "precision": 2, "unit": ""},
+    {"short": "UNDL", "type": "switch", "display": "Unique delay", "symbol": "uniqueDelay", "default": 1},
+    {"short": "DCYL", "type": "dial", "display": "Decay Low", "symbol": "decay", "default": 2000, "range": [0, 100000, 0.1, 0.25, false], "precision": 1, "unit": "ms"},
+    {"short": "APU", "type": "dial", "display": "All pass First", "symbol": "allPassUp", "default": 10000, "range": [20, 20000, 1, 0.5, false], "precision": 0, "unit": "Hz"},
+    {"short": "APD", "type": "dial", "display": "All pass Last", "symbol": "allPassDown", "default": 100, "range": [20, 20000, 1, 0.5, false], "precision": 0, "unit": "Hz"},
+    {"short": "LPF", "type": "dial", "display": "Low pass", "symbol": "lowPass", "default": 3000, "range": [20, 20000, 1, 0.5, false], "precision": 0, "unit": "Hz"},
+    {"short": "LPC", "type": "drop", "display": "Low pass count", "symbol": "lowPassCount", "default": 0, "listitems": ["none", "one", "two", "1/4", "1/2", "3/4","All"]},
+    {"short": "HPF", "type": "dial", "display": "High pass", "symbol": "highPass", "default": 3000, "range": [20, 20000, 1, 0.5, false], "precision": 0, "unit": "Hz"},
+    {"short": "HPC", "type": "drop", "display": "High pass count", "symbol": "highPassCount", "default": 0, "listitems": ["none", "one", "two", "1/4", "1/2", "3/4","All"]},
+    {"short": "MDPT", "type": "dial", "display": "Mod depth", "symbol": "modulationDepth", "default": 0.02, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
+    {"short": "MDSP", "type": "dial", "display": "Mod speed", "symbol": "modulationSpeed", "default": 0.25, "range": [0.01, 5, 0.01, 0.5, false], "precision": 2, "unit": "Hz"},
+    {"short": "RVPT", "type": "switch", "display": "Reverse pitch", "symbol": "reversePitch", "default": 0},
+    {"short": "PTST", "type": "dial", "display": "Pitch Strength", "symbol": "pitchStrength", "default": 0.5, "range": [0.0, 1.0, 0.01, 1, false], "precision": 2, "unit": ""},
+    {"short": "PT1", "type": "dial", "display": "Pitch 1 inplace", "symbol": "pitch1Inplace", "default": 0, "range": [-12, 12, 0.01, 1, false], "precision": 2, "unit": "st"},
+    {"short": "PT2", "type": "dial", "display": "Pitch 2 inplace", "symbol": "pitch2Inplace", "default": 0, "range": [-12, 12, 0.01, 1, false], "precision": 2, "unit": "st"},
+    {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1280",
+    "WINDOW_HEIGHT": "1024",
+    "type": "|=5",
+    "composition": "C=(1:12) R=(2:1:1:1:1) A1=(LVL*500,CPU*200) A2=(DCYL, DRY, WET, WIDE, FFT*600) A3=(SMSZ, SZFC, BLG, UNDL) A4=(APU, APD, LPF, LPC, HPF, HPC) A5=(ORD, MDPT, MDSP) A6=(RVPT, PTST, PT1, PT2)"
+  },
+  "CPP":
+  {
+    "CLASS_NAME": "MiniReverbImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/MiniReverbImpl.h",
+    "HINTPROC:" : "Mono-Stereo Mono-Mono Stereo-Stereo",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

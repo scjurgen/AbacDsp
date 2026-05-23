@@ -5,8 +5,9 @@
  * NOT A GOOD IDEA TO CHANGE STUFF HERE
  */
 
-#include "GuiConstants.h"
+#include "GuisandboxConstants.h"
 
+#include "inc/GuiConstants.h"
 #include "inc/CpuMeter.h"
 #include "inc/CustomRotaryDial.h"
 #include "inc/GenericMeter.h"

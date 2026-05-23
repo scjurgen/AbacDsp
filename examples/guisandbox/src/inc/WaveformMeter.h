@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include <vector>
+
 #include "GenericMeter.h"
 
 
@@ -40,23 +41,23 @@ class WaveformShow : public juce::Component
         const float width = bounds.getWidth() - 2 * pad;
         const float channelWidth = width;
 
-        juce::Rectangle<float> meterBounds(pad, pad, channelWidth, height);
+        const juce::Rectangle<float> meterBounds(pad, pad, channelWidth, height);
 
         // Draw grid
         g.setColour(juce::Colours::grey.withAlpha(0.2f));
         for (int i = 0; i < 5; ++i)
         {
-            float y = meterBounds.getY() + i * meterBounds.getHeight() / 4.0f;
+            float y = meterBounds.getY() + static_cast<float>(i) * meterBounds.getHeight() / 4.0f;
             g.drawHorizontalLine(static_cast<int>(y), meterBounds.getX(), meterBounds.getRight());
         }
         for (int i = 0; i < 10; ++i)
         {
-            float x = meterBounds.getX() + i * meterBounds.getWidth() / 9.0f;
+            float x = meterBounds.getX() + static_cast<float>(i) * meterBounds.getWidth() / 9.0f;
             g.drawVerticalLine(static_cast<int>(x), meterBounds.getY(), meterBounds.getBottom());
         }
 
         // Draw waveform
-        g.setColour(juce::Colours::white.withAlpha(0.8f));
+        g.setColour(juce::Colour(GuiConstants::instance().colors.statusOutline));
         juce::Path waveformPath;
         const float xScale = meterBounds.getWidth() / static_cast<float>(m_lastValues.size() - 1);
         const float yScale = meterBounds.getHeight() / 2.0f;
@@ -66,12 +67,12 @@ class WaveformShow : public juce::Component
 
         for (size_t i = 1; i < m_lastValues.size(); ++i)
         {
-            float x = meterBounds.getX() + i * xScale;
+            float x = meterBounds.getX() + static_cast<float>(i) * xScale;
             float y = centerY - m_lastValues[i] * yScale;
             waveformPath.lineTo(x, y);
         }
 
-        g.strokePath(waveformPath, juce::PathStrokeType(2.0f));
+        g.strokePath(waveformPath, juce::PathStrokeType(1.0f));
     }
 
 

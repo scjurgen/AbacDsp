@@ -2,6 +2,8 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include <memory>
+
 class ModRotaryDial : public juce::Slider
 {
   public:
@@ -60,7 +62,7 @@ class CustomRotaryDial : public juce::Component
     using ButtonAttachment = std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>;
 
   public:
-    CustomRotaryDial(Component* /*parent = nullptr*/)
+    explicit CustomRotaryDial(Component* /*parent = nullptr*/)
         : m_slider(&m_label)
     {
         addAndMakeVisible(m_slider);
@@ -75,7 +77,8 @@ class CustomRotaryDial : public juce::Component
 
     void reset(juce::AudioProcessorValueTreeState& state, const juce::String& paramID)
     {
-        m_sliderAttachment.reset(new juce::AudioProcessorValueTreeState::SliderAttachment(state, paramID, m_slider));
+        m_sliderAttachment =
+            std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(state, paramID, m_slider);
     }
 
     void setLabelText(const juce::String& text)
@@ -85,13 +88,17 @@ class CustomRotaryDial : public juce::Component
 
     void resized() override
     {
-        auto bounds = getLocalBounds().reduced(2);
-        const auto fontHeight = m_label.getFont().getHeight();
+        const auto bounds = getLocalBounds().reduced(2);
+        const auto fontHeight = static_cast<int>(m_label.getFont().getHeight());
 
-        const auto labelBounds = bounds.removeFromBottom(static_cast<int>(fontHeight));
-        m_slider.setBounds(bounds);
-        m_label.setBounds(labelBounds);
+        const auto knobSize = std::min(bounds.getWidth(), bounds.getHeight() - fontHeight);
+        const auto xOffset = (bounds.getWidth() - knobSize) / 2;
+        const auto yOffset = (bounds.getHeight() - knobSize - fontHeight) / 2;
+
+        m_label.setBounds(bounds.getX(), bounds.getY() + yOffset, bounds.getWidth(), fontHeight);
+        m_slider.setBounds(bounds.getX() + xOffset, bounds.getY() + yOffset + fontHeight, knobSize, knobSize);
     }
+
 
     void setHasModifier(bool mod)
     {

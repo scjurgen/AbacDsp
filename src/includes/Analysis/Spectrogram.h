@@ -421,7 +421,7 @@ class FloatingHorizonFFTImage : public SpectrogramBase
 
     [[nodiscard]] SpectrumImageSet getImageSet() const
     {
-        return {m_currentSlice, m_width, m_height, m_image.data()};
+        return {m_currentSlice, m_width, m_height, m_image.data(), m_sampleRate, m_fftLength, m_windowForwardRatio};
     }
 
   protected:
@@ -431,7 +431,7 @@ class FloatingHorizonFFTImage : public SpectrogramBase
         m_horizon.resize(m_width, 0.0f);
     }
 
-    void onFftLengthChanged()
+    void onFftLengthChanged() override
     {
         m_image.resize(m_fftLength / 2 * m_slices, 0.0f);
     }

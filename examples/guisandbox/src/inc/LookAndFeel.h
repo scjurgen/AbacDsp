@@ -11,7 +11,9 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
     juce::Colour backgroundMidGrey;
     juce::Colour statusOutline, statusOutlineDisabled;
     juce::Colour gradientDarkGrey, gradientDarkGreyDisabled;
+    juce::Colour knobGradStart, knobGradCenter, knobGradEnd;
     const juce::Font mainFontDefinition;
+    float comboWidthFactor_{0.95f};
 
   public:
     GuiLookAndFeel()
@@ -24,6 +26,10 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         statusOutlineDisabled = juce::Colour(GuiConstants::instance().colors.statusOutline).withAlpha(0.35f);
         gradientDarkGrey = juce::Colour(GuiConstants::instance().colors.gd_DarkGreyStart);
         gradientDarkGreyDisabled = juce::Colour(GuiConstants::instance().colors.gd_DarkGreyStart).withAlpha(0.35f);
+
+        knobGradStart = juce::Colour(GuiConstants::instance().colors.knobGradStart);
+        knobGradCenter = juce::Colour(GuiConstants::instance().colors.knobGradCenter);
+        knobGradEnd = juce::Colour(GuiConstants::instance().colors.knobGradEnd);
     }
 
     void drawLabel(juce::Graphics& g, juce::Label& label) override
@@ -72,6 +78,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         const auto rx = cx - radius;
         const auto ry = cy - radius;
         const auto rw = radius * 2.0f;
+        const auto rh = radius * 2.0f;
 
         const auto zeroPos =
             slider.getMinimum() < 0 && slider.getMaximum() > 0
@@ -104,11 +111,79 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         juce::Path statusRingPath;
         statusRingPath.addCentredArc(cx, cy, radius - extraMargin, radius - extraMargin, 0.0f, zeroAngle, angle, true);
         g.strokePath(statusRingPath, juce::PathStrokeType(strokeSliderRange));
+        if (slider.isEnabled())
+        {
+            constexpr float fSlightBevel = 0.4f;
+            constexpr float fShadowOffsetFrac = 0.35f;
+            constexpr float fShadowExpandFrac = 0.15f;
+            constexpr float fShadowAlpha = 1.f;
+            constexpr float fRimArcFraction = 0.6f; // fraction of full circle
+            constexpr float fRimThickness = 1.5f;
 
-        slider.isEnabled() ? g.setGradientFill(juce::ColourGradient(backgroundMidGrey, rx + rw / 2, ry,
-                                                                    gradientDarkGrey, rx + rw / 2, ry + rw, false))
-                           : g.setColour(gradientDarkGreyDisabled);
-        g.fillEllipse(rect.reduced(extraMargin + statusOutlineThickness + bedOutline + bedThickness));
+            const auto knobRect = rect.reduced(extraMargin + statusOutlineThickness + bedOutline + bedThickness);
+            const auto kx = knobRect.getX();
+            const auto ky = knobRect.getY();
+            const auto kw = knobRect.getWidth();
+            const auto kh = knobRect.getHeight();
+            const auto kcx = kx + kw * 0.5f;
+            const auto kcy = ky + kh * 0.5f;
+            const auto kr = kw * 0.5f;
+
+            const auto shadowOffset = kr * fShadowOffsetFrac;
+            const auto shadowExpand = kr * fShadowExpandFrac;
+
+            // Shadow
+            {
+                juce::Path shadowPath;
+                shadowPath.addEllipse(kx + shadowOffset, ky + shadowOffset, kw + shadowExpand, kh + shadowExpand);
+                juce::ColourGradient shadowGrad(juce::Colours::black.withAlpha(fShadowAlpha), kcx + shadowOffset,
+                                                kcy + shadowOffset, juce::Colours::black.withAlpha(0.0f),
+                                                kcx + shadowOffset + kr + shadowExpand, kcy + shadowOffset, true);
+                shadowGrad.addColour(0.50, juce::Colours::black.withAlpha(fShadowAlpha * 0.45f));
+                shadowGrad.addColour(0.80, juce::Colours::black.withAlpha(fShadowAlpha * 0.08f));
+                g.setGradientFill(shadowGrad);
+                g.fillPath(shadowPath);
+            }
+
+            // Disk
+            juce::ColourGradient grad(knobGradCenter.brighter(fSlightBevel), kx, ky,
+                                      knobGradCenter.darker(fSlightBevel), kx + kw, ky + kh, false);
+            g.setGradientFill(grad);
+            g.fillEllipse(knobRect);
+
+            // Rim highlight — clip to thin outer ring, fill with radial gradient
+            {
+                constexpr float halfSpan = juce::MathConstants<float>::pi * fRimArcFraction;
+                constexpr float centre = -juce::MathConstants<float>::pi * 0.25f;
+
+                // Thin ring mask: outer circle minus slightly smaller inner circle
+                constexpr float ringWidth = 10.0f;
+                juce::Path ringClip;
+                ringClip.addCentredArc(kcx, kcy, kr, kr, 0.0f, centre - halfSpan, centre + halfSpan, true);
+                ringClip.addCentredArc(kcx, kcy, kr - ringWidth, kr - ringWidth, 0.0f, centre + halfSpan,
+                                       centre - halfSpan, false);
+                ringClip.closeSubPath();
+
+                // Radial gradient from rim inward — white at edge, transparent toward centre
+                juce::ColourGradient rimGrad(juce::Colours::white.withAlpha(0.90f), kcx, kcy,
+                                             juce::Colours::white.withAlpha(0.0f), kcx, kcy, true);
+                rimGrad.point1 = {kcx + (kr - ringWidth) * std::sin(centre - juce::MathConstants<float>::pi),
+                                  kcy - (kr - ringWidth) * std::cos(centre - juce::MathConstants<float>::pi)};
+                rimGrad.point2 = {kcx + kr * std::sin(centre - juce::MathConstants<float>::pi),
+                                  kcy - kr * std::cos(centre - juce::MathConstants<float>::pi)};
+
+                g.saveState();
+                g.reduceClipRegion(ringClip);
+                g.setGradientFill(rimGrad);
+                g.fillEllipse(knobRect);
+                g.restoreState();
+            }
+        }
+        else
+        {
+            g.setColour(gradientDarkGreyDisabled);
+            g.fillEllipse(rect.reduced(extraMargin + statusOutlineThickness + bedOutline + bedThickness));
+        }
 
         juce::Path dialPointerPath;
         dialPointerPath.addEllipse(-strokeSliderRange, -radius + 12.0f, strokeSliderRange * 2, strokeSliderRange * 2);
@@ -161,31 +236,35 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
     void drawComboBox(juce::Graphics& g, int width, int height, bool /*isButtonDown*/, int /*buttonX*/, int /*buttonY*/,
                       int /*buttonW*/, int /*buttonH*/, juce::ComboBox& box) override
     {
-        auto cornerSize = box.findParentComponentOfClass<juce::ChoicePropertyComponent>() != nullptr ? 0.0f : 1.0f;
-        juce::Rectangle<int> boxBounds(0, 0, width, height);
+        const auto paddedWidth = static_cast<float>(width) * comboWidthFactor_;
+        const auto xOffset = (static_cast<float>(width) - paddedWidth) * 0.5f;
+        auto cornerSize = box.findParentComponentOfClass<juce::PopupMenu::CustomComponent>() != nullptr ? 0.0f : 1.0f;
+        juce::Rectangle<float> boxBounds(xOffset, 0.0f, paddedWidth, static_cast<float>(height));
 
         g.setColour(backgroundDarkGrey);
-        g.fillRoundedRectangle(boxBounds.toFloat(), cornerSize);
+        g.fillRoundedRectangle(boxBounds, cornerSize);
 
-        juce::Rectangle<int> arrowZone(width - 30, 0, 20, height);
+        juce::Rectangle<int> arrowZone(static_cast<int>(xOffset) + static_cast<int>(paddedWidth) - 30, 0, 20, height);
         juce::Path path;
         path.startNewSubPath(arrowZone.getX() + 3.0f, arrowZone.getCentreY() - 2.0f);
         path.lineTo(static_cast<float>(arrowZone.getCentreX()), arrowZone.getCentreY() + 3.0f);
         path.lineTo(arrowZone.getRight() - 3.0f, arrowZone.getCentreY() - 2.0f);
 
-        g.setColour(box.findColour(juce::ComboBox::arrowColourId).withAlpha((box.isEnabled() ? 0.9f : 0.2f)));
+        g.setColour(box.findColour(juce::ComboBox::arrowColourId).withAlpha(box.isEnabled() ? 0.9f : 0.2f));
         g.strokePath(path, juce::PathStrokeType(2.0f));
     }
 
     void positionComboBoxText(juce::ComboBox& box, juce::Label& label) override
     {
-        label.setBounds(1, 1, box.getWidth() - 30, box.getHeight() - 2);
+        const auto paddedWidth = static_cast<float>(box.getWidth()) * comboWidthFactor_;
+        const auto xOffset = static_cast<int>((static_cast<float>(box.getWidth()) - paddedWidth) * 0.5f);
+        label.setBounds(xOffset + 1, 1, static_cast<int>(paddedWidth) - 30, box.getHeight() - 2);
         label.setFont(getComboBoxFont(box));
     }
 
     void drawPopupMenuBackground(juce::Graphics& g, int width, int height) override
     {
-        g.fillAll(backgroundMidGrey);
+        g.fillAll(backgroundDarkGrey);
         juce::ignoreUnused(width, height);
 
 #if !JUCE_MAC

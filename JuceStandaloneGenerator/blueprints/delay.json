@@ -1,0 +1,40 @@
+{
+  "name": "delay",
+  "plugintype": "Delay",
+  "color": "Analyser",
+  "shortdescription" : "Delay + Spektrum analyser",
+  "description": [
+    "✨ Delay + Spektrum analyser\n"
+  ],
+  "ports-control":
+  [
+    {"short": "GAIN", "type":"dial", "display": "Gain", "symbol": "gain", "default": 0, "range": [-60,60, 0.1, 1,false], "precision": 1, "unit": "dB" },
+    {"short": "DRY", "type": "dial", "display": "Dry", "symbol": "dry", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "WET", "type": "dial", "display": "Wet", "symbol": "wet", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+
+    {"short": "TIME", "type": "dial", "display": "Time", "symbol": "timeInMs", "default": 0, "range": [1, 10000, 0.1, 0.3, false], "precision": 1, "unit": "ms"},
+    {"short": "FDBK", "type": "dial", "display": "Feedback", "symbol": "feedback", "default": 0, "range": [-100, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "LOP", "type": "dial", "display": "Low pass cutoff", "symbol": "lowPass", "default": 12000, "range": [100, 20000, 1, 0.3, false], "precision": 0, "unit": "Hz"},
+    {"short": "HIP", "type": "dial", "display": "High pass cutoff", "symbol": "highPass", "default": 50, "range": [100, 20000, 1, 0.3, false], "precision": 0, "unit": "Hz"},
+    {"short": "ALP", "type": "dial", "display": "All pass cutoff", "symbol": "allPass", "default": 1500, "range": [100, 20000, 1, 0.3, false], "precision": 0, "unit": "Hz"},
+    {"short": "MOD", "type": "dial", "display": "Modulation depth", "symbol": "modDepth", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "MDSP", "type": "dial", "display": "Modulation speed", "symbol": "modSpeed", "default": 0.25, "range": [0.05, 20, 0.1, 0.3, false], "precision": 1, "unit": "Hz"},
+
+    {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu"},
+    {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"},
+    {"short": "SIG", "type":"gauge", "gaugetype" : "signal", "display": "Signal", "symbol": "signal"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1000",
+    "WINDOW_HEIGHT": "600",
+    "type": "||||",
+    "composition": "C=(1:1:1:5) A1=(GAIN,DRY,WET,LVL*100,CPU*100) A2=(TIME,FDBK,LOP,HIP,ALP)  A3=(MOD,MDSP) A4=(FFT%1, SIG%1))"
+  },
+  "CPP":
+  {
+    "CLASS_NAME": "DelayImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/DelayImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

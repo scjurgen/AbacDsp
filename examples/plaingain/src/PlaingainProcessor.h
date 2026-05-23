@@ -72,7 +72,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 
     void releaseResources() override
     {
-        std::cout << "releaseResources: Called on shutdown" << std::endl;
+        std::cout << "releaseResources: Cyalled on shutdown" << std::endl;
 
         if (m_fileIo.areParametersModified())
         {
@@ -378,7 +378,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 
     [[nodiscard]] const std::vector<float>& getWaveDataToShow()
     {
-        return pluginRunner->visualizeWaveData();
+        if (pluginRunner)
+        {
+            return pluginRunner->visualizeWaveData();
+        }
+        return {};
     }
     [[nodiscard]] std::pair<float, float> getInputDbLoad() const
     {
@@ -392,6 +396,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     [[nodiscard]] AbacDsp::SpectrumImageSet getSpectrogram() const
     {
         return m_spectrogram.getImageSet();
+    }
+
+    [[nodiscard]] bool hasRunner() const
+    {
+        return pluginRunner.get() != nullptr;
     }
 
     float m_maxValue{0.f};

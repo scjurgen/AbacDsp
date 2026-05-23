@@ -41,17 +41,17 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
 #pragma GCC diagnostic ignored "-Wfloat-conversion"
     void resized() override
     {
-        auto area = getLocalBounds().reduced(static_cast<int>(GuiConstants::instance().margins.big));
+        auto area = getLocalBounds().reduced(static_cast<int>(Constants::Margins::big));
 
         // auto generated
-        // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(GuiConstants::instance().margins.small);
-        const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(GuiConstants::instance().margins.medium);
+        // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
+        const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
         std::vector<juce::Rectangle<int>> areas(4);
         const auto colWidth = area.getWidth() / 13;
-        areas[0] = area.removeFromLeft(colWidth * 1).reduced(GuiConstants::instance().margins.small);
-        areas[1] = area.removeFromLeft(colWidth * 2).reduced(GuiConstants::instance().margins.small);
-        areas[2] = area.removeFromLeft(colWidth * 2).reduced(GuiConstants::instance().margins.small);
-        areas[3] = area.reduced(GuiConstants::instance().margins.small);
+        areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+        areas[1] = area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
+        areas[2] = area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
+        areas[3] = area.reduced(Constants::Margins::small);
 
         {
             juce::FlexBox box;
@@ -67,11 +67,25 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
             box.flexWrap = juce::FlexBox::Wrap::noWrap;
             box.flexDirection = juce::FlexBox::Direction::column;
             box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+            box.items.add(juce::FlexItem(patchDrop)
+                              .withFlex(0)
+                              .withWidth(areas[2].toFloat().getWidth())
+                              .withHeight(Constants::Text::labelHeight)
+                              .withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(subPatchDrop)
+                              .withFlex(0)
+                              .withWidth(areas[2].toFloat().getWidth())
+                              .withHeight(Constants::Text::labelHeight)
+                              .withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(onOffSwitch)
-                              .withWidth(GuiConstants::instance().text.labelWidth)
-                              .withHeight(GuiConstants::instance().text.labelHeight)
+                              .withWidth(Constants::Text::labelWidth)
+                              .withHeight(Constants::Text::labelHeight)
                               .withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(mixDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(div2Label)
+                              .withWidth(Constants::Text::labelWidth)
+                              .withHeight(Constants::Text::labelHeight)
+                              .withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(modulationDepthDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(kneeDial).withFlex(1).withMargin(knobMarginSmall));
             box.performLayout(areas[1].toFloat());
@@ -83,8 +97,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
             box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
             box.items.add(juce::FlexItem(inputDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(div1Label)
-                              .withWidth(GuiConstants::instance().text.labelWidth)
-                              .withHeight(GuiConstants::instance().text.labelHeight)
+                              .withWidth(Constants::Text::labelWidth)
+                              .withHeight(Constants::Text::labelHeight)
                               .withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(densityDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(thresholdDial).withFlex(1).withMargin(knobMarginSmall));
@@ -110,6 +124,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
 
     void initWidgets()
     {
+        addAndMakeVisible(patchDrop);
+        patchDrop.addItemList(valueTreeState.getParameter("patch")->getAllValueStrings(), 1);
+        patchDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "patch", patchDrop);
+        addAndMakeVisible(subPatchDrop);
+        subPatchDrop.addItemList(valueTreeState.getParameter("subPatch")->getAllValueStrings(), 1);
+        subPatchDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "subPatch", subPatchDrop);
         addAndMakeVisible(onOffSwitch);
         onOffSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "onOff", onOffSwitch);
@@ -136,10 +158,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
         div1Label.setText(juce::String::fromUTF8("-- drop this too ----"), juce::dontSendNotification);
         addAndMakeVisible(div2Label);
         div2Label.setText(juce::String::fromUTF8("DropIt!"), juce::dontSendNotification);
-        addAndMakeVisible(dropItDrop);
-        dropItDrop.addItemList(valueTreeState.getParameter("dropIt")->getAllValueStrings(), 1);
-        dropItDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-            valueTreeState, "dropIt", dropItDrop);
         addAndMakeVisible(cpuGauge);
         cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
         addAndMakeVisible(levelGauge);
@@ -154,7 +172,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
     GuiLookAndFeel m_laf;
     juce::Colour backgroundApp;
 
-    juce::ToggleButton onOffSwitch{juce::String::fromUTF8("✨")};
+    juce::ComboBox patchDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> patchDropAttachment;
+    juce::ComboBox subPatchDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> subPatchDropAttachment;
+    juce::ToggleButton onOffSwitch{juce::String::fromUTF8("Power")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> onOffSwitchAttachment;
     CustomRotaryDial inputDial{this};
     CustomRotaryDial modulationDepthDial{this};
@@ -164,11 +186,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
     CustomRotaryDial kneeDial{this};
     juce::Label div1Label{};
     juce::Label div2Label{};
-    juce::ComboBox dropItDrop{};
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> dropItDropAttachment;
     CpuGauge cpuGauge{};
     Gauge levelGauge{};
-    SpectrogramDisplay spectrogramGauge{};
+    SpectrogramDisplay spectrogramGauge{CLutPreset};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
 };

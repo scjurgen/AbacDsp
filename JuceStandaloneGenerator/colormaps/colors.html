@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Color Map</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 14px;
+    background: #1a1a1a;
+    color: #d4d4d4;
+    padding: 2rem;
+  }
+  h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    color: #e8e8e8;
+    letter-spacing: 0.02em;
+  }
+  table { border-collapse: collapse; width: 100%; max-width: 800px; }
+  thead th {
+    text-align: left;
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #888;
+    border-bottom: 1px solid #333;
+  }
+  tbody tr { border-bottom: 1px solid #252525; }
+  tbody tr:hover { background: #222; }
+  td { padding: 0.45rem 1rem; vertical-align: middle; }
+  td:nth-child(4) { min-width: 140px; padding: 0.3rem 0.75rem; }
+  code {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.8rem;
+    color: #a8c7fa;
+  }
+</style>
+</head>
+<body>
+<h1>Color Map</h1>
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>RGB Value</th>
+      <th>Nearest XKCD Color</th>
+      <th>Preview</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Red</td><td><code>#770000</code></td><td>blood</td><td style="background-color:rgb(119,0,0);color:#fff;font-weight:600;text-align:center;">Red</td></tr>
+    <tr><td>Orange</td><td><code>#774400</code></td><td>medium brown</td><td style="background-color:rgb(119,68,0);color:#fff;font-weight:600;text-align:center;">Orange</td></tr>
+    <tr><td>Chorus</td><td><code>#1780D2</code></td><td>cerulean</td><td style="background-color:rgb(23,128,210);color:#fff;font-weight:600;text-align:center;">Chorus</td></tr>
+    <tr><td>Compressor</td><td><code>#757030</code></td><td>olive drab</td><td style="background-color:rgb(117,112,48);color:#fff;font-weight:600;text-align:center;">Compressor</td></tr>
+    <tr><td>CrossOver</td><td><code>#6CA1A7</code></td><td>greyblue</td><td style="background-color:rgb(108,161,167);color:#000;font-weight:600;text-align:center;">CrossOver</td></tr>
+    <tr><td>Delay</td><td><code>#104474</code></td><td>prussian blue</td><td style="background-color:rgb(16,68,116);color:#fff;font-weight:600;text-align:center;">Delay</td></tr>
+    <tr><td>Driver</td><td><code>#771A12</code></td><td>reddy brown</td><td style="background-color:rgb(119,26,18);color:#fff;font-weight:600;text-align:center;">Driver</td></tr>
+    <tr><td>Enhance</td><td><code>#6B6BA9</code></td><td>french blue</td><td style="background-color:rgb(107,107,169);color:#fff;font-weight:600;text-align:center;">Enhance</td></tr>
+    <tr><td>Filter</td><td><code>#8A5569</code></td><td>dark mauve</td><td style="background-color:rgb(138,85,105);color:#fff;font-weight:600;text-align:center;">Filter</td></tr>
+    <tr><td>Flanger</td><td><code>#6B345B</code></td><td>grape</td><td style="background-color:rgb(107,52,91);color:#fff;font-weight:600;text-align:center;">Flanger</td></tr>
+    <tr><td>Formant</td><td><code>#734545</code></td><td>purplish brown</td><td style="background-color:rgb(115,69,69);color:#fff;font-weight:600;text-align:center;">Formant</td></tr>
+    <tr><td>GEQ</td><td><code>#4747A8</code></td><td>blueberry</td><td style="background-color:rgb(71,71,168);color:#fff;font-weight:600;text-align:center;">GEQ</td></tr>
+    <tr><td>Gate</td><td><code>#734A01</code></td><td>medium brown</td><td style="background-color:rgb(115,74,1);color:#fff;font-weight:600;text-align:center;">Gate</td></tr>
+    <tr><td>Megatap</td><td><code>#203528</code></td><td>charcoal</td><td style="background-color:rgb(32,53,40);color:#fff;font-weight:600;text-align:center;">Megatap</td></tr>
+    <tr><td>Midi</td><td><code>#F08000</code></td><td>pumpkin</td><td style="background-color:rgb(240,128,0);color:#000;font-weight:600;text-align:center;">Midi</td></tr>
+    <tr><td>Mixer</td><td><code>#6D7D9F</code></td><td>slate blue</td><td style="background-color:rgb(109,125,159);color:#fff;font-weight:600;text-align:center;">Mixer</td></tr>
+    <tr><td>MultiCompressor</td><td><code>#541C1E</code></td><td>deep brown</td><td style="background-color:rgb(84,28,30);color:#fff;font-weight:600;text-align:center;">MultiCompressor</td></tr>
+    <tr><td>MultiDelay</td><td><code>#3C4586</code></td><td>cobalt</td><td style="background-color:rgb(60,69,134);color:#fff;font-weight:600;text-align:center;">MultiDelay</td></tr>
+    <tr><td>Multiplexer</td><td><code>#5C685C</code></td><td>gunmetal</td><td style="background-color:rgb(92,104,92);color:#fff;font-weight:600;text-align:center;">Multiplexer</td></tr>
+    <tr><td>PEQ</td><td><code>#9F5A1F</code></td><td>sienna</td><td style="background-color:rgb(159,90,31);color:#fff;font-weight:600;text-align:center;">PEQ</td></tr>
+    <tr><td>PanTrem</td><td><code>#1C474E</code></td><td>dark teal</td><td style="background-color:rgb(28,71,78);color:#fff;font-weight:600;text-align:center;">PanTrem</td></tr>
+    <tr><td>Phaser</td><td><code>#185513</code></td><td>forest</td><td style="background-color:rgb(24,85,19);color:#fff;font-weight:600;text-align:center;">Phaser</td></tr>
+    <tr><td>Pitch</td><td><code>#7D6835</code></td><td>dirt brown</td><td style="background-color:rgb(125,104,53);color:#fff;font-weight:600;text-align:center;">Pitch</td></tr>
+    <tr><td>PlexDelay</td><td><code>#0191AB</code></td><td>teal blue</td><td style="background-color:rgb(1,145,171);color:#fff;font-weight:600;text-align:center;">PlexDelay</td></tr>
+    <tr><td>RTA</td><td><code>#3E6391</code></td><td>denim</td><td style="background-color:rgb(62,99,145);color:#fff;font-weight:600;text-align:center;">RTA</td></tr>
+    <tr><td>Reso</td><td><code>#664B70</code></td><td>dirty purple</td><td style="background-color:rgb(102,75,112);color:#fff;font-weight:600;text-align:center;">Reso</td></tr>
+    <tr><td>Reverb</td><td><code>#482172</code></td><td>dark indigo</td><td style="background-color:rgb(72,33,114);color:#fff;font-weight:600;text-align:center;">Reverb</td></tr>
+    <tr><td>Ringmod</td><td><code>#422C2E</code></td><td>dark grey</td><td style="background-color:rgb(66,44,46);color:#fff;font-weight:600;text-align:center;">Ringmod</td></tr>
+    <tr><td>Rotary</td><td><code>#372F25</code></td><td>dark grey</td><td style="background-color:rgb(55,47,37);color:#fff;font-weight:600;text-align:center;">Rotary</td></tr>
+    <tr><td>Synth</td><td><code>#39612D</code></td><td>pine</td><td style="background-color:rgb(57,97,45);color:#fff;font-weight:600;text-align:center;">Synth</td></tr>
+    <tr><td>TMA</td><td><code>#1C4F3A</code></td><td>evergreen</td><td style="background-color:rgb(28,79,58);color:#fff;font-weight:600;text-align:center;">TMA</td></tr>
+    <tr><td>Tentap</td><td><code>#782C5A</code></td><td>grape</td><td style="background-color:rgb(120,44,90);color:#fff;font-weight:600;text-align:center;">Tentap</td></tr>
+    <tr><td>Vocoder</td><td><code>#065751</code></td><td>dark blue green</td><td style="background-color:rgb(6,87,81);color:#fff;font-weight:600;text-align:center;">Vocoder</td></tr>
+    <tr><td>VolPan</td><td><code>#5A5748</code></td><td>greyish brown</td><td style="background-color:rgb(90,87,72);color:#fff;font-weight:600;text-align:center;">VolPan</td></tr>
+    <tr><td>Wah</td><td><code>#494949</code></td><td>charcoal grey</td><td style="background-color:rgb(73,73,73);color:#fff;font-weight:600;text-align:center;">Wah</td></tr>
+  </tbody>
+</table>
+</body>
+</html>

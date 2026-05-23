@@ -5,7 +5,7 @@
 #include <cmath>
 #include <functional>
 
-#include "SincFilter.h"
+#include "Filters/Sinc/SincFilter.h"
 
 namespace AbacDsp
 {

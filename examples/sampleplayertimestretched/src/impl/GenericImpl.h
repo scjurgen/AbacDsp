@@ -13,7 +13,7 @@ template <size_t BlockSize>
 class GenericImpl final : public EffectBase
 {
   public:
-    GenericImpl(const float sampleRate)
+    explicit GenericImpl(const float sampleRate)
         : EffectBase(sampleRate)
     {
     }

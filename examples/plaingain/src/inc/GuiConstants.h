@@ -12,14 +12,17 @@ class GuiConstants
     struct Colors
     {
         std::array<uint32_t, 10> cols{};
-        uint32_t INV{0x00ffffff};
         uint32_t bg_App{};
+        uint32_t bg_Component{};
         uint32_t bg_DarkGrey{};
         uint32_t bg_MidGrey{};
         uint32_t bg_LightGrey{};
         uint32_t gd_LightGreyStart{};
         uint32_t gd_LightGreyEnd{};
         uint32_t gd_DarkGreyStart{};
+        uint32_t knobGradStart{};
+        uint32_t knobGradCenter{};
+        uint32_t knobGradEnd{};
         uint32_t statusOutline{};
     };
 
@@ -62,27 +65,36 @@ class GuiConstants
         jassert(instance_ != nullptr); // must call setPreset() before first use
         return *instance_;
     }
-
+    auto getGradient()
+    {
+        return m_gradient;
+    }
     static void setPreset(GradientPreset preset)
     {
         instance_ = std::make_unique<GuiConstants>(preset);
     }
 
-    explicit GuiConstants(GradientPreset preset = GradientPreset::Heat)
+    explicit GuiConstants(GradientPreset preset = GradientPreset::Ink)
     {
-        auto gradient = makeGradient(preset);
+        m_gradient = makeGradient(preset);
 
         std::generate(
             colors.cols.begin(), colors.cols.end(), [&, i = size_t{0}]() mutable
-            { return gradient.getColourAtPosition(static_cast<double>(i++) / colors.cols.size()).getARGB(); });
+            { return m_gradient.getColourAtPosition(static_cast<double>(i++) / colors.cols.size()).getARGB(); });
 
-        colors.bg_App = colors.cols[1];
-        colors.bg_DarkGrey = colors.cols[2];
-        colors.bg_MidGrey = colors.cols[5];
-        colors.bg_LightGrey = colors.cols[3];
-        colors.gd_LightGreyStart = colors.cols[1];
-        colors.gd_LightGreyEnd = colors.cols[2];
-        colors.gd_DarkGreyStart = colors.cols[3];
+        colors.bg_App = colors.cols[2];
+        colors.bg_Component = colors.cols[1];
+        colors.bg_DarkGrey = colors.cols[5];      // box borders, menu
+        colors.bg_MidGrey = colors.cols[3];       // gradient knob top
+        colors.bg_LightGrey = colors.cols[9];     // ?
+        colors.gd_DarkGreyStart = colors.cols[2]; // gradien knob bottom
+        colors.gd_LightGreyStart = colors.cols[0];
+        colors.gd_LightGreyEnd = colors.cols[0];
+
+        colors.knobGradStart = colors.cols[0];
+        colors.knobGradCenter = colors.cols[3];
+        colors.knobGradEnd = colors.cols[8];
+
         colors.statusOutline = colors.cols[8];
     }
 
@@ -97,6 +109,7 @@ class GuiConstants
     InitJuce init;
 
   private:
+    juce::ColourGradient m_gradient;
     static inline std::unique_ptr<GuiConstants> instance_;
 
     static juce::ColourGradient makeGradient(GradientPreset preset)

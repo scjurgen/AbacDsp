@@ -49,18 +49,19 @@ namespace AbacDsp
         10 * std::log10(std::pow((1 + a1 + a2), 2.f) + (a2 * phi - (a1 * (1 + a2) + 4 * a2)) * phi);
     return db;
 }
-template <std::floating_point T>
-[[nodiscard]] T inline biquadMagnitudeLinear(const T cf, const T b0, const T b1, const T b2, const T a1, const T a2)
-{
-    const auto phi = 4 * std::pow(std::sin(static_cast<T>(M_PI) * cf), 2);
 
-    const auto b_sum = b0 + b1 + b2;
+[[nodiscard]] float inline biquadMagnitudeLinear(const float cf, const float b0, const float b1, const float b2,
+                                                 const float a1, const float a2)
+{
+    const auto phi = 4 * std::pow(std::sin(static_cast<double>(M_PI) * static_cast<double>(cf)), 2.0);
+
+    const auto b_sum = static_cast<double>(b0 + b1 + b2);
     const auto numerator = b_sum * b_sum + (b0 * b2 * phi - (b1 * (b0 + b2) + 4 * b0 * b2)) * phi;
 
-    const auto a_sum = 1 + a1 + a2;
+    const auto a_sum = static_cast<double>(1 + a1 + a2);
     const auto denominator = a_sum * a_sum + (a2 * phi - (a1 * (1 + a2) + 4 * a2)) * phi;
 
-    return std::sqrt(numerator / denominator);
+    return static_cast<float>(std::sqrt(numerator / denominator));
 }
 
 [[nodiscard]] float inline biquadMagnitude(const float cf, const float b0, const float b1, const float b2,
@@ -202,7 +203,7 @@ class BiquadCoefficients
 
     [[nodiscard]] float magnitudeLinear(const float cf) const
     {
-        return biquadMagnitudeLinear<double>(cf, b0, b1, b2, a1, a2);
+        return biquadMagnitudeLinear(cf, b0, b1, b2, a1, a2);
     }
 
     [[nodiscard]] float magnitude(const float cf) const
@@ -565,14 +566,15 @@ class ChebyshevBiquad
     {
         m_isLowPass = isLowPass;
         m_isType1 = true;
-        const auto [fC, beta, a] = computeFactors(order, fc, ripple);
+        const auto [fC_, beta_, a_] = computeFactors(order, fc, ripple);
 
-        auto calcPoleZero = [&](std::complex<float> fSPole, bool isLowPass, float beta, bool isOdd)
+        auto calcPoleZero =
+            [&](const std::complex<float> fSPole, const bool lowPass, const float beta, const bool isOdd)
         {
             auto fZPole = BilinearTransform(fSPole);
             std::complex<float> fZZero;
             float fDCPoleDistance;
-            if (isLowPass)
+            if (lowPass)
             {
                 fZZero = {-1, 0};
                 fDCPoleDistance = isOdd ? sqrt(std::norm(std::complex<float>{1, 0} - fZPole)) / 2
@@ -580,8 +582,8 @@ class ChebyshevBiquad
             }
             else
             {
-                fZPole = (std::complex<float>{beta - fZPole.real(), -fZPole.imag()}) /
-                         (std::complex<float>{1 - beta * fZPole.real(), -beta * fZPole.imag()});
+                fZPole = (std::complex{beta - fZPole.real(), -fZPole.imag()}) /
+                         (std::complex{1 - beta * fZPole.real(), -beta * fZPole.imag()});
                 fZZero = {1, 0};
                 fDCPoleDistance = isOdd ? sqrt(std::norm(std::complex<float>{-1, 0} - fZPole)) / 2
                                         : std::norm(std::complex<float>{-1, 0} - fZPole) / 4;
@@ -591,9 +593,9 @@ class ChebyshevBiquad
 
         for (auto iPair = 0u; iPair < order / 2; iPair++)
         {
-            const auto f = static_cast<float>(2 * iPair + 1) * static_cast<float>(M_PI) / (2 * order);
-            std::complex<float> fSPole{-fC * std::sinh(a) * std::sin(f), fC * std::cosh(a) * std::cos(f)};
-            auto [fZPole, fZZero, fDCPoleDistance] = calcPoleZero(fSPole, isLowPass, beta, false);
+            const auto f = static_cast<float>(2 * iPair + 1) * static_cast<float>(M_PI) / static_cast<float>(2 * order);
+            const std::complex fSPole{-fC_ * std::sinh(a_) * std::sin(f), fC_ * std::cosh(a_) * std::cos(f)};
+            auto [fZPole, fZZero, fDCPoleDistance] = calcPoleZero(fSPole, isLowPass, beta_, false);
             coefficients[iPair].b0 = fDCPoleDistance;
             coefficients[iPair].b1 = -2 * fZZero.real() * fDCPoleDistance;
             coefficients[iPair].b2 = fDCPoleDistance;
@@ -604,7 +606,7 @@ class ChebyshevBiquad
         if ((order & 1) == 0)
         {
             m_isOdd = false;
-            float fTemp = Convert::dbToGain(-std::max(0.00001f, ripple));
+            const auto fTemp = Convert::dbToGain(-std::max(0.00001f, ripple));
             coefficients[0].b0 *= fTemp;
             coefficients[0].b1 *= fTemp;
             coefficients[0].b2 *= fTemp;
@@ -612,8 +614,8 @@ class ChebyshevBiquad
         else
         {
             m_isOdd = true;
-            std::complex<float> fSPole{-fC * static_cast<float>(sinh(a)), 0.f};
-            auto [fZPole, fZZero, fDCPoleDistance] = calcPoleZero(fSPole, isLowPass, beta, true);
+            const std::complex fSPole{-fC_ * static_cast<float>(sinh(a_)), 0.f};
+            auto [fZPole, fZZero, fDCPoleDistance] = calcPoleZero(fSPole, isLowPass, beta_, true);
             coefficients[m_elements - 1].b0 = fDCPoleDistance;
             coefficients[m_elements - 1].b1 = -fZZero.real() * fDCPoleDistance;
             coefficients[m_elements - 1].b2 = 0;

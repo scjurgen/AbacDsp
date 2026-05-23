@@ -1,0 +1,50 @@
+{
+  "name": "synthexplorer",
+  "displayname": "synthexplorer",
+  "status": "beta",
+  "plugintype": "InstrumentPlugin",
+  "lookAndFeel": "LookAndFeel.h",
+  "color": "#eeeeee",
+  "boxy": "boxy",
+  "plugintype-see-also": "http://lv2plug.in/ns/lv2core#InstrumentPlugin",
+  "micro": 127,
+  "minor": 1,
+  "major": 0,
+  "shortdescription": "Just an explorer",
+  "description": ["✨ Just an explorer. "],
+  "midi-ports-in": [],
+  "midi-ports-out": [],
+  "audio-ports-in": [{ "name": "in", "symbol":  "in"}],
+  "audio-ports-out": [{ "name": "left", "symbol":  "left"},{ "name": "right", "symbol":  "right"}],
+  "ports-control":
+  [
+    {"short": "RLD", "type": "switch", "display": "Reload", "symbol": "reload", "default": 0},
+    {"short": "PRS", "type": "dial", "display": "Preset", "symbol": "preset", "default": 0, "range": [0, 10, 1, 1, false], "precision": 0, "unit": ""},
+    {"short": "VOL", "type": "dial", "display": "Vol", "symbol": "vol", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "REV", "type": "dial", "display": "Reverb", "symbol": "reverbLevel", "default": -24, "range": [-120, 0, 1, 1, false], "precision": 0, "unit": "dB"},
+    {"short": "USR1", "type": "dial", "display": "Ctrl 1", "symbol": "user1", "default": 0, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "%"},
+    {"short": "USR2", "type": "dial", "display": "Ctrl 2", "symbol": "user2", "default": 0, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "%"},
+    {"short": "USR3", "type": "dial", "display": "Ctrl 3", "symbol": "user3", "default": 0, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "%"},
+    {"short": "USR4", "type": "dial", "display": "Ctrl 4", "symbol": "user4", "default": 0, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "%"},
+    {"short": "USR5", "type": "dial", "display": "Ctrl 5", "symbol": "user5", "default": 0, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "%"},
+    {"short": "USR6", "type": "dial", "display": "Ctrl 6", "symbol": "user6", "default": 0, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "%"},
+    {"short": "USR7", "type": "dial", "display": "Ctrl 7", "symbol": "user7", "default": 0, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "%"},
+    {"short": "USR8", "type": "dial", "display": "Ctrl 8", "symbol": "user8", "default": 0, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "%"},
+
+    {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1200",
+    "WINDOW_HEIGHT": "600",
+    "type": "|||||",
+     "composition": "C=(1:2:2:2:6) A1=(RLD,LVL*200,CPU*200) A2=(PRS,VOL,REV) A3=(USR1,USR2,USR3,USR4) A4=(USR5,USR6,USR7,USR8) A5=(FFT%1))"
+  },
+  "CPP":
+  {
+    "CLASS_NAME": "SynthExplorerPedal<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "pedals/SynthExplorerPedal.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

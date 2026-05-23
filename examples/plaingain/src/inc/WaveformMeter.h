@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include <vector>
+
 #include "GenericMeter.h"
 
 
@@ -24,7 +25,10 @@ class WaveformShow : public juce::Component
 
     void update(const std::vector<float>& values)
     {
-        m_lastValues = values;
+        if (!values.empty())
+        {
+            m_lastValues = values;
+        }
         repaint();
     }
 
@@ -40,34 +44,46 @@ class WaveformShow : public juce::Component
         const float width = bounds.getWidth() - 2 * pad;
         const float channelWidth = width;
 
-        juce::Rectangle<float> meterBounds(pad, pad, channelWidth, height);
+        const juce::Rectangle<float> meterBounds(pad, pad, channelWidth, height);
 
         // Draw grid
         g.setColour(juce::Colours::grey.withAlpha(0.2f));
         for (int i = 0; i < 5; ++i)
         {
-            float y = meterBounds.getY() + i * meterBounds.getHeight() / 4.0f;
+            const float y = meterBounds.getY() + static_cast<float>(i) * meterBounds.getHeight() / 4.0f;
             g.drawHorizontalLine(static_cast<int>(y), meterBounds.getX(), meterBounds.getRight());
         }
         for (int i = 0; i < 10; ++i)
         {
-            float x = meterBounds.getX() + i * meterBounds.getWidth() / 9.0f;
+            const float x = meterBounds.getX() + static_cast<float>(i) * meterBounds.getWidth() / 9.0f;
             g.drawVerticalLine(static_cast<int>(x), meterBounds.getY(), meterBounds.getBottom());
         }
 
         // Draw waveform
         g.setColour(juce::Colour(GuiConstants::instance().colors.statusOutline));
         juce::Path waveformPath;
-        const float xScale = meterBounds.getWidth() / static_cast<float>(m_lastValues.size() - 1);
+        size_t sz = m_lastValues.size() / 2;
+        const float xScale = meterBounds.getWidth() / static_cast<float>(sz - 1);
         const float yScale = meterBounds.getHeight() / 2.0f;
         const float centerY = meterBounds.getCentreY();
 
-        waveformPath.startNewSubPath(meterBounds.getX(), centerY - m_lastValues[0] * yScale);
+        float maxValue = m_lastValues[0];
+        size_t maxIdx = 0;
+        for (size_t idx = 0; idx < sz; ++idx)
+        {
+            if (m_lastValues[idx] > maxValue)
+            {
+                maxValue = m_lastValues[idx];
+                maxIdx = idx;
+            }
+        }
 
-        for (size_t i = 1; i < m_lastValues.size(); ++i)
+        waveformPath.startNewSubPath(meterBounds.getX(), centerY - m_lastValues[maxIdx] * yScale);
+
+        for (size_t i = 1; i < sz; ++i)
         {
             float x = meterBounds.getX() + static_cast<float>(i) * xScale;
-            float y = centerY - m_lastValues[i] * yScale;
+            float y = centerY - m_lastValues[maxIdx + i] * yScale;
             waveformPath.lineTo(x, y);
         }
 
@@ -94,7 +110,7 @@ class WaveformGauge : public juce::Component
     {
         g.setColour(backgroundDarkGrey);
         g.fillRoundedRectangle(getLocalBounds().toFloat(), 3);
-        g.setColour(juce::Colours::white);
+        g.setColour(juce::Colours::red);
         g.drawText(m_label, getLocalBounds().removeFromTop(20), juce::Justification::centred);
     }
 

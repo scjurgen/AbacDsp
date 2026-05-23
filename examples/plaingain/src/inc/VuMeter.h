@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "GuiConstants.h"
 
 class MeterBackground : public juce::Component
 {
@@ -216,7 +217,8 @@ class Meter : public juce::Component
         auto boxHeight = (bounds.getHeight() / 20) * 2;
         auto boxArea = bounds.removeFromBottom(boxHeight);
         const juce::FlexItem::Margin comboMargin =
-            juce::FlexItem::Margin(6.0f, bounds.getWidth() / 2 - 80, 6.0f, bounds.getWidth() / 2 - 80);
+            juce::FlexItem::Margin(6.0f, static_cast<float>(bounds.getWidth()) * 0.5f - 80, 6.0f,
+                                   static_cast<float>(bounds.getWidth()) * 0.5f - 80);
 
         juce::FlexBox mBox;
         mBox.flexWrap = juce::FlexBox::Wrap::noWrap;
@@ -229,7 +231,7 @@ class Meter : public juce::Component
         needle.setBounds(bounds);
     }
 
-    void setMode(int m)
+    void setMode(const int m)
     {
         meterBg.setMode(m);
         needle.setMode(m);

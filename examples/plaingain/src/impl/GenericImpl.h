@@ -13,7 +13,7 @@ template <size_t BlockSize>
 class GenericImpl final : public EffectBase
 {
   public:
-    GenericImpl(const float sampleRate)
+    explicit GenericImpl(const float sampleRate)
         : EffectBase(sampleRate)
     {
         m_visualWavedata.resize(6000);
@@ -43,11 +43,14 @@ class GenericImpl final : public EffectBase
             out(i, 1) = in(i, 1);
         }
 
-        m_visualWavedata[m_currentSample] = out(i, 0) * 0.5f;
-        m_currentSample++;
-        if (m_currentSample >= m_visualWavedata.size())
+        for (size_t i = 0; i < BlockSize; ++i)
         {
-            m_currentSample = 0;
+            m_visualWavedata[m_currentSample] = out(i, 0) + out(i, 1);
+            m_currentSample++;
+            if (m_currentSample >= m_visualWavedata.size())
+            {
+                m_currentSample = 0;
+            }
         }
     }
     const std::vector<float>& visualizeWaveData()
