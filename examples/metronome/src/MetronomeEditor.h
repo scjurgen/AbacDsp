@@ -6,7 +6,6 @@
  */
 
 #include "MetronomeProcessor.h"
-
 #include "UiElements.h"
 
 //==============================================================================
@@ -30,6 +29,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
 
     ~AudioPluginAudioProcessorEditor() override
     {
+        stopTimer();
         setLookAndFeel(nullptr);
     }
 

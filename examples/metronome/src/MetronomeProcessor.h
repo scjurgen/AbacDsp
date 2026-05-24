@@ -5,17 +5,14 @@
  * Keep the file readonly
  */
 
-#include "Analysis/EnvelopeFollower.h"
-#include "Analysis/Spectrogram.h"
-
-#include "Audio/FixedSizeProcessor.h"
-
-#include "UiElements.h"
+#include <juce_audio_processors/juce_audio_processors.h>
 
 #include "impl/MetronomeImpl.h"
+#include "Analysis/EnvelopeFollower.h"
+#include "Analysis/Spectrogram.h"
+#include "Audio/FixedSizeProcessor.h"
+#include "UiElements.h"
 #include "impl/FileIo.h"
-
-#include <juce_audio_processors/juce_audio_processors.h>
 
 const auto CLutPreset{GuiConstants::GradientPreset::Heat};
 
@@ -47,7 +44,15 @@ m_parameters.addParameterListener("onOff", this);
 
         m_fileIo.initialize(m_patchIndex);
     }
-    ~AudioPluginAudioProcessor() override = default;
+    ~AudioPluginAudioProcessor() override
+    {
+        m_parameters.removeParameterListener("subset", this);
+m_parameters.removeParameterListener("bpm", this);
+m_parameters.removeParameterListener("metroVolume", this);
+m_parameters.removeParameterListener("inputVolume", this);
+m_parameters.removeParameterListener("onOff", this);
+
+    }
 
     void prepareToPlay(const double sampleRate, const int samplesPerBlock) override
     {
@@ -256,14 +261,10 @@ params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("o
 
             if (m_fileIo.areParametersModified())
             {
-                juce::NativeMessageBox::showAsync(
-                    juce::MessageBoxOptions()
-                        .withTitle("Save Parameters")
-                        .withMessage("Parameters have changed, do you want to save before loading new patch?")
-                        .withButton("Yes")
-                        .withButton("No")
-                        .withIconType(juce::MessageBoxIconType::QuestionIcon),
-                    [this, pi = m_patchIndex](int result) { handlePatchChangeAsync(pi, result == 0); });
+                const int result = juce::NativeMessageBox::showYesNoBox(
+                    juce::MessageBoxIconType::QuestionIcon, "Save Parameters",
+                    "Parameters have changed, do you want to save before loading new patch?", nullptr, nullptr);
+                handlePatchChange(m_patchIndex, result == 1);
             }
             else
             {
@@ -288,8 +289,7 @@ params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("o
         }
     }
 
-    // Helper to handle patch change after dialog response
-    void handlePatchChangeAsync(const std::vector<int>& newPatchIndex, bool shouldSave)
+    void handlePatchChange(const std::vector<int>& newPatchIndex, bool shouldSave)
     {
         if (shouldSave)
         {
@@ -301,7 +301,6 @@ params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("o
 
     void loadPatchDirect(const std::vector<int>& patchIndex)
     {
-        m_fileIo.loadPatchDirect(patchIndex);
         m_fileIo.loadPatchDirect(patchIndex);
         const auto& params = m_fileIo.getCurrentParameters();
 

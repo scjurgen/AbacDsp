@@ -2,11 +2,11 @@
 
 #include <array>
 #include <cstdint>
+#include <juce_graphics/juce_graphics.h>
 #include <memory>
 #include <numeric>
-#include <juce_graphics/juce_graphics.h>
 
-class GuiConstants
+class GuiConstants : public juce::DeletedAtShutdown
 {
   public:
     struct Colors
@@ -71,7 +71,8 @@ class GuiConstants
     }
     static void setPreset(GradientPreset preset)
     {
-        instance_ = std::make_unique<GuiConstants>(preset);
+        delete instance_;
+        instance_ = new GuiConstants(preset);
     }
 
     explicit GuiConstants(GradientPreset preset = GradientPreset::Ink)
@@ -110,7 +111,7 @@ class GuiConstants
 
   private:
     juce::ColourGradient m_gradient;
-    static inline std::unique_ptr<GuiConstants> instance_;
+    static inline GuiConstants* instance_ = nullptr;
 
     static juce::ColourGradient makeGradient(GradientPreset preset)
     {

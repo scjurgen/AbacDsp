@@ -93,6 +93,7 @@ cppJuceFileVars = [
     "MODULE",
     "MODULE_UPPER",
     "ADD_PARAMETER_LISTENERS",
+    "REMOVE_PARAMETER_LISTENERS",
     "CLASS_NAME",
     "CREATE_PARAMETER_LAYOUT",
     "ID_PARAMETERS",
@@ -361,6 +362,13 @@ def addParameterListeners(m:dict):
             res += f"""m_parameters.addParameterListener("{item['symbol']}", this);\n"""
     return res
 
+def removeParameterListeners(m:dict):
+    res = ""
+    for item in m["ports-control"]:
+        if item['type'] in ["dial", "drop", "switch"]:
+            res += f"""m_parameters.removeParameterListener("{item['symbol']}", this);\n"""
+    return res
+
 
 def createParameterLayout(m: dict) -> str:
     res = ""
@@ -594,6 +602,7 @@ def createPackageFromJsonDict(m: dict):
 
     m["CPP"]["TIMER_CALLBACKS"] = createGaugeCallbacks(m)
     m["CPP"]["ADD_PARAMETER_LISTENERS"] = addParameterListeners(m)
+    m["CPP"]["REMOVE_PARAMETER_LISTENERS"] = removeParameterListeners(m)
     m["CPP"]["CREATE_PARAMETER_LAYOUT"] = createParameterLayout(m)
     m["CPP"]["PARAMETER_CHANGED"] = createParameterChanged(m)
     m["CPP"]["SETTERS"] = createSettersImplementation(m)
