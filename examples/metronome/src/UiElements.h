@@ -15,5 +15,6 @@
 #include "inc/VuMeter.h"
 #include "inc/WaveformMeter.h"
 #include "impl/EffectBase.h"
+#include "inc/MetronomeWaveDisplay.h"
 
 #include "inc/LookAndFeel.h"

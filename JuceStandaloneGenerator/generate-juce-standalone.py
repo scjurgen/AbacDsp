@@ -793,13 +793,17 @@ def createPackageFromJsonDict(m: dict):
         f.write(f"""#include "{m["Module"]}Constants.h"\n\n""")
         for file_name in cppSourceFilesFixed:
             f.write(f"""#include "{file_name}"\n""")
+        for extra in m.get("extra_ui_includes", []):
+            f.write(f"""#include "{extra}"\n""")
         f.write(f"""\n#include "{cppLookAndFeel}"\n""")
     protected_files = {
-        "gitignore"
+        "gitignore",
         "src/unittests/CMakeLists.txt",
         "src/CMakeLists.txt",
         "CMakeLists.txt",
     }
+    for pf in m.get("protected_files", []):
+        protected_files.add(pf)
     targetDir = cppTargetDir.replace("{module}", m["module"])
     force = m.get("_force_all", False)
     syncer = FileSync(cppTmpDir.replace("{module}", m["module"]), targetDir, set() if force else protected_files)

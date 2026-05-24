@@ -21,8 +21,14 @@
     "WINDOW_WIDTH": "960",
     "WINDOW_HEIGHT": "600",
     "type": "=",
-    "composition": "R=(1:3) A1=(SUB*120, LVL*70, ONF, BPM, MVOL, IVOL) A2=(SIG))"
+    "composition": "R=(1:5) A1=(SUB*120, LVL*70, ONF, BPM, MVOL, IVOL) A2=(SIG))"
   },
+  "extra_ui_includes": [
+    "inc/MetronomeWaveDisplay.h"
+  ],
+  "protected_files": [
+    "src/MetronomeEditor.h"
+  ],
   "CPP":
   {
     "CLASS_NAME": "MetronomeImpl<NumSamplesPerBlock>",

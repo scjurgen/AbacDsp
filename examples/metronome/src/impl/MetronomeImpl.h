@@ -16,19 +16,25 @@ class MetronomeImpl final : public EffectBase
     static constexpr float tickDecaySeconds = 0.04f;
     static constexpr float tickBoostDb = 24.f;
 
+    // Max display window: ±250ms each side at 48 kHz = 24 000 samples total
+    static constexpr size_t kVisualBufferSize = 24000;
+    static constexpr float kDesiredHalfWindowMs = 250.f;
+
     explicit MetronomeImpl(const float sampleRate)
         : EffectBase(sampleRate)
         , m_tickFilter(sampleRate)
     {
         m_tickFilter.setByDecay(0, tickFrequencyHz, tickDecaySeconds);
         m_samplesPerBeat = beatsToSamples(m_bpm);
-        m_visualWavedata.resize(6000);
+        m_visualWavedata.resize(kVisualBufferSize, 0.f);
+        updateHalfWindow();
     }
 
     void setBpm(const float value)
     {
         m_bpm = std::clamp(value, 40.f, 250.f);
         m_samplesPerBeat = beatsToSamples(m_bpm);
+        updateHalfWindow();
     }
 
     void setMetroVolume(const float valueDb)
@@ -48,7 +54,7 @@ class MetronomeImpl final : public EffectBase
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
-        const size_t halfWindow = m_visualWavedata.size() / 2;
+        const size_t halfWindow = m_halfWindow;
 
         auto writeInputPlusDoubletToVisualWindow = [&](const float visSignal)
         {
@@ -85,11 +91,18 @@ class MetronomeImpl final : public EffectBase
 
     const std::vector<float>& visualizeWaveData()
     {
-        m_preparedWavedata = m_visualWavedata;
+        const size_t windowSize = m_halfWindow * 2;
+        m_preparedWavedata.assign(m_visualWavedata.begin(), m_visualWavedata.begin() + windowSize);
         return m_preparedWavedata;
     }
 
   private:
+    void updateHalfWindow() noexcept
+    {
+        const size_t desired = static_cast<size_t>(sampleRate() * kDesiredHalfWindowMs / 1000.f);
+        m_halfWindow = std::min(desired, m_samplesPerBeat / 2);
+    }
+
     [[nodiscard]] size_t beatsToSamples(const float bpm) const noexcept
     {
         return static_cast<size_t>(sampleRate() * 60.f / bpm);
@@ -101,6 +114,7 @@ class MetronomeImpl final : public EffectBase
     bool m_running{false};
     size_t m_samplesPerBeat{0};
     size_t m_beatSamplePos{0};
+    size_t m_halfWindow{3000};
 
     AbacDsp::SvfResoBP m_tickFilter;
 
