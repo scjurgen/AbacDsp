@@ -7,12 +7,12 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
-#include "impl/MetronomeImpl.h"
 #include "Analysis/EnvelopeFollower.h"
 #include "Analysis/Spectrogram.h"
 #include "Audio/FixedSizeProcessor.h"
 #include "UiElements.h"
 #include "impl/FileIo.h"
+#include "impl/MetronomeImpl.h"
 
 const auto CLutPreset{GuiConstants::GradientPreset::Heat};
 
@@ -33,31 +33,31 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                              AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& output)
                       { pluginRunner->processBlock(input, output); })
         , m_parameters(*this, nullptr, "PARAMETERS", createParameterLayout())
-                        , m_envInput{AbacDsp::RmsFollower(10000), AbacDsp::RmsFollower(10000)}
-        , m_envOutput{AbacDsp::RmsFollower(10000), AbacDsp::RmsFollower(10000)}                                                                                         , m_patchIndex(1, 0)
+        , m_envInput{AbacDsp::RmsFollower(10000), AbacDsp::RmsFollower(10000)}
+        , m_envOutput{AbacDsp::RmsFollower(10000), AbacDsp::RmsFollower(10000)}
+        , m_patchIndex(1, 0)
     {
         m_parameters.addParameterListener("subset", this);
-m_parameters.addParameterListener("bpm", this);
-m_parameters.addParameterListener("metroVolume", this);
-m_parameters.addParameterListener("inputVolume", this);
-m_parameters.addParameterListener("subVolume", this);
-m_parameters.addParameterListener("onOff", this);
-m_parameters.addParameterListener("subdivision", this);
-m_parameters.addParameterListener("timeSig", this);
+        m_parameters.addParameterListener("bpm", this);
+        m_parameters.addParameterListener("metroVolume", this);
+        m_parameters.addParameterListener("inputVolume", this);
+        m_parameters.addParameterListener("subVolume", this);
+        m_parameters.addParameterListener("onOff", this);
+        m_parameters.addParameterListener("subdivision", this);
+        m_parameters.addParameterListener("timeSig", this);
 
         m_fileIo.initialize(m_patchIndex);
     }
     ~AudioPluginAudioProcessor() override
     {
         m_parameters.removeParameterListener("subset", this);
-m_parameters.removeParameterListener("bpm", this);
-m_parameters.removeParameterListener("metroVolume", this);
-m_parameters.removeParameterListener("inputVolume", this);
-m_parameters.removeParameterListener("subVolume", this);
-m_parameters.removeParameterListener("onOff", this);
-m_parameters.removeParameterListener("subdivision", this);
-m_parameters.removeParameterListener("timeSig", this);
-
+        m_parameters.removeParameterListener("bpm", this);
+        m_parameters.removeParameterListener("metroVolume", this);
+        m_parameters.removeParameterListener("inputVolume", this);
+        m_parameters.removeParameterListener("subVolume", this);
+        m_parameters.removeParameterListener("onOff", this);
+        m_parameters.removeParameterListener("subdivision", this);
+        m_parameters.removeParameterListener("timeSig", this);
     }
 
     void prepareToPlay(const double sampleRate, const int samplesPerBlock) override
@@ -234,26 +234,31 @@ m_parameters.removeParameterListener("timeSig", this);
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     {
         std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("subset",1), "Subset", juce::StringArray {"#1","#2","#3","#4","#5"}, 0));
-params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("bpm", 1), "BPM",
-                    juce::NormalisableRange<float>(40, 250, 0.1, 1, false),
-                    120, juce::String("BPM"), juce::AudioProcessorParameter::genericParameter,
-                    [](float value, float) { return juce::String(value, 1) + " BPM"; }));
-params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("metroVolume", 1), "Metro Volume",
-                    juce::NormalisableRange<float>(-60, 0, 0.1, 1, false),
-                    -6, juce::String("Metro Volume"), juce::AudioProcessorParameter::genericParameter,
-                    [](float value, float) { return juce::String(value, 1) + " dB"; }));
-params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("inputVolume", 1), "Input Volume",
-                    juce::NormalisableRange<float>(-60, 12, 0.1, 1, false),
-                    0, juce::String("Input Volume"), juce::AudioProcessorParameter::genericParameter,
-                    [](float value, float) { return juce::String(value, 1) + " dB"; }));
-params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("subVolume", 1), "Sub Volume",
-                    juce::NormalisableRange<float>(-60, 0, 0.1, 1, false),
-                    -15, juce::String("Sub Volume"), juce::AudioProcessorParameter::genericParameter,
-                    [](float value, float) { return juce::String(value, 1) + " dB"; }));
-params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("onOff",1), "Start", 0));
-params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("subdivision",1), "Subdivision", juce::StringArray {"Off","8th","Shuffle","Triplet","16th"}, 0));
-params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("timeSig",1), "Time Signature", juce::StringArray {"4/4","3/4","6/8","5/4","7/8","9/8","11/8","13/8"}, 0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("subset", 1), "Subset", juce::StringArray{"#1", "#2", "#3", "#4", "#5"}, 0));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("bpm", 1), "BPM", juce::NormalisableRange<float>(40, 250, 0.1, 1, false), 120,
+            juce::String("BPM"), juce::AudioProcessorParameter::genericParameter,
+            [](float value, float) { return juce::String(value, 1) + " BPM"; }));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("metroVolume", 1), "Metro Volume", juce::NormalisableRange<float>(-60, 0, 0.1, 1, false),
+            -6, juce::String("Metro Volume"), juce::AudioProcessorParameter::genericParameter,
+            [](float value, float) { return juce::String(value, 1) + " dB"; }));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("inputVolume", 1), "Input Volume", juce::NormalisableRange<float>(-60, 12, 0.1, 1, false),
+            0, juce::String("Input Volume"), juce::AudioProcessorParameter::genericParameter,
+            [](float value, float) { return juce::String(value, 1) + " dB"; }));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("subVolume", 1), "Sub Volume", juce::NormalisableRange<float>(-60, 0, 0.1, 1, false), -15,
+            juce::String("Sub Volume"), juce::AudioProcessorParameter::genericParameter,
+            [](float value, float) { return juce::String(value, 1) + " dB"; }));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("onOff", 1), "Start", 0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("subdivision", 1), "Subdivision",
+            juce::StringArray{"Off", "8th", "Shuffle", "Triplet", "16th"}, 0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("timeSig", 1), "Time Signature",
+            juce::StringArray{"4/4", "3/4", "6/8", "5/4", "7/8", "9/8", "11/8", "13/8"}, 0));
 
         return {params.begin(), params.end()};
     }
@@ -269,7 +274,10 @@ params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(
 
         if (parameterID == "subset")
         {
-             if (parameterID == "subset") { m_patchIndex[0] = static_cast<int>(newValue);} 
+            if (parameterID == "subset")
+            {
+                m_patchIndex[0] = static_cast<int>(newValue);
+            }
 
             if (m_fileIo.areParametersModified())
             {
@@ -290,12 +298,17 @@ params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(
 
         static const std::map<juce::String, std::function<void(AudioPluginAudioProcessor&, float)>> parameterMap{
             {"bpm", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setBpm(v); }},
-{"metroVolume", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setMetroVolume(v); }},
-{"inputVolume", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setInputVolume(v); }},
-{"subVolume", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setSubVolume(v); }},
-{"onOff", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setOnOff(static_cast<bool>(v)); }},
-{"subdivision", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setSubdivision(static_cast<size_t>(v)); }},
-{"timeSig", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setTimeSig(static_cast<size_t>(v)); }},
+            {"metroVolume",
+             [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setMetroVolume(v); }},
+            {"inputVolume",
+             [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setInputVolume(v); }},
+            {"subVolume", [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setSubVolume(v); }},
+            {"onOff",
+             [](const AudioPluginAudioProcessor& p, const float v) { p.pluginRunner->setOnOff(static_cast<bool>(v)); }},
+            {"subdivision", [](const AudioPluginAudioProcessor& p, const float v)
+             { p.pluginRunner->setSubdivision(static_cast<size_t>(v)); }},
+            {"timeSig", [](const AudioPluginAudioProcessor& p, const float v)
+             { p.pluginRunner->setTimeSig(static_cast<size_t>(v)); }},
 
         };
         if (auto it = parameterMap.find(parameterID); it != parameterMap.end())
@@ -320,60 +333,58 @@ params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(
         const auto& params = m_fileIo.getCurrentParameters();
 
         // Apply loaded parameters to APVTS (triggers UI update)
-             if (auto* p = m_parameters.getParameter("bpm"))
-                        {
-                            const auto& range = m_parameters.getParameterRange("bpm");
-                            float normalized = range.convertTo0to1(params.bpm);
-                            p->setValueNotifyingHost(normalized);
-                        }
-                     if (auto* p = m_parameters.getParameter("metroVolume"))
-                        {
-                            const auto& range = m_parameters.getParameterRange("metroVolume");
-                            float normalized = range.convertTo0to1(params.metroVolume);
-                            p->setValueNotifyingHost(normalized);
-                        }
-                     if (auto* p = m_parameters.getParameter("inputVolume"))
-                        {
-                            const auto& range = m_parameters.getParameterRange("inputVolume");
-                            float normalized = range.convertTo0to1(params.inputVolume);
-                            p->setValueNotifyingHost(normalized);
-                        }
-                     if (auto* p = m_parameters.getParameter("subVolume"))
-                        {
-                            const auto& range = m_parameters.getParameterRange("subVolume");
-                            float normalized = range.convertTo0to1(params.subVolume);
-                            p->setValueNotifyingHost(normalized);
-                        }
-                     if (auto* p = m_parameters.getParameter("onOff"))
-                        {
-                            const auto& range = m_parameters.getParameterRange("onOff");
-                            float normalized = range.convertTo0to1(params.onOff);
-                            p->setValueNotifyingHost(normalized);
-                        }
-                     if (auto* p = m_parameters.getParameter("subdivision"))
-                        {
-                            const auto& range = m_parameters.getParameterRange("subdivision");
-                            float normalized = range.convertTo0to1(params.subdivision);
-                            p->setValueNotifyingHost(normalized);
-                        }
-                     if (auto* p = m_parameters.getParameter("timeSig"))
-                        {
-                            const auto& range = m_parameters.getParameterRange("timeSig");
-                            float normalized = range.convertTo0to1(params.timeSig);
-                            p->setValueNotifyingHost(normalized);
-                        }
-                
+        if (auto* p = m_parameters.getParameter("bpm"))
+        {
+            const auto& range = m_parameters.getParameterRange("bpm");
+            float normalized = range.convertTo0to1(params.bpm);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("metroVolume"))
+        {
+            const auto& range = m_parameters.getParameterRange("metroVolume");
+            float normalized = range.convertTo0to1(params.metroVolume);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("inputVolume"))
+        {
+            const auto& range = m_parameters.getParameterRange("inputVolume");
+            float normalized = range.convertTo0to1(params.inputVolume);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("subVolume"))
+        {
+            const auto& range = m_parameters.getParameterRange("subVolume");
+            float normalized = range.convertTo0to1(params.subVolume);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("onOff"))
+        {
+            const auto& range = m_parameters.getParameterRange("onOff");
+            float normalized = range.convertTo0to1(params.onOff);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("subdivision"))
+        {
+            const auto& range = m_parameters.getParameterRange("subdivision");
+            float normalized = range.convertTo0to1(params.subdivision);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("timeSig"))
+        {
+            const auto& range = m_parameters.getParameterRange("timeSig");
+            float normalized = range.convertTo0to1(params.timeSig);
+            p->setValueNotifyingHost(normalized);
+        }
     }
 
 
-    
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-conversion"
 
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override
     {
         juce::ScopedNoDenormals noDenormals;
-        
+
         if (!midiMessages.isEmpty())
         {
             for (const auto& msg : midiMessages)
@@ -381,30 +392,34 @@ params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(
                 pluginRunner->processMidi(msg.data);
             }
         }
-                for (int c = 0; c < std::min(2, buffer.getNumChannels()); ++c)
+        for (int c = 0; c < std::min(2, buffer.getNumChannels()); ++c)
         {
             m_envInput[c].feed(buffer.getReadPointer(c), buffer.getNumSamples());
             m_inputDb[c].store(std::log10(m_envInput[c].getRms()) * 20.f);
         }
-                if ((getTotalNumInputChannels() == 2) && (getTotalNumOutputChannels() == 2))
+        if ((getTotalNumInputChannels() == 2) && (getTotalNumOutputChannels() == 2))
         {
             fixedRunner.processBlock(buffer);
         }
-                for (int c = 0; c < std::min(2, buffer.getNumChannels()); ++c)
+        for (int c = 0; c < std::min(2, buffer.getNumChannels()); ++c)
         {
             m_envOutput[c].feed(buffer.getReadPointer(c), buffer.getNumSamples());
             m_outputDb[c].store(std::log10(m_envOutput[c].getRms()) * 20.f);
         }
-                            }
+    }
 
 #pragma GCC diagnostic pop
 
-    
-        [[nodiscard]] const std::vector<float>& getWaveDataToShow()
+
+    [[nodiscard]] const std::vector<float>& getWaveDataToShow()
     {
         return pluginRunner->visualizeWaveData();
     }
-            [[nodiscard]] std::pair<float, float> getInputDbLoad() const
+    [[nodiscard]] size_t getWaveDataBeatIndex() const
+    {
+        return pluginRunner->getBeatIndex();
+    }
+    [[nodiscard]] std::pair<float, float> getInputDbLoad() const
     {
         return {m_inputDb[0].load(), m_inputDb[1].load()};
     }
@@ -413,13 +428,13 @@ params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(
     {
         return {m_outputDb[0].load(), m_outputDb[1].load()};
     }
-        
+
     [[nodiscard]] bool hasRunner() const
     {
         return pluginRunner.get() != nullptr;
     }
     float m_maxValue{0.f};
-    
+
   private:
     size_t m_sampleRate{48000};
 
@@ -434,12 +449,12 @@ params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(
     AbacDsp::FixedSizeProcessor<2, NumSamplesPerBlock, juce::AudioBuffer<float>> fixedRunner;
     std::unique_ptr<MetronomeImpl<NumSamplesPerBlock>> pluginRunner;
     juce::AudioProcessorValueTreeState m_parameters;
-            // VU-Meter
+    // VU-Meter
     std::atomic<float> m_inputDb[2];
     std::atomic<float> m_outputDb[2];
     std::array<AbacDsp::RmsFollower, 2> m_envInput;
     std::array<AbacDsp::RmsFollower, 2> m_envOutput;
-            std::vector<int> m_patchIndex;
+    std::vector<int> m_patchIndex;
     FileIo m_fileIo;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessor)
 };

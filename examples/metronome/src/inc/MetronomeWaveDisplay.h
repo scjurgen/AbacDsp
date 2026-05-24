@@ -7,8 +7,8 @@
 #include "GuiConstants.h"
 
 // Metronome-specific waveform display.
-// The incoming data vector always has the beat marker at its centre sample.
-// Timing zones: ±20ms (good), ±50ms (acceptable) are shaded.
+// Beat marker is at m_beatIndex (default n/4 — 1/4 from left), showing ~3/4 beat after.
+// Timing zones: ±20ms (good), ±50ms (acceptable) are shaded around the beat.
 class MetronomeWaveDisplay : public juce::Component
 {
   public:
@@ -25,6 +25,10 @@ class MetronomeWaveDisplay : public juce::Component
     void setSubdivisionType(int type) noexcept
     {
         m_subdivisionType = type;
+    }
+    void setBeatIndex(size_t beatIndex) noexcept
+    {
+        m_beatIndex = beatIndex;
     }
 
     void update(const std::vector<float>& data)
@@ -64,10 +68,12 @@ class MetronomeWaveDisplay : public juce::Component
         const auto waveArea = area;
 
         const size_t n = m_data.size();
-        const float cx = waveArea.getCentreX();
+        const size_t beatIndex = (m_beatIndex > 0 && m_beatIndex < n) ? m_beatIndex : n / 4;
         const float samplesPerMs = m_sampleRate / 1000.f;
         const float pxPerSample = waveArea.getWidth() / static_cast<float>(n);
-        const float halfWindowMs = static_cast<float>(n / 2) / samplesPerMs;
+        const float cx = waveArea.getX() + static_cast<float>(beatIndex) * pxPerSample;
+        const float leftWindowMs = static_cast<float>(beatIndex) / samplesPerMs;
+        const float rightWindowMs = static_cast<float>(n - beatIndex) / samplesPerMs;
 
         // Timing zones (±50ms, ±20ms)
         auto fillZone = [&](float halfMs, juce::Colour colour)
@@ -88,9 +94,10 @@ class MetronomeWaveDisplay : public juce::Component
         }
 
         // Time grid lines and ms labels
-        const float gridMs = halfWindowMs > 150.f ? 100.f : halfWindowMs > 60.f ? 50.f : 25.f;
+        const float windowMs = std::max(leftWindowMs, rightWindowMs);
+        const float gridMs = windowMs > 300.f ? 200.f : windowMs > 150.f ? 100.f : windowMs > 60.f ? 50.f : 25.f;
         g.setFont(juce::Font(10.f));
-        for (float ms = -halfWindowMs; ms <= halfWindowMs + 0.1f; ms += gridMs)
+        for (float ms = -leftWindowMs; ms <= rightWindowMs + 0.1f; ms += gridMs)
         {
             const float x = cx + ms * samplesPerMs * pxPerSample;
             if (x < waveArea.getX() || x > waveArea.getRight())
@@ -108,7 +115,7 @@ class MetronomeWaveDisplay : public juce::Component
         // Subdivision zones — shaded area + center line, rendered before the beat marker
         if (m_samplesPerBeat > 0 && m_subdivisionType > 0)
         {
-            const size_t halfWindow = n / 2;
+            const size_t postWindow = n - beatIndex;
             const size_t spb = m_samplesPerBeat;
             std::vector<size_t> offsets;
             switch (m_subdivisionType)
@@ -143,11 +150,11 @@ class MetronomeWaveDisplay : public juce::Component
 
             for (const size_t offset : offsets)
             {
-                if (offset < halfWindow)
+                if (offset < postWindow)
                 {
                     drawSubdivision(cx + static_cast<float>(offset) * pxPerSample);
                 }
-                if (spb > offset && (spb - offset) <= halfWindow)
+                if (spb > offset && (spb - offset) <= beatIndex)
                 {
                     drawSubdivision(cx - static_cast<float>(spb - offset) * pxPerSample);
                 }
@@ -185,6 +192,7 @@ class MetronomeWaveDisplay : public juce::Component
     std::vector<float> m_data;
     float m_sampleRate{48000.f};
     size_t m_samplesPerBeat{0};
+    size_t m_beatIndex{0};
     int m_subdivisionType{0};
     juce::String m_label;
 };

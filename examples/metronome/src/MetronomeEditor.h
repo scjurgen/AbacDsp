@@ -112,8 +112,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
             levelGauge.update(processorRef.getInputDbLoad(), processorRef.getOutputDbLoad());
             const float sr = static_cast<float>(processorRef.getSampleRate());
             const float bpm = static_cast<float>(valueTreeState.getParameterAsValue("bpm").getValue());
+            const size_t samplesPerBeat = static_cast<size_t>(sr * 60.f / bpm);
             signalGauge.setSampleRate(sr);
-            signalGauge.setSamplesPerBeat(static_cast<size_t>(sr * 60.f / bpm));
+            signalGauge.setSamplesPerBeat(samplesPerBeat);
+            signalGauge.setBeatIndex(processorRef.getWaveDataBeatIndex());
             signalGauge.setSubdivisionType(
                 static_cast<int>(valueTreeState.getParameterAsValue("subdivision").getValue()));
             signalGauge.update(processorRef.getWaveDataToShow());

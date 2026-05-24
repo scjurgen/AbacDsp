@@ -21,9 +21,9 @@ class MetronomeImpl final : public EffectBase
     static constexpr float tickBoostDb = 24.f;
     static constexpr float subDefaultOffsetDb = -9.f;
 
-    // Display window
-    static constexpr size_t kVisualBufferSize = 24000;
-    static constexpr float kDesiredHalfWindowMs = 250.f;
+    // Display window — shows one full beat: 1/4 before beat, 3/4 after
+    static constexpr size_t kVisualBufferSize = 200000; // ~4s at 48kHz, covers 40 BPM
+    static constexpr float kBeatPositionRatio = 0.25f;
 
     // -----------------------------------------------------------------------
     enum class Subdivision
@@ -50,7 +50,7 @@ class MetronomeImpl final : public EffectBase
 
         m_samplesPerBeat = beatsToSamples(m_bpm);
         m_visualWavedata.resize(kVisualBufferSize, 0.f);
-        updateHalfWindow();
+        updateWindowSizes();
         updateSubPositions();
     }
 
@@ -59,7 +59,7 @@ class MetronomeImpl final : public EffectBase
     {
         m_bpm = std::clamp(value, 40.f, 250.f);
         m_samplesPerBeat = beatsToSamples(m_bpm);
-        updateHalfWindow();
+        updateWindowSizes();
         updateSubPositions();
     }
 
@@ -99,17 +99,18 @@ class MetronomeImpl final : public EffectBase
     // -----------------------------------------------------------------------
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
-        const size_t halfWindow = m_halfWindow;
+        const size_t preWindow = m_preWindow;
+        const size_t postWindow = m_postWindow;
 
         auto writeToVisualWindow = [&](const float visSignal)
         {
-            if (m_beatSamplePos < halfWindow)
+            if (m_beatSamplePos < postWindow)
             {
-                m_visualWavedata[halfWindow + m_beatSamplePos] = visSignal;
+                m_visualWavedata[preWindow + m_beatSamplePos] = visSignal;
             }
-            else if (m_beatSamplePos >= m_samplesPerBeat - halfWindow)
+            else if (m_beatSamplePos >= m_samplesPerBeat - preWindow)
             {
-                m_visualWavedata[m_beatSamplePos - (m_samplesPerBeat - halfWindow)] = visSignal;
+                m_visualWavedata[m_beatSamplePos - (m_samplesPerBeat - preWindow)] = visSignal;
             }
         };
 
@@ -158,17 +159,22 @@ class MetronomeImpl final : public EffectBase
 
     const std::vector<float>& visualizeWaveData()
     {
-        const size_t windowSize = m_halfWindow * 2;
+        const size_t windowSize = m_preWindow + m_postWindow;
         m_preparedWavedata.assign(m_visualWavedata.begin(), m_visualWavedata.begin() + windowSize);
         return m_preparedWavedata;
     }
 
+    [[nodiscard]] size_t getBeatIndex() const noexcept
+    {
+        return m_preWindow;
+    }
+
   private:
     // -----------------------------------------------------------------------
-    void updateHalfWindow() noexcept
+    void updateWindowSizes() noexcept
     {
-        const size_t desired = static_cast<size_t>(sampleRate() * kDesiredHalfWindowMs / 1000.f);
-        m_halfWindow = std::min(desired, m_samplesPerBeat / 2);
+        m_preWindow = m_samplesPerBeat / 4;
+        m_postWindow = m_samplesPerBeat - m_preWindow;
     }
 
     void updateSubPositions()
@@ -214,7 +220,8 @@ class MetronomeImpl final : public EffectBase
     size_t m_beatSamplePos{0};
     size_t m_barBeatCount{0};
     size_t m_beatsPerBar{4};
-    size_t m_halfWindow{3000};
+    size_t m_preWindow{0};
+    size_t m_postWindow{0};
 
     Subdivision m_subdivision{Subdivision::Off};
     std::vector<size_t> m_subPositions;
