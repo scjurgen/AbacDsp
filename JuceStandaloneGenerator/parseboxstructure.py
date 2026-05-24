@@ -117,16 +117,19 @@ def construct_boxes(m: dict):
                 case 'dial':
                     result += f""".withFlex({item["size"]})"""
                 case 'drop':
-                    result += f".withFlex(0).withWidth(areas[{idx}].toFloat().getWidth()).withHeight(Constants::Text::labelHeight)"
+                    if item["flex"] == "abs":
+                        result += f".withFlex(0).withWidth({item['size']}).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
+                    else:
+                        result += f".withFlex(1).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
                 case 'gauge':
                     if item['flex'] == 'abs':
                         result += f""".{withDirection}({item["size"]})"""
                     else:
                         result += f""".withFlex({item["size"]})"""
                 case 'switch':
-                    result += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight)"
+                    result += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
                 case 'label':
-                    result += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight)"
+                    result += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
             result += ".withMargin(knobMarginSmall));\n"
         result += f"""box.performLayout(areas[{idx - 1}].toFloat());\n}}\n"""
         return result
