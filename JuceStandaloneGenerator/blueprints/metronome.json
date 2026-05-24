@@ -15,7 +15,7 @@
     {"short": "IVOL", "type": "dial",   "display": "Input Volume",   "symbol": "inputVolume", "default": 0,   "range": [-60, 12, 0.1, 1, false],   "precision": 1, "unit": "dB"},
     {"short": "SVOL", "type": "dial",   "display": "Sub Volume",     "symbol": "subVolume",   "default": -15, "range": [-60, 0, 0.1, 1, false],   "precision": 1, "unit": "dB"},
     {"short": "ONF",  "type": "switch", "display": "Start",          "symbol": "onOff",       "default": 0},
-    {"short": "PRE",  "type": "drop",   "display": "Preset",         "symbol": "preset",      "default": 5,   "listitems": ["3/4", "3/4 8th", "3/4 shuffle", "3/4 triplet", "4/4", "4/4 8th", "4/4 shuffle", "4/4 triplet", "4/4 swing", "5/4 (3+2)", "5/4 8th (3+2)", "5/4 (2+3)", "5/4 8th (2+3)", "6/8 in-2", "6/8 in-6", "7/8 (2+2+3)", "7/8 (2+3+2)", "7/8 (3+2+2)", "9/8 in-3", "9/8 in-9", "11/8 (3+3+3+2)", "11/8 (3+3+2+3)", "13/8 (3+3+3+2+2)", "13/8 (3+4+3+3)"]},
+    {"short": "PRE",  "type": "drop",   "display": "Preset",         "symbol": "preset",      "default": 6,   "listitems": ["3/4", "3/4 8th", "3/4 16th", "3/4 shuffle", "3/4 triplet", "4/4", "4/4 8th", "4/4 16th", "4/4 shuffle", "4/4 triplet", "4/4 swing", "5/4 (3+2)", "5/4 8th (3+2)", "5/4 (2+3)", "5/4 8th (2+3)", "6/8 in-2", "6/8 in-6", "7/8 (2+2+3)", "7/8 (2+3+2)", "7/8 (3+2+2)", "9/8 in-3", "9/8 in-9", "11/8 (3+3+3+2)", "11/8 (3+3+2+3)", "13/8 (3+3+3+2+2)", "13/8 (3+4+3+3)"]},
     {"short": "SWG",  "type": "dial",   "display": "Swing",          "symbol": "swingRatio",  "default": 1.5, "range": [1.0, 2.0, 0.01, 1, false],  "precision": 2, "unit": "",
      "visible_when": "processorRef.presetHasSwing(presetDrop.getSelectedItemIndex())",
      "depends_on": "preset"},

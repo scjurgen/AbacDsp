@@ -55,7 +55,7 @@ class MetronomeImpl final : public EffectBase
     static constexpr size_t kVisualBufferSize = 200000; // ~4s at 48kHz, covers 40 BPM
     static constexpr float kBeatPositionRatio = 0.25f;
 
-    static constexpr int kDefaultPresetIndex = 5; // 4/4 8th
+    static constexpr int kDefaultPresetIndex = 6; // 4/4 8th
 
     // -----------------------------------------------------------------------
     explicit MetronomeImpl(const float sampleRate)
@@ -223,6 +223,7 @@ class MetronomeImpl final : public EffectBase
     static constexpr AccentLevel N = AccentLevel::None;
 
     static constexpr SubdivType kEi = SubdivType::Eighth;
+    static constexpr SubdivType kSi = SubdivType::Sixteenth;
     static constexpr SubdivType kTr = SubdivType::Triplet;
     static constexpr SubdivType kSh = SubdivType::Shuffle;
     static constexpr SubdivType kC3 = SubdivType::Compound3;
@@ -234,10 +235,12 @@ class MetronomeImpl final : public EffectBase
         // Simple meters — vanilla (quarter beats only) then subdivided variants
         {"3/4",                   3, {D,B,B},                                                   kNo, false},
         {"3/4 8th",               3, {D,B,B},                                                   kEi, false},
+        {"3/4 16th",              3, {D,B,B},                                                   kSi, false},
         {"3/4 shuffle",           3, {D,B,B},                                                   kSh, true},
         {"3/4 triplet",           3, {D,B,B},                                                   kTr, false},
         {"4/4",                   4, {D,B,B,B},                                                 kNo, false},
         {"4/4 8th",               4, {D,B,B,B},                                                 kEi, false},
+        {"4/4 16th",              4, {D,B,B,B},                                                 kSi, false},
         {"4/4 shuffle",           4, {D,B,B,B},                                                 kSh, true},
         {"4/4 triplet",           4, {D,B,B,B},                                                 kTr, false},
         {"4/4 swing",             4, {D,B,B,B},                                                 kSh, true},
