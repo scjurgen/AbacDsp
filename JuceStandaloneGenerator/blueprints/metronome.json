@@ -15,23 +15,37 @@
     {"short": "IVOL", "type": "dial",   "display": "Input Volume",   "symbol": "inputVolume", "default": 0,   "range": [-60, 12, 0.1, 1, false],   "precision": 1, "unit": "dB"},
     {"short": "SVOL", "type": "dial",   "display": "Sub Volume",     "symbol": "subVolume",   "default": -15, "range": [-60, 0, 0.1, 1, false],   "precision": 1, "unit": "dB"},
     {"short": "ONF",  "type": "switch", "display": "Start",          "symbol": "onOff",       "default": 0},
-    {"short": "SDIV", "type": "drop",   "display": "Subdivision",    "symbol": "subdivision", "default": 0,   "listitems": ["Off", "8th", "Shuffle", "Triplet", "16th"]},
-    {"short": "TSIG", "type": "drop",   "display": "Time Signature", "symbol": "timeSig",     "default": 0,   "listitems": ["4/4", "3/4", "6/8", "5/4", "7/8", "9/8", "11/8", "13/8"]},
+    {"short": "PRE",  "type": "drop",   "display": "Preset",         "symbol": "preset",      "default": 3,   "listitems": ["3/4 straight", "3/4 shuffle", "3/4 triplet", "4/4 straight", "4/4 shuffle", "4/4 triplet", "4/4 swing", "5/4 (3+2)", "5/4 (2+3)", "6/8 in-2", "6/8 in-6", "7/8 (2+2+3)", "7/8 (2+3+2)", "7/8 (3+2+2)", "9/8 in-3", "9/8 in-9", "11/8 (3+3+3+2)", "11/8 (3+3+2+3)", "13/8 (3+3+3+2+2)", "13/8 (3+4+3+3)"]},
+    {"short": "SWG",  "type": "dial",   "display": "Swing",          "symbol": "swingRatio",  "default": 1.5, "range": [1.0, 2.0, 0.01, 1, false],  "precision": 2, "unit": "",
+     "visible_when": "processorRef.presetHasSwing(presetDrop.getSelectedItemIndex())",
+     "depends_on": "preset"},
     {"short": "LVL",  "type": "gauge",  "gaugetype": "levels",       "display": "Level",      "symbol": "level",      "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
-    {"short": "SIG",  "type": "gauge",  "gaugetype": "signal",       "display": "Beat",       "symbol": "signal"}
+    {"short": "SIG",  "type": "gauge",  "gaugetype": "signal",       "display": "Beat",       "symbol": "signal",     "customtype": "MetronomeWaveDisplay"}
   ],
   "layout": {
     "WINDOW_WIDTH": "960",
     "WINDOW_HEIGHT": "660",
-    "type": "=",
-    "composition": "R=(1:1:4) A1=(SUB*120, LVL*70, ONF, BPM, MVOL, IVOL) A2=(TSIG*160, SDIV*160, SVOL) A3=(SIG)"
+    "type": "≡",
+    "composition": "R=(1:1:4) A1=(SUB*120, LVL*70, ONF, BPM, MVOL, IVOL) A2=(PRE*200, SVOL, SWG) A3=(SIG)"
   },
   "extra_ui_includes": [
     "inc/MetronomeWaveDisplay.h"
   ],
-  "protected_files": [
-    "src/MetronomeEditor.h"
+  "extra_timer_callbacks": [
+    "{ const float sr = static_cast<float>(processorRef.getSampleRate());",
+    "const float bpm = static_cast<float>(valueTreeState.getParameterAsValue(\"bpm\").getValue());",
+    "const size_t spb = static_cast<size_t>(sr * 60.f / bpm);",
+    "signalGauge.setSampleRate(sr);",
+    "signalGauge.setSamplesPerBeat(spb);",
+    "signalGauge.setBeatIndex(processorRef.getWaveDataBeatIndex());",
+    "signalGauge.setSubdivisionPositions(processorRef.getSubdivisionPositions()); }"
   ],
+  "extra_processor_methods": [
+    "[[nodiscard]] bool presetHasSwing(int idx) const noexcept { return pluginRunner && pluginRunner->isPresetSwing(idx); }",
+    "[[nodiscard]] size_t getWaveDataBeatIndex() const noexcept { return pluginRunner ? pluginRunner->getBeatIndex() : 0u; }",
+    "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }"
+  ],
+  "protected_files": [],
   "CPP":
   {
     "CLASS_NAME": "MetronomeImpl<NumSamplesPerBlock>",

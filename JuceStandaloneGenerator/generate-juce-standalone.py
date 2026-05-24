@@ -106,6 +106,8 @@ cppJuceFileVars = [
     "WIDGETS_DECL",
     "RESIZED_AREA",
     "TIMER_CALLBACKS",
+    "EXTRA_PRIVATE_METHODS",
+    "EXTRA_PROCESSOR_METHODS",
     "ParamStructMembers",
     "ParamIdList",
     "ParamIdStringList",
@@ -147,6 +149,9 @@ def createGaugeCallbacks(m:dict) -> str:
                     res += f"""{item["symbol"]}Gauge.update(processorRef.getSpectrogram());\n"""
                 case "signal":
                     res += f"""{item["symbol"]}Gauge.update(processorRef.getWaveDataToShow());\n"""
+    extra = m.get("extra_timer_callbacks", [])
+    if extra:
+        res += "\n" + "\n".join(extra) + "\n"
     return res
 
 
@@ -307,53 +312,93 @@ def createWidgetsDecl(m: dict) -> str:
                 res += f"juce::ComboBox {varname}{{}};\n"
                 res += f"std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> {varname}Attachment;\n"
             case "gauge":
-                match item['gaugetype']:
-                    case "cpuload":
-                        varname = f"{symbol}Gauge"
-                        res += f"CpuGauge {varname}{{}};\n"
-                    case "spectrogram":
-                        varname = f"{symbol}Gauge"
-                        res += f"SpectrogramDisplay {varname}{{CLutPreset}};\n"
-                    case "levels":
-                        varname = f"{symbol}Gauge"
-                        res += f"Gauge {varname}{{}};\n"
-                    case "signal":
-                        varname = f"{symbol}Gauge"
-                        res += f"WaveformGauge {varname}{{}};\n"
+                varname = f"{symbol}Gauge"
+                if "customtype" in item:
+                    res += f"{item['customtype']} {varname}{{}};\n"
+                else:
+                    match item['gaugetype']:
+                        case "cpuload":
+                            res += f"CpuGauge {varname}{{}};\n"
+                        case "spectrogram":
+                            res += f"SpectrogramDisplay {varname}{{CLutPreset}};\n"
+                        case "levels":
+                            res += f"Gauge {varname}{{}};\n"
+                        case "signal":
+                            res += f"WaveformGauge {varname}{{}};\n"
             case "label":
                 varname = f"{symbol}Label"
                 res += f"juce::Label {varname}{{}};\n"
     return res
 
 def createInitWidgets(m: dict) -> str:
+    # Build map: symbol -> list of ports that depend_on it (for onChange injection)
+    dependents: dict = {}
+    for item in m["ports-control"]:
+        if "depends_on" in item:
+            dep_sym = item["depends_on"]
+            dependents.setdefault(dep_sym, []).append(item)
+
     res = ""
     for item in m["ports-control"]:
         varname = f"{item['symbol']}"
+        conditional = "visible_when" in item
+        add_fn = "addChildComponent" if conditional else "addAndMakeVisible"
         match item['type']:
             case "dial":
                 varname += "Dial"
-                res += f"""addAndMakeVisible({varname});
+                res += f"""{add_fn}({varname});
                 {varname}.reset(valueTreeState, "{item['symbol']}");
                 {varname}.setLabelText(juce::String::fromUTF8("{item['display']}"));\n"""
             case "switch":
                 varname += "Switch"
-                res += f"""addAndMakeVisible({varname});
+                res += f"""{add_fn}({varname});
                 {varname}Attachment = std::make_unique < juce::AudioProcessorValueTreeState::ButtonAttachment > (
                 valueTreeState, "{item['symbol']}", {varname});
                 \n"""
             case "drop":
                 varname += "Drop"
-                res += f"""addAndMakeVisible({varname});
+                res += f"""{add_fn}({varname});
                 {varname}.addItemList(valueTreeState.getParameter("{item['symbol']}")->getAllValueStrings(), 1);
                 {varname}Attachment = std::make_unique < juce::AudioProcessorValueTreeState::ComboBoxAttachment > (
                 valueTreeState, "{item['symbol']}", {varname});\n"""
+                # Inject onChange handler for any dependents
+                if item['symbol'] in dependents:
+                    callbacks = " ".join(
+                        f"update{d['symbol'][0].upper() + d['symbol'][1:]}Visibility();"
+                        for d in dependents[item['symbol']]
+                    )
+                    res += f"""{varname}.onChange = [this] {{ {callbacks} }};\n"""
+                    for dep in dependents[item['symbol']]:
+                        dep_upper = dep['symbol'][0].upper() + dep['symbol'][1:]
+                        res += f"""update{dep_upper}Visibility();\n"""
             case "gauge":
                 varname += "Gauge"
-                res += f"""addAndMakeVisible({varname}); {varname}.setLabelText(juce::String::fromUTF8("{item['display']}"));\n"""
+                res += f"""{add_fn}({varname}); {varname}.setLabelText(juce::String::fromUTF8("{item['display']}"));\n"""
             case "label":
                 varname += "Label"
-                res += f"""addAndMakeVisible({varname}); {varname}.setText(juce::String::fromUTF8("{item['display']}"), juce::dontSendNotification);\n"""
+                res += f"""{add_fn}({varname}); {varname}.setText(juce::String::fromUTF8("{item['display']}"), juce::dontSendNotification);\n"""
     return res
+
+
+def createExtraPrivateMethods(m: dict) -> str:
+    res = ""
+    for item in m["ports-control"]:
+        if "visible_when" in item:
+            symbol = item['symbol']
+            symbol_upper = symbol[0].upper() + symbol[1:]
+            varname = f"{symbol}{item['type'].capitalize()}"
+            condition = item["visible_when"]
+            res += f"""  void update{symbol_upper}Visibility()\n  {{\n"""
+            res += f"""    {varname}.setVisible({condition});\n"""
+            res += f"""    resized();\n  }}\n\n"""
+    return res
+
+def createExtraProcessorMethods(m: dict) -> str:
+    methods = m.get("extra_processor_methods", [])
+    if not methods:
+        return ""
+    return "\n".join(methods) + "\n"
+
 
 def addParameterListeners(m:dict):
     res = ""
@@ -621,6 +666,8 @@ def createPackageFromJsonDict(m: dict):
     m["CPP"]["INIT_WIDGETS"] = createInitWidgets(m)
     m["CPP"]["WIDGETS_DECL"] = createWidgetsDecl(m)
     m["CPP"]["RESIZED_AREA"] = construct_boxes(m)
+    m["CPP"]["EXTRA_PRIVATE_METHODS"] = createExtraPrivateMethods(m)
+    m["CPP"]["EXTRA_PROCESSOR_METHODS"] = createExtraProcessorMethods(m)
 
     for idx in range(len(m["ports-control"])):
         item = fillDefaults(m["ports-control"][idx])

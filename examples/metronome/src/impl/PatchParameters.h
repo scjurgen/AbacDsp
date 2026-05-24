@@ -18,16 +18,16 @@ struct PatchParameters
         inputVolume, // dial
         subVolume  , // dial
         onOff      , // switch
-        subdivision, // drop
-        timeSig     // drop
+        preset     , // drop
+        swingRatio  // dial
     };
 float bpm{};
 float metroVolume{};
 float inputVolume{};
 float subVolume{};
 bool onOff{};
-size_t subdivision{};
-size_t timeSig{};
+size_t preset{};
+float swingRatio{};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
@@ -36,8 +36,8 @@ size_t timeSig{};
 "inputVolume",
 "subVolume",
 "onOff",
-"subdivision",
-"timeSig"
+"preset",
+"swingRatio"
     });
 //        "onOff", "patch", "input", "modulationDepth", "mix", "density", "threshold", "knee"});
 
@@ -61,8 +61,8 @@ size_t timeSig{};
         else if constexpr (ParamId == Id::inputVolume) return inputVolume;
         else if constexpr (ParamId == Id::subVolume) return subVolume;
         else if constexpr (ParamId == Id::onOff) return onOff;
-        else if constexpr (ParamId == Id::subdivision) return subdivision;
-        else if constexpr (ParamId == Id::timeSig) return timeSig;
+        else if constexpr (ParamId == Id::preset) return preset;
+        else if constexpr (ParamId == Id::swingRatio) return swingRatio;
 
     }
 
@@ -85,9 +85,9 @@ break;
 break;
  case Id::onOff: if (!isEqual(get<Id::onOff>(), value)) {get<Id::onOff>() = static_cast<bool>(value) ;m_modified = true;}
 break;
- case Id::subdivision: if (!isEqual(get<Id::subdivision>(), value)) {get<Id::subdivision>() = static_cast<size_t>(value) ;m_modified = true;}
+ case Id::preset: if (!isEqual(get<Id::preset>(), value)) {get<Id::preset>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
- case Id::timeSig: if (!isEqual(get<Id::timeSig>(), value)) {get<Id::timeSig>() = static_cast<size_t>(value) ;m_modified = true;}
+ case Id::swingRatio: if (!isEqual(get<Id::swingRatio>(), value)) {get<Id::swingRatio>() = value;m_modified = true;}
 break;
 
             default:
@@ -132,6 +132,6 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         inputVolume, // dial
         subVolume  , // dial
         onOff      , // switch
-        subdivision, // drop
-        timeSig     // drop
+        preset     , // drop
+        swingRatio  // dial
 )

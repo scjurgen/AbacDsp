@@ -370,6 +370,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         return pluginRunner->visualizeWaveData();
     }
     /*END_SHOWWAVEFORM*/
+    /*EXTRA_PROCESSOR_METHODS*/
     /*START_SHOWVUMETER*/
     [[nodiscard]] std::pair<float, float> getInputDbLoad() const
     {

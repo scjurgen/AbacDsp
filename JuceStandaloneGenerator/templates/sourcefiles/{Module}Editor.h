@@ -59,6 +59,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor, juce:
         /*INIT_WIDGETS*/
     }
 
+    /*EXTRA_PRIVATE_METHODS*/
   private:
     AudioPluginAudioProcessor& processorRef;
     juce::AudioProcessorValueTreeState& valueTreeState;

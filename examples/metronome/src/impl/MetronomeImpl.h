@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <vector>
 
@@ -8,15 +9,44 @@
 #include "EffectBase.h"
 #include "Filters/SvfResoBP.h"
 
+// -----------------------------------------------------------------------
+// Rhythm preset data model
+enum class AccentLevel : uint8_t
+{
+    None,
+    Subdiv,
+    Beat,
+    Downbeat
+};
+enum class SubdivType : uint8_t
+{
+    None,
+    Eighth,
+    Sixteenth,
+    Triplet,
+    Shuffle,
+    Compound3
+};
+
+struct RhythmPreset
+{
+    const char* name;
+    uint8_t barBeats;
+    AccentLevel pattern[16]; // only first barBeats entries are used
+    SubdivType subdivType;
+    bool hasSwing;
+};
+
+// -----------------------------------------------------------------------
 template <size_t BlockSize>
 class MetronomeImpl final : public EffectBase
 {
   public:
     // -----------------------------------------------------------------------
     // Sound parameters
-    static constexpr float tickFrequencyHz = 800.f;    // main beat
-    static constexpr float beatOneFrequencyHz = 400.f; // bar start (octave below)
-    static constexpr float subFrequencyHz = 1600.f;    // subdivision (octave above)
+    static constexpr float tickFrequencyHz = 800.f;
+    static constexpr float beatOneFrequencyHz = 400.f;
+    static constexpr float subFrequencyHz = 1600.f;
     static constexpr float tickDecaySeconds = 0.04f;
     static constexpr float tickBoostDb = 24.f;
     static constexpr float subDefaultOffsetDb = -9.f;
@@ -25,17 +55,7 @@ class MetronomeImpl final : public EffectBase
     static constexpr size_t kVisualBufferSize = 200000; // ~4s at 48kHz, covers 40 BPM
     static constexpr float kBeatPositionRatio = 0.25f;
 
-    // -----------------------------------------------------------------------
-    enum class Subdivision
-    {
-        Off,
-        Eighths,
-        Shuffle,
-        Triplets,
-        Sixteenths
-    };
-
-    static constexpr int kBeatsPerBar[] = {4, 3, 6, 5, 7, 9, 11, 13};
+    static constexpr int kDefaultPresetIndex = 3; // 4/4 straight
 
     // -----------------------------------------------------------------------
     explicit MetronomeImpl(const float sampleRate)
@@ -83,17 +103,36 @@ class MetronomeImpl final : public EffectBase
         m_running = value;
     }
 
-    void setSubdivision(const int index)
+    void setPreset(const int index)
     {
-        m_subdivision = static_cast<Subdivision>(std::clamp(index, 0, 4));
+        m_presetIndex = std::clamp(index, 0, kNumPresets - 1);
+        m_barBeatCount = 0;
         updateSubPositions();
     }
 
-    // index matches kBeatsPerBar[]
-    void setTimeSig(const int index)
+    void setSwingRatio(const float ratio)
     {
-        m_beatsPerBar = static_cast<size_t>(kBeatsPerBar[std::clamp(index, 0, 7)]);
-        m_barBeatCount = 0;
+        m_swingRatio = std::clamp(ratio, 1.f, 2.f);
+        updateSubPositions();
+    }
+
+    [[nodiscard]] bool presetHasSwing() const noexcept
+    {
+        return kPresets[m_presetIndex].hasSwing;
+    }
+
+    [[nodiscard]] static bool isPresetSwing(const int index) noexcept
+    {
+        if (index < 0 || index >= kNumPresets)
+        {
+            return false;
+        }
+        return kPresets[index].hasSwing;
+    }
+
+    [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
+    {
+        return m_subPositions;
     }
 
     // -----------------------------------------------------------------------
@@ -118,13 +157,19 @@ class MetronomeImpl final : public EffectBase
         {
             if (m_beatSamplePos == 0)
             {
-                if (m_barBeatCount == 0)
+                switch (kPresets[m_presetIndex].pattern[m_barBeatCount])
                 {
-                    m_beatOneFilter.reset(0.f, m_metroGain);
-                }
-                else
-                {
-                    m_tickFilter.reset(0.f, m_metroGain);
+                    case AccentLevel::Downbeat:
+                        m_beatOneFilter.reset(0.f, m_metroGain);
+                        break;
+                    case AccentLevel::Beat:
+                        m_tickFilter.reset(0.f, m_metroGain);
+                        break;
+                    case AccentLevel::Subdiv:
+                        m_subFilter.reset(0.f, m_subGain);
+                        break;
+                    case AccentLevel::None:
+                        break;
                 }
             }
 
@@ -149,7 +194,7 @@ class MetronomeImpl final : public EffectBase
             if (++m_beatSamplePos >= m_samplesPerBeat)
             {
                 m_beatSamplePos = 0;
-                if (++m_barBeatCount >= m_beatsPerBar)
+                if (++m_barBeatCount >= static_cast<size_t>(kPresets[m_presetIndex].barBeats))
                 {
                     m_barBeatCount = 0;
                 }
@@ -171,6 +216,52 @@ class MetronomeImpl final : public EffectBase
 
   private:
     // -----------------------------------------------------------------------
+    // Preset table — short aliases to keep the table readable
+    static constexpr AccentLevel D = AccentLevel::Downbeat;
+    static constexpr AccentLevel B = AccentLevel::Beat;
+    static constexpr AccentLevel S = AccentLevel::Subdiv;
+    static constexpr AccentLevel N = AccentLevel::None;
+
+    static constexpr SubdivType kEi = SubdivType::Eighth;
+    static constexpr SubdivType kTr = SubdivType::Triplet;
+    static constexpr SubdivType kSh = SubdivType::Shuffle;
+    static constexpr SubdivType kC3 = SubdivType::Compound3;
+    static constexpr SubdivType kNo = SubdivType::None;
+
+    // clang-format off
+    static constexpr RhythmPreset kPresets[] = {
+        //  name                      beats  pattern (padded to 16)                              subdiv  swing
+        // Simple meters
+        {"3/4 straight",          3, {D,B,B},                                                   kEi, false},
+        {"3/4 shuffle",           3, {D,B,B},                                                   kSh, true},
+        {"3/4 triplet",           3, {D,B,B},                                                   kTr, false},
+        {"4/4 straight",          4, {D,B,B,B},                                                 kEi, false},
+        {"4/4 shuffle",           4, {D,B,B,B},                                                 kSh, true},
+        {"4/4 triplet",           4, {D,B,B,B},                                                 kTr, false},
+        {"4/4 swing",             4, {D,B,B,B},                                                 kSh, true},
+        // 5/4 — all 5 quarter beats tick; preset name conveys grouping feel
+        {"5/4 (3+2)",             5, {D,B,B,B,B},                                               kEi, false},
+        {"5/4 (2+3)",             5, {D,B,B,B,B},                                               kEi, false},
+        // Compound meters (felt beat = dotted quarter, subdivides into 3 eighth notes)
+        {"6/8 in-2",              2, {D,B},                                                      kC3, false},
+        // 6/8 in-6: felt beat = eighth note; accents every 3 eighths
+        {"6/8 in-6",              6, {D,S,S,B,S,S},                                             kNo, false},
+        // Odd meters: felt beat = eighth note; accent at grouping boundaries
+        {"7/8 (2+2+3)",           7, {D,N,B,N,B,N,N},                                          kNo, false},
+        {"7/8 (2+3+2)",           7, {D,N,B,N,N,B,N},                                          kNo, false},
+        {"7/8 (3+2+2)",           7, {D,N,N,B,N,B,N},                                          kNo, false},
+        {"9/8 in-3",              3, {D,B,B},                                                   kC3, false},
+        {"9/8 in-9",              9, {D,S,S,B,S,S,B,S,S},                                      kNo, false},
+        {"11/8 (3+3+3+2)",       11, {D,N,N,B,N,N,B,N,N,B,N},                                  kNo, false},
+        {"11/8 (3+3+2+3)",       11, {D,N,N,B,N,N,B,N,B,N,N},                                  kNo, false},
+        {"13/8 (3+3+3+2+2)",     13, {D,N,N,B,N,N,B,N,N,B,N,B,N},                              kNo, false},
+        {"13/8 (3+4+3+3)",       13, {D,N,N,B,N,N,N,B,N,N,B,N,N},                              kNo, false},
+    };
+    // clang-format on
+
+    static constexpr int kNumPresets = static_cast<int>(std::size(kPresets));
+
+    // -----------------------------------------------------------------------
     void updateWindowSizes() noexcept
     {
         m_preWindow = m_samplesPerBeat / 4;
@@ -185,22 +276,29 @@ class MetronomeImpl final : public EffectBase
             return;
         }
         const size_t spb = m_samplesPerBeat;
-        switch (m_subdivision)
+        switch (kPresets[m_presetIndex].subdivType)
         {
-            case Subdivision::Off:
+            case SubdivType::None:
                 break;
-            case Subdivision::Eighths:
+            case SubdivType::Eighth:
                 m_subPositions = {spb / 2};
                 break;
-            case Subdivision::Shuffle:
-                m_subPositions = {spb * 2 / 3};
+            case SubdivType::Sixteenth:
+                m_subPositions = {spb / 4, spb / 2, 3 * spb / 4};
                 break;
-            case Subdivision::Triplets:
-                m_subPositions = {spb / 3, spb * 2 / 3};
+            case SubdivType::Triplet:
+                m_subPositions = {spb / 3, 2 * spb / 3};
                 break;
-            case Subdivision::Sixteenths:
-                m_subPositions = {spb / 4, spb / 2, spb * 3 / 4};
+            case SubdivType::Compound3:
+                m_subPositions = {spb / 3, 2 * spb / 3};
                 break;
+            case SubdivType::Shuffle:
+            {
+                const auto longPart =
+                    static_cast<size_t>(static_cast<float>(spb) * m_swingRatio / (1.f + m_swingRatio));
+                m_subPositions = {longPart};
+                break;
+            }
         }
     }
 
@@ -216,14 +314,15 @@ class MetronomeImpl final : public EffectBase
     float m_inputGain{1.f};
     bool m_running{false};
 
+    int m_presetIndex{kDefaultPresetIndex};
+    float m_swingRatio{1.5f};
+
     size_t m_samplesPerBeat{0};
     size_t m_beatSamplePos{0};
     size_t m_barBeatCount{0};
-    size_t m_beatsPerBar{4};
     size_t m_preWindow{0};
     size_t m_postWindow{0};
 
-    Subdivision m_subdivision{Subdivision::Off};
     std::vector<size_t> m_subPositions;
 
     AbacDsp::SvfResoBP m_tickFilter;

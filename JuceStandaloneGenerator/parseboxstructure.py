@@ -112,25 +112,29 @@ def construct_boxes(m: dict):
         for item in areas[idx]:
             p = findShortEntry(item["symbol"])
             var = f"""{p["symbol"]}{p['type'].capitalize()}"""
-            result += f"""box.items.add(juce::FlexItem({var})"""
+            flex_line = f"""box.items.add(juce::FlexItem({var})"""
             match p['type']:
                 case 'dial':
-                    result += f""".withFlex({item["size"]})"""
+                    flex_line += f""".withFlex({item["size"]})"""
                 case 'drop':
                     if item["flex"] == "abs":
-                        result += f".withFlex(0).withWidth({item['size']}).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
+                        flex_line += f".withFlex(0).withWidth({item['size']}).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
                     else:
-                        result += f".withFlex(1).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
+                        flex_line += f".withFlex(1).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
                 case 'gauge':
                     if item['flex'] == 'abs':
-                        result += f""".{withDirection}({item["size"]})"""
+                        flex_line += f""".{withDirection}({item["size"]})"""
                     else:
-                        result += f""".withFlex({item["size"]})"""
+                        flex_line += f""".withFlex({item["size"]})"""
                 case 'switch':
-                    result += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
+                    flex_line += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
                 case 'label':
-                    result += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
-            result += ".withMargin(knobMarginSmall));\n"
+                    flex_line += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
+            flex_line += ".withMargin(knobMarginSmall));\n"
+            if "visible_when" in p:
+                result += f"""if ({var}.isVisible()) {{\n{flex_line}}}\n"""
+            else:
+                result += flex_line
         result += f"""box.performLayout(areas[{idx - 1}].toFloat());\n}}\n"""
         return result
 
@@ -239,8 +243,8 @@ def construct_boxes(m: dict):
             result += f"""std::vector<juce::Rectangle<int>> areas(3);
                    const auto rowHeight = area.getHeight() / {virtual_rows};
                                    areas[0] = area.removeFromTop(rowHeight*{rows[0]}).reduced(Constants::Margins::small);
-                                   areas[0] = area.removeFromTop(rowHeight*{rows[1]}).reduced(Constants::Margins::small);
-                                   areas[1] = area.reduced(Constants::Margins::small);\n\n"""
+                                   areas[1] = area.removeFromTop(rowHeight*{rows[1]}).reduced(Constants::Margins::small);
+                                   areas[2] = area.reduced(Constants::Margins::small);\n\n"""
             result += saveAreaRow(areas, 1)
             result += saveAreaRow(areas, 2)
             result += saveAreaRow(areas, 3)

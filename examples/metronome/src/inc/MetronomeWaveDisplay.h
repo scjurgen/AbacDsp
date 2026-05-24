@@ -22,9 +22,9 @@ class MetronomeWaveDisplay : public juce::Component
     {
         m_samplesPerBeat = spb;
     }
-    void setSubdivisionType(int type) noexcept
+    void setSubdivisionPositions(const std::vector<size_t>& positions)
     {
-        m_subdivisionType = type;
+        m_subdivisionPositions = positions;
     }
     void setBeatIndex(size_t beatIndex) noexcept
     {
@@ -113,28 +113,10 @@ class MetronomeWaveDisplay : public juce::Component
         }
 
         // Subdivision zones — shaded area + center line, rendered before the beat marker
-        if (m_samplesPerBeat > 0 && m_subdivisionType > 0)
+        if (m_samplesPerBeat > 0 && !m_subdivisionPositions.empty())
         {
             const size_t postWindow = n - beatIndex;
             const size_t spb = m_samplesPerBeat;
-            std::vector<size_t> offsets;
-            switch (m_subdivisionType)
-            {
-                case 1:
-                    offsets = {spb / 2};
-                    break;
-                case 2:
-                    offsets = {spb * 2 / 3};
-                    break;
-                case 3:
-                    offsets = {spb / 3, spb * 2 / 3};
-                    break;
-                case 4:
-                    offsets = {spb / 4, spb / 2, spb * 3 / 4};
-                    break;
-                default:
-                    break;
-            }
 
             constexpr float kSubZoneHalfMs = 15.f;
             const float subZoneHalfPx = kSubZoneHalfMs * samplesPerMs * pxPerSample;
@@ -148,7 +130,7 @@ class MetronomeWaveDisplay : public juce::Component
                 g.drawVerticalLine(static_cast<int>(subX), waveArea.getY(), waveArea.getBottom());
             };
 
-            for (const size_t offset : offsets)
+            for (const size_t offset : m_subdivisionPositions)
             {
                 if (offset < postWindow)
                 {
@@ -193,6 +175,6 @@ class MetronomeWaveDisplay : public juce::Component
     float m_sampleRate{48000.f};
     size_t m_samplesPerBeat{0};
     size_t m_beatIndex{0};
-    int m_subdivisionType{0};
+    std::vector<size_t> m_subdivisionPositions;
     juce::String m_label;
 };
