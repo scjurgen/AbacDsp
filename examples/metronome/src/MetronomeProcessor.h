@@ -252,7 +252,7 @@ params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("
                     -15, juce::String("Sub Volume"), juce::AudioProcessorParameter::genericParameter,
                     [](float value, float) { return juce::String(value, 1) + " dB"; }));
 params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("onOff",1), "Start", 0));
-params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("preset",1), "Preset", juce::StringArray {"3/4 straight","3/4 shuffle","3/4 triplet","4/4 straight","4/4 shuffle","4/4 triplet","4/4 swing","5/4 (3+2)","5/4 (2+3)","6/8 in-2","6/8 in-6","7/8 (2+2+3)","7/8 (2+3+2)","7/8 (3+2+2)","9/8 in-3","9/8 in-9","11/8 (3+3+3+2)","11/8 (3+3+2+3)","13/8 (3+3+3+2+2)","13/8 (3+4+3+3)"}, 3));
+params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("preset",1), "Preset", juce::StringArray {"3/4","3/4 8th","3/4 shuffle","3/4 triplet","4/4","4/4 8th","4/4 shuffle","4/4 triplet","4/4 swing","5/4 (3+2)","5/4 8th (3+2)","5/4 (2+3)","5/4 8th (2+3)","6/8 in-2","6/8 in-6","7/8 (2+2+3)","7/8 (2+3+2)","7/8 (3+2+2)","9/8 in-3","9/8 in-9","11/8 (3+3+3+2)","11/8 (3+3+2+3)","13/8 (3+3+3+2+2)","13/8 (3+4+3+3)"}, 5));
 params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("swingRatio", 1), "Swing",
                     juce::NormalisableRange<float>(1.0, 2.0, 0.01, 1, false),
                     1.5, juce::String("Swing"), juce::AudioProcessorParameter::genericParameter,

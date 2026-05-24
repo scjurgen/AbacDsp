@@ -55,7 +55,7 @@ class MetronomeImpl final : public EffectBase
     static constexpr size_t kVisualBufferSize = 200000; // ~4s at 48kHz, covers 40 BPM
     static constexpr float kBeatPositionRatio = 0.25f;
 
-    static constexpr int kDefaultPresetIndex = 3; // 4/4 straight
+    static constexpr int kDefaultPresetIndex = 5; // 4/4 8th
 
     // -----------------------------------------------------------------------
     explicit MetronomeImpl(const float sampleRate)
@@ -231,17 +231,21 @@ class MetronomeImpl final : public EffectBase
     // clang-format off
     static constexpr RhythmPreset kPresets[] = {
         //  name                      beats  pattern (padded to 16)                              subdiv  swing
-        // Simple meters
-        {"3/4 straight",          3, {D,B,B},                                                   kEi, false},
+        // Simple meters — vanilla (quarter beats only) then subdivided variants
+        {"3/4",                   3, {D,B,B},                                                   kNo, false},
+        {"3/4 8th",               3, {D,B,B},                                                   kEi, false},
         {"3/4 shuffle",           3, {D,B,B},                                                   kSh, true},
         {"3/4 triplet",           3, {D,B,B},                                                   kTr, false},
-        {"4/4 straight",          4, {D,B,B,B},                                                 kEi, false},
+        {"4/4",                   4, {D,B,B,B},                                                 kNo, false},
+        {"4/4 8th",               4, {D,B,B,B},                                                 kEi, false},
         {"4/4 shuffle",           4, {D,B,B,B},                                                 kSh, true},
         {"4/4 triplet",           4, {D,B,B,B},                                                 kTr, false},
         {"4/4 swing",             4, {D,B,B,B},                                                 kSh, true},
-        // 5/4 — all 5 quarter beats tick; preset name conveys grouping feel
-        {"5/4 (3+2)",             5, {D,B,B,B,B},                                               kEi, false},
-        {"5/4 (2+3)",             5, {D,B,B,B,B},                                               kEi, false},
+        // 5/4 — grouping feel in name; vanilla then 8th subdivision
+        {"5/4 (3+2)",             5, {D,B,B,B,B},                                               kNo, false},
+        {"5/4 8th (3+2)",         5, {D,B,B,B,B},                                               kEi, false},
+        {"5/4 (2+3)",             5, {D,B,B,B,B},                                               kNo, false},
+        {"5/4 8th (2+3)",         5, {D,B,B,B,B},                                               kEi, false},
         // Compound meters (felt beat = dotted quarter, subdivides into 3 eighth notes)
         {"6/8 in-2",              2, {D,B},                                                      kC3, false},
         // 6/8 in-6: felt beat = eighth note; accents every 3 eighths
