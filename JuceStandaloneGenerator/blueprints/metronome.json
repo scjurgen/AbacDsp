@@ -1,0 +1,32 @@
+{
+  "name": "metronome",
+  "displayname": "Metronome",
+  "plugintype": "Metronome",
+  "color": "Chorus",
+  "shortdescription": "Metronome with damped sine tick",
+  "description": [
+    "✨ Metronome with settable BPM, start/stop and damped sine tick\n"
+  ],
+  "ports-control":
+  [
+    {"short": "SUB", "type": "drop", "display": "Subset", "symbol": "subset", "default": 0, "patch": true, "listitems": "#{}", "count": 5},
+    {"short": "BPM",  "type": "dial",   "display": "BPM",          "symbol": "bpm",         "default": 120, "range": [40, 250, 0.1, 1, false], "precision": 1, "unit": "BPM"},
+    {"short": "MVOL", "type": "dial",   "display": "Metro Volume",  "symbol": "metroVolume", "default": -6,  "range": [-60, 0, 0.1, 1, false],  "precision": 1, "unit": "dB"},
+    {"short": "IVOL", "type": "dial",   "display": "Input Volume",  "symbol": "inputVolume", "default": 0,   "range": [-60, 12, 0.1, 1, false],  "precision": 1, "unit": "dB"},
+    {"short": "ONF",  "type": "switch", "display": "Start",         "symbol": "onOff",       "default": 0},
+    {"short": "LVL",  "type": "gauge",  "gaugetype": "levels",      "display": "Level",      "symbol": "level",      "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "SIG",  "type": "gauge",  "gaugetype": "signal",      "display": "Beat",     "symbol": "signal"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "960",
+    "WINDOW_HEIGHT": "600",
+    "type": "=",
+    "composition": "R=(1:3) A1=(SUB*120, LVL*70, ONF, BPM, MVOL, IVOL) A2=(SIG))"
+  },
+  "CPP":
+  {
+    "CLASS_NAME": "MetronomeImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/MetronomeImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

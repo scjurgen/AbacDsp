@@ -25,6 +25,5 @@
 - support transport
 
 ### C++ UI
-- add nicer knobs
 - use soft gradient in main window
 - use backdrop

@@ -5,9 +5,8 @@
 #include <array>
 #include <cmath>
 #include <complex>
-
-#include <iostream>
 #include <iomanip>
+#include <iostream>
 #include <tuple>
 
 #include "Numbers/Convert.h"
