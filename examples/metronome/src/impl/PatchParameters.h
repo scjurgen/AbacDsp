@@ -16,19 +16,28 @@ struct PatchParameters
         bpm        , // dial
         metroVolume, // dial
         inputVolume, // dial
-        onOff       // switch
+        subVolume  , // dial
+        onOff      , // switch
+        subdivision, // drop
+        timeSig     // drop
     };
 float bpm{};
 float metroVolume{};
 float inputVolume{};
+float subVolume{};
 bool onOff{};
+size_t subdivision{};
+size_t timeSig{};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
         "bpm",
 "metroVolume",
 "inputVolume",
-"onOff"
+"subVolume",
+"onOff",
+"subdivision",
+"timeSig"
     });
 //        "onOff", "patch", "input", "modulationDepth", "mix", "density", "threshold", "knee"});
 
@@ -50,7 +59,10 @@ bool onOff{};
         if constexpr (ParamId == Id::bpm) return bpm;
         else if constexpr (ParamId == Id::metroVolume) return metroVolume;
         else if constexpr (ParamId == Id::inputVolume) return inputVolume;
+        else if constexpr (ParamId == Id::subVolume) return subVolume;
         else if constexpr (ParamId == Id::onOff) return onOff;
+        else if constexpr (ParamId == Id::subdivision) return subdivision;
+        else if constexpr (ParamId == Id::timeSig) return timeSig;
 
     }
 
@@ -69,7 +81,13 @@ break;
 break;
  case Id::inputVolume: if (!isEqual(get<Id::inputVolume>(), value)) {get<Id::inputVolume>() = value;m_modified = true;}
 break;
+ case Id::subVolume: if (!isEqual(get<Id::subVolume>(), value)) {get<Id::subVolume>() = value;m_modified = true;}
+break;
  case Id::onOff: if (!isEqual(get<Id::onOff>(), value)) {get<Id::onOff>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::subdivision: if (!isEqual(get<Id::subdivision>(), value)) {get<Id::subdivision>() = static_cast<size_t>(value) ;m_modified = true;}
+break;
+ case Id::timeSig: if (!isEqual(get<Id::timeSig>(), value)) {get<Id::timeSig>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
 
             default:
@@ -112,5 +130,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         bpm        , // dial
         metroVolume, // dial
         inputVolume, // dial
-        onOff       // switch
+        subVolume  , // dial
+        onOff      , // switch
+        subdivision, // drop
+        timeSig     // drop
 )

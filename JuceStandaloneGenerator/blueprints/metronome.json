@@ -9,19 +9,22 @@
   ],
   "ports-control":
   [
-    {"short": "SUB", "type": "drop", "display": "Subset", "symbol": "subset", "default": 0, "patch": true, "listitems": "#{}", "count": 5},
-    {"short": "BPM",  "type": "dial",   "display": "BPM",          "symbol": "bpm",         "default": 120, "range": [40, 250, 0.1, 1, false], "precision": 1, "unit": "BPM"},
-    {"short": "MVOL", "type": "dial",   "display": "Metro Volume",  "symbol": "metroVolume", "default": -6,  "range": [-60, 0, 0.1, 1, false],  "precision": 1, "unit": "dB"},
-    {"short": "IVOL", "type": "dial",   "display": "Input Volume",  "symbol": "inputVolume", "default": 0,   "range": [-60, 12, 0.1, 1, false],  "precision": 1, "unit": "dB"},
-    {"short": "ONF",  "type": "switch", "display": "Start",         "symbol": "onOff",       "default": 0},
-    {"short": "LVL",  "type": "gauge",  "gaugetype": "levels",      "display": "Level",      "symbol": "level",      "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
-    {"short": "SIG",  "type": "gauge",  "gaugetype": "signal",      "display": "Beat",     "symbol": "signal"}
+    {"short": "SUB",  "type": "drop",   "display": "Subset",        "symbol": "subset",      "default": 0,   "patch": true, "listitems": "#{}", "count": 5},
+    {"short": "BPM",  "type": "dial",   "display": "BPM",           "symbol": "bpm",         "default": 120, "range": [40, 250, 0.1, 1, false],  "precision": 1, "unit": "BPM"},
+    {"short": "MVOL", "type": "dial",   "display": "Metro Volume",   "symbol": "metroVolume", "default": -6,  "range": [-60, 0, 0.1, 1, false],   "precision": 1, "unit": "dB"},
+    {"short": "IVOL", "type": "dial",   "display": "Input Volume",   "symbol": "inputVolume", "default": 0,   "range": [-60, 12, 0.1, 1, false],   "precision": 1, "unit": "dB"},
+    {"short": "SVOL", "type": "dial",   "display": "Sub Volume",     "symbol": "subVolume",   "default": -15, "range": [-60, 0, 0.1, 1, false],   "precision": 1, "unit": "dB"},
+    {"short": "ONF",  "type": "switch", "display": "Start",          "symbol": "onOff",       "default": 0},
+    {"short": "SDIV", "type": "drop",   "display": "Subdivision",    "symbol": "subdivision", "default": 0,   "listitems": ["Off", "8th", "Shuffle", "Triplet", "16th"]},
+    {"short": "TSIG", "type": "drop",   "display": "Time Signature", "symbol": "timeSig",     "default": 0,   "listitems": ["4/4", "3/4", "6/8", "5/4", "7/8", "9/8", "11/8", "13/8"]},
+    {"short": "LVL",  "type": "gauge",  "gaugetype": "levels",       "display": "Level",      "symbol": "level",      "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "SIG",  "type": "gauge",  "gaugetype": "signal",       "display": "Beat",       "symbol": "signal"}
   ],
   "layout": {
     "WINDOW_WIDTH": "960",
-    "WINDOW_HEIGHT": "600",
+    "WINDOW_HEIGHT": "660",
     "type": "=",
-    "composition": "R=(1:5) A1=(SUB*120, LVL*70, ONF, BPM, MVOL, IVOL) A2=(SIG))"
+    "composition": "R=(1:1:4) A1=(SUB*120, LVL*70, ONF, BPM, MVOL, IVOL) A2=(TSIG*160, SDIV*160, SVOL) A3=(SIG)"
   },
   "extra_ui_includes": [
     "inc/MetronomeWaveDisplay.h"

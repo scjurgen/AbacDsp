@@ -21,7 +21,10 @@ class GenericImpl final : public EffectBase
     void setBpm(const float value){ m_bpm = value;}
 void setMetroVolume(const float value){ m_metroVolume = std::pow(10.f,value/20.f);}
 void setInputVolume(const float value){ m_inputVolume = std::pow(10.f,value/20.f);}
+void setSubVolume(const float value){ m_subVolume = std::pow(10.f,value/20.f);}
 void setOnOff(const bool value){ m_onOff = value;}
+void setSubdivision(const size_t value){ m_subdivision = value;}
+void setTimeSig(const size_t value){ m_timeSig = value;}
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
@@ -52,7 +55,10 @@ void setOnOff(const bool value){ m_onOff = value;}
     float m_bpm{};
 float m_metroVolume{};
 float m_inputVolume{};
+float m_subVolume{};
 bool m_onOff{};
+size_t m_subdivision{};
+size_t m_timeSig{};
 
 
         std::vector<float> m_visualWavedata;
