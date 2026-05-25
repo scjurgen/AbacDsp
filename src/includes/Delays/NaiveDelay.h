@@ -1,7 +1,7 @@
 #pragma once
 
 #include <algorithm>
-#include <array>
+#include <span>
 #include <vector>
 
 namespace AbacDsp
@@ -16,7 +16,7 @@ class NaiveDelay
     {
     }
 
-    void setSize(const size_t newSize)
+    void setSize(const size_t newSize) noexcept
     {
         m_currentDelayWidth = std::min(newSize, MAXSIZE - 2);
         m_read = m_head - m_currentDelayWidth + MAXSIZE;
@@ -26,7 +26,7 @@ class NaiveDelay
         }
     }
 
-    float step(const float in)
+    float step(const float in) noexcept
     {
         m_buffer[m_head++] = in;
         if (m_head >= m_buffer.size())
@@ -41,9 +41,9 @@ class NaiveDelay
         return result;
     }
 
-    void processBlock(const float* source, float* target, const size_t numSamples)
+    void processBlock(std::span<const float> source, std::span<float> target) noexcept
     {
-        std::transform(source, source + numSamples, target, [this](const float in) { return step(in); });
+        std::transform(source.begin(), source.end(), target.begin(), [this](const float in) { return step(in); });
     }
 
   private:
