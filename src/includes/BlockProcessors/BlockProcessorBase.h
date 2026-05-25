@@ -28,7 +28,7 @@ class CallbackManager
   public:
     using ProcessorPtr = std::shared_ptr<BlockProcessorBase<BlockSize>>;
 
-    void setCallback(size_t delayIndex, ProcessorPtr processor)
+    void setCallback(const size_t delayIndex, ProcessorPtr processor) noexcept
     {
         if (delayIndex < ORDER)
         {
@@ -36,7 +36,7 @@ class CallbackManager
         }
     }
 
-    void removeCallback(size_t delayIndex)
+    void removeCallback(const size_t delayIndex) noexcept
     {
         if (delayIndex < ORDER)
         {
@@ -44,7 +44,7 @@ class CallbackManager
         }
     }
 
-    void processCallbacks(std::array<std::array<float, BlockSize>, ORDER>& delayData)
+    void processCallbacks(std::array<std::array<float, BlockSize>, ORDER>& delayData) noexcept
     {
         for (size_t delayIdx = 0; delayIdx < ORDER; ++delayIdx)
         {
@@ -55,7 +55,7 @@ class CallbackManager
         }
     }
 
-    void reset()
+    void reset() noexcept
     {
         for (size_t delayIdx = 0; delayIdx < ORDER; ++delayIdx)
         {
@@ -66,7 +66,7 @@ class CallbackManager
         }
     }
 
-    bool hasCallback(size_t delayIndex) const
+    [[nodiscard]] bool hasCallback(const size_t delayIndex) const noexcept
     {
         if (delayIndex >= ORDER)
         {
