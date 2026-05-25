@@ -213,8 +213,8 @@ public:
         [](float value, float) { return juce::String(value, 1) + " BPM"; }));
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID("dropBars", 1), "Drop Bars",
-        juce::StringArray{"Drop none", "Play 3 Drop 1", "Play 2 Drop 2",
-                          "Play 1 Drop 3"},
+        juce::StringArray{"Drop none", "Play 1 Drop 1", "Play 3 Drop 1",
+                          "Play 2 Drop 2", "Play 1 Drop 3"},
         0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("metroVolume", 1), "Metro Volume",

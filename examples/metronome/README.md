@@ -65,11 +65,12 @@ Legend: **D** = downbeat, **B** = beat, **s** = subdivision tick
 
 Silence the click for N bars to train internal pulse.
 
-| Setting | Cycle (■ = heard, □ = silent) |
-|---|---|
-| Drop none      | ■ ■ ■ ■ ■ ■ … |
-| Play 3 Drop 1  | ■ ■ ■ □ ■ ■ ■ □ … |
-| Play 2 Drop 2  | ■ ■ □ □ ■ ■ □ □ … |
-| Play 1 Drop 3  | ■ □ □ □ ■ □ □ □ … |
+| Setting       | Cycle (■ = heard, □ = silent) |
+|---------------|---|
+| Drop none     | ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ … |
+| Play 1 Drop 1 | ■ □ ■ □ ■ □ ■ □ ■ □ ■ □ … |
+| Play 3 Drop 1 | ■ ■ ■ □ ■ ■ ■ □ ■ ■ ■ □ … |
+| Play 2 Drop 2 | ■ ■ □ □ ■ ■ □ □ ■ ■ □ □ … |
+| Play 1 Drop 3 | ■ □ □ □ ■ □ □ □ ■ □ □ □ … |
 
 The cycle always restarts on the downbeat of the next heard bar.

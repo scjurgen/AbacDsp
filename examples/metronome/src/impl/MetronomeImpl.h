@@ -32,7 +32,7 @@ struct RhythmPreset
 {
     const char* name;
     uint8_t barBeats;
-    AccentLevel pattern[16]; // only first barBeats entries are used
+    std::array<AccentLevel, 16> pattern; // only first barBeats entries are used
     SubdivType subdivType;
     bool hasSwing;
 };
@@ -85,7 +85,7 @@ class MetronomeImpl final : public EffectBase
 
     void setDropBars(const size_t value)
     {
-        m_dropModeIndex = static_cast<int>(std::min(value, static_cast<size_t>(kNumDropModes - 1)));
+        m_dropModeIndex = static_cast<int>(std::min(value, kDropBarModes.size() - 1));
         m_barCount = 0;
     }
 
@@ -111,7 +111,7 @@ class MetronomeImpl final : public EffectBase
 
     void setPreset(const int index)
     {
-        m_presetIndex = std::clamp(index, 0, kNumPresets - 1);
+        m_presetIndex = std::clamp(index, 0, static_cast<int>(kPresets.size()) - 1);
         m_barBeatCount = 0;
         m_barCount = 0;
         updateSubPositions();
@@ -125,16 +125,16 @@ class MetronomeImpl final : public EffectBase
 
     [[nodiscard]] bool presetHasSwing() const noexcept
     {
-        return kPresets[m_presetIndex].hasSwing;
+        return kPresets[static_cast<size_t>(m_presetIndex)].hasSwing;
     }
 
     [[nodiscard]] static bool isPresetSwing(const int index) noexcept
     {
-        if (index < 0 || index >= kNumPresets)
+        if (index < 0 || index >= static_cast<int>(kPresets.size()))
         {
             return false;
         }
-        return kPresets[index].hasSwing;
+        return kPresets[static_cast<size_t>(index)].hasSwing;
     }
 
     [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
@@ -162,12 +162,12 @@ class MetronomeImpl final : public EffectBase
 
         for (size_t i = 0; i < BlockSize; ++i)
         {
-            const auto& mode = kDropBarModes[m_dropModeIndex];
+            const auto& mode = kDropBarModes[static_cast<size_t>(m_dropModeIndex)];
             const bool isMuted = mode.playBars > 0 && m_barCount >= mode.playBars;
 
             if (m_beatSamplePos == 0 && !isMuted)
             {
-                switch (kPresets[m_presetIndex].pattern[m_barBeatCount])
+                switch (kPresets[static_cast<size_t>(m_presetIndex)].pattern[m_barBeatCount])
                 {
                     case AccentLevel::Downbeat:
                         m_beatOneFilter.reset(0.f, m_metroGain);
@@ -207,7 +207,7 @@ class MetronomeImpl final : public EffectBase
             if (++m_beatSamplePos >= m_samplesPerBeat)
             {
                 m_beatSamplePos = 0;
-                if (++m_barBeatCount >= static_cast<size_t>(kPresets[m_presetIndex].barBeats))
+                if (++m_barBeatCount >= static_cast<size_t>(kPresets[static_cast<size_t>(m_presetIndex)].barBeats))
                 {
                     m_barBeatCount = 0;
                     if (mode.playBars > 0)
@@ -243,14 +243,14 @@ class MetronomeImpl final : public EffectBase
         int dropBars;
     };
     // clang-format off
-    static constexpr DropBarMode kDropBarModes[] = {
+    static constexpr auto kDropBarModes = std::to_array<DropBarMode>({
         {0, 0}, // Drop none
+        {1, 1}, // Play 1 Drop 1
         {3, 1}, // Play 3 Drop 1
         {2, 2}, // Play 2 Drop 2
         {1, 3}, // Play 1 Drop 3
-    };
+    });
     // clang-format on
-    static constexpr int kNumDropModes = static_cast<int>(std::size(kDropBarModes));
 
     // -----------------------------------------------------------------------
     // Preset table — short aliases to keep the table readable
@@ -267,7 +267,7 @@ class MetronomeImpl final : public EffectBase
     static constexpr SubdivType kNo = SubdivType::None;
 
     // clang-format off
-    static constexpr RhythmPreset kPresets[] = {
+    static constexpr auto kPresets = std::to_array<RhythmPreset>({
         //  name                      beats  pattern (padded to 16)                              subdiv  swing
         // Simple meters — vanilla (quarter beats only) then subdivided variants
         {"3/4",                   3, {D,B,B},                                                   kNo, false},
@@ -300,10 +300,8 @@ class MetronomeImpl final : public EffectBase
         {"11/8 (3+3+2+3)",       11, {D,S,S,B,S,S,B,S,B,S,S},                                  kNo, false},
         {"13/8 (3+3+3+2+2)",     13, {D,S,S,B,S,S,B,S,S,B,S,B,S},                              kNo, false},
         {"13/8 (3+4+3+3)",       13, {D,S,S,B,S,S,S,B,S,S,B,S,S},                              kNo, false},
-    };
+    });
     // clang-format on
-
-    static constexpr int kNumPresets = static_cast<int>(std::size(kPresets));
 
     // -----------------------------------------------------------------------
     void updateWindowSizes() noexcept
@@ -320,7 +318,7 @@ class MetronomeImpl final : public EffectBase
             return;
         }
         const size_t spb = m_samplesPerBeat;
-        switch (kPresets[m_presetIndex].subdivType)
+        switch (kPresets[static_cast<size_t>(m_presetIndex)].subdivType)
         {
             case SubdivType::None:
                 break;
