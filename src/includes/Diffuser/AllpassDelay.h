@@ -1,16 +1,16 @@
 #pragma once
 
-#include "AudioProcessing.h"
-#include "Filters/Biquad.h"
-#include "Filters/OnePoleFilter.h"
-#include "Filters/FourStageFilter.h"
-#include "InterpolationCollection.h"
-#include "Modulation.h"
-
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <vector>
+
+#include "AudioProcessing.h"
+#include "Filters/Biquad.h"
+#include "Filters/FourStageFilter.h"
+#include "Filters/OnePoleFilter.h"
+#include "InterpolationCollection.h"
+#include "Modulation.h"
 
 
 namespace AbacDsp
@@ -23,19 +23,19 @@ class AllPassDelay
     static constexpr size_t minDelaySize{
         51u}; // don't allow delay lines shorter than 51, ( a wall at the distance of 30cm [@ 48kHz] )
 
-    explicit AllPassDelay(float sampleRate)
+    explicit AllPassDelay(const float sampleRate)
         : m_sampleRate(sampleRate)
         , m_maxBufferSize(static_cast<size_t>(std::round(static_cast<float>(MaxSize48Khz) * sampleRate / 48000.f)))
         , m_buffer(m_maxBufferSize + 6, 0.f)
     {
     }
 
-    void clear()
+    void clear() noexcept
     {
         std::fill(m_buffer.begin(), m_buffer.end(), 0.f);
     }
 
-    void newFadeIfNeeded()
+    void newFadeIfNeeded() noexcept
     {
         if (m_newFadeSize && !m_fadeSteps)
         {
@@ -48,28 +48,28 @@ class AllPassDelay
         }
     }
 
-    [[nodiscard]] float getDecayTimeInSamples(const float db = -60.f) const
+    [[nodiscard]] float getDecayTimeInSamples(const float db = -60.f) const noexcept
     {
         const auto f = Convert::dbToGain(db);
         return std::log10(f) * static_cast<float>(m_currentDelayWidth) / std::log10(m_feedback);
     }
 
-    void setFeedback(const float gain)
+    void setFeedback(const float gain) noexcept
     {
         m_feedback = std::clamp(gain, -0.99f, 0.99f);
     }
 
-    void setSize(const size_t newSize)
+    void setSize(const size_t newSize) noexcept
     {
         setSizeImpl<false>(newSize);
     }
 
-    void setSize(const size_t newSize, const SkipSmoothing_t&)
+    void setSize(const size_t newSize, const SkipSmoothing_t&) noexcept
     {
         setSizeImpl<true>(newSize);
     }
 
-    void feedWrite(const float in)
+    void feedWrite(const float in) noexcept
     {
         m_buffer[m_headWrite] = in;
         if (++m_headWrite >= m_maxBufferSize)
@@ -105,31 +105,31 @@ class AllPassDelay
         return output;
     }
 
-    float nextHeadRead(const size_t index)
+    float nextHeadRead(const size_t index) noexcept
     {
         const float returnValue = m_buffer[m_headRead[index]];
         m_headRead[index] = (m_headRead[index] + 1) % m_maxBufferSize;
         return returnValue;
     }
 
-    void processBlock(const float* source, float* target)
+    void processBlock(const float* source, float* target) noexcept
     {
-        std::transform(source, source + BlockSize, target, [this](float in) { return step(in); });
+        std::transform(source, source + BlockSize, target, [this](const float in) { return step(in); });
     }
 
-    void processBlockInplace(float* inplace, size_t numSamples)
+    void processBlockInplace(float* inplace, [[maybe_unused]] size_t numSamples) noexcept
     {
         processBlock(inplace, inplace);
     }
 
-    [[nodiscard]] size_t size() const
+    [[nodiscard]] size_t size() const noexcept
     {
         return m_currentDelayWidth;
     }
 
   private:
     template <bool fastSetting>
-    void setSizeImpl(const size_t newSize)
+    void setSizeImpl(const size_t newSize) noexcept
     {
         const auto clampedSize = std::clamp<size_t>(newSize, minDelaySize, m_maxBufferSize);
         if (clampedSize == m_currentDelayWidth)
@@ -155,7 +155,7 @@ class AllPassDelay
         }
     }
 
-    float m_sampleRate;
+    const float m_sampleRate;
     float m_feedback{0.0f};
     size_t m_headWrite{0};
     std::array<size_t, 2> m_headRead{0, 0};
@@ -179,7 +179,7 @@ class ModulatingAllPassDelay
     static constexpr size_t minDelaySize{
         51u}; // don't allow delay lines shorter than 51, ( a wall at the distance of 30cm [@ 48kHz] )
 
-    explicit ModulatingAllPassDelay(float sampleRate)
+    explicit ModulatingAllPassDelay(const float sampleRate)
         : m_sampleRate(sampleRate)
         , m_lowpass(sampleRate)
         , m_allpass(sampleRate)
@@ -273,7 +273,7 @@ class ModulatingAllPassDelay
             m_buffer[m_headWrite] = m_allpass.step(m_buffer[m_headWrite]);
         }
 
-        // replicate values of begin at end, so we don't need to do handle InterPolate on splitted buffer
+        // replicate values at end guard region so interpolation reads past MAXSIZE stay valid
         if (m_headWrite < 6)
         {
             const size_t padIndex = m_headWrite + m_maxBufferSize;
@@ -310,22 +310,13 @@ class ModulatingAllPassDelay
                 }
                 return outValue + inValue;
             }
-            else
-            {
-                return nextHeadRead(0);
-            }
+            return nextHeadRead(0);
         };
         const float delayed = getResult();
         const auto output = -m_feedback * in + delayed;
         const auto toWrite = in + m_feedback * delayed;
         feedWrite(toWrite);
         return output;
-
-        // const float result = getResult();
-        // const auto feedDelay = in - result * m_feedback; // N.B. negative feedback
-        // const auto ret = feedDelay * m_feedback + result;
-        // feedWrite(feedDelay);
-        // return ret;
     }
 
     float nextHeadRead(const size_t index)
@@ -401,7 +392,7 @@ class ModulatingAllPassDelay
     {
         m_modulation.setModulationDepth(std::min(static_cast<float>(m_maxBufferSize - 3), m_modulationDepth));
     }
-    float m_sampleRate;
+    const float m_sampleRate;
 
     OnePoleFilter<OnePoleFilterCharacteristic::LowPass, false> m_lowpass;
     Ap6Smooth m_allpass;
@@ -414,7 +405,6 @@ class ModulatingAllPassDelay
     size_t m_headWrite{0};
     std::array<size_t, 2> m_headRead{0, 0};
 
-    // fade strategy
     size_t m_fadeSteps{0};
     float m_fadeFactorIn{0.0f};
     float m_fadeFactorOut{0.0f};
@@ -422,12 +412,10 @@ class ModulatingAllPassDelay
     size_t m_newFadeSize{0};
     size_t m_newFadeSizeScheduled{0};
 
-    // adapt soft buffersize *speed up/down* could be also an option (pitching adaption like Eventide does):
-    // Addendum: Hendrik prefers non pitching
     size_t m_currentDelayWidth{MaxSize48Khz / 8};
     size_t m_tick{0};
     Modulation m_modulation;
-    float m_modulationDepth{0};
+    float m_modulationDepth{0.0f};
     size_t m_maxBufferSize{MaxSize48Khz};
     std::vector<float> m_buffer{};
 };
@@ -444,7 +432,6 @@ class ModulatingAllPassDelayNoSoftAdapt
         , m_modulation(sampleRate / 16)
     {
         m_dispersionFilter.setSmoothingSteps(0);
-        // m_dispersionFilter.computeCoefficients(m_sampleRate, 1000, 0.707, 0);
         m_maxSize = maxSize;
         m_buffer.resize(maxSize + 6);
         m_currentDelayWidth = maxSize / 8;
@@ -467,10 +454,9 @@ class ModulatingAllPassDelayNoSoftAdapt
         m_lowPass.setCutoff(value);
     }
 
-    void setAllpass(const float value)
+    void setAllpass(const float value) noexcept
     {
         m_dispersionFilter.setCutoff(value);
-        //        m_dispersionFilter.computeCoefficients(m_sampleRate, value, 0.7071067f, 0);
     }
 
     void setFeedback(const float gain)
@@ -510,16 +496,13 @@ class ModulatingAllPassDelayNoSoftAdapt
 
     void feedWrite(float in)
     {
-        // m_buffer[m_headWrite] = in;
         m_buffer[m_headWrite] = m_lowPass.step(in);
-
-        // m_buffer[m_headWrite] = m_dispersionFilter.singleStepAllPass(m_buffer[m_headWrite]);
         m_buffer[m_headWrite] = m_dispersionFilter.step(m_buffer[m_headWrite]);
 
-        // replicate values of begin at end, so we don't need to do handle InterPolate on splitted buffer
+        // replicate values at end guard region so interpolation reads past MAXSIZE stay valid
         if (m_headWrite < 6)
         {
-            size_t padIndex = m_headWrite + m_maxSize;
+            const size_t padIndex = m_headWrite + m_maxSize;
             m_buffer[padIndex] = m_buffer[m_headWrite];
         }
 
@@ -547,19 +530,15 @@ class ModulatingAllPassDelayNoSoftAdapt
             feedWrite(toWrite);
             return output;
         }
-        else
-        {
-            // Schroeder allpass
-            const auto output = -m_feedback * in + delayed;
-            const auto toWrite = in + m_feedback * delayed;
-            feedWrite(toWrite);
-            return output;
-        }
+        const auto output = -m_feedback * in + delayed;
+        const auto toWrite = in + m_feedback * delayed;
+        feedWrite(toWrite);
+        return output;
     }
 
     float nextHeadRead()
     {
-        float returnValue;
+        float returnValue{0.0f};
         if (m_modulation.isModulating())
         {
             const auto [depth, fraction] = m_modulation.lastValuePair();
@@ -593,7 +572,7 @@ class ModulatingAllPassDelayNoSoftAdapt
     }
 
   private:
-    float m_sampleRate;
+    const float m_sampleRate;
     void trimModulationDepth()
     {
         m_modulation.setModulationDepth(std::min(static_cast<float>(m_maxSize - 3), m_modulationDepth));
@@ -601,16 +580,15 @@ class ModulatingAllPassDelayNoSoftAdapt
 
     OnePoleFilter<OnePoleFilterCharacteristic::LowPass, false> m_lowPass;
     Ap18Smooth m_dispersionFilter;
-    // Biquad<BiquadFilterType::AllPass> m_dispersionFilter;
     float m_feedback{0.0f};
-    float m_lastValue{0.f};
+    float m_lastValue{0.0f};
     size_t m_headRead{0};
     size_t m_headWrite{0};
     size_t m_currentDelayWidth{10};
     size_t m_tick{0};
     Modulation m_modulation;
-    float m_modulationDepth;
-    size_t m_maxSize;
+    float m_modulationDepth{0.0f};
+    size_t m_maxSize{0};
     std::vector<float> m_buffer{};
 };
 
@@ -634,47 +612,47 @@ class FixedAllpassDelay
         std::fill(m_buffer.begin(), m_buffer.end(), 0.f);
     }
 
-    void setLowpass(const float value)
+    void setLowpass(const float value) noexcept
     {
         m_lowPass.setCutoff(value);
     }
 
-    void setAllpass(const float value)
+    void setAllpass(const float value) noexcept
     {
         m_dispersionFilter.setCutoff(value);
     }
 
-    void setFeedback(const float gain)
+    void setFeedback(const float gain) noexcept
     {
         m_feedback = std::clamp(gain, -1.f, 1.f);
     }
 
-    void setFeedbackNoClamp(const float gain)
+    void setFeedbackNoClamp(const float gain) noexcept
     {
         m_feedback = gain;
     }
 
-    void reset()
+    void reset() noexcept
     {
         m_dispersionFilter.reset();
         m_lowPass.reset();
         std::fill_n(m_buffer.data(), m_delaySteps, 0);
     }
 
-    void setSize(const size_t newSize)
+    void setSize(const size_t newSize) noexcept
     {
         const auto clampedSize = std::clamp<size_t>(newSize, 2, m_maxSize);
         m_delaySteps = clampedSize;
         m_head = 0;
     }
 
-    float step(const float in)
+    float step(const float in) noexcept
     {
         m_head = m_head >= m_delaySteps ? 0 : m_head;
         return stepNoIf(in);
     }
 
-    float stepNoIf(const float in)
+    float stepNoIf(const float in) noexcept
     {
         m_lastValue = m_buffer[m_head];
         const auto feedDelay = m_highPass.step(in + m_lastValue * m_feedback);
@@ -695,19 +673,19 @@ class FixedAllpassDelay
         }
     }
 
-    void processBlockInplace(float* inplace, size_t numSamples)
+    void processBlockInplace(float* inplace, const size_t numSamples) noexcept
     {
         processBlock(inplace, inplace, numSamples);
     }
 
-    [[nodiscard]] size_t size() const
+    [[nodiscard]] size_t size() const noexcept
     {
         return m_delaySteps;
     }
 
   private:
     std::vector<float> m_buffer;
-    size_t m_maxSize;
+    size_t m_maxSize{0};
 
     OnePoleFilter<OnePoleFilterCharacteristic::LowPass, false> m_lowPass;
     OnePoleFilter<OnePoleFilterCharacteristic::HighPass, true> m_highPass;
