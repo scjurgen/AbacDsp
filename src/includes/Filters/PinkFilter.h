@@ -26,7 +26,6 @@ namespace AbacDsp
 template <bool FastPink>
 struct PinkCoeffs;
 
-// 3-pole (fast) coefficients
 template <>
 struct PinkCoeffs<true>
 {
@@ -36,7 +35,6 @@ struct PinkCoeffs<true>
     static constexpr float direct = 0.1848f;
 };
 
-// 7-pole (more accurate) coefficients
 template <>
 struct PinkCoeffs<false>
 {
@@ -52,13 +50,9 @@ template <bool FastPink = true>
 class PinkFilter
 {
   public:
-    PinkFilter() noexcept
-    {
-        m_v.fill(0.0f);
-    }
+    PinkFilter() noexcept = default;
 
-    /** Process a single white-noise sample into pink noise. */
-    float step(float in) noexcept
+    float step(const float in) noexcept
     {
         using C = PinkCoeffs<FastPink>;
         for (size_t i = 0; i < m_v.size(); ++i)
@@ -91,7 +85,7 @@ class PinkFilter
     }
 
   private:
-    std::array<float, (FastPink ? 3 : 7)> m_v;
+    std::array<float, (FastPink ? 3 : 7)> m_v{};
 };
 
 }
