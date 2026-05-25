@@ -1,19 +1,17 @@
 #pragma once
 
-#include "DebugMod.h"
-
-#include "AllpassDelay.h"
-#include "AudioProcessing.h"
-#include "Fader.h"
-#include "Filters/OnePoleFilter.h"
-#include "Numbers/BulgeControl.h"
-#include "Helpers/ConstructArray.h"
-#include "Numbers/PrimeDispatcher.h"
-#include "SplitProcessing.h"
-
 #include <array>
 #include <cmath>
 #include <vector>
+
+#include "AllpassDelay.h"
+#include "AudioProcessing.h"
+#include "DebugMod.h"
+#include "Fader.h"
+#include "Helpers/ConstructArray.h"
+#include "Numbers/BulgeControl.h"
+#include "Numbers/PrimeDispatcher.h"
+#include "SplitProcessing.h"
 
 namespace AbacDsp
 {
@@ -79,9 +77,8 @@ class DiffuserDelayChain
         setNewElements(elements);
     }
 
-    // return the number of elements depending on what has
-    // been scheduled and if nothing scheduled the current amount
-    [[nodiscard]] size_t elements() const
+    // returns scheduled element count if pending, else active count
+    [[nodiscard]] size_t elements() const noexcept
     {
         if (m_scheduledNewElements)
         {
@@ -101,11 +98,11 @@ class DiffuserDelayChain
             r.setLowpass(hz);
         }
     }
-    auto exponentialInterpolateRatio(const float min, const float max, const float ratio)
+    [[nodiscard]] float exponentialInterpolateRatio(const float min, const float max, const float ratio) const noexcept
     {
         if (min <= 0)
         {
-            return 1E32;
+            return 1E32f;
         }
         return min * std::pow(max / min, ratio);
     }
@@ -248,12 +245,8 @@ class DiffuserDelayChain
         std::array<size_t, NumElements> sourceSizes{};
         std::array<size_t, NumElements> primeValues{};
 
-        std::transform(m_ratios.begin(), m_ratios.end(), sourceSizes.begin(),
-                       [this](const float ratio)
-                       {
-                           const auto val = static_cast<long>(m_bottomSize + (m_topSize - m_bottomSize) * ratio);
-                           return static_cast<size_t>(val);
-                       });
+        std::transform(m_ratios.begin(), m_ratios.end(), sourceSizes.begin(), [this](const float ratio)
+                       { return static_cast<size_t>(m_bottomSize + (m_topSize - m_bottomSize) * ratio); });
         generateUniquePrimeSet<11u>(sourceSizes.data(), primeValues.data(), m_elementsToUse);
         for (size_t i = 0; i < m_elementsToUse; ++i)
         {
