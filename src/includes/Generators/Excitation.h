@@ -1,17 +1,17 @@
 #pragma once
 
-#include <vector>
-#include <span>
-#include <numbers>
-#include <cmath>
-#include <random>
 #include <algorithm>
+#include <cmath>
+#include <numbers>
+#include <random>
+#include <span>
+#include <vector>
 
 class WindowFunctions
 {
   public:
     template <typename T>
-    static std::vector<T> hannWindow(size_t N)
+    [[nodiscard]] static std::vector<T> hannWindow(const size_t N)
     {
         std::vector<T> window(N);
         constexpr T pi2 = 2 * std::numbers::pi_v<T>;
@@ -55,7 +55,7 @@ class Excitation
         generateNoise();
     }
 
-    float getInterpolatedValue(const float position) noexcept
+    [[nodiscard]] float getInterpolatedValue(const float position) noexcept
     {
         if (position < 0.0f || m_sine.empty())
         {
@@ -75,17 +75,17 @@ class Excitation
         return sineWeight * sineValue + noiseWeight * noiseValue;
     }
 
-    const std::vector<float>& getPattern() const noexcept
+    [[nodiscard]] const std::vector<float>& getPattern() const noexcept
     {
         return m_sine;
     }
 
-    const std::vector<float>& getSinePattern() const noexcept
+    [[nodiscard]] const std::vector<float>& getSinePattern() const noexcept
     {
         return m_sine;
     }
 
-    const std::vector<float>& getNoisePattern() const noexcept
+    [[nodiscard]] const std::vector<float>& getNoisePattern() const noexcept
     {
         return m_noise;
     }
@@ -95,7 +95,7 @@ class Excitation
         return m_sineLength;
     }
 
-    void setNoise(const float noiseFactor)
+    void setNoise(const float noiseFactor) noexcept
     {
         m_noiseFactor = std::clamp(noiseFactor, 0.0f, 1.0f);
     }
@@ -135,16 +135,16 @@ class Excitation
     {
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_real_distribution distribution(.0f, 4.0f);
+        std::uniform_real_distribution distribution(0.0f, 4.0f);
         for (size_t i = 0; i < m_noise.size(); ++i)
         {
             m_noise[i] = distribution(gen);
         }
     }
 
-    size_t m_sineLength;
+    const size_t m_sineLength;
     std::vector<float> m_sine;
     std::vector<float> m_noise;
     size_t m_noiseIndex{0};
-    float m_noiseFactor;
+    float m_noiseFactor{0.0f};
 };
