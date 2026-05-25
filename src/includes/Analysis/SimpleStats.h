@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <numeric>
@@ -15,9 +16,9 @@ template <typename T>
 class SimpleStats
 {
   public:
-    SimpleStats() {}
+    SimpleStats() = default;
 
-    void addDataPoint(T value)
+    void addDataPoint(const T value)
     {
         m_dataPoints.push_back(static_cast<double>(value));
         m_count++;
@@ -37,156 +38,118 @@ class SimpleStats
         m_precision = points;
     }
 
-    double getMean()
+    [[nodiscard]] double getMean() const
     {
-        if (m_dirty)
-        {
-            compute();
-        }
+        computeIfDirty();
         return m_mean;
     }
 
-    double getVariance()
+    [[nodiscard]] double getVariance() const
     {
-        if (m_dirty)
-        {
-            compute();
-        }
+        computeIfDirty();
         return m_variance;
     }
 
-    double getStdDev()
+    [[nodiscard]] double getStdDev() const
     {
-        if (m_dirty)
-        {
-            compute();
-        }
+        computeIfDirty();
         return std::sqrt(m_variance);
     }
 
-    double getMin()
+    [[nodiscard]] double getMin() const
     {
-        if (m_dirty)
-        {
-            compute();
-        }
+        computeIfDirty();
         return m_min;
     }
 
-    double getMax()
+    [[nodiscard]] double getMax() const
     {
-        if (m_dirty)
-        {
-            compute();
-        }
+        computeIfDirty();
         return m_max;
     }
 
-    double getRange()
+    [[nodiscard]] double getRange() const
     {
-        if (m_dirty)
-        {
-            compute();
-        }
+        computeIfDirty();
         return m_max - m_min;
     }
 
-    size_t getCount() const
+    [[nodiscard]] size_t getCount() const noexcept
     {
         return m_count;
     }
 
-    // Percentile calculation (0.0 to 1.0)
-    double getPercentile(const double p)
+    [[nodiscard]] double getPercentile(const double p) const
     {
-        if (m_dirty)
-        {
-            compute();
-        }
+        computeIfDirty();
         if (m_dataPoints.empty())
         {
             return 0.0;
         }
         auto sorted = m_dataPoints;
-        std::sort(sorted.begin(), sorted.end());
-        const auto index = p * (sorted.size() - 1);
+        std::ranges::sort(sorted);
+        const double index = p * static_cast<double>(sorted.size() - 1);
         const auto lower = static_cast<size_t>(std::floor(index));
         const auto upper = static_cast<size_t>(std::ceil(index));
         if (lower == upper)
         {
             return sorted[lower];
         }
-        const auto weight = index - lower;
+        const double weight = index - static_cast<double>(lower);
         return sorted[lower] * (1.0 - weight) + sorted[upper] * weight;
     }
 
-    double getMedian()
+    [[nodiscard]] double getMedian() const
     {
         return getPercentile(0.5);
     }
 
-    double getQ1()
+    [[nodiscard]] double getQ1() const
     {
         return getPercentile(0.25);
     }
 
-    double getQ3()
+    [[nodiscard]] double getQ3() const
     {
         return getPercentile(0.75);
     }
 
-    double getIQR()
+    [[nodiscard]] double getIQR() const
     {
         return getQ3() - getQ1();
     }
 
-    // Check if value is an outlier using IQR method
-    bool isOutlier(const T value, const double multiplier = 1.5)
+    [[nodiscard]] bool isOutlier(const T value, const double multiplier = 1.5) const
     {
-        if (m_dirty)
-        {
-            compute();
-        }
+        computeIfDirty();
         const auto q1 = getQ1();
         const auto q3 = getQ3();
         const auto iqr = q3 - q1;
-        const auto lower = q1 - multiplier * iqr;
-        const auto upper = q3 + multiplier * iqr;
-        return static_cast<double>(value) < lower || static_cast<double>(value) > upper;
+        const auto lowerBound = q1 - multiplier * iqr;
+        const auto upperBound = q3 + multiplier * iqr;
+        return static_cast<double>(value) < lowerBound || static_cast<double>(value) > upperBound;
     }
 
-    // Root Mean Square Error from target value
-    double getRMSE(const double target = 0.0)
+    [[nodiscard]] double getRMSE(const double target = 0.0) const
     {
-        if (m_dirty)
-        {
-            compute();
-        }
-        auto sum_squared_error = 0.0;
-        for (const auto value : m_dataPoints)
-        {
-            const auto error = value - target;
-            sum_squared_error += error * error;
-        }
-        return std::sqrt(sum_squared_error / m_dataPoints.size());
+        computeIfDirty();
+        const auto sumSq = std::transform_reduce(m_dataPoints.begin(), m_dataPoints.end(), 0.0, std::plus{},
+                                                 [target](const double v)
+                                                 {
+                                                     const auto e = v - target;
+                                                     return e * e;
+                                                 });
+        return std::sqrt(sumSq / static_cast<double>(m_dataPoints.size()));
     }
 
-    // Mean Absolute Error from target value
-    double getMAE(const double target = 0.0)
+    [[nodiscard]] double getMAE(const double target = 0.0) const
     {
-        if (m_dirty)
-        {
-            compute();
-        }
-        auto sum_abs_error = 0.0;
-        for (const auto value : m_dataPoints)
-        {
-            sum_abs_error += std::abs(value - target);
-        }
-        return sum_abs_error / m_dataPoints.size();
+        computeIfDirty();
+        const auto sumAbs = std::transform_reduce(m_dataPoints.begin(), m_dataPoints.end(), 0.0, std::plus{},
+                                                  [target](const double v) { return std::abs(v - target); });
+        return sumAbs / static_cast<double>(m_dataPoints.size());
     }
 
-    // Statistical summary with stream support (vertical layout)
     void printSummary(std::ostream& os, const std::string& name = "", const double target = 1.0) const
     {
         if (!name.empty())
@@ -195,20 +158,19 @@ class SimpleStats
         }
         os << std::fixed << std::setprecision(m_precision);
         os << "  Count:   " << m_count << "\n";
-        os << "  Mean:    " << const_cast<SimpleStats*>(this)->getMean() << "\n";
-        os << "  Std Dev: " << const_cast<SimpleStats*>(this)->getStdDev() << "\n";
-        os << "  Min:     " << const_cast<SimpleStats*>(this)->getMin() << "\n";
-        os << "  Max:     " << const_cast<SimpleStats*>(this)->getMax() << "\n";
-        os << "  Range:   " << const_cast<SimpleStats*>(this)->getRange() << "\n";
-        os << "  Median:  " << const_cast<SimpleStats*>(this)->getMedian() << "\n";
-        os << "  Q1:      " << const_cast<SimpleStats*>(this)->getQ1() << "\n";
-        os << "  Q3:      " << const_cast<SimpleStats*>(this)->getQ3() << "\n";
-        os << "  IQR:     " << const_cast<SimpleStats*>(this)->getIQR() << "\n";
-        os << "  MAE:     " << const_cast<SimpleStats*>(this)->getMAE(target) << "\n";
-        os << "  RMSE:    " << const_cast<SimpleStats*>(this)->getRMSE(target) << "\n";
+        os << "  Mean:    " << getMean() << "\n";
+        os << "  Std Dev: " << getStdDev() << "\n";
+        os << "  Min:     " << getMin() << "\n";
+        os << "  Max:     " << getMax() << "\n";
+        os << "  Range:   " << getRange() << "\n";
+        os << "  Median:  " << getMedian() << "\n";
+        os << "  Q1:      " << getQ1() << "\n";
+        os << "  Q3:      " << getQ3() << "\n";
+        os << "  IQR:     " << getIQR() << "\n";
+        os << "  MAE:     " << getMAE(target) << "\n";
+        os << "  RMSE:    " << getRMSE(target) << "\n";
     }
 
-    // Print horizontal header for table output
     void printHorizontalSummaryHeader(std::ostream& os, const std::string& nameHeader = "Name") const
     {
         const int fieldWidth = m_precision + 8;
@@ -219,32 +181,32 @@ class SimpleStats
            << "\n";
     }
 
-    // Statistical summary with horizontal layout (table row)
     void printHorizontalSummary(std::ostream& os, const std::string& name = "", const double target = 1.0) const
     {
         const int fieldWidth = m_precision + 8;
         os << std::left << std::setw(30) << name << std::right << std::setw(10) << m_count << std::fixed
-           << std::setprecision(m_precision) << std::setw(fieldWidth) << const_cast<SimpleStats*>(this)->getMean()
-           << std::setw(fieldWidth) << const_cast<SimpleStats*>(this)->getStdDev() << std::setw(fieldWidth)
-           << const_cast<SimpleStats*>(this)->getMin() << std::setw(fieldWidth)
-           << const_cast<SimpleStats*>(this)->getMax() << std::setw(fieldWidth)
-           << const_cast<SimpleStats*>(this)->getMedian() << std::setw(fieldWidth)
-           << const_cast<SimpleStats*>(this)->getMAE(target) << std::setw(fieldWidth)
-           << const_cast<SimpleStats*>(this)->getRMSE(target) << "\n";
+           << std::setprecision(m_precision) << std::setw(fieldWidth) << getMean() << std::setw(fieldWidth)
+           << getStdDev() << std::setw(fieldWidth) << getMin() << std::setw(fieldWidth) << getMax()
+           << std::setw(fieldWidth) << getMedian() << std::setw(fieldWidth) << getMAE(target) << std::setw(fieldWidth)
+           << getRMSE(target) << "\n";
     }
 
   private:
     size_t m_count{};
     int m_precision{6};
-    bool m_dirty{true};
+    mutable bool m_dirty{true};
     std::vector<double> m_dataPoints{};
-    double m_mean{};
-    double m_variance{};
-    double m_min{};
-    double m_max{};
+    mutable double m_mean{};
+    mutable double m_variance{};
+    mutable double m_min{};
+    mutable double m_max{};
 
-    void compute()
+    void computeIfDirty() const
     {
+        if (!m_dirty)
+        {
+            return;
+        }
         if (m_dataPoints.empty())
         {
             m_mean = m_variance = m_min = m_max = 0.0;
@@ -252,23 +214,17 @@ class SimpleStats
             return;
         }
 
-        // Calculate mean
-        const auto sum = std::accumulate(m_dataPoints.begin(), m_dataPoints.end(), 0.0);
-        m_mean = sum / m_dataPoints.size();
+        m_mean =
+            std::accumulate(m_dataPoints.begin(), m_dataPoints.end(), 0.0) / static_cast<double>(m_dataPoints.size());
 
-        // Calculate variance (sample variance, n-1)
-        auto variance_sum = 0.0;
-        for (const auto value : m_dataPoints)
-        {
-            const auto diff = value - m_mean;
-            variance_sum += diff * diff;
-        }
-        m_variance = (m_dataPoints.size() > 1) ? variance_sum / (m_dataPoints.size() - 1) : 0.0;
+        const auto varianceSum =
+            std::transform_reduce(m_dataPoints.begin(), m_dataPoints.end(), 0.0, std::plus{},
+                                  [mean = m_mean](const double v) { return (v - mean) * (v - mean); });
+        m_variance = (m_dataPoints.size() > 1) ? varianceSum / static_cast<double>(m_dataPoints.size() - 1) : 0.0;
 
-        // Find min and max
-        const auto minmax = std::minmax_element(m_dataPoints.begin(), m_dataPoints.end());
-        m_min = *minmax.first;
-        m_max = *minmax.second;
+        const auto [minIt, maxIt] = std::minmax_element(m_dataPoints.begin(), m_dataPoints.end());
+        m_min = *minIt;
+        m_max = *maxIt;
 
         m_dirty = false;
     }
