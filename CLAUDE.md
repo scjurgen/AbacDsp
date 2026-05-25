@@ -133,6 +133,21 @@ Float-based by default; templates for type flexibility; block operations preferr
 - Use `std::format` over `printf` / `std::stringstream` for type-safe formatting.
 - Implement comparisons via `<=>` (three-way comparison) to derive all operators from one definition.
 
+### Function Size & Decomposition
+- Keep functions short and single-purpose. If a function no longer fits comfortably on one screen, split it.
+- If a block of code inside a function needs a comment to explain what it does, extract it into a named private function or a local lambda instead — the name replaces the comment.
+- Prefer local lambdas for self-contained logic that is only used in one place and captures its context naturally:
+  ```cpp
+  const auto clampedGain = [&]() noexcept { return std::clamp(raw, kMinGain, kMaxGain); };
+  ```
+- Prefer private member functions when the logic is reusable, testable, or non-trivial enough to deserve its own name in the class interface.
+
+### Comments
+- Write comments sparingly. Well-named identifiers and small functions are the primary documentation.
+- Only add a comment when the **why** is non-obvious: a hidden constraint, a subtle invariant, a known hardware quirk, or a workaround for a specific external bug.
+- Never write comments that describe **what** the code does — if the code needs that explanation, rename or restructure it.
+- Do not reference the task, PR, or caller in comments (`// added for issue #123`, `// called by Foo`); that belongs in the commit message.
+
 ### General Robustness
 - Zero-initialize structs at declaration: `MyStruct s{}`.
 - Avoid static local mutable state; prefer dependency injection.
