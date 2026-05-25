@@ -1,8 +1,8 @@
 #pragma once
 
-#include "BlockProcessorBase.h"
-
 #include <numbers>
+
+#include "BlockProcessorBase.h"
 
 namespace AbacDsp
 {
@@ -28,7 +28,7 @@ class Lowpass final : public BlockProcessorBase<BlockSize>
         }
     }
 
-    void setCutoff(const float cutoffFreq)
+    void setCutoff(const float cutoffFreq) noexcept
     {
         m_coeff = 1.0f - std::exp(-2.0f * std::numbers::pi_v<float> * cutoffFreq / m_sampleRate);
     }
