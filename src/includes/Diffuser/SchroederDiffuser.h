@@ -1,14 +1,12 @@
 #pragma once
 
 
-#include "SchroederAllpass.h"
+#include <array>
+
+#include "Helpers/ConstructArray.h"
 #include "Numbers/BulgeControl.h"
 #include "Numbers/PrimeDispatcher.h"
-#include "Helpers/ConstructArray.h"
-
-#include <array>
-#include <cmath>
-#include <vector>
+#include "SchroederAllpass.h"
 
 namespace AbacDsp
 {
@@ -45,11 +43,6 @@ class Bulge2
         std::transform(m_ratios.begin(), m_ratios.end(), sourceSizes.begin(), [this](const float ratio)
                        { return static_cast<size_t>(m_bottomSize + (m_topSize - m_bottomSize) * ratio); });
         generateUniquePrimeSet<11u>(sourceSizes.data(), primeValues.data(), NumElements);
-        for (size_t i = 0; i < primeValues.size(); ++i)
-        {
-            std::cout << primeValues[i] << ", ";
-        }
-        std::cout << "\n";
     }
     int m_bottomSize{100};
     int m_topSize{1000};
@@ -88,7 +81,7 @@ class SchroederDiffuser
         scaleDiffuser<false>();
     }
 
-    void setFeedback(const float newFeedback)
+    void setFeedback(const float newFeedback) noexcept
     {
         if (newFeedback == m_feedback)
         {
@@ -101,7 +94,7 @@ class SchroederDiffuser
         }
     }
 
-    void processBlock(const float* source, float* target)
+    void processBlock(const float* source, float* target) noexcept
     {
         std::copy_n(source, BlockSize, target);
         for (size_t i = 0; i < m_delay.size(); ++i)

@@ -1,12 +1,12 @@
 #pragma once
 
 
-#include "Numbers/Convert.h"
-
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <vector>
+
+#include "Numbers/Convert.h"
 
 /*
  * Dattorro 48kHz:
@@ -29,7 +29,7 @@ class SchroederAllPass
     {
     }
 
-    float step(const float input)
+    float step(const float input) noexcept
     {
         const float w_delayed = m_buffer[m_writeIndex];
         const float output = w_delayed - m_gain * input;
@@ -38,7 +38,7 @@ class SchroederAllPass
         return output;
     }
 
-    void processBlock(const float* in, float* out)
+    void processBlock(const float* in, float* out) noexcept
     {
         for (size_t i = 0; i < BlockSize; ++i)
         {
@@ -46,7 +46,7 @@ class SchroederAllPass
         }
     }
 
-    void setGain(const float gain)
+    void setGain(const float gain) noexcept
     {
         m_gain = std::clamp(gain, -1.f, 1.f);
     }
@@ -61,7 +61,7 @@ class SchroederAllPass
         }
     }
 
-    void clear()
+    void clear() noexcept
     {
         std::fill(m_buffer.begin(), m_buffer.end(), 0.0f);
         m_writeIndex = 0;
@@ -87,12 +87,12 @@ class SchroederAllPassSoftTransition
     {
     }
 
-    void clear()
+    void clear() noexcept
     {
         std::fill(m_buffer.begin(), m_buffer.end(), 0.f);
     }
 
-    void newFadeIfNeeded()
+    void newFadeIfNeeded() noexcept
     {
         if (m_newFadeSize && !m_fadeSteps)
         {
@@ -111,12 +111,12 @@ class SchroederAllPassSoftTransition
         return std::log10(f) * static_cast<float>(m_currentDelayWidth) / std::log10(m_feedback);
     }
 
-    void setGain(const float gain)
+    void setGain(const float gain) noexcept
     {
         m_feedback = std::clamp(gain, -0.99999f, 0.99999f);
     }
 
-    void setSize(const size_t newSize, const bool fast = false)
+    void setSize(const size_t newSize, const bool fast = false) noexcept
     {
         if (fast)
         {
@@ -128,7 +128,7 @@ class SchroederAllPassSoftTransition
         }
     }
 
-    void feedWrite(const float in)
+    void feedWrite(const float in) noexcept
     {
         m_buffer[m_headWrite] = in;
         if (++m_headWrite >= m_maxBufferSize)
@@ -137,7 +137,7 @@ class SchroederAllPassSoftTransition
         }
     }
 
-    float step(const float in)
+    float step(const float in) noexcept
     {
         newFadeIfNeeded();
         auto getNext = [this]()
@@ -166,14 +166,14 @@ class SchroederAllPassSoftTransition
         return output;
     }
 
-    float nextHeadRead(const size_t index)
+    float nextHeadRead(const size_t index) noexcept
     {
         const float returnValue = m_buffer[m_headRead[index]];
         m_headRead[index] = (m_headRead[index] + 1) % m_maxBufferSize;
         return returnValue;
     }
 
-    void processBlock(const float* source, float* target)
+    void processBlock(const float* source, float* target) noexcept
     {
         newFadeIfNeeded();
         if (m_fadeSteps)
@@ -194,19 +194,19 @@ class SchroederAllPassSoftTransition
         }
     }
 
-    void processBlockInplace(float* inplace)
+    void processBlockInplace(float* inplace) noexcept
     {
         processBlock(inplace, inplace);
     }
 
-    [[nodiscard]] size_t size() const
+    [[nodiscard]] size_t size() const noexcept
     {
         return m_currentDelayWidth;
     }
 
   private:
     template <bool fastSetting>
-    void setSizeImpl(const size_t newSize)
+    void setSizeImpl(const size_t newSize) noexcept
     {
         const auto clampedSize = std::clamp<size_t>(newSize, minDelaySize, m_maxBufferSize);
         if (clampedSize == m_currentDelayWidth)
@@ -232,7 +232,7 @@ class SchroederAllPassSoftTransition
         }
     }
 
-    float m_sampleRate;
+    const float m_sampleRate;
     float m_feedback{0.0f};
     size_t m_headWrite{0};
     std::array<size_t, 2> m_headRead{0, 0};
