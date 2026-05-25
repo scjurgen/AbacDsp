@@ -330,7 +330,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         /*START_SHOWVUMETER*/
         for (int c = 0; c < std::min(2, buffer.getNumChannels()); ++c)
         {
-            m_envInput[c].feed(buffer.getReadPointer(c), buffer.getNumSamples());
+            m_envInput[c].feed(std::span{buffer.getReadPointer(c), static_cast<size_t>(buffer.getNumSamples())});
             m_inputDb[c].store(std::log10(m_envInput[c].getRms()) * 20.f);
         }
         /*END_SHOWVUMETER*/
@@ -341,7 +341,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         /*START_SHOWVUMETER*/
         for (int c = 0; c < std::min(2, buffer.getNumChannels()); ++c)
         {
-            m_envOutput[c].feed(buffer.getReadPointer(c), buffer.getNumSamples());
+            m_envOutput[c].feed(std::span{buffer.getReadPointer(c), static_cast<size_t>(buffer.getNumSamples())});
             m_outputDb[c].store(std::log10(m_envOutput[c].getRms()) * 20.f);
         }
         /*END_SHOWVUMETER*/

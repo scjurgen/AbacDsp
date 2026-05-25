@@ -25,7 +25,10 @@ class WaveformShow : public juce::Component
 
     void update(const std::vector<float>& values)
     {
-        m_lastValues = values;
+        if (!values.empty())
+        {
+            m_lastValues = values;
+        }
         repaint();
     }
 
@@ -47,12 +50,12 @@ class WaveformShow : public juce::Component
         g.setColour(juce::Colours::grey.withAlpha(0.2f));
         for (int i = 0; i < 5; ++i)
         {
-            float y = meterBounds.getY() + static_cast<float>(i) * meterBounds.getHeight() / 4.0f;
+            const float y = meterBounds.getY() + static_cast<float>(i) * meterBounds.getHeight() / 4.0f;
             g.drawHorizontalLine(static_cast<int>(y), meterBounds.getX(), meterBounds.getRight());
         }
         for (int i = 0; i < 10; ++i)
         {
-            float x = meterBounds.getX() + static_cast<float>(i) * meterBounds.getWidth() / 9.0f;
+            const float x = meterBounds.getX() + static_cast<float>(i) * meterBounds.getWidth() / 9.0f;
             g.drawVerticalLine(static_cast<int>(x), meterBounds.getY(), meterBounds.getBottom());
         }
 
@@ -95,7 +98,7 @@ class WaveformGauge : public juce::Component
     {
         g.setColour(backgroundDarkGrey);
         g.fillRoundedRectangle(getLocalBounds().toFloat(), 3);
-        g.setColour(juce::Colours::white);
+        g.setColour(juce::Colours::red);
         g.drawText(m_label, getLocalBounds().removeFromTop(20), juce::Justification::centred);
     }
 

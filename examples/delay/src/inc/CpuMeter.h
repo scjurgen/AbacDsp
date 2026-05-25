@@ -2,7 +2,6 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
-#include <vector>
 #include "GenericMeter.h"
 
 
@@ -57,7 +56,7 @@ class CpuValue : public juce::Component
         g.fillRect(meterBounds);
 
         // Calculate the height of the visible portion
-        float visibleHeight = juce::jmap(std::clamp(value, 0.f, 100.f), 0.f, 100.f, 0.0f, height);
+        const float visibleHeight = juce::jmap(std::clamp(value, 0.f, 100.f), 0.f, 100.f, 0.0f, height);
 
         // Paint over the unused portion with the background color
         g.setColour(juce::Colour(GuiConstants::instance().colors.bg_App));

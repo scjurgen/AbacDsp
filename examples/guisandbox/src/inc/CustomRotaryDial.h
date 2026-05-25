@@ -40,7 +40,7 @@ class ModRotaryDial : public juce::Slider
         }
     }
 
-    void setHasModifiers(bool mod)
+    void setHasModifiers(const bool mod)
     {
         m_isModifiable = mod;
     }
@@ -100,7 +100,7 @@ class CustomRotaryDial : public juce::Component
     }
 
 
-    void setHasModifier(bool mod)
+    void setHasModifier(const bool mod)
     {
         m_slider.setHasModifiers(mod);
     }

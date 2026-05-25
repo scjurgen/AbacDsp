@@ -7,6 +7,7 @@
 
 #include "JuliasynthConstants.h"
 
+#include "inc/GuiConstants.h"
 #include "inc/CpuMeter.h"
 #include "inc/CustomRotaryDial.h"
 #include "inc/GenericMeter.h"

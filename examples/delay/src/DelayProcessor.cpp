@@ -7,14 +7,11 @@
 #include "DelayProcessor.h"
 #include "DelayEditor.h"
 
-
-juce::AudioProcessorEditor* AudioPluginAudioProcessor::createEditor()
-{
-    GuiConstants::setPreset(GuiConstants::GradientPreset::Heat);
-    return new AudioPluginAudioProcessorEditor(*this, m_parameters);
+juce::AudioProcessorEditor *AudioPluginAudioProcessor::createEditor() {
+  GuiConstants::setPreset(CLutPreset);
+  return new AudioPluginAudioProcessorEditor(*this, m_parameters);
 }
 
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
-{
-    return new AudioPluginAudioProcessor();
+juce::AudioProcessor *JUCE_CALLTYPE createPluginFilter() {
+  return new AudioPluginAudioProcessor();
 }

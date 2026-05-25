@@ -78,7 +78,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         const auto rx = cx - radius;
         const auto ry = cy - radius;
         const auto rw = radius * 2.0f;
-        const auto rh = radius * 2.0f;
+        // const auto rh = radius * 2.0f;
 
         const auto zeroPos =
             slider.getMinimum() < 0 && slider.getMaximum() > 0
@@ -118,7 +118,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
             constexpr float fShadowExpandFrac = 0.15f;
             constexpr float fShadowAlpha = 1.f;
             constexpr float fRimArcFraction = 0.6f; // fraction of full circle
-            constexpr float fRimThickness = 1.5f;
+            // constexpr float fRimThickness = 1.5f;
 
             const auto knobRect = rect.reduced(extraMargin + statusOutlineThickness + bedOutline + bedThickness);
             const auto kx = knobRect.getX();
@@ -176,6 +176,28 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
                 g.reduceClipRegion(ringClip);
                 g.setGradientFill(rimGrad);
                 g.fillEllipse(knobRect);
+                g.restoreState();
+            }
+            // After the Disk fill, before the Rim highlight block:
+            {
+                constexpr float ringFraction = 0.05f;
+                const float ringInner = kr * (1.0f - ringFraction);
+                const float innerDiam = ringInner * 2.0f;
+
+                juce::Path ringPath;
+                ringPath.addEllipse(kx, ky, kw, kh);
+                ringPath.addEllipse(kcx - ringInner, kcy - ringInner, innerDiam, innerDiam);
+                ringPath.setUsingNonZeroWinding(false); // even-odd: inner ellipse cuts out
+
+                juce::ColourGradient ringGrad(knobGradCenter.brighter(1).withAlpha(0.7f), kx, ky,
+                                              knobGradCenter.darker(1).withAlpha(0.7f), kx + kw, ky + kh, true);
+                ringGrad.addColour(0.4, knobGradCenter.brighter(1).withAlpha(0.2f));
+                ringGrad.addColour(0.6, knobGradCenter.darker(1).withAlpha(0.2f));
+
+                g.saveState();
+                g.reduceClipRegion(ringPath);
+                g.setGradientFill(ringGrad);
+                g.fillEllipse(kx, ky, kw, kh);
                 g.restoreState();
             }
         }
@@ -280,7 +302,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
 
     juce::Font getLabelFont(juce::Label& label) override
     {
-        if (auto* slider = dynamic_cast<juce::Slider*>(label.getParentComponent()))
+        if (auto* _ = dynamic_cast<juce::Slider*>(label.getParentComponent()))
         {
             label.setBorderSize(juce::BorderSize<int>(0));
             label.setColour(juce::Label::outlineColourId, juce::Colours::transparentBlack);

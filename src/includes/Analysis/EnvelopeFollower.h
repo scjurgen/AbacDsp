@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <numeric>
+#include <span>
 #include <vector>
 
 namespace AbacDsp
@@ -23,7 +24,7 @@ class RmsFollower
     {
     }
 
-    void setWindowSize(const size_t width)
+    void setWindowSize(const size_t width) noexcept
     {
         constexpr size_t MinimumWindowSize{1};
         const auto newWidth = std::max(MinimumWindowSize, std::min(m_movingWindow.size(), width));
@@ -49,25 +50,25 @@ class RmsFollower
         m_currentWidth = newWidth;
     }
 
-    void feed(const float* buffer, const size_t numSamples)
+    void feed(std::span<const float> buffer) noexcept
     {
         size_t indexBuffer = 0;
-        while (indexBuffer < numSamples)
+        while (indexBuffer < buffer.size())
         {
-            auto remainderWrite = m_movingWindow.size() - m_writeHead;
-            auto remainderRead = m_movingWindow.size() - m_readHead;
-            auto remainderMin = std::min(std::min(remainderWrite, remainderRead), m_currentWidth);
-            auto samplesToProcess = numSamples - indexBuffer;
+            const auto remainderWrite = m_movingWindow.size() - m_writeHead;
+            const auto remainderRead = m_movingWindow.size() - m_readHead;
+            const auto remainderMin = std::min({remainderWrite, remainderRead, m_currentWidth});
+            const auto samplesToProcess = buffer.size() - indexBuffer;
             if (samplesToProcess <= remainderMin)
             {
-                addValues(buffer + indexBuffer, samplesToProcess);
+                addValues(buffer.subspan(indexBuffer, samplesToProcess));
                 m_writeHead += samplesToProcess;
                 m_readHead += samplesToProcess;
                 indexBuffer += samplesToProcess;
             }
             else
             {
-                addValues(buffer + indexBuffer, remainderMin);
+                addValues(buffer.subspan(indexBuffer, remainderMin));
                 m_writeHead += remainderMin;
                 m_readHead += remainderMin;
                 indexBuffer += remainderMin;
@@ -83,26 +84,26 @@ class RmsFollower
         }
     }
 
-    [[nodiscard]] float getRms() const
+    [[nodiscard]] float getRms() const noexcept
     {
         return std::sqrt(
             static_cast<float>((static_cast<float>(m_currentSum) * reciprocalSizeFactor) * m_reciprocalWidth));
     }
 
-    [[nodiscard]] float getMs() const
+    [[nodiscard]] float getMs() const noexcept
     {
         return static_cast<float>((static_cast<float>(m_currentSum) * reciprocalSizeFactor) * m_reciprocalWidth);
     }
 
   private:
-    void addValues(const float* buffer, const size_t numSamples)
+    void addValues(std::span<const float> buffer) noexcept
     {
         m_currentSum -= std::accumulate(m_movingWindow.data() + m_readHead,
-                                        m_movingWindow.data() + m_readHead + numSamples, static_cast<Precision>(0));
-        std::transform(buffer, buffer + numSamples, m_movingWindow.data() + m_writeHead, [](const auto value)
+                                        m_movingWindow.data() + m_readHead + buffer.size(), static_cast<Precision>(0));
+        std::transform(buffer.begin(), buffer.end(), m_movingWindow.data() + m_writeHead, [](const auto value)
                        { return static_cast<Precision>((value * value) * static_cast<float>(sizeFactor)); });
         m_currentSum += std::accumulate(m_movingWindow.data() + m_writeHead,
-                                        m_movingWindow.data() + m_writeHead + numSamples, static_cast<Precision>(0));
+                                        m_movingWindow.data() + m_writeHead + buffer.size(), static_cast<Precision>(0));
     }
 
     std::vector<Precision> m_movingWindow;
@@ -110,7 +111,7 @@ class RmsFollower
     size_t m_readHead{0};
     size_t m_writeHead{0};
     size_t m_currentWidth{0};
-    float m_reciprocalWidth;
+    float m_reciprocalWidth{0.f};
 };
 
 
@@ -124,17 +125,17 @@ class PeakEnvelopeFollower
     {
     }
 
-    void setAttackInMsecs(const float attackInMilliseconds)
+    void setAttackInMsecs(const float attackInMilliseconds) noexcept
     {
         m_attackFactor = static_cast<float>(std::pow(m_range, 1.0f / (attackInMilliseconds * m_sampleRate / 1000.f)));
     }
 
-    void setReleaseInMsecs(const float releaseInMilliseconds)
+    void setReleaseInMsecs(const float releaseInMilliseconds) noexcept
     {
         m_releaseFactor = static_cast<float>(std::pow(m_range, 1.0f / (releaseInMilliseconds * m_sampleRate / 1000.f)));
     }
 
-    float step(const float value)
+    float step(const float value) noexcept
     {
         const auto valueIn = std::abs(value);
         m_envelope = valueIn > m_envelope ? m_attackFactor * (m_envelope - valueIn) + valueIn
@@ -142,12 +143,13 @@ class PeakEnvelopeFollower
         return m_envelope;
     }
 
-    [[maybe_unused]] void blockAnalyze(const float* source, float* target, const size_t numSamples)
+    void blockAnalyze(std::span<const float> source, std::span<float> target) noexcept
     {
-        std::transform(source, source + numSamples, target, [this](const float in) { return step(in); });
+        std::transform(source.begin(), source.end(), target.begin(),
+                       [this](const float in) noexcept { return step(in); });
     }
 
-    [[nodiscard]] float getEnvelope() const
+    [[nodiscard]] float getEnvelope() const noexcept
     {
         return m_envelope;
     }

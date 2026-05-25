@@ -1,10 +1,11 @@
-#include "gtest/gtest.h"
-#include "Analysis/EnvelopeFollower.h"
-
-#include <vector>
+#include <algorithm>
 #include <cmath>
 #include <numeric>
-#include <algorithm>
+#include <vector>
+
+#include "gtest/gtest.h"
+
+#include "Analysis/EnvelopeFollower.h"
 
 namespace AbacDsp::Test
 {
@@ -19,7 +20,7 @@ TEST(RmsFollowerTest, MultipleValuesFeed)
     RmsFollower sut{kWindowSize};
     const std::vector<float> buffer = {1.0f, 0.5f, -0.5f, 0.25f};
 
-    sut.feed(buffer.data(), buffer.size());
+    sut.feed(buffer);
 
     constexpr float sumSquares = 1.0f + 0.25f + 0.25f + 0.0625f;
     constexpr auto expectedMs = sumSquares / static_cast<float>(kWindowSize);
@@ -34,7 +35,7 @@ TEST(RmsFollowerTest, FillWindowCompletelyWithOnes)
     RmsFollower sut{kWindowSize};
     const std::vector<float> buffer(kWindowSize, 1.0f);
 
-    sut.feed(buffer.data(), buffer.size());
+    sut.feed(buffer);
 
     EXPECT_NEAR(sut.getRms(), 1.0f, kTolerance);
     EXPECT_NEAR(sut.getMs(), 1.0f, kTolerance);
@@ -44,12 +45,12 @@ TEST(RmsFollowerTest, OverfillWindowWithSlidingEffect)
 {
     RmsFollower sut{kWindowSize};
     const std::vector<float> ones(kWindowSize, 1.0f);
-    sut.feed(ones.data(), ones.size());
+    sut.feed(ones);
 
     EXPECT_NEAR(sut.getRms(), 1.0f, kTolerance);
 
     const std::vector<float> zeros(kWindowSize, 0.0f);
-    sut.feed(zeros.data(), zeros.size());
+    sut.feed(zeros);
 
     EXPECT_NEAR(sut.getRms(), 0.0f, kTolerance) << "sliding window should have cleared all ones";
     EXPECT_NEAR(sut.getMs(), 0.0f, kTolerance);
@@ -59,7 +60,7 @@ TEST(RmsFollowerTest, WindowSizeChange)
 {
     RmsFollower sut{kWindowSize};
     const std::vector<float> ones(kWindowSize, 1.0f);
-    sut.feed(ones.data(), ones.size());
+    sut.feed(ones);
 
     constexpr size_t newWindowSize = 5;
     sut.setWindowSize(newWindowSize);
@@ -67,7 +68,7 @@ TEST(RmsFollowerTest, WindowSizeChange)
     EXPECT_NEAR(sut.getRms(), 1.0f, kTolerance);
 
     const std::vector<float> mixed = {0.5f, -0.5f};
-    sut.feed(mixed.data(), mixed.size());
+    sut.feed(mixed);
 
     constexpr auto expectedMs = (3.0f + 0.25f + 0.25f) / static_cast<float>(newWindowSize);
     EXPECT_NEAR(sut.getMs(), expectedMs, kTolerance);
@@ -80,7 +81,7 @@ TEST(RmsFollowerTest, MinimumWindowSize)
 
     constexpr auto testValue = 2.0f;
     const std::vector<float> buffer = {testValue};
-    sut.feed(buffer.data(), buffer.size());
+    sut.feed(buffer);
 
     EXPECT_NEAR(sut.getRms(), testValue, kTolerance) << "minimum window size should be 1";
     EXPECT_NEAR(sut.getMs(), testValue * testValue, kTolerance);
@@ -93,7 +94,7 @@ TEST(RmsFollowerTest, LargeBufferProcessing)
     std::vector<float> buffer(bufferSize);
     std::iota(buffer.begin(), buffer.end(), 1.0f);
 
-    sut.feed(buffer.data(), buffer.size());
+    sut.feed(buffer);
 
     float sumSquares = 0.0f;
     for (size_t i = bufferSize - kWindowSize; i < bufferSize; ++i)
@@ -112,7 +113,7 @@ TEST(RmsFollowerTest, NegativeValuesSquaredCorrectly)
     RmsFollower sut{kWindowSize};
     const std::vector<float> buffer = {-1.0f, -2.0f, -3.0f};
 
-    sut.feed(buffer.data(), buffer.size());
+    sut.feed(buffer);
 
     constexpr auto expectedMs = (1.0f + 4.0f + 9.0f) / static_cast<float>(kWindowSize);
     const auto expectedRms = std::sqrt(expectedMs);
@@ -213,7 +214,7 @@ TEST(PeakEnvelopeFollowerTest, BlockAnalyze)
     const std::vector<float> source = {0.1f, 0.5f, -0.8f, 0.3f, 0.0f};
     std::vector<float> target(source.size());
 
-    sut.blockAnalyze(source.data(), target.data(), source.size());
+    sut.blockAnalyze(source, target);
 
     for (const auto value : target)
     {
@@ -311,7 +312,7 @@ TEST(PeakEnvelopeFollowerTest, ConsistencyBetweenStepAndBlockAnalyze)
     const std::vector source = {0.1f, 0.3f, 0.7f};
     std::vector<float> blockResults(source.size());
 
-    sutBlock.blockAnalyze(source.data(), blockResults.data(), source.size());
+    sutBlock.blockAnalyze(source, blockResults);
 
     std::vector<float> stepResults;
     stepResults.reserve(source.size());

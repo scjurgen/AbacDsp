@@ -10,7 +10,7 @@ class GaugeBackground : public juce::Component
   public:
     GaugeBackground()
     {
-        backgroundApp = juce::Colour(GuiConstants::instance().colors.bg_App);
+        backgroundApp = juce::Colour(GuiConstants::instance().colors.bg_Component);
         setBufferedToImage(true);
     }
 
@@ -91,7 +91,7 @@ class GaugeValue : public juce::Component
             float linValue = std::clamp(values[i], -84.f, 12.f) + 84;
             float visibleHeight = juce::jmap(std::clamp(linValue, 0.f, 100.f), 0.f, 100.f, 0.0f, height);
 
-            g.setColour(juce::Colour(GuiConstants::instance().colors.bg_App));
+            g.setColour(juce::Colour(GuiConstants::instance().colors.bg_Component));
             columnBounds.expand(1, 0);
             g.fillRect(columnBounds.withBottom(height - visibleHeight));
         }
@@ -106,11 +106,13 @@ class GaugeIndicators : public juce::Component
   public:
     GaugeIndicators()
     {
+        lineIndicatorColor = juce::Colour(GuiConstants::instance().colors.statusOutline);
         setInterceptsMouseClicks(false, false);
     }
 
     void paint(juce::Graphics& g) override
     {
+        constexpr size_t pad = 4;
         const auto height = static_cast<float>(getHeight());
         const auto width = static_cast<float>(getWidth());
 
@@ -118,15 +120,14 @@ class GaugeIndicators : public juce::Component
         {
             const float y = juce::jmap(db, minValue_, maxValue_, height, 0.0f);
             const bool isZero = (std::abs(db) < 0.01f);
-
-            g.setColour(isZero ? juce::Colours::white.withAlpha(0.75f) : juce::Colours::white.withAlpha(0.30f));
-
-            g.drawLine(0, y, width, y, isZero ? 1.5f : 1.0f);
+            g.setColour(isZero ? lineIndicatorColor.withAlpha(0.75f) : lineIndicatorColor.withAlpha(0.30f));
+            g.drawLine(pad, y, width - pad * 2, y, isZero ? 1.5f : 1.0f);
         }
     }
 
   private:
     float minValue_{-60.f}, maxValue_{12.f};
+    juce::Colour lineIndicatorColor;
 };
 
 class Gauge : public juce::Component
