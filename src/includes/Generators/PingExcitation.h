@@ -1,11 +1,11 @@
 #pragma once
 
-#include <vector>
-#include <span>
-#include <numbers>
-#include <cmath>
-#include <random>
 #include <algorithm>
+#include <cmath>
+#include <numbers>
+#include <random>
+#include <span>
+#include <vector>
 
 namespace AbacDsp
 {
@@ -13,12 +13,12 @@ class WindowFunctions
 {
   public:
     template <typename T>
-    static std::vector<T> hannWindow(size_t N)
+    [[nodiscard]] static std::vector<T> hannWindow(const size_t N)
     {
         std::vector<T> window(N);
         for (size_t i = 0; i < N; ++i)
         {
-            T w = static_cast<T>(i) / static_cast<T>(N - 1);
+            const T w = static_cast<T>(i) / static_cast<T>(N - 1);
             window[i] = T(0.5) * (T(1) - std::cos(T(2.0) * std::numbers::pi_v<T> * w));
         }
         return window;
@@ -27,13 +27,13 @@ class WindowFunctions
     template <typename T>
     static void blackmanHarrisWindow(std::span<T> x)
     {
-        const T a0 = 0.35875;
-        const T a1 = 0.48829;
-        const T a2 = 0.14128;
-        const T a3 = 0.01168;
+        constexpr T a0 = 0.35875;
+        constexpr T a1 = 0.48829;
+        constexpr T a2 = 0.14128;
+        constexpr T a3 = 0.01168;
         for (size_t i = 0; i < x.size(); i++)
         {
-            T w = static_cast<T>(i) / static_cast<T>(x.size() - 1);
+            const T w = static_cast<T>(i) / static_cast<T>(x.size() - 1);
             x[i] *= a0 - a1 * std::cos(T(2.0) * std::numbers::pi_v<T> * w) +
                     a2 * std::cos(T(4.0) * std::numbers::pi_v<T> * w) +
                     a3 * std::cos(T(6.0) * std::numbers::pi_v<T> * w);
@@ -46,17 +46,16 @@ class Excitation
   public:
     static constexpr size_t NumNoise{65535};
 
-    explicit Excitation(size_t patternLength = 1024)
+    explicit Excitation(const size_t patternLength = 1024)
         : m_sineLength(patternLength)
         , m_sine(patternLength + 1, 0.0f)
         , m_noise(NumNoise, 0.0f)
-        , m_noiseFactor(0.0f)
     {
         generateSineWave();
         generateNoise();
     }
 
-    float getInterpolatedValue(const float position) noexcept
+    [[nodiscard]] float getInterpolatedValue(const float position) noexcept
     {
         if (position < 0.0f || m_sine.empty())
         {
@@ -96,7 +95,7 @@ class Excitation
         return m_sineLength;
     }
 
-    void setNoise(const float noiseFactor)
+    void setNoise(const float noiseFactor) noexcept
     {
         m_noiseFactor = std::clamp(noiseFactor, 0.0f, 1.0f);
     }
@@ -136,17 +135,17 @@ class Excitation
     {
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_real_distribution distribution(.0f, 4.0f);
+        std::uniform_real_distribution distribution(0.0f, 4.0f);
         for (size_t i = 0; i < m_noise.size(); ++i)
         {
             m_noise[i] = distribution(gen);
         }
     }
 
-    size_t m_sineLength;
+    const size_t m_sineLength;
     std::vector<float> m_sine;
     std::vector<float> m_noise;
     size_t m_noiseIndex{0};
-    float m_noiseFactor;
+    float m_noiseFactor{0.0f};
 };
 }
