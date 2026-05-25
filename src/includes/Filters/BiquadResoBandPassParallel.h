@@ -4,7 +4,6 @@
 #include <array>
 #include <cmath>
 #include <numbers>
-#include <numeric>
 
 namespace AbacDsp
 {
@@ -22,15 +21,9 @@ class BiquadResoBandPassParallel
     explicit BiquadResoBandPassParallel(const float sampleRate)
         : m_sampleRate(sampleRate)
     {
-        // computeCoefficients(0, 1000.f);
-        // computeCoefficients(1, 1000.f);
     }
 
-    BiquadResoBandPassParallel()
-    {
-        // computeCoefficients(0, 1000.f);
-        // computeCoefficients(1, 1000.f);
-    }
+    BiquadResoBandPassParallel() = default;
 
     void setSampleRate(const float sampleRate)
     {
@@ -72,7 +65,7 @@ class BiquadResoBandPassParallel
         m_cf[mainIndex][index].a2 = (1 - kqCl + kSquare[mainIndex]) * norm;
     }
 
-    float step(size_t mainIndex, const float in) noexcept
+    [[nodiscard]] float step(const size_t mainIndex, const float in) noexcept
     {
         const auto b0s = in * m_cf[mainIndex][m_currentSet[mainIndex]].b0;
         const auto out = b0s + m_z[mainIndex][0];
@@ -93,14 +86,14 @@ class BiquadResoBandPassParallel
         }
     }
 
-    void reset(size_t mainIndex, const float v1 = 0.f, const float v2 = 0.f) noexcept
+    void reset(const size_t mainIndex, const float v1 = 0.f, const float v2 = 0.f) noexcept
     {
         m_z[mainIndex][0] = v1;
         m_z[mainIndex][1] = v2;
     }
 
-    float magnitude(size_t mainIndex, const size_t subIndex, const float hz,
-                    const float sampleRate = 48000.f) const noexcept
+    [[nodiscard]] float magnitude(const size_t mainIndex, const size_t subIndex, const float hz,
+                                  const float sampleRate = 48000.f) const noexcept
     {
         const auto b0 = static_cast<double>(m_cf[mainIndex][subIndex].b0);
         const auto a1 = static_cast<double>(m_cf[mainIndex][subIndex].a1);
@@ -112,12 +105,12 @@ class BiquadResoBandPassParallel
         return static_cast<float>(db);
     }
 
-    void damp(size_t mainIndex, const bool damp)
+    void damp(const size_t mainIndex, const bool damp) noexcept
     {
         m_currentSet[mainIndex] = damp ? 1 : 0;
     }
 
-    bool isActive(size_t mainIndex) noexcept
+    bool isActive(const size_t mainIndex) noexcept
     {
         if (std::abs(m_z[mainIndex][0]) > 1E-5f || std::abs(m_z[mainIndex][1]) > 1E-5f)
         {
