@@ -290,16 +290,16 @@ class MetronomeImpl final : public EffectBase
         {"6/8 in-2",              2, {D,B},                                                      kC3, false},
         // 6/8 in-6: felt beat = eighth note; accents every 3 eighths
         {"6/8 in-6",              6, {D,S,S,B,S,S},                                             kNo, false},
-        // Odd meters: felt beat = eighth note; accent at grouping boundaries
-        {"7/8 (2+2+3)",           7, {D,N,B,N,B,N,N},                                          kNo, false},
-        {"7/8 (2+3+2)",           7, {D,N,B,N,N,B,N},                                          kNo, false},
-        {"7/8 (3+2+2)",           7, {D,N,N,B,N,B,N},                                          kNo, false},
+        // Odd meters: felt beat = eighth note; S marks within-group subdivisions
+        {"7/8 (2+2+3)",           7, {D,S,B,S,B,S,S},                                          kNo, false},
+        {"7/8 (2+3+2)",           7, {D,S,B,S,S,B,S},                                          kNo, false},
+        {"7/8 (3+2+2)",           7, {D,S,S,B,S,B,S},                                          kNo, false},
         {"9/8 in-3",              3, {D,B,B},                                                   kC3, false},
         {"9/8 in-9",              9, {D,S,S,B,S,S,B,S,S},                                      kNo, false},
-        {"11/8 (3+3+3+2)",       11, {D,N,N,B,N,N,B,N,N,B,N},                                  kNo, false},
-        {"11/8 (3+3+2+3)",       11, {D,N,N,B,N,N,B,N,B,N,N},                                  kNo, false},
-        {"13/8 (3+3+3+2+2)",     13, {D,N,N,B,N,N,B,N,N,B,N,B,N},                              kNo, false},
-        {"13/8 (3+4+3+3)",       13, {D,N,N,B,N,N,N,B,N,N,B,N,N},                              kNo, false},
+        {"11/8 (3+3+3+2)",       11, {D,S,S,B,S,S,B,S,S,B,S},                                  kNo, false},
+        {"11/8 (3+3+2+3)",       11, {D,S,S,B,S,S,B,S,B,S,S},                                  kNo, false},
+        {"13/8 (3+3+3+2+2)",     13, {D,S,S,B,S,S,B,S,S,B,S,B,S},                              kNo, false},
+        {"13/8 (3+4+3+3)",       13, {D,S,S,B,S,S,S,B,S,S,B,S,S},                              kNo, false},
     };
     // clang-format on
 
