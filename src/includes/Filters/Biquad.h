@@ -7,42 +7,17 @@
 #include <complex>
 #include <iomanip>
 #include <iostream>
+#include <numbers>
 #include <tuple>
 
 #include "Numbers/Convert.h"
-/*
-enum class BiquadFilterType
-{
-    LowPass,
-    HighPass,
-    BandPass,
-    Notch,
-    Peak,
-    LoShelf,
-    HiShelf,
-    AllPass,
-};
-
-template <BiquadFilterType type>
-class Biquad::
-    void computeCoefficients(const float sampleRate, const float frequency, const float Q, const float peakGain);
-    void processBlock(const float* in, float* outBuffer, size_t numSamples);
-
-template <BiquadFilterType type>
-class BiquadStereo::
-{
-    void computeCoefficients(const float sampleRate, const float frequency, const float Q, const float peakGain);
-    void processBlock(const float* left, const float* right, float* outLeft, float* outRight, size_t numSamples);
- }
-
- */
 
 namespace AbacDsp
 {
 [[nodiscard]] float inline biquadMagnitudeInDb(const float cf, const float b0, const float b1, const float b2,
                                                const float a1, const float a2)
 {
-    const auto phi = 4 * std::pow(std::sin(2.f * static_cast<float>(M_PI) * cf / 2.f), 2.f);
+    const auto phi = 4 * std::pow(std::sin(2.f * std::numbers::pi_v<float> * cf / 2.f), 2.f);
     const auto db =
         10 * std::log10(std::pow((b0 + b1 + b2), 2.f) + (b0 * b2 * phi - (b1 * (b0 + b2) + 4 * b0 * b2)) * phi) -
         10 * std::log10(std::pow((1 + a1 + a2), 2.f) + (a2 * phi - (a1 * (1 + a2) + 4 * a2)) * phi);
@@ -52,7 +27,7 @@ namespace AbacDsp
 [[nodiscard]] float inline biquadMagnitudeLinear(const float cf, const float b0, const float b1, const float b2,
                                                  const float a1, const float a2)
 {
-    const auto phi = 4 * std::pow(std::sin(static_cast<double>(M_PI) * static_cast<double>(cf)), 2.0);
+    const auto phi = 4 * std::pow(std::sin(std::numbers::pi_v<double> * static_cast<double>(cf)), 2.0);
 
     const auto b_sum = static_cast<double>(b0 + b1 + b2);
     const auto numerator = b_sum * b_sum + (b0 * b2 * phi - (b1 * (b0 + b2) + 4 * b0 * b2)) * phi;
@@ -93,7 +68,7 @@ class BiquadCoefficients
     {
         const auto f = std::clamp(frequency, 1.f, sampleRate / 2.f);
         const auto Fc = f / sampleRate;
-        const auto K = std::tan(static_cast<float>(M_PI) * Fc);
+        const auto K = std::tan(std::numbers::pi_v<float> * Fc);
         const auto kSquare = K * K;
         auto norm = 1 / (1 + K / Q + kSquare);
 #pragma GCC diagnostic push
@@ -102,7 +77,7 @@ class BiquadCoefficients
         {
             case BiquadFilterType::AllPass:
             {
-                const auto w0 = 2 * static_cast<float>(M_PI) * f / sampleRate;
+                const auto w0 = 2.f * std::numbers::pi_v<float> * f / sampleRate;
                 const auto cosW0 = std::cos(w0);
                 const auto alpha = std::sin(w0) / (2 * Q);
                 const auto a0 = 1 + alpha;
@@ -156,7 +131,7 @@ class BiquadCoefficients
             {
                 const auto v2 = std::pow(10.f, peakGain / 40.f);
                 const auto v = std::sqrt(v2);
-                const auto w0 = 2 * static_cast<float>(M_PI) * f / sampleRate;
+                const auto w0 = 2.f * std::numbers::pi_v<float> * f / sampleRate;
                 const auto cosW0 = std::cos(w0);
                 const auto alpha = std::sin(w0) / (2 * Q);
                 const auto scale = (v2 + 1) + (v2 - 1) * cosW0 + 2 * v * alpha;
@@ -172,7 +147,7 @@ class BiquadCoefficients
             {
                 const auto v2 = std::pow(10.f, peakGain / 40.f);
                 const auto v = std::sqrt(v2);
-                const auto w0 = 2 * static_cast<float>(M_PI) * f / sampleRate;
+                const auto w0 = 2.f * std::numbers::pi_v<float> * f / sampleRate;
                 const auto cosW0 = std::cos(w0);
                 const auto alpha = std::sin(w0) / (2 * Q);
                 const auto scale = (v2 + 1) - (v2 - 1) * cosW0 + 2 * v * alpha;
@@ -264,7 +239,7 @@ class Biquad : public BiquadCoefficients
 #pragma GCC diagnostic pop
     }
 
-    float singleStepGeneric(const float in) // shelving filters
+    float singleStepGeneric(const float in) noexcept
     {
         const auto out = in * b0 + m_z[0];
         m_z[0] = in * b1 + m_z[1] - a1 * out;
@@ -272,7 +247,7 @@ class Biquad : public BiquadCoefficients
         return out;
     }
 
-    float singleStepBandPass(const float in)
+    float singleStepBandPass(const float in) noexcept
     {
         // b1 == 0
         // b2 == -b0 -> 3 mul
@@ -283,7 +258,7 @@ class Biquad : public BiquadCoefficients
         return out;
     }
 
-    float singleStepNotch(const float in)
+    float singleStepNotch(const float in) noexcept
     {
         // b2 = b0
         // a1 = b1 --> 3  mul
@@ -294,7 +269,7 @@ class Biquad : public BiquadCoefficients
         return out;
     }
 
-    float singleStepLowPass(const float in)
+    float singleStepLowPass(const float in) noexcept
     {
         // b1 = -2 * b0 -> doesn't really help?
         // b2 = b0 -> 4 mul (maybe 3?)
@@ -305,7 +280,7 @@ class Biquad : public BiquadCoefficients
         return out;
     }
 
-    float singleStepHighPass(const float in)
+    float singleStepHighPass(const float in) noexcept
     {
         // b1 = -2 * b0 -> doesn't really help?
         // b2 = b0 -> 4 mul (maybe 3?)
@@ -316,7 +291,7 @@ class Biquad : public BiquadCoefficients
         return out;
     }
 
-    float singleStepPeak(const float in)
+    float singleStepPeak(const float in) noexcept
     {
         const auto out = in * b0 + m_z[0];
         m_z[0] = b1 * (in - out) + m_z[1];
@@ -324,17 +299,15 @@ class Biquad : public BiquadCoefficients
         return out;
     }
 
-    float singleStepAllPass(const float in)
+    float singleStepAllPass(const float in) noexcept
     {
-        // m_a2 = m_b0;
-        // m_a1 = m_b1;
         const auto out = in * b0 + m_z[0];
         m_z[0] = b1 * (in - out) + m_z[1];
         m_z[1] = in * b2 - b0 * out;
         return out;
     }
 
-    void reset()
+    void reset() noexcept
     {
         std::fill_n(m_z.data(), m_z.size(), 0.f);
     }
@@ -408,7 +381,6 @@ class BiquadStereo : public BiquadCoefficients
     }
 
   private:
-    // 1 pole filter
     void lastStepChebyshev(const float inLeft, const float inRight, float& outLeft, float& outRight)
     {
         outLeft = inLeft * b0 + m_z[0][0];
@@ -417,7 +389,7 @@ class BiquadStereo : public BiquadCoefficients
         m_z[1][0] = inRight * b1 - a1 * outRight;
     }
 
-    void singleStepGeneric(const float inLeft, const float inRight, float& outLeft, float& outRight) // shelving filters
+    void singleStepGeneric(const float inLeft, const float inRight, float& outLeft, float& outRight)
     {
         outLeft = inLeft * b0 + m_z[0][0];
         m_z[0][0] = inLeft * b1 + m_z[0][1] - a1 * outLeft;
@@ -487,8 +459,6 @@ class BiquadStereo : public BiquadCoefficients
 
     void singleStepAllPass(const float inLeft, const float inRight, float& outLeft, float& outRight)
     {
-        // m_a2 = m_b0;
-        // m_a1 = m_b1;
         outLeft = inLeft * b0 + m_z[0][0];
         m_z[0][0] = b1 * (inLeft - outLeft) + m_z[0][1];
         m_z[0][1] = inLeft * b2 - b0 * outLeft;
@@ -497,7 +467,7 @@ class BiquadStereo : public BiquadCoefficients
         m_z[1][1] = inRight * b2 - b0 * outRight;
     }
 
-    void reset()
+    void reset() noexcept
     {
         for (auto& c : m_z)
         {
@@ -546,7 +516,7 @@ class ChebyshevBiquad
         float fC, beta, a;
     };
 
-    auto computeFactors(const size_t order, const float fc, const float ripple)
+    InitialFactors computeFactors(const size_t order, const float fc, const float ripple)
     {
         m_elements = (order + 1) / 2;
         m_order = order;
@@ -556,8 +526,8 @@ class ChebyshevBiquad
         const auto rippleLimited = std::max(0.001f, ripple);
         const auto eps = std::sqrt(std::pow(10.0f, rippleLimited / 10.0f) - 1);
 
-        return InitialFactors{std::tan(static_cast<float>(M_PI) * fNorm),
-                              std::cos(fNorm * 2 * static_cast<float>(M_PI)),
+        return InitialFactors{std::tan(std::numbers::pi_v<float> * fNorm),
+                              std::cos(fNorm * 2.f * std::numbers::pi_v<float>),
                               std::log(1.f / eps + std::sqrt(1.f / (eps * eps) + 1)) / static_cast<float>(order)};
     }
 
@@ -576,7 +546,7 @@ class ChebyshevBiquad
             if (lowPass)
             {
                 fZZero = {-1, 0};
-                fDCPoleDistance = isOdd ? sqrt(std::norm(std::complex<float>{1, 0} - fZPole)) / 2
+                fDCPoleDistance = isOdd ? std::sqrt(std::norm(std::complex<float>{1, 0} - fZPole)) / 2
                                         : std::norm(std::complex<float>{1, 0} - fZPole) / 4;
             }
             else
@@ -584,7 +554,7 @@ class ChebyshevBiquad
                 fZPole = (std::complex{beta - fZPole.real(), -fZPole.imag()}) /
                          (std::complex{1 - beta * fZPole.real(), -beta * fZPole.imag()});
                 fZZero = {1, 0};
-                fDCPoleDistance = isOdd ? sqrt(std::norm(std::complex<float>{-1, 0} - fZPole)) / 2
+                fDCPoleDistance = isOdd ? std::sqrt(std::norm(std::complex<float>{-1, 0} - fZPole)) / 2
                                         : std::norm(std::complex<float>{-1, 0} - fZPole) / 4;
             }
             return std::make_tuple(fZPole, fZZero, fDCPoleDistance);
@@ -592,7 +562,8 @@ class ChebyshevBiquad
 
         for (auto iPair = 0u; iPair < order / 2; iPair++)
         {
-            const auto f = static_cast<float>(2 * iPair + 1) * static_cast<float>(M_PI) / static_cast<float>(2 * order);
+            const auto f =
+                static_cast<float>(2 * iPair + 1) * std::numbers::pi_v<float> / static_cast<float>(2 * order);
             const std::complex fSPole{-fC_ * std::sinh(a_) * std::sin(f), fC_ * std::cosh(a_) * std::cos(f)};
             auto [fZPole, fZZero, fDCPoleDistance] = calcPoleZero(fSPole, isLowPass, beta_, false);
             coefficients[iPair].b0 = fDCPoleDistance;
@@ -613,7 +584,7 @@ class ChebyshevBiquad
         else
         {
             m_isOdd = true;
-            const std::complex fSPole{-fC_ * static_cast<float>(sinh(a_)), 0.f};
+            const std::complex fSPole{-fC_ * std::sinh(a_), 0.f};
             auto [fZPole, fZZero, fDCPoleDistance] = calcPoleZero(fSPole, isLowPass, beta_, true);
             coefficients[m_elements - 1].b0 = fDCPoleDistance;
             coefficients[m_elements - 1].b1 = -fZZero.real() * fDCPoleDistance;
@@ -633,23 +604,22 @@ class ChebyshevBiquad
 
         for (unsigned iPair = 0; iPair < static_cast<unsigned>(order / 2); iPair++)
         {
-            auto f = static_cast<float>(2 * iPair + 1) * static_cast<float>(M_PI) / static_cast<float>(2 * order);
+            auto f = static_cast<float>(2 * iPair + 1) * std::numbers::pi_v<float> / static_cast<float>(2 * order);
             std::complex<float> z1{fC, 0};
             std::complex<float> z2{-std::sinh(a) * std::sin(f), std::cosh(a) * std::cos(f)};
             const auto fSPole = z1 / z2;
             auto fZPole = BilinearTransform(fSPole);
             const auto fSZero =
-                std::complex<float>(0, fC / std::cos(((2 * iPair) + 1) * static_cast<float>(M_PI) / (2 * order)));
+                std::complex<float>(0, fC / std::cos(((2 * iPair) + 1) * std::numbers::pi_v<float> / (2 * order)));
             auto fZZero = BilinearTransform(fSZero);
             float fDCPoleDistance;
-            if (isLowPass) // LOWPASS
+            if (isLowPass)
             {
                 fDCPoleDistance =
                     std::norm(std::complex<float>{1, 0} - fZPole) / std::norm(std::complex<float>{1, 0} - fZZero);
             }
             else
             {
-                // Highpass - do the digital LP->HP transform on the poles and zeroes
                 fZPole = std::complex<float>(beta - fZPole.real(), -fZPole.imag()) /
                          std::complex<float>(1 - beta * fZPole.real(), -beta * fZPole.imag());
                 fZZero = std::complex<float>(beta - fZZero.real(), -fZZero.imag()) /
@@ -669,9 +639,9 @@ class ChebyshevBiquad
             const auto iiPair = (static_cast<int>(order) - 1) / 2;
             const auto iPair = static_cast<float>(iiPair);
             auto fSPole = std::complex<float>(fC, 0) /
-                          std::complex<float>(-std::sinh(a) * std::sin((2 * iPair + 1) * static_cast<float>(M_PI) /
+                          std::complex<float>(-std::sinh(a) * std::sin((2 * iPair + 1) * std::numbers::pi_v<float> /
                                                                        static_cast<float>(2 * order)),
-                                              std::cosh(a) * std::cos((2 * iPair + 1) * static_cast<float>(M_PI) /
+                                              std::cosh(a) * std::cos((2 * iPair + 1) * std::numbers::pi_v<float> /
                                                                       static_cast<float>(2 * order)));
             auto fZPole = BilinearTransform(fSPole);
             float fZZeroReal;
@@ -683,7 +653,6 @@ class ChebyshevBiquad
             }
             else
             {
-                // Highpass -  LP->HP transform on poles and zeroes
                 fZPole = std::complex<float>(beta - fZPole.real(), -fZPole.imag()) /
                          std::complex<float>(1 - beta * fZPole.real(), -fZPole.imag());
                 fZZeroReal = 1.f;
@@ -703,19 +672,19 @@ class ChebyshevBiquad
         assignToBiquads();
     }
 
-    [[nodiscard]] Coefficients getCoefficients(size_t index) const
+    [[nodiscard]] Coefficients getCoefficients(const size_t index) const noexcept
     {
         return coefficients[index];
     }
 
-    [[nodiscard]] size_t elements() const
+    [[nodiscard]] size_t elements() const noexcept
     {
         return m_elements;
     }
 
 
     // 3 x mul
-    float stepChebyType1(const float in, const float b0, const float a1, const float a2, float& z0, float& z1)
+    float stepChebyType1(const float in, const float b0, const float a1, const float a2, float& z0, float& z1) noexcept
     {
         const auto t = in * b0;
         const auto out = t + z0;
@@ -726,7 +695,7 @@ class ChebyshevBiquad
 
     // 4 x mul
     float stepChebyType2(const float in, const float b0, const float b1, const float a1, const float a2, float& z0,
-                         float& z1)
+                         float& z1) noexcept
     {
         const auto t = in * b0;
         const auto out = t + z0;
@@ -735,7 +704,7 @@ class ChebyshevBiquad
         return out;
     }
 
-    float step1stOrder(const float in, const float b0, const float b1, const float a1, float& z0) // shelving filters
+    float step1stOrder(const float in, const float b0, const float b1, const float a1, float& z0) noexcept
     {
         const auto t = in * b0;
         const auto out = t + z0;
@@ -839,19 +808,7 @@ class ChebyshevBiquad
         }
     }
 
-    void processBlockStereoOld(const float* left, const float* right, float* outLeft, float* outRight,
-                               const size_t numSamples)
-    {
-        m_biquads[0][0].processBlock(left, outLeft, numSamples);
-        m_biquads[1][0].processBlock(right, outRight, numSamples);
-        for (size_t i = 1; i < m_elements; ++i)
-        {
-            m_biquads[0][i].processBlock(outLeft, outLeft, numSamples);
-            m_biquads[1][i].processBlock(outRight, outRight, numSamples);
-        }
-    }
-
-    auto getMagnitudeInDb(const float cf) const
+    [[nodiscard]] float getMagnitudeInDb(const float cf) const
     {
         float sum = 0;
         for (size_t i = 0; i < m_elements; ++i)
@@ -875,7 +832,7 @@ class ChebyshevBiquad
     }
 
   private:
-    static std::complex<float> BilinearTransform(const std::complex<float> fS)
+    static std::complex<float> BilinearTransform(const std::complex<float> fS) noexcept
     {
         const float fDenominator = std::norm(std::complex<float>{1, 0} - fS);
         return {(1 - fS.real() * fS.real() - fS.imag() * fS.imag()) / fDenominator, 2 * fS.imag() / fDenominator};
@@ -906,11 +863,11 @@ class PeakBiquad
     }
 
 
-    void computeCoefficients(const float frequency, const float peakGain, float Q)
+    void computeCoefficients(const float frequency, const float peakGain, float Q) noexcept
     {
         const auto Fc = frequency / m_sampleRate;
-        const auto V = powf(10.f, fabs(peakGain) / 20.0f);
-        const auto K = tanf(std::numbers::pi_v<float> * Fc);
+        const auto V = std::pow(10.f, std::abs(peakGain) / 20.0f);
+        const auto K = std::tan(std::numbers::pi_v<float> * Fc);
         const auto KSquare = K * K;
         if (Q <= 0)
         {
@@ -934,7 +891,7 @@ class PeakBiquad
         }
     }
 
-    float step(const float in)
+    float step(const float in) noexcept
     {
         m_z[2] = in * m_b0 + m_z[1];
         m_z[1] = m_b1 * (in - m_z[2]) + m_z[0];
