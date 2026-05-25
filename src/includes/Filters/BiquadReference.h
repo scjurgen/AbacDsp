@@ -21,9 +21,6 @@ class BiquadReference
             case BiquadFilterType::AllPass:
                 allpass(f, q);
                 break;
-            // case BiquadFilterType::SignalGain:
-            //     signalGain(Conversions::dbToGain(gain));
-            //     break;
             case BiquadFilterType::LowPass:
                 lowpass(f, q);
                 break;
@@ -50,13 +47,13 @@ class BiquadReference
         }
     }
 
-    void signalGain(const double gain)
+    void signalGain(const double gain) noexcept
     {
         b0 = gain;
         b1 = b2 = a1 = a2 = 0;
     }
 
-    void peak(const double f, const double q, const double gain)
+    void peak(const double f, const double q, const double gain) noexcept
     {
         const auto fCutoff = f / m_sampleRate;
         const auto V = std::pow(10, std::abs(gain) / 20.0);
@@ -80,7 +77,7 @@ class BiquadReference
         a1 = b1 = 2 * (kSquare - 1) * norm;
     }
 
-    void highpass(const double f, const double q)
+    void highpass(const double f, const double q) noexcept
     {
         const auto fCutoff = f / m_sampleRate;
         const auto K = std::tan(std::numbers::pi * fCutoff);
@@ -93,7 +90,7 @@ class BiquadReference
         a2 = (1 - K / q + kSquare) * norm;
     }
 
-    void lowpass(double f, double q)
+    void lowpass(const double f, const double q) noexcept
     {
         const auto fCutoff = f / m_sampleRate;
         const auto K = std::tan(std::numbers::pi * fCutoff);
@@ -106,7 +103,7 @@ class BiquadReference
         a2 = (1 - K / q + kSquare) * norm;
     }
 
-    void bandpass(const double f, const double q)
+    void bandpass(const double f, const double q) noexcept
     {
         const auto fCutoff = f / m_sampleRate;
         const auto K = std::tan(std::numbers::pi * fCutoff);
@@ -119,7 +116,7 @@ class BiquadReference
         a2 = (1 - K / q + kSquare) * norm;
     }
 
-    void notch(const double f, const double q)
+    void notch(const double f, const double q) noexcept
     {
         const auto fCutoff = f / m_sampleRate;
         const auto K = std::tan(std::numbers::pi * fCutoff);
@@ -130,7 +127,7 @@ class BiquadReference
         a2 = (1 - K / q + kSquare) * norm;
     }
 
-    void loshelf(const double f, const double q, const double gain)
+    void loshelf(const double f, const double q, const double gain) noexcept
     {
         const auto v2 = std::pow(10, (gain / 40));
         const auto w0 = 2 * std::numbers::pi * f / m_sampleRate;
@@ -144,7 +141,7 @@ class BiquadReference
         b2 = (v2 * ((v2 + 1) - (v2 - 1) * std::cos(w0) - 2 * std::sqrt(v2) * alpha)) / scale;
     }
 
-    void hishelf(const double f, const double q, const double gain)
+    void hishelf(const double f, const double q, const double gain) noexcept
     {
         const auto v2 = std::pow(10, (gain / 40));
         const auto w0 = 2 * std::numbers::pi * f / m_sampleRate;
@@ -158,7 +155,7 @@ class BiquadReference
         b2 = (v2 * ((v2 + 1) + (v2 - 1) * std::cos(w0) - 2 * std::sqrt(v2) * alpha)) / scale;
     }
 
-    void allpass(const double f, const double q)
+    void allpass(const double f, const double q) noexcept
     {
         const auto w0 = 2 * std::numbers::pi * f / m_sampleRate;
         const auto cosW0 = std::cos(w0);
@@ -170,7 +167,7 @@ class BiquadReference
         b2 = (1 + alpha) / a0;
     }
 
-    double magnitude(const double hz)
+    [[nodiscard]] double magnitude(const double hz) noexcept
     {
         const auto phi = 4 * std::pow(std::sin(2 * std::numbers::pi * hz / m_sampleRate / 2), 2);
         const auto db =
@@ -179,7 +176,7 @@ class BiquadReference
         return db;
     }
 
-    void getCoefficients(double& a1_, double& a2_, double& b0_, double& b1_, double& b2_)
+    void getCoefficients(double& a1_, double& a2_, double& b0_, double& b1_, double& b2_) noexcept
     {
         a1_ = a1;
         a2_ = a2;
@@ -189,7 +186,7 @@ class BiquadReference
     }
 
   private:
-    double m_sampleRate;
+    const double m_sampleRate;
     BiquadFilterType m_type;
     double a1{0}, a2{0}, b0{0}, b1{0}, b2{0};
 };
