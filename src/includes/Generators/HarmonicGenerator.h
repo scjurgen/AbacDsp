@@ -31,27 +31,27 @@ class HarmonicGenerator
         m_harmonicFormula = std::move(harmonicFormula);
     }
 
-    void setSkew(const float value)
+    void setSkew(const float value) noexcept
     {
         m_skew = std::pow(2.f, value);
     }
 
-    void setStrength(const float value)
+    void setStrength(const float value) noexcept
     {
         m_strength = value;
     }
 
-    void setRandPower(const float value)
+    void setRandPower(const float value) noexcept
     {
         m_randomPower = value;
     }
 
-    void setRandSpread(const float value)
+    void setRandSpread(const float value) noexcept
     {
         m_randomSpread = value;
     }
 
-    size_t addHarmonics(Harmonic* target, size_t idx, size_t count, const float baseFrequency, const float power)
+    size_t addHarmonics(Harmonic* target, size_t idx, const size_t count, const float baseFrequency, const float power)
     {
         m_power = power;
 
@@ -164,7 +164,7 @@ inline auto subharmonic()
 }
 
 // Subharmonic series with configurable denominator range
-inline auto subharmonic_range(int maxDenominator)
+inline auto subharmonic_range(const int maxDenominator)
 {
     return [maxDenominator](const int overtoneNum, float)
     {
@@ -268,7 +268,7 @@ inline auto vowel_formants()
 }
 
 // Vocal tract length scaling (strength parameter scales VTL)
-inline auto formant_scaled(float vtl)
+inline auto formant_scaled(const float vtl)
 {
     return [vtl](const int overtoneNum, float strength)
     {
