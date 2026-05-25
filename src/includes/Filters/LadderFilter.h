@@ -4,9 +4,10 @@
 #include <array>
 #include <cmath>
 #include <complex>
-#include <functional>
-#include <iostream>
 #include <numbers>
+#include <stdexcept>
+#include <string_view>
+#include <vector>
 
 namespace AbacDsp
 {
@@ -16,7 +17,7 @@ struct PoleMixingList
     std::array<float, 5> cf;
 };
 
-static std::vector<PoleMixingList> poleMixingList = {
+inline const std::vector<PoleMixingList> poleMixingList = {
     {"LP1", {0, -1, 0, 0, 0}},
     {"LP2", {0, 0, 1, 0, 0}},
     {"LP3", {0, 0, 0, -1, 0}},
@@ -70,11 +71,13 @@ static std::vector<PoleMixingList> poleMixingList = {
     {"20db LP shelf", {0.1, -0.6, 1.1, -2.8, 3.2}},
 };
 
-size_t findFilterIndex(std::string_view target)
+[[nodiscard]] inline size_t findFilterIndex(std::string_view target)
 {
     auto it = std::ranges::find_if(poleMixingList, [target](const PoleMixingList& pm) { return pm.name == target; });
     if (it != poleMixingList.end())
+    {
         return static_cast<size_t>(std::distance(poleMixingList.begin(), it));
+    }
     throw std::out_of_range("PoleMixingList name not found");
 }
 
@@ -125,7 +128,7 @@ class ResonanceFrequencyModifier
                                                           : m_userResonance;
     }
 
-    float m_sampleRate;
+    const float m_sampleRate;
     float m_frequency;
     float m_resonance;
     float m_userResonance;
@@ -162,17 +165,17 @@ class FourStageFilterTheoretical
         x0 = a - b + c - d + e;
     }
 
-    [[nodiscard]] T magnitude(T cutoff, T testFrequency, T resonance) const
+    [[nodiscard]] T magnitude(const T cutoff, const T testFrequency, const T resonance) const
     {
         const T w = testFrequency / cutoff; // normalized to cutoff
         // |G| = |N| / |D|
         const auto nReal = x0 + x4 * w * w * w * w - x2 * w * w;
         const auto nImg = -x1 * w + x3 * w * w * w;
-        const auto nMag = sqrt(nReal * nReal + nImg * nImg);
+        const auto nMag = std::sqrt(nReal * nReal + nImg * nImg);
 
         const auto dReal = 1.0 - 6.0 * w * w + w * w * w * w + resonance;
         const auto dImg = -4.0 * w + 4 * w * w * w;
-        const auto dMag = sqrt(dReal * dReal + dImg * dImg);
+        const auto dMag = std::sqrt(dReal * dReal + dImg * dImg);
 
         return nMag / dMag;
     }
@@ -190,41 +193,39 @@ class FourStageFilterTheoretical
         const auto dPhase = calcPhase(dImg, dReal);
 
         auto phaseValue = nPhase - dPhase;
-        while (phaseValue > std::numbers::pi)
+        while (phaseValue > std::numbers::pi_v<T>)
         {
-            phaseValue -= 2 * std::numbers::pi;
+            phaseValue -= T{2} * std::numbers::pi_v<T>;
         }
-        while (phaseValue < -std::numbers::pi)
+        while (phaseValue < -std::numbers::pi_v<T>)
         {
-            phaseValue += 2 * std::numbers::pi;
+            phaseValue += T{2} * std::numbers::pi_v<T>;
         }
         phase = phaseValue;
     }
 
-    static T calcPhase(const T img, const T real)
+    [[nodiscard]] static T calcPhase(const T img, const T real)
     {
-        return real > 0 ? -atan(img / real) : -(std::numbers::pi - std::atan(img / std::abs(real)));
+        return real > 0 ? -std::atan(img / real) : -(std::numbers::pi_v<T> - std::atan(img / std::abs(real)));
     }
 
-    T magnitudeBP(T cutoff, T testFrequency, T resonance) const
+    [[nodiscard]] T magnitudeBP(const T cutoff, const T testFrequency, const T resonance) const
     {
         const T pole = std::exp(-T(2) * std::numbers::pi_v<T> * cutoff / m_sampleRate);
         const T w = T(2) * std::numbers::pi_v<T> * testFrequency / m_sampleRate;
-        auto y = stage_outputs(pole, w);
-        auto band = bandpass(y);
-        auto num = numerator(m_coefficients, y);
-        auto denom = T(1) + resonance * band;
+        const auto y = stage_outputs(pole, w);
+        const auto band = bandpass(y);
+        const auto num = numerator(m_coefficients, y);
+        const auto denom = T(1) + resonance * band;
         return std::abs(num / denom);
     }
 
-    T magnitudeBP2(T pole, T w, T resonance) const
+    [[nodiscard]] T magnitudeBP2(const T pole, const T w, const T resonance) const
     {
-        // w in radians (0...pi) at 48kHz
-        // m_pole: (your filter pole coefficient)
-        std::array<std::complex<T>, 5> y = stage_outputs(pole, w);
-        std::complex<T> band = bandpass(y);
-        std::complex<T> num = numerator(m_coefficients, y);
-        std::complex<T> denom = T(1.0) + resonance * band;
+        const auto y = stage_outputs(pole, w);
+        const std::complex<T> band = bandpass(y);
+        const std::complex<T> num = numerator(m_coefficients, y);
+        const std::complex<T> denom = T(1.0) + resonance * band;
         return std::abs(num / denom);
     }
 
@@ -258,11 +259,13 @@ class FourStageFilterTheoretical
     {
         std::complex<T> sum{};
         for (size_t i = 0; i < 5; ++i)
+        {
             sum += coeffs[i] * y[i];
+        }
         return sum;
     }
 
-    T m_sampleRate;
+    const T m_sampleRate;
     std::array<T, 5> m_coefficients;
     T x0{0}, x1{0}, x2{0}, x3{0}, x4{0};
 };
@@ -281,32 +284,32 @@ class FourStageFilterTheoretical
 class Filter1Pole4StageSmooth
 {
   public:
-    explicit Filter1Pole4StageSmooth(float sampleRate)
+    explicit Filter1Pole4StageSmooth(const float sampleRate)
         : m_sampleRate(sampleRate)
     {
         setCutoffFrequency(m_cutoffFrequency);
         m_pole = m_targetPole;
     }
 
-    void setFilterCoefficients(const std::array<float, 5>& cf)
+    void setFilterCoefficients(const std::array<float, 5>& cf) noexcept
     {
         m_coefficients = cf;
     }
 
-    void setParameterSmoothTimeMs(float ms)
+    void setParameterSmoothTimeMs(const float ms) noexcept
     {
         const float T = ms * 1e-3f;
         m_smoothingAlpha = 1.f - std::exp(-1.f / (T * m_sampleRate));
     }
 
-    void setResonance(float value)
+    void setResonance(const float value) noexcept
     {
         m_targetResonance = value;
     }
 
     // because we are in the digital domain we need to adapt the resonance frequency
     // this solution seems to be more efficient than implementing
-    static float adaptResonanceFrequency(const float x)
+    [[nodiscard]] static float adaptResonanceFrequency(const float x) noexcept
     {
         if (x > 2800.f)
         {
@@ -317,20 +320,20 @@ class Filter1Pole4StageSmooth
                           10.f, 22000.f);
     }
 
-    void setCutoffFrequency(float cutoffFrequency)
+    void setCutoffFrequency(const float cutoffFrequency) noexcept
     {
         m_cutoff = cutoffFrequency;
         const float x = adaptResonanceFrequency(cutoffFrequency);
-        m_targetPole = std::exp(-std::numbers::pi * 2.0f * x / m_sampleRate);
+        m_targetPole = std::exp(-2.0f * std::numbers::pi_v<float> * x / m_sampleRate);
     }
 
-    void setCutoffFrequencyClean(float cutoffFrequency)
+    void setCutoffFrequencyClean(const float cutoffFrequency) noexcept
     {
         m_cutoff = cutoffFrequency;
-        m_targetPole = std::exp(-std::numbers::pi * 2.0f * cutoffFrequency / m_sampleRate);
+        m_targetPole = std::exp(-2.0f * std::numbers::pi_v<float> * cutoffFrequency / m_sampleRate);
     }
 
-    static float compress(const float in)
+    [[nodiscard]] static float compress(const float in) noexcept
     {
         /*
         +--------------------+------------------------------+---------------------+-----------+
@@ -347,7 +350,7 @@ class Filter1Pole4StageSmooth
         return in / std::sqrt(1 + in * in);
     }
 
-    [[nodiscard]] float step(float in)
+    [[nodiscard]] float step(const float in) noexcept
     {
         m_pole += m_smoothingAlpha * (m_targetPole - m_pole);
         m_reso += m_smoothingAlpha * (m_targetResonance - m_reso);
@@ -365,13 +368,15 @@ class Filter1Pole4StageSmooth
         return tmpSum;
     }
 
-    void processBlock(const float* source, float* target, size_t numSamples)
+    void processBlock(const float* source, float* target, const size_t numSamples) noexcept
     {
         for (size_t i = 0; i < numSamples; ++i)
+        {
             target[i] = step(source[i]);
+        }
     }
 
-    void reset()
+    void reset() noexcept
     {
         std::ranges::fill(m_v, 0.f);
         m_pole = m_targetPole;
@@ -405,12 +410,12 @@ class FourStageOnePoleFilterNoResonance
     {
     }
 
-    void setCutoff(const float cutoff)
+    void setCutoff(const float cutoff) noexcept
     {
         m_pole = std::exp(-2.0f * std::numbers::pi_v<float> * cutoff / m_sampleRate);
     }
 
-    float singleStep(const float in)
+    [[nodiscard]] float singleStep(const float in) noexcept
     {
         m_v[0] = in + m_pole * (m_v[0] - in);
         m_v[1] = m_v[0] + m_pole * (m_v[1] - m_v[0]);
@@ -419,13 +424,13 @@ class FourStageOnePoleFilterNoResonance
         return f0 * in + f1 * m_v[0] + f2 * m_v[1] + f3 * m_v[2] + f4 * m_v[3];
     }
 
-    void processBlock(const float* source, float* target, const size_t numSamples)
+    void processBlock(const float* source, float* target, const size_t numSamples) noexcept
     {
-        std::transform(source, source + numSamples, target, [this](auto value) { return singleStep(value); });
+        std::transform(source, source + numSamples, target, [this](const float value) { return singleStep(value); });
     }
 
   private:
-    float m_sampleRate;
+    const float m_sampleRate;
     float m_pole{0.5f};
     std::array<float, 4> m_v{0, 0, 0, 0};
 };
