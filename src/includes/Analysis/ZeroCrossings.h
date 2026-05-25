@@ -1,19 +1,16 @@
 #pragma once
 
-#include <functional>
-#include <vector>
 #include <algorithm>
 #include <cmath>
-#include <numeric>
 #include <concepts>
+#include <functional>
+#include <numeric>
+#include <span>
+#include <vector>
 
 namespace AbacDsp
 {
-/*
- * Usage:
- * std::vector<float> signal;
- * const auto stats = AbacDsp::calculateZeroCrossingStatistics(signal.data(), signal.size(), true);
- */
+
 struct ZeroCrossingStatistics
 {
     float meanPeriodLen{0.0f};
@@ -24,7 +21,7 @@ struct ZeroCrossingStatistics
 };
 
 template <std::floating_point T>
-inline T calculateDC(const T* data, const size_t size)
+[[nodiscard]] inline T calculateDC(const T* data, const size_t size) noexcept
 {
     if (size == 0)
     {
@@ -34,11 +31,11 @@ inline T calculateDC(const T* data, const size_t size)
 }
 
 /*
- * the passed lambda is for analysing data series where the baseline is not 0, e.g.
- * modulation that wiggles around 0.5 -> [](const float x) {return x-0.5f;}
+ * The preprocessing lambda handles baselines other than 0 — e.g. modulation
+ * oscillating around 0.5 would use [](float x) { return x - 0.5f; }
  */
 template <std::floating_point T, typename PreprocessFunc = std::function<T(T)>>
-inline size_t findFirstZeroCrossingNP(
+[[nodiscard]] inline size_t findFirstZeroCrossingNP(
     const T* data, const size_t maxSize, PreprocessFunc preprocess = [](T x) { return x; })
 {
     if (maxSize < 2)
@@ -46,10 +43,10 @@ inline size_t findFirstZeroCrossingNP(
         return maxSize;
     }
 
-    auto previousValue = preprocess(data[0]);
+    T previousValue = preprocess(data[0]);
     for (size_t index = 1; index < maxSize; ++index)
     {
-        auto currentValue = preprocess(data[index]);
+        const T currentValue = preprocess(data[index]);
         if (previousValue < T{0} && currentValue >= T{0})
         {
             return index;
@@ -60,7 +57,7 @@ inline size_t findFirstZeroCrossingNP(
 }
 
 template <std::floating_point T>
-inline size_t findFirstZeroCrossingNP(const T* data, const size_t maxSize, bool removeDC)
+[[nodiscard]] inline size_t findFirstZeroCrossingNP(const T* data, const size_t maxSize, const bool removeDC)
 {
     if (!removeDC)
     {
@@ -72,7 +69,7 @@ inline size_t findFirstZeroCrossingNP(const T* data, const size_t maxSize, bool 
 }
 
 template <std::floating_point T, typename PreprocessFunc = std::function<T(T)>>
-inline float periodLengthByZeroCrossingAverage(
+[[nodiscard]] inline float periodLengthByZeroCrossingAverage(
     const T* data, const size_t size, PreprocessFunc preprocess = [](T x) { return x; })
 {
     const size_t firstIndex = findFirstZeroCrossingNP(data, size, preprocess);
@@ -81,13 +78,13 @@ inline float periodLengthByZeroCrossingAverage(
         return 0.0f;
     }
 
-    auto previousValue = preprocess(data[firstIndex]);
+    T previousValue = preprocess(data[firstIndex]);
     size_t cnt = 0;
     size_t lastIndex = firstIndex;
 
     for (size_t i = firstIndex + 1; i < size; ++i)
     {
-        auto value = preprocess(data[i]);
+        const T value = preprocess(data[i]);
         if (previousValue < T{0} && value >= T{0})
         {
             ++cnt;
@@ -105,7 +102,7 @@ inline float periodLengthByZeroCrossingAverage(
 }
 
 template <std::floating_point T>
-inline float periodLengthByZeroCrossingAverage(const T* data, const size_t size, bool removeDC)
+[[nodiscard]] inline float periodLengthByZeroCrossingAverage(const T* data, const size_t size, const bool removeDC)
 {
     if (!removeDC)
     {
@@ -117,7 +114,7 @@ inline float periodLengthByZeroCrossingAverage(const T* data, const size_t size,
 }
 
 template <std::floating_point T, typename PreprocessFunc = std::function<T(T)>>
-inline ZeroCrossingStatistics calculateZeroCrossingStatistics(
+[[nodiscard]] inline ZeroCrossingStatistics calculateZeroCrossingStatistics(
     const T* data, const size_t size, PreprocessFunc preprocess = [](T x) { return x; })
 {
     ZeroCrossingStatistics stats;
@@ -129,15 +126,15 @@ inline ZeroCrossingStatistics calculateZeroCrossingStatistics(
     }
 
     std::vector<float> periodLengths;
-    auto previousValue = preprocess(data[firstIndex]);
+    T previousValue = preprocess(data[firstIndex]);
     size_t lastZeroCrossing = firstIndex;
 
     for (size_t i = firstIndex + 1; i < size; ++i)
     {
-        auto value = preprocess(data[i]);
+        const T value = preprocess(data[i]);
         if (previousValue < T{0} && value >= T{0})
         {
-            float periodLength = static_cast<float>(i - lastZeroCrossing);
+            const float periodLength = static_cast<float>(i - lastZeroCrossing);
             periodLengths.push_back(periodLength);
             lastZeroCrossing = i;
         }
@@ -154,22 +151,25 @@ inline ZeroCrossingStatistics calculateZeroCrossingStatistics(
     const float sum = std::accumulate(periodLengths.begin(), periodLengths.end(), 0.0f);
     stats.meanPeriodLen = sum / static_cast<float>(periodLengths.size());
 
-    stats.minPeriodLength = *std::min_element(periodLengths.begin(), periodLengths.end());
-    stats.maxPeriodLength = *std::max_element(periodLengths.begin(), periodLengths.end());
+    const auto [minIt, maxIt] = std::minmax_element(periodLengths.begin(), periodLengths.end());
+    stats.minPeriodLength = *minIt;
+    stats.maxPeriodLength = *maxIt;
 
-    float sumSquaredDifferences = 0.0f;
-    for (const auto& length : periodLengths)
-    {
-        const float diff = length - stats.meanPeriodLen;
-        sumSquaredDifferences += diff * diff;
-    }
+    const float sumSquaredDifferences =
+        std::transform_reduce(periodLengths.begin(), periodLengths.end(), 0.0f, std::plus<>{},
+                              [mean = stats.meanPeriodLen](const float length)
+                              {
+                                  const float diff = length - mean;
+                                  return diff * diff;
+                              });
 
     stats.standardDeviation = std::sqrt(sumSquaredDifferences / static_cast<float>(periodLengths.size()));
     return stats;
 }
 
 template <std::floating_point T>
-inline ZeroCrossingStatistics calculateZeroCrossingStatistics(const T* data, const size_t size, const bool removeDC)
+[[nodiscard]] inline ZeroCrossingStatistics calculateZeroCrossingStatistics(const T* data, const size_t size,
+                                                                            const bool removeDC)
 {
     if (!removeDC)
     {
@@ -180,8 +180,23 @@ inline ZeroCrossingStatistics calculateZeroCrossingStatistics(const T* data, con
     return calculateZeroCrossingStatistics(data, size, [dc](T x) { return x - dc; });
 }
 
+template <std::floating_point T, typename PreprocessFunc = std::function<T(T)>>
+[[nodiscard]] inline ZeroCrossingStatistics calculateZeroCrossingStatistics(
+    std::span<const T> signal, PreprocessFunc preprocess = [](T x) { return x; })
+{
+    return calculateZeroCrossingStatistics(signal.data(), signal.size(), preprocess);
+}
+
+template <std::floating_point T, typename PreprocessFunc = std::function<T(T)>>
+[[nodiscard]] inline ZeroCrossingStatistics calculateZeroCrossingStatistics(
+    const std::vector<T>& signal, PreprocessFunc preprocess = [](T x) { return x; })
+{
+    return calculateZeroCrossingStatistics(signal.data(), signal.size(), preprocess);
+}
+
 template <std::floating_point T>
-inline ZeroCrossingStatistics calculateZeroCrossingStatistics(std::vector<T> signal, const bool removeDC)
+[[nodiscard]] inline ZeroCrossingStatistics calculateZeroCrossingStatistics(std::span<const T> signal,
+                                                                            const bool removeDC)
 {
     if (!removeDC)
     {
@@ -193,8 +208,9 @@ inline ZeroCrossingStatistics calculateZeroCrossingStatistics(std::vector<T> sig
 }
 
 template <std::floating_point T>
-inline ZeroCrossingStatistics calculateZeroCrossingStatistics(std::contiguous_iterator auto first,
-                                                              std::contiguous_iterator auto last, const bool removeDC)
+[[nodiscard]] inline ZeroCrossingStatistics calculateZeroCrossingStatistics(std::contiguous_iterator auto first,
+                                                                            std::contiguous_iterator auto last,
+                                                                            const bool removeDC)
 {
     if (!removeDC)
     {
