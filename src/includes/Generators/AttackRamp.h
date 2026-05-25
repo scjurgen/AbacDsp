@@ -1,7 +1,8 @@
 #pragma once
 
-#include <cmath>
+#include <algorithm>
 #include <array>
+#include <cmath>
 
 namespace AbacDsp
 {
@@ -25,30 +26,23 @@ class AttackRamp
 
     explicit AttackRamp(const float sampleRate)
         : m_sampleRate(sampleRate)
-        , m_timeMs(2.0f)
-        , m_mode(RampMode::Exponential)
-        , m_state(State::Idle)
-        , m_currentValue(0.0f)
-        , m_sampleCount(0)
-        , m_blocksRemaining(0)
-        , m_increment(0.0f)
     {
         updateRampParameters();
     }
 
-    void setAttackTimeMs(const float timeMs)
+    void setAttackTimeMs(const float timeMs) noexcept
     {
         m_timeMs = timeMs;
         updateRampParameters();
     }
 
-    void setMode(RampMode mode)
+    void setMode(const RampMode mode) noexcept
     {
         m_mode = mode;
         updateRampParameters();
     }
 
-    void trigger()
+    void trigger() noexcept
     {
         m_sampleCount = 0;
         m_currentValue = 1E-6f;
@@ -56,12 +50,12 @@ class AttackRamp
         m_blocksRemaining = m_totalBlocks;
     }
 
-    bool isActive() const
+    [[nodiscard]] bool isActive() const noexcept
     {
         return m_state != State::Idle;
     }
 
-    void processBlock(std::array<float, BlockSize>& block)
+    void processBlock(std::array<float, BlockSize>& block) noexcept
     {
         if (m_state == State::Idle)
         {
@@ -79,16 +73,16 @@ class AttackRamp
     }
 
   private:
-    float m_sampleRate;
-    float m_timeMs;
-    RampMode m_mode;
-    State m_state;
-    float m_currentValue;
-    size_t m_sampleCount;
-    size_t m_totalBlocks;
-    size_t m_blocksRemaining;
-    float m_increment;
-    float m_exponentialFactor;
+    const float m_sampleRate;
+    float m_timeMs{2.0f};
+    RampMode m_mode{RampMode::Exponential};
+    State m_state{State::Idle};
+    float m_currentValue{0.0f};
+    size_t m_sampleCount{0};
+    size_t m_totalBlocks{0};
+    size_t m_blocksRemaining{0};
+    float m_increment{0.0f};
+    float m_exponentialFactor{1.0f};
 
     void updateRampParameters()
     {
