@@ -337,8 +337,8 @@ public:
                     static_cast<size_t>(buffer.getNumSamples())});
       m_outputDb[c].store(std::log10(m_envOutput[c].getRms()) * 20.f);
     }
-    m_spectrogram.processBlock(buffer.getWritePointer(0),
-                               buffer.getNumSamples());
+    m_spectrogram.processBlock(std::span{
+        buffer.getReadPointer(0), static_cast<size_t>(buffer.getNumSamples())});
   }
 
 #pragma GCC diagnostic pop

@@ -350,7 +350,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
         /*END_SHOWVUMETER*/
         /*START_SHOWSPECTROGRAM*/
-        m_spectrogram.processBlock(buffer.getWritePointer(0), buffer.getNumSamples());
+        m_spectrogram.processBlock(std::span{buffer.getReadPointer(0), static_cast<size_t>(buffer.getNumSamples())});
         /*END_SHOWSPECTROGRAM*/
         /*START_SHOWCPULOAD*/
         const auto endTime = std::chrono::high_resolution_clock::now();

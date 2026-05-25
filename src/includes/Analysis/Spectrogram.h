@@ -1,7 +1,7 @@
 #pragma once
 
-
 #include <cmath>
+#include <span>
 #include <thread>
 #include <vector>
 
@@ -14,12 +14,12 @@ class MelSpectroGram
   public:
     struct ImageSet
     {
-        size_t currentSlize;
+        size_t currentSlice;
         size_t width;
         size_t fftHalfLength;
         const float* data;
 
-        [[nodiscard]] size_t size() const
+        [[nodiscard]] size_t size() const noexcept
         {
             return width * fftHalfLength;
         }
@@ -28,31 +28,27 @@ class MelSpectroGram
     MelSpectroGram()
         : m_magnitudes(512, 0)
         , m_fft{1024}
-        , m_workerThread(&MelSpectroGram::workerFunction, this)
+        , m_workerThread([this](std::stop_token tok) { workerFunction(tok); })
     {
         setMelBands(40);
         setFftLength(1024);
         setSlices(1920);
     }
 
-    ~MelSpectroGram()
-    {
-        m_shouldExit.store(true, std::memory_order_release);
-        m_workerThread.join();
-    }
+    ~MelSpectroGram() = default;
 
-    void setMelBands(size_t melBands)
+    void setMelBands(const size_t melBands)
     {
         m_melHeight = melBands;
         m_melSpectrogram.resize(m_melHeight * m_slices);
         createMelFilterbank();
     }
 
-    void setSlices(size_t cnt)
+    void setSlices(const size_t cnt)
     {
         m_slices = cnt;
         m_spectrogram.resize(m_fftLength / 2 * m_slices);
-        m_currentSlice = std::clamp<size_t>(m_currentSlice, 0u, cnt);
+        m_currentSlice = std::clamp(m_currentSlice, size_t{0}, cnt);
     }
 
     void setFftLength(const size_t N)
@@ -65,16 +61,14 @@ class MelSpectroGram
         m_magnitudes.resize(m_fftLength / 2);
     }
 
-    void processBlock(const float* in, size_t numSamples)
+    void processBlock(std::span<const float> input)
     {
-        for (size_t i = 0; i < numSamples; ++i)
+        for (const float sample : input)
         {
-            m_buffer[m_bufferIndex] = in[i];
-            m_bufferIndex++;
-
+            m_buffer[m_bufferIndex++] = sample;
             if (m_bufferIndex >= m_fftLength)
             {
-                calculateFFT();
+                enqueueFFT();
                 advanceWindow();
             }
         }
@@ -86,34 +80,31 @@ class MelSpectroGram
     }
 
   private:
-    void calculateFFT()
+    void enqueueFFT()
     {
-        size_t head = m_queueHead.load(std::memory_order_relaxed);
-        size_t nextHead = (head + 1) % QUEUE_SIZE;
-
+        const size_t head = m_queueHead.load(std::memory_order_relaxed);
+        const size_t nextHead = (head + 1) % QUEUE_SIZE;
         if (nextHead != m_queueTail.load(std::memory_order_acquire))
         {
             m_fftQueue[head % QUEUE_SIZE] = m_buffer;
             m_queueHead.store(nextHead, std::memory_order_release);
         }
-        // If the queue is full, we skip this FFT computation
     }
 
     void advanceWindow()
     {
-        auto samplesToKeep = static_cast<size_t>(m_fftLength * (1.0f - m_windowForward));
-        auto index = m_fftLength - samplesToKeep;
+        const auto samplesToKeep = static_cast<size_t>(m_fftLength * (1.0f - m_windowForward));
+        const auto index = m_fftLength - samplesToKeep;
         std::copy_n(&m_buffer[index], m_buffer.size() - index, m_buffer.data());
         m_bufferIndex = samplesToKeep;
     }
 
-    void workerFunction()
+    void workerFunction(std::stop_token token)
     {
-        while (!m_shouldExit.load(std::memory_order_acquire))
+        while (!token.stop_requested())
         {
-            size_t tail = m_queueTail.load(std::memory_order_relaxed);
-            size_t head = m_queueHead.load(std::memory_order_acquire);
-
+            const size_t tail = m_queueTail.load(std::memory_order_relaxed);
+            const size_t head = m_queueHead.load(std::memory_order_acquire);
             if (tail != head)
             {
                 processFFT(m_fftQueue[tail % QUEUE_SIZE]);
@@ -129,7 +120,6 @@ class MelSpectroGram
     void processFFT(const std::vector<float>& buffer)
     {
         m_fft.compute(buffer, m_magnitudes);
-
         std::copy_n(m_magnitudes.data(), m_magnitudes.size(), &m_spectrogram[m_currentSlice * (m_fftLength / 2)]);
         m_currentSlice++;
         if (m_currentSlice >= m_slices)
@@ -138,6 +128,7 @@ class MelSpectroGram
         }
         std::fill_n(&m_spectrogram[m_currentSlice * (m_fftLength / 2)], m_magnitudes.size(), 1.f);
     }
+
     std::vector<float> m_melSpectrogram;
     size_t m_melHeight{40};
     std::vector<std::vector<float>> m_melFilterbank;
@@ -145,37 +136,41 @@ class MelSpectroGram
 
     void createMelFilterbank()
     {
-        float maxFreq = m_sampleRate / 2.0f;
-        float minMel = 0;
-        float maxMel = 2595.0f * std::log10(1.0f + maxFreq / 700.0f);
+        const float maxFreq = m_sampleRate / 2.0f;
+        constexpr float minMel = 0.f;
+        const float maxMel = 2595.0f * std::log10(1.0f + maxFreq / 700.0f);
 
         m_melFilterbank.resize(m_melHeight);
 
         for (size_t i = 0; i < m_melHeight; ++i)
         {
-            float mel = minMel + (maxMel - minMel) * i / (m_melHeight - 1);
-            float hz = 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f);
-            size_t fftBin = static_cast<size_t>(std::round(hz * m_fftLength / m_sampleRate));
+            const float mel = minMel + (maxMel - minMel) * static_cast<float>(i) / static_cast<float>(m_melHeight - 1);
+            const float hz = 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f);
+            const size_t fftBin = static_cast<size_t>(std::round(hz * static_cast<float>(m_fftLength) / m_sampleRate));
 
-            m_melFilterbank[i].resize(m_fftLength / 2);
-            std::fill(m_melFilterbank[i].begin(), m_melFilterbank[i].end(), 0.0f);
+            m_melFilterbank[i].assign(m_fftLength / 2, 0.0f);
 
             if (i > 0 && i < m_melHeight - 1)
             {
-                float prevMel = minMel + (maxMel - minMel) * (i - 1) / (m_melHeight - 1);
-                float nextMel = minMel + (maxMel - minMel) * (i + 1) / (m_melHeight - 1);
-                float prevHz = 700.0f * (std::pow(10.0f, prevMel / 2595.0f) - 1.0f);
-                float nextHz = 700.0f * (std::pow(10.0f, nextMel / 2595.0f) - 1.0f);
-                size_t prevBin = static_cast<size_t>(std::round(prevHz * m_fftLength / m_sampleRate));
-                size_t nextBin = static_cast<size_t>(std::round(nextHz * m_fftLength / m_sampleRate));
+                const float prevMel =
+                    minMel + (maxMel - minMel) * static_cast<float>(i - 1) / static_cast<float>(m_melHeight - 1);
+                const float nextMel =
+                    minMel + (maxMel - minMel) * static_cast<float>(i + 1) / static_cast<float>(m_melHeight - 1);
+                const float prevHz = 700.0f * (std::pow(10.0f, prevMel / 2595.0f) - 1.0f);
+                const float nextHz = 700.0f * (std::pow(10.0f, nextMel / 2595.0f) - 1.0f);
+                const size_t prevBin =
+                    static_cast<size_t>(std::round(prevHz * static_cast<float>(m_fftLength) / m_sampleRate));
+                const size_t nextBin =
+                    static_cast<size_t>(std::round(nextHz * static_cast<float>(m_fftLength) / m_sampleRate));
 
                 for (size_t j = prevBin; j < fftBin; ++j)
                 {
-                    m_melFilterbank[i][j] = (j - prevBin) / static_cast<float>(fftBin - prevBin);
+                    m_melFilterbank[i][j] = static_cast<float>(j - prevBin) / static_cast<float>(fftBin - prevBin);
                 }
                 for (size_t j = fftBin; j < nextBin; ++j)
                 {
-                    m_melFilterbank[i][j] = 1.0f - (j - fftBin) / static_cast<float>(nextBin - fftBin);
+                    m_melFilterbank[i][j] =
+                        1.0f - static_cast<float>(j - fftBin) / static_cast<float>(nextBin - fftBin);
                 }
             }
         }
@@ -184,7 +179,6 @@ class MelSpectroGram
     void processFFTToMel(const std::vector<float>& buffer)
     {
         m_fft.compute(buffer, m_magnitudes);
-
         std::copy_n(m_magnitudes.data(), m_magnitudes.size(), &m_spectrogram[m_currentSlice * (m_fftLength / 2)]);
 
         for (size_t i = 0; i < m_melHeight; ++i)
@@ -203,6 +197,7 @@ class MelSpectroGram
             m_currentSlice = 0;
         }
     }
+
     std::vector<float> m_spectrogram;
     std::vector<float> m_buffer;
     std::vector<float> m_fftBuffer;
@@ -213,13 +208,11 @@ class MelSpectroGram
     float m_windowForward{0.75f};
     size_t m_currentSlice{0};
     size_t m_bufferIndex{0};
-    // fft async
     static constexpr size_t QUEUE_SIZE = 4;
     std::array<std::vector<float>, QUEUE_SIZE> m_fftQueue;
     std::atomic<size_t> m_queueHead{0};
     std::atomic<size_t> m_queueTail{0};
-    std::atomic<bool> m_shouldExit{false};
-    std::thread m_workerThread;
+    std::jthread m_workerThread;
 };
 
 struct SpectrumImageSet
@@ -232,7 +225,7 @@ struct SpectrumImageSet
     unsigned fftLength;
     float windowForwardRatio; // hop / fftLength — for time axis labelling
 
-    [[nodiscard]] size_t size() const
+    [[nodiscard]] size_t size() const noexcept
     {
         return width * height;
     }
@@ -244,16 +237,12 @@ class SpectrogramBase
     SpectrogramBase()
         : m_magnitudes(512, 0)
         , m_fft{1024}
-        , m_workerThread(&SpectrogramBase::workerFunction, this)
+        , m_workerThread([this](std::stop_token tok) { workerFunction(tok); })
     {
         setFftLength(1024);
     }
 
-    virtual ~SpectrogramBase()
-    {
-        m_shouldExit.store(true, std::memory_order_release);
-        m_workerThread.join();
-    }
+    virtual ~SpectrogramBase() = default;
 
     void setSampleRate(const float sr)
     {
@@ -279,16 +268,14 @@ class SpectrogramBase
         m_forwardLength = static_cast<unsigned>(m_fftLength * m_windowForwardRatio);
     }
 
-    void processBlock(const float* in, const unsigned numSamples)
+    void processBlock(std::span<const float> input)
     {
-        for (unsigned i = 0; i < numSamples; ++i)
+        for (const float sample : input)
         {
-            m_buffer[m_bufferIndex] = in[i];
-            m_bufferIndex++;
-
+            m_buffer[m_bufferIndex++] = sample;
             if (m_bufferIndex >= m_fftLength)
             {
-                calculateFFT();
+                enqueueFFT();
                 advanceWindow();
             }
         }
@@ -309,11 +296,10 @@ class SpectrogramBase
     unsigned m_bufferIndex{0};
 
   private:
-    void calculateFFT()
+    void enqueueFFT()
     {
-        size_t head = m_queueHead.load(std::memory_order_relaxed);
-        size_t nextHead = (head + 1) % QUEUE_SIZE;
-
+        const size_t head = m_queueHead.load(std::memory_order_relaxed);
+        const size_t nextHead = (head + 1) % QUEUE_SIZE;
         if (nextHead != m_queueTail.load(std::memory_order_acquire))
         {
             m_fftQueue[head % QUEUE_SIZE] = m_buffer;
@@ -328,13 +314,12 @@ class SpectrogramBase
         m_bufferIndex = samplesToKeep;
     }
 
-    void workerFunction()
+    void workerFunction(std::stop_token token)
     {
-        while (!m_shouldExit.load(std::memory_order_acquire))
+        while (!token.stop_requested())
         {
-            size_t tail = m_queueTail.load(std::memory_order_relaxed);
-            size_t head = m_queueHead.load(std::memory_order_acquire);
-
+            const size_t tail = m_queueTail.load(std::memory_order_relaxed);
+            const size_t head = m_queueHead.load(std::memory_order_acquire);
             if (tail != head)
             {
                 m_fft.compute(m_fftQueue[tail % QUEUE_SIZE], m_magnitudes);
@@ -352,8 +337,7 @@ class SpectrogramBase
     std::array<std::vector<float>, QUEUE_SIZE> m_fftQueue;
     std::atomic<size_t> m_queueHead{0};
     std::atomic<size_t> m_queueTail{0};
-    std::atomic<bool> m_shouldExit{false};
-    std::thread m_workerThread;
+    std::jthread m_workerThread;
 };
 
 class SimpleSpectrogram : public SpectrogramBase
@@ -391,14 +375,12 @@ class SimpleSpectrogram : public SpectrogramBase
         {
             return;
         }
-
         std::copy_n(magnitudes.data(), magnitudes.size(), &m_spectrogram[m_currentSlice * (m_fftLength / 2)]);
         m_currentSlice++;
         if (m_currentSlice >= m_slices)
         {
             m_currentSlice = 0;
         }
-
         std::fill_n(&m_spectrogram[m_currentSlice * (m_fftLength / 2)], magnitudes.size(), 1.f);
     }
 
@@ -415,7 +397,6 @@ class FloatingHorizonFFTImage : public SpectrogramBase
         : m_magnitudeCollector(m_fftLength / 2)
         , m_horizon(m_width)
         , m_image(m_width * m_height)
-
     {
     }
 
@@ -444,7 +425,7 @@ class FloatingHorizonFFTImage : public SpectrogramBase
         }
         if (yp > m_horizon[xpos])
         {
-            const size_t imgIdx = static_cast<size_t>(yp + xpos * m_width);
+            const size_t imgIdx = static_cast<size_t>(yp + static_cast<float>(xpos) * static_cast<float>(m_width));
             if (imgIdx >= m_image.size())
             {
                 return;
@@ -474,7 +455,7 @@ class FloatingHorizonFFTImage : public SpectrogramBase
             const auto value = m_magnitudeCollector[x] / static_cast<float>(m_count);
             const auto yp = 120.f + static_cast<float>(m_currentSlice * m_gap) + 20 * std::log10(value);
             const auto xpos = offsetX + x;
-            if (ypp < yp) // new point is greater, draw down up
+            if (ypp < yp)
             {
                 while (ypp < yp)
                 {
@@ -485,7 +466,7 @@ class FloatingHorizonFFTImage : public SpectrogramBase
             else
             {
                 auto ypTmp = yp;
-                while (ypTmp < ypp) // new point lower, draw reverse
+                while (ypTmp < ypp)
                 {
                     plotOverHorizon(static_cast<unsigned>(xpos), ypTmp, value * 4 + 0.00001f);
                     ypTmp++;
@@ -497,11 +478,11 @@ class FloatingHorizonFFTImage : public SpectrogramBase
         m_currentSlice = (m_currentSlice + 1) % m_slices;
         if (m_currentSlice == 0)
         {
-            std::fill(m_horizon.begin(), m_horizon.end(), 0.0f);
-            std::fill(m_image.begin(), m_image.end(), 0.0f);
+            std::ranges::fill(m_horizon, 0.0f);
+            std::ranges::fill(m_image, 0.0f);
         }
         m_count = 0;
-        std::fill(m_magnitudeCollector.begin(), m_magnitudeCollector.end(), 0.f);
+        std::ranges::fill(m_magnitudeCollector, 0.f);
     }
 
   private:

@@ -2,9 +2,8 @@
 
 #include "Analysis/SimpleStats.h"
 #include "Analysis/ZeroCrossings.h"
-#include "Numbers/Convert.h"
-
 #include "Filters/SvfResoBP.h"
+#include "Numbers/Convert.h"
 
 namespace AbacDsp::Test
 {
