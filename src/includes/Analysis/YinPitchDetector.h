@@ -1,11 +1,10 @@
 #pragma once
 
 #include <algorithm>
-#include <array>
-#include <vector>
 #include <cmath>
-#include <numeric>
 #include <optional>
+#include <span>
+#include <vector>
 
 namespace AbacDsp
 {
@@ -13,19 +12,15 @@ namespace AbacDsp
 class YinPitchDetector
 {
   public:
-    // Constexpr tolerances for better maintainability
     static constexpr float kDefaultThreshold = 0.1f;
     static constexpr float kSilenceThreshold = 1e-6f;
     static constexpr float kMinCumulativeSumThreshold = 1e-10f;
     static constexpr float kMinimumQualityThreshold = 0.8f;
-    static constexpr float kMinPeriodsForBuffer = 4.0f; // Number of periods needed for reliable detection
+    static constexpr float kMinPeriodsForBuffer = 4.0f;
 
     explicit YinPitchDetector(const float sampleRate, const float minFreq = 80.0f, const float maxFreq = 1000.0f,
                               const float hopFrequency = 50.0f)
         : m_sampleRate(sampleRate)
-        , m_minFreq(minFreq)
-        , m_maxFreq(maxFreq)
-        , m_hopFrequency(hopFrequency)
         , m_bufferSize(calculateBufferSize(sampleRate, minFreq))
         , m_hopSize(calculateHopSize(sampleRate, hopFrequency))
         , m_minPeriod(static_cast<size_t>(sampleRate / maxFreq))
@@ -39,18 +34,16 @@ class YinPitchDetector
     {
     }
 
-    bool hasNewPitch() const
+    [[nodiscard]] bool hasNewPitch() const noexcept
     {
         return m_newPitch;
     }
 
     float step(const float in)
     {
-        // Add new sample to circular buffer
         m_buffer[m_writeIndex] = in;
         m_writeIndex = (m_writeIndex + 1) % m_bufferSize;
 
-        // Process based on calculated hop size
         m_newPitch = false;
         if (++m_hopCounter >= m_hopSize)
         {
@@ -62,44 +55,39 @@ class YinPitchDetector
         return m_currentPitch;
     }
 
-    void processBlock(const float* source, float* target, const size_t numSamples)
+    void processBlock(std::span<const float> source, std::span<float> target)
     {
-        std::transform(source, source + numSamples, target, [this](const float in) { return step(in); });
+        std::transform(source.begin(), source.end(), target.begin(), [this](const float in) { return step(in); });
     }
 
-    float getCurrentPitch() const
+    [[nodiscard]] float getCurrentPitch() const noexcept
     {
         return m_currentPitch;
     }
 
-    // Getters for debugging/testing
-    size_t getBufferSize() const
+    [[nodiscard]] size_t getBufferSize() const noexcept
     {
         return m_bufferSize;
     }
-    size_t getHopSize() const
+
+    [[nodiscard]] size_t getHopSize() const noexcept
     {
         return m_hopSize;
     }
-    float getActualHopRate() const
+
+    [[nodiscard]] float getActualHopRate() const noexcept
     {
         return m_sampleRate / static_cast<float>(m_hopSize);
     }
 
   private:
-    // Configuration
     float m_sampleRate;
-    float m_minFreq;
-    float m_maxFreq;
-    float m_hopFrequency;
 
-    // Calculated sizes
     size_t m_bufferSize;
     size_t m_hopSize;
     size_t m_minPeriod;
     size_t m_maxPeriod;
 
-    // Processing state
     std::vector<float> m_buffer;
     std::vector<float> m_differenceFunction;
     std::vector<float> m_cmndf;
@@ -108,22 +96,17 @@ class YinPitchDetector
     size_t m_hopCounter;
     bool m_newPitch{false};
 
-    static size_t calculateBufferSize(const float sampleRate, const float minFreq)
+    [[nodiscard]] static size_t calculateBufferSize(const float sampleRate, const float minFreq) noexcept
     {
-        // Calculate buffer size based on minimum frequency
-        // We need at least kMinPeriodsForBuffer periods of the lowest frequency
-        const float minPeriodSamples = sampleRate / minFreq;
-        const size_t requiredSize = static_cast<size_t>(kMinPeriodsForBuffer * minPeriodSamples);
-
-        return requiredSize;
+        return static_cast<size_t>(kMinPeriodsForBuffer * (sampleRate / minFreq));
     }
 
-    static size_t calculateHopSize(const float sampleRate, const float hopFrequency)
+    [[nodiscard]] static size_t calculateHopSize(const float sampleRate, const float hopFrequency) noexcept
     {
         return static_cast<size_t>(sampleRate / hopFrequency);
     }
 
-    float computePitch()
+    [[nodiscard]] float computePitch()
     {
         if (!hasEnoughEnergy())
         {
@@ -140,20 +123,17 @@ class YinPitchDetector
         return m_sampleRate / refinedTau;
     }
 
-    bool hasEnoughEnergy()
+    [[nodiscard]] bool hasEnoughEnergy() const
     {
-        float sumSquares = 0.0f;
         const size_t analysisLength = m_bufferSize / 2;
-
+        float sumSquares = 0.0f;
         for (size_t i = 0; i < analysisLength; ++i)
         {
             const size_t idx = (m_writeIndex - analysisLength + i + m_bufferSize) % m_bufferSize;
             const float sample = m_buffer[idx];
             sumSquares += sample * sample;
         }
-
-        const float rmsEnergy = std::sqrt(sumSquares / analysisLength);
-        return rmsEnergy > kSilenceThreshold;
+        return std::sqrt(sumSquares / static_cast<float>(analysisLength)) > kSilenceThreshold;
     }
 
     void computeDifferenceFunction()
@@ -176,7 +156,7 @@ class YinPitchDetector
             m_differenceFunction[tau] = sum;
         }
 
-        // Set tau=0 to 1.0 by convention
+        // tau=0 is defined as 1 by the YIN algorithm convention
         m_differenceFunction[0] = 1.0f;
     }
 
@@ -189,54 +169,37 @@ class YinPitchDetector
         {
             cumulativeSum += m_differenceFunction[tau];
 
-            if (cumulativeSum > kMinCumulativeSumThreshold)
-            {
-                m_cmndf[tau] = m_differenceFunction[tau] * static_cast<float>(tau) / cumulativeSum;
-            }
-            else
-            {
-                m_cmndf[tau] = 1.0f; // Default to high value for near-zero cumulative sum
-            }
+            m_cmndf[tau] = (cumulativeSum > kMinCumulativeSumThreshold)
+                               ? m_differenceFunction[tau] * static_cast<float>(tau) / cumulativeSum
+                               : 1.0f;
         }
     }
 
-    std::optional<size_t> findAbsoluteThreshold()
+    [[nodiscard]] std::optional<size_t> findAbsoluteThreshold() const
     {
-        const size_t startTau = std::max(m_minPeriod, size_t(1));
+        const size_t startTau = std::max(m_minPeriod, size_t{1});
         const size_t endTau = std::min(m_cmndf.size(), m_maxPeriod);
 
-        // First pass: look for values below threshold that are local minima
         for (size_t tau = startTau; tau < endTau; ++tau)
         {
-            if (m_cmndf[tau] < kDefaultThreshold)
+            if (m_cmndf[tau] < kDefaultThreshold && tau > 0 && tau < m_cmndf.size() - 1 &&
+                m_cmndf[tau] <= m_cmndf[tau - 1] && m_cmndf[tau] <= m_cmndf[tau + 1])
             {
-                // Check if it's a local minimum
-                if (tau > 0 && tau < m_cmndf.size() - 1)
-                {
-                    if (m_cmndf[tau] <= m_cmndf[tau - 1] && m_cmndf[tau] <= m_cmndf[tau + 1])
-                    {
-                        return tau;
-                    }
-                }
+                return tau;
             }
         }
 
-        // Second pass: find global minimum, but only if it's significantly low
-        const auto minIt = std::min_element(m_cmndf.begin() + startTau, m_cmndf.begin() + endTau);
-        if (minIt != m_cmndf.begin() + endTau)
+        const auto minIt = std::min_element(m_cmndf.begin() + static_cast<ptrdiff_t>(startTau),
+                                            m_cmndf.begin() + static_cast<ptrdiff_t>(endTau));
+        if (minIt != m_cmndf.begin() + static_cast<ptrdiff_t>(endTau) && *minIt < kMinimumQualityThreshold)
         {
-            const float minValue = *minIt;
-            // Only accept the global minimum if it's reasonably low
-            if (minValue < kMinimumQualityThreshold)
-            {
-                return std::distance(m_cmndf.begin(), minIt);
-            }
+            return static_cast<size_t>(std::distance(m_cmndf.begin(), minIt));
         }
 
         return std::nullopt;
     }
 
-    float parabolicInterpolation(const size_t tau) const
+    [[nodiscard]] float parabolicInterpolation(const size_t tau) const noexcept
     {
         if (tau == 0 || tau >= m_cmndf.size() - 1)
         {
@@ -247,7 +210,6 @@ class YinPitchDetector
         const float y2 = m_cmndf[tau];
         const float y3 = m_cmndf[tau + 1];
 
-        // Parabolic interpolation
         const float a = (y1 - 2.0f * y2 + y3) / 2.0f;
         const float b = (y3 - y1) / 2.0f;
 
@@ -256,8 +218,7 @@ class YinPitchDetector
             return static_cast<float>(tau);
         }
 
-        const float xVertex = -b / (2.0f * a);
-        return static_cast<float>(tau) + xVertex;
+        return static_cast<float>(tau) + (-b / (2.0f * a));
     }
 };
 
