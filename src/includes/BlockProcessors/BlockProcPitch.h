@@ -1,7 +1,6 @@
 #pragma once
 
 #include <array>
-#include <cmath>
 
 #include "BlockProcessorBase.h"
 #include "Delays/PitchFadeWindowDelay.h"
@@ -30,10 +29,10 @@ class Pitch final : public BlockProcessorBase<BlockSize>
         m_pdl.setPitch(semiTones);
     }
 
-    void setPitchMix(const float value)
+    void setPitchMix(const float value) noexcept
     {
         m_mixPitch = value;
-        m_mixPlain = 1 - value;
+        m_mixPlain = 1.0f - value;
     }
     void setReverse(const bool reverse) noexcept
     {
@@ -54,7 +53,7 @@ class Pitch final : public BlockProcessorBase<BlockSize>
     void reset() noexcept override {}
 
   private:
-    float m_sampleRate;
+    const float m_sampleRate;
     float m_mixPitch{0.5f};
     float m_mixPlain{0.5f};
     PitchFadeWindowDelay<DelayBufferSize> m_pdl;
