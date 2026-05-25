@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cmath>
 #include <span>
 #include <thread>
@@ -28,14 +29,18 @@ class MelSpectroGram
     MelSpectroGram()
         : m_magnitudes(512, 0)
         , m_fft{1024}
-        , m_workerThread([this](std::stop_token tok) { workerFunction(tok); })
+        , m_workerThread(&MelSpectroGram::workerFunction, this)
     {
         setMelBands(40);
         setFftLength(1024);
         setSlices(1920);
     }
 
-    ~MelSpectroGram() = default;
+    ~MelSpectroGram()
+    {
+        m_shouldExit.store(true, std::memory_order_release);
+        m_workerThread.join();
+    }
 
     void setMelBands(const size_t melBands)
     {
@@ -99,9 +104,9 @@ class MelSpectroGram
         m_bufferIndex = samplesToKeep;
     }
 
-    void workerFunction(std::stop_token token)
+    void workerFunction()
     {
-        while (!token.stop_requested())
+        while (!m_shouldExit.load(std::memory_order_acquire))
         {
             const size_t tail = m_queueTail.load(std::memory_order_relaxed);
             const size_t head = m_queueHead.load(std::memory_order_acquire);
@@ -212,7 +217,8 @@ class MelSpectroGram
     std::array<std::vector<float>, QUEUE_SIZE> m_fftQueue;
     std::atomic<size_t> m_queueHead{0};
     std::atomic<size_t> m_queueTail{0};
-    std::jthread m_workerThread;
+    std::atomic<bool> m_shouldExit{false};
+    std::thread m_workerThread;
 };
 
 struct SpectrumImageSet
@@ -237,12 +243,16 @@ class SpectrogramBase
     SpectrogramBase()
         : m_magnitudes(512, 0)
         , m_fft{1024}
-        , m_workerThread([this](std::stop_token tok) { workerFunction(tok); })
+        , m_workerThread(&SpectrogramBase::workerFunction, this)
     {
         setFftLength(1024);
     }
 
-    virtual ~SpectrogramBase() = default;
+    virtual ~SpectrogramBase()
+    {
+        m_shouldExit.store(true, std::memory_order_release);
+        m_workerThread.join();
+    }
 
     void setSampleRate(const float sr)
     {
@@ -314,9 +324,9 @@ class SpectrogramBase
         m_bufferIndex = samplesToKeep;
     }
 
-    void workerFunction(std::stop_token token)
+    void workerFunction()
     {
-        while (!token.stop_requested())
+        while (!m_shouldExit.load(std::memory_order_acquire))
         {
             const size_t tail = m_queueTail.load(std::memory_order_relaxed);
             const size_t head = m_queueHead.load(std::memory_order_acquire);
@@ -337,7 +347,8 @@ class SpectrogramBase
     std::array<std::vector<float>, QUEUE_SIZE> m_fftQueue;
     std::atomic<size_t> m_queueHead{0};
     std::atomic<size_t> m_queueTail{0};
-    std::jthread m_workerThread;
+    std::atomic<bool> m_shouldExit{false};
+    std::thread m_workerThread;
 };
 
 class SimpleSpectrogram : public SpectrogramBase
