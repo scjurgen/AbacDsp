@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include "Numbers/EasyingFunctions.h"
 
 namespace AbacDsp
@@ -62,26 +61,14 @@ class FracReadHead
         m_totalSteps = static_cast<size_t>(std::ceil(std::abs(1.5f * deltaDifference / advanceDeviation)));
 
         if (m_totalSteps == 0)
+        {
             return;
+        }
 
         m_currentPhase = TransitionPhase::Ramping;
         m_currentStep = 0;
     }
 
-    /**
-     * @brief Advances read head position using smooth interpolation toward target delta.
-     *
-     * During ramping phase, applies either:
-     * - Quadratic: 2nd-degree polynomial for parabolic interpolation
-     * - Quartic: 4th-degree smoothstep for sharper acceleration profile
-     *
-     * The advance rate modulates from 1.0 toward maxAdvance, creating a bell-curve profile.
-     * Once target delta is reached, snaps position to exact target and enters idle phase.
-     * Handles deferred delta changes queued during ramping.
-     *
-     * @param referencePosition Reference position (typically write head) for delta calculation.
-     * @return Current fractional read head position (wrapped to [0, WrapSize)).
-     */
     float step(const float referencePosition) noexcept
     {
         m_referencePosition = referencePosition;
@@ -156,7 +143,7 @@ class FracReadHead
     }
 
   private:
-    float m_sampleRate;
+    const float m_sampleRate;
     double m_position{0.0};
     double m_advance{1.0};
     float m_targetDelta{0.0f};
