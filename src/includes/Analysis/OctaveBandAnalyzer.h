@@ -1,8 +1,9 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cmath>
-#include <algorithm>
+
 #include "Filters/Biquad.h"
 
 namespace AbacDsp
@@ -42,7 +43,7 @@ class OctaveBandAnalyzer
         }
     }
 
-    const std::array<float, NumBins>& getLevels() const
+    [[nodiscard]] const std::array<float, NumBins>& getLevels() const
     {
         for (size_t i = 0; i < NumBins; ++i)
         {
@@ -52,7 +53,7 @@ class OctaveBandAnalyzer
         return m_levels;
     }
 
-    const std::array<float, NumBins>& getCenterFrequencies() const
+    [[nodiscard]] const std::array<float, NumBins>& getCenterFrequencies() const
     {
         for (size_t i = 0; i < NumBins; ++i)
         {
@@ -92,8 +93,8 @@ class OctaveBandAnalyzer
     }
 
   private:
-    float m_sampleRate;
-    float m_Q;
+    float m_sampleRate{0.f};
+    float m_Q{0.f};
     std::array<float, NumBins> m_internalLevels{};
     std::array<float, NumBins> m_internalCenterFreqs{};
     mutable std::array<float, NumBins> m_levels{};
@@ -142,7 +143,7 @@ class OctaveBandAnalyzer
         }
     }
 
-    static constexpr size_t mapUserIndexToInternal(const size_t userIdx)
+    [[nodiscard]] static constexpr size_t mapUserIndexToInternal(const size_t userIdx) noexcept
     {
         const size_t octaveNum = userIdx / BinsPerOctave;
         const size_t binInOctave = userIdx % BinsPerOctave;
@@ -168,7 +169,7 @@ class OctaveBandAnalyzer
             for (size_t bin = 0; bin < BinsPerOctave; ++bin)
             {
                 const size_t bandIdx = baseIdx + bin;
-                const float centerFreq = computeBandCenterFreq(octave, bin, octaveSampleRate);
+                const float centerFreq = computeBandCenterFreq(bin, octaveSampleRate);
                 m_bp[bandIdx].computeCoefficients(octaveSampleRate, centerFreq, m_Q, 0.0f);
             }
 
@@ -192,12 +193,12 @@ class OctaveBandAnalyzer
             for (size_t bin = 0; bin < BinsPerOctave; ++bin)
             {
                 const size_t bandIdx = baseIdx + bin;
-                m_internalCenterFreqs[bandIdx] = computeBandCenterFreq(octave, bin, octaveSampleRate);
+                m_internalCenterFreqs[bandIdx] = computeBandCenterFreq(bin, octaveSampleRate);
             }
         }
     }
 
-    float computeBandCenterFreq(const size_t octave, const size_t bin, const float octaveSampleRate) const
+    [[nodiscard]] float computeBandCenterFreq(const size_t bin, const float octaveSampleRate) const noexcept
     {
         const float baseCenter = octaveSampleRate * 0.25f;
         const float binOffset = (static_cast<float>(bin) - static_cast<float>(BinsPerOctave - 1) * 0.5f) /
@@ -205,7 +206,7 @@ class OctaveBandAnalyzer
         return baseCenter * std::pow(2.0f, binOffset);
     }
 
-    float computeRMSLevel(const size_t numSamples)
+    float computeRMSLevel(const size_t numSamples) noexcept
     {
         float sumL = 0.0f;
         float sumR = 0.0f;
