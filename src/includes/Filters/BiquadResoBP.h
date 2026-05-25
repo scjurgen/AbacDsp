@@ -4,7 +4,6 @@
 #include <array>
 #include <cmath>
 #include <numbers>
-#include <numeric>
 
 namespace AbacDsp
 {
@@ -112,18 +111,18 @@ class BiquadResoBP
         m_z[1] = v2;
     }
 
-    void pump(const float f)
+    void pump(const float f) noexcept
     {
         m_z[0] *= f;
         m_z[1] *= f;
     }
 
-    [[nodiscard]] float currentMagnitudeSquared() const
+    [[nodiscard]] float currentMagnitudeSquared() const noexcept
     {
         return m_z[0] * m_z[0] + m_z[1] * m_z[1];
     }
 
-    [[nodiscard]] float currentMagnitude() const
+    [[nodiscard]] float currentMagnitude() const noexcept
     {
         return std::sqrt(currentMagnitudeSquared());
     }
@@ -140,7 +139,7 @@ class BiquadResoBP
         return static_cast<float>(db);
     }
 
-    void damp(const bool damp)
+    void damp(const bool damp) noexcept
     {
         m_currentSet = damp ? 1 : 0;
     }
@@ -162,7 +161,7 @@ class BiquadResoBP
         return m_inActiveCount < 32;
     }
 
-    void triggered()
+    void triggered() noexcept
     {
         m_decayCount = m_decayMax;
     }
