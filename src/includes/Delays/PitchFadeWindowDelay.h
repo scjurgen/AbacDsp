@@ -1,9 +1,11 @@
 #pragma once
 
-#include "Numbers/Interpolation.h"
-
+#include <cmath>
 #include <random>
+#include <span>
 #include <vector>
+
+#include "Numbers/Interpolation.h"
 
 namespace AbacDsp
 {
@@ -20,16 +22,16 @@ class PitchFadeWindowDelay
         setFadeTime(10000);
     }
 
-    void setSize(const size_t newSize)
+    void setSize(const size_t newSize) noexcept
     {
         m_readHeads.size = std::min(newSize, m_maxSize - 1);
     }
 
-    void setFadeTime(const size_t t)
+    void setFadeTime(const size_t t) noexcept
     {
         m_readHeads.fadeTime = std::min(t, m_fadeBuffer.size() - 1);
-        m_readHeads.fadeStep = 1.0f / m_readHeads.fadeTime;
-        const float invFadeTime = 1.0f / m_readHeads.fadeTime;
+        m_readHeads.fadeStep = 1.0f / static_cast<float>(m_readHeads.fadeTime);
+        const float invFadeTime = 1.0f / static_cast<float>(m_readHeads.fadeTime);
         for (size_t i = 0; i < m_readHeads.fadeTime; ++i)
         {
             m_fadeBuffer[i] = static_cast<float>(i) * invFadeTime;
@@ -82,7 +84,7 @@ class PitchFadeWindowDelay
         return returnValue;
     }
 
-    void setReverse(const bool reverse)
+    void setReverse(const bool reverse) noexcept
     {
         m_reverse = reverse;
     }
@@ -93,7 +95,7 @@ class PitchFadeWindowDelay
         setPitchRatio(ratio);
     }
 
-    void setPitchRatio(const float ratio)
+    void setPitchRatio(const float ratio) noexcept
     {
         if (std::fpclassify(ratio) == FP_ZERO)
         {
@@ -102,9 +104,9 @@ class PitchFadeWindowDelay
         m_readHeads.advance = ratio;
     }
 
-    void processBlock(const float* source, float* target, const size_t numSamples)
+    void processBlock(std::span<const float> source, std::span<float> target)
     {
-        for (size_t i = 0; i < numSamples; ++i)
+        for (size_t i = 0; i < source.size(); ++i)
         {
             target[i] = step(source[i]);
         }
@@ -116,12 +118,12 @@ class PitchFadeWindowDelay
         m_readHeads.fade = true;
         m_readHeads.fadeOutPos = m_readHeads.fadeInPos;
         m_readHeads.fadeCount = m_readHeads.fadeTime;
-        m_readHeads.fadeInGain = 0;
-        m_readHeads.fadeOutGain = 1.0;
+        m_readHeads.fadeInGain = 0.0f;
+        m_readHeads.fadeOutGain = 1.0f;
         m_readHeads.fadeInPos = calcMaterialInPosition();
     }
 
-    void advanceFade(float& fadePos)
+    void advanceFade(float& fadePos) noexcept
     {
         fadePos += m_reverse ? -m_readHeads.advance : m_readHeads.advance;
         while (fadePos < 0)
@@ -183,7 +185,7 @@ class PitchFadeWindowDelay
         {
             pos += m_maxSize;
         }
-        return round(pos);
+        return std::round(pos);
     }
 
     struct ReadHead
@@ -192,8 +194,8 @@ class PitchFadeWindowDelay
         float fadeOutPos{MAXSIZE * 0.75f};
         float advance{0.001f};
         size_t size{MAXSIZE};
-        float fadeInGain{1};
-        float fadeOutGain{0};
+        float fadeInGain{1.0f};
+        float fadeOutGain{0.0f};
         size_t fadeTime{MAXSIZE / 4};
         size_t fadeCount{0};
         size_t plainSteps{1};

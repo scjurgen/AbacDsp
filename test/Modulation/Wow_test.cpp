@@ -1,15 +1,15 @@
 
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
-
 #include <algorithm>
 #include <cmath>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
 #include <numeric>
 #include <vector>
 
+#include "AudioFile/SaveWav.h"
+
 #include "Analysis/SimpleStats.h"
 #include "Analysis/ZeroCrossings.h"
-#include "AudioFile/SaveWav.h"
 #include "Modulation/Wow.h"
 
 namespace AbacDsp::Test

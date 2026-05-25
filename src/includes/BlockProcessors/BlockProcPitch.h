@@ -42,7 +42,7 @@ class Pitch final : public BlockProcessorBase<BlockSize>
     void process(std::array<float, BlockSize>& blk) noexcept override
     {
         std::array<float, BlockSize> tmp;
-        m_pdl.processBlock(blk.data(), tmp.data(), BlockSize);
+        m_pdl.processBlock(blk, tmp);
         m_lp.processBlock(tmp.data(), BlockSize);
         for (size_t i = 0; i < BlockSize; ++i)
         {
