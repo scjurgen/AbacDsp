@@ -24,17 +24,17 @@ class AudioBuffer
         {
         }
 
-        SampleType& operator[](size_t channel)
+        [[nodiscard]] SampleType& operator[](const size_t channel) noexcept
         {
             return m_ptr[channel];
         }
 
-        const SampleType& operator[](size_t channel) const
+        [[nodiscard]] const SampleType& operator[](const size_t channel) const noexcept
         {
             return m_ptr[channel];
         }
 
-        operator Frame() const
+        [[nodiscard]] operator Frame() const noexcept
         {
             Frame frame;
             std::copy_n(m_ptr, Channels, frame.begin());
@@ -59,12 +59,12 @@ class AudioBuffer
         {
         }
 
-        const SampleType& operator[](size_t channel) const
+        [[nodiscard]] const SampleType& operator[](const size_t channel) const noexcept
         {
             return m_ptr[channel];
         }
 
-        operator Frame() const
+        [[nodiscard]] operator Frame() const noexcept
         {
             Frame frame;
             std::copy_n(m_ptr, Channels, frame.begin());
@@ -94,114 +94,89 @@ class AudioBuffer
         {
         }
 
-        Frame operator*() const
+        [[nodiscard]] Frame operator*() const noexcept
         {
             Frame frame;
             std::copy_n(m_ptr, Channels, frame.begin());
             return frame;
         }
 
-        const SampleType* operator->() const
+        [[nodiscard]] const SampleType* operator->() const noexcept
         {
             return m_ptr;
         }
 
-        FrameIterator& operator++()
+        FrameIterator& operator++() noexcept
         {
             m_ptr += Channels;
             return *this;
         }
 
-        FrameIterator operator++(int)
+        FrameIterator operator++(int) noexcept
         {
             auto tmp = *this;
             ++(*this);
             return tmp;
         }
 
-        FrameIterator& operator--()
+        FrameIterator& operator--() noexcept
         {
             m_ptr -= Channels;
             return *this;
         }
 
-        FrameIterator operator--(int)
+        FrameIterator operator--(int) noexcept
         {
             auto tmp = *this;
             --(*this);
             return tmp;
         }
 
-        FrameIterator& operator+=(difference_type n)
+        FrameIterator& operator+=(const difference_type n) noexcept
         {
-            m_ptr += n * Channels;
+            m_ptr += n * static_cast<difference_type>(Channels);
             return *this;
         }
 
-        FrameIterator operator+(difference_type n) const
+        [[nodiscard]] FrameIterator operator+(const difference_type n) const noexcept
         {
             auto tmp = *this;
             return tmp += n;
         }
 
-        friend FrameIterator operator+(difference_type n, const FrameIterator& it)
+        [[nodiscard]] friend FrameIterator operator+(const difference_type n, const FrameIterator& it) noexcept
         {
             return it + n;
         }
 
-        FrameIterator& operator-=(difference_type n)
+        FrameIterator& operator-=(const difference_type n) noexcept
         {
-            m_ptr -= n * Channels;
+            m_ptr -= n * static_cast<difference_type>(Channels);
             return *this;
         }
 
-        FrameIterator operator-(difference_type n) const
+        [[nodiscard]] FrameIterator operator-(const difference_type n) const noexcept
         {
             auto tmp = *this;
             return tmp -= n;
         }
 
-        difference_type operator-(const FrameIterator& other) const
+        [[nodiscard]] difference_type operator-(const FrameIterator& other) const noexcept
         {
-            return (m_ptr - other.m_ptr) / Channels;
+            return (m_ptr - other.m_ptr) / static_cast<difference_type>(Channels);
         }
 
-        Frame operator[](difference_type n) const
+        [[nodiscard]] Frame operator[](const difference_type n) const noexcept
         {
             return *(*this + n);
         }
 
-        bool operator==(const FrameIterator& other) const
+        [[nodiscard]] bool operator==(const FrameIterator& other) const noexcept
         {
             return m_ptr == other.m_ptr;
         }
 
-        bool operator!=(const FrameIterator& other) const
-        {
-            return !(*this == other);
-        }
-
-        bool operator<(const FrameIterator& other) const
-        {
-            return m_ptr < other.m_ptr;
-        }
-
-        bool operator>(const FrameIterator& other) const
-        {
-            return other < *this;
-        }
-
-        bool operator<=(const FrameIterator& other) const
-        {
-            return !(other < *this);
-        }
-
-        bool operator>=(const FrameIterator& other) const
-        {
-            return !(*this < other);
-        }
-
-        std::strong_ordering operator<=>(const FrameIterator& other) const
+        [[nodiscard]] std::strong_ordering operator<=>(const FrameIterator& other) const noexcept
         {
             return m_ptr <=> other.m_ptr;
         }

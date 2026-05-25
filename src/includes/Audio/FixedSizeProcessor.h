@@ -9,9 +9,10 @@
 namespace AbacDsp
 {
 
-inline size_t getSamplesPerMillisecond(float milliseconds, float sampleRate, size_t maxValue)
+[[nodiscard]] inline size_t getSamplesPerMillisecond(const float milliseconds, const float sampleRate,
+                                                     const size_t maxValue) noexcept
 {
-    auto size = static_cast<size_t>(std::round(milliseconds * 0.001f * sampleRate));
+    const auto size = static_cast<size_t>(std::round(milliseconds * 0.001f * sampleRate));
     return std::clamp<size_t>(size, 1, maxValue);
 }
 
