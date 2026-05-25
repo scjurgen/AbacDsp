@@ -1,7 +1,7 @@
 #pragma once
 
-#include <random>
 #include <cmath>
+#include <random>
 
 namespace AbacDsp
 {
@@ -18,10 +18,9 @@ class OrnsteinUhlenbeckProcess
 {
   public:
     explicit OrnsteinUhlenbeckProcess(const float sampleRate)
-        : m_dt(1 / sampleRate)
+        : m_dt(1.f / sampleRate)
         , m_sqrtDt(std::sqrt(m_dt))
         , m_normalDist(0.0f, 1.0f / 2.33f)
-        , m_x(0.0f)
     {
     }
 
@@ -43,7 +42,7 @@ class OrnsteinUhlenbeckProcess
      *  dx = theta(mu - x)dt + sigma*sqrt(dt)*dW
      *  @return Current process value x.
      */
-    float step() noexcept
+    [[nodiscard]] float step() noexcept
     {
         const auto dW = m_normalDist(m_rng);
         m_x += m_theta * (m_mu - m_x) * m_dt + m_sigma * m_sqrtDt * dW;
@@ -70,7 +69,7 @@ class OrnsteinUhlenbeckProcess
     float m_sigma{0.0f};
     float m_theta{1.0f};
     float m_mu{0.0f};
-    float m_x;
+    float m_x{0.0f};
 
     std::mt19937 m_rng{std::random_device{}()};
     std::normal_distribution<float> m_normalDist;
