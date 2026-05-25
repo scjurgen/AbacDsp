@@ -739,6 +739,8 @@ def createPackageFromJsonDict(m: dict):
 
     m["CPP"]["Module"] = m["CPP"]["module"].capitalize()
     m["CPP"]["GAUGES"] = gauge_present(m)
+    if getPatchCount(m) > 0:
+        m["CPP"]["GAUGES"].append("PATCHSUPPORT")
 
     cppTargetFile = f"{cppTmpDir}/src/{cppJuceFile}"
     createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{cppJuceFile}", m["CPP"], cppJuceFileVars)

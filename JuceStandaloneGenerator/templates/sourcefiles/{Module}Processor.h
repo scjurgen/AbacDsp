@@ -239,6 +239,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
 
 
+        /*START_PATCHSUPPORT*/
         if (/*PatchChanged*/)
         {
             /*PatchIndexAssign*/
@@ -257,8 +258,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
         else
         {
+            /*END_PATCHSUPPORT*/
             m_fileIo.updateParameter(parameterID.toStdString(), newValue);
+            /*START_PATCHSUPPORT*/
         }
+        /*END_PATCHSUPPORT*/
 
         static const std::map<juce::String, std::function<void(AudioPluginAudioProcessor&, float)>> parameterMap{
             /*PARAMETER_CHANGED*/

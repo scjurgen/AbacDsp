@@ -255,21 +255,7 @@ public:
       return;
     }
 
-    if () {
-
-      if (m_fileIo.areParametersModified()) {
-        const int result = juce::NativeMessageBox::showYesNoBox(
-            juce::MessageBoxIconType::QuestionIcon, "Save Parameters",
-            "Parameters have changed, do you want to save before loading new "
-            "patch?",
-            nullptr, nullptr);
-        handlePatchChange(m_patchIndex, result == 1);
-      } else {
-        loadPatchDirect(m_patchIndex);
-      }
-    } else {
-      m_fileIo.updateParameter(parameterID.toStdString(), newValue);
-    }
+    m_fileIo.updateParameter(parameterID.toStdString(), newValue);
 
     static const std::map<
         juce::String, std::function<void(AudioPluginAudioProcessor &, float)>>
