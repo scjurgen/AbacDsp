@@ -1,19 +1,15 @@
 #pragma once
 
 #include <algorithm>
-#include <random>
 #include <vector>
 
-#include "SamplerateConverter/SrPushConverter.h"
-#include "Numbers/MultichannelInterpolation.h"
-#include "Parameters/SmoothingParameter.h"
-
 #include "Helpers/ConstructArray.h"
-
 #include "Modulation/Flutter.h"
 #include "Modulation/Wow.h"
-
+#include "Numbers/MultichannelInterpolation.h"
 #include "Numbers/TimeDistanceSmoother.h"
+#include "Parameters/SmoothingParameter.h"
+#include "SamplerateConverter/SrPushConverter.h"
 
 namespace AbacDsp
 {
@@ -21,8 +17,8 @@ template <size_t BufferSize, size_t NumChannels, size_t NumReadHeads, size_t Til
 class VariSpeedTapeDelay
 {
   public:
-    static constexpr auto accelPerSec = 6.f; // max ratio units per second (acceleration)
-    static constexpr auto brakePerSec = 3.f; // max ratio units per second (braking)
+    static constexpr auto accelPerSec = 6.f;
+    static constexpr auto brakePerSec = 3.f;
     static constexpr auto NoisePeakQ = 0.1f;
     using TapeInterpolation = MultichannelInterpolation<NumChannels>;
     using DefectsInterpolation = MultichannelInterpolation<NumChannels>;
@@ -61,10 +57,6 @@ class VariSpeedTapeDelay
             const float fraction = m_rdhd[hdIdx].getPosition() - static_cast<float>(indexBuffer);
             std::array<float, NumChannels> tmp{};
             TapeInterpolation::catmullRom(&m_buffer[indexBuffer * NumChannels], tmp.data(), fraction);
-            // the last head is the total looptime
-            const size_t sosHeadIndex =
-                std::max<size_t>(1000, static_cast<size_t>(m_rdhd[NumReadHeads - 1].getCurrentDelta()));
-            const size_t wrappedIndex = indexBuffer % (sosHeadIndex > 0 ? sosHeadIndex : indexBuffer);
             for (size_t c = 0; c < NumChannels; ++c)
             {
                 out[i * NumChannels + c] = tmp[c];
@@ -91,10 +83,9 @@ class VariSpeedTapeDelay
 
     void setReadHead(const size_t hdIdx, const float delta, const bool force = false) noexcept
     {
-        // savety areas of 1000 samples for modulation
-        constexpr float MaxModulationSavety{1000.f};
+        constexpr float MaxModulationSafety{1000.f};
         const auto clampedDelta =
-            std::clamp(delta, MaxModulationSavety, static_cast<float>(BufferSize) - 1 - MaxModulationSavety);
+            std::clamp(delta, MaxModulationSafety, static_cast<float>(BufferSize) - 1 - MaxModulationSafety);
         if (force)
         {
             m_rdhd[hdIdx].forceReadPositionDistance(clampedDelta);
@@ -167,7 +158,6 @@ class VariSpeedTapeDelay
     {
         if (m_writeHead >= 6)
         {
-            // no special treatment for interpolation wrap, just copy and advance
             if (const auto availableFrames = std::min(BufferSize - m_writeHead, frames); availableFrames >= frames)
             {
                 std::copy_n(data, availableFrames * NumChannels, m_buffer.begin() + m_writeHead * NumChannels);
@@ -193,7 +183,7 @@ class VariSpeedTapeDelay
         }
     }
 
-    float m_sampleRate;
+    const float m_sampleRate;
 
   protected:
     std::vector<float> m_buffer;
