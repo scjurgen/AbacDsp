@@ -54,13 +54,13 @@ class ResonanceCompensation
                                         4.f,           8.f,          16.f,        32.f,       64.f};
 
   public:
-    static float compensate(float index, float time)
+    [[nodiscard]] static float compensate(const float index, const float time) noexcept
     {
         constexpr float logFirst = 10.f;
         const auto col = std::clamp<size_t>(std::log2(time) + logFirst, 0, m_times.size() - 1);
         const auto col_frac = std::clamp((time - m_times[col]) / (m_times[col + 1] - m_times[col]), 0.0f, 1.0f);
 
-        const auto row = static_cast<int>(floor(index / 12));
+        const auto row = static_cast<int>(std::floor(index / 12));
         const auto row_frac = std::clamp(index / 12.f - static_cast<float>(row), 0.0f, 1.0f);
 
         // Bilinear interpolation in log-space
@@ -109,7 +109,7 @@ class SvfResoBP
         m_decayT = t;
         m_decayMax = static_cast<int>(m_sampleRate * t);
         constexpr auto k = 0.1447648273f;
-        float Q = std::numbers::pi_v<float> * frequency * t * k;
+        const float Q = std::numbers::pi_v<float> * frequency * t * k;
         computeCoefficients(index, frequency, Q);
     }
 
@@ -205,7 +205,6 @@ class SvfResoBP
 
     void damp(const bool damp) noexcept
     {
-        // std::cout << damp << std::endl;
         m_currentSet = damp ? 1 : 0;
     }
 
@@ -238,7 +237,7 @@ class SvfResoBP
     void recomputeCoefficientsWithBend(const size_t index) noexcept
     {
         constexpr float centsToOctave = 1.f / 1200.f;
-        const float ratio = std::exp2f(m_pitchBend * centsToOctave);
+        const float ratio = std::exp2(m_pitchBend * centsToOctave);
         const float bendFrequency = m_frequency * ratio;
 
         const float g = std::tan(m_piDivSampleRate * bendFrequency);
