@@ -1,11 +1,12 @@
 #pragma once
 
-#include "Numbers/Interpolation.h"
-#include "Audio/FixedSizeProcessor.h"
-
 #include <algorithm>
 #include <cmath>
+#include <span>
 #include <vector>
+
+#include "Audio/FixedSizeProcessor.h"
+#include "Numbers/Interpolation.h"
 
 namespace AbacDsp
 {
@@ -19,11 +20,11 @@ class ModulatingDelayPitchedAdjust
     {
     }
 
-    void setWidthInMsecs(float milliseconds)
+    void setWidthInMsecs(const float milliseconds) noexcept
     {
         m_setByTime = true;
-        auto newSize = std::clamp<size_t>(getSamplesPerMillisecond(milliseconds, m_sampleRate, MaxSizeInSamples), 48u,
-                                          MaxSizeInSamples - 1);
+        const auto newSize = std::clamp<size_t>(getSamplesPerMillisecond(milliseconds, m_sampleRate, MaxSizeInSamples),
+                                                48u, MaxSizeInSamples - 1);
 
         if (newSize == m_currentDistance)
         {
@@ -32,7 +33,7 @@ class ModulatingDelayPitchedAdjust
         m_lastDistanceRequested = newSize;
     }
 
-    void setSize(size_t newSize)
+    void setSize(size_t newSize) noexcept
     {
         if (newSize >= MaxSizeInSamples)
         {
@@ -46,29 +47,29 @@ class ModulatingDelayPitchedAdjust
         m_lastDistanceRequested = newSize;
     }
 
-    void setFeedback(const float gain)
+    void setFeedback(const float gain) noexcept
     {
         m_feedback = std::clamp(gain, -0.99999f, 0.99999f);
     }
 
-    void feedBackByTime(const float msecs, const float db = 0.001f, const bool negative = false)
+    void feedBackByTime(const float msecs, const float db = 0.001f, const bool negative = false) noexcept
     {
         m_decayMsecs = msecs;
         const auto feedback = std::pow(db, m_currentDistance / m_sampleRate / (msecs / 1000.0f));
         setFeedback(negative ? -feedback : feedback);
     }
 
-    void setModDepth(const float depth)
+    void setModDepth(const float depth) noexcept
     {
         m_modWidth = depth * 100.f;
     }
 
-    void setModSpeed(float speedHz)
+    void setModSpeed(const float speedHz) noexcept
     {
         m_modAdvanceTick = 2.f * speedHz / m_sampleRate;
     }
 
-    void sweepTick()
+    void sweepTick() noexcept
     {
         m_currentPhase += m_modAdvanceTick;
         if (m_currentPhase >= 1.0f)
@@ -77,17 +78,17 @@ class ModulatingDelayPitchedAdjust
         }
     }
 
-    float step(const float in)
+    float step(const float in) noexcept
     {
         sweepTick();
-        const auto depth = m_modWidth * (fabsf(m_currentPhase) + 1) + 1; // triangular wave
+        const auto depth = m_modWidth * (std::abs(m_currentPhase) + 1) + 1; // triangular wave
         float dHead = m_headRead + depth;
         if (dHead >= MaxSizeInSamples)
         {
             dHead -= MaxSizeInSamples;
         }
-        float intTailPosition;
-        const auto fraction = modff(dHead, &intTailPosition);
+        float intTailPosition{};
+        const auto fraction = std::modf(dHead, &intTailPosition);
         const auto bufferValue = Interpolation::hermite43z(&m_buffer[static_cast<size_t>(intTailPosition)], fraction);
         const auto feedDelay = in + bufferValue * m_feedback;
         const auto ret = bufferValue;
@@ -106,21 +107,16 @@ class ModulatingDelayPitchedAdjust
         }
         if (m_advanceSteps)
         {
-            long dt;
-            if (m_headWrite > m_headRead)
-            {
-                dt = m_headWrite - (long) m_headRead;
-            }
-            else
-            {
-                dt = m_headWrite + MaxSizeInSamples - (long) m_headRead;
-            }
+            const auto headReadFloor = static_cast<ptrdiff_t>(m_headRead);
+            const ptrdiff_t dt = (m_headWrite > m_headRead)
+                                     ? static_cast<ptrdiff_t>(m_headWrite) - headReadFloor
+                                     : static_cast<ptrdiff_t>(m_headWrite + MaxSizeInSamples) - headReadFloor;
 
-            m_currentDistance = dt;
+            m_currentDistance = static_cast<size_t>(dt);
             if (static_cast<size_t>(dt) / 4 == m_newDistance / 4)
             {
                 m_advanceSteps = false;
-                m_advance = 1.0;
+                m_advance = 1.0f;
                 if (m_setByTime)
                 {
                     feedBackByTime(m_decayMsecs);
@@ -143,22 +139,18 @@ class ModulatingDelayPitchedAdjust
         return ret;
     }
 
-    bool isAdvancing() const
+    [[nodiscard]] bool isAdvancing() const noexcept
     {
         return m_advanceSteps;
     }
 
-    template <size_t blockSize>
-    void blockFill(const float* in, float* out)
+    void blockFill(std::span<const float> in, std::span<float> out) noexcept
     {
-        for (size_t pos = 0; pos < blockSize; pos++)
-        {
-            out[pos] = step(in[pos]);
-        }
+        std::transform(in.begin(), in.end(), out.begin(), [this](const float s) noexcept { return step(s); });
     }
 
   private:
-    void adjustBufferByPitching(const size_t newSize)
+    void adjustBufferByPitching(const size_t newSize) noexcept
     {
         m_newDistance = newSize;
         if (newSize > m_currentDistance)
@@ -181,22 +173,19 @@ class ModulatingDelayPitchedAdjust
         }
     }
 
-    float m_sampleRate{48000.0f};
-    float m_feedback{0};
-    float m_headRead{0};
+    const float m_sampleRate{48000.0f};
+    float m_feedback{0.0f};
+    float m_headRead{0.0f};
     size_t m_headWrite{0};
-    float m_decayMsecs{100};
-    // adapt soft buffersize *speed up/down*
+    float m_decayMsecs{100.0f};
     size_t m_currentDistance{MaxSizeInSamples / 10};
     size_t m_newDistance{0};
     size_t m_lastDistanceRequested{0};
     bool m_advanceSteps{false};
-    float m_advance{1.0};
-
-    // modulation
-    float m_modWidth{.1};
-    float m_modAdvanceTick{0.01};
-    float m_currentPhase{0.0};
+    float m_advance{1.0f};
+    float m_modWidth{0.1f};
+    float m_modAdvanceTick{0.01f};
+    float m_currentPhase{0.0f};
     bool m_setByTime{false};
     std::vector<float> m_buffer;
 };
