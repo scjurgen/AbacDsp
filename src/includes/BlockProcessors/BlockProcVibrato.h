@@ -3,8 +3,8 @@
 #include <array>
 #include <cmath>
 
-#include "Modulation/Wow.h"
 #include "BlockProcessorBase.h"
+#include "Modulation/Wow.h"
 
 namespace AbacDsp::BlockProc
 {
@@ -62,7 +62,6 @@ class Vibrato final : public BlockProcessorBase<BlockSize>
     {
         m_buffer.fill(0.0f);
         m_writePos = 0;
-        m_readPos = 0;
     }
 
   private:
@@ -71,6 +70,5 @@ class Vibrato final : public BlockProcessorBase<BlockSize>
     Wow m_wow;
     std::array<float, DelayBufferSize> m_buffer{};
     size_t m_writePos{0};
-    size_t m_readPos{0};
 };
 }
