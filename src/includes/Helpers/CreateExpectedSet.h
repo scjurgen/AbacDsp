@@ -3,14 +3,14 @@
 #include <charconv>
 #include <cmath>
 #include <iostream>
-#include <iomanip>
 #include <sstream>
+#include <string>
 #include <vector>
 
 namespace CreateExpectedSet
 {
 
-inline std::string format_float(const float value, const int precision)
+[[nodiscard]] inline std::string format_float(const float value, const int precision)
 {
     if (std::isnan(value))
     {
@@ -44,7 +44,9 @@ inline std::string format_float(const float value, const int precision)
         {
             result.erase(result.find_last_not_of('0') + 1);
             if (result.back() == '.')
+            {
                 result += '0';
+            }
         }
         return result;
     }
@@ -78,7 +80,8 @@ inline std::string format_float(const float value, const int precision)
 }
 
 
-inline void toStream(std::ostream& os, const std::vector<float>& data, int precision = 6, int columnsPerRow = 8)
+inline void toStream(std::ostream& os, const std::vector<float>& data, const int precision = 6,
+                     const int columnsPerRow = 8)
 {
     os << "const std::vector<float> expected{";
 
@@ -91,10 +94,8 @@ inline void toStream(std::ostream& os, const std::vector<float>& data, int preci
 
         const auto value = data[i];
 
-        // Check if value is integral
         if (std::floor(value) == value && std::abs(value) < 1e7f)
         {
-            // Format as integer with explicit decimal point
             if (value < 0.f)
             {
                 os << "-" << static_cast<int>(std::abs(value)) << ".f";
@@ -124,12 +125,13 @@ inline void toStream(std::ostream& os, const std::vector<float>& data, int preci
     os << "\n};\n";
 }
 
-inline void printAsTestVector(const std::vector<float>& data, int precision = 6, int columnsPerRow = 8)
+inline void printAsTestVector(const std::vector<float>& data, const int precision = 6, const int columnsPerRow = 8)
 {
     toStream(std::cout, data, precision, columnsPerRow);
 }
 
-inline std::string toString(const std::vector<float>& data, int precision = 6, int columnsPerRow = 8)
+[[nodiscard]] inline std::string toString(const std::vector<float>& data, const int precision = 6,
+                                          const int columnsPerRow = 8)
 {
     std::stringstream ss;
     toStream(ss, data, precision, columnsPerRow);
