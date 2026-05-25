@@ -1,10 +1,11 @@
 #pragma once
 
-#include "Helpers/PlatformIntrinsics.h"
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <numbers>
-#include <algorithm>
+
+#include "Helpers/PlatformIntrinsics.h"
 
 namespace AbacDsp
 {
@@ -73,7 +74,7 @@ class BiquadResoBpParallelSIMD
     void setByDecay(const size_t mainIndex, const size_t index, const float frequency, const float t) noexcept
     {
         constexpr auto k = 0.1447648273f;
-        float Q = std::numbers::pi_v<float> * frequency * t * k;
+        const float Q = std::numbers::pi_v<float> * frequency * t * k;
         computeCoefficients(mainIndex, index, frequency, Q);
     }
 
@@ -180,7 +181,7 @@ class BiquadResoBpParallelSIMD
         m_z1[groupIndex][laneIndex] = v2;
     }
 
-    [[nodiscard]] float magnitude(size_t mainIndex, const size_t subIndex, const float hz,
+    [[nodiscard]] float magnitude(const size_t mainIndex, const size_t subIndex, const float hz,
                                   const float sampleRate = 48000.f) const noexcept
     {
         const auto b0 = static_cast<double>(m_cf[mainIndex][subIndex].b0);
