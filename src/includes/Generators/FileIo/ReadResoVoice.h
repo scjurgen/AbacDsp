@@ -2,7 +2,8 @@
 
 #include <fstream>
 #include <sstream>
-#include <stdexcept>
+#include <string>
+#include <vector>
 
 struct CsvVoice
 {
@@ -14,7 +15,7 @@ struct CsvVoice
     float waitMs;
 };
 
-inline bool readVoiceSettings(const std::string& filename, std::vector<CsvVoice>& settings)
+[[nodiscard]] inline bool readVoiceSettings(const std::string& filename, std::vector<CsvVoice>& settings)
 {
     std::ifstream file(filename);
 
@@ -26,7 +27,6 @@ inline bool readVoiceSettings(const std::string& filename, std::vector<CsvVoice>
     std::string line;
     while (std::getline(file, line))
     {
-        // Skip empty lines and comments
         if (line.empty() || line[0] == '#')
         {
             continue;
