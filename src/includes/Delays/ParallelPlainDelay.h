@@ -1,8 +1,8 @@
 #pragma once
 
 #include <array>
-#include <vector>
 #include <cassert>
+#include <vector>
 
 namespace AbacDsp
 {
@@ -19,7 +19,7 @@ class ParallelPlainDelay
         }
     }
 
-    void setSize(const size_t index, const size_t newSize)
+    void setSize(const size_t index, const size_t newSize) noexcept
     {
         assert(index < m_read[0].size());
         m_currentDelayWidth[index] = std::min(newSize, MAXSIZE - 1);
@@ -38,8 +38,7 @@ class ParallelPlainDelay
         }
     }
 
-    // set relative to first read head (will assert if trying on headIdx = 0)
-    void setRelativeHead(const size_t headIdx, const size_t index, const int newDistance)
+    void setRelativeHead(const size_t headIdx, const size_t index, const int newDistance) noexcept
     {
         assert(headIdx > 0 && headIdx < m_read.size() && index < m_read[headIdx].size());
         m_deltaTaps[headIdx - 1][index] = newDistance;
@@ -60,7 +59,6 @@ class ParallelPlainDelay
                 m_buffer[c][m_head + i] = src[c][i];
             }
         }
-        // copy in data to end of buffer wrap if needed
         for (size_t c = 0; c < CHANNELS; ++c)
         {
             if (m_head == 0)
@@ -90,7 +88,7 @@ class ParallelPlainDelay
         }
     }
 
-    void processHead(size_t idx, std::array<std::array<float, BlockSize>, CHANNELS>& target) noexcept
+    void processHead(const size_t idx, std::array<std::array<float, BlockSize>, CHANNELS>& target) noexcept
     {
         assert(idx > 0 && idx < m_read.size());
         for (size_t c = 0; c < CHANNELS; ++c)
