@@ -14,6 +14,7 @@ struct PatchParameters
     enum class Id : int
     {
         bpm        , // dial
+        dropBars   , // drop
         metroVolume, // dial
         inputVolume, // dial
         subVolume  , // dial
@@ -22,6 +23,7 @@ struct PatchParameters
         swingRatio  // dial
     };
 float bpm{};
+size_t dropBars{};
 float metroVolume{};
 float inputVolume{};
 float subVolume{};
@@ -32,6 +34,7 @@ float swingRatio{};
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
         "bpm",
+"dropBars",
 "metroVolume",
 "inputVolume",
 "subVolume",
@@ -57,6 +60,7 @@ float swingRatio{};
     auto& get()
     {
         if constexpr (ParamId == Id::bpm) return bpm;
+        else if constexpr (ParamId == Id::dropBars) return dropBars;
         else if constexpr (ParamId == Id::metroVolume) return metroVolume;
         else if constexpr (ParamId == Id::inputVolume) return inputVolume;
         else if constexpr (ParamId == Id::subVolume) return subVolume;
@@ -76,6 +80,8 @@ float swingRatio{};
         switch (id)
         {
  case Id::bpm: if (!isEqual(get<Id::bpm>(), value)) {get<Id::bpm>() = value;m_modified = true;}
+break;
+ case Id::dropBars: if (!isEqual(get<Id::dropBars>(), value)) {get<Id::dropBars>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
  case Id::metroVolume: if (!isEqual(get<Id::metroVolume>(), value)) {get<Id::metroVolume>() = value;m_modified = true;}
 break;
@@ -128,6 +134,7 @@ private:
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     PatchParameters,
         bpm        , // dial
+        dropBars   , // drop
         metroVolume, // dial
         inputVolume, // dial
         subVolume  , // dial

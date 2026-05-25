@@ -83,6 +83,12 @@ class MetronomeImpl final : public EffectBase
         updateSubPositions();
     }
 
+    void setDropBars(const size_t value)
+    {
+        m_dropModeIndex = static_cast<int>(std::min(value, static_cast<size_t>(kNumDropModes - 1)));
+        m_barCount = 0;
+    }
+
     void setMetroVolume(const float valueDb)
     {
         m_metroGain = std::pow(10.f, (valueDb + tickBoostDb) / 20.f);
@@ -107,6 +113,7 @@ class MetronomeImpl final : public EffectBase
     {
         m_presetIndex = std::clamp(index, 0, kNumPresets - 1);
         m_barBeatCount = 0;
+        m_barCount = 0;
         updateSubPositions();
     }
 
@@ -155,7 +162,10 @@ class MetronomeImpl final : public EffectBase
 
         for (size_t i = 0; i < BlockSize; ++i)
         {
-            if (m_beatSamplePos == 0)
+            const auto& mode = kDropBarModes[m_dropModeIndex];
+            const bool isMuted = mode.playBars > 0 && m_barCount >= mode.playBars;
+
+            if (m_beatSamplePos == 0 && !isMuted)
             {
                 switch (kPresets[m_presetIndex].pattern[m_barBeatCount])
                 {
@@ -173,18 +183,21 @@ class MetronomeImpl final : public EffectBase
                 }
             }
 
-            for (const size_t subPos : m_subPositions)
+            if (!isMuted)
             {
-                if (m_beatSamplePos == subPos)
+                for (const size_t subPos : m_subPositions)
                 {
-                    m_subFilter.reset(0.f, m_subGain);
+                    if (m_beatSamplePos == subPos)
+                    {
+                        m_subFilter.reset(0.f, m_subGain);
+                    }
                 }
             }
 
             const float tick = m_tickFilter.step0();
             const float beatOne = m_beatOneFilter.step0();
             const float sub = m_subFilter.step0();
-            const float output = m_running ? (tick + beatOne + sub) : 0.f;
+            const float output = m_running && !isMuted ? (tick + beatOne + sub) : 0.f;
 
             out(i, 0) = in(i, 0) * m_inputGain + output;
             out(i, 1) = in(i, 1) * m_inputGain + output;
@@ -197,6 +210,13 @@ class MetronomeImpl final : public EffectBase
                 if (++m_barBeatCount >= static_cast<size_t>(kPresets[m_presetIndex].barBeats))
                 {
                     m_barBeatCount = 0;
+                    if (mode.playBars > 0)
+                    {
+                        if (++m_barCount >= mode.playBars + mode.dropBars)
+                        {
+                            m_barCount = 0;
+                        }
+                    }
                 }
             }
         }
@@ -215,6 +235,23 @@ class MetronomeImpl final : public EffectBase
     }
 
   private:
+    // -----------------------------------------------------------------------
+    // Drop-bar mode table: {playBars, dropBars}. playBars=0 means disabled.
+    struct DropBarMode
+    {
+        int playBars;
+        int dropBars;
+    };
+    // clang-format off
+    static constexpr DropBarMode kDropBarModes[] = {
+        {0, 0}, // Drop none
+        {3, 1}, // Play 3 Drop 1
+        {2, 2}, // Play 2 Drop 2
+        {1, 3}, // Play 1 Drop 3
+    };
+    // clang-format on
+    static constexpr int kNumDropModes = static_cast<int>(std::size(kDropBarModes));
+
     // -----------------------------------------------------------------------
     // Preset table — short aliases to keep the table readable
     static constexpr AccentLevel D = AccentLevel::Downbeat;
@@ -320,6 +357,8 @@ class MetronomeImpl final : public EffectBase
     float m_subGain{std::pow(10.f, (-6.f + subDefaultOffsetDb + tickBoostDb) / 20.f)};
     float m_inputGain{1.f};
     bool m_running{false};
+    int m_dropModeIndex{0};
+    int m_barCount{0};
 
     int m_presetIndex{kDefaultPresetIndex};
     float m_swingRatio{1.5f};

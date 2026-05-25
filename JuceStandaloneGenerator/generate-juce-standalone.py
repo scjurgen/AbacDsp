@@ -743,43 +743,43 @@ def createPackageFromJsonDict(m: dict):
     cppTargetFile = f"{cppTmpDir}/src/{cppJuceFile}"
     createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{cppJuceFile}", m["CPP"], cppJuceFileVars)
     clangFormatFile = getTargetName(cppTargetFile, m)
-    cmd = f"clang-format -i -style=file:.clang-format {clangFormatFile}"
+    cmd = f"clang-format -i -style=file {clangFormatFile}"
     os.system(cmd)
 
     cppTargetFile = f"{cppTmpDir}/src/{cppJuceFileImplement}"
     createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{cppJuceFileImplement}", m["CPP"], cppJuceFileVars)
     clangFormatFile = getTargetName(cppTargetFile, m)
-    cmd = f"clang-format -i -style=file:.clang-format {clangFormatFile}"
+    cmd = f"clang-format -i -style=file {clangFormatFile}"
     os.system(cmd)
 
     cppTargetFile = f"{cppTmpDir}/src/{cppSourceFilesImpl}"
     createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{cppSourceFilesImpl}", m["CPP"], cppJuceFileVars)
     clangFormatFile = getTargetName(cppTargetFile, m)
-    cmd = f"clang-format -i -style=file:.clang-format {clangFormatFile}"
+    cmd = f"clang-format -i -style=file {clangFormatFile}"
     os.system(cmd)
 
     cppTargetFile = f"{cppTmpDir}/src/{cppSourceFilesImplFileIo}"
     createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{cppSourceFilesImplFileIo}", m["CPP"], cppJuceFileVars)
     clangFormatFile = getTargetName(cppTargetFile, m)
-    cmd = f"clang-format -i -style=file:.clang-format {clangFormatFile}"
+    cmd = f"clang-format -i -style=file {clangFormatFile}"
     os.system(cmd)
 
     cppTargetFile = f"{cppTmpDir}/src/{cppPatchParameters}"
     createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{cppPatchParameters}", m["CPP"], cppJuceFileVars)
     clangFormatFile = getTargetName(cppTargetFile, m)
-    cmd = f"clang-format -i -style=file:.clang-format {clangFormatFile}"
+    cmd = f"clang-format -i -style=file {clangFormatFile}"
     os.system(cmd)
 
     cppTargetFile = f"{cppTmpDir}/src/{cppJuceFileEditor}"
     createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{cppJuceFileEditor}", m["CPP"], cppJuceFileVars)
     clangFormatFile = getTargetName(cppTargetFile, m)
-    cmd = f"clang-format -i -style=file:.clang-format {clangFormatFile}"
+    cmd = f"clang-format -i -style=file {clangFormatFile}"
     os.system(cmd)
 
     cppTargetFile = f"{cppTmpDir}/src/{cppSourceFilesUnitTest}"
     createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{cppSourceFilesUnitTest}", m["CPP"], cppJuceFileVars)
     clangFormatFile = getTargetName(cppTargetFile, m)
-    cmd = f"clang-format -i -style=file:.clang-format {clangFormatFile}"
+    cmd = f"clang-format -i -style=file {clangFormatFile}"
     os.system(cmd)
 
     cppTargetFile = f"{cppTmpDir}/src/{cppJuceFileConstants}"
@@ -790,7 +790,7 @@ def createPackageFromJsonDict(m: dict):
 
     createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{cppJuceFileConstants}", newConstants, cppConstants)
     clangFormatFile = getTargetName(cppTargetFile, m)
-    cmd = f"clang-format -i -style=file:.clang-format {clangFormatFile}"
+    cmd = f"clang-format -i -style=file {clangFormatFile}"
     os.system(cmd)
 
     digest = hashlib.sha256(m["CPP"]["module"].encode("utf-8")).hexdigest()
