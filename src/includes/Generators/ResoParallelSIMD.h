@@ -5,12 +5,7 @@
 #include <cmath>
 #include <numbers>
 #include <simd/simd.h>
-#include <vector>
 
-/*
- purely for excitation and some decay
- *
- */
 namespace AbacDsp
 {
 /*
@@ -79,7 +74,7 @@ class ResoBpParallelSIMD
     void setByDecay(const size_t mainIndex, const size_t index, const float frequency, const float t)
     {
         constexpr auto k = 0.1447648273f;
-        float Q = std::numbers::pi_v<float> * frequency * t * k;
+        const float Q = std::numbers::pi_v<float> * frequency * t * k;
         computeCoefficients(mainIndex, index, frequency, Q);
     }
 
@@ -91,7 +86,7 @@ class ResoBpParallelSIMD
         const auto norm = 1.f / (1 + kqCl + m_kSquare[mainIndex]);
 
         m_cf[mainIndex][index].b0 = kqCl * norm;
-        m_cf[mainIndex][index].a1 = 2 * (m_kSquare[mainIndex] - 1) * norm;
+        m_cf[mainIndex][index].a1 = 2.f * (m_kSquare[mainIndex] - 1) * norm;
         m_cf[mainIndex][index].a2 = (1 - kqCl + m_kSquare[mainIndex]) * norm;
 
         updateSoACoefficients(mainIndex, index);
@@ -109,7 +104,7 @@ class ResoBpParallelSIMD
         const auto norm = 1.f / (1 + kqCl + m_kSquare[mainIndex]);
 
         m_cf[mainIndex][index].b0 = kqCl * norm;
-        m_cf[mainIndex][index].a1 = 2 * (m_kSquare[mainIndex] - 1) * norm;
+        m_cf[mainIndex][index].a1 = 2.f * (m_kSquare[mainIndex] - 1) * norm;
         m_cf[mainIndex][index].a2 = (1 - kqCl + m_kSquare[mainIndex]) * norm;
 
         updateSoACoefficients(mainIndex, index);
@@ -154,22 +149,22 @@ class ResoBpParallelSIMD
         m_z1[groupIndex][laneIndex] = v2;
     }
 
-    [[nodiscard]] float magnitude(size_t mainIndex, const size_t subIndex, const float hz,
+    [[nodiscard]] float magnitude(const size_t mainIndex, const size_t subIndex, const float hz,
                                   const float sampleRate = 48000.f) const noexcept
     {
         const auto b0 = static_cast<double>(m_cf[mainIndex][subIndex].b0);
         const auto a1 = static_cast<double>(m_cf[mainIndex][subIndex].a1);
         const auto a2 = static_cast<double>(m_cf[mainIndex][subIndex].a2);
 
-        const auto phi = 4 * std::pow(std::sin(2 * std::numbers::pi_v<double> * hz / sampleRate / 2), 2);
+        const auto phi = 4.0 * std::pow(std::sin(2.0 * std::numbers::pi_v<double> * hz / sampleRate / 2.0), 2.0);
         const auto db =
-            10 * std::log10(std::pow((b0 + 0 + -b0), 2) + (b0 * -b0 * phi - (0 * (b0 + -b0) + 4 * b0 * -b0)) * phi) -
-            10 * std::log10(std::pow((1.f + a1 + a2), 2) + (a2 * phi - (a1 * (1 + a2) + 4 * a2)) * phi);
+            10.0 * std::log10(std::pow((b0 + 0 + -b0), 2) + (b0 * -b0 * phi - (0 * (b0 + -b0) + 4 * b0 * -b0)) * phi) -
+            10.0 * std::log10(std::pow((1.f + a1 + a2), 2) + (a2 * phi - (a1 * (1 + a2) + 4 * a2)) * phi);
 
         return static_cast<float>(db);
     }
 
-    void damp(const bool damp)
+    void damp(const bool damp) noexcept
     {
         m_currentSet = damp ? 1 : 0;
     }
