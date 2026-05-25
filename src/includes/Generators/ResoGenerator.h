@@ -1,26 +1,15 @@
 #pragma once
 
-#include <array>
 #include <algorithm>
-#include <cmath>
-#include <numeric>
+#include <array>
 #include <random>
 
 #include "Filters/SvfResoBP.h"
 #include "HarmonicGenerator.h"
 #include "Numbers/Convert.h"
 
-#include <iostream>
-
 namespace AbacDsp
 {
-/*
- * Resonance generator processor:
- * - generates a list of frequencies when triggered.
- * - list depends on various variables that control the distribution in frequency
- * and amplitude
- */
-
 template <size_t BlockSize, size_t NumElements>
 class ResoGenerator
 {
@@ -34,12 +23,11 @@ class ResoGenerator
         }
     }
 
-    void setExcitationNoise(const float value) noexcept {}
+    void setExcitationNoise(const float /*value*/) noexcept {}
 
     void setSoftExcitation(const float value) noexcept
     {
         m_softExcitation = std::clamp(value, 0.f, 1.f);
-        std::cout << m_softExcitation << std::endl;
     }
 
     void setAttack(const float attackMs) noexcept
@@ -103,16 +91,9 @@ class ResoGenerator
 
     void pitchBendCents(const size_t minNote, const size_t maxNote, const float cents) noexcept
     {
-        // const int minIndex = (static_cast<int>(minNote) - m_minMidiNote) * m_stepsPerSemitone;
-        // const int maxIndex = (static_cast<int>(maxNote) - m_minMidiNote) * m_stepsPerSemitone;
-        // const int startIdx = std::max(0, minIndex);
-        // const int endIdx = std::min(static_cast<int>(NumElements) - 1, maxIndex);
-
+        (void) minNote;
+        (void) maxNote;
         m_bq[0].pitchBendCents(cents);
-        // for (int index = 0; index < cntActive; ++index)
-        // {
-        //     m_bq[index].pitchBend(normalized);
-        // }
     }
 
     void processBlock(std::array<float, BlockSize>& out) noexcept
@@ -178,15 +159,11 @@ class ResoGenerator
     }
 
   private:
-    float m_sampleRate;
-    float m_attack = 0.0f;
-    int32_t m_attackSamples = 0;
-    int32_t m_attackCounter = 0;
-    size_t m_countVoices{0};
-    size_t lastCnt = 0;
-    size_t cntActive = 0;
-    int m_minMidiNote{0};
-    int m_stepsPerSemitone{12};
+    const float m_sampleRate;
+    float m_attack{0.0f};
+    int32_t m_attackSamples{0};
+    int32_t m_attackCounter{0};
+    size_t cntActive{0};
     float m_softExcitation{0.f};
     mutable std::mt19937 m_rng{std::random_device{}()};
     std::array<float, NumElements> m_frequencies{};
@@ -194,7 +171,6 @@ class ResoGenerator
     alignas(64) std::array<int32_t, NumElements> m_triggerWait{};
     alignas(64) std::array<float, NumElements> m_trigger{};
     alignas(64) std::array<float, NumElements> m_triggerGain{};
-    alignas(64) std::array<float, NumElements> m_phaseAdvance{};
     alignas(64) std::array<int32_t, NumElements> m_activeState{};
 };
 }
