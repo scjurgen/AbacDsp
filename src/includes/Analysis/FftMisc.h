@@ -1,15 +1,15 @@
 #pragma once
 
-#include "Numbers/Convert.h"
-
-
 #include <cassert>
 #include <cmath>
 #include <complex>
 #include <iostream>
+#include <numbers>
 #include <random>
 #include <valarray>
 #include <vector>
+
+#include "Numbers/Convert.h"
 
 /*
  * BasicFFT (allocates heap while computing)
@@ -165,7 +165,7 @@ class BasicFFT
 class FFTResponse
 {
   public:
-    static std::vector<float> generateNoiseSignal(const size_t NumFrames)
+    [[nodiscard]] static std::vector<float> generateNoiseSignal(const size_t NumFrames)
     {
         std::minstd_rand generator(31);
         std::uniform_real_distribution dist(-1.f, 1.f);
@@ -175,7 +175,7 @@ class FFTResponse
     }
 
     template <size_t interleave, size_t channelOffset>
-    static std::vector<float> analyse(const std::vector<float>& resultBuffer, const size_t windowSize)
+    [[nodiscard]] static std::vector<float> analyse(const std::vector<float>& resultBuffer, const size_t windowSize)
     {
         const size_t windowAdvance = windowSize / 4;
         static_assert(interleave > 0);
@@ -197,7 +197,7 @@ class FFTResponse
                 sumUp[i] += magnitude[i + 1]; // skip dc
             }
         }
-        const auto maxit = max_element(sumUp.begin(), sumUp.end());
+        const auto maxit = std::max_element(sumUp.begin(), sumUp.end());
         if (*maxit == 0.f)
         {
             return sumUp;
@@ -219,8 +219,8 @@ class FFTResponse
         std::vector<float> frequencies;
     };
 
-    static FrequencySlice processFrequencies(const std::vector<float>& binFrequency, const std::vector<float>& binSum,
-                                             float minValue)
+    [[nodiscard]] static FrequencySlice processFrequencies(const std::vector<float>& binFrequency,
+                                                           const std::vector<float>& binSum, float minValue)
     {
         FrequencySlice slice{};
         const auto lastNonZero =
@@ -244,9 +244,9 @@ class FFTResponse
     }
 
     template <size_t interleave, size_t channelOffset>
-    static FrequencySlice analyseByOctaveBins(const std::vector<float>& resultBuffer, const size_t windowSize,
-                                              const float sampleRate, const int binsPerOctave,
-                                              const float startFreq = -1)
+    [[nodiscard]] static FrequencySlice analyseByOctaveBins(const std::vector<float>& resultBuffer,
+                                                            const size_t windowSize, const float sampleRate,
+                                                            const int binsPerOctave, const float startFreq = -1)
     {
         auto tmp = analyse<interleave, channelOffset>(resultBuffer, windowSize);
         auto numBins = static_cast<unsigned>(std::ceil(std::log(sampleRate) / std::log(2.f) * binsPerOctave));
@@ -267,7 +267,7 @@ class FFTResponse
         }
         std::transform(binCount.begin(), binCount.end(), binSum.begin(), binSum.begin(),
                        [](auto cnt, auto sum) { return cnt > 0 ? sum / static_cast<float>(cnt) : 0; });
-        const auto maxit = max_element(binSum.begin(), binSum.end());
+        const auto maxit = std::max_element(binSum.begin(), binSum.end());
         const float normFactor = 1.f / (*maxit);
         for (float& i : binSum)
         {
@@ -278,8 +278,8 @@ class FFTResponse
     }
 
     template <size_t interleave, size_t channelOffset>
-    static std::vector<float> analyseByNoteBins(const std::vector<float>& resultBuffer, const size_t windowSize,
-                                                const float sampleRate)
+    [[nodiscard]] static std::vector<float> analyseByNoteBins(const std::vector<float>& resultBuffer,
+                                                              const size_t windowSize, const float sampleRate)
     {
         auto tmp = analyse<interleave, channelOffset>(resultBuffer, windowSize);
         constexpr size_t numBins = 12;
@@ -299,7 +299,7 @@ class FFTResponse
         }
         std::transform(binCount.begin(), binCount.end(), binSum.begin(), binSum.begin(),
                        [](auto cnt, auto sum) { return cnt > 0 ? sum / static_cast<float>(cnt) : 0; });
-        const auto maxit = max_element(binSum.begin(), binSum.end());
+        const auto maxit = std::max_element(binSum.begin(), binSum.end());
         const float normFactor = 1.f / (*maxit);
         for (float& i : binSum)
         {
@@ -652,11 +652,11 @@ class HannWindowMagnitudesFft
     {
         window.resize(N);
         std::generate(window.begin(), window.end(),
-                      [n = 0, N]() mutable
+                      [n = size_t{0}, N]() mutable
                       {
                           const auto w = static_cast<double>(n) / static_cast<double>(N - 1);
                           ++n;
-                          return 0.5 * (1 - std::cos(2.0 * M_PI * w));
+                          return 0.5 * (1 - std::cos(2.0 * std::numbers::pi_v<double> * w));
                       });
     }
 
@@ -697,7 +697,8 @@ class WindowedMagnitudesFft
     void applyWindow()
     {
         window.resize(N);
-        std::generate(window.begin(), window.end(), [n = 0, this]() mutable { return this->windowFunction(n++, N); });
+        std::generate(window.begin(), window.end(),
+                      [n = size_t{0}, this]() mutable { return this->windowFunction(n++, N); });
     }
 
     KissFft<float> fft;
@@ -709,23 +710,23 @@ class WindowedMagnitudesFft
 
 struct HannWindow
 {
-    float operator()(size_t n, size_t N) const
+    float operator()(size_t n, size_t N) const noexcept
     {
         const auto w = static_cast<float>(n) / static_cast<float>(N - 1);
-        return 0.5f * (1.f - std::cos(2.0f * static_cast<float>(M_PI) * w));
+        return 0.5f * (1.f - std::cos(2.0f * std::numbers::pi_v<float> * w));
     }
 };
 
 struct BlackmanWindow
 {
-    float operator()(size_t n, size_t N) const
+    float operator()(size_t n, size_t N) const noexcept
     {
         const float w = static_cast<float>(n) / static_cast<float>(N - 1);
         constexpr float a0 = 0.42f;
         constexpr float a1 = 0.5f;
         constexpr float a2 = 0.08f;
-        return a0 - a1 * std::cos(2.0f * static_cast<float>(M_PI) * w) +
-               a2 * std::cos(4.0f * static_cast<float>(M_PI) * w);
+        return a0 - a1 * std::cos(2.0f * std::numbers::pi_v<float> * w) +
+               a2 * std::cos(4.0f * std::numbers::pi_v<float> * w);
     }
 };
 
