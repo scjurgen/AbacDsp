@@ -1,8 +1,9 @@
 #pragma once
 
-#include <vector>
-#include <array>
 #include <algorithm>
+#include <array>
+#include <span>
+#include <vector>
 
 #include "Filters/OnePoleFilter.h"
 
@@ -38,17 +39,17 @@ class DispersionDelay
         m_read[1] = m_read[0];
     }
 
-    void setFadeWindowSize(const size_t size)
+    void setFadeWindowSize(const size_t size) noexcept
     {
-        m_fadeWindowSize = size;
+        m_fadeWindowSize = static_cast<float>(size);
     }
 
-    void setAllPassCutoff(const float f)
+    void setAllPassCutoff(const float f) noexcept
     {
         m_allPass.setCutoff(f);
     }
 
-    void setSize(const size_t newSize)
+    void setSize(const size_t newSize) noexcept
     {
         const size_t clampedSize = std::min(newSize, MAXSIZE - 2);
         if (m_activeFade)
@@ -78,9 +79,9 @@ class DispersionDelay
         m_read[inactiveHead] = m_targetRead;
     }
 
-    float step(const float in)
+    float step(const float in) noexcept
     {
-        float result;
+        float result{0.0f};
 
         if (m_activeFade)
         {
@@ -143,13 +144,13 @@ class DispersionDelay
         return result;
     }
 
-    void processBlock(const float* source, float* target, const size_t numSamples)
+    void processBlock(std::span<const float> source, std::span<float> target) noexcept
     {
-        std::transform(source, source + numSamples, target, [this](const float in) { return step(in); });
+        std::transform(source.begin(), source.end(), target.begin(), [this](const float in) { return step(in); });
     }
 
   private:
-    float m_sampleRate;
+    const float m_sampleRate;
     AllPass m_allPass;
     size_t m_currentDelayWidth{MAXSIZE / 8};
     size_t m_targetDelayWidth{MAXSIZE / 8};
@@ -158,7 +159,7 @@ class DispersionDelay
     size_t m_head{0};
     std::array<size_t, 2> m_read{};
     size_t m_currentReadHead{0};
-    float m_fadeWindowSize{1024};
+    float m_fadeWindowSize{1024.0f};
     float m_currentFadeIn;
     float m_currentFadeOut;
     size_t m_fadeStep;
