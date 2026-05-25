@@ -10,25 +10,26 @@ class JuliaIter
     static constexpr float BailRadius{10000.f};
 
   public:
-    void setCx(const float cx_)
+    void setCx(const float cx_) noexcept
     {
         cr = cx_;
     }
 
-    void setCy(const float cy_)
+    void setCy(const float cy_) noexcept
     {
         ci = cy_;
     }
-    void setPower(const float power_)
+
+    void setPower(const float power_) noexcept
     {
         power = power_;
     }
 
-    float getIter(const float zr_, const float zi_)
+    float getIter(const float zr_, const float zi_) noexcept
     {
         auto zr = zr_;
         auto zi = zi_;
-        float magnitude{0};
+        float magnitude{0.f};
 
         size_t iter = 0;
         while (magnitude < BailRadius)
@@ -41,16 +42,16 @@ class JuliaIter
             zi = new_magnitude * std::sin(new_angle) + ci;
             if (iter++ > MaxIter)
             {
-                return 0;
+                return 0.f;
             }
         }
-        return static_cast<float>(iter) - log(log(magnitude) / log(BailRadius) * power) / log(power);
-        //        return static_cast<float>(iter) + (2.0f - std::log(magnitude) / std::log(BailRadius));
+        return static_cast<float>(iter) -
+               std::log(std::log(magnitude) / std::log(BailRadius) * power) / std::log(power);
     }
 
   protected:
     float cr{}, ci{};
-    float power{2};
+    float power{2.f};
 };
 
 class JuliaWalk : public JuliaIter
@@ -61,48 +62,48 @@ class JuliaWalk : public JuliaIter
     {
         setFrequency(440.f);
     }
-    void setCx(const float cx_)
+    void setCx(const float cx_) noexcept
     {
         cr = cx_;
     }
-    void setCy(const float cy_)
+    void setCy(const float cy_) noexcept
     {
         ci = cy_;
     }
-    void setJx(const float jx)
+    void setJx(const float jx) noexcept
     {
         m_jr = jx;
     }
-    void setJy(const float jy)
+    void setJy(const float jy) noexcept
     {
         m_ji = jy;
     }
-    void setJxRad(const float jx_rad)
+    void setJxRad(const float jx_rad) noexcept
     {
         m_jr_rad = jx_rad;
     }
-    void setJyRad(const float jy_rad)
+    void setJyRad(const float jy_rad) noexcept
     {
         m_ji_rad = jy_rad;
     }
-    void setFrequency(const float f)
+    void setFrequency(const float f) noexcept
     {
         m_advance = f / m_sampleRate;
     }
 
-    float next()
+    float next() noexcept
     {
         m_phase += m_advance;
-        if (m_phase >= 2 * std::numbers::pi_v<float>)
+        if (m_phase >= 2.f * std::numbers::pi_v<float>)
         {
-            m_phase -= 2 * std::numbers::pi_v<float>;
+            m_phase -= 2.f * std::numbers::pi_v<float>;
         }
         const auto r = m_jr + std::cos(m_phase) * m_jr_rad;
         const auto i = m_ji + std::sin(m_phase) * m_ji_rad;
         return getIter(r, i);
     }
 
-    float m_sampleRate;
+    const float m_sampleRate;
     float m_jr{};
     float m_ji{};
     float m_jr_rad{};
