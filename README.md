@@ -36,3 +36,25 @@ No dependencies for the dsp code it self (examples and unit-test have submodules
 
 For usage check always the unit-tests or examples, these contain implementations that should cover and 
 which should be self-explanatory.
+
+## IDE Setup
+
+### clangd / static analysis
+
+The repo includes a `.clangd` file that points clangd to `cmake-build-debug/compile_commands.json`,
+so no symlink is needed. You only need to create that build directory once:
+
+**Tests-only build** (no JUCE required):
+```bash
+mkdir cmake-build-debug && cd cmake-build-debug
+cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
+```
+
+**Full build** (includes JUCE examples — required for metronome, reverb, etc.):
+```bash
+mkdir cmake-build-debug && cd cmake-build-debug
+cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_FULL_PROJECT=ON ..
+```
+
+After configuring, restart your language server (or reopen the project). With the full build
+the IDE will resolve all JUCE headers and the `AbacDsp` includes inside `examples/`.
