@@ -3,14 +3,13 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <string_view>
 #include <vector>
 
 #include "Audio/AudioBuffer.h"
 #include "EffectBase.h"
 #include "Filters/SvfResoBP.h"
 
-// -----------------------------------------------------------------------
-// Rhythm preset data model
 enum class AccentLevel : uint8_t
 {
     None,
@@ -30,20 +29,17 @@ enum class SubdivType : uint8_t
 
 struct RhythmPreset
 {
-    const char* name;
+    std::string_view name;
     uint8_t barBeats;
     std::array<AccentLevel, 16> pattern; // only first barBeats entries are used
     SubdivType subdivType;
     bool hasSwing;
 };
 
-// -----------------------------------------------------------------------
 template <size_t BlockSize>
 class MetronomeImpl final : public EffectBase
 {
   public:
-    // -----------------------------------------------------------------------
-    // Sound parameters
     static constexpr float tickFrequencyHz = 800.f;
     static constexpr float beatOneFrequencyHz = 400.f;
     static constexpr float subFrequencyHz = 1600.f;
@@ -57,7 +53,6 @@ class MetronomeImpl final : public EffectBase
 
     static constexpr int kDefaultPresetIndex = 6; // 4/4 8th
 
-    // -----------------------------------------------------------------------
     explicit MetronomeImpl(const float sampleRate)
         : EffectBase(sampleRate)
         , m_tickFilter(sampleRate)
@@ -74,7 +69,6 @@ class MetronomeImpl final : public EffectBase
         updateSubPositions();
     }
 
-    // -----------------------------------------------------------------------
     void setBpm(const float value)
     {
         m_bpm = std::clamp(value, 40.f, 250.f);
@@ -89,22 +83,22 @@ class MetronomeImpl final : public EffectBase
         m_barCount = 0;
     }
 
-    void setMetroVolume(const float valueDb)
+    void setMetroVolume(const float valueDb) noexcept
     {
         m_metroGain = std::pow(10.f, (valueDb + tickBoostDb) / 20.f);
     }
 
-    void setSubVolume(const float valueDb)
+    void setSubVolume(const float valueDb) noexcept
     {
         m_subGain = std::pow(10.f, (valueDb + tickBoostDb) / 20.f);
     }
 
-    void setInputVolume(const float valueDb)
+    void setInputVolume(const float valueDb) noexcept
     {
         m_inputGain = std::pow(10.f, valueDb / 20.f);
     }
 
-    void setOnOff(const bool value)
+    void setOnOff(const bool value) noexcept
     {
         m_running = value;
     }
@@ -142,13 +136,12 @@ class MetronomeImpl final : public EffectBase
         return m_subPositions;
     }
 
-    // -----------------------------------------------------------------------
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
         const size_t preWindow = m_preWindow;
         const size_t postWindow = m_postWindow;
 
-        auto writeToVisualWindow = [&](const float visSignal)
+        auto writeToVisualWindow = [&](const float visSignal) noexcept
         {
             if (m_beatSamplePos < postWindow)
             {
@@ -167,31 +160,12 @@ class MetronomeImpl final : public EffectBase
 
             if (m_beatSamplePos == 0 && !isMuted)
             {
-                switch (kPresets[static_cast<size_t>(m_presetIndex)].pattern[m_barBeatCount])
-                {
-                    case AccentLevel::Downbeat:
-                        m_beatOneFilter.reset(0.f, m_metroGain);
-                        break;
-                    case AccentLevel::Beat:
-                        m_tickFilter.reset(0.f, m_metroGain);
-                        break;
-                    case AccentLevel::Subdiv:
-                        m_subFilter.reset(0.f, m_subGain);
-                        break;
-                    case AccentLevel::None:
-                        break;
-                }
+                triggerBeatAccent(kPresets[static_cast<size_t>(m_presetIndex)].pattern[m_barBeatCount]);
             }
 
             if (!isMuted)
             {
-                for (const size_t subPos : m_subPositions)
-                {
-                    if (m_beatSamplePos == subPos)
-                    {
-                        m_subFilter.reset(0.f, m_subGain);
-                    }
-                }
+                triggerSubdivisions();
             }
 
             const float tick = m_tickFilter.step0();
@@ -207,22 +181,12 @@ class MetronomeImpl final : public EffectBase
             if (++m_beatSamplePos >= m_samplesPerBeat)
             {
                 m_beatSamplePos = 0;
-                if (++m_barBeatCount >= static_cast<size_t>(kPresets[static_cast<size_t>(m_presetIndex)].barBeats))
-                {
-                    m_barBeatCount = 0;
-                    if (mode.playBars > 0)
-                    {
-                        if (++m_barCount >= mode.playBars + mode.dropBars)
-                        {
-                            m_barCount = 0;
-                        }
-                    }
-                }
+                advanceBeatAndBar(mode);
             }
         }
     }
 
-    const std::vector<float>& visualizeWaveData()
+    [[nodiscard]] const std::vector<float>& visualizeWaveData()
     {
         const size_t windowSize = m_preWindow + m_postWindow;
         m_preparedWavedata.assign(m_visualWavedata.begin(), m_visualWavedata.begin() + windowSize);
@@ -235,7 +199,6 @@ class MetronomeImpl final : public EffectBase
     }
 
   private:
-    // -----------------------------------------------------------------------
     // Drop-bar mode table: {playBars, dropBars}. playBars=0 means disabled.
     struct DropBarMode
     {
@@ -252,8 +215,8 @@ class MetronomeImpl final : public EffectBase
     });
     // clang-format on
 
-    // -----------------------------------------------------------------------
-    // Preset table — short aliases to keep the table readable
+    // Short aliases keep the preset table readable
+    // clang-format off
     static constexpr AccentLevel D = AccentLevel::Downbeat;
     static constexpr AccentLevel B = AccentLevel::Beat;
     static constexpr AccentLevel S = AccentLevel::Subdiv;
@@ -303,7 +266,47 @@ class MetronomeImpl final : public EffectBase
     });
     // clang-format on
 
-    // -----------------------------------------------------------------------
+    void triggerBeatAccent(const AccentLevel level) noexcept
+    {
+        switch (level)
+        {
+            case AccentLevel::Downbeat:
+                m_beatOneFilter.reset(0.f, m_metroGain);
+                break;
+            case AccentLevel::Beat:
+                m_tickFilter.reset(0.f, m_metroGain);
+                break;
+            case AccentLevel::Subdiv:
+                m_subFilter.reset(0.f, m_subGain);
+                break;
+            case AccentLevel::None:
+                break;
+        }
+    }
+
+    void triggerSubdivisions() noexcept
+    {
+        for (const size_t subPos : m_subPositions)
+        {
+            if (m_beatSamplePos == subPos)
+            {
+                m_subFilter.reset(0.f, m_subGain);
+            }
+        }
+    }
+
+    void advanceBeatAndBar(const DropBarMode& mode) noexcept
+    {
+        if (++m_barBeatCount >= static_cast<size_t>(kPresets[static_cast<size_t>(m_presetIndex)].barBeats))
+        {
+            m_barBeatCount = 0;
+            if (mode.playBars > 0 && ++m_barCount >= mode.playBars + mode.dropBars)
+            {
+                m_barCount = 0;
+            }
+        }
+    }
+
     void updateWindowSizes() noexcept
     {
         m_preWindow = m_samplesPerBeat / 4;
@@ -329,8 +332,7 @@ class MetronomeImpl final : public EffectBase
                 m_subPositions = {spb / 4, spb / 2, 3 * spb / 4};
                 break;
             case SubdivType::Triplet:
-                m_subPositions = {spb / 3, 2 * spb / 3};
-                break;
+                [[fallthrough]];
             case SubdivType::Compound3:
                 m_subPositions = {spb / 3, 2 * spb / 3};
                 break;
@@ -349,7 +351,6 @@ class MetronomeImpl final : public EffectBase
         return static_cast<size_t>(sampleRate() * 60.f / bpm);
     }
 
-    // -----------------------------------------------------------------------
     float m_bpm{120.f};
     float m_metroGain{std::pow(10.f, (-6.f + tickBoostDb) / 20.f)};
     float m_subGain{std::pow(10.f, (-6.f + subDefaultOffsetDb + tickBoostDb) / 20.f)};
