@@ -272,7 +272,7 @@ class DiffuserDelayChain
         }
     }
 
-    float step(float value)
+    [[nodiscard]] float step(const float value)
     {
         auto tmp = value;
         for (size_t i = 0; i < m_elementsToUse; ++i)
@@ -361,6 +361,5 @@ class DiffuserDelayChain
     bool m_fadeOutAugmentElements{false};
     bool m_fadeInReduceElements{false};
 };
-
 
 }

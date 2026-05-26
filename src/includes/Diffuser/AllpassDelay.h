@@ -78,7 +78,7 @@ class AllPassDelay
         }
     }
 
-    float step(const float in)
+    [[nodiscard]] float step(const float in)
     {
         auto getResult = [this]()
         {
@@ -105,7 +105,7 @@ class AllPassDelay
         return output;
     }
 
-    float nextHeadRead(const size_t index) noexcept
+    [[nodiscard]] float nextHeadRead(const size_t index) noexcept
     {
         const float returnValue = m_buffer[m_headRead[index]];
         m_headRead[index] = (m_headRead[index] + 1) % m_maxBufferSize;
@@ -195,12 +195,12 @@ class ModulatingAllPassDelay
     ModulatingAllPassDelay(const ModulatingAllPassDelay&&) = delete;
     ModulatingAllPassDelay& operator=(const ModulatingAllPassDelay&&) = delete;
 
-    void clear()
+    void clear() noexcept
     {
         std::fill(m_buffer.begin(), m_buffer.end(), 0.f);
     }
 
-    void newFadeIfNeeded()
+    void newFadeIfNeeded() noexcept
     {
         if (m_newFadeSize && !m_fadeSteps)
         {
@@ -219,45 +219,45 @@ class ModulatingAllPassDelay
         return std::log10(f) * static_cast<float>(m_currentDelayWidth) / std::log10(m_feedback);
     }
 
-    void setLowpass(const float value)
+    void setLowpass(const float value) noexcept
     {
         m_useLowPass = value < maxFilterFrequency;
         m_lowpass.setCutoff(value);
     }
 
-    void setAllpass(const float value)
+    void setAllpass(const float value) noexcept
     {
         m_useAllPass = value < maxFilterFrequency;
         m_allpass.setCutoff(value);
     }
 
-    void setFeedback(const float gain)
+    void setFeedback(const float gain) noexcept
     {
         m_feedback = std::clamp(gain, -0.99f, 0.99f);
     }
 
-    void setSize(const size_t newSize)
+    void setSize(const size_t newSize) noexcept
     {
         setSizeImpl<false>(newSize);
     }
 
-    void setSize(const size_t newSize, const SkipSmoothing_t&)
+    void setSize(const size_t newSize, const SkipSmoothing_t&) noexcept
     {
         setSizeImpl<true>(newSize);
     }
 
-    void setModulationDepth(const float depth)
+    void setModulationDepth(const float depth) noexcept
     {
         m_modulationDepth = depth * 100.f;
         trimModulationDepth();
     }
 
-    void setModulationSpeed(const float speedHz)
+    void setModulationSpeed(const float speedHz) noexcept
     {
         m_modulation.setModulationSpeed(speedHz);
     }
 
-    void feedWrite(const float in)
+    void feedWrite(const float in) noexcept
     {
         if (m_useLowPass)
         {
@@ -286,7 +286,7 @@ class ModulatingAllPassDelay
         }
     }
 
-    float step(const float in)
+    [[nodiscard]] float step(const float in)
     {
         if (++m_tick == 16)
         {
@@ -388,10 +388,11 @@ class ModulatingAllPassDelay
     }
 
 
-    void trimModulationDepth()
+    void trimModulationDepth() noexcept
     {
         m_modulation.setModulationDepth(std::min(static_cast<float>(m_maxBufferSize - 3), m_modulationDepth));
     }
+
     const float m_sampleRate;
 
     OnePoleFilter<OnePoleFilterCharacteristic::LowPass, false> m_lowpass;
@@ -420,7 +421,6 @@ class ModulatingAllPassDelay
     std::vector<float> m_buffer{};
 };
 
-
 template <bool positiveOnly>
 class ModulatingAllPassDelayNoSoftAdapt
 {
@@ -437,19 +437,18 @@ class ModulatingAllPassDelayNoSoftAdapt
         m_currentDelayWidth = maxSize / 8;
     }
 
-
-    void clear()
+    void clear() noexcept
     {
         std::fill(m_buffer.begin(), m_buffer.end(), 0.f);
     }
 
-    float getDecayTimeInSamples(const float db = -60.f)
+    [[nodiscard]] float getDecayTimeInSamples(const float db = -60.f) const noexcept
     {
         const auto f = dbToGain(db);
         return std::log10(f) * static_cast<float>(m_currentDelayWidth) / std::log10(m_feedback);
     }
 
-    void setLowpass(const float value)
+    void setLowpass(const float value) noexcept
     {
         m_lowPass.setCutoff(value);
     }
@@ -459,42 +458,42 @@ class ModulatingAllPassDelayNoSoftAdapt
         m_dispersionFilter.setCutoff(value);
     }
 
-    void setFeedback(const float gain)
+    void setFeedback(const float gain) noexcept
     {
         m_feedback = std::clamp(gain, -1.f, 1.f);
     }
 
-    void setFeedbackNoClamp(const float gain)
+    void setFeedbackNoClamp(const float gain) noexcept
     {
         m_feedback = gain;
     }
 
-    void reset()
+    void reset() noexcept
     {
         m_dispersionFilter.reset();
         m_lowPass.reset();
         std::fill_n(m_buffer.data(), m_buffer.size(), 0);
     }
 
-    void setSize(const size_t newSize)
+    void setSize(const size_t newSize) noexcept
     {
         const auto clampedSize = std::clamp<size_t>(newSize, 2, m_maxSize);
         m_currentDelayWidth = clampedSize;
         m_headRead = (m_headWrite + m_maxSize - m_currentDelayWidth) % m_maxSize;
     }
 
-    void setModulationDepth(const float depth)
+    void setModulationDepth(const float depth) noexcept
     {
         m_modulationDepth = depth * 100.f;
         trimModulationDepth();
     }
 
-    void setModulationSpeed(float speedHz)
+    void setModulationSpeed(const float speedHz) noexcept
     {
         m_modulation.setModulationSpeed(speedHz);
     }
 
-    void feedWrite(float in)
+    void feedWrite(const float in) noexcept
     {
         m_buffer[m_headWrite] = m_lowPass.step(in);
         m_buffer[m_headWrite] = m_dispersionFilter.step(m_buffer[m_headWrite]);
@@ -512,8 +511,7 @@ class ModulatingAllPassDelayNoSoftAdapt
         }
     }
 
-
-    float step(const float in)
+    [[nodiscard]] float step(const float in)
     {
         if (++m_tick == 16)
         {
@@ -536,7 +534,7 @@ class ModulatingAllPassDelayNoSoftAdapt
         return output;
     }
 
-    float nextHeadRead()
+    [[nodiscard]] float nextHeadRead()
     {
         float returnValue{0.0f};
         if (m_modulation.isModulating())
@@ -557,23 +555,25 @@ class ModulatingAllPassDelayNoSoftAdapt
         return returnValue;
     }
 
-    void processBlock(const float* source, float* target, size_t numSamples)
+    void processBlock(const float* source, float* target, const size_t numSamples)
     {
-        std::transform(source, source + numSamples, target, [this](float in) { return step(in); });
-    }
-    void processBlockInplace(float* inplace, size_t numSamples)
-    {
-        std::transform(inplace, inplace + numSamples, inplace, [this](float in) { return step(in); });
+        std::transform(source, source + numSamples, target, [this](const float in) { return step(in); });
     }
 
-    [[nodiscard]] size_t size() const
+    void processBlockInplace(float* inplace, const size_t numSamples)
+    {
+        std::transform(inplace, inplace + numSamples, inplace, [this](const float in) { return step(in); });
+    }
+
+    [[nodiscard]] size_t size() const noexcept
     {
         return m_currentDelayWidth;
     }
 
   private:
     const float m_sampleRate;
-    void trimModulationDepth()
+
+    void trimModulationDepth() noexcept
     {
         m_modulation.setModulationDepth(std::min(static_cast<float>(m_maxSize - 3), m_modulationDepth));
     }
@@ -581,7 +581,6 @@ class ModulatingAllPassDelayNoSoftAdapt
     OnePoleFilter<OnePoleFilterCharacteristic::LowPass, false> m_lowPass;
     Ap18Smooth m_dispersionFilter;
     float m_feedback{0.0f};
-    float m_lastValue{0.0f};
     size_t m_headRead{0};
     size_t m_headWrite{0};
     size_t m_currentDelayWidth{10};
@@ -591,7 +590,6 @@ class ModulatingAllPassDelayNoSoftAdapt
     size_t m_maxSize{0};
     std::vector<float> m_buffer{};
 };
-
 
 class FixedAllpassDelay
 {
@@ -607,7 +605,7 @@ class FixedAllpassDelay
         m_highPass.setCutoff(25.f);
     }
 
-    void clear()
+    void clear() noexcept
     {
         std::fill(m_buffer.begin(), m_buffer.end(), 0.f);
     }
@@ -646,13 +644,13 @@ class FixedAllpassDelay
         m_head = 0;
     }
 
-    float step(const float in) noexcept
+    [[nodiscard]] float step(const float in) noexcept
     {
         m_head = m_head >= m_delaySteps ? 0 : m_head;
         return stepNoIf(in);
     }
 
-    float stepNoIf(const float in) noexcept
+    [[nodiscard]] float stepNoIf(const float in) noexcept
     {
         m_lastValue = m_buffer[m_head];
         const auto feedDelay = m_highPass.step(in + m_lastValue * m_feedback);

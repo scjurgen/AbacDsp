@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -22,14 +21,11 @@ class SchroederAllPass
 {
   public:
     explicit SchroederAllPass()
-        : m_delayLength(MaxSize / 2)
-        , m_gain(0.65f)
-        , m_buffer(MaxSize, 0.0f)
-        , m_writeIndex(0)
+        : m_buffer(MaxSize, 0.0f)
     {
     }
 
-    float step(const float input) noexcept
+    [[nodiscard]] float step(const float input) noexcept
     {
         const float w_delayed = m_buffer[m_writeIndex];
         const float output = w_delayed - m_gain * input;
@@ -51,7 +47,7 @@ class SchroederAllPass
         m_gain = std::clamp(gain, -1.f, 1.f);
     }
 
-    void setSize(const size_t samples)
+    void setSize(const size_t samples) noexcept
     {
         if (samples != m_delayLength)
         {
@@ -68,10 +64,10 @@ class SchroederAllPass
     }
 
   private:
-    size_t m_delayLength;
-    float m_gain;
+    size_t m_delayLength{MaxSize / 2};
+    float m_gain{0.65f};
     std::vector<float> m_buffer;
-    size_t m_writeIndex;
+    size_t m_writeIndex{0};
 };
 
 
@@ -137,7 +133,7 @@ class SchroederAllPassSoftTransition
         }
     }
 
-    float step(const float in) noexcept
+    [[nodiscard]] float step(const float in) noexcept
     {
         newFadeIfNeeded();
         auto getNext = [this]()

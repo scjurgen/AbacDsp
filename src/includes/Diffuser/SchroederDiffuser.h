@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <array>
 
 #include "Helpers/ConstructArray.h"
@@ -126,7 +125,7 @@ class SchroederDiffuser
         }
     }
 
-    float step(const float value)
+    [[nodiscard]] float step(const float value)
     {
         auto tmp = value;
         for (size_t i = 0; i < m_delay.size(); ++i)
@@ -144,6 +143,5 @@ class SchroederDiffuser
 
     std::array<SchroederAllPassSoftTransition<MaxDelayLength, BlockSize>, NumElements> m_delay{};
 };
-
 
 }
