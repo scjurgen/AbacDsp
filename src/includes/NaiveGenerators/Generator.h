@@ -5,7 +5,6 @@
 #include <numbers>
 #include <random>
 #include <stdexcept>
-#include <vector>
 
 #include "Filters/OnePoleFilter.h"
 
@@ -32,18 +31,16 @@ class Generator
     explicit Generator(const float sampleRate, const float frequency = 440.f)
         : m_sampleRate(sampleRate)
         , m_frequency(frequency)
-        , m_phase(0.0f)
-        , m_lastNoise(0.0f)
+        , m_advance(frequency / sampleRate)
         , m_lowpass(sampleRate)
     {
-        m_advance = m_frequency / m_sampleRate;
         if constexpr (Style == Wave::Noise)
         {
             m_rng.seed(std::random_device{}());
         }
     }
 
-    float step()
+    [[nodiscard]] float step()
     {
         if constexpr (Style == Wave::Sine)
         {
@@ -100,7 +97,7 @@ class Generator
         m_advance = m_frequency / m_sampleRate;
         while (begin != end)
         {
-            float value = step();
+            const auto value = step();
             for (size_t i = 0; i < numChannels && begin != end; ++i)
             {
                 *begin++ = value;
@@ -109,7 +106,7 @@ class Generator
     }
 
   private:
-    void advancePhase()
+    void advancePhase() noexcept
     {
         m_phase += m_advance;
         if (m_phase > 1.0f)
@@ -118,7 +115,10 @@ class Generator
         }
     }
 
-    float m_sampleRate, m_frequency, m_phase, m_advance, m_lastNoise;
+    float m_sampleRate;
+    float m_frequency;
+    float m_phase{0.0f};
+    float m_advance;
     std::mt19937 m_rng;
     OnePoleFilter<OnePoleFilterCharacteristic::LowPass, false> m_lowpass;
 };
