@@ -19,18 +19,9 @@ class DispersionDelay
     explicit DispersionDelay(const float sampleRate)
         : m_sampleRate(sampleRate)
         , m_allPass(sampleRate)
-        , m_scheduledDelayWidth(MAXSIZE / 8)
-        , m_hasScheduledChange(false)
-        , m_currentReadHead(0)
-        , m_fadeWindowSize(1024.f)
-        , m_currentFadeIn(0.f)
-        , m_currentFadeOut(1.f)
-        , m_fadeStep(0)
-        , m_activeFade(false)
-        , m_targetRead(MAXSIZE - MAXSIZE / 8 - 1)
         , m_buffer(MAXSIZE, 0.f)
     {
-        m_allPass.setCutoff(sampleRate / 2 - 1);
+        m_allPass.setCutoff(sampleRate * 0.5f - 1.f);
         m_read[0] = MAXSIZE - m_currentDelayWidth - 1;
         while (m_read[0] >= m_buffer.size())
         {
@@ -79,7 +70,7 @@ class DispersionDelay
         m_read[inactiveHead] = m_targetRead;
     }
 
-    float step(const float in) noexcept
+    [[nodiscard]] float step(const float in) noexcept
     {
         float result{0.0f};
 
@@ -154,17 +145,17 @@ class DispersionDelay
     AllPass m_allPass;
     size_t m_currentDelayWidth{MAXSIZE / 8};
     size_t m_targetDelayWidth{MAXSIZE / 8};
-    size_t m_scheduledDelayWidth;
-    bool m_hasScheduledChange;
+    size_t m_scheduledDelayWidth{MAXSIZE / 8};
+    bool m_hasScheduledChange{false};
     size_t m_head{0};
     std::array<size_t, 2> m_read{};
     size_t m_currentReadHead{0};
     float m_fadeWindowSize{1024.0f};
-    float m_currentFadeIn;
-    float m_currentFadeOut;
-    size_t m_fadeStep;
-    bool m_activeFade;
-    size_t m_targetRead;
+    float m_currentFadeIn{0.f};
+    float m_currentFadeOut{1.f};
+    size_t m_fadeStep{0};
+    bool m_activeFade{false};
+    size_t m_targetRead{MAXSIZE - MAXSIZE / 8 - 1};
     std::vector<float> m_buffer;
 };
 
