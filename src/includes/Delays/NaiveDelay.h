@@ -26,7 +26,7 @@ class NaiveDelay
         }
     }
 
-    float step(const float in) noexcept
+    [[nodiscard]] float step(const float in) noexcept
     {
         m_buffer[m_head++] = in;
         if (m_head >= m_buffer.size())

@@ -78,7 +78,7 @@ class ModulatingDelayPitchedAdjust
         }
     }
 
-    float step(const float in) noexcept
+    [[nodiscard]] float step(const float in) noexcept
     {
         sweepTick();
         const auto depth = m_modWidth * (std::abs(m_currentPhase) + 1) + 1; // triangular wave

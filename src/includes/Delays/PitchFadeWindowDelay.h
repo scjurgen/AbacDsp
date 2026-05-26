@@ -38,7 +38,7 @@ class PitchFadeWindowDelay
         }
     }
 
-    float step(const float in)
+    [[nodiscard]] float step(const float in)
     {
         float returnValue = 0.f;
 
@@ -80,7 +80,7 @@ class PitchFadeWindowDelay
         }
 
         m_buffer[m_head++] = in;
-        m_head = m_head % m_maxSize;
+        m_head %= m_maxSize;
         return returnValue;
     }
 
@@ -126,7 +126,7 @@ class PitchFadeWindowDelay
     void advanceFade(float& fadePos) noexcept
     {
         fadePos += m_reverse ? -m_readHeads.advance : m_readHeads.advance;
-        while (fadePos < 0)
+        while (fadePos < 0.f)
         {
             fadePos += m_maxSize;
         }
@@ -138,7 +138,7 @@ class PitchFadeWindowDelay
 
     [[nodiscard]] float getFractional(const float position) const
     {
-        const auto idx = static_cast<size_t>(floorf(position));
+        const auto idx = static_cast<size_t>(std::floor(position));
         const float fractional = position - static_cast<float>(idx);
         // whenever using another interpolation set the MaxInterpolationWidth
         return Interpolation::linearPt2(&m_buffer[idx % m_maxSize], fractional);
@@ -181,7 +181,7 @@ class PitchFadeWindowDelay
         {
             pos -= m_maxSize;
         }
-        while (pos < 0)
+        while (pos < 0.f)
         {
             pos += m_maxSize;
         }

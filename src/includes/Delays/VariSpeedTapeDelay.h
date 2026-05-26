@@ -53,7 +53,7 @@ class VariSpeedTapeDelay
         {
             m_rdhd[hdIdx].advancePosition();
 
-            const size_t indexBuffer = std::floor(m_rdhd[hdIdx].getPosition());
+            const auto indexBuffer = static_cast<size_t>(std::floor(m_rdhd[hdIdx].getPosition()));
             const float fraction = m_rdhd[hdIdx].getPosition() - static_cast<float>(indexBuffer);
             std::array<float, NumChannels> tmp{};
             TapeInterpolation::catmullRom(&m_buffer[indexBuffer * NumChannels], tmp.data(), fraction);
@@ -79,7 +79,6 @@ class VariSpeedTapeDelay
             writeToRingBuffer(m_tmpOutput.data(), producedFrames);
         }
     }
-
 
     void setReadHead(const size_t hdIdx, const float delta, const bool force = false) noexcept
     {
@@ -116,7 +115,7 @@ class VariSpeedTapeDelay
         std::ranges::fill(m_tmpOutput, 0);
     }
 
-    const std::vector<float>& getBuffer() const noexcept
+    [[nodiscard]] const std::vector<float>& getBuffer() const noexcept
     {
         return m_buffer;
     }
