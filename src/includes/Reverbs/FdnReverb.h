@@ -1,15 +1,15 @@
 #pragma once
 
-#include "Delays/ModulationDelay.h"
+#include <random>
+
 #include "Delays/DispersionDelay.h"
+#include "Delays/ModulationDelay.h"
+#include "Delays/PitchFadeWindowDelay.h"
 #include "Filters/Biquad.h"
 #include "Filters/OnePoleFilter.h"
 #include "HadamardFeed.h"
-#include "Delays/PitchFadeWindowDelay.h"
 #include "Helpers/ConstructArray.h"
 #include "Numbers/PrimeDispatcher.h"
-
-#include <random>
 
 namespace AbacDsp
 {
@@ -98,7 +98,6 @@ class FdnTank
         }
     }
 
-
     void setModulationSpeed()
     {
         if (!m_countModulation)
@@ -168,16 +167,8 @@ class FdnTank
         m_currentWidth[index] = w;
         m_delay[index].setSize(w);
         m_basicDelay[index].setSize(w);
-        const auto tmp = powf(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
+        const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
-
-        // for (size_t i = 0; i < NumPitchDelays; ++i)
-        // {
-        //     if (index == m_order - NumPitchDelays + i)
-        //     {
-        //         m_octaveDelay[i].setSize(w);
-        //     }
-        // }
         return w;
     }
 
@@ -190,15 +181,8 @@ class FdnTank
         m_currentWidth[index] = value;
         m_delay[index].setSize(value);
         m_basicDelay[index].setSize(value);
-        const auto tmp = powf(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
+        const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
-        for (size_t i = 0; i < NumPitchDelays; ++i)
-        {
-            if (index == m_order - NumPitchDelays + i)
-            {
-                //  m_octaveDelay[i].setSize(value);
-            }
-        }
     }
 
     void computeDelaySizes()
@@ -223,11 +207,9 @@ class FdnTank
         {
             ensureUniqueDiscreteSize(m_discreteSize.data(), m_order);
         }
-        size_t sum = 0;
         for (size_t i = 0; i < m_order; ++i)
         {
             setDirectSize(i, m_discreteSize[i]);
-            sum += m_discreteSize[i];
         }
     }
 
@@ -265,12 +247,12 @@ class FdnTank
         m_mono = 1.f - value;
     }
 
-    float getBulgeValue(const float x, const float bulge, const float bulgePower = 4.0f)
+    [[nodiscard]] float getBulgeValue(const float x, const float bulge, const float bulgePower = 4.0f) const noexcept
     {
         return bulge < 0 ? 1 - std::pow(1 - x, std::pow(bulgePower, -bulge)) : std::pow(x, std::pow(bulgePower, bulge));
     }
 
-    static float getSymBulge(const float x, const float bulge, const float bulgePower = 4.0f)
+    [[nodiscard]] static float getSymBulge(const float x, const float bulge, const float bulgePower = 4.0f)
     {
         if (x < 0.5)
         {
@@ -323,13 +305,9 @@ class FdnTank
             }
         }
     }
-    void setLowPassCount(const float value)
-    { // m_v=value;
-    }
+    void setLowPassCount(const float /*value*/) {}
 
-    void setHighPassCount(const float value)
-    { // m_v=value;
-    }
+    void setHighPassCount(const float /*value*/) {}
 
     void setModulationDepth(const float value)
     {
@@ -355,7 +333,6 @@ class FdnTank
         }
     }
 
-
     void setPitchStrength(const float value)
     {
         m_pitchStrength = value;
@@ -370,7 +347,6 @@ class FdnTank
     {
         setPitch(1, value);
     }
-
 
     void matrixFeed(float in)
     {
@@ -427,23 +403,8 @@ class FdnTank
                     m_delay[s].step(in - m_feedValue[m_order - 1 - s] * m_gain[m_order - 1 - s]);
             }
         }
-        // for (size_t s = 0; s < m_order && s < m_countSaturation; ++s)
-        // {
-        //     size_t idx = s + (m_order - m_countSaturation) / 2;
-        //     m_lastValue[idx] = m_invSaturationDepth * std::atan(m_saturationDepth * m_lastValue[idx]);
-        // }
-        //
-        // for (size_t s = 0; s < m_countLowpass; ++s)
-        // {
-        //     size_t idx = s + (m_order - m_countLowpass) / 2;
-        //     m_lastValue[idx] = m_lp[s].step(m_lastValue[idx]);
-        // }
-        // for (size_t s = 0; s < m_countHighpass; ++s)
-        // {
-        //     size_t idx = s + (m_order - m_countHighpass) / 2;
-        //     m_lastValue[idx] = m_hp[idx].step(m_lastValue[idx]);
-        // }
     }
+
     void processBlock(const float* in, float* out)
     {
         for (uint32_t pos = 0; pos < BlockSize; pos++)
@@ -553,7 +514,7 @@ class FdnTank
     float m_modSpeed{0.2f};
     float m_modDepth{0.f};
     float m_bulge{-0.6f};
-    float m_mono{0.0};
+    float m_mono{0.0f};
     std::array<size_t, MAXORDER> m_currentWidth{};
     std::array<float, MAXORDER> m_lastValue{};
     std::array<float, MAXORDER> m_feedValue{};

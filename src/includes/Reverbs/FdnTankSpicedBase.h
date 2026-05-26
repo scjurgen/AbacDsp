@@ -1,14 +1,13 @@
 #pragma once
 
+#include <random>
+
+#include "Delays/ParallelPlainDelay.h"
 #include "HadamardWalsh4.h"
 #include "HadamardWalsh8.h"
 #include "HadamardWalsh16.h"
 #include "HadamardWalsh32.h"
-
-#include "Delays/ParallelPlainDelay.h"
 #include "Numbers/PrimeDispatcher.h"
-
-#include <random>
 
 namespace AbacDsp
 {
@@ -26,7 +25,7 @@ class FdnTankSpicedBase
   public:
     struct DelayWarp
     {
-        float getBulgeValue(const float x, const float bulgePower = 4.0f)
+        [[nodiscard]] float getBulgeValue(const float x, const float bulgePower = 4.0f) const noexcept
         {
             return bulge < 0 ? 1 - std::pow(1 - x, std::pow(bulgePower, bulge))
                              : std::pow(x, std::pow(bulgePower, -bulge));
@@ -102,7 +101,6 @@ class FdnTankSpicedBase
         setItdTaps(m_itdTaps);
     }
 
-
     void setUniqueDelay(const bool value)
     {
         m_avoidEqualLengthDelay = value;
@@ -134,7 +132,7 @@ class FdnTankSpicedBase
         w = getUsefulPrime<11>(w);
         m_currentWidth[index] = w;
         m_delay.setSize(index, w - 1);
-        const auto tmp = powf(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
+        const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
         return w;
     }
@@ -148,7 +146,7 @@ class FdnTankSpicedBase
 
         m_currentWidth[index] = value;
         m_delay.setSize(index, value - 2 * BlockSize);
-        const auto tmp = powf(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
+        const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
     }
 
@@ -280,7 +278,6 @@ class FdnTankSpicedBase
 
     void processBlockSplitAdd(const float* in, float* left, float* right)
     {
-        constexpr float factorOrder = 1.f / static_cast<float>(ORDER);
         for (size_t o = 0; o < ORDER; ++o)
         {
             for (size_t s = 0; s < BlockSize; s++)
@@ -289,15 +286,14 @@ class FdnTankSpicedBase
             }
         }
         m_delay.processBlock(m_inValue, m_outValue);
-        std::array<std::array<float, BlockSize>, ORDER> decorrelatedLeft;
-        std::array<std::array<float, BlockSize>, ORDER> decorrelatedRight;
+        std::array<std::array<float, BlockSize>, ORDER> decorrelatedLeft{};
+        std::array<std::array<float, BlockSize>, ORDER> decorrelatedRight{};
         m_delay.processHead(1, decorrelatedLeft);
         m_delay.processHead(2, decorrelatedRight);
 
         for (uint32_t s = 0; s < BlockSize; s++)
         {
             matrixFeed(s);
-            float result = 0.0f;
             for (size_t o = 0; o < ORDER; ++o)
             {
                 left[s] += decorrelatedLeft[o][s];
@@ -329,7 +325,7 @@ class FdnTankSpicedBase
     float m_sampleRate;
     DelayWarp m_warp;
 
-    float m_mono{0.0};
+    float m_mono{0.0f};
     alignas(16) std::array<size_t, ORDER> m_currentWidth{};
     alignas(16) std::array<std::array<float, BlockSize>, ORDER> m_inValue{};
     alignas(16) std::array<std::array<float, BlockSize>, ORDER> m_outValue{};

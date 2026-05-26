@@ -1,19 +1,18 @@
 #pragma once
 
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <memory>
+#include <random>
+
 #include "../BlockProcessors/BlockProcessorBase.h"
+#include "Delays/ParallelPlainDelay.h"
 #include "HadamardWalsh4.h"
 #include "HadamardWalsh8.h"
 #include "HadamardWalsh16.h"
 #include "HadamardWalsh32.h"
-
-#include "Delays/ParallelPlainDelay.h"
 #include "Numbers/PrimeDispatcher.h"
-
-#include <cmath>
-#include <random>
-#include <array>
-#include <algorithm>
-#include <memory>
 
 namespace AbacDsp
 {
@@ -30,7 +29,7 @@ class FdnTankSpiced
   public:
     struct DelayWarp
     {
-        float getBulgeValue(const float x, const float bulgePower = 4.0f)
+        [[nodiscard]] float getBulgeValue(const float x, const float bulgePower = 4.0f) const noexcept
         {
             return bulge < 0 ? 1 - std::pow(1 - x, std::pow(bulgePower, bulge))
                              : std::pow(x, std::pow(bulgePower, -bulge));
@@ -54,7 +53,6 @@ class FdnTankSpiced
         initRandomItd();
     }
 
-    // Callback management
     void setDelayCallback(size_t delayIndex, std::shared_ptr<BlockProcessorBase<BlockSize>> processor)
     {
         m_callbacks.setCallback(delayIndex, std::move(processor));
@@ -70,7 +68,6 @@ class FdnTankSpiced
         m_callbacks.reset();
     }
 
-    // Existing methods (unchanged interface)
     void initUniformItd()
     {
         constexpr float maxItdMs = 0.33f;
@@ -148,7 +145,7 @@ class FdnTankSpiced
         w = getUsefulPrime<11>(w);
         m_currentWidth[index] = w;
         m_delay.setSize(index, w - 1);
-        const auto tmp = powf(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
+        const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
         return w;
     }
@@ -161,7 +158,7 @@ class FdnTankSpiced
         }
         m_currentWidth[index] = value;
         m_delay.setSize(index, value - 2 * BlockSize);
-        const auto tmp = powf(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
+        const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
     }
 
@@ -300,7 +297,6 @@ class FdnTankSpiced
 
     void processBlockSplitAdd(const float* in, float* left, float* right)
     {
-        constexpr float factorOrder = 1.f / static_cast<float>(ORDER);
         for (size_t o = 0; o < ORDER; ++o)
         {
             for (size_t s = 0; s < BlockSize; s++)
@@ -313,8 +309,8 @@ class FdnTankSpiced
 
         m_callbacks.processCallbacks(m_outValue);
 
-        std::array<std::array<float, BlockSize>, ORDER> decorrelatedLeft;
-        std::array<std::array<float, BlockSize>, ORDER> decorrelatedRight;
+        std::array<std::array<float, BlockSize>, ORDER> decorrelatedLeft{};
+        std::array<std::array<float, BlockSize>, ORDER> decorrelatedRight{};
         m_delay.processHead(1, decorrelatedLeft);
         m_delay.processHead(2, decorrelatedRight);
 
@@ -333,7 +329,7 @@ class FdnTankSpiced
     float m_feedBackGain;
     float m_sampleRate;
     DelayWarp m_warp;
-    float m_mono{0.0};
+    float m_mono{0.0f};
 
     alignas(16) std::array<size_t, ORDER> m_currentWidth{};
     alignas(16) std::array<std::array<float, BlockSize>, ORDER> m_inValue{};

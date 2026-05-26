@@ -11,7 +11,6 @@
 namespace AbacDsp
 {
 
-
 template <size_t MaxSizePerElement, size_t ORDER, size_t BlockSize>
     requires(MaxSizePerElement % BlockSize == 0)
 class FdnTankBlockDelayWalsh
@@ -60,7 +59,7 @@ class FdnTankBlockDelayWalsh
         w = getUsefulPrime<11>(w);
         m_currentWidth[index] = w;
         m_delay.setSize(index, w - 1);
-        const auto tmp = powf(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
+        const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
         return w;
     }
@@ -74,7 +73,7 @@ class FdnTankBlockDelayWalsh
 
         m_currentWidth[index] = value;
         m_delay.setSize(index, value - 2 * BlockSize);
-        const auto tmp = powf(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
+        const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
     }
 
@@ -248,7 +247,7 @@ class FdnTankBlockDelayWalsh
     float m_sampleRate;
     DelayWarp m_warp;
 
-    float m_mono{0.0};
+    float m_mono{0.0f};
     alignas(16) std::array<size_t, ORDER> m_currentWidth{};
     alignas(16) std::array<std::array<float, BlockSize>, ORDER> m_inValue{};
     alignas(16) std::array<std::array<float, BlockSize>, ORDER> m_outValue{};

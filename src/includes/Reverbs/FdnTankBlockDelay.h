@@ -56,7 +56,7 @@ class FdnTankBlockDelay
         w = getUsefulPrime<11>(w);
         m_currentWidth[index] = w;
         m_delay.setSize(index, w - 1);
-        const auto tmp = powf(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
+        const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
         return w;
     }
@@ -69,7 +69,7 @@ class FdnTankBlockDelay
         }
         m_currentWidth[index] = value;
         m_delay.setSize(index, value - 2 * BlockSize);
-        const auto tmp = powf(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
+        const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
     }
 
@@ -228,7 +228,7 @@ class FdnTankBlockDelay
     float m_sampleRate;
     DelayWarp m_warp;
 
-    float m_mono{0.0};
+    float m_mono{0.0f};
     std::array<size_t, ORDER> m_currentWidth{};
     std::array<std::array<float, BlockSize>, ORDER> m_inValue{};
     std::array<std::array<float, BlockSize>, ORDER> m_outValue{};
