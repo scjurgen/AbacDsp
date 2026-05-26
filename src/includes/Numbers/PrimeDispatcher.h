@@ -1,10 +1,10 @@
-
 #pragma once
 
 #include <algorithm>
+#include <cstddef>
 #include <iterator>
+#include <stdexcept>
 #include <type_traits>
-#include <vector>
 
 namespace AbacDsp
 {
@@ -13,7 +13,7 @@ namespace AbacDsp
  * to avoid phase cancellation effects
  *
  */
-[[nodiscard]] inline bool isPrimeNumber(size_t n)
+[[nodiscard]] inline bool isPrimeNumber(const size_t n)
 {
     if (n == 2 || n == 3)
     {
@@ -33,12 +33,9 @@ namespace AbacDsp
     return true;
 }
 
-/*
- * this does NOT work for MINVALUE  less than 3
- */
 template <size_t MINVALUE>
     requires(MINVALUE >= 3)
-[[nodiscard]] size_t getUsefulPrime(const size_t wIn)
+[[nodiscard]] inline size_t getUsefulPrime(const size_t wIn)
 {
     auto n = std::max(MINVALUE, wIn) | 1;
     if (wIn > 1'000'000'000)
@@ -65,7 +62,7 @@ inline auto returnOrderedPrimeTable(InputIterator source, InputIterator target, 
 {
     std::copy(source, source + numItems, target);
     std::sort(target, target + numItems);
-    size_t lastPrime = 0;
+    size_t lastPrime{0};
 
     for (size_t idx = 0; idx < numItems; ++idx, ++target)
     {
@@ -101,7 +98,7 @@ inline auto generateUniquePrimeSet(const In source, Out target, const size_t num
     }
 }
 
-static void ensureUniqueDiscreteSize(size_t* discreteSize, unsigned int last)
+inline void ensureUniqueDiscreteSize(size_t* discreteSize, const unsigned int last)
 {
     bool changes_made;
     do
