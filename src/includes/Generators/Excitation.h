@@ -7,6 +7,9 @@
 #include <span>
 #include <vector>
 
+namespace AbacDsp
+{
+
 class WindowFunctions
 {
   public:
@@ -17,7 +20,7 @@ class WindowFunctions
         constexpr T pi2 = 2 * std::numbers::pi_v<T>;
         for (size_t i = 0; i < N; ++i)
         {
-            T w = static_cast<T>(i) / static_cast<T>(N - 1);
+            const T w = static_cast<T>(i) / static_cast<T>(N - 1);
             window[i] = T(0.5) * (T(1) - std::cos(pi2 * w));
         }
         return window;
@@ -29,13 +32,13 @@ class WindowFunctions
         constexpr T pi2 = 2 * std::numbers::pi_v<T>;
         constexpr T pi4 = 4 * std::numbers::pi_v<T>;
         constexpr T pi6 = 6 * std::numbers::pi_v<T>;
-        const T a0 = 0.35875;
-        const T a1 = 0.48829;
-        const T a2 = 0.14128;
-        const T a3 = 0.01168;
+        constexpr T a0 = 0.35875;
+        constexpr T a1 = 0.48829;
+        constexpr T a2 = 0.14128;
+        constexpr T a3 = 0.01168;
         for (size_t i = 0; i < x.size(); i++)
         {
-            T w = static_cast<T>(i) / static_cast<T>(x.size() - 1);
+            const T w = static_cast<T>(i) / static_cast<T>(x.size() - 1);
             x[i] *= a0 - a1 * std::cos(pi2 * w) + a2 * std::cos(pi4 * w) + a3 * std::cos(pi6 * w);
         }
     }
@@ -45,11 +48,10 @@ class Excitation
 {
   public:
     static constexpr size_t NumNoise{65535};
-    explicit Excitation(size_t patternLength = 1024)
+    explicit Excitation(const size_t patternLength = 1024)
         : m_sineLength(patternLength)
         , m_sine(patternLength + 1, 0.0f)
         , m_noise(NumNoise, 0.0f)
-        , m_noiseFactor(0.0f)
     {
         generateSineWave();
         generateNoise();
@@ -134,7 +136,7 @@ class Excitation
     void generateNoise()
     {
         std::random_device rd;
-        std::mt19937 gen(rd());
+        std::mt19937 gen{rd()};
         std::uniform_real_distribution distribution(0.0f, 4.0f);
         for (size_t i = 0; i < m_noise.size(); ++i)
         {
@@ -148,3 +150,5 @@ class Excitation
     size_t m_noiseIndex{0};
     float m_noiseFactor{0.0f};
 };
+
+}  // namespace AbacDsp

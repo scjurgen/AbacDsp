@@ -6,8 +6,9 @@
 #include <numbers>
 #include <random>
 
-// Generates sparse crackling noise for lightning discharge simulation
-// Uses interleaved velvet noise with time-varying density and resonant filtering
+namespace AbacDsp
+{
+
 class VelvetCrackleGenerator
 {
   public:
@@ -20,12 +21,12 @@ class VelvetCrackleGenerator
     {
         m_phase = 0;
         m_density_envelope = 0.0f;
-        std::fill(m_filter_states.begin(), m_filter_states.end(), FilterState{});
+        std::ranges::fill(m_filter_states, FilterState{});
     }
 
     [[nodiscard]] float process(const float intensity, const float brightness)
     {
-        const int base_grid = 96; // ~500 Hz at 48kHz
+        constexpr int base_grid = 96; // ~500 Hz at 48kHz
         const int density_mod = static_cast<int>(intensity * 384.0f);
         const int grid_size = base_grid + density_mod;
 
@@ -121,3 +122,5 @@ class VelvetCrackleGenerator
     float m_air_absorption_z1{0.0f};
     std::array<FilterState, 4> m_filter_states;
 };
+
+}  // namespace AbacDsp

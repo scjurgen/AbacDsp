@@ -1,8 +1,10 @@
 #pragma once
 
-
 #include <cmath>
 #include <numbers>
+
+namespace AbacDsp
+{
 
 class JuliaIter
 {
@@ -25,7 +27,7 @@ class JuliaIter
         power = power_;
     }
 
-    float getIter(const float zr_, const float zi_) noexcept
+    [[nodiscard]] float getIter(const float zr_, const float zi_) noexcept
     {
         auto zr = zr_;
         auto zi = zi_;
@@ -91,7 +93,7 @@ class JuliaWalk : public JuliaIter
         m_advance = f / m_sampleRate;
     }
 
-    float next() noexcept
+    [[nodiscard]] float next() noexcept
     {
         m_phase += m_advance;
         if (m_phase >= 2.f * std::numbers::pi_v<float>)
@@ -108,6 +110,8 @@ class JuliaWalk : public JuliaIter
     float m_ji{};
     float m_jr_rad{};
     float m_ji_rad{};
-    float m_phase{0};
+    float m_phase{0.f};
     float m_advance{};
 };
+
+}  // namespace AbacDsp

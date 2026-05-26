@@ -5,6 +5,7 @@
 #include <functional>
 #include <numbers>
 #include <random>
+
 namespace AbacDsp
 {
 struct Harmonic
@@ -51,7 +52,7 @@ class HarmonicGenerator
         m_randomSpread = value;
     }
 
-    size_t addHarmonics(Harmonic* target, size_t idx, const size_t count, const float baseFrequency, const float power)
+    [[nodiscard]] size_t addHarmonics(Harmonic* target, size_t idx, const size_t count, const float baseFrequency, const float power)
     {
         m_power = power;
 
@@ -105,7 +106,6 @@ class HarmonicGenerator
         }
         return factor;
     }
-
 
     [[nodiscard]] static float calculateOvertonePower(const float basePower, const float value,
                                                       const float overtonePosition) noexcept

@@ -3,6 +3,7 @@
 #include <cmath>
 #include <numbers>
 #include <vector>
+
 namespace AbacDsp
 {
 inline void renderReferenceSineWave(std::vector<float>& target, const double sampleRate, const double frequency)

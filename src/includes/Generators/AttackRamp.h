@@ -97,7 +97,7 @@ class AttackRamp
         m_exponentialFactor = std::pow(1.0f / 1E-6f, 1.0f / static_cast<float>(totalSamples));
     }
 
-    void processLinearBlock(std::array<float, BlockSize>& block)
+    void processLinearBlock(std::array<float, BlockSize>& block) noexcept
     {
         for (size_t i = 0; i < BlockSize; ++i)
         {
@@ -111,7 +111,7 @@ class AttackRamp
         }
     }
 
-    void processExponentialBlock(std::array<float, BlockSize>& block)
+    void processExponentialBlock(std::array<float, BlockSize>& block) noexcept
     {
         for (size_t i = 0; i < BlockSize; ++i)
         {
@@ -127,4 +127,4 @@ class AttackRamp
     }
 };
 
-}
+}  // namespace AbacDsp

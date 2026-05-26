@@ -91,8 +91,8 @@ class ResoGenerator
 
     void pitchBendCents(const size_t minNote, const size_t maxNote, const float cents) noexcept
     {
-        (void) minNote;
-        (void) maxNote;
+        (void)minNote;
+        (void)maxNote;
         m_bq[0].pitchBendCents(cents);
     }
 

@@ -134,7 +134,7 @@ class Excitation
     void generateNoise()
     {
         std::random_device rd;
-        std::mt19937 gen(rd());
+        std::mt19937 gen{rd()};
         std::uniform_real_distribution distribution(0.0f, 4.0f);
         for (size_t i = 0; i < m_noise.size(); ++i)
         {

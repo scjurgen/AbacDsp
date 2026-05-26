@@ -3,7 +3,11 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
+
+namespace AbacDsp
+{
 
 struct CsvVoice
 {
@@ -15,9 +19,9 @@ struct CsvVoice
     float waitMs;
 };
 
-[[nodiscard]] inline bool readVoiceSettings(const std::string& filename, std::vector<CsvVoice>& settings)
+[[nodiscard]] inline bool readVoiceSettings(const std::string_view filename, std::vector<CsvVoice>& settings)
 {
-    std::ifstream file(filename);
+    std::ifstream file(std::string{filename});
 
     if (!file.is_open())
     {
@@ -42,3 +46,5 @@ struct CsvVoice
     }
     return true;
 }
+
+}  // namespace AbacDsp

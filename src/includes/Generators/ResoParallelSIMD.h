@@ -169,7 +169,7 @@ class ResoBpParallelSIMD
         m_currentSet = damp ? 1 : 0;
     }
 
-    bool isActive(const size_t mainIndex) noexcept
+    [[nodiscard]] bool isActive(const size_t mainIndex) noexcept
     {
         if (std::abs(m_z[mainIndex][0]) > 1E-5f || std::abs(m_z[mainIndex][1]) > 1E-5f)
         {

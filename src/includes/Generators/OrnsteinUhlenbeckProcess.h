@@ -6,14 +6,6 @@
 namespace AbacDsp
 {
 
-/**
- * @brief Correlated noise generator using the Ornstein-Uhlenbeck process.
- *
- * Continuous-time stochastic process that exhibits mean reversion,
- * commonly used for modeling random fluctuations with temporal correlation.
- *
- * @see https://en.wikipedia.org/wiki/Ornstein-Uhlenbeck_process
- */
 class OrnsteinUhlenbeckProcess
 {
   public:
@@ -37,11 +29,7 @@ class OrnsteinUhlenbeckProcess
         m_mu = m_sigma;
     }
 
-    /** @brief Advance Ornstein-Uhlenbeck process by one discrete time step.
-     *
-     *  dx = theta(mu - x)dt + sigma*sqrt(dt)*dW
-     *  @return Current process value x.
-     */
+    // dx = theta(mu - x)dt + sigma*sqrt(dt)*dW
     [[nodiscard]] float step() noexcept
     {
         const auto dW = m_normalDist(m_rng);
@@ -49,13 +37,11 @@ class OrnsteinUhlenbeckProcess
         return m_x;
     }
 
-    /** @brief Resets x to 0; RNG state is preserved. */
     void reset() noexcept
     {
         m_x = 0.0f;
     }
 
-    /** @brief Resets x to 0 and reseeds the RNG. */
     void reset(const std::mt19937::result_type seed) noexcept
     {
         m_x = 0.0f;
