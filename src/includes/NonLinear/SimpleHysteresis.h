@@ -1,21 +1,11 @@
 #pragma once
 
+#include <array>
 #include <cmath>
 #include <numbers>
-#include <iostream>
 
 namespace AbacDsp
 {
-/*
- * possible usage:
-    void setHysteresis(const float v)
-    {
-        const float a = 18000 - v * 12000;
-        const float d = 18000 - v * 6000;
-        m_hysteresis.setFrequencyResponse(a, d);
-
-    }
- */
 
 class SimpleHysteresis
 {
@@ -26,7 +16,7 @@ class SimpleHysteresis
         : m_sampleRate(sampleRate)
         , m_smoothingCoeff(calculateSmoothingCoeff(SmoothingTimeSeconds, sampleRate))
     {
-        setFrequencyResponse(5000, 9000);
+        setFrequencyResponse(5000.f, 9000.f);
     }
 
     void setFrequencyResponse(const float attackHz, const float decayHz) noexcept
@@ -35,7 +25,7 @@ class SimpleHysteresis
         m_targetDecayRate = std::exp(-2.0f * std::numbers::pi_v<float> * decayHz / m_sampleRate);
     }
 
-    float step(const float x) noexcept
+    [[nodiscard]] float step(const float x) noexcept
     {
         m_attackRate += (m_targetAttackRate - m_attackRate) * m_smoothingCoeff;
         m_decayRate += (m_targetDecayRate - m_decayRate) * m_smoothingCoeff;
@@ -48,7 +38,7 @@ class SimpleHysteresis
     }
 
   private:
-    static const float calculateSmoothingCoeff(const float timeConstant, const float sampleRate) noexcept
+    [[nodiscard]] static float calculateSmoothingCoeff(const float timeConstant, const float sampleRate) noexcept
     {
         // Coefficient for exponential smoothing
         // alpha = 1 - exp(-deltaT / timeConstant)
@@ -56,12 +46,12 @@ class SimpleHysteresis
         return 1.0f - std::exp(-deltaT / timeConstant);
     }
 
-    float m_sampleRate;
-    float m_state[2]{};
+    const float m_sampleRate;
+    std::array<float, 2> m_state{};
     float m_attackRate{0.1f};
     float m_decayRate{0.05f};
     float m_targetAttackRate{0.1f};
     float m_targetDecayRate{0.05f};
-    float m_smoothingCoeff;
+    const float m_smoothingCoeff;
 };
 }
