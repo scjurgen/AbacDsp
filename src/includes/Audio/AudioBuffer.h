@@ -187,22 +187,22 @@ class AudioBuffer
 
     AudioBuffer() = default;
 
-    [[nodiscard]] constexpr size_t numFrames() const
+    [[nodiscard]] constexpr size_t numFrames() const noexcept
     {
         return NumFrames;
     }
 
-    [[nodiscard]] constexpr size_t numChannels() const
+    [[nodiscard]] constexpr size_t numChannels() const noexcept
     {
         return Channels;
     }
 
-    SampleType& operator()(size_t frame, size_t channel)
+    SampleType& operator()(const size_t frame, const size_t channel)
     {
         return m_data[frame * Channels + channel];
     }
 
-    const SampleType& operator()(size_t frame, size_t channel) const
+    const SampleType& operator()(const size_t frame, const size_t channel) const
     {
         return m_data[frame * Channels + channel];
     }
@@ -271,7 +271,6 @@ class AudioBuffer
     std::array<SampleType, Channels * NumFrames> m_data{};
 };
 
-// Type aliases
 template <size_t NumFrames>
 using MonoAudioBuffer = AudioBuffer<1, NumFrames>;
 

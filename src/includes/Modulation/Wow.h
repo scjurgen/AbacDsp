@@ -11,13 +11,6 @@
 namespace AbacDsp
 {
 
-/**
- * @brief Tape WOW effect processor that simulates analog tape speed variations.
- *
- * Generates pitch modulation characteristic of vintage tape machines by combining
- * sinusoidal modulation with correlated noise from an Ornstein-Uhlenbeck process.
- * Provides controls for rate, depth, variance, and drift to shape the wow character.
- */
 class Wow
 {
   public:
@@ -62,10 +55,6 @@ class Wow
         m_drift = v;
     }
 
-    /**
-     * @brief Set the drift rate in Hz (typical range: 0.01 - 0.5 Hz)
-     * @param rateHz Drift rate in Hz
-     */
     void setDriftRate(const float rateHz) noexcept
     {
         m_driftRate = std::clamp(rateHz, 0.01f, 0.5f);

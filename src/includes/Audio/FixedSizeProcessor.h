@@ -78,7 +78,7 @@ class FixedSizeProcessor
 
                 for (unsigned frame = 0; frame < framesToProcess; ++frame)
                 {
-                    m_inputBuffer(m_feedAndEat + frame, channel) = 0;
+                    m_inputBuffer(m_feedAndEat + frame, channel) = 0.0f;
                     outputChannelData[frame] = m_outputBuffer(m_feedAndEat + frame, channel);
                 }
             }

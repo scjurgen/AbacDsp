@@ -11,7 +11,6 @@ class BlockProcessorBase
 {
   public:
     virtual ~BlockProcessorBase() = default;
-    // must be safe for inplace transformation of sampledata
     virtual void process(std::array<float, BlockSize>& blk) noexcept = 0;
     virtual void reset() noexcept {}
 };

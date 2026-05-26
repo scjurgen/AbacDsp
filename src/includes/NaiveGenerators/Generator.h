@@ -115,7 +115,7 @@ class Generator
         }
     }
 
-    float m_sampleRate;
+    const float m_sampleRate;
     float m_frequency;
     float m_phase{0.0f};
     float m_advance;

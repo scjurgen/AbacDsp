@@ -15,7 +15,6 @@ class Highpass final : public BlockProcessorBase<BlockSize>
     explicit Highpass(const float sampleRate)
         : m_sampleRate(sampleRate)
         , m_coeff(1.0f - std::exp(-2.0f * std::numbers::pi_v<float> * 1000.f / sampleRate))
-        , m_state(0.0f)
     {
     }
 
@@ -34,9 +33,9 @@ class Highpass final : public BlockProcessorBase<BlockSize>
     }
 
   private:
-    float m_sampleRate;
+    const float m_sampleRate;
     float m_coeff;
-    float m_state;
+    float m_state{};
 };
 }
 }
