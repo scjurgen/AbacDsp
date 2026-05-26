@@ -54,7 +54,6 @@
 namespace Approximation
 {
 
-// Domain tags
 struct DomainMinusOneToOne
 {
 };
@@ -65,35 +64,34 @@ struct DomainMinusPiToPi
 {
 };
 
-// Template declarations
 template <typename Domain>
-inline float remezSinP3(float x) noexcept;
+[[nodiscard]] inline float remezSinP3(const float x) noexcept;
 template <typename Domain>
-inline float remezSinP5(float x) noexcept;
+[[nodiscard]] inline float remezSinP5(const float x) noexcept;
 template <typename Domain>
-inline float remezCosP4(float x) noexcept;
+[[nodiscard]] inline float remezCosP4(const float x) noexcept;
 template <typename Domain>
-inline float remezCosP6(float x) noexcept;
+[[nodiscard]] inline float remezCosP6(const float x) noexcept;
 template <typename Domain>
-inline float remezFullSinP5(float x) noexcept;
+[[nodiscard]] inline float remezFullSinP5(const float x) noexcept;
 template <typename Domain>
-inline float remezFullSinP7(float x) noexcept;
+[[nodiscard]] inline float remezFullSinP7(const float x) noexcept;
 template <typename Domain>
-inline float remezFullSinP9(float x) noexcept;
+[[nodiscard]] inline float remezFullSinP9(const float x) noexcept;
 template <typename Domain>
-inline float remezFullCosP6(float x) noexcept;
+[[nodiscard]] inline float remezFullCosP6(const float x) noexcept;
 template <typename Domain>
-inline float remezFullCosP8(float x) noexcept;
+[[nodiscard]] inline float remezFullCosP8(const float x) noexcept;
 template <typename Domain>
-inline float remezFullCosP10(float x) noexcept;
+[[nodiscard]] inline float remezFullCosP10(const float x) noexcept;
 template <typename Domain>
-inline float remezFullCosAbsFoldP4(float x) noexcept;
+[[nodiscard]] inline float remezFullCosAbsFoldP4(const float x) noexcept;
 template <typename Domain>
-inline float remezFullCosAbsFoldP6(float x) noexcept;
+[[nodiscard]] inline float remezFullCosAbsFoldP6(const float x) noexcept;
 
 // Max error: 4.49e-03
 template <>
-inline float remezSinP3<DomainMinusPiHalfToPiHalf>(float x) noexcept
+[[nodiscard]] inline float remezSinP3<DomainMinusPiHalfToPiHalf>(const float x) noexcept
 {
     const auto x2 = x * x;
     return x * (-0.142566727f * x2 + 0.985529543f);
@@ -101,7 +99,7 @@ inline float remezSinP3<DomainMinusPiHalfToPiHalf>(float x) noexcept
 
 // Max error: 6.77e-05
 template <>
-inline float remezSinP5<DomainMinusPiHalfToPiHalf>(float x) noexcept
+[[nodiscard]] inline float remezSinP5<DomainMinusPiHalfToPiHalf>(const float x) noexcept
 {
     const auto x2 = x * x;
     return x * ((0.007514377f * x2 + -0.165673079f) * x2 + 0.999696773f);
@@ -109,7 +107,7 @@ inline float remezSinP5<DomainMinusPiHalfToPiHalf>(float x) noexcept
 
 // Max error: 5.97e-04
 template <>
-inline float remezCosP4<DomainMinusPiHalfToPiHalf>(float x) noexcept
+[[nodiscard]] inline float remezCosP4<DomainMinusPiHalfToPiHalf>(const float x) noexcept
 {
     const auto x2 = x * x;
     return ((0.036791683f * x2 + -0.495580849f) * x2 + 0.999403229f);
@@ -117,7 +115,7 @@ inline float remezCosP4<DomainMinusPiHalfToPiHalf>(float x) noexcept
 
 // Max error: 6.70e-06
 template <>
-inline float remezCosP6<DomainMinusPiHalfToPiHalf>(float x) noexcept
+[[nodiscard]] inline float remezCosP6<DomainMinusPiHalfToPiHalf>(const float x) noexcept
 {
     const auto x2 = x * x;
     return (((-0.001271209f * x2 + 0.041487748f) * x2 + -0.499912440f) * x2 + 0.999993295f);
@@ -125,7 +123,7 @@ inline float remezCosP6<DomainMinusPiHalfToPiHalf>(float x) noexcept
 
 // Max error: 4.49e-03
 template <>
-inline float remezSinP3<DomainMinusOneToOne>(float x) noexcept
+[[nodiscard]] inline float remezSinP3<DomainMinusOneToOne>(const float x) noexcept
 {
     const auto x2 = x * x;
     return x * (-0.552557921f * x2 + 1.548066186f);
@@ -133,7 +131,7 @@ inline float remezSinP3<DomainMinusOneToOne>(float x) noexcept
 
 // Max error: 6.77e-05
 template <>
-inline float remezSinP5<DomainMinusOneToOne>(float x) noexcept
+[[nodiscard]] inline float remezSinP5<DomainMinusOneToOne>(const float x) noexcept
 {
     const auto x2 = x * x;
     return x * ((0.071860854f * x2 + -0.642113167f) * x2 + 1.570320019f);
@@ -141,7 +139,7 @@ inline float remezSinP5<DomainMinusOneToOne>(float x) noexcept
 
 // Max error: 5.97e-04
 template <>
-inline float remezCosP4<DomainMinusOneToOne>(float x) noexcept
+[[nodiscard]] inline float remezCosP4<DomainMinusOneToOne>(const float x) noexcept
 {
     const auto x2 = x * x;
     return ((0.223990274f * x2 + -1.222796733f) * x2 + 0.999403229f);
@@ -149,7 +147,7 @@ inline float remezCosP4<DomainMinusOneToOne>(float x) noexcept
 
 // Max error: 6.70e-06
 template <>
-inline float remezCosP6<DomainMinusOneToOne>(float x) noexcept
+[[nodiscard]] inline float remezCosP6<DomainMinusOneToOne>(const float x) noexcept
 {
     const auto x2 = x * x;
     return (((-0.019095736f * x2 + 0.252580240f) * x2 + -1.233484504f) * x2 + 0.999993295f);
@@ -157,7 +155,7 @@ inline float remezCosP6<DomainMinusOneToOne>(float x) noexcept
 
 // Max error: 6.85e-03
 template <>
-inline float remezFullSinP5<DomainMinusPiToPi>(float x) noexcept
+[[nodiscard]] inline float remezFullSinP5<DomainMinusPiToPi>(const float x) noexcept
 {
     const auto x2 = x * x;
     return x * ((0.005465398f * x2 + -0.153462570f) * x2 + 0.984415719f);
@@ -165,7 +163,7 @@ inline float remezFullSinP5<DomainMinusPiToPi>(float x) noexcept
 
 // Max error: 2.50e-04
 template <>
-inline float remezFullSinP7<DomainMinusPiToPi>(float x) noexcept
+[[nodiscard]] inline float remezFullSinP7<DomainMinusPiToPi>(const float x) noexcept
 {
     const auto x2 = x * x;
     return x * (((-0.000145077f * x2 + 0.007958062f) * x2 + -0.165666986f) * x2 + 0.999275871f);
@@ -173,7 +171,7 @@ inline float remezFullSinP7<DomainMinusPiToPi>(float x) noexcept
 
 // Max error: 5.85e-06
 template <>
-inline float remezFullSinP9<DomainMinusPiToPi>(float x) noexcept
+[[nodiscard]] inline float remezFullSinP9<DomainMinusPiToPi>(const float x) noexcept
 {
     const auto x2 = x * x;
     return x * ((((0.000002148f * x2 + -0.000192650f) * x2 + 0.008308985f) * x2 + -0.166624385f) * x2 + 0.999979388f);
@@ -181,7 +179,7 @@ inline float remezFullSinP9<DomainMinusPiToPi>(float x) noexcept
 
 // Max error: 1.39e-03
 template <>
-inline float remezFullCosP6<DomainMinusPiToPi>(float x) noexcept
+[[nodiscard]] inline float remezFullCosP6<DomainMinusPiToPi>(const float x) noexcept
 {
     const auto x2 = x * x;
     return (((-0.000969668f * x2 + 0.039227680f) * x2 + -0.495349576f) * x2 + 0.998606596f);
@@ -189,7 +187,7 @@ inline float remezFullCosP6<DomainMinusPiToPi>(float x) noexcept
 
 // Max error: 4.02e-05
 template <>
-inline float remezFullCosP8<DomainMinusPiToPi>(float x) noexcept
+[[nodiscard]] inline float remezFullCosP8<DomainMinusPiToPi>(const float x) noexcept
 {
     const auto x2 = x * x;
     return ((((0.000018792f * x2 + -0.001339266f) * x2 + 0.041496019f) * x2 + -0.499793125f) * x2 + 0.999959795f);
@@ -197,7 +195,7 @@ inline float remezFullCosP8<DomainMinusPiToPi>(float x) noexcept
 
 // Max error: 7.78e-07
 template <>
-inline float remezFullCosP10<DomainMinusPiToPi>(float x) noexcept
+[[nodiscard]] inline float remezFullCosP10<DomainMinusPiToPi>(const float x) noexcept
 {
     const auto x2 = x * x;
     return (((((-0.000000220f * x2 + 0.000024204f) * x2 + -0.001385892f) * x2 + 0.041659822f) * x2 + -0.499994268f) *
@@ -207,7 +205,7 @@ inline float remezFullCosP10<DomainMinusPiToPi>(float x) noexcept
 
 // Max error: 6.85e-03
 template <>
-inline float remezFullSinP5<DomainMinusOneToOne>(float x) noexcept
+[[nodiscard]] inline float remezFullSinP5<DomainMinusOneToOne>(const float x) noexcept
 {
     const auto x2 = x * x;
     return x * ((1.672519451f * x2 + -4.758302910f) * x2 + 3.092633191f);
@@ -215,7 +213,7 @@ inline float remezFullSinP5<DomainMinusOneToOne>(float x) noexcept
 
 // Max error: 2.50e-04
 template <>
-inline float remezFullSinP7<DomainMinusOneToOne>(float x) noexcept
+[[nodiscard]] inline float remezFullSinP7<DomainMinusOneToOne>(const float x) noexcept
 {
     const auto x2 = x * x;
     return x * (((-0.438175042f * x2 + 2.435323557f) * x2 + -5.136716393f) * x2 + 3.139317734f);
@@ -223,7 +221,7 @@ inline float remezFullSinP7<DomainMinusOneToOne>(float x) noexcept
 
 // Max error: 5.85e-06
 template <>
-inline float remezFullSinP9<DomainMinusOneToOne>(float x) noexcept
+[[nodiscard]] inline float remezFullSinP9<DomainMinusOneToOne>(const float x) noexcept
 {
     const auto x2 = x * x;
     return x * ((((0.064026175f * x2 + -0.581859413f) * x2 + 2.542712980f) * x2 + -5.166401789f) * x2 + 3.141527899f);
@@ -231,7 +229,7 @@ inline float remezFullSinP9<DomainMinusOneToOne>(float x) noexcept
 
 // Max error: 1.39e-03
 template <>
-inline float remezFullCosP6<DomainMinusOneToOne>(float x) noexcept
+[[nodiscard]] inline float remezFullCosP6<DomainMinusOneToOne>(const float x) noexcept
 {
     const auto x2 = x * x;
     return (((-0.932228331f * x2 + 3.821132684f) * x2 + -4.888904352f) * x2 + 0.998606596f);
@@ -239,7 +237,7 @@ inline float remezFullCosP6<DomainMinusOneToOne>(float x) noexcept
 
 // Max error: 4.02e-05
 template <>
-inline float remezFullCosP8<DomainMinusOneToOne>(float x) noexcept
+[[nodiscard]] inline float remezFullCosP8<DomainMinusOneToOne>(const float x) noexcept
 {
     const auto x2 = x * x;
     return ((((0.178306867f * x2 + -1.287555484f) * x2 + 4.042089452f) * x2 + -4.932760424f) * x2 + 0.999959795f);
@@ -247,7 +245,7 @@ inline float remezFullCosP8<DomainMinusOneToOne>(float x) noexcept
 
 // Max error: 7.78e-07
 template <>
-inline float remezFullCosP10<DomainMinusOneToOne>(float x) noexcept
+[[nodiscard]] inline float remezFullCosP10<DomainMinusOneToOne>(const float x) noexcept
 {
     const auto x2 = x * x;
     return (((((-0.020582795f * x2 + 0.229664214f) * x2 + -1.332381204f) * x2 + 4.058045414f) * x2 + -4.934745629f) *
@@ -257,7 +255,7 @@ inline float remezFullCosP10<DomainMinusOneToOne>(float x) noexcept
 
 // Max error: 4.49e-03
 template <>
-inline float remezFullCosAbsFoldP4<DomainMinusPiToPi>(float x) noexcept
+[[nodiscard]] inline float remezFullCosAbsFoldP4<DomainMinusPiToPi>(const float x) noexcept
 {
     const auto ax = std::abs(x);
     return ((((0.000000000f * ax + 0.142566726f) * ax + -0.671829871f) * ax + 0.069778350f) * ax + 0.995508265f);
@@ -265,7 +263,7 @@ inline float remezFullCosAbsFoldP4<DomainMinusPiToPi>(float x) noexcept
 
 // Max error: 6.77e-05
 template <>
-inline float remezFullCosAbsFoldP6<DomainMinusPiToPi>(float x) noexcept
+[[nodiscard]] inline float remezFullCosAbsFoldP6<DomainMinusPiToPi>(const float x) noexcept
 {
     const auto ax = std::abs(x);
     return (
@@ -277,7 +275,7 @@ inline float remezFullCosAbsFoldP6<DomainMinusPiToPi>(float x) noexcept
 
 // Max error: 4.49e-03
 template <>
-inline float remezFullCosAbsFoldP4<DomainMinusOneToOne>(float x) noexcept
+[[nodiscard]] inline float remezFullCosAbsFoldP4<DomainMinusOneToOne>(const float x) noexcept
 {
     const auto ax = std::abs(x);
     return ((((0.000000001f * ax + 4.420463366f) * ax + -6.630695050f) * ax + 0.219215153f) * ax + 0.995508265f);
@@ -285,7 +283,7 @@ inline float remezFullCosAbsFoldP4<DomainMinusOneToOne>(float x) noexcept
 
 // Max error: 6.77e-05
 template <>
-inline float remezFullCosAbsFoldP6<DomainMinusOneToOne>(float x) noexcept
+[[nodiscard]] inline float remezFullCosAbsFoldP6<DomainMinusOneToOne>(const float x) noexcept
 {
     const auto ax = std::abs(x);
     return (
