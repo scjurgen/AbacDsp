@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cmath>
+#include <limits>
 #include <numbers>
-#include <numeric>
 
 #include "Numbers/Approximation.h"
 
@@ -11,10 +11,10 @@ namespace Convert
 template <std::floating_point T>
 void getPanFactor(const T angleInPercent, T& left, T& right)
 {
-    const T f = static_cast<T>(std::sqrt(T(2)) / T(2));
-    T angle = angleInPercent * T(std::numbers::pi / 400);
-    T cosVal = std::cos(angle);
-    T sinVal = std::sin(angle);
+    const T f = std::sqrt(T(2)) / T(2);
+    const T angle = angleInPercent * (std::numbers::pi_v<T> / T(400));
+    const T cosVal = std::cos(angle);
+    const T sinVal = std::sin(angle);
     left = f * (cosVal - sinVal);
     right = f * (cosVal + sinVal);
 }
@@ -32,15 +32,15 @@ void getPanFactorNormalized(const T angleNormalized, T& left, T& right)
 }
 
 template <std::floating_point T>
-[[nodiscard]] static T dbToGain(T dB)
+[[nodiscard]] T dbToGain(const T dB)
 {
-    return pow(T(10), dB / T(20));
+    return std::pow(T(10), dB / T(20));
 }
 
 template <std::floating_point T>
-[[nodiscard]] static T gainToDb(T gain)
+[[nodiscard]] T gainToDb(const T gain)
 {
-    if (gain <= 0)
+    if (gain <= T(0))
     {
         if (std::numeric_limits<T>::is_iec559)
         {
@@ -53,38 +53,39 @@ template <std::floating_point T>
 
 
 template <std::floating_point T>
-static T frequencyToNote(const T f, const T orchestraTuning = 440.f)
+[[nodiscard]] T frequencyToNote(const T f, const T orchestraTuning = T(440))
 {
-    return std::log(f / orchestraTuning) / std::log(static_cast<T>(2.0)) * static_cast<T>(12) + static_cast<T>(69);
+    return std::log2(f / orchestraTuning) * T(12) + T(69);
 }
 
 template <std::floating_point T>
-static T noteToFrequency(const T note, const T orchestraTuning = 440.f)
+[[nodiscard]] T noteToFrequency(const T note, const T orchestraTuning = T(440))
 {
-    return orchestraTuning * std::exp2((note - static_cast<T>(69)) / static_cast<T>(12));
-}
-template <std::floating_point T>
-static T noteToFrequency(const int note, const T orchestraTuning = 440.f)
-{
-    return orchestraTuning * std::exp2((static_cast<T>(note) - static_cast<T>(69)) / static_cast<T>(12));
+    return orchestraTuning * std::exp2((note - T(69)) / T(12));
 }
 
 template <std::floating_point T>
-static T noteIntervalToRatio(const T interval)
+[[nodiscard]] T noteToFrequency(const int note, const T orchestraTuning = T(440))
 {
-    return std::exp2(interval / static_cast<T>(12));
+    return orchestraTuning * std::exp2((static_cast<T>(note) - T(69)) / T(12));
 }
 
 template <std::floating_point T>
-static T ratioToNoteInterval(const T ratio)
+[[nodiscard]] T noteIntervalToRatio(const T interval)
 {
-    return std::log(ratio) / std::log(static_cast<T>(2.0)) * static_cast<T>(12);
+    return std::exp2(interval / T(12));
 }
 
 template <std::floating_point T>
-static T centsToRelativePitch(T cents)
+[[nodiscard]] T ratioToNoteInterval(const T ratio)
 {
-    return std::exp2(cents / static_cast<T>(1200));
+    return std::log2(ratio) * T(12);
+}
+
+template <std::floating_point T>
+[[nodiscard]] T centsToRelativePitch(const T cents)
+{
+    return std::exp2(cents / T(1200));
 }
 
 }
