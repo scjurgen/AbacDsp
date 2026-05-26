@@ -79,7 +79,7 @@ class WowTest : public ::testing::Test
     {
         for (size_t i = 0; i < count; ++i)
         {
-            m_wow->step();
+            (void) m_wow->step();
         }
     }
 };

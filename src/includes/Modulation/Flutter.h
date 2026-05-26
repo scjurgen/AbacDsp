@@ -1,11 +1,10 @@
 #pragma once
 
-#include "Numbers/Approximation.h"
-
 #include <array>
-#include <numbers>
 #include <cmath>
+#include <numbers>
 
+#include "Numbers/Approximation.h"
 #include "Parameters/SmoothingParameter.h"
 
 namespace AbacDsp
@@ -14,8 +13,8 @@ namespace AbacDsp
 class FlutterLfo
 {
   public:
-    explicit FlutterLfo(const float sampleRate, const float frequencyMultiplier, const float amplitude = 1,
-                        const float phaseOffset = 0)
+    explicit FlutterLfo(const float sampleRate, const float frequencyMultiplier, const float amplitude = 1.f,
+                        const float phaseOffset = 0.f)
         : m_frequencyMultiplier(frequencyMultiplier / sampleRate)
         , m_amplitude(amplitude)
         , m_phase(phaseOffset)
@@ -27,17 +26,17 @@ class FlutterLfo
         m_phase = 0.0f;
     }
 
-    static float fastCos(const float x) noexcept
+    [[nodiscard]] static float fastCos(const float x) noexcept
     {
         // 1 - 6 * x^2 / (pi^2) + 4 * x^3 / (|pi^3|)
         constexpr float c1 = 0.60792710185403f; // 6/π²
         constexpr float c2 = 0.12900613773279f; // 4/π³
         const auto xSquare = x * x;
         const auto xCube = xSquare * x;
-        return 1 - c1 * xSquare + c2 * std::abs(xCube);
+        return 1.f - c1 * xSquare + c2 * std::abs(xCube);
     }
 
-    float step(const float baseFrequency) noexcept
+    [[nodiscard]] float step(const float baseFrequency) noexcept
     {
         const auto phaseInc = std::numbers::pi_v<float> * 2.0f * baseFrequency * m_frequencyMultiplier;
 
@@ -91,7 +90,7 @@ class Flutter
         }
     }
 
-    float step() noexcept
+    [[nodiscard]] float step() noexcept
     {
         if (!m_rateSmoothed.hasStoppedSmoothing())
         {

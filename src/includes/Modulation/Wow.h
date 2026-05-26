@@ -1,12 +1,12 @@
 #pragma once
 
-#include <random>
 #include <cmath>
 #include <numbers>
+#include <random>
 
-#include "Parameters/SmoothingParameter.h"
 #include "Filters/OnePoleFilter.h"
 #include "Generators/OrnsteinUhlenbeckProcess.h"
+#include "Parameters/SmoothingParameter.h"
 
 namespace AbacDsp
 {
@@ -32,18 +32,14 @@ class Wow
         m_rateSmoothed.newTransition(1.f, defaultSmoothingTime, m_sampleRate, true);
         m_varianceSmoothed.newTransition(0.0f, defaultSmoothingTime, m_sampleRate, true);
 
-        // Set up lowpass filter for Ornstein-Uhlenbeck process
         m_lowpass.setCutoff(10.0f);
         m_depthLowpass.setCutoff(10.0f);
-
-        // Pre-compute amplitude scaling
-        m_amp = 1000.0f * 1000.0f / m_sampleRate;
     }
 
     void seed(const std::mt19937::result_type seed) noexcept
     {
         m_rng.seed(seed);
-        m_ouProcess.seed(seed + 1); // Use different seed for OU process
+        m_ouProcess.seed(seed + 1);
     }
 
     void setRate(const float v) noexcept
@@ -76,7 +72,7 @@ class Wow
     }
 
     // use sparingly, this stuff is CPU heavy
-    float step() noexcept
+    [[nodiscard]] float step() noexcept
     {
         if (!m_varianceSmoothed.hasStoppedSmoothing())
         {
@@ -84,13 +80,13 @@ class Wow
         }
 
         auto rate = m_rateSmoothed.getValue();
-        auto depth = m_depthLowpass.step(m_depth);
+        const auto depth = m_depthLowpass.step(m_depth);
 
         if (m_drift > 0.0f)
         {
             // Stochastic drift: low-frequency random walk with mean reversion
             // This creates slow, correlated changes rather than pure sinusoidal drift
-            const auto driftNoise = m_uniformDist(m_rng) * 0.002f; // Very small random steps
+            const auto driftNoise = m_uniformDist(m_rng) * 0.002f;
             const auto meanReversion = -m_driftState / m_driftTimeConstant * m_invSampleRate;
 
             m_driftState += driftNoise + meanReversion;
@@ -109,7 +105,6 @@ class Wow
         const auto ouValue = m_ouProcess.step();
         const auto filteredOU = m_lowpass.step(ouValue);
 
-        // Generate wow modulation (in milliseconds)
         const auto maxDelayMs = depth * 10.0f;
         const auto currentDelay = maxDelayMs * (std::sin(m_phase) + filteredOU);
 
@@ -138,7 +133,6 @@ class Wow
     float m_driftState{0.f};         // Current drift state (random walk)
     float m_driftTimeConstant{20.f}; // Time constant for drift evolution (~20-50 seconds)
 
-    float m_amp{0.f};
     float m_previousDelay{0.f};
 
     OnePoleFilter<OnePoleFilterCharacteristic::LowPass> m_lowpass;
