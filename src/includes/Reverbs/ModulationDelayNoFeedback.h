@@ -1,12 +1,12 @@
 #pragma once
 
-#include "AudioProcessing.h"
-#include "InterpolationCollection.h"
-
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <vector>
+
+#include "AudioProcessing.h"
+#include "InterpolationCollection.h"
 
 namespace AbacDsp
 {
@@ -32,12 +32,12 @@ template <size_t MAXSIZE>
 class ModulationDelayNoFeedback
 {
   public:
-    ModulationDelayNoFeedback()
+    explicit ModulationDelayNoFeedback()
     {
         m_buffer.resize(MAXSIZE + 6, 0.f);
     }
 
-    ModulationDelayNoFeedback(const float sampleRate)
+    explicit ModulationDelayNoFeedback(const float sampleRate)
         : m_sampleRate(sampleRate)
     {
         m_buffer.resize(MAXSIZE + 6, 0.f);
@@ -75,7 +75,7 @@ class ModulationDelayNoFeedback
                 return;
             }
             m_advanceSteps = true;
-            m_advance = 1.25;
+            m_advance = 1.25f;
         }
     }
 
@@ -105,9 +105,6 @@ class ModulationDelayNoFeedback
             }
             m_oldDelayWidth = m_currentDelayWidth;
             m_currentDelayWidth = m_newFadeSize;
-            //            print_log("new delay width: %d hd[0]: %f hd[1]: %f steps: %d (max: %d)", m_currentDelayWidth,
-            //            m_headRead[0],
-            //                      m_headRead[1], m_fadeSteps, MAXSIZE);
         }
     }
 
@@ -183,7 +180,7 @@ class ModulationDelayNoFeedback
         }
     }
 
-    float step(const float in)
+    [[nodiscard]] float step(const float in)
     {
         return next(in);
     }
@@ -237,7 +234,7 @@ class ModulationDelayNoFeedback
 
     int_fast8_t m_tick{0};
 
-    float next(const float in)
+    [[nodiscard]] float next(const float in)
     {
         m_tick++;
         m_tick &= 0xf;
@@ -268,29 +265,24 @@ class ModulationDelayNoFeedback
         }
     }
 
-    float nextHeadRead(const size_t index)
+    [[nodiscard]] float nextHeadRead(const size_t index)
     {
         auto dHead = m_headRead[index];
-        float returnValue;
+        float returnValue{};
         if (std::abs(m_modWidth) > 1E-7f)
         {
-            const auto depth = m_modWidth * (fabsf(m_currentPhase)) + 1; // triangular wave
+            const auto depth = m_modWidth * std::abs(m_currentPhase) + 1.f;
             dHead += depth;
             if (dHead >= MAXSIZE)
             {
                 dHead -= MAXSIZE;
             }
-            float intTailPosition;
-            const auto fraction = modff(dHead, &intTailPosition);
+            float intTailPosition{};
+            const auto fraction = std::modf(dHead, &intTailPosition);
             returnValue = Interpolation<float>::linearPt2(&m_buffer[static_cast<size_t>(intTailPosition)], fraction);
         }
         else
         {
-            // if (m_setNewModWidth)
-            //{
-            //     m_modWidth = m_newModWidth;
-            //     m_currentPhase = 0;
-            // }
             returnValue = m_buffer[static_cast<size_t>(dHead)];
         }
 
@@ -305,10 +297,10 @@ class ModulationDelayNoFeedback
     void processBlock(const float* source, float* target, const size_t numSamples)
     {
         relaxedInit();
-        std::transform(source, source + numSamples, target, [this](float in) { return next(in); });
+        std::transform(source, source + numSamples, target, [this](const float in) { return next(in); });
     }
 
-    size_t size() const
+    [[nodiscard]] size_t size() const noexcept
     {
         return m_currentDelayWidth;
     }

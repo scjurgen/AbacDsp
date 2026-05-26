@@ -1,6 +1,5 @@
 #pragma once
 
-
 namespace AbacDsp
 {
 inline void hadamardFeed(const unsigned order, const float* col, float* sum) noexcept

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "HadamardFeed.h"
+#include <random>
+
 #include "Delays/NaiveDelay.h"
+#include "HadamardFeed.h"
 #include "Helpers/ConstructArray.h"
 #include "Numbers/PrimeDispatcher.h"
-
-#include <random>
 
 namespace AbacDsp
 {
@@ -51,7 +51,7 @@ class FdnTankRef
         w = getUsefulPrime<11>(w);
         m_currentWidth[index] = w;
         m_basicDelay[index].setSize(w - 1);
-        const auto tmp = powf(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
+        const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
         return w;
     }
@@ -65,7 +65,7 @@ class FdnTankRef
 
         m_currentWidth[index] = value;
         m_basicDelay[index].setSize(value - 1);
-        const auto tmp = powf(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
+        const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
     }
 
@@ -228,12 +228,12 @@ class FdnTankRef
     }
 
   private:
-    float m_sampleRate;
+    const float m_sampleRate;
     float m_feedBackGain;
     float m_minSize{100};
     float m_maxSize{210};
     float m_bulge{-0.6f};
-    float m_mono{0.0};
+    float m_mono{0.0f};
     std::array<size_t, MAXORDER> m_currentWidth{};
     std::array<float, MAXORDER> m_lastValue{};
     std::array<float, MAXORDER> m_feedValue{};

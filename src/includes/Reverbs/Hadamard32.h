@@ -1,7 +1,8 @@
 #pragma once
 
-#include "Helpers/PlatformIntrinsics.h"
 #include <array>
+
+#include "Helpers/PlatformIntrinsics.h"
 
 namespace AbacDsp
 {

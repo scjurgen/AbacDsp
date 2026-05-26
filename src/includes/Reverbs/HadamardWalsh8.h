@@ -1,14 +1,16 @@
 #pragma once
 
-#include "Helpers/PlatformIntrinsics.h"
 #include <array>
+
+#include "Helpers/PlatformIntrinsics.h"
 
 namespace AbacDsp
 {
 
 inline void hadamardWalsh8(const float* input, float* output) noexcept
 {
-    std::array<float, 8> temp1, temp2;
+    std::array<float, 8> temp1{};
+    std::array<float, 8> temp2{};
 
     // Stage 1: stride 1
     temp1[0] = input[0] + input[1];
