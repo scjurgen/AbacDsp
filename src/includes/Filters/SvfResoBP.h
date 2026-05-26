@@ -102,7 +102,6 @@ class SvfResoBP
         m_sampleRate = sampleRate;
     }
 
-
     void setByDecay(const size_t index, const float frequency, const float t)
     {
         m_frequency = frequency;
@@ -149,7 +148,7 @@ class SvfResoBP
         m_cf[index].a3 = g * m_cf[index].a2;
     }
 
-    float step(const float in) noexcept
+    [[nodiscard]] float step(const float in) noexcept
     {
         const auto& cf = m_cf[m_currentSet];
         const float v3 = in - m_z[1];
@@ -160,7 +159,7 @@ class SvfResoBP
         return cf.k * v1;
     }
 
-    float step0() noexcept
+    [[nodiscard]] float step0() noexcept
     {
         const auto& cf = m_cf[m_currentSet];
         const float v3 = -m_z[1];
@@ -208,7 +207,7 @@ class SvfResoBP
         m_currentSet = damp ? 1 : 0;
     }
 
-    bool isActive() noexcept
+    [[nodiscard]] bool isActive() noexcept
     {
         if (m_decayCount > 0)
         {

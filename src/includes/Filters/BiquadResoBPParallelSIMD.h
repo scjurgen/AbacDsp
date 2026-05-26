@@ -170,7 +170,6 @@ class BiquadResoBpParallelSIMD
         }
     }
 
-
     void reset(const size_t mainIndex, const float v1 = 0.f, const float v2 = 0.f) noexcept
     {
         m_z[mainIndex][0] = v1;
@@ -187,7 +186,7 @@ class BiquadResoBpParallelSIMD
         const auto b0 = static_cast<double>(m_cf[mainIndex][subIndex].b0);
         const auto a1 = static_cast<double>(m_cf[mainIndex][subIndex].a1);
         const auto a2 = static_cast<double>(m_cf[mainIndex][subIndex].a2);
-        const auto phi = 4 * std::pow(std::sin(2 * std::numbers::pi * hz / sampleRate / 2), 2);
+        const auto phi = 4 * std::pow(std::sin(2 * std::numbers::pi_v<double> * hz / sampleRate / 2), 2);
         const auto db =
             10 * std::log10(std::pow((b0 + 0 + -b0), 2) + (b0 * -b0 * phi - (0 * (b0 + -b0) + 4 * b0 * -b0)) * phi) -
             10 * std::log10(std::pow((1.f + a1 + a2), 2) + (a2 * phi - (a1 * (1 + a2) + 4 * a2)) * phi);
@@ -199,7 +198,7 @@ class BiquadResoBpParallelSIMD
         m_currentSet = damp ? 1 : 0;
     }
 
-    bool isActive(const size_t mainIndex) noexcept
+    [[nodiscard]] bool isActive(const size_t mainIndex) noexcept
     {
         if (std::abs(m_z[mainIndex][0]) > 1E-5f || std::abs(m_z[mainIndex][1]) > 1E-5f)
         {

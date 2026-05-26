@@ -89,7 +89,6 @@ class ResonanceFrequencyModifier
         , m_frequency(1000.f)
         , m_resonance(0.f)
         , m_userResonance(0.0f)
-
     {
         updateResonance();
     }
@@ -396,10 +395,9 @@ class Filter1Pole4StageSmooth
 
     float m_smoothingAlpha{0.01f};
 
-    std::array<float, 4> m_v{0, 0, 0, 0};
-    std::array<float, 5> m_coefficients{0, -1, 0, 0, 0};
+    std::array<float, 4> m_v{};
+    std::array<float, 5> m_coefficients{0.f, -1.f, 0.f, 0.f, 0.f};
 };
-
 
 template <int f0, int f1, int f2, int f3, int f4>
 class FourStageOnePoleFilterNoResonance
@@ -432,6 +430,6 @@ class FourStageOnePoleFilterNoResonance
   private:
     const float m_sampleRate;
     float m_pole{0.5f};
-    std::array<float, 4> m_v{0, 0, 0, 0};
+    std::array<float, 4> m_v{};
 };
 }

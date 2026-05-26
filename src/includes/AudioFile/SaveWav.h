@@ -1,17 +1,17 @@
 #pragma once
 
-#include "AudioFile.h"
-
 #include <span>
 #include <string>
 #include <vector>
+
+#include "AudioFile.h"
 
 namespace AudioUtility
 {
 class SaveWav
 {
   public:
-    static AudioFile<float> MonoToAudioFile(const std::span<const float>& data, const float sampleRate = 48000.f)
+    [[nodiscard]] static AudioFile<float> MonoToAudioFile(const std::span<const float>& data, const float sampleRate = 48000.f)
     {
         AudioFile<float> af;
         af.setNumChannels(1);
@@ -22,7 +22,7 @@ class SaveWav
         return af;
     }
 
-    static AudioFile<float> StereoToAudioFile(const std::span<const float>& leftData,
+    [[nodiscard]] static AudioFile<float> StereoToAudioFile(const std::span<const float>& leftData,
                                               const std::span<const float>& rightData, const float sampleRate = 48000.f)
     {
         AudioFile<float> af;

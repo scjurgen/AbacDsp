@@ -4,24 +4,7 @@
 
 namespace AbacDsp
 {
-/**
- * Pink noise filter implementation based on Paul Kellett's algorithm.
- *
- * This templated filter converts white noise to pink noise using a weighted sum
- * of first-order filters with carefully chosen pole positions.
- *
- * @tparam FastPink If true (default), uses the 3-pole "economy" version providing *                  ±0.5dB accuracy
- * above 9.2Hz at 44.1kHz sampling rate. If false, uses the 7-pole "accurate" version providing ±0.05dB accuracy with
- * higher computational cost.
- *
- * Both variants maintain the characteristic -3dB/octave rolloff of pink noise.
- * The algorithm uses fixed coefficients optimized for real-time performance.
- *
- * @see Original implementation by Paul Kellett on music-dsp mailing list
- * @see [http://www.firstpr.com.au/dsp/pink-noise/](http://www.firstpr.com.au/dsp/pink-noise/) for detailed analysis
- */
-
-
+// Paul Kellett's pink noise algorithm; FastPink=true: 3-pole ±0.5dB, false: 7-pole ±0.05dB
 template <bool FastPink>
 struct PinkCoeffs;
 
@@ -44,14 +27,13 @@ struct PinkCoeffs<false>
     static constexpr float direct = 0.5362f;
 };
 
-
 template <bool FastPink = true>
 class PinkFilter
 {
   public:
     PinkFilter() noexcept = default;
 
-    float step(const float in) noexcept
+    [[nodiscard]] float step(const float in) noexcept
     {
         using C = PinkCoeffs<FastPink>;
         for (size_t i = 0; i < m_v.size(); ++i)

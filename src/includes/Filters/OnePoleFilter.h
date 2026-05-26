@@ -4,34 +4,18 @@
 #include <array>
 #include <cmath>
 #include <numbers>
+
 namespace AbacDsp
 {
-/**
- * @brief First-order (one-pole) filters N.B.: there are 2 slightly difference Highpass versions.
- */
+// N.B.: two HighPass variants with slightly different characteristics — see HighPassLeaky vs HighPass
 enum class OnePoleFilterCharacteristic
 {
-    /**
-     * @brief One-pole lowpass (leaky integrator).
-     */
     LowPass,
-
-    /**
-     * @brief Canonical one-pole highpass (textbook digital HPF).
-     */
     HighPass,
-
     AllPass,
-
-    /**
-     * @brief Leaky highpass (input minus lowpass).
-     * Computes y[n] = x[n] − lowpass(x[n]), an alternate highpass structure.
-     * N.B.: Simpler, but high-frequency gain is always slightly less than 0dB; output rolls off slightly at Nyquist,
-     * unlike the canonical HighPass.
-     */
+    // y[n] = x[n] - lowpass(x[n]); gain at Nyquist is slightly below 0dB, unlike canonical HighPass
     HighPassLeaky
 };
-
 
 template <typename Derived, OnePoleFilterCharacteristic FilterCharacteristic>
 class OnePoleBase
@@ -69,12 +53,7 @@ class OnePoleBase
         m_fdbk = value;
     }
 
-    /**
-     * @brief Sets the filter decay time, specifying how long it takes the filter's response to decrease to a given
-     * fraction of its initial value, as set by the target ratio parameter. Typical fractions are -20dB (0.1), -40dB
-     * (0.01), and -60dB (0.001).
-     * N.B.: use this for explicit control of smoothing
-     */
+    // fraction: -20dB=0.1, -40dB=0.01, -60dB=0.001
     void setDecayTime(const float timeInSeconds, const float fraction = 0.1f) noexcept
     {
         m_fdbk = std::pow(fraction, 1.0f / (timeInSeconds * m_sampleRate));
@@ -137,7 +116,7 @@ class OnePoleFilter : public OnePoleBase<OnePoleFilter<FilterCharacteristic, Cla
         resetImpl();
     }
 
-    float step(const float in) noexcept
+    [[nodiscard]] float step(const float in) noexcept
     {
         if constexpr (FilterCharacteristic == OnePoleFilterCharacteristic::AllPass)
         {
@@ -210,7 +189,6 @@ class OnePoleFilter : public OnePoleBase<OnePoleFilter<FilterCharacteristic, Cla
     float m_v{0.0f};
     float m_x1{0.f};
 };
-
 
 // --- Stereo version ---
 template <OnePoleFilterCharacteristic FilterCharacteristic, bool ClampValues = false>
@@ -298,7 +276,6 @@ class OnePoleFilterStereo
     std::array<float, 2> m_v{};
     std::array<float, 2> m_x1{};
 };
-
 
 // --- Arbitrary channel count version (MultiChannel) ---
 template <OnePoleFilterCharacteristic FilterCharacteristic, size_t NumChannels, bool ClampValues = false>

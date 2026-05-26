@@ -1,10 +1,8 @@
 #pragma once
 
+#include <cstring>
 #include <string>
 #include <vector>
-#include <span>
-#include <stdexcept>
-#include <cstring>
 
 #include <vorbis/codec.h>
 #include <vorbis/vorbisfile.h>
@@ -22,7 +20,7 @@ class LoadOgg
         int64_t numSamples;
     };
 
-    static OggInfo getInfo(const std::string& filename)
+    [[nodiscard]] static OggInfo getInfo(const std::string& filename)
     {
         OggVorbis_File vf;
         if (ov_fopen(filename.c_str(), &vf) < 0)
@@ -38,7 +36,7 @@ class LoadOgg
         return info;
     }
 
-    static std::vector<float> loadMonoFromFile(const std::string& filename)
+    [[nodiscard]] static std::vector<float> loadMonoFromFile(const std::string& filename)
     {
         OggVorbis_File vf;
         if (ov_fopen(filename.c_str(), &vf) < 0)
@@ -46,7 +44,6 @@ class LoadOgg
             return {};
         }
 
-        vorbis_info* vi = ov_info(&vf, -1);
         const auto totalSamples = static_cast<size_t>(ov_pcm_total(&vf, -1));
 
         std::vector<float> result(totalSamples);
@@ -75,7 +72,7 @@ class LoadOgg
         return result;
     }
 
-    static std::pair<std::vector<float>, std::vector<float>> loadStereoFromFile(const std::string& filename)
+    [[nodiscard]] static std::pair<std::vector<float>, std::vector<float>> loadStereoFromFile(const std::string& filename)
     {
         OggVorbis_File vf;
         if (ov_fopen(filename.c_str(), &vf) < 0)
@@ -116,7 +113,7 @@ class LoadOgg
         return {left, right};
     }
 
-    static bool loadStereoInterleavedFromFile(const std::string& filename, std::vector<float>& target,
+    [[nodiscard]] static bool loadStereoInterleavedFromFile(const std::string& filename, std::vector<float>& target,
                                               size_t padding = 2) // padding for resample interpolation
     {
         OggVorbis_File vf;
@@ -171,17 +168,17 @@ class LoadOgg
         return true;
     }
 
-    static int getSampleRate(const std::string& filename)
+    [[nodiscard]] static int getSampleRate(const std::string& filename)
     {
         return getInfo(filename).sampleRate;
     }
 
-    static int getNumChannels(const std::string& filename)
+    [[nodiscard]] static int getNumChannels(const std::string& filename)
     {
         return getInfo(filename).channels;
     }
 
-    static int64_t getNumSamplesPerChannel(const std::string& filename)
+    [[nodiscard]] static int64_t getNumSamplesPerChannel(const std::string& filename)
     {
         return getInfo(filename).numSamples;
     }

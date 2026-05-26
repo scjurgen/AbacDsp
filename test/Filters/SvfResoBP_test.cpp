@@ -57,7 +57,7 @@ TEST(SvfResoBPTest, quickReleaseDamping)
 
     for (size_t i = 0; i < 4800; ++i)
     {
-        sut.step(i < 7 ? 1024.f : 0.f);
+        (void)sut.step(i < 7 ? 1024.f : 0.f);
     }
 
     float preDecayMax = sut.step(0.f);
@@ -69,7 +69,7 @@ TEST(SvfResoBPTest, quickReleaseDamping)
     sut.damp(true);
     for (size_t i = 0; i < 700; ++i)
     {
-        sut.step(0.f);
+        (void)sut.step(0.f);
     }
 
     float currentMax = sut.step(0.f);
@@ -170,13 +170,11 @@ TEST(SvfResoBPTest, pitchBendUpRemainsStable)
 
     const auto compFactor = ResonanceCompensation::compensate(static_cast<float>(48), decay);
     float maxValue = 0;
-    int decayTime = 0;
     SvfResoBP sut{sampleRate};
     sut.setByDecay(0, freq, decay);
     sut.reset(0, compFactor);
     for (size_t j = 0; j < 600; ++j)
     {
-        decayTime++;
         std::array<float, 1> out{};
         sut.process0(out.data(), 1);
         const auto v = out[0];
@@ -187,7 +185,6 @@ TEST(SvfResoBPTest, pitchBendUpRemainsStable)
         float pitchMaxValue = 0;
         for (size_t k = 0; k < 126000; ++k)
         {
-            decayTime++;
             std::array<float, 1> out{};
             sut.process0(out.data(), 1);
             const auto v = out[0];
@@ -198,7 +195,6 @@ TEST(SvfResoBPTest, pitchBendUpRemainsStable)
         float pitchMaxValue = 0;
         for (size_t k = 0; k < 1260000; ++k)
         {
-            decayTime++;
             std::array<float, 1> out{};
             sut.process0(out.data(), 1);
             const auto v = out[0];
@@ -212,7 +208,6 @@ TEST(SvfResoBPTest, pitchBendUpRemainsStable)
         sut.reset(0, compFactor);
         for (size_t j = 0; j < 600; ++j)
         {
-            decayTime++;
             std::array<float, 1> out{};
             sut.process0(out.data(), 1);
             const auto v = out[0];
@@ -228,7 +223,6 @@ TEST(SvfResoBPTest, pitchBendUpRemainsStable)
             sut.pitchBendCents(std::clamp(pb, -1200.f, 1200.f));
             for (size_t k = 0; k < 1260; ++k)
             {
-                decayTime++;
                 std::array<float, 1> out{};
                 sut.process0(out.data(), 1);
                 const auto v = out[0];

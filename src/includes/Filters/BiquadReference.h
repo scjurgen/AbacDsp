@@ -1,14 +1,13 @@
-
 #pragma once
 
 #include "Filters/Biquad.h"
+
 namespace AbacDsp
 {
 class BiquadReference
 {
   public:
     BiquadReference(const double sampleRate, const BiquadFilterType type)
-
         : m_sampleRate(sampleRate)
         , m_type(type)
     {
@@ -57,7 +56,7 @@ class BiquadReference
     {
         const auto fCutoff = f / m_sampleRate;
         const auto V = std::pow(10, std::abs(gain) / 20.0);
-        const auto K = std::tan(std::numbers::pi * fCutoff);
+        const auto K = std::tan(std::numbers::pi_v<double> * fCutoff);
         const auto kSquare = K * K;
         double norm{};
         if (gain >= 0)
@@ -80,7 +79,7 @@ class BiquadReference
     void highpass(const double f, const double q) noexcept
     {
         const auto fCutoff = f / m_sampleRate;
-        const auto K = std::tan(std::numbers::pi * fCutoff);
+        const auto K = std::tan(std::numbers::pi_v<double> * fCutoff);
         const auto kSquare = K * K;
         const auto norm = 1 / (1 + K / q + kSquare);
         b0 = 1 * norm;
@@ -93,7 +92,7 @@ class BiquadReference
     void lowpass(const double f, const double q) noexcept
     {
         const auto fCutoff = f / m_sampleRate;
-        const auto K = std::tan(std::numbers::pi * fCutoff);
+        const auto K = std::tan(std::numbers::pi_v<double> * fCutoff);
         const auto kSquare = K * K;
         const auto norm = 1 / (1 + K / q + kSquare);
         b0 = kSquare * norm;
@@ -106,7 +105,7 @@ class BiquadReference
     void bandpass(const double f, const double q) noexcept
     {
         const auto fCutoff = f / m_sampleRate;
-        const auto K = std::tan(std::numbers::pi * fCutoff);
+        const auto K = std::tan(std::numbers::pi_v<double> * fCutoff);
         const auto kSquare = K * K;
         const auto norm = 1 / (1 + K / q + kSquare);
         b0 = K / q * norm;
@@ -119,7 +118,7 @@ class BiquadReference
     void notch(const double f, const double q) noexcept
     {
         const auto fCutoff = f / m_sampleRate;
-        const auto K = std::tan(std::numbers::pi * fCutoff);
+        const auto K = std::tan(std::numbers::pi_v<double> * fCutoff);
         const auto kSquare = K * K;
         const auto norm = 1 / (1 + K / q + kSquare);
         b2 = b0 = (1 + kSquare) * norm;
@@ -130,7 +129,7 @@ class BiquadReference
     void loshelf(const double f, const double q, const double gain) noexcept
     {
         const auto v2 = std::pow(10, (gain / 40));
-        const auto w0 = 2 * std::numbers::pi * f / m_sampleRate;
+        const auto w0 = 2 * std::numbers::pi_v<double> * f / m_sampleRate;
         const auto alpha = std::sin(w0) / (2 * q);
         const auto scale = (v2 + 1) + (v2 - 1) * std::cos(w0) + 2 * std::sqrt(v2) * alpha;
 
@@ -144,7 +143,7 @@ class BiquadReference
     void hishelf(const double f, const double q, const double gain) noexcept
     {
         const auto v2 = std::pow(10, (gain / 40));
-        const auto w0 = 2 * std::numbers::pi * f / m_sampleRate;
+        const auto w0 = 2 * std::numbers::pi_v<double> * f / m_sampleRate;
         const auto alpha = std::sin(w0) / (2 * q);
         const auto scale = (v2 + 1) - (v2 - 1) * std::cos(w0) + 2 * std::sqrt(v2) * alpha;
 
@@ -157,7 +156,7 @@ class BiquadReference
 
     void allpass(const double f, const double q) noexcept
     {
-        const auto w0 = 2 * std::numbers::pi * f / m_sampleRate;
+        const auto w0 = 2 * std::numbers::pi_v<double> * f / m_sampleRate;
         const auto cosW0 = std::cos(w0);
         const auto alpha = std::sin(w0) / (2 * q);
         const auto a0 = 1 + alpha;
@@ -167,16 +166,16 @@ class BiquadReference
         b2 = (1 + alpha) / a0;
     }
 
-    [[nodiscard]] double magnitude(const double hz) noexcept
+    [[nodiscard]] double magnitude(const double hz) const noexcept
     {
-        const auto phi = 4 * std::pow(std::sin(2 * std::numbers::pi * hz / m_sampleRate / 2), 2);
+        const auto phi = 4 * std::pow(std::sin(2 * std::numbers::pi_v<double> * hz / m_sampleRate / 2), 2);
         const auto db =
             10 * std::log10(std::pow((b0 + b1 + b2), 2) + (b0 * b2 * phi - (b1 * (b0 + b2) + 4 * b0 * b2)) * phi) -
             10 * std::log10(std::pow((1 + a1 + a2), 2) + (a2 * phi - (a1 * (1 + a2) + 4 * a2)) * phi);
         return db;
     }
 
-    void getCoefficients(double& a1_, double& a2_, double& b0_, double& b1_, double& b2_) noexcept
+    void getCoefficients(double& a1_, double& a2_, double& b0_, double& b1_, double& b2_) const noexcept
     {
         a1_ = a1;
         a2_ = a2;
@@ -187,7 +186,7 @@ class BiquadReference
 
   private:
     const double m_sampleRate;
-    BiquadFilterType m_type;
+    const BiquadFilterType m_type;
     double a1{0}, a2{0}, b0{0}, b1{0}, b2{0};
 };
 }

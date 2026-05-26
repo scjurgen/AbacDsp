@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <algorithm>
@@ -14,7 +13,7 @@
 
 namespace AbacDsp
 {
-[[nodiscard]] float inline biquadMagnitudeInDb(const float cf, const float b0, const float b1, const float b2,
+[[nodiscard]] inline float biquadMagnitudeInDb(const float cf, const float b0, const float b1, const float b2,
                                                const float a1, const float a2)
 {
     const auto phi = 4 * std::pow(std::sin(2.f * std::numbers::pi_v<float> * cf / 2.f), 2.f);
@@ -24,7 +23,7 @@ namespace AbacDsp
     return db;
 }
 
-[[nodiscard]] float inline biquadMagnitudeLinear(const float cf, const float b0, const float b1, const float b2,
+[[nodiscard]] inline float biquadMagnitudeLinear(const float cf, const float b0, const float b1, const float b2,
                                                  const float a1, const float a2)
 {
     const auto phi = 4 * std::pow(std::sin(std::numbers::pi_v<double> * static_cast<double>(cf)), 2.0);
@@ -38,7 +37,7 @@ namespace AbacDsp
     return static_cast<float>(std::sqrt(numerator / denominator));
 }
 
-[[nodiscard]] float inline biquadMagnitude(const float cf, const float b0, const float b1, const float b2,
+[[nodiscard]] inline float biquadMagnitude(const float cf, const float b0, const float b1, const float b2,
                                            const float a1, const float a2)
 {
     return std::pow(10.0f, biquadMagnitudeInDb(cf, b0, b1, b2, a1, a2));
@@ -239,7 +238,7 @@ class Biquad : public BiquadCoefficients
 #pragma GCC diagnostic pop
     }
 
-    float singleStepGeneric(const float in) noexcept
+    [[nodiscard]] float singleStepGeneric(const float in) noexcept
     {
         const auto out = in * b0 + m_z[0];
         m_z[0] = in * b1 + m_z[1] - a1 * out;
@@ -247,7 +246,7 @@ class Biquad : public BiquadCoefficients
         return out;
     }
 
-    float singleStepBandPass(const float in) noexcept
+    [[nodiscard]] float singleStepBandPass(const float in) noexcept
     {
         // b1 == 0
         // b2 == -b0 -> 3 mul
@@ -258,7 +257,7 @@ class Biquad : public BiquadCoefficients
         return out;
     }
 
-    float singleStepNotch(const float in) noexcept
+    [[nodiscard]] float singleStepNotch(const float in) noexcept
     {
         // b2 = b0
         // a1 = b1 --> 3  mul
@@ -269,7 +268,7 @@ class Biquad : public BiquadCoefficients
         return out;
     }
 
-    float singleStepLowPass(const float in) noexcept
+    [[nodiscard]] float singleStepLowPass(const float in) noexcept
     {
         // b1 = -2 * b0 -> doesn't really help?
         // b2 = b0 -> 4 mul (maybe 3?)
@@ -280,7 +279,7 @@ class Biquad : public BiquadCoefficients
         return out;
     }
 
-    float singleStepHighPass(const float in) noexcept
+    [[nodiscard]] float singleStepHighPass(const float in) noexcept
     {
         // b1 = -2 * b0 -> doesn't really help?
         // b2 = b0 -> 4 mul (maybe 3?)
@@ -291,7 +290,7 @@ class Biquad : public BiquadCoefficients
         return out;
     }
 
-    float singleStepPeak(const float in) noexcept
+    [[nodiscard]] float singleStepPeak(const float in) noexcept
     {
         const auto out = in * b0 + m_z[0];
         m_z[0] = b1 * (in - out) + m_z[1];
@@ -299,7 +298,7 @@ class Biquad : public BiquadCoefficients
         return out;
     }
 
-    float singleStepAllPass(const float in) noexcept
+    [[nodiscard]] float singleStepAllPass(const float in) noexcept
     {
         const auto out = in * b0 + m_z[0];
         m_z[0] = b1 * (in - out) + m_z[1];
@@ -516,7 +515,7 @@ class ChebyshevBiquad
         float fC, beta, a;
     };
 
-    InitialFactors computeFactors(const size_t order, const float fc, const float ripple)
+    [[nodiscard]] InitialFactors computeFactors(const size_t order, const float fc, const float ripple)
     {
         m_elements = (order + 1) / 2;
         m_order = order;
@@ -594,7 +593,6 @@ class ChebyshevBiquad
         }
         assignToBiquads();
     }
-
 
     void computeType2(const size_t order, const float fc, const float ripple, const bool isLowPass)
     {
@@ -684,7 +682,7 @@ class ChebyshevBiquad
 
 
     // 3 x mul
-    float stepChebyType1(const float in, const float b0, const float a1, const float a2, float& z0, float& z1) noexcept
+    [[nodiscard]] float stepChebyType1(const float in, const float b0, const float a1, const float a2, float& z0, float& z1) noexcept
     {
         const auto t = in * b0;
         const auto out = t + z0;
@@ -694,7 +692,7 @@ class ChebyshevBiquad
     }
 
     // 4 x mul
-    float stepChebyType2(const float in, const float b0, const float b1, const float a1, const float a2, float& z0,
+    [[nodiscard]] float stepChebyType2(const float in, const float b0, const float b1, const float a1, const float a2, float& z0,
                          float& z1) noexcept
     {
         const auto t = in * b0;
@@ -704,7 +702,7 @@ class ChebyshevBiquad
         return out;
     }
 
-    float step1stOrder(const float in, const float b0, const float b1, const float a1, float& z0) noexcept
+    [[nodiscard]] float step1stOrder(const float in, const float b0, const float b1, const float a1, float& z0) noexcept
     {
         const auto t = in * b0;
         const auto out = t + z0;
@@ -862,7 +860,6 @@ class PeakBiquad
     {
     }
 
-
     void computeCoefficients(const float frequency, const float peakGain, float Q) noexcept
     {
         const auto Fc = frequency / m_sampleRate;
@@ -891,7 +888,7 @@ class PeakBiquad
         }
     }
 
-    float step(const float in) noexcept
+    [[nodiscard]] float step(const float in) noexcept
     {
         m_z[2] = in * m_b0 + m_z[1];
         m_z[1] = m_b1 * (in - m_z[2]) + m_z[0];

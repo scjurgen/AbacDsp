@@ -77,7 +77,7 @@ class BiquadResoBP
         m_cf[index].a2 = (1 - kqCl + kSquare) * norm;
     }
 
-    float step(const float in) noexcept
+    [[nodiscard]] float step(const float in) noexcept
     {
         const auto b0s = in * m_cf[m_currentSet].b0;
         const auto out = b0s + m_z[0];
@@ -86,14 +86,13 @@ class BiquadResoBP
         return out;
     }
 
-    float step0() noexcept
+    [[nodiscard]] float step0() noexcept
     {
         const auto out = m_z[0];
         m_z[0] = m_z[1] - m_cf[m_currentSet].a1 * out;
         m_z[1] = -m_cf[m_currentSet].a2 * out;
         return out;
     }
-
 
     void process(const float* in, float* outBuffer, const size_t numSamples) noexcept
     {
@@ -144,7 +143,7 @@ class BiquadResoBP
         m_currentSet = damp ? 1 : 0;
     }
 
-    bool isActive() noexcept
+    [[nodiscard]] bool isActive() noexcept
     {
         if (m_decayCount > 0)
         {
