@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cmath>
+#include <cstddef>
+
 #include "Numbers/EasyingFunctions.h"
 
 namespace AbacDsp

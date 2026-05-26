@@ -1,24 +1,21 @@
 #pragma once
 
-#include <array>
-#include <cmath>
-
 namespace AbacDsp
 {
 class Interpolation
 {
   public:
-    static float zeroOrderHold(const float* y, const float /*x*/)
+    [[nodiscard]] static float zeroOrderHold(const float* y, const float /*x*/) noexcept
     {
         return y[0];
     }
 
-    static float linearPt2(const float* y, const float x)
+    [[nodiscard]] static float linearPt2(const float* y, const float x) noexcept
     {
         return y[0] + (y[1] - y[0]) * x;
     }
 
-    static float bspline43x(const float* y, const float x)
+    [[nodiscard]] static float bspline43x(const float* y, const float x) noexcept
     {
         constexpr auto oneOverSix = 1.f / 6.f;
         constexpr auto twoOverThree = 2.f / 3.f;
@@ -30,7 +27,7 @@ class Interpolation
         return ((c3 * x + c2) * x + c1) * x + c0;
     }
 
-    static float bspline43z(const float* y, const float x)
+    [[nodiscard]] static float bspline43z(const float* y, const float x) noexcept
     {
         const auto z = x - 0.5f;
         const auto even1 = y[0] + y[3], modd1 = y[3] - y[0];
@@ -42,7 +39,7 @@ class Interpolation
         return ((c3 * z + c2) * z + c1) * z + c0;
     }
 
-    static float lagrange43x(const float* y, const float x)
+    [[nodiscard]] static float lagrange43x(const float* y, const float x) noexcept
     {
         const auto c0 = y[1];
         const auto c1 = y[2] - 1.f / 3.f * y[0] - 0.5f * y[1] - 1.f / 6.f * y[3];
@@ -51,7 +48,7 @@ class Interpolation
         return ((c3 * x + c2) * x + c1) * x + c0;
     }
 
-    static float lagrange43z(const float* y, const float x)
+    [[nodiscard]] static float lagrange43z(const float* y, const float x) noexcept
     {
         const auto z = x - 1.f / 2.f;
         const auto even1 = y[0] + y[3], odd1 = y[0] - y[3];
@@ -63,7 +60,7 @@ class Interpolation
         return ((c3 * z + c2) * z + c1) * z + c0;
     }
 
-    static float hermite43x(const float* y, const float x)
+    [[nodiscard]] static float hermite43x(const float* y, const float x) noexcept
     {
         const auto c0 = y[1];
         const auto c1 = 0.5f * (y[2] - y[0]);
@@ -72,7 +69,7 @@ class Interpolation
         return ((c3 * x + c2) * x + c1) * x + c0;
     }
 
-    static float hermite43z(const float* y, const float x)
+    [[nodiscard]] static float hermite43z(const float* y, const float x) noexcept
     {
         const auto z = x - 1.f / 2.f;
         const auto even1 = y[0] + y[3], odd1 = y[0] - y[3];
@@ -84,7 +81,7 @@ class Interpolation
         return ((c3 * z + c2) * z + c1) * z + c0;
     }
 
-    static float bspline65x(const float* y, const float x)
+    [[nodiscard]] static float bspline65x(const float* y, const float x) noexcept
     {
         const auto ym2py2 = y[0] + y[4], ym1py1 = y[1] + y[3];
         const auto y2mym2 = y[4] - y[0], y1mym1 = y[3] - y[1];
@@ -98,7 +95,7 @@ class Interpolation
         return ((((c5 * x + c4) * x + c3) * x + c2) * x + c1) * x + c0;
     }
 
-    static float lagrange65x(const float* y, const float x)
+    [[nodiscard]] static float lagrange65x(const float* y, const float x) noexcept
     {
         const auto ym1py1 = y[1] + y[3];
         const auto twentyfourthym2py2 = 1.f / 24.f * (y[0] + y[4]);
@@ -112,7 +109,7 @@ class Interpolation
         return ((((c5 * x + c4) * x + c3) * x + c2) * x + c1) * x + c0;
     }
 
-    static float lagrange65z(const float* y, const float x)
+    [[nodiscard]] static float lagrange65z(const float* y, const float x) noexcept
     {
         const auto z = x - 1.f / 2.f;
         const auto even1 = y[0] + y[5], odd1 = y[0] - y[5];
@@ -127,7 +124,7 @@ class Interpolation
         return ((((c5 * z + c4) * z + c3) * z + c2) * z + c1) * z + c0;
     }
 
-    static float hermite63x(const float* y, const float x)
+    [[nodiscard]] static float hermite63x(const float* y, const float x) noexcept
     {
         const auto c0 = y[2];
         const auto c1 = 1.f / 12.f * (y[0] - y[4]) + 2.f / 3.f * (y[3] - y[1]);
@@ -137,7 +134,7 @@ class Interpolation
         return ((c3 * x + c2) * x + c1) * x + c0;
     }
 
-    static float hermite63z(const float* y, const float x)
+    [[nodiscard]] static float hermite63z(const float* y, const float x) noexcept
     {
         const auto z = x - 1.f / 2.f;
         const auto even1 = y[0] + y[5], odd1 = y[0] - y[5];
@@ -150,7 +147,7 @@ class Interpolation
         return ((c3 * z + c2) * z + c1) * z + c0;
     }
 
-    static float hermite65x(const float* y, const float x)
+    [[nodiscard]] static float hermite65x(const float* y, const float x) noexcept
     {
         const auto eighthym2 = 1.f / 8.f * y[0];
         const auto eleventwentyfourthy2 = 11.f / 24.f * y[4];
@@ -165,7 +162,7 @@ class Interpolation
         return ((((c5 * x + c4) * x + c3) * x + c2) * x + c1) * x + c0;
     }
 
-    static float hermite65z(const float* y, const float x)
+    [[nodiscard]] static float hermite65z(const float* y, const float x) noexcept
     {
         const auto z = x - 1.f / 2.f;
         const auto even1 = y[0] + y[5], odd1 = y[0] - y[5];
