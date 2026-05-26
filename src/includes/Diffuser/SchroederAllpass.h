@@ -70,7 +70,6 @@ class SchroederAllPass
     size_t m_writeIndex{0};
 };
 
-
 template <size_t MaxSize48Khz, size_t BlockSize>
 class SchroederAllPassSoftTransition
 {
@@ -243,4 +242,4 @@ class SchroederAllPassSoftTransition
     std::vector<float> m_buffer{};
 };
 
-}
+}  // namespace AbacDsp

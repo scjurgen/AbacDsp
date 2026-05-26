@@ -54,4 +54,5 @@ class SimpleHysteresis
     float m_targetDecayRate{0.05f};
     const float m_smoothingCoeff;
 };
-}
+
+}  // namespace AbacDsp

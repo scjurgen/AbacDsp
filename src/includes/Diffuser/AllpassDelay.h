@@ -394,7 +394,6 @@ class ModulatingAllPassDelay
     }
 
     const float m_sampleRate;
-
     OnePoleFilter<OnePoleFilterCharacteristic::LowPass, false> m_lowpass;
     Ap6Smooth m_allpass;
 
@@ -694,4 +693,4 @@ class FixedAllpassDelay
     size_t m_delaySteps;
 };
 
-}
+}  // namespace AbacDsp
