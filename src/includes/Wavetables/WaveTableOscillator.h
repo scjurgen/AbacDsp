@@ -1,24 +1,14 @@
 #pragma once
 
-#include "WaveTableStorage.h"
-#include "Parameters/SmoothingParameter.h"
 #include <cmath>
 #include <vector>
+
+#include "Parameters/SmoothingParameter.h"
+#include "WaveTableStorage.h"
 
 namespace AbacDsp
 {
 
-/*
- * This wave table oscillator contains following options:
- * - 3 wavetables between we can morph, potentially it could be extended to a classic
- *       wavetable morph with N wavetables (e.g. serum)
- * - every wavetable consists of bandlimited wave tables and when select a start frequency
- *   we select the best table for the playout frequency (setFrequency)
- * - with changeFrequency you can change the pitch
- * - we have a pwm mode which can also be used (subtract wave from itself with a phase offset)
- * - morphmode has no smoothing (seems to be resilient to it)
- * - pwm needs smoothing, changes are quite drastic
- */
 class WaveTableOscillator
 {
   public:
@@ -42,7 +32,6 @@ class WaveTableOscillator
         applyMorph();
     }
 
-    // don't change table when doing slight changes to pitch
     void changeFrequency(const float frequency) noexcept
     {
         if (m_frequency == frequency)
@@ -54,7 +43,6 @@ class WaveTableOscillator
         m_invPhaseInc = m_sampleRate / frequency;
     }
 
-    // only when setting a frequency for a new trigger we choose the tableindex
     void setFrequency(const float frequency) noexcept
     {
         if (m_frequency == frequency)
@@ -83,14 +71,12 @@ class WaveTableOscillator
         applyMorph();
     }
 
-    float process() noexcept
+    [[nodiscard]] float process() noexcept
     {
         updatePhase();
         return getOutput();
     }
 
-    // block processing handles wrapping at end of table by calculating first the number of
-    // samples we can process without wrapping
     void processBlock(float* target, const size_t numSamples)
     {
         if (!m_pwm.hasStoppedSmoothing())
@@ -178,7 +164,7 @@ class WaveTableOscillator
     void applyMorph()
     {
         const auto morph = std::clamp((m_morphValue + 1) * 0.5f, 0.f, 1.f) * (m_set.size() - 1);
-        m_tblSubIdx = std::floor(morph);
+        m_tblSubIdx = static_cast<size_t>(std::floor(morph));
         m_morph = morph - m_tblSubIdx;
         if (m_tblSubIdx >= m_set.size() - 1)
         {
@@ -190,7 +176,6 @@ class WaveTableOscillator
 
     void handleNoise()
     {
-        // if any of the active tables is a noise wave table
         const bool isWhite0 = m_set[m_tblSubIdx].wave == BasicWave::White;
         const bool isWhite1 = m_set[m_tblSubIdx + 1].wave == BasicWave::White;
 
@@ -320,7 +305,7 @@ class WaveTableOscillator
     }
 
     static constexpr size_t TableSize = WaveTableSize;
-    float m_sampleRate;
+    const float m_sampleRate;
     float m_phasor = 0.0f;
     float m_phasorWithOffset = 0.0f;
     float m_phaseInc = 0.0f;
@@ -328,8 +313,8 @@ class WaveTableOscillator
     float m_frequency{1.f};
     float m_morphValue{0.f};
 
-    size_t m_tblSubIdx{0};                     // Index into WaveTableCollection
-    std::array<size_t, 2> m_curTableIdx{0, 0}; // Index within WaveTableSet
+    size_t m_tblSubIdx{0};
+    std::array<size_t, 2> m_curTableIdx{0, 0};
     std::array<WaveTableSet, 3> m_set{};
     bool m_hasNoise{false};
     float m_noiseRatio{0.f};

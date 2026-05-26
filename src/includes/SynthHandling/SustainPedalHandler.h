@@ -3,7 +3,7 @@
 #include <array>
 #include <functional>
 #include <optional>
-
+#include <vector>
 
 /* rules:
  * noteOn Handler:
@@ -29,6 +29,9 @@
  *
  * allNotesOff
  */
+namespace AbacDsp
+{
+
 class SustainPedalHandler
 {
     struct ActiveNoteSlots
@@ -44,7 +47,6 @@ class SustainPedalHandler
   public:
     explicit SustainPedalHandler(const size_t maxVoices = 16)
         : m_activeNotes(maxVoices)
-        , m_counter(0)
     {
     }
 
@@ -60,32 +62,28 @@ class SustainPedalHandler
     {
         int slotIndex = -1;
 
-        // First check for existing note to replace in sustain mode
         if (m_sustainActive)
         {
-            for (int i = 0; i < m_activeNotes.size(); ++i)
+            for (size_t i = 0; i < m_activeNotes.size(); ++i)
             {
                 auto& slot = m_activeNotes[i];
                 if (slot.isUsed && slot.channel == channel && slot.note == note)
                 {
-                    // Force release of existing note before retriggering
                     if (m_noteOff)
                     {
                         m_noteOff(channel, note, slot.noteOffVelocity);
                     }
                     slot.isUsed = false;
-                    slotIndex = i;
+                    slotIndex = static_cast<int>(i);
                     break;
                 }
             }
         }
 
-        // If no replacement found, find new slot
         if (slotIndex == -1)
         {
             slotIndex = findFreeSlot();
 
-            // Voice stealing when full
             if (slotIndex == -1)
             {
                 slotIndex = findVoiceToSteal();
@@ -98,7 +96,6 @@ class SustainPedalHandler
             }
         }
 
-        // Update slot with new note information
         auto& slot = m_activeNotes[slotIndex];
         slot = {true, false, channel, note, velocity, m_counter++};
 
@@ -108,7 +105,6 @@ class SustainPedalHandler
             m_noteOn(channel, note, velocity);
         }
     }
-
 
     void noteOff(const int channel, const int note, const int velocity) noexcept
     {
@@ -173,30 +169,30 @@ class SustainPedalHandler
     }
 
   private:
-    int findFreeSlot() const
+    [[nodiscard]] int findFreeSlot() const noexcept
     {
-        for (int i = 0; i < m_activeNotes.size(); ++i)
+        for (size_t i = 0; i < m_activeNotes.size(); ++i)
         {
             if (!m_activeNotes[i].isUsed)
             {
-                return i;
+                return static_cast<int>(i);
             }
         }
         return -1;
     }
 
-    int findVoiceToSteal() const
+    [[nodiscard]] int findVoiceToSteal() const noexcept
     {
         int lowestCount = std::numeric_limits<int>::max();
         int lowestIndex = -1;
 
-        for (int i = 0; i < m_activeNotes.size(); ++i)
+        for (size_t i = 0; i < m_activeNotes.size(); ++i)
         {
             const auto& slot = m_activeNotes[i];
             if (slot.isUsed && slot.count < lowestCount)
             {
                 lowestCount = slot.count;
-                lowestIndex = i;
+                lowestIndex = static_cast<int>(i);
             }
         }
         return lowestIndex;
@@ -206,5 +202,7 @@ class SustainPedalHandler
     MidiCallback m_noteOn = nullptr;
     MidiCallback m_noteOff = nullptr;
     bool m_sustainActive = false;
-    int m_counter;
+    int m_counter{};
 };
+
+}  // namespace AbacDsp

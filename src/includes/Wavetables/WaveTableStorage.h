@@ -1,14 +1,15 @@
 #pragma once
-#include "Analysis/FftMisc.h"
 
-#include <array>
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <mutex>
 #include <numbers>
 #include <numeric>
 #include <random>
 #include <vector>
+
+#include "Analysis/FftMisc.h"
 
 namespace AbacDsp
 {
@@ -29,7 +30,7 @@ enum class BasicWave
     Last // N.B.: Always keep this as the last entry
 };
 
-const std::vector<std::string> waveTablesAsString{
+inline const std::vector<std::string> waveTablesAsString{
     "Sine",   "Triangle",   "Saw",   "SharkFin",      "Square",           "Pulse",
     "Pulse1", "NoiseFloor", "White", "RectifiedSine", "RectifiedTriangle"};
 
@@ -38,7 +39,7 @@ constexpr size_t WaveTableSize{2048};
 struct WaveTable
 {
     float topFreq{};
-    std::array<float, WaveTableSize + 1> data; // Extra sample for interpolation
+    std::array<float, WaveTableSize + 1> data{}; // Extra sample for interpolation
 };
 
 
@@ -214,25 +215,8 @@ class WaveTableStore
     }
     static WaveTableSet fftFromSlice(const std::vector<float>& slice);
 
-    /*
-     * @brief Generates band-limited wavetables by progressively reducing harmonics for antialiasing.
-     *
-     * Starting from the full spectrum, each iteration creates a wavetable with fewer harmonics for lower frequency
-     * bands. DC add Nyquist are zeroed, then significant harmonics are identified.
-     * For each band:
-     *   1. Finds highest non-negligible harmonic (magnitude > 1E-4)
-     *   2. Copies harmonics up to current max into new spectrum
-     *   3. Generates time-domain wavetable via makeWaveTable()
-     *   4. Adjusts maxHarmonic for next band until no significant harmonics remain
-     *
-     * Resulting wavetable set is stored in s_wtbls for later playback at appropriate frequencies.
-     */
     static WaveTableSet addSet(std::vector<float>& freqWaveRe, std::vector<float>& freqWaveIm);
 
-    /**
-     * @brief Convert spectral data to a normalized wavetable with wrap sample and add to currently generated
-     * wavetable
-     */
     static float makeWaveTable(std::vector<float>& ar, std::vector<float>& ai, float scale, const float topFreq,
                                std::vector<WaveTable>& tables);
 
