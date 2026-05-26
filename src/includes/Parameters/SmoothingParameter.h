@@ -8,7 +8,7 @@ namespace AbacDsp
 class LinearSmoothing
 {
   public:
-    LinearSmoothing(const float defaultValue = 1.f) noexcept
+    explicit LinearSmoothing(const float defaultValue = 1.f) noexcept
         : m_newValue(defaultValue)
         , m_currentValue(defaultValue)
     {
