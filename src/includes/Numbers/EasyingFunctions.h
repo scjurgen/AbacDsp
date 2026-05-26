@@ -18,7 +18,6 @@ template <typename T>
     return T(1) - T(4) * c * x2 + T(4) * c * x;
 }
 
-
 // Integral: F(x) = x + (16c/5)x⁵ - 8c*x⁴ + (16c/3)x³ + C
 template <typename T>
 [[nodiscard]] constexpr T smoothStep4Integral(const T x, const T c = T(0)) noexcept

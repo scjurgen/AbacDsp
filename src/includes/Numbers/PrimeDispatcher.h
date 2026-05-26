@@ -77,7 +77,6 @@ inline auto returnOrderedPrimeTable(InputIterator source, InputIterator target, 
     }
 }
 
-
 template <size_t MINVALUE, typename In, typename Out>
 inline auto generateUniquePrimeSet(const In source, Out target, const size_t numItems)
     -> std::enable_if_t<std::is_unsigned_v<typename std::iterator_traits<In>::value_type>, void>
@@ -100,7 +99,7 @@ inline auto generateUniquePrimeSet(const In source, Out target, const size_t num
 
 inline void ensureUniqueDiscreteSize(size_t* discreteSize, const unsigned int last)
 {
-    bool changes_made;
+    bool changes_made{false};
     do
     {
         changes_made = false;

@@ -14,14 +14,7 @@ enum class TransitionPhase
     Ramping
 };
 
-/**
- * @brief Fractional read head with smooth delta transitions.
- *
- * Manages a read head position that can smoothly transition between different delta values
- * relative to a reference position. Supports two smoothing profiles:
- * - Quadratic (parabolic): More aggressive acceleration profile
- * - Quartic: Smoother easing in and out with gentler transitions
- */
+// quartic=true: smoother ease in/out; quartic=false: more aggressive quadratic acceleration
 template <size_t WrapSize, bool quartic = false>
 class FracReadHead
 {
@@ -159,4 +152,4 @@ class FracReadHead
     Scheduled m_scheduled{false, 0.0f, 0.0f};
 };
 
-}
+}  // namespace AbacDsp

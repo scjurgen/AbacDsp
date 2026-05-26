@@ -204,4 +204,5 @@ class VariSpeedTapeDelay
     float m_flutterRate{1.f};
     float m_wowRate{1.f};
 };
-}
+
+}  // namespace AbacDsp

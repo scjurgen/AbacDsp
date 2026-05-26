@@ -214,4 +214,5 @@ class PitchFadeWindowDelay
     std::minstd_rand m_randomGenerator;
     std::uniform_int_distribution<size_t> m_randDistribution{0, m_randomVariation};
 };
-}
+
+}  // namespace AbacDsp

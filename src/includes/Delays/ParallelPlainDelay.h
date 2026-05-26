@@ -115,4 +115,5 @@ class ParallelPlainDelay
     alignas(16) std::array<std::vector<float>, CHANNELS> m_buffer;
     size_t m_head{};
 };
-}
+
+}  // namespace AbacDsp

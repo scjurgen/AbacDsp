@@ -79,7 +79,6 @@ namespace CreateExpectedSet
     return mantissa_str + "e" + (exponent < 0 ? "-" : "+") + std::to_string(std::abs(exponent));
 }
 
-
 inline void toStream(std::ostream& os, const std::vector<float>& data, const int precision = 6,
                      const int columnsPerRow = 8)
 {

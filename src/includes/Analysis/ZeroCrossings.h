@@ -223,4 +223,4 @@ template <std::floating_point T>
                                            [dc](T x) { return x - dc; });
 }
 
-}
+}  // namespace AbacDsp

@@ -88,7 +88,7 @@ class SincFilter
         for (size_t i = 0; i < items; ++i)
         {
             const float iCoeff = getFractionFromInterleaved(ilvdIdx--, fraction);
-            for (auto c = 0; c < NumChannels; ++c)
+            for (size_t c = 0; c < NumChannels; ++c)
             {
                 result[c] += iCoeff * buffer[bIdx++];
             }
@@ -114,7 +114,7 @@ class SincFilter
     void processFilterHalf(int32_t filterIdx, const float* buffer, size_t bIdx, const int32_t increment,
                            float* result) const noexcept
     {
-        float intPart;
+        float intPart{};
         const auto addFraction = std::modf(static_cast<float>(increment) / static_cast<float>(DiscreteSteps), &intPart);
         float fraction = (filterIdx & (DiscreteSteps - 1)) / static_cast<float>(DiscreteSteps);
         while (filterIdx > term)

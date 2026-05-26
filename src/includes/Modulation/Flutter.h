@@ -55,8 +55,8 @@ class FlutterLfo
     }
 
   private:
-    float m_frequencyMultiplier;
-    float m_amplitude;
+    const float m_frequencyMultiplier;
+    const float m_amplitude;
     float m_phase;
 };
 
@@ -121,4 +121,4 @@ class Flutter
     std::array<FlutterLfo, 3> m_lfos;
 };
 
-}
+}  // namespace AbacDsp

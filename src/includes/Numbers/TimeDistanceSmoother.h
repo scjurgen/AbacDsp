@@ -4,6 +4,9 @@
 #include <cmath>
 #include <concepts>
 
+namespace AbacDsp
+{
+
 template <std::floating_point FloatType = double>
 class TimeDistanceSmoother
 {
@@ -168,7 +171,7 @@ class TimeDistanceSmoother
     }
 
     // keep all FloatType, otherwise we get drift problems
-    FloatType m_sampleRate{};
+    const FloatType m_sampleRate{};
     FloatType m_wrapPosition{FloatType(100)};
 
     FloatType m_idealWritePosition{FloatType(0)};
@@ -185,3 +188,5 @@ class TimeDistanceSmoother
     FloatType m_correctionTime{FloatType(0.05)};
     int m_correctionCooldown{0};
 };
+
+}  // namespace AbacDsp

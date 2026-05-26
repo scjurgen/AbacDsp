@@ -80,10 +80,10 @@ class YinPitchDetector
   private:
     const float m_sampleRate;
 
-    size_t m_bufferSize;
-    size_t m_hopSize;
-    size_t m_minPeriod;
-    size_t m_maxPeriod;
+    const size_t m_bufferSize;
+    const size_t m_hopSize;
+    const size_t m_minPeriod;
+    const size_t m_maxPeriod;
 
     std::vector<float> m_buffer;
     std::vector<float> m_differenceFunction;
@@ -219,4 +219,4 @@ class YinPitchDetector
     }
 };
 
-}
+}  // namespace AbacDsp

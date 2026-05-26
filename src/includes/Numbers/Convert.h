@@ -24,7 +24,7 @@ void getPanFactorNormalized(const T angleNormalized, T& left, T& right)
 {
     constexpr T f = static_cast<T>(0.7071067811865476);
 
-    const T angle = angleNormalized * static_cast<T>(std::numbers::pi / 4);
+    const T angle = angleNormalized * static_cast<T>(std::numbers::pi_v<T> / 4);
     const T cosVal = Approximation::remezCosP6<Approximation::DomainMinusPiHalfToPiHalf>(static_cast<float>(angle));
     const T sinVal = Approximation::remezSinP5<Approximation::DomainMinusPiHalfToPiHalf>(static_cast<float>(angle));
     left = f * (cosVal - sinVal);
@@ -50,7 +50,6 @@ template <std::floating_point T>
     }
     return std::log10(gain) * T(20);
 }
-
 
 template <std::floating_point T>
 [[nodiscard]] T frequencyToNote(const T f, const T orchestraTuning = T(440))

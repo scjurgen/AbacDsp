@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <string>
+#include <string_view>
 
 namespace AbacDsp
 {
@@ -27,7 +28,7 @@ class LinearSmoothingParameter
         m_max = max;
     }
 
-    void setMoniker(const std::string& moniker)
+    void setMoniker(const std::string_view moniker)
     {
         m_moniker = moniker;
     }
@@ -40,7 +41,7 @@ class LinearSmoothingParameter
     void forceValue(const float newValue) noexcept
     {
         m_value = std::clamp(newValue, m_min, m_max);
-        std::fill(m_values.begin(), m_values.end(), m_value);
+        std::ranges::fill(m_values, m_value);
     }
 
     void setValue(const float newValue) noexcept
@@ -49,7 +50,7 @@ class LinearSmoothingParameter
         const auto delta = target - m_value;
         if (delta == 0.0f)
         {
-            std::fill(m_values.begin(), m_values.end(), m_value);
+            std::ranges::fill(m_values, m_value);
             return;
         }
         std::generate(m_values.begin(), m_values.end(),
@@ -100,7 +101,7 @@ class LinearParameter
         updateStep();
     }
 
-    void setMoniker(const std::string& moniker)
+    void setMoniker(const std::string_view moniker)
     {
         m_moniker = moniker;
     }
