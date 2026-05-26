@@ -1,24 +1,23 @@
 #pragma once
 
-#include <array>
 #include <cstddef>
 
 template <typename T_>
 class Interpolation
 {
   public:
-    [[maybe_unused]] static T_ zeroOrderHold(const T_* y, const T_ /*x*/)
+    [[nodiscard]] static T_ zeroOrderHold(const T_* y, const T_ /*x*/) noexcept
     {
         return y[0];
     }
 
-    [[maybe_unused]] static T_ linearPt2(const T_* y, const T_ x)
+    [[nodiscard]] static T_ linearPt2(const T_* y, const T_ x) noexcept
     {
         return y[0] + (y[1] - y[0]) * x;
     }
 
     // 4-point, 3rd-order Catmull-Rom / cubic Hermite
-    [[maybe_unused]] static T_ catmullRom(const T_* y, const T_ x)
+    [[nodiscard]] static T_ catmullRom(const T_* y, const T_ x) noexcept
     {
         const auto c0 = y[1];
         const auto c1 = T_(0.5) * (y[2] - y[0]);
@@ -28,7 +27,7 @@ class Interpolation
     }
 
     // Niemitalo 4-point, 3rd-order optimal (z-form, 2x oversampled)
-    [[maybe_unused]] static T_ optimal_43x(const T_* y, const T_ x)
+    [[nodiscard]] static T_ optimal_43x(const T_* y, const T_ x) noexcept
     {
         const auto even1 = y[1] + y[2], odd1 = y[2] - y[1];
         const auto even2 = y[0] + y[3], odd2 = y[3] - y[0];
@@ -40,7 +39,7 @@ class Interpolation
     }
 
     // Niemitalo 6-point, 5th-order optimal (z-form, 2x oversampled)
-    [[maybe_unused]] static T_ optimal_65z(const T_* y, const T_ x)
+    [[nodiscard]] static T_ optimal_65z(const T_* y, const T_ x) noexcept
     {
         const auto z = x - T_(0.5);
         const auto even1 = y[2] + y[3], odd1 = y[3] - y[2];
@@ -67,7 +66,7 @@ template <size_t NumChannels>
 class MultichannelInterpolation
 {
   public:
-    static void linearPt2(const float* interleaved, float* out, float x)
+    static void linearPt2(const float* interleaved, float* out, const float x)
     {
         for (size_t ch = 0; ch < NumChannels; ++ch)
         {
@@ -77,7 +76,7 @@ class MultichannelInterpolation
         }
     }
 
-    static void catmullRom(const float* interleaved, float* out, float x)
+    static void catmullRom(const float* interleaved, float* out, const float x)
     {
         for (size_t ch = 0; ch < NumChannels; ++ch)
         {
@@ -87,7 +86,7 @@ class MultichannelInterpolation
         }
     }
 
-    static void optimal_43(const float* interleaved, float* out, float x)
+    static void optimal_43(const float* interleaved, float* out, const float x)
     {
         for (size_t ch = 0; ch < NumChannels; ++ch)
         {
@@ -97,7 +96,7 @@ class MultichannelInterpolation
         }
     }
 
-    static void optimal_65(const float* interleaved, float* out, float x)
+    static void optimal_65(const float* interleaved, float* out, const float x)
     {
         for (size_t ch = 0; ch < NumChannels; ++ch)
         {
@@ -114,7 +113,7 @@ struct LinearKernel
     static constexpr int Support = 2;
     static constexpr int Pre = 0;
     static constexpr int Post = 1;
-    static float eval(const float* y, float frac) noexcept
+    [[nodiscard]] static float eval(const float* y, const float frac) noexcept
     {
         return Interpolation<float>::linearPt2(y, frac);
     }
@@ -125,7 +124,7 @@ struct CatmullRomKernel
     static constexpr int Support = 4;
     static constexpr int Pre = 1;
     static constexpr int Post = 2;
-    static float eval(const float* y, float frac) noexcept
+    [[nodiscard]] static float eval(const float* y, const float frac) noexcept
     {
         return Interpolation<float>::catmullRom(y, frac);
     }
@@ -136,7 +135,7 @@ struct Optimal4Kernel
     static constexpr int Support = 4;
     static constexpr int Pre = 1;
     static constexpr int Post = 2;
-    static float eval(const float* y, float frac) noexcept
+    [[nodiscard]] static float eval(const float* y, const float frac) noexcept
     {
         return Interpolation<float>::optimal_43x(y, frac);
     }
@@ -147,7 +146,7 @@ struct Optimal6Kernel
     static constexpr int Support = 6;
     static constexpr int Pre = 2;
     static constexpr int Post = 3;
-    static float eval(const float* y, float frac) noexcept
+    [[nodiscard]] static float eval(const float* y, const float frac) noexcept
     {
         return Interpolation<float>::optimal_65z(y, frac);
     }
