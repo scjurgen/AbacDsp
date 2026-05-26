@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <algorithm>
@@ -67,16 +66,16 @@ class Bulge
 {
   public:
     template <typename T>
-    static T getValue(const T x, const T bulge, const T bulgePower = 4.0)
+    [[nodiscard]] static T getValue(const T x, const T bulge, const T bulgePower = T(4))
     {
-        if (bulge < 0)
+        if (bulge < T(0))
         {
-            if (x >= 1.f)
+            if (x >= T(1))
             {
-                return 1;
+                return T(1);
             }
-            auto f = std::pow(bulgePower, -bulge);
-            return 1 - std::pow(1 - x, f);
+            const auto f = std::pow(bulgePower, -bulge);
+            return T(1) - std::pow(T(1) - x, f);
         }
         return std::pow(x, std::pow(bulgePower, bulge));
     }
@@ -90,7 +89,7 @@ class Bulge
             *s = 0;
             return;
         }
-        size_t index = 0;
+        size_t index{0};
         std::generate_n(s, items,
                         [&index, items, bulge]()
                         {
@@ -114,17 +113,16 @@ class Bulge
             *s = low;
             return;
         }
-        size_t index = 0;
-        std::generate_n(s, items,
-                        [&index, low, high, items, bulge]()
-                        {
-                            const auto f =
-                                Bulge::getValue(static_cast<float>(index) / static_cast<float>(items - 1), bulge);
-                            const auto y =
-                                static_cast<T>(round(static_cast<float>(low) + static_cast<float>(high - low) * f));
-                            ++index;
-                            return y;
-                        });
+        size_t index{0};
+        std::generate_n(
+            s, items,
+            [&index, low, high, items, bulge]()
+            {
+                const auto f = Bulge::getValue(static_cast<float>(index) / static_cast<float>(items - 1), bulge);
+                const auto y = static_cast<T>(std::round(static_cast<float>(low) + static_cast<float>(high - low) * f));
+                ++index;
+                return y;
+            });
     }
 };
 }
