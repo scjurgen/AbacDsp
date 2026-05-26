@@ -4,9 +4,6 @@
 #include <cmath>
 #include <concepts>
 
-/*
- * @brief Smooth read head position
- */
 template <std::floating_point FloatType = double>
 class TimeDistanceSmoother
 {
@@ -53,7 +50,9 @@ class TimeDistanceSmoother
     void newTargetDistance(const FloatType distance, const FloatType transitionTimeSeconds = FloatType(0.02)) noexcept
     {
         if (std::abs(distance - m_targetDistance) < FloatType(0.5))
+        {
             return;
+        }
 
         m_targetDistance = distance;
 
@@ -96,7 +95,9 @@ class TimeDistanceSmoother
             readAdvance -= m_distanceChangePerSample;
             m_remainingTransitionSamples--;
             if (m_remainingTransitionSamples <= 0)
+            {
                 m_isTransitioning = false;
+            }
         }
         else if (m_correctionThreshold > FloatType(0) && m_correctionCooldown <= 0)
         {
