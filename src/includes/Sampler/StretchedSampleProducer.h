@@ -11,14 +11,6 @@
 namespace AbacDsp
 {
 
-/**
- * @brief Phase vocoder-based time stretcher with transient preservation.
- *
- * Performs independent time stretching on stereo samples using STFT with
- * phase-locked vocoder. Supports transient-aware repositioning with
- * configurable lookahead zero-padding to preserve attack transients.
- * Uses 75% overlap (hopSize = windowSize/4) with Hann windowing.
- */
 class StretchedSampleProducer
 {
   public:
@@ -123,12 +115,12 @@ class StretchedSampleProducer
         return true;
     }
 
-    [[nodiscard]] bool isDone() const
+    [[nodiscard]] bool isDone() const noexcept
     {
         return m_isDone;
     }
 
-    [[nodiscard]] size_t getRemainingSourceSamples() const
+    [[nodiscard]] size_t getRemainingSourceSamples() const noexcept
     {
         if (!m_data || m_isDone)
         {
@@ -193,7 +185,7 @@ class StretchedSampleProducer
         m_phaseReset = true;
     }
 
-    size_t getAvailableSamples() const
+    [[nodiscard]] size_t getAvailableSamples() const
     {
         if (m_ringWritePos >= m_ringReadPos)
         {
@@ -202,7 +194,7 @@ class StretchedSampleProducer
         return m_outputRingL.size() - m_ringReadPos + m_ringWritePos;
     }
 
-    bool processFrame(const float* samples, const size_t dataSize)
+    [[nodiscard]] bool processFrame(const float* samples, const size_t dataSize)
     {
         if (!fillInputBuffer(samples, dataSize))
             return false;
@@ -214,7 +206,7 @@ class StretchedSampleProducer
         return true;
     }
 
-    bool fillInputBuffer(const float* samples, const size_t dataSize)
+    [[nodiscard]] bool fillInputBuffer(const float* samples, const size_t dataSize)
     {
         const auto zeroPadSamples = (m_transientOffset > 0) ? std::min(m_transientOffset, m_fftSize) : 0;
 
@@ -336,7 +328,7 @@ class StretchedSampleProducer
     float m_feedRatio{1.0f};
     bool m_isDone{true};
     bool m_phaseReset{true};
-    float m_sampleRate;
+    const float m_sampleRate;
     PFFFT_Setup* m_fftSetup{nullptr};
     float* m_fftWork{nullptr};
     float* m_fftBuffer{nullptr};

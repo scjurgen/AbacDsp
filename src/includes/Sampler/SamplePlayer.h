@@ -53,7 +53,6 @@ class AudiofileIO
     }
 };
 
-
 template <size_t MaxVoices>
 class SamplePlayer
 {
@@ -116,15 +115,12 @@ class SamplePlayer
     std::array<BasicSamplePlayer, MaxVoices> m_voices{};
 };
 
-
 template <size_t BASENOTE, size_t MIDI_STEPS, size_t ROUND_ROBINS>
 class Instrument
 {
   public:
     explicit Instrument(const std::string& basefilepath)
         : m_basefilepath(basefilepath)
-        , m_loadingThread{}
-        , m_loadingComplete(false)
     {
         if (ROUND_ROBINS > 1)
         {
@@ -158,20 +154,12 @@ class Instrument
     {
         for (size_t i = 0; i < MIDI_STEPS * ROUND_ROBINS; ++i)
         {
-            char sampleFileName[256];
-            snprintf(sampleFileName, sizeof(sampleFileName), "%s/S_%05d.WAV", m_basefilepath.c_str(),
+            std::array<char, 256> sampleFileName{};
+            snprintf(sampleFileName.data(), sampleFileName.size(), "%s/S_%05d.WAV", m_basefilepath.c_str(),
                      static_cast<int>(i + 1));
-            if (AudiofileIO::loadStereoWaveFileAlloc(sampleFileName, m_sample[i]))
-            {
-                //   print_log("loaded %s %ld", sampleFileName, m_sample[i].size() / 2);
-            }
-            else
-            {
-                //     print_log("could not load %s", sampleFileName);
-            }
+            AudiofileIO::loadStereoWaveFileAlloc(sampleFileName.data(), m_sample[i]);
         }
         m_loadingComplete = true;
-        // print_log("loading completed");
         callback();
     }
 

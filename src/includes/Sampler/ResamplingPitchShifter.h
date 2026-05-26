@@ -32,7 +32,7 @@ class ResamplingPitchShifter
         m_pitchRatio = ratio;
     }
 
-    bool produceSamples(float* outLeft, float* outRight, const size_t numSamples)
+    [[nodiscard]] bool produceSamples(float* outLeft, float* outRight, const size_t numSamples)
     {
         if (!m_producer)
         {
@@ -62,7 +62,7 @@ class ResamplingPitchShifter
         return true;
     }
 
-    [[nodiscard]] bool isDone() const
+    [[nodiscard]] bool isDone() const noexcept
     {
         return m_producerDone;
     }
@@ -78,7 +78,7 @@ class ResamplingPitchShifter
         m_intermediateBufferR.resize(IntermediateBufferSize, 0.0f);
     }
 
-    size_t getAvailableSamples() const
+    [[nodiscard]] size_t getAvailableSamples() const
     {
         const float fracReadPosWrapped = std::fmod(m_fractionalReadPos, static_cast<float>(m_ringBufferSize));
         const size_t intReadPos = static_cast<size_t>(fracReadPosWrapped);
@@ -90,7 +90,7 @@ class ResamplingPitchShifter
         return m_ringBufferSize - intReadPos + m_ringWritePos;
     }
 
-    bool fillIntermediateBuffer()
+    [[nodiscard]] bool fillIntermediateBuffer()
     {
         if (!m_producer->produceSamples(m_intermediateBufferL.data(), m_intermediateBufferR.data(),
                                         IntermediateBufferSize))
@@ -109,7 +109,7 @@ class ResamplingPitchShifter
         return true;
     }
 
-    static float hermiteInterp(const std::vector<float>& buffer, float pos)
+    [[nodiscard]] static float hermiteInterp(const std::vector<float>& buffer, const float pos)
     {
         const size_t size = buffer.size();
         const size_t p1 = static_cast<size_t>(std::floor(pos)) % size;

@@ -69,7 +69,6 @@ class SamplePlayerBasic
                 return;
             }
 
-            // 4-point Hermite interpolation (stereo interleaved)
             const size_t pPos = m_intPlayPos * 2;
             const auto ym1_L = samples[pPos];
             const auto y0_L = samples[pPos + 2];
@@ -110,7 +109,7 @@ class SamplePlayerBasic
         }
     }
 
-    [[nodiscard]] bool isDone() const
+    [[nodiscard]] bool isDone() const noexcept
     {
         return m_isDone;
     }
@@ -122,7 +121,7 @@ class SamplePlayerBasic
     float m_advanceFactor{1.0f};
     bool m_loop{false};
     bool m_isDone{true};
-    float m_sampleRate;
+    const float m_sampleRate;
     ChebyshevBiquad m_lowPassFilter;
     bool m_needsFiltering{false};
 };
