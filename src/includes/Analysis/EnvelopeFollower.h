@@ -114,7 +114,6 @@ class RmsFollower
     float m_reciprocalWidth{0.f};
 };
 
-
 template <size_t DBRange>
 class PeakEnvelopeFollower
 {
@@ -135,7 +134,7 @@ class PeakEnvelopeFollower
         m_releaseFactor = static_cast<float>(std::pow(m_range, 1.0f / (releaseInMilliseconds * m_sampleRate / 1000.f)));
     }
 
-    float step(const float value) noexcept
+    [[nodiscard]] float step(const float value) noexcept
     {
         const auto valueIn = std::abs(value);
         m_envelope = valueIn > m_envelope ? m_attackFactor * (m_envelope - valueIn) + valueIn
@@ -155,7 +154,7 @@ class PeakEnvelopeFollower
     }
 
   private:
-    float m_sampleRate;
+    const float m_sampleRate;
     const float m_range;
     float m_attackFactor{0.999f};
     float m_releaseFactor{0.999f};

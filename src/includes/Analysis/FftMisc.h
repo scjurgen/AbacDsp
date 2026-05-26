@@ -110,7 +110,7 @@ class BasicFFT
         for (size_t i = 0; i < x.size(); ++i)
         {
             const auto w = static_cast<double>(i) / static_cast<double>(x.size() - 1);
-            x[i] *= 0.5 * (1 - std::cos(2.0 * std::numbers::pi_v<float> * w));
+            x[i] *= 0.5 * (1 - std::cos(2.0 * std::numbers::pi_v<double> * w));
         }
     }
 
@@ -119,10 +119,10 @@ class BasicFFT
         for (size_t i = 0; i < x.size(); ++i)
         {
             const auto w = static_cast<double>(i) / static_cast<double>(x.size() - 1);
-            x[i] *= 1 - 1.93 * std::cos(2.0 * std::numbers::pi_v<float> * w) +
-                    1.29 * std::cos(4.0 * std::numbers::pi_v<float> * w) -
-                    0.388 * std::cos(6.0 * std::numbers::pi_v<float> * w) +
-                    0.0322 * std::cos(8.0 * std::numbers::pi_v<float> * w);
+            x[i] *= 1 - 1.93 * std::cos(2.0 * std::numbers::pi_v<double> * w) +
+                    1.29 * std::cos(4.0 * std::numbers::pi_v<double> * w) -
+                    0.388 * std::cos(6.0 * std::numbers::pi_v<double> * w) +
+                    0.0322 * std::cos(8.0 * std::numbers::pi_v<double> * w);
         }
     }
 
@@ -131,8 +131,8 @@ class BasicFFT
         for (size_t i = 0; i < x.size(); ++i)
         {
             const auto w = static_cast<double>(i) / static_cast<double>(x.size() - 1);
-            x[i] *= 0.42 - 0.5 * std::cos(2.0 * std::numbers::pi_v<float> * w) +
-                    0.08 * std::cos(4.0 * std::numbers::pi_v<float> * w);
+            x[i] *= 0.42 - 0.5 * std::cos(2.0 * std::numbers::pi_v<double> * w) +
+                    0.08 * std::cos(4.0 * std::numbers::pi_v<double> * w);
         }
     }
 
@@ -153,7 +153,7 @@ class BasicFFT
         for (size_t k = 0; k < N / 2; ++k)
         {
             const auto t =
-                std::polar(1.0, -2 * std::numbers::pi_v<float> * static_cast<double>(k) / static_cast<double>(N)) *
+                std::polar(1.0, -2 * std::numbers::pi_v<double> * static_cast<double>(k) / static_cast<double>(N)) *
                 odd[k];
             x[k] = even[k] + t;
             x[k + N / 2] = even[k] - t;
@@ -362,10 +362,10 @@ class KissFft
         _twiddles.resize(_nfft);
 
         const T_Scalar phInc =
-            (_inverse ? 2 : -2) * acos(static_cast<T_Scalar>(-1)) / static_cast<float>(_twiddles.size());
+            (_inverse ? 2 : -2) * std::acos(static_cast<T_Scalar>(-1)) / static_cast<T_Scalar>(_twiddles.size());
         for (size_t i = 0; i < _twiddles.size(); ++i)
         {
-            _twiddles[i] = exp(std::complex<T_Scalar>(0, static_cast<float>(i) * phInc));
+            _twiddles[i] = std::exp(std::complex<T_Scalar>(0, static_cast<T_Scalar>(i) * phInc));
         }
 
         // factorize
@@ -468,7 +468,7 @@ class KissFft
         const auto negative_if_inverse = static_cast<T_Scalar>(_inverse * -2 + 1);
         for (size_t k = 0; k < m; ++k)
         {
-            std::complex<T_Scalar> scratch[7];
+            std::array<std::complex<T_Scalar>, 7> scratch{};
             scratch[0] = fOut[k + m] * _twiddles[k * fStride];
             scratch[1] = fOut[k + 2 * m] * _twiddles[k * fStride * 2];
             scratch[2] = fOut[k + 3 * m] * _twiddles[k * fStride * 3];
@@ -497,7 +497,7 @@ class KissFft
         size_t k = m;
         do
         {
-            std::complex<T_Scalar> scratch[5];
+            std::array<std::complex<T_Scalar>, 5> scratch{};
             scratch[1] = fOut[m] * *tw1;
             scratch[2] = fOut[m2] * *tw2;
             scratch[3] = scratch[1] + scratch[2];
@@ -527,7 +527,7 @@ class KissFft
 
         for (size_t u = 0; u < m; ++u, ++fOut0, ++fOut1, ++fOut2, ++fOut3, ++fOut4)
         {
-            std::complex<T_Scalar> scratch[13];
+            std::array<std::complex<T_Scalar>, 13> scratch{};
             scratch[0] = *fOut0;
 
             scratch[1] = *fOut1 * _twiddles[u * fStride];
@@ -635,7 +635,7 @@ class HannWindowMagnitudesFft
     void compute(const std::vector<float>& src, std::vector<float>& dst)
     {
         std::transform(src.begin(), src.end(), window.begin(), tmpIn.begin(),
-                       [](const float s, const float w) { return std::complex(s * w, 0.0f); });
+                       [](const float s, const float w) { return std::complex<float>(s * w, 0.0f); });
         fft.compute(tmpIn.data(), tmpOut.data());
         realDataToMagnitude(dst);
     }
@@ -643,7 +643,7 @@ class HannWindowMagnitudesFft
   private:
     void realDataToMagnitude(std::vector<float>& dst) const
     {
-        float d = 1.f / static_cast<float>(window.size());
+        const float d = 1.f / static_cast<float>(window.size());
         std::transform(tmpOut.begin(), tmpOut.begin() + window.size() / 2, dst.begin(),
                        [d](const auto& complex_val) { return std::abs(complex_val) * d; });
     }
@@ -681,7 +681,7 @@ class WindowedMagnitudesFft
     void compute(const std::vector<float>& src, std::vector<float>& dst)
     {
         std::transform(src.begin(), src.end(), window.begin(), tmpIn.begin(),
-                       [](float s, float w) { return std::complex<float>(s * w, 0.0f); });
+                       [](const float s, const float w) { return std::complex<float>(s * w, 0.0f); });
         fft.compute(tmpIn.data(), tmpOut.data());
         realDataToMagnitude(dst);
     }
@@ -689,7 +689,7 @@ class WindowedMagnitudesFft
   private:
     void realDataToMagnitude(std::vector<float>& dst) const
     {
-        float d = 1.f / static_cast<float>(window.size());
+        const float d = 1.f / static_cast<float>(window.size());
         std::transform(tmpOut.begin(), tmpOut.begin() + window.size() / 2, dst.begin(),
                        [d](const auto& complex_val) { return std::abs(complex_val) * d; });
     }
@@ -710,7 +710,7 @@ class WindowedMagnitudesFft
 
 struct HannWindow
 {
-    float operator()(size_t n, size_t N) const noexcept
+    float operator()(const size_t n, const size_t N) const noexcept
     {
         const auto w = static_cast<float>(n) / static_cast<float>(N - 1);
         return 0.5f * (1.f - std::cos(2.0f * std::numbers::pi_v<float> * w));
@@ -719,7 +719,7 @@ struct HannWindow
 
 struct BlackmanWindow
 {
-    float operator()(size_t n, size_t N) const noexcept
+    float operator()(const size_t n, const size_t N) const noexcept
     {
         const float w = static_cast<float>(n) / static_cast<float>(N - 1);
         constexpr float a0 = 0.42f;

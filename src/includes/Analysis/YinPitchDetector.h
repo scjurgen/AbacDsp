@@ -28,9 +28,6 @@ class YinPitchDetector
         , m_buffer(m_bufferSize, 0.0f)
         , m_differenceFunction(m_bufferSize / 2, 0.0f)
         , m_cmndf(m_bufferSize / 2, 0.0f)
-        , m_writeIndex(0)
-        , m_currentPitch(0.0f)
-        , m_hopCounter(0)
     {
     }
 
@@ -39,7 +36,7 @@ class YinPitchDetector
         return m_newPitch;
     }
 
-    float step(const float in)
+    [[nodiscard]] float step(const float in)
     {
         m_buffer[m_writeIndex] = in;
         m_writeIndex = (m_writeIndex + 1) % m_bufferSize;
@@ -81,7 +78,7 @@ class YinPitchDetector
     }
 
   private:
-    float m_sampleRate;
+    const float m_sampleRate;
 
     size_t m_bufferSize;
     size_t m_hopSize;
@@ -91,9 +88,9 @@ class YinPitchDetector
     std::vector<float> m_buffer;
     std::vector<float> m_differenceFunction;
     std::vector<float> m_cmndf;
-    size_t m_writeIndex;
-    float m_currentPitch;
-    size_t m_hopCounter;
+    size_t m_writeIndex{0};
+    float m_currentPitch{0.0f};
+    size_t m_hopCounter{0};
     bool m_newPitch{false};
 
     [[nodiscard]] static size_t calculateBufferSize(const float sampleRate, const float minFreq) noexcept
