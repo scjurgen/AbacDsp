@@ -45,8 +45,8 @@ class SrPushConverter
         std::ranges::fill(m_buffer, 0);
     }
 
-    size_t fetchBlock(const float currentRatio, const float* in, const size_t numSamples, float* data,
-                      const size_t maxNumSamples) noexcept
+    [[nodiscard]] size_t fetchBlock(const float currentRatio, const float* in, const size_t numSamples, float* data,
+                                     const size_t maxNumSamples) noexcept
     {
         srData.ratio = std::clamp(currentRatio, 1.f / SrConvertMaxRatio, SrConvertMaxRatio);
         srData.dataOut = data;
@@ -123,11 +123,10 @@ class SrPushConverter
     template <size_t CHANNELS>
     void calcSincOutput(const float floatIncrement, const float inputIndex, const float scale, float* output) noexcept
     {
-        const auto increment = lrint(floatIncrement * DStepsFloat);
-        const auto startFilterIdx = lrint(inputIndex * floatIncrement * DStepsFloat);
+        const auto increment = std::lrint(floatIncrement * DStepsFloat);
+        const auto startFilterIdx = std::lrint(inputIndex * floatIncrement * DStepsFloat);
         const auto maxFilterIdx = m_sincFilter->halfCoeffWidth() * DSteps;
 
-        // Process left half
         auto numCoeff = (maxFilterIdx - startFilterIdx) / increment;
         auto filterIdx = startFilterIdx + numCoeff * increment;
         float left[CHANNELS]{};
@@ -143,7 +142,7 @@ class SrPushConverter
             m_sincFilter->processFilterHalf<CHANNELS, DSteps, 1, -1>(
                 filterIdx, m_buffer.data(), m_bufferCurrent - CHANNELS * numCoeff, increment, left);
         }
- filterIdx = increment - startFilterIdx;
+        filterIdx = increment - startFilterIdx;
         numCoeff = (maxFilterIdx - filterIdx) / increment;
         filterIdx = filterIdx + numCoeff * increment;
         float right[CHANNELS]{};
@@ -180,12 +179,12 @@ class SrPushConverter
         const auto mn = std::min(m_lastRatio, targetRatio);
         const auto count = mn < 1 ? cnt / mn : cnt;
 
-        halfFilterChannelWidth = MAXCHANNELS * (lrint(count) + 1);
+        halfFilterChannelWidth = MAXCHANNELS * (std::lrint(count) + 1);
 
         auto inputIndex = m_lastPosition;
         auto remainder = std::fmod(inputIndex, 1.f);
 
-        m_bufferCurrent = (m_bufferCurrent + MAXCHANNELS * lrint(inputIndex - remainder)) % m_bufferSize;
+        m_bufferCurrent = (m_bufferCurrent + MAXCHANNELS * std::lrint(inputIndex - remainder)) % m_bufferSize;
         inputIndex = remainder;
 
         static auto terminate = currentRatioReciprocal + 1e-10f;
@@ -217,9 +216,8 @@ class SrPushConverter
             calcSincOutput<MAXCHANNELS>(floatIncrement, inputIndex, floatIncrement / m_sincFilter->increment(),
                                         srData.dataOut + m_outGenerated);
 
-
             m_outGenerated += MAXCHANNELS;
-            if (m_outCount > 0 && fabs(m_lastRatio - targetRatio) > 1e-10)
+            if (m_outCount > 0 && std::abs(m_lastRatio - targetRatio) > 1e-10)
             {
                 currentRatio = m_lastRatio + m_outGenerated * (targetRatio - m_lastRatio) / m_outCount;
                 currentRatioReciprocal = 1.f / currentRatio;
@@ -228,7 +226,7 @@ class SrPushConverter
             inputIndex += currentRatioReciprocal;
 
             remainder = std::fmod(inputIndex, 1.0f);
-            m_bufferCurrent = (m_bufferCurrent + MAXCHANNELS * lrint(inputIndex - remainder)) % m_bufferSize;
+            m_bufferCurrent = (m_bufferCurrent + MAXCHANNELS * std::lrint(inputIndex - remainder)) % m_bufferSize;
             inputIndex = remainder;
         }
         m_lastPosition = inputIndex;
@@ -248,9 +246,9 @@ class SrPushConverter
         m_lastRatio = lastRatio;
     }
 
-    void* m_userCbData;
-    long m_savedFrames;
-    const float* m_savedData;
+    void* m_userCbData{nullptr};
+    long m_savedFrames{};
+    const float* m_savedData{nullptr};
 
     SrPushConverterData srData;
 

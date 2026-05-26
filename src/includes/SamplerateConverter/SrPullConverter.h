@@ -164,26 +164,21 @@ class SrPullConverter
 
         if (m_bufferCurrent == 0)
         {
-            // Initial state. Set up zeros at the start of the m_buffer and then load new data after that.
             len = m_bufferSize - 2 * halfFilterChannelWidth;
             m_bufferCurrent = m_bufferEnd = halfFilterChannelWidth;
         }
         else if (m_bufferEnd + halfFilterChannelWidth + numChannels + m_inCount < m_bufferSize)
         {
-            //  Load data at current end position
             len = std::max(m_bufferSize - m_bufferCurrent - halfFilterChannelWidth, 0);
         }
         else
         {
-            // Move data at end of m_buffer back to the start of m_buffer
             len = m_bufferEnd - m_bufferCurrent;
             std::copy(m_buffer.begin() + (m_bufferCurrent - halfFilterChannelWidth),
                       m_buffer.begin() + (m_bufferCurrent - halfFilterChannelWidth) + (halfFilterChannelWidth + len),
                       m_buffer.begin());
             m_bufferCurrent = halfFilterChannelWidth;
             m_bufferEnd = m_bufferCurrent + len;
-
-            // Now load data at current end of m_buffer.
             len = std::max(m_bufferSize - m_bufferCurrent - halfFilterChannelWidth, 0);
         }
 
@@ -201,10 +196,8 @@ class SrPullConverter
 
         if (m_usedCount == m_inCount && m_bufferEnd - m_bufferCurrent < 2 * halfFilterChannelWidth && end_of_input)
         {
-            // current m_buffer has been consumed and this is the last m_buffer.
             if (m_bufferSize - m_bufferEnd < halfFilterChannelWidth + 12)
             {
-                // If necessary, move data down to the start of the m_buffer
                 len = m_bufferEnd - m_bufferCurrent;
                 std::copy(m_buffer.begin() + (m_bufferCurrent - halfFilterChannelWidth),
                           m_buffer.begin() + (m_bufferCurrent - halfFilterChannelWidth) +
@@ -235,11 +228,10 @@ class SrPullConverter
     template <size_t CHANNELS>
     void calcSincOutput(const float floatIncrement, const float inputIndex, const float scale, float* output)
     {
-        const auto increment = lrint(floatIncrement * DStepsFloat);
-        const auto startFilterIdx = lrint(inputIndex * floatIncrement * DStepsFloat);
+        const auto increment = std::lrint(floatIncrement * DStepsFloat);
+        const auto startFilterIdx = std::lrint(inputIndex * floatIncrement * DStepsFloat);
         const auto maxFilterIdx = m_sincFilter->halfCoeffWidth() * DSteps;
 
-        // Process left half
         auto numCoeff = (maxFilterIdx - startFilterIdx) / increment;
         auto filterIdx = startFilterIdx + numCoeff * increment;
         float left[CHANNELS]{};
@@ -256,7 +248,6 @@ class SrPullConverter
                 filterIdx, m_buffer.data(), m_bufferCurrent - CHANNELS * numCoeff, increment, left);
         }
 
-        // Process right half
         filterIdx = increment - startFilterIdx;
         numCoeff = (maxFilterIdx - filterIdx) / increment;
         filterIdx = filterIdx + numCoeff * increment;
@@ -290,23 +281,20 @@ class SrPullConverter
         auto currentRatio = m_lastRatio;
         auto currentRatioReciprocal = 1.f / m_lastRatio;
         auto halfFilterChannelWidth{0u};
-        // Check the sample rate ratio wrt the m_buffer len.
         const auto cnt = (m_sincFilter->halfCoeffWidth() + 2.0f) / m_sincFilter->increment();
         const auto mn = std::min(m_lastRatio, targetRatio);
         const auto count = mn < 1 ? cnt / mn : cnt;
 
-        // Maximum coefficients on either side of center point.
-        halfFilterChannelWidth = numChannels * (lrint(count) + 1);
+        halfFilterChannelWidth = numChannels * (std::lrint(count) + 1);
 
         auto inputIndex = m_lastPosition;
         auto remainder = std::fmod(inputIndex, 1.f);
 
-        m_bufferCurrent = (m_bufferCurrent + numChannels * lrint(inputIndex - remainder)) % m_bufferSize;
+        m_bufferCurrent = (m_bufferCurrent + numChannels * std::lrint(inputIndex - remainder)) % m_bufferSize;
         inputIndex = remainder;
 
         static auto terminate = currentRatioReciprocal + 1e-10f;
 
-        // produce
         while (m_outGenerated < m_outCount)
         {
             size_t samplesAvailable = (m_bufferEnd - m_bufferCurrent + m_bufferSize) % m_bufferSize;
@@ -344,7 +332,7 @@ class SrPullConverter
             }
 
             m_outGenerated += numChannels;
-            if (m_outCount > 0 && fabs(m_lastRatio - targetRatio) > 1e-10)
+            if (m_outCount > 0 && std::abs(m_lastRatio - targetRatio) > 1e-10)
             {
                 // this needs a thorough check, looks like we need to preestimate the number of samples to be generated
                 // and substitute with m_outCount generated
@@ -357,12 +345,11 @@ class SrPullConverter
             inputIndex += currentRatioReciprocal;
 
             remainder = std::fmod(inputIndex, 1.0f);
-            m_bufferCurrent = (m_bufferCurrent + numChannels * lrint(inputIndex - remainder)) % m_bufferSize;
+            m_bufferCurrent = (m_bufferCurrent + numChannels * std::lrint(inputIndex - remainder)) % m_bufferSize;
             inputIndex = remainder;
         }
         m_lastPosition = inputIndex;
         m_lastRatio = targetRatio;
-        // m_lastRatio = currentRatio;
         srData.inputFramesConsumed = m_usedCount / numChannels;
         srData.outputFramesGenerated = m_outGenerated / numChannels;
         return true;
@@ -379,12 +366,11 @@ class SrPullConverter
     }
 
     DataCallback m_cb;
-    void* m_userCbData;
-    long m_savedFrames;
-    const float* m_savedData;
+    void* m_userCbData{nullptr};
+    long m_savedFrames{};
+    const float* m_savedData{nullptr};
 
-
-    SrConverterData srData;
+    SrConverterData srData{};
 
     float m_lastRatio{};
     float m_lastPosition{};
