@@ -58,6 +58,7 @@ cppSourceFilesFixed = [
     "inc/SpectrogramDisplay.h",
     "inc/VuMeter.h",
     "inc/WaveformMeter.h",
+    "inc/AppSettings.h",
     "impl/EffectBase.h",
 ]
 cppSourceFiles3rdParty = [
@@ -106,6 +107,7 @@ cppJuceFileVars = [
     "WIDGETS_DECL",
     "RESIZED_AREA",
     "TIMER_CALLBACKS",
+    "APPLY_THEME_CALLBACKS",
     "EXTRA_PRIVATE_METHODS",
     "EXTRA_PROCESSOR_METHODS",
     "ParamStructMembers",
@@ -152,6 +154,18 @@ def createGaugeCallbacks(m:dict) -> str:
     extra = m.get("extra_timer_callbacks", [])
     if extra:
         res += "\n" + "\n".join(extra) + "\n"
+    return res
+
+
+def createThemeCallbacks(m: dict) -> str:
+    res = ""
+    for item in m["ports-control"]:
+        if item["type"] == "gauge":
+            match item.get("gaugetype"):
+                case "spectrogram":
+                    res += f"""{item["symbol"]}Gauge.setGradientPreset(preset);\n"""
+                case "cpuload" | "levels" | "signal":
+                    res += f"""{item["symbol"]}Gauge.updateColors();\n"""
     return res
 
 
@@ -320,7 +334,7 @@ def createWidgetsDecl(m: dict) -> str:
                         case "cpuload":
                             res += f"CpuGauge {varname}{{}};\n"
                         case "spectrogram":
-                            res += f"SpectrogramDisplay {varname}{{CLutPreset}};\n"
+                            res += f"SpectrogramDisplay {varname}{{AppSettings::loadTheme()}};\n"
                         case "levels":
                             res += f"Gauge {varname}{{}};\n"
                         case "signal":
@@ -646,6 +660,7 @@ def createPackageFromJsonDict(m: dict):
         item["setter"] = "set"+item["keyUpper"]
 
     m["CPP"]["TIMER_CALLBACKS"] = createGaugeCallbacks(m)
+    m["CPP"]["APPLY_THEME_CALLBACKS"] = createThemeCallbacks(m)
     m["CPP"]["ADD_PARAMETER_LISTENERS"] = addParameterListeners(m)
     m["CPP"]["REMOVE_PARAMETER_LISTENERS"] = removeParameterListeners(m)
     m["CPP"]["CREATE_PARAMETER_LAYOUT"] = createParameterLayout(m)

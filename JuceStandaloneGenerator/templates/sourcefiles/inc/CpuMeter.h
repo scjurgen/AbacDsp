@@ -33,25 +33,15 @@ class CpuValue : public juce::Component
     void redrawValue(juce::Graphics& g, const juce::Rectangle<float>& bounds) const
     {
         constexpr size_t pad = 8;
-        constexpr float s = 4.0f;
-        constexpr uint32_t alpha = 0x88000000;
         const float height = bounds.getHeight() - 2 * pad;
         const float width = bounds.getWidth() - 2 * pad;
         const float channelWidth = width;
 
         juce::Rectangle<float> meterBounds(pad, pad, channelWidth, height);
 
-        // Create the gradient
-        juce::ColourGradient gradient(juce::Colour(alpha | 0x00FF00), meterBounds.getBottomLeft(),
-                                      juce::Colour(alpha | 0xFF0088), meterBounds.getTopLeft(), false);
-
-        // Add intermediate color stops
-        gradient.addColour(juce::jmap(70.0f - s, 0.0f, 100.0f, 0.0f, 1.0f), juce::Colour(alpha | 0x00FF00));
-        gradient.addColour(juce::jmap(70.0f + s, 0.0f, 100.0f, 0.0f, 1.0f), juce::Colour(alpha | 0xFFFF00));
-        gradient.addColour(juce::jmap(85.0f - s, 0.0f, 100.0f, 0.0f, 1.0f), juce::Colour(alpha | 0xFFFF00));
-        gradient.addColour(juce::jmap(85.0f + s, 0.0f, 100.0f, 0.0f, 1.0f), juce::Colour(alpha | 0xFF0000));
-
-        // Draw the full gradient rectangle
+        auto gradient = GuiConstants::instance().getGradient();
+        gradient.point1 = meterBounds.getBottomLeft();
+        gradient.point2 = meterBounds.getTopLeft();
         g.setGradientFill(gradient);
         g.fillRect(meterBounds);
 
@@ -59,7 +49,7 @@ class CpuValue : public juce::Component
         const float visibleHeight = juce::jmap(std::clamp(value, 0.f, 100.f), 0.f, 100.f, 0.0f, height);
 
         // Paint over the unused portion with the background color
-        g.setColour(juce::Colour(GuiConstants::instance().colors.bg_App));
+        g.setColour(juce::Colour(GuiConstants::instance().colors.background));
         g.fillRect(meterBounds.withBottom(height - visibleHeight));
     }
 
@@ -75,14 +65,14 @@ class CpuGauge : public juce::Component
     {
         addAndMakeVisible(gaugeBg);
         addAndMakeVisible(gaugeValue);
-        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey);
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.backgroundDark);
     }
 
     void paint(juce::Graphics& g) override
     {
         g.setColour(backgroundDarkGrey);
         g.fillRoundedRectangle(getLocalBounds().toFloat(), 3);
-        g.setColour(juce::Colours::white);
+        g.setColour(juce::Colour(GuiConstants::instance().colors.statusOutline));
         g.drawText(m_label, getLocalBounds().removeFromTop(20), juce::Justification::centred);
     }
 
@@ -102,6 +92,13 @@ class CpuGauge : public juce::Component
     void setLabelText(const juce::String& label)
     {
         m_label = label;
+        repaint();
+    }
+
+    void updateColors()
+    {
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.backgroundDark);
+        gaugeBg.updateColors();
         repaint();
     }
 

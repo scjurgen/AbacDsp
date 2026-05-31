@@ -1,16 +1,15 @@
 #pragma once
-#include "GuiConstants.h"
-
 #include <juce_gui_basics/juce_gui_basics.h>
-
 #include <vector>
+
+#include "GuiConstants.h"
 
 class GaugeBackground : public juce::Component
 {
   public:
     GaugeBackground()
     {
-        backgroundApp = juce::Colour(GuiConstants::instance().colors.bg_Component);
+        backgroundApp = juce::Colour(GuiConstants::instance().colors.backgroundComponent);
         setBufferedToImage(true);
     }
 
@@ -24,6 +23,12 @@ class GaugeBackground : public juce::Component
     void resized() override
     {
         GaugeArea = getLocalBounds().reduced(3);
+        repaint();
+    }
+
+    void updateColors()
+    {
+        backgroundApp = juce::Colour(GuiConstants::instance().colors.backgroundComponent);
         repaint();
     }
 
@@ -91,7 +96,7 @@ class GaugeValue : public juce::Component
             float linValue = std::clamp(values[i], -84.f, 12.f) + 84;
             float visibleHeight = juce::jmap(std::clamp(linValue, 0.f, 100.f), 0.f, 100.f, 0.0f, height);
 
-            g.setColour(juce::Colour(GuiConstants::instance().colors.bg_Component));
+            g.setColour(juce::Colour(GuiConstants::instance().colors.backgroundComponent));
             columnBounds.expand(1, 0);
             g.fillRect(columnBounds.withBottom(height - visibleHeight));
         }
@@ -138,7 +143,7 @@ class Gauge : public juce::Component
         addAndMakeVisible(gaugeBg);
         addAndMakeVisible(gaugeValue);
         addAndMakeVisible(gaugeIndicators);
-        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey);
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.backgroundDark);
     }
 
     void paint(juce::Graphics& g) override
@@ -183,6 +188,13 @@ class Gauge : public juce::Component
     void setLabelText(const juce::String& label)
     {
         m_label = label;
+        repaint();
+    }
+
+    void updateColors()
+    {
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.backgroundDark);
+        gaugeBg.updateColors();
         repaint();
     }
 

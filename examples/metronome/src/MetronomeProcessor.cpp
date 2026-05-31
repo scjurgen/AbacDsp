@@ -8,7 +8,7 @@
 #include "MetronomeEditor.h"
 
 juce::AudioProcessorEditor *AudioPluginAudioProcessor::createEditor() {
-  GuiConstants::setPreset(CLutPreset);
+  GuiConstants::setPreset(AppSettings::loadTheme());
   return new AudioPluginAudioProcessorEditor(*this, m_parameters);
 }
 

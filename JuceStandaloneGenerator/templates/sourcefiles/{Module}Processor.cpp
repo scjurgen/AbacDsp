@@ -4,13 +4,13 @@
  * Keep the file readonly
  */
 
-#include "/*MODULE_UPPER*/Processor.h"
 #include "/*MODULE_UPPER*/Editor.h"
+#include "/*MODULE_UPPER*/Processor.h"
 
 
 juce::AudioProcessorEditor* AudioPluginAudioProcessor::createEditor()
 {
-    GuiConstants::setPreset(CLutPreset);
+    GuiConstants::setPreset(AppSettings::loadTheme());
     return new AudioPluginAudioProcessorEditor(*this, m_parameters);
 }
 

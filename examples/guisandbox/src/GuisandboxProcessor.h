@@ -14,8 +14,6 @@
 #include "impl/FileIo.h"
 #include "impl/GuiSandBox.h"
 
-const auto CLutPreset{GuiConstants::GradientPreset::Heat};
-
 class AudioPluginAudioProcessor
     : public juce::AudioProcessor,
       public juce::AudioProcessorValueTreeState::Listener {
@@ -423,6 +421,10 @@ public:
 #pragma GCC diagnostic pop
 
   [[nodiscard]] float getCpuLoad() const { return m_cpuLoad.load(); }
+
+  [[nodiscard]] const std::vector<float> &getWaveDataToShow() {
+    return pluginRunner->visualizeWaveData();
+  }
 
   [[nodiscard]] std::pair<float, float> getInputDbLoad() const {
     return {m_inputDb[0].load(), m_inputDb[1].load()};
