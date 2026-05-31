@@ -26,6 +26,12 @@ class GaugeBackground : public juce::Component
         repaint();
     }
 
+    void updateColors()
+    {
+        backgroundApp = juce::Colour(GuiConstants::instance().colors.backgroundComponent);
+        repaint();
+    }
+
   private:
     juce::Rectangle<int> GaugeArea;
     juce::Colour backgroundApp;
@@ -182,6 +188,13 @@ class Gauge : public juce::Component
     void setLabelText(const juce::String& label)
     {
         m_label = label;
+        repaint();
+    }
+
+    void updateColors()
+    {
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.backgroundDark);
+        gaugeBg.updateColors();
         repaint();
     }
 

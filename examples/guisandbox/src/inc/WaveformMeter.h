@@ -120,6 +120,13 @@ class WaveformGauge : public juce::Component
         repaint();
     }
 
+    void updateColors()
+    {
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.backgroundDark);
+        gaugeBg.updateColors();
+        repaint();
+    }
+
   private:
     GaugeBackground gaugeBg;
     WaveformShow gaugeValue;

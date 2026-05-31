@@ -280,7 +280,10 @@ public:
     setLookAndFeel(m_laf.get());
     juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
     backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
+    cpuGauge.updateColors();
+    levelGauge.updateColors();
     spectrogramGauge.setGradientPreset(preset);
+    signalGauge.updateColors();
 
     repaint();
   }
