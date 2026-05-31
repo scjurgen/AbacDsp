@@ -225,9 +225,6 @@ public:
     }
 
     if (!m_boundsRestored && m_topLevel->isOnDesktop()) {
-      if (auto *rw = dynamic_cast<juce::ResizableWindow *>(m_topLevel)) {
-        rw->setUsingNativeTitleBar(true);
-      }
       const auto saved = AppSettings::loadWindowBounds(getWidth(), getHeight());
       m_topLevel->setTopLeftPosition(saved.getX(), saved.getY());
       m_boundsRestored = true;
@@ -255,6 +252,8 @@ public:
         themeMenu.addItem(i + 1, kThemeNames[static_cast<size_t>(i)]);
       }
       menu.addSubMenu("Theme", themeMenu);
+      menu.addSeparator();
+      menu.addItem(kAudioSettingsId, "Audio Settings");
     }
     return menu;
   }
@@ -272,6 +271,7 @@ public:
         });
     if (menuItemID >= 1 && menuItemID <= static_cast<int>(kPresets.size())) {
       applyTheme(kPresets[static_cast<size_t>(menuItemID - 1)]);
+    } else if (menuItemID == kAudioSettingsId) {
     }
   }
 
@@ -289,6 +289,8 @@ public:
   }
 
 private:
+  static constexpr int kAudioSettingsId = 100;
+
   AudioPluginAudioProcessor &processorRef;
   juce::AudioProcessorValueTreeState &valueTreeState;
   std::unique_ptr<GuiLookAndFeel> m_laf;
