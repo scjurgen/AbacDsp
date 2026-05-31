@@ -1,7 +1,7 @@
 #pragma once
 
-#include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_graphics/juce_graphics.h>
+#include <juce_gui_basics/juce_gui_basics.h>
 
 #include "Analysis/Spectrogram.h"
 #include "GuiConstants.h"
@@ -30,6 +30,12 @@ class SpectrogramBackground : public juce::Component
 
     void resized() override
     {
+        repaint();
+    }
+
+    void updateColors()
+    {
+        backgroundApp = juce::Colour(GuiConstants::instance().colors.bg_App);
         repaint();
     }
 
@@ -188,6 +194,13 @@ class SpectrogramOverlay : public juce::Component
         }
     }
 
+    void updateColors()
+    {
+        labelColour = juce::Colour(GuiConstants::instance().colors.statusOutline);
+        labelBgColour = juce::Colour(GuiConstants::instance().colors.bg_App).withAlpha(0.55f);
+        repaint();
+    }
+
   private:
     float m_sampleRate{0.f};
     unsigned m_fftLength{0};
@@ -241,6 +254,10 @@ class SpectrogramDisplay : public juce::Component
     void setGradientPreset(GuiConstants::GradientPreset preset)
     {
         spectrogramImage.setGradientPreset(preset);
+        spectrogramBg.updateColors();
+        spectrogramOverlay.updateColors();
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey);
+        repaint();
     }
 
   private:

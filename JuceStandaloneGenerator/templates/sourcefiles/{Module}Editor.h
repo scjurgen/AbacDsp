@@ -23,7 +23,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         , backgroundApp(juce::Colour(GuiConstants::instance().colors.bg_App))
         , m_menuBar(this)
     {
-        setLookAndFeel(&m_laf);
+        m_laf = std::make_unique<GuiLookAndFeel>();
+        setLookAndFeel(m_laf.get());
         addAndMakeVisible(m_menuBar);
         initWidgets();
         setResizable(true, true);
@@ -145,13 +146,23 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         });
         if (menuItemID >= 1 && menuItemID <= static_cast<int>(kPresets.size()))
         {
-            AppSettings::saveTheme(kPresets[static_cast<size_t>(menuItemID - 1)]);
-            juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, "Theme",
-                                                   "Theme will take effect after restart.");
+            applyTheme(kPresets[static_cast<size_t>(menuItemID - 1)]);
         }
         else if (menuItemID == kAudioSettingsId)
         {
         }
+    }
+
+    void applyTheme(GuiConstants::GradientPreset preset)
+    {
+        AppSettings::saveTheme(preset);
+        GuiConstants::setPreset(preset);
+        setLookAndFeel(nullptr);
+        m_laf = std::make_unique<GuiLookAndFeel>();
+        setLookAndFeel(m_laf.get());
+        backgroundApp = juce::Colour(GuiConstants::instance().colors.bg_App);
+        /*APPLY_THEME_CALLBACKS*/
+        repaint();
     }
 
     /*EXTRA_PRIVATE_METHODS*/
@@ -160,7 +171,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
     AudioPluginAudioProcessor& processorRef;
     juce::AudioProcessorValueTreeState& valueTreeState;
-    GuiLookAndFeel m_laf;
+    std::unique_ptr<GuiLookAndFeel> m_laf;
     juce::Colour backgroundApp;
     juce::MenuBarComponent m_menuBar;
     juce::Component* m_topLevel{nullptr};

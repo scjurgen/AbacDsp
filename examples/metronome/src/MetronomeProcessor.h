@@ -14,8 +14,6 @@
 #include "impl/FileIo.h"
 #include "impl/MetronomeImpl.h"
 
-const auto CLutPreset{GuiConstants::GradientPreset::Heat};
-
 class AudioPluginAudioProcessor
     : public juce::AudioProcessor,
       public juce::AudioProcessorValueTreeState::Listener {

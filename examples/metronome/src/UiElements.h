@@ -14,6 +14,7 @@
 #include "inc/SpectrogramDisplay.h"
 #include "inc/VuMeter.h"
 #include "inc/WaveformMeter.h"
+#include "inc/AppSettings.h"
 #include "impl/EffectBase.h"
 #include "inc/MetronomeWaveDisplay.h"
 
