@@ -101,7 +101,7 @@ class MetronomeWaveDisplay : public juce::Component
         // Time grid lines and ms labels
         const float windowMs = std::max(leftWindowMs, rightWindowMs);
         const float gridMs = windowMs > 300.f ? 200.f : windowMs > 150.f ? 100.f : windowMs > 60.f ? 50.f : 25.f;
-        g.setFont(juce::Font(10.f));
+        g.setFont(juce::Font(juce::FontOptions(10.f)));
         for (float ms = -leftWindowMs; ms <= rightWindowMs + 0.1f; ms += gridMs)
         {
             const float x = cx + ms * samplesPerMs * pxPerSample;
@@ -169,7 +169,7 @@ class MetronomeWaveDisplay : public juce::Component
         if (m_label.isNotEmpty())
         {
             g.setColour(juce::Colour(c.cols[7]).withAlpha(0.75f));
-            g.setFont(juce::Font(11.f));
+            g.setFont(juce::Font(juce::FontOptions(11.f)));
             g.drawText(m_label, getLocalBounds().removeFromTop(static_cast<int>(kTitleH + kPad)),
                        juce::Justification::centred);
         }

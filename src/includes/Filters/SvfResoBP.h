@@ -57,17 +57,18 @@ class ResonanceCompensation
     [[nodiscard]] static float compensate(const float index, const float time) noexcept
     {
         constexpr float logFirst = 10.f;
-        const auto col = std::clamp<size_t>(std::log2(time) + logFirst, 0, m_times.size() - 1);
+        const auto col =
+            static_cast<size_t>(std::clamp(std::log2(time) + logFirst, 0.f, static_cast<float>(m_times.size() - 1)));
         const auto col_frac = std::clamp((time - m_times[col]) / (m_times[col + 1] - m_times[col]), 0.0f, 1.0f);
 
         const auto row = static_cast<int>(std::floor(index / 12));
         const auto row_frac = std::clamp(index / 12.f - static_cast<float>(row), 0.0f, 1.0f);
 
         // Bilinear interpolation in log-space
-        const auto v00 = (m_lut[row][col]);
-        const auto v10 = (m_lut[row + 1][col]);
-        const auto v01 = (m_lut[row][col + 1]);
-        const auto v11 = (m_lut[row + 1][col + 1]);
+        const auto v00 = m_lut[static_cast<size_t>(row)][col];
+        const auto v10 = m_lut[static_cast<size_t>(row + 1)][col];
+        const auto v01 = m_lut[static_cast<size_t>(row)][col + 1];
+        const auto v11 = m_lut[static_cast<size_t>(row + 1)][col + 1];
 
         const auto v0 = std::lerp(v00, v10, row_frac);
         const auto v1 = std::lerp(v01, v11, row_frac);

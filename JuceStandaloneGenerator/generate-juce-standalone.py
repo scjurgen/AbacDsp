@@ -200,7 +200,7 @@ def createParameterChanged(m:dict) -> str:
                 case 'dial':
                     res += f"""{{"{item['symbol']}", [](const AudioPluginAudioProcessor& p, const float v) {{ p.pluginRunner->{item['setter']}(v); }}}},\n"""
                 case 'drop':
-                    res += f"""{{"{item['symbol']}", [](const AudioPluginAudioProcessor& p, const float v) {{ p.pluginRunner->{item['setter']}(static_cast<size_t>(v)); }}}},\n"""
+                    res += f"""{{"{item['symbol']}", [](const AudioPluginAudioProcessor& p, const float v) {{ p.pluginRunner->{item['setter']}(static_cast<int>(v)); }}}},\n"""
                 case 'switch':
                      res += f"""{{"{item['symbol']}", [](const AudioPluginAudioProcessor& p, const float v) {{ p.pluginRunner->{item['setter']}(static_cast<bool>(v)); }}}},\n"""
     return res

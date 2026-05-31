@@ -189,7 +189,8 @@ class MetronomeImpl final : public EffectBase
     [[nodiscard]] const std::vector<float>& visualizeWaveData()
     {
         const size_t windowSize = m_preWindow + m_postWindow;
-        m_preparedWavedata.assign(m_visualWavedata.begin(), m_visualWavedata.begin() + windowSize);
+        m_preparedWavedata.assign(m_visualWavedata.begin(),
+                                  std::next(m_visualWavedata.begin(), static_cast<std::ptrdiff_t>(windowSize)));
         return m_preparedWavedata;
     }
 
