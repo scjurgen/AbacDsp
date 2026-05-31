@@ -11,7 +11,9 @@
 
 template <size_t BlockSize> class GenericImpl final : public EffectBase {
 public:
-  explicit GenericImpl(const float sampleRate) : EffectBase(sampleRate) {}
+  explicit GenericImpl(const float sampleRate) : EffectBase(sampleRate) {
+    m_visualWavedata.resize(6000);
+  }
   void setOnOff(const bool value) { m_onOff = value; }
   void setInput(const float value) { m_input = std::pow(10.f, value / 20.f); }
   void setModulationDepth(const float value) { m_modulationDepth = value; }
@@ -26,6 +28,19 @@ public:
       out(i, 0) = in(i, 0);
       out(i, 1) = in(i, 1);
     }
+
+    for (size_t i = 0; i < BlockSize; ++i) {
+      m_visualWavedata[m_currentSample] = out(i, 0) + out(i, 1);
+      m_currentSample++;
+      if (m_currentSample >= m_visualWavedata.size()) {
+        m_currentSample = 0;
+      }
+    }
+  }
+  const std::vector<float> &visualizeWaveData() {
+    m_preparedWavedata.resize(m_visualWavedata.size());
+    m_preparedWavedata = m_visualWavedata;
+    return m_preparedWavedata;
   }
 
 private:
@@ -36,4 +51,8 @@ private:
   float m_density{};
   float m_threshold{};
   float m_knee{};
+
+  std::vector<float> m_visualWavedata;
+  std::vector<float> m_preparedWavedata;
+  size_t m_currentSample = 0;
 };

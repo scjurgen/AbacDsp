@@ -58,6 +58,7 @@ cppSourceFilesFixed = [
     "inc/SpectrogramDisplay.h",
     "inc/VuMeter.h",
     "inc/WaveformMeter.h",
+    "inc/AppSettings.h",
     "impl/EffectBase.h",
 ]
 cppSourceFiles3rdParty = [
@@ -320,7 +321,7 @@ def createWidgetsDecl(m: dict) -> str:
                         case "cpuload":
                             res += f"CpuGauge {varname}{{}};\n"
                         case "spectrogram":
-                            res += f"SpectrogramDisplay {varname}{{CLutPreset}};\n"
+                            res += f"SpectrogramDisplay {varname}{{AppSettings::loadTheme()}};\n"
                         case "levels":
                             res += f"Gauge {varname}{{}};\n"
                         case "signal":

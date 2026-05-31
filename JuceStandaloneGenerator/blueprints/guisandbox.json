@@ -36,12 +36,14 @@
     {"short": "DIV2", "type":"label", "display": "DropIt!", "symbol": "div2"},
     {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
     {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
-    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"}
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"},
+    {"short": "SIG",  "type": "gauge",  "gaugetype": "signal",       "display": "Beat",       "symbol": "signal"}
+
   ],
   "layout": {
     "WINDOW_WIDTH": "1200",
     "WINDOW_HEIGHT": "800",
     "type": "||||",
-    "composition": "C=(1:2:2:8) A1=(LVL*2400, CPU*2400) A2=(SUB, SUBP, ONF, MIX, DIV2, DPT, KNE) A3=(INP, DIV1, DNS,THR) A4=(FFT*2000))"
+    "composition": "C=(1:2:2:8) A1=(LVL*2400, CPU*2400) A2=(SUB, SUBP, ONF, MIX, DIV2, DPT, KNE) A3=(INP, DIV1, DNS,THR) A4=(FFT, SIG))"
   }
 }

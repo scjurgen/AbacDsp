@@ -14,8 +14,6 @@
 #include "UiElements.h"
 #include "impl/FileIo.h"
 
-const auto CLutPreset{GuiConstants::GradientPreset::Heat};
-
 class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::AudioProcessorValueTreeState::Listener
 {
   public:

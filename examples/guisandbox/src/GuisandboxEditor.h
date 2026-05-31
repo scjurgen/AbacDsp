@@ -10,33 +10,45 @@
 
 //==============================================================================
 class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
-                                        juce::Timer {
+                                        juce::Timer,
+                                        juce::MenuBarModel,
+                                        juce::ComponentListener {
 public:
   explicit AudioPluginAudioProcessorEditor(
       AudioPluginAudioProcessor &p, juce::AudioProcessorValueTreeState &vts)
       : AudioProcessorEditor(&p), processorRef(p), valueTreeState(vts),
-        backgroundApp(juce::Colour(GuiConstants::instance().colors.bg_App)) {
+        backgroundApp(juce::Colour(GuiConstants::instance().colors.bg_App)),
+        m_menuBar(this) {
     setLookAndFeel(&m_laf);
+    addAndMakeVisible(m_menuBar);
     initWidgets();
     setResizable(true, true);
     setResizeLimits(GuiConstants::instance().init.WindowWidth,
                     GuiConstants::instance().init.WindowHeight, 4000, 3000);
-    setSize(GuiConstants::instance().init.WindowWidth,
-            GuiConstants::instance().init.WindowHeight);
+    const auto saved = AppSettings::loadWindowBounds(
+        GuiConstants::instance().init.WindowWidth,
+        GuiConstants::instance().init.WindowHeight);
+    setSize(saved.getWidth(), saved.getHeight());
     startTimerHz(GuiConstants::instance().init.TimerHertz);
   }
 
   ~AudioPluginAudioProcessorEditor() override {
+    if (m_topLevel != nullptr) {
+      m_topLevel->removeComponentListener(this);
+    }
     stopTimer();
     setLookAndFeel(nullptr);
   }
 
   void paint(juce::Graphics &g) override { g.fillAll(backgroundApp); }
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wfloat-conversion"
   void resized() override {
-    auto area =
-        getLocalBounds().reduced(static_cast<int>(Constants::Margins::big));
+    auto area = getLocalBounds();
+    m_menuBar.setBounds(
+        area.removeFromTop(getLookAndFeel().getDefaultMenuBarHeight()));
+    area = area.reduced(static_cast<int>(Constants::Margins::big));
 
     // auto generated
     // const juce::FlexItem::Margin knobMargin =
@@ -124,8 +136,10 @@ public:
       box.flexDirection = juce::FlexBox::Direction::column;
       box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
       box.items.add(juce::FlexItem(spectrogramGauge)
-                        .withHeight(2000)
+                        .withFlex(1)
                         .withMargin(knobMarginSmall));
+      box.items.add(
+          juce::FlexItem(signalGauge).withFlex(1).withMargin(knobMarginSmall));
       box.performLayout(areas[3].toFloat());
     }
   }
@@ -137,6 +151,7 @@ public:
       levelGauge.update(processorRef.getInputDbLoad(),
                         processorRef.getOutputDbLoad());
       spectrogramGauge.update(processorRef.getSpectrogram());
+      signalGauge.update(processorRef.getWaveDataToShow());
     }
   }
 
@@ -188,13 +203,88 @@ public:
     levelGauge.setLabelText(juce::String::fromUTF8("Level"));
     addAndMakeVisible(spectrogramGauge);
     spectrogramGauge.setLabelText(juce::String::fromUTF8("Spectrogram"));
+    addAndMakeVisible(signalGauge);
+    signalGauge.setLabelText(juce::String::fromUTF8("Beat"));
+  }
+
+  void parentHierarchyChanged() override {
+    auto *top = getTopLevelComponent();
+    if (top == this) {
+      return;
+    }
+
+    if (m_topLevel != top) {
+      if (m_topLevel != nullptr) {
+        m_topLevel->removeComponentListener(this);
+      }
+      m_topLevel = top;
+      m_topLevel->addComponentListener(this);
+    }
+
+    if (!m_boundsRestored && m_topLevel->isOnDesktop()) {
+      const auto saved = AppSettings::loadWindowBounds(getWidth(), getHeight());
+      m_topLevel->setTopLeftPosition(saved.getX(), saved.getY());
+      m_boundsRestored = true;
+    }
+  }
+
+  void componentMovedOrResized(juce::Component &component, bool /*wasMoved*/,
+                               bool /*wasResized*/) override {
+    if (m_boundsRestored) {
+      AppSettings::saveWindowBounds(component.getScreenBounds());
+    }
+  }
+
+  juce::StringArray getMenuBarNames() override { return {"Settings"}; }
+
+  juce::PopupMenu getMenuForIndex(int menuIndex,
+                                  const juce::String &) override {
+    juce::PopupMenu menu;
+    if (menuIndex == 0) {
+      static constexpr auto kThemeNames =
+          std::to_array<const char *>({"Classic", "Viridis", "Inferno",
+                                       "Grayscale", "Heat", "Ink", "Teal"});
+      juce::PopupMenu themeMenu;
+      for (int i = 0; i < static_cast<int>(kThemeNames.size()); ++i) {
+        themeMenu.addItem(i + 1, kThemeNames[static_cast<size_t>(i)]);
+      }
+      menu.addSubMenu("Theme", themeMenu);
+      menu.addSeparator();
+      menu.addItem(kAudioSettingsId, "Audio Settings");
+    }
+    return menu;
+  }
+
+  void menuItemSelected(int menuItemID, int /*topLevelMenuIndex*/) override {
+    static constexpr auto kPresets =
+        std::to_array<GuiConstants::GradientPreset>({
+            GuiConstants::GradientPreset::Classic,
+            GuiConstants::GradientPreset::Viridis,
+            GuiConstants::GradientPreset::Inferno,
+            GuiConstants::GradientPreset::Grayscale,
+            GuiConstants::GradientPreset::Heat,
+            GuiConstants::GradientPreset::Ink,
+            GuiConstants::GradientPreset::Teal,
+        });
+    if (menuItemID >= 1 && menuItemID <= static_cast<int>(kPresets.size())) {
+      AppSettings::saveTheme(kPresets[static_cast<size_t>(menuItemID - 1)]);
+      juce::AlertWindow::showMessageBoxAsync(
+          juce::MessageBoxIconType::InfoIcon, "Theme",
+          "Theme will take effect after restart.");
+    } else if (menuItemID == kAudioSettingsId) {
+    }
   }
 
 private:
+  static constexpr int kAudioSettingsId = 100;
+
   AudioPluginAudioProcessor &processorRef;
   juce::AudioProcessorValueTreeState &valueTreeState;
   GuiLookAndFeel m_laf;
   juce::Colour backgroundApp;
+  juce::MenuBarComponent m_menuBar;
+  juce::Component *m_topLevel{nullptr};
+  bool m_boundsRestored{false};
 
   juce::ComboBox patchDrop{};
   std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>
@@ -215,7 +305,8 @@ private:
   juce::Label div2Label{};
   CpuGauge cpuGauge{};
   Gauge levelGauge{};
-  SpectrogramDisplay spectrogramGauge{CLutPreset};
+  SpectrogramDisplay spectrogramGauge{AppSettings::loadTheme()};
+  WaveformGauge signalGauge{};
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
 };
