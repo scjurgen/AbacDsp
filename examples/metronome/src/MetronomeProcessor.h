@@ -440,6 +440,16 @@ public:
     static const std::vector<size_t> empty{};
     return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty;
   }
+  [[nodiscard]] int getBarBeats() const noexcept {
+    return pluginRunner ? pluginRunner->getBarBeats() : 4;
+  }
+  [[nodiscard]] float getBarPhase() const noexcept {
+    return pluginRunner ? pluginRunner->getBarPhase() : 0.f;
+  }
+  [[nodiscard]] AbacDsp::SpectrumImageSet getInputSpectrogram() const {
+    return pluginRunner ? pluginRunner->getSpectrogramData()
+                        : AbacDsp::SpectrumImageSet{};
+  }
 
   [[nodiscard]] bool hasRunner() const { return pluginRunner.get() != nullptr; }
   float m_maxValue{0.f};

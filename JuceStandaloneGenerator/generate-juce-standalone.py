@@ -162,7 +162,7 @@ def createThemeCallbacks(m: dict) -> str:
     for item in m["ports-control"]:
         if item["type"] == "gauge":
             match item.get("gaugetype"):
-                case "spectrogram":
+                case "spectrogram" | "iris":
                     res += f"""{item["symbol"]}Gauge.setGradientPreset(preset);\n"""
                 case "cpuload" | "levels" | "signal":
                     res += f"""{item["symbol"]}Gauge.updateColors();\n"""

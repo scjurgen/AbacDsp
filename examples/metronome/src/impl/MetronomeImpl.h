@@ -6,6 +6,7 @@
 #include <string_view>
 #include <vector>
 
+#include "Analysis/Spectrogram.h"
 #include "Audio/AudioBuffer.h"
 #include "EffectBase.h"
 #include "Filters/SvfResoBP.h"
@@ -65,6 +66,7 @@ class MetronomeImpl final : public EffectBase
 
         m_samplesPerBeat = beatsToSamples(m_bpm);
         m_visualWavedata.resize(kVisualBufferSize, 0.f);
+        m_inputSpectrogram.setSampleRate(sampleRate);
         updateWindowSizes();
         updateSubPositions();
     }
@@ -138,6 +140,13 @@ class MetronomeImpl final : public EffectBase
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
+        std::array<float, BlockSize> inMono{};
+        for (size_t i = 0; i < BlockSize; ++i)
+        {
+            inMono[i] = in(i, 0);
+        }
+        m_inputSpectrogram.processBlock(std::span<const float>{inMono});
+
         const size_t preWindow = m_preWindow;
         const size_t postWindow = m_postWindow;
 
@@ -197,6 +206,31 @@ class MetronomeImpl final : public EffectBase
     [[nodiscard]] size_t getBeatIndex() const noexcept
     {
         return m_preWindow;
+    }
+
+    [[nodiscard]] AbacDsp::SpectrumImageSet getSpectrogramData() const
+    {
+        return m_inputSpectrogram.getImageSet();
+    }
+
+    [[nodiscard]] int getBarBeats() const noexcept
+    {
+        return static_cast<int>(kPresets[static_cast<size_t>(m_presetIndex)].barBeats);
+    }
+
+    [[nodiscard]] float getBarPhase() const noexcept
+    {
+        if (m_samplesPerBeat == 0)
+        {
+            return 0.f;
+        }
+        const int barBeats = getBarBeats();
+        if (barBeats == 0)
+        {
+            return 0.f;
+        }
+        const float beatPhase = static_cast<float>(m_beatSamplePos) / static_cast<float>(m_samplesPerBeat);
+        return (static_cast<float>(m_barBeatCount) + beatPhase) / static_cast<float>(barBeats);
     }
 
   private:
@@ -377,4 +411,5 @@ class MetronomeImpl final : public EffectBase
 
     std::vector<float> m_visualWavedata;
     std::vector<float> m_preparedWavedata;
+    AbacDsp::SimpleSpectrogram m_inputSpectrogram;
 };

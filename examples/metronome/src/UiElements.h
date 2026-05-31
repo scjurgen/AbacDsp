@@ -17,5 +17,6 @@
 #include "inc/AppSettings.h"
 #include "impl/EffectBase.h"
 #include "inc/CircularBeatDisplay.h"
+#include "inc/CircularSpectrogramDisplay.h"
 
 #include "inc/LookAndFeel.h"

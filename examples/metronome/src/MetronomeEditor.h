@@ -114,6 +114,8 @@ public:
       box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
       box.items.add(
           juce::FlexItem(signalGauge).withFlex(1).withMargin(knobMarginSmall));
+      box.items.add(
+          juce::FlexItem(irisGauge).withFlex(2).withMargin(knobMarginSmall));
       box.performLayout(areas[1].toFloat());
     }
   }
@@ -133,6 +135,13 @@ public:
         signalGauge.setBeatIndex(processorRef.getWaveDataBeatIndex());
         signalGauge.setSubdivisionPositions(
             processorRef.getSubdivisionPositions());
+        irisGauge.setSampleRate(sr);
+        irisGauge.setSamplesPerBeat(spb);
+        irisGauge.setBarBeats(processorRef.getBarBeats());
+        irisGauge.setBarPhase(processorRef.getBarPhase());
+        irisGauge.setSubdivisionPositions(
+            processorRef.getSubdivisionPositions());
+        irisGauge.update(processorRef.getInputSpectrogram());
       }
     }
   }
@@ -180,6 +189,8 @@ public:
     swingRatioDial.setLabelText(juce::String::fromUTF8("Swing"));
     addAndMakeVisible(signalGauge);
     signalGauge.setLabelText(juce::String::fromUTF8("Beat"));
+    addAndMakeVisible(irisGauge);
+    irisGauge.setLabelText(juce::String::fromUTF8("Spectrum Iris"));
   }
 
   void parentHierarchyChanged() override {
@@ -253,6 +264,7 @@ public:
     juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
     backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
     signalGauge.updateColors();
+    irisGauge.setGradientPreset(preset);
 
     repaint();
   }
@@ -290,6 +302,7 @@ private:
       presetDropAttachment;
   CustomRotaryDial swingRatioDial{this};
   CircularBeatDisplay signalGauge{};
+  CircularSpectrogramDisplay irisGauge{};
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
 };

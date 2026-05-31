@@ -25,16 +25,18 @@
     {"short": "SWG",  "type": "dial",   "display": "Swing",          "symbol": "swingRatio",  "default": 1.5, "range": [1.0, 2.0, 0.01, 1, false],  "precision": 2, "unit": "",
      "visible_when": "processorRef.presetHasSwing(presetDrop.getSelectedItemIndex())",
      "depends_on": "preset"},
-    {"short": "SIG",  "type": "gauge",  "gaugetype": "signal",       "display": "Beat",       "symbol": "signal",     "customtype": "CircularBeatDisplay"}
+    {"short": "SIG",  "type": "gauge",  "gaugetype": "signal",       "display": "Beat",       "symbol": "signal",     "customtype": "CircularBeatDisplay"},
+    {"short": "IRIS", "type": "gauge",  "gaugetype": "iris",         "display": "Spectrum Iris", "symbol": "iris", "customtype": "CircularSpectrogramDisplay"}
   ],
   "layout": {
     "WINDOW_WIDTH": "960",
     "WINDOW_HEIGHT": "660",
     "type": "||",
-    "composition": "C=(1:5) A1=(SUB, PRE, DRP, SWG, ONF, BPM,SVOL, MVOL, IVOL) A2=(SIG%1)"
+    "composition": "C=(1:5) A1=(SUB, PRE, DRP, SWG, ONF, BPM, SVOL, MVOL, IVOL) A2=(SIG%1, IRIS%2)"
   },
   "extra_ui_includes": [
-    "inc/CircularBeatDisplay.h"
+    "inc/CircularBeatDisplay.h",
+    "inc/CircularSpectrogramDisplay.h"
   ],
   "extra_timer_callbacks": [
     "{ const float sr = static_cast<float>(processorRef.getSampleRate());",
@@ -43,12 +45,21 @@
     "signalGauge.setSampleRate(sr);",
     "signalGauge.setSamplesPerBeat(spb);",
     "signalGauge.setBeatIndex(processorRef.getWaveDataBeatIndex());",
-    "signalGauge.setSubdivisionPositions(processorRef.getSubdivisionPositions()); }"
+    "signalGauge.setSubdivisionPositions(processorRef.getSubdivisionPositions());",
+    "irisGauge.setSampleRate(sr);",
+    "irisGauge.setSamplesPerBeat(spb);",
+    "irisGauge.setBarBeats(processorRef.getBarBeats());",
+    "irisGauge.setBarPhase(processorRef.getBarPhase());",
+    "irisGauge.setSubdivisionPositions(processorRef.getSubdivisionPositions());",
+    "irisGauge.update(processorRef.getInputSpectrogram()); }"
   ],
   "extra_processor_methods": [
     "[[nodiscard]] bool presetHasSwing(int idx) const noexcept { return pluginRunner && pluginRunner->isPresetSwing(idx); }",
     "[[nodiscard]] size_t getWaveDataBeatIndex() const noexcept { return pluginRunner ? pluginRunner->getBeatIndex() : 0u; }",
-    "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }"
+    "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }",
+    "[[nodiscard]] int getBarBeats() const noexcept { return pluginRunner ? pluginRunner->getBarBeats() : 4; }",
+    "[[nodiscard]] float getBarPhase() const noexcept { return pluginRunner ? pluginRunner->getBarPhase() : 0.f; }",
+    "[[nodiscard]] AbacDsp::SpectrumImageSet getInputSpectrogram() const { return pluginRunner ? pluginRunner->getSpectrogramData() : AbacDsp::SpectrumImageSet{}; }"
   ],
   "protected_files": [],
   "CPP":
