@@ -59,7 +59,7 @@ class CpuValue : public juce::Component
         const float visibleHeight = juce::jmap(std::clamp(value, 0.f, 100.f), 0.f, 100.f, 0.0f, height);
 
         // Paint over the unused portion with the background color
-        g.setColour(juce::Colour(GuiConstants::instance().colors.bg_App));
+        g.setColour(juce::Colour(GuiConstants::instance().colors.background));
         g.fillRect(meterBounds.withBottom(height - visibleHeight));
     }
 
@@ -75,7 +75,7 @@ class CpuGauge : public juce::Component
     {
         addAndMakeVisible(gaugeBg);
         addAndMakeVisible(gaugeValue);
-        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey);
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.backgroundDark);
     }
 
     void paint(juce::Graphics& g) override

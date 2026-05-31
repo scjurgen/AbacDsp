@@ -17,7 +17,7 @@ public:
   explicit AudioPluginAudioProcessorEditor(
       AudioPluginAudioProcessor &p, juce::AudioProcessorValueTreeState &vts)
       : AudioProcessorEditor(&p), processorRef(p), valueTreeState(vts),
-        backgroundApp(juce::Colour(GuiConstants::instance().colors.bg_App)),
+        backgroundApp(juce::Colour(GuiConstants::instance().colors.background)),
         m_menuBar(this) {
     m_laf = std::make_unique<GuiLookAndFeel>();
     setLookAndFeel(m_laf.get());
@@ -279,7 +279,7 @@ public:
     setLookAndFeel(nullptr);
     m_laf = std::make_unique<GuiLookAndFeel>();
     setLookAndFeel(m_laf.get());
-    backgroundApp = juce::Colour(GuiConstants::instance().colors.bg_App);
+    backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
     spectrogramGauge.setGradientPreset(preset);
 
     repaint();

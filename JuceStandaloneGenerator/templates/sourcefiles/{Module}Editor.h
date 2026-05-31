@@ -20,7 +20,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         : AudioProcessorEditor(&p)
         , processorRef(p)
         , valueTreeState(vts)
-        , backgroundApp(juce::Colour(GuiConstants::instance().colors.bg_App))
+        , backgroundApp(juce::Colour(GuiConstants::instance().colors.background))
         , m_menuBar(this)
     {
         m_laf = std::make_unique<GuiLookAndFeel>();
@@ -160,7 +160,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         setLookAndFeel(nullptr);
         m_laf = std::make_unique<GuiLookAndFeel>();
         setLookAndFeel(m_laf.get());
-        backgroundApp = juce::Colour(GuiConstants::instance().colors.bg_App);
+        backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
         /*APPLY_THEME_CALLBACKS*/
         repaint();
     }

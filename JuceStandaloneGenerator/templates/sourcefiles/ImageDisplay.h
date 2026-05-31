@@ -8,7 +8,7 @@ class ImageDisplay : public juce::Component
   public:
     ImageDisplay()
     {
-        backgroundDarkGrey = juce::Colour(Constants::Colors::bg_DarkGrey);
+        backgroundDarkGrey = juce::Colour(Constants::Colors::backgroundDark);
     }
 
     void paint(juce::Graphics& g) override

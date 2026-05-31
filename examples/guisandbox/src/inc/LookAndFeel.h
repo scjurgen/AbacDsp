@@ -7,11 +7,11 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
   private:
     const juce::String mainFont{"Futura"};
     const float fontHeight{GuiConstants::instance().text.fontHeight};
-    juce::Colour backgroundDarkGrey, backgroundDarkGreyDisabled;
-    juce::Colour backgroundMidGrey;
+    juce::Colour backgroundDark, backgroundDarkDisabled;
+    juce::Colour backgroundMid;
     juce::Colour statusOutline, statusOutlineDisabled;
-    juce::Colour gradientDarkGrey, gradientDarkGreyDisabled;
-    juce::Colour knobGradStart, knobGradCenter, knobGradEnd;
+    juce::Colour gradientDark, gradientDarkDisabled;
+    juce::Colour knobGradientStart, knobGradientCenter, knobGradientEnd;
     const juce::Font mainFontDefinition;
     float comboWidthFactor_{0.95f};
 
@@ -19,17 +19,17 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
     GuiLookAndFeel()
         : mainFontDefinition(juce::FontOptions(mainFont, fontHeight, juce::Font::plain))
     {
-        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey);
-        backgroundDarkGreyDisabled = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey).withAlpha(0.35f);
-        backgroundMidGrey = juce::Colour(GuiConstants::instance().colors.bg_MidGrey);
+        backgroundDark = juce::Colour(GuiConstants::instance().colors.backgroundDark);
+        backgroundDarkDisabled = juce::Colour(GuiConstants::instance().colors.backgroundDark).withAlpha(0.35f);
+        backgroundMid = juce::Colour(GuiConstants::instance().colors.backgroundMid);
         statusOutline = juce::Colour(GuiConstants::instance().colors.statusOutline);
         statusOutlineDisabled = juce::Colour(GuiConstants::instance().colors.statusOutline).withAlpha(0.35f);
-        gradientDarkGrey = juce::Colour(GuiConstants::instance().colors.gd_DarkGreyStart);
-        gradientDarkGreyDisabled = juce::Colour(GuiConstants::instance().colors.gd_DarkGreyStart).withAlpha(0.35f);
+        gradientDark = juce::Colour(GuiConstants::instance().colors.gradientDark);
+        gradientDarkDisabled = juce::Colour(GuiConstants::instance().colors.gradientDark).withAlpha(0.35f);
 
-        knobGradStart = juce::Colour(GuiConstants::instance().colors.knobGradStart);
-        knobGradCenter = juce::Colour(GuiConstants::instance().colors.knobGradCenter);
-        knobGradEnd = juce::Colour(GuiConstants::instance().colors.knobGradEnd);
+        knobGradientStart = juce::Colour(GuiConstants::instance().colors.knobGradientStart);
+        knobGradientCenter = juce::Colour(GuiConstants::instance().colors.knobGradientCenter);
+        knobGradientEnd = juce::Colour(GuiConstants::instance().colors.knobGradientEnd);
     }
 
     void drawLabel(juce::Graphics& g, juce::Label& label) override
@@ -50,14 +50,14 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         auto toggleBounds = bounds.removeFromLeft(static_cast<int>(bounds.getHeight() * 1.5f));
         auto textBounds = bounds.reduced(2);
 
-        g.setColour(backgroundDarkGrey);
+        g.setColour(backgroundDark);
         g.fillRoundedRectangle(toggleBounds.toFloat().reduced(2.0f), toggleBounds.getHeight() / 2.0f);
 
         auto diameter = toggleBounds.getHeight() - 13.0f;
         auto circleX = button.getToggleState() ? toggleBounds.getRight() - diameter - 6.5f : toggleBounds.getX() + 6.5f;
         auto circleY = toggleBounds.getY() + 6.5f;
 
-        g.setColour(button.getToggleState() ? statusOutline : gradientDarkGrey);
+        g.setColour(button.getToggleState() ? statusOutline : gradientDark);
         g.fillEllipse(circleX, circleY, diameter, diameter);
 
         if (!button.getButtonText().isEmpty())
@@ -101,7 +101,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         //        g.setColour(juce::Colour(0x80ff0000));
         //        g.fillRect(rect);
 
-        slider.isEnabled() ? g.setColour(backgroundDarkGrey) : g.setColour(backgroundDarkGreyDisabled);
+        slider.isEnabled() ? g.setColour(backgroundDark) : g.setColour(backgroundDarkDisabled);
         juce::Path bgPath;
         bgPath.addCentredArc(cx, cy, radius - extraMargin, radius - extraMargin, 0.0f, rotaryStartAngle, rotaryEndAngle,
                              true);
@@ -146,8 +146,8 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
             }
 
             // Disk
-            juce::ColourGradient grad(knobGradCenter.brighter(fSlightBevel), kx, ky,
-                                      knobGradCenter.darker(fSlightBevel), kx + kw, ky + kh, false);
+            juce::ColourGradient grad(knobGradientCenter.brighter(fSlightBevel), kx, ky,
+                                      knobGradientCenter.darker(fSlightBevel), kx + kw, ky + kh, false);
             g.setGradientFill(grad);
             g.fillEllipse(knobRect);
 
@@ -189,10 +189,10 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
                 ringPath.addEllipse(kcx - ringInner, kcy - ringInner, innerDiam, innerDiam);
                 ringPath.setUsingNonZeroWinding(false); // even-odd: inner ellipse cuts out
 
-                juce::ColourGradient ringGrad(knobGradCenter.brighter(1).withAlpha(0.7f), kx, ky,
-                                              knobGradCenter.darker(1).withAlpha(0.7f), kx + kw, ky + kh, true);
-                ringGrad.addColour(0.4, knobGradCenter.brighter(1).withAlpha(0.2f));
-                ringGrad.addColour(0.6, knobGradCenter.darker(1).withAlpha(0.2f));
+                juce::ColourGradient ringGrad(knobGradientCenter.brighter(1).withAlpha(0.7f), kx, ky,
+                                              knobGradientCenter.darker(1).withAlpha(0.7f), kx + kw, ky + kh, true);
+                ringGrad.addColour(0.4, knobGradientCenter.brighter(1).withAlpha(0.2f));
+                ringGrad.addColour(0.6, knobGradientCenter.darker(1).withAlpha(0.2f));
 
                 g.saveState();
                 g.reduceClipRegion(ringPath);
@@ -203,7 +203,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         }
         else
         {
-            g.setColour(gradientDarkGreyDisabled);
+            g.setColour(gradientDarkDisabled);
             g.fillEllipse(rect.reduced(extraMargin + statusOutlineThickness + bedOutline + bedThickness));
         }
 
@@ -220,7 +220,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
     {
         const auto bounds = button.getLocalBounds().toFloat();
 
-        g.setColour(button.getToggleState() ? statusOutline.withMultipliedAlpha(0.8f) : backgroundMidGrey);
+        g.setColour(button.getToggleState() ? statusOutline.withMultipliedAlpha(0.8f) : backgroundMid);
         g.fillRoundedRectangle(bounds, 2);
     }
 
@@ -251,7 +251,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
     void drawBubble(juce::Graphics& g, juce::BubbleComponent& /*b*/, const juce::Point<float>& /*tip*/,
                     const juce::Rectangle<float>& body) override
     {
-        g.setColour(backgroundMidGrey);
+        g.setColour(backgroundMid);
         g.fillRoundedRectangle(body, 2);
     }
 
@@ -263,7 +263,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         auto cornerSize = box.findParentComponentOfClass<juce::PopupMenu::CustomComponent>() != nullptr ? 0.0f : 1.0f;
         juce::Rectangle<float> boxBounds(xOffset, 0.0f, paddedWidth, static_cast<float>(height));
 
-        g.setColour(backgroundDarkGrey);
+        g.setColour(backgroundDark);
         g.fillRoundedRectangle(boxBounds, cornerSize);
 
         juce::Rectangle<int> arrowZone(static_cast<int>(xOffset) + static_cast<int>(paddedWidth) - 30, 0, 20, height);
@@ -286,11 +286,11 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
 
     void drawPopupMenuBackground(juce::Graphics& g, int width, int height) override
     {
-        g.fillAll(backgroundDarkGrey);
+        g.fillAll(backgroundDark);
         juce::ignoreUnused(width, height);
 
 #if !JUCE_MAC
-        g.setColour(backgroundDarkGrey.withAlpha(0.6f));
+        g.setColour(backgroundDark.withAlpha(0.6f));
         g.drawRect(0, 0, width, height);
 #endif
     }
