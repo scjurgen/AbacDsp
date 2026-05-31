@@ -17,9 +17,11 @@ public:
   explicit AudioPluginAudioProcessorEditor(
       AudioPluginAudioProcessor &p, juce::AudioProcessorValueTreeState &vts)
       : AudioProcessorEditor(&p), processorRef(p), valueTreeState(vts),
-        backgroundApp(juce::Colour(GuiConstants::instance().colors.bg_App)),
+        backgroundApp(juce::Colour(GuiConstants::instance().colors.background)),
         m_menuBar(this) {
-    setLookAndFeel(&m_laf);
+    m_laf = std::make_unique<GuiLookAndFeel>();
+    setLookAndFeel(m_laf.get());
+    juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
     addAndMakeVisible(m_menuBar);
     initWidgets();
     setResizable(true, true);
@@ -37,6 +39,7 @@ public:
       m_topLevel->removeComponentListener(this);
     }
     stopTimer();
+    juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
     setLookAndFeel(nullptr);
   }
 
@@ -55,35 +58,31 @@ public:
     // juce::FlexItem::Margin(Constants::Margins::small);
     const juce::FlexItem::Margin knobMarginSmall =
         juce::FlexItem::Margin(Constants::Margins::medium);
-    std::vector<juce::Rectangle<int>> areas(3);
-    const auto rowHeight = area.getHeight() / 6;
+    std::vector<juce::Rectangle<int>> areas(2);
+    const auto colWidth = area.getWidth() / 6;
     areas[0] =
-        area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-    areas[1] =
-        area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-    areas[2] = area.reduced(Constants::Margins::small);
+        area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+    areas[1] = area.reduced(Constants::Margins::small);
 
     {
       juce::FlexBox box;
       box.flexWrap = juce::FlexBox::Wrap::noWrap;
-      box.flexDirection = juce::FlexBox::Direction::row;
+      box.flexDirection = juce::FlexBox::Direction::column;
       box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
       box.items.add(juce::FlexItem(subsetDrop)
                         .withFlex(0)
-                        .withWidth(120)
                         .withHeight(Constants::Text::labelHeight)
-                        .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                        .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                         .withMargin(knobMarginSmall));
       box.items.add(juce::FlexItem(presetDrop)
                         .withFlex(0)
-                        .withWidth(200)
                         .withHeight(Constants::Text::labelHeight)
-                        .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                        .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                         .withMargin(knobMarginSmall));
       box.items.add(juce::FlexItem(dropBarsDrop)
-                        .withFlex(1)
+                        .withFlex(0)
                         .withHeight(Constants::Text::labelHeight)
-                        .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                        .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                         .withMargin(knobMarginSmall));
       if (swingRatioDial.isVisible()) {
         box.items.add(juce::FlexItem(swingRatioDial)
@@ -91,19 +90,12 @@ public:
                           .withMargin(knobMarginSmall));
       }
       box.items.add(juce::FlexItem(onOffSwitch)
-                        .withWidth(Constants::Text::labelWidth)
+                        .withFlex(0)
                         .withHeight(Constants::Text::labelHeight)
-                        .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                        .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                         .withMargin(knobMarginSmall));
       box.items.add(
           juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
-      box.performLayout(areas[0].toFloat());
-    }
-    {
-      juce::FlexBox box;
-      box.flexWrap = juce::FlexBox::Wrap::noWrap;
-      box.flexDirection = juce::FlexBox::Direction::row;
-      box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
       box.items.add(juce::FlexItem(subVolumeDial)
                         .withFlex(1)
                         .withMargin(knobMarginSmall));
@@ -113,16 +105,16 @@ public:
       box.items.add(juce::FlexItem(inputVolumeDial)
                         .withFlex(1)
                         .withMargin(knobMarginSmall));
-      box.performLayout(areas[1].toFloat());
+      box.performLayout(areas[0].toFloat());
     }
     {
       juce::FlexBox box;
       box.flexWrap = juce::FlexBox::Wrap::noWrap;
-      box.flexDirection = juce::FlexBox::Direction::row;
+      box.flexDirection = juce::FlexBox::Direction::column;
       box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
       box.items.add(
           juce::FlexItem(signalGauge).withFlex(1).withMargin(knobMarginSmall));
-      box.performLayout(areas[2].toFloat());
+      box.performLayout(areas[1].toFloat());
     }
   }
 #pragma GCC diagnostic pop
@@ -232,8 +224,6 @@ public:
         themeMenu.addItem(i + 1, kThemeNames[static_cast<size_t>(i)]);
       }
       menu.addSubMenu("Theme", themeMenu);
-      menu.addSeparator();
-      menu.addItem(kAudioSettingsId, "Audio Settings");
     }
     return menu;
   }
@@ -250,12 +240,21 @@ public:
             GuiConstants::GradientPreset::Teal,
         });
     if (menuItemID >= 1 && menuItemID <= static_cast<int>(kPresets.size())) {
-      AppSettings::saveTheme(kPresets[static_cast<size_t>(menuItemID - 1)]);
-      juce::AlertWindow::showMessageBoxAsync(
-          juce::MessageBoxIconType::InfoIcon, "Theme",
-          "Theme will take effect after restart.");
-    } else if (menuItemID == kAudioSettingsId) {
+      applyTheme(kPresets[static_cast<size_t>(menuItemID - 1)]);
     }
+  }
+
+  void applyTheme(GuiConstants::GradientPreset preset) {
+    AppSettings::saveTheme(preset);
+    GuiConstants::setPreset(preset);
+    setLookAndFeel(nullptr);
+    m_laf = std::make_unique<GuiLookAndFeel>();
+    setLookAndFeel(m_laf.get());
+    juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
+    backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
+    signalGauge.updateColors();
+
+    repaint();
   }
 
   void updateSwingRatioVisibility() {
@@ -265,11 +264,9 @@ public:
   }
 
 private:
-  static constexpr int kAudioSettingsId = 100;
-
   AudioPluginAudioProcessor &processorRef;
   juce::AudioProcessorValueTreeState &valueTreeState;
-  GuiLookAndFeel m_laf;
+  std::unique_ptr<GuiLookAndFeel> m_laf;
   juce::Colour backgroundApp;
   juce::MenuBarComponent m_menuBar;
   juce::Component *m_topLevel{nullptr};
@@ -292,7 +289,7 @@ private:
   std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>
       presetDropAttachment;
   CustomRotaryDial swingRatioDial{this};
-  MetronomeWaveDisplay signalGauge{};
+  CircularBeatDisplay signalGauge{};
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
 };

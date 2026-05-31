@@ -16,6 +16,6 @@
 #include "inc/WaveformMeter.h"
 #include "inc/AppSettings.h"
 #include "impl/EffectBase.h"
-#include "inc/MetronomeWaveDisplay.h"
+#include "inc/CircularBeatDisplay.h"
 
 #include "inc/LookAndFeel.h"

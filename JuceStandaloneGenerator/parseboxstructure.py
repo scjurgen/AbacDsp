@@ -119,6 +119,8 @@ def construct_boxes(m: dict):
                 case 'drop':
                     if item["flex"] == "abs":
                         flex_line += f".withFlex(0).withWidth({item['size']}).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
+                    elif isColumn:
+                        flex_line += f".withFlex(0).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::stretch)"
                     else:
                         flex_line += f".withFlex(1).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
                 case 'gauge':
@@ -127,9 +129,15 @@ def construct_boxes(m: dict):
                     else:
                         flex_line += f""".withFlex({item["size"]})"""
                 case 'switch':
-                    flex_line += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
+                    if isColumn:
+                        flex_line += ".withFlex(0).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::stretch)"
+                    else:
+                        flex_line += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
                 case 'label':
-                    flex_line += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
+                    if isColumn:
+                        flex_line += ".withFlex(0).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::stretch)"
+                    else:
+                        flex_line += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
             flex_line += ".withMargin(knobMarginSmall));\n"
             if "visible_when" in p:
                 result += f"""if ({var}.isVisible()) {{\n{flex_line}}}\n"""

@@ -25,16 +25,16 @@
     {"short": "SWG",  "type": "dial",   "display": "Swing",          "symbol": "swingRatio",  "default": 1.5, "range": [1.0, 2.0, 0.01, 1, false],  "precision": 2, "unit": "",
      "visible_when": "processorRef.presetHasSwing(presetDrop.getSelectedItemIndex())",
      "depends_on": "preset"},
-    {"short": "SIG",  "type": "gauge",  "gaugetype": "signal",       "display": "Beat",       "symbol": "signal",     "customtype": "MetronomeWaveDisplay"}
+    {"short": "SIG",  "type": "gauge",  "gaugetype": "signal",       "display": "Beat",       "symbol": "signal",     "customtype": "CircularBeatDisplay"}
   ],
   "layout": {
     "WINDOW_WIDTH": "960",
     "WINDOW_HEIGHT": "660",
-    "type": "≡",
-    "composition": "R=(1:1:4) A1=(SUB*120, PRE*200, DRP, SWG, ONF, BPM) A2=(SVOL, MVOL, IVOL) A3=(SIG)"
+    "type": "||",
+    "composition": "C=(1:5) A1=(SUB, PRE, DRP, SWG, ONF, BPM,SVOL, MVOL, IVOL) A2=(SIG%1)"
   },
   "extra_ui_includes": [
-    "inc/MetronomeWaveDisplay.h"
+    "inc/CircularBeatDisplay.h"
   ],
   "extra_timer_callbacks": [
     "{ const float sr = static_cast<float>(processorRef.getSampleRate());",
