@@ -30,6 +30,38 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         knobGradientStart = juce::Colour(GuiConstants::instance().colors.knobGradientStart);
         knobGradientCenter = juce::Colour(GuiConstants::instance().colors.knobGradientCenter);
         knobGradientEnd = juce::Colour(GuiConstants::instance().colors.knobGradientEnd);
+
+        const auto bg = juce::Colour(GuiConstants::instance().colors.background);
+        const auto bgDark = juce::Colour(GuiConstants::instance().colors.backgroundDark);
+        const auto bgMid = juce::Colour(GuiConstants::instance().colors.backgroundMid);
+        const auto fg = juce::Colour(GuiConstants::instance().colors.statusOutline);
+
+        setColour(juce::ResizableWindow::backgroundColourId, bg);
+        setColour(juce::DocumentWindow::backgroundColourId, bg);
+        setColour(juce::AlertWindow::backgroundColourId, bgDark);
+        setColour(juce::AlertWindow::textColourId, fg);
+        setColour(juce::AlertWindow::outlineColourId, bgMid);
+        setColour(juce::TextEditor::backgroundColourId, bgDark);
+        setColour(juce::TextEditor::textColourId, fg);
+        setColour(juce::TextEditor::outlineColourId, bgMid);
+        setColour(juce::TextEditor::focusedOutlineColourId, fg);
+        setColour(juce::Label::textColourId, fg);
+        setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+        setColour(juce::ToggleButton::tickColourId, fg);
+        setColour(juce::ToggleButton::tickDisabledColourId, bgMid);
+        setColour(juce::ToggleButton::textColourId, fg);
+        setColour(juce::TextButton::buttonColourId, bgDark);
+        setColour(juce::TextButton::buttonOnColourId, bgMid);
+        setColour(juce::TextButton::textColourOffId, fg);
+        setColour(juce::TextButton::textColourOnId, fg);
+        setColour(juce::ComboBox::backgroundColourId, bgDark);
+        setColour(juce::ComboBox::textColourId, fg);
+        setColour(juce::ComboBox::arrowColourId, fg);
+        setColour(juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
+        setColour(juce::PopupMenu::backgroundColourId, bgDark);
+        setColour(juce::PopupMenu::textColourId, fg);
+        setColour(juce::PopupMenu::highlightedBackgroundColourId, bgMid);
+        setColour(juce::PopupMenu::highlightedTextColourId, fg);
     }
 
     void drawLabel(juce::Graphics& g, juce::Label& label) override

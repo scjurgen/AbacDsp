@@ -25,6 +25,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         m_laf = std::make_unique<GuiLookAndFeel>();
         setLookAndFeel(m_laf.get());
+        juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
         addAndMakeVisible(m_menuBar);
         initWidgets();
         setResizable(true, true);
@@ -43,6 +44,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             m_topLevel->removeComponentListener(this);
         }
         stopTimer();
+        juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
         setLookAndFeel(nullptr);
     }
 
@@ -160,6 +162,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         setLookAndFeel(nullptr);
         m_laf = std::make_unique<GuiLookAndFeel>();
         setLookAndFeel(m_laf.get());
+        juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
         backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
         /*APPLY_THEME_CALLBACKS*/
         repaint();

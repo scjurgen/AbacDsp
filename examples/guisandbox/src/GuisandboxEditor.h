@@ -21,6 +21,7 @@ public:
         m_menuBar(this) {
     m_laf = std::make_unique<GuiLookAndFeel>();
     setLookAndFeel(m_laf.get());
+    juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
     addAndMakeVisible(m_menuBar);
     initWidgets();
     setResizable(true, true);
@@ -38,6 +39,7 @@ public:
       m_topLevel->removeComponentListener(this);
     }
     stopTimer();
+    juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
     setLookAndFeel(nullptr);
   }
 
@@ -279,6 +281,7 @@ public:
     setLookAndFeel(nullptr);
     m_laf = std::make_unique<GuiLookAndFeel>();
     setLookAndFeel(m_laf.get());
+    juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
     backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
     spectrogramGauge.setGradientPreset(preset);
 
