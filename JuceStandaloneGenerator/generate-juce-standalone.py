@@ -441,8 +441,10 @@ def createParameterLayout(m: dict) -> str:
                 precision = item['precision']
                 ln = f"""std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("{paramId}", 1), "{paramName}",
                     juce::NormalisableRange<float>({item['rangeStart']}, {item['rangeEnd']}, {item['intervalValue']}, {item['skewFactor']}, {item['useSymmetricSkew']}),
-                    {paramDefault}, juce::String("{paramName}"), juce::AudioProcessorParameter::genericParameter,
-                    [](float value, float) {{ return juce::String(value, {precision}) + " {item['unit']}"; }})"""
+                    {paramDefault},
+                    juce::AudioParameterFloatAttributes{{}}
+                        .withLabel("{item['unit']}")
+                        .withStringFromValueFunction([](float value, int) {{ return juce::String(value, {precision}) + " {item['unit']}"; }}))"""
                 res += f"params.push_back({ln});\n"
             case 'switch':
                 ln = f"""std::make_unique<juce::AudioParameterBool>(juce::ParameterID("{paramId}",1), "{paramName}", {paramDefault})"""

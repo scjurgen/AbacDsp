@@ -220,35 +220,51 @@ public:
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("input", 1), "Input",
         juce::NormalisableRange<float>(0, 50, 0.1, 1, false), 2,
-        juce::String("Input"), juce::AudioProcessorParameter::genericParameter,
-        [](float value, float) { return juce::String(value, 2) + " dB"; }));
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("dB")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 2) + " dB";
+            })));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("modulationDepth", 1), "Depth",
         juce::NormalisableRange<float>(1, 50, 0.01, 0.8, false), 2,
-        juce::String("Depth"), juce::AudioProcessorParameter::genericParameter,
-        [](float value, float) { return juce::String(value, 2) + " ms"; }));
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("ms")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 2) + " ms";
+            })));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("mix", 1), "Mix",
         juce::NormalisableRange<float>(-100, 100, 1, 1, false), 0.0,
-        juce::String("Mix"), juce::AudioProcessorParameter::genericParameter,
-        [](float value, float) { return juce::String(value, 1) + " "; }));
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 1) + " ";
+            })));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("density", 1), "Density",
         juce::NormalisableRange<float>(1, 12, 0.01, 1, false), 1,
-        juce::String("Density"),
-        juce::AudioProcessorParameter::genericParameter,
-        [](float value, float) { return juce::String(value, 1) + " "; }));
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 1) + " ";
+            })));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("threshold", 1), "Threshold",
         juce::NormalisableRange<float>(1, 12, 0, 1, false), 1,
-        juce::String("Threshold"),
-        juce::AudioProcessorParameter::genericParameter,
-        [](float value, float) { return juce::String(value, 4) + " "; }));
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 4) + " ";
+            })));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("knee", 1), "Knee",
         juce::NormalisableRange<float>(1, 12, 0.01, 1, false), 1,
-        juce::String("Knee"), juce::AudioProcessorParameter::genericParameter,
-        [](float value, float) { return juce::String(value, 2) + " dB"; }));
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("dB")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 2) + " dB";
+            })));
 
     return {params.begin(), params.end()};
   }
