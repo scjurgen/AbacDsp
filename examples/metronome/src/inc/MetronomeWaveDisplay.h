@@ -46,6 +46,11 @@ class MetronomeWaveDisplay : public juce::Component
         repaint();
     }
 
+    void updateColors()
+    {
+        repaint();
+    }
+
     void paint(juce::Graphics& g) override
     {
         const auto& c = GuiConstants::instance().colors;
