@@ -11,7 +11,7 @@ Goal: Integrate Themes:
 
 Step 1: user wants to change theme, selects theme, needs to restart the application so the theme will be set. 
 Step 2: the theme will be applied directly and implies more refactoring
-Step 3: clean up GuiConstants.h, there are color names that are not anymore reflecting the intent (e.g. dark, grey, bg -> background, gd -> gradient)
+Step 3: clean up GuiConstants.h, there are color names that are not anymore reflecting the intent (e.g. dark, grey, bg -> background, gd -> gradient). Analyse and propose changes
 Step 4: Audiosettings should be also customized with the theme colors
 
 ## DSP Library
