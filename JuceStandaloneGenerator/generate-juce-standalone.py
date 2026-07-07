@@ -47,6 +47,7 @@ mainTargetDir = "../examples"
 cppTmpDir = "/tmp/{module}"
 cppTargetDir = "../examples/{module}"
 cppAllElementsInclude = "UiElements.h"
+rootCMakeLists = "../CMakeLists.txt"
 
 cppLookAndFeel = "inc/LookAndFeel.h"
 
@@ -635,6 +636,24 @@ def enrich(m: dict):
         m['ports-control'].remove(item)
 
 
+def ensureCMakeSubdirectory(module: str):
+    with open(rootCMakeLists, "r") as f:
+        lines = f.readlines()
+    entry_pattern = re.compile(r'^(\s*)add_subdirectory\(examples/([A-Za-z0-9_]+)\)\s*$')
+    entries = [(i, match.group(2)) for i, line in enumerate(lines) if (match := entry_pattern.match(line))]
+    if not entries:
+        print(f"WARNING: no add_subdirectory(examples/...) entries found in {rootCMakeLists}, skipping")
+        return
+    if module in (mod for _, mod in entries):
+        return
+    indent = entry_pattern.match(lines[entries[0][0]]).group(1)
+    insert_at = next((i for i, mod in entries if module < mod), entries[-1][0] + 1)
+    lines.insert(insert_at, f"{indent}add_subdirectory(examples/{module})\n")
+    with open(rootCMakeLists, "w") as f:
+        f.writelines(lines)
+    print(f"Added add_subdirectory(examples/{module}) to {rootCMakeLists}")
+
+
 def createPackageFromJsonDict(m: dict):
     targetDir = f"{mainTargetDir}/{m['name']}"
     enrich(m)
@@ -875,11 +894,17 @@ def createPackageFromJsonDict(m: dict):
     syncer = FileSync(cppTmpDir.replace("{module}", m["module"]), targetDir, set() if force else protected_files)
     syncer.sync()
 
+    if not stand_alone:
+        ensureCMakeSubdirectory(m["module"])
+
 
 def usage(progname: str):
     progname = os.path.basename(progname)
-    print(f"Usage: {progname} (--list | --help | --forceall | --standalone) module <module>")
+    print(f"Usage: {progname} (--list | --help | --forceall | --standalone | --target-dir <path>) module <module>")
     print("module name of a module in blueprints ")
+    print("--target-dir <path>  overwrite the output folder (overrides --standalone's default target too);")
+    print("                     put {module} in <path> to control where the module name is inserted,")
+    print("                     otherwise it is appended as a subfolder")
     print(moduleList)
     exit(1)
 
@@ -904,7 +929,8 @@ if len(sys.argv) >= 2:
         usage(sys.argv[0])
     else:
         force_all = False
-        for i in range(1, len(sys.argv)):
+        i = 1
+        while i < len(sys.argv):
             m = sys.argv[i]
             if m == "--standalone":
                 mainTargetDir = "../juce-projects"
@@ -913,6 +939,14 @@ if len(sys.argv) >= 2:
                 cppJuceCmake = "CMakeListsStandalone.txt"
             elif m == "--forceall":
                 force_all = True
+            elif m == "--target-dir":
+                i += 1
+                if i >= len(sys.argv):
+                    print("--target-dir requires a path argument")
+                    usage(sys.argv[0])
+                targetDirArg = os.path.abspath(os.path.expanduser(sys.argv[i]))
+                cppTargetDir = targetDirArg if "{module}" in targetDirArg else f"{targetDirArg}/{{module}}"
+                mainTargetDir = targetDirArg
             elif m[0] == '-':
                 print(f'unknown option {m}')
                 usage(sys.argv[0])
@@ -924,3 +958,4 @@ if len(sys.argv) >= 2:
                     createPackageFromJsonDict(cfg)
                 else:
                     print(f'module "{sys.argv[i]}" not found (use --list to obtain a list)')
+            i += 1
