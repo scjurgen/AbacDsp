@@ -252,7 +252,7 @@ class SvfResoBP
         const float denom = 1.f / (1.f + g * (g + k));
         m_cf[index].a1 = denom;
         m_cf[index].a2 = g * denom;
-        m_cf[index].a3 = g * m_cf[0].a2;
+        m_cf[index].a3 = g * m_cf[index].a2;
     }
 
     float m_sampleRate{48000.f};
