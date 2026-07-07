@@ -288,13 +288,14 @@ def createtructVariablesImplementation(m:dict):
     for item in m["ports-control"]:
         if 'patch' not in item:
             symbol = item['symbol']
+            default = item.get('default', 0)
             match item['type']:
                 case "dial":
-                    res += f"float {symbol}{{}};\n"
+                    res += f"float {symbol}{{{float(default)}f}};\n"
                 case "switch":
-                    res += f"bool {symbol}{{}};\n"
+                    res += f"bool {symbol}{{{'true' if default else 'false'}}};\n"
                 case "drop":
-                    res += f"size_t {symbol}{{}};\n"
+                    res += f"size_t {symbol}{{{default}}};\n"
     return res
 def createVariablesImplementation(m:dict):
     res = ""
