@@ -901,9 +901,12 @@ def createPackageFromJsonDict(m: dict):
 
 def usage(progname: str):
     progname = os.path.basename(progname)
-    print(f"Usage: {progname} (--list | --help | --forceall | --standalone | --target-dir <path>) module <module>")
+    print(f"Usage: {progname} --mode (standalone | localexample) [--forceall] [--target-dir <path>] module <module>...")
     print("module name of a module in blueprints ")
-    print("--target-dir <path>  overwrite the output folder (overrides --standalone's default target too);")
+    print("--mode standalone     generate a standalone JUCE project; requires --target-dir")
+    print("--mode localexample   generate an in-repo example under ../examples/{module}")
+    print("--target-dir <path>  overwrite the output folder; mandatory with --mode standalone,")
+    print("                     optional with --mode localexample (overrides its default target);")
     print("                     put {module} in <path> to control where the module name is inserted,")
     print("                     otherwise it is appended as a subfolder")
     print(moduleList)
@@ -930,14 +933,22 @@ if len(sys.argv) >= 2:
         usage(sys.argv[0])
     else:
         force_all = False
+        mode = None
+        target_dir_overridden = False
+        targetDirArg = None
+        modules_requested = []
         i = 1
         while i < len(sys.argv):
             m = sys.argv[i]
-            if m == "--standalone":
-                mainTargetDir = "../juce-projects"
-                cppTargetDir = "../juce-projects/{module}"
-                stand_alone = True
-                cppJuceCmake = "CMakeListsStandalone.txt"
+            if m == "--mode":
+                i += 1
+                if i >= len(sys.argv):
+                    print("--mode requires an argument (standalone or localexample)")
+                    usage(sys.argv[0])
+                mode = sys.argv[i]
+                if mode not in ("standalone", "localexample"):
+                    print(f'unknown mode "{mode}" (expected standalone or localexample)')
+                    usage(sys.argv[0])
             elif m == "--forceall":
                 force_all = True
             elif m == "--target-dir":
@@ -946,17 +957,35 @@ if len(sys.argv) >= 2:
                     print("--target-dir requires a path argument")
                     usage(sys.argv[0])
                 targetDirArg = os.path.abspath(os.path.expanduser(sys.argv[i]))
-                cppTargetDir = targetDirArg if "{module}" in targetDirArg else f"{targetDirArg}/{{module}}"
-                mainTargetDir = targetDirArg
+                target_dir_overridden = True
             elif m[0] == '-':
                 print(f'unknown option {m}')
                 usage(sys.argv[0])
             else:
-                if m in moduleList:
-                    cfg = loadConfig(m)
-                    if force_all:
-                        cfg["_force_all"] = True
-                    createPackageFromJsonDict(cfg)
-                else:
-                    print(f'module "{sys.argv[i]}" not found (use --list to obtain a list)')
+                modules_requested.append(m)
             i += 1
+
+        if mode is None:
+            print("--mode is required (standalone or localexample)")
+            usage(sys.argv[0])
+
+        if mode == "standalone" and not target_dir_overridden:
+            print("--target-dir is required when --mode standalone is used")
+            usage(sys.argv[0])
+
+        if mode == "standalone":
+            stand_alone = True
+            cppJuceCmake = "CMakeListsStandalone.txt"
+
+        if target_dir_overridden:
+            cppTargetDir = targetDirArg if "{module}" in targetDirArg else f"{targetDirArg}/{{module}}"
+            mainTargetDir = targetDirArg
+
+        for m in modules_requested:
+            if m in moduleList:
+                cfg = loadConfig(m)
+                if force_all:
+                    cfg["_force_all"] = True
+                createPackageFromJsonDict(cfg)
+            else:
+                print(f'module "{m}" not found (use --list to obtain a list)')
