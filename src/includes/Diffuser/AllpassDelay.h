@@ -5,12 +5,13 @@
 #include <cmath>
 #include <vector>
 
-#include "AudioProcessing.h"
-#include "Filters/Biquad.h"
 #include "Filters/FourStageFilter.h"
+#include "Filters/LadderFilter.h"
 #include "Filters/OnePoleFilter.h"
-#include "InterpolationCollection.h"
-#include "Modulation.h"
+#include "Helpers/SkipSmoothing.h"
+#include "Modulation/Modulation.h"
+#include "Numbers/Convert.h"
+#include "Numbers/Interpolation.h"
 
 
 namespace AbacDsp
@@ -215,7 +216,7 @@ class ModulatingAllPassDelay
 
     [[nodiscard]] float getDecayTimeInSamples(const float db = -60.f) const
     {
-        const auto f = dbToGain(db);
+        const auto f = Convert::dbToGain(db);
         return std::log10(f) * static_cast<float>(m_currentDelayWidth) / std::log10(m_feedback);
     }
 
@@ -331,7 +332,7 @@ class ModulatingAllPassDelay
                 {
                     dHead -= m_maxBufferSize;
                 }
-                return Interpolation<float>::bspline_43x(&m_buffer[dHead], fraction);
+                return Interpolation::bspline43x(&m_buffer[dHead], fraction);
             }
             else
             {
@@ -443,7 +444,7 @@ class ModulatingAllPassDelayNoSoftAdapt
 
     [[nodiscard]] float getDecayTimeInSamples(const float db = -60.f) const noexcept
     {
-        const auto f = dbToGain(db);
+        const auto f = Convert::dbToGain(db);
         return std::log10(f) * static_cast<float>(m_currentDelayWidth) / std::log10(m_feedback);
     }
 
@@ -544,7 +545,7 @@ class ModulatingAllPassDelayNoSoftAdapt
             {
                 dHead -= m_maxSize;
             }
-            returnValue = Interpolation<float>::linearPt2(&m_buffer[dHead], fraction);
+            returnValue = Interpolation::linearPt2(&m_buffer[dHead], fraction);
         }
         else
         {
@@ -654,7 +655,7 @@ class FixedAllpassDelay
         m_lastValue = m_buffer[m_head];
         const auto feedDelay = m_highPass.step(in + m_lastValue * m_feedback);
         const auto ret = feedDelay * m_feedback + m_lastValue;
-        m_buffer[m_head++] = m_lowPass.step(m_dispersionFilter.step(feedDelay));
+        m_buffer[m_head++] = m_lowPass.step(m_dispersionFilter.singleStep(feedDelay));
         return ret;
     }
 
@@ -686,7 +687,7 @@ class FixedAllpassDelay
 
     OnePoleFilter<OnePoleFilterCharacteristic::LowPass, false> m_lowPass;
     OnePoleFilter<OnePoleFilterCharacteristic::HighPass, true> m_highPass;
-    Ap12FixedNoSmooth m_dispersionFilter;
+    FourStageOnePoleFilterNoResonance<1, -4, 4, 0, 0> m_dispersionFilter;
     float m_feedback{0.0f};
     float m_lastValue{0.f};
     size_t m_head{0};

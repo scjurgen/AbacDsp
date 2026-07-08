@@ -413,6 +413,11 @@ class FourStageOnePoleFilterNoResonance
         m_pole = std::exp(-2.0f * std::numbers::pi_v<float> * cutoff / m_sampleRate);
     }
 
+    void reset() noexcept
+    {
+        std::ranges::fill(m_v, 0.f);
+    }
+
     [[nodiscard]] float singleStep(const float in) noexcept
     {
         m_v[0] = in + m_pole * (m_v[0] - in);

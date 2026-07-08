@@ -1,17 +1,17 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <functional>
 #include <vector>
 
 #include "AllpassDelay.h"
-#include "AudioProcessing.h"
-#include "DebugMod.h"
-#include "Fader.h"
+#include "Audio/Fader.h"
 #include "Helpers/ConstructArray.h"
+#include "Helpers/SkipSmoothing.h"
 #include "Numbers/BulgeControl.h"
 #include "Numbers/PrimeDispatcher.h"
-#include "SplitProcessing.h"
 
 namespace AbacDsp
 {
@@ -322,7 +322,7 @@ class DiffuserDelayChain
         }
         checkChangeElementsDone();
         std::copy_n(tmpFadeIn.data(), numSamples, target);
-        blockSum(tmpFadeOut.data(), target, numSamples);
+        std::transform(target, target + numSamples, tmpFadeOut.data(), target, std::plus<>{});
     }
 
     void decreaseNumElements(float* target, size_t numSamples)
@@ -334,7 +334,7 @@ class DiffuserDelayChain
             m_delay[i].processBlockInplace(target, numSamples);
         }
         checkChangeElementsDone();
-        blockSum(tmpFadeIn.data(), target, numSamples);
+        std::transform(target, target + numSamples, tmpFadeIn.data(), target, std::plus<>{});
     }
 
     float m_bottomSize{100.f};
