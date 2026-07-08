@@ -9,14 +9,14 @@
 
 namespace Constants {
 namespace Colors {
-constexpr uint32_t bg_App{0xff101010};
-constexpr uint32_t bg_DarkGrey{0xff505050};
-constexpr uint32_t bg_MidGrey{0xff404040};
-constexpr uint32_t bg_LightGrey{0xff202090};
+constexpr uint32_t background{0xff101010};
+constexpr uint32_t backgroundDark{0xff505050};
+constexpr uint32_t backgroundMid{0xff404040};
+constexpr uint32_t backgroundLight{0xff202090};
 
-constexpr uint32_t gd_LightGreyStart{0xffeeeee};
-constexpr uint32_t gd_LightGreyEnd{0xffc4c4c4};
-constexpr uint32_t gd_DarkGreyStart{0xff101010};
+constexpr uint32_t gradientStart{0xffeeeee};
+constexpr uint32_t gradientEnd{0xffc4c4c4};
+constexpr uint32_t gradientDark{0xff101010};
 
 constexpr uint32_t statusOutline{0xffdddddd};
 } // namespace Colors

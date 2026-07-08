@@ -14,8 +14,6 @@
 #include "impl/FileIo.h"
 #include "impl/SamplePlayerTimeStretched.h"
 
-const auto CLutPreset{GuiConstants::GradientPreset::Heat};
-
 class AudioPluginAudioProcessor
     : public juce::AudioProcessor,
       public juce::AudioProcessorValueTreeState::Listener {
@@ -202,8 +200,11 @@ public:
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("vol", 1), "Vol",
         juce::NormalisableRange<float>(-100, 12, 0.1, 1, false), 0,
-        juce::String("Vol"), juce::AudioProcessorParameter::genericParameter,
-        [](float value, float) { return juce::String(value, 1) + " dB"; }));
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("dB")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 1) + " dB";
+            })));
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID("type", 1), "Sample",
         juce::StringArray{"Sample1", "Sample2", "Sample3", "Sample4"}, 0));
@@ -216,15 +217,19 @@ public:
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("position", 1), "Position",
         juce::NormalisableRange<float>(0, 100, 0.01, 1, false), 0,
-        juce::String("Position"),
-        juce::AudioProcessorParameter::genericParameter,
-        [](float value, float) { return juce::String(value, 2) + " %"; }));
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("%")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 2) + " %";
+            })));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("advance", 1), "Advance",
         juce::NormalisableRange<float>(0.1, 10, 0.01, 0.25, false), 1,
-        juce::String("Advance"),
-        juce::AudioProcessorParameter::genericParameter,
-        [](float value, float) { return juce::String(value, 2) + " x"; }));
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("x")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 2) + " x";
+            })));
 
     return {params.begin(), params.end()};
   }
@@ -242,12 +247,19 @@ public:
       }
 
       if (m_fileIo.areParametersModified()) {
-        const int result = juce::NativeMessageBox::showYesNoBox(
-            juce::MessageBoxIconType::QuestionIcon, "Save Parameters",
-            "Parameters have changed, do you want to save before loading new "
-            "patch?",
-            nullptr, nullptr);
-        handlePatchChange(m_patchIndex, result == 1);
+        juce::NativeMessageBox::showAsync(
+            juce::MessageBoxOptions()
+                .withIconType(juce::MessageBoxIconType::QuestionIcon)
+                .withTitle("Save Parameters")
+                .withMessage("Parameters have changed, do you want to save "
+                             "before loading new patch?")
+                .withButton("Yes")
+                .withButton("No"),
+            [this, patchIndex = m_patchIndex](int result) {
+              // showAsync returns the plain index of the clicked button (0 =
+              // "Yes", 1 = "No").
+              handlePatchChange(patchIndex, result == 0);
+            });
       } else {
         loadPatchDirect(m_patchIndex);
       }
@@ -262,7 +274,7 @@ public:
                        const float v) { p.pluginRunner->setVol(v); }},
             {"type",
              [](const AudioPluginAudioProcessor &p, const float v) {
-               p.pluginRunner->setType(static_cast<size_t>(v));
+               p.pluginRunner->setType(static_cast<int>(v));
              }},
             {"position", [](const AudioPluginAudioProcessor &p,
                             const float v) { p.pluginRunner->setPosition(v); }},

@@ -1,28 +1,31 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <juce_graphics/juce_graphics.h>
-#include <memory>
-#include <numeric>
+
+#include "themes/Themes.h"
 
 class GuiConstants : public juce::DeletedAtShutdown
 {
   public:
+    using Theme = Themes::Theme;
+    using GradientPreset = Themes::Theme; // legacy name, kept for hand-written widgets
+
     struct Colors
     {
+        // Accent ramp sampled from the spectrogram gradient, not the curated UI palette.
         std::array<uint32_t, 10> cols{};
-        uint32_t bg_App{};
-        uint32_t bg_Component{};
-        uint32_t bg_DarkGrey{};
-        uint32_t bg_MidGrey{};
-        uint32_t bg_LightGrey{};
-        uint32_t gd_LightGreyStart{};
-        uint32_t gd_LightGreyEnd{};
-        uint32_t gd_DarkGreyStart{};
-        uint32_t knobGradStart{};
-        uint32_t knobGradCenter{};
-        uint32_t knobGradEnd{};
+        uint32_t background{};
+        uint32_t backgroundComponent{};
+        uint32_t backgroundDark{};
+        uint32_t backgroundMid{};
+        uint32_t backgroundLight{};
+        uint32_t gradientDark{};
+        uint32_t knobGradientStart{};
+        uint32_t knobGradientCenter{};
+        uint32_t knobGradientEnd{};
         uint32_t statusOutline{};
     };
 
@@ -47,61 +50,78 @@ class GuiConstants : public juce::DeletedAtShutdown
         int TimerHertz{60};
     };
 
-    enum class GradientPreset
-    {
-        Classic,
-        Viridis,
-        Inferno,
-        Grayscale,
-        Heat,
-        Ink,
-        Teal,
-    };
-
     static constexpr int kLutSize = 256;
+
+    static constexpr float kMeterMinDb = -84.f;
+    static constexpr float kMeterMaxDb = 12.f;
+    static constexpr float kLevelWarnDb = -12.f;
+    static constexpr float kLevelDangerDb = 0.f;
+    static constexpr float kCpuWarnFraction = 0.60f;
+    static constexpr float kCpuDangerFraction = 0.75f;
 
     static GuiConstants& instance()
     {
         jassert(instance_ != nullptr); // must call setPreset() before first use
         return *instance_;
     }
-    auto getGradient()
-    {
-        return m_gradient;
-    }
-    static void setPreset(GradientPreset preset)
+
+    static void setPreset(Theme theme)
     {
         delete instance_;
-        instance_ = new GuiConstants(preset);
+        instance_ = new GuiConstants(theme);
     }
 
-    explicit GuiConstants(GradientPreset preset = GradientPreset::Ink)
+    explicit GuiConstants(Theme theme = Theme::Ink)
     {
-        m_gradient = makeGradient(preset);
+        const auto& def = Themes::definition(theme);
 
-        std::generate(
-            colors.cols.begin(), colors.cols.end(), [&, i = size_t{0}]() mutable
-            { return m_gradient.getColourAtPosition(static_cast<double>(i++) / colors.cols.size()).getARGB(); });
+        m_spectrogramGradient = makeSpectrogramGradient(def);
+        m_cpuGradient = makeZoneGradient(def.cpuZones, kCpuWarnFraction, kCpuDangerFraction);
+        m_levelGradient = makeZoneGradient(def.levelZones, levelPosition(kLevelWarnDb), levelPosition(kLevelDangerDb));
 
-        colors.bg_App = colors.cols[2];
-        colors.bg_Component = colors.cols[1];
-        colors.bg_DarkGrey = colors.cols[5];      // box borders, menu
-        colors.bg_MidGrey = colors.cols[3];       // gradient knob top
-        colors.bg_LightGrey = colors.cols[9];     // ?
-        colors.gd_DarkGreyStart = colors.cols[2]; // gradien knob bottom
-        colors.gd_LightGreyStart = colors.cols[0];
-        colors.gd_LightGreyEnd = colors.cols[0];
+        std::generate(colors.cols.begin(), colors.cols.end(),
+                      [&, i = size_t{0}]() mutable
+                      {
+                          return m_spectrogramGradient
+                              .getColourAtPosition(static_cast<double>(i++) / colors.cols.size())
+                              .getARGB();
+                      });
 
-        colors.knobGradStart = colors.cols[0];
-        colors.knobGradCenter = colors.cols[3];
-        colors.knobGradEnd = colors.cols[8];
-
-        colors.statusOutline = colors.cols[8];
+        colors.background = def.background;
+        colors.backgroundComponent = def.backgroundComponent;
+        colors.backgroundDark = def.backgroundDark;
+        colors.backgroundMid = def.backgroundMid;
+        colors.backgroundLight = def.backgroundLight;
+        colors.gradientDark = def.gradientDark;
+        colors.knobGradientStart = def.knobGradientStart;
+        colors.knobGradientCenter = def.knobGradientCenter;
+        colors.knobGradientEnd = def.knobGradientEnd;
+        colors.statusOutline = def.statusOutline;
     }
 
-    static void buildLut(GradientPreset preset, juce::PixelARGB (&lut)[kLutSize])
+    [[nodiscard]] juce::ColourGradient getSpectrogramGradient() const
     {
-        makeGradient(preset).createLookupTable(lut, kLutSize);
+        return m_spectrogramGradient;
+    }
+
+    [[nodiscard]] juce::ColourGradient getCpuGradient() const
+    {
+        return m_cpuGradient;
+    }
+
+    [[nodiscard]] juce::ColourGradient getLevelGradient() const
+    {
+        return m_levelGradient;
+    }
+
+    static void buildLut(Theme theme, juce::PixelARGB (&lut)[kLutSize])
+    {
+        makeSpectrogramGradient(Themes::definition(theme)).createLookupTable(lut, kLutSize);
+    }
+
+    [[nodiscard]] static constexpr float levelPosition(const float db)
+    {
+        return (db - kMeterMinDb) / (kMeterMaxDb - kMeterMinDb);
     }
 
     Colors colors;
@@ -110,57 +130,41 @@ class GuiConstants : public juce::DeletedAtShutdown
     InitJuce init;
 
   private:
-    juce::ColourGradient m_gradient;
+    juce::ColourGradient m_spectrogramGradient;
+    juce::ColourGradient m_cpuGradient;
+    juce::ColourGradient m_levelGradient;
     static inline GuiConstants* instance_ = nullptr;
 
-    static juce::ColourGradient makeGradient(GradientPreset preset)
+    static juce::ColourGradient makeSpectrogramGradient(const Themes::ThemeDefinition& def)
     {
-        juce::ColourGradient gradient;
+        const auto& stops = def.spectrogramStops;
+        const auto count = def.spectrogramStopCount;
 
-        switch (preset)
+        juce::ColourGradient gradient(juce::Colour(stops[0].argb), 0.0f, 0.0f, juce::Colour(stops[count - 1].argb),
+                                      1.0f, 0.0f, false);
+        for (size_t i = 1; i + 1 < count; ++i)
         {
-            case GradientPreset::Classic:
-                gradient = juce::ColourGradient(juce::Colour::fromHSV(0.67f, 1.0f, 0.0f, 1.0f), 0.0f, 0.0f,
-                                                juce::Colour::fromHSV(0.0f, 1.0f, 1.0f, 1.0f), 1.0f, 0.0f, false);
-                break;
-            case GradientPreset::Viridis:
-                gradient = juce::ColourGradient(juce::Colour(0xff440154), 0.0f, 0.0f, juce::Colour(0xfffde725), 1.0f,
-                                                0.0f, false);
-                gradient.addColour(0.33, juce::Colour(0xff31688e));
-                gradient.addColour(0.66, juce::Colour(0xff35b779));
-                break;
-            case GradientPreset::Inferno:
-                gradient = juce::ColourGradient(juce::Colour(0xff000004), 0.0f, 0.0f, juce::Colour(0xfffcffa4), 1.0f,
-                                                0.0f, false);
-                gradient.addColour(0.33, juce::Colour(0xff56106e));
-                gradient.addColour(0.55, juce::Colour(0xffbc3754));
-                gradient.addColour(0.75, juce::Colour(0xfff98e09));
-                break;
-            case GradientPreset::Grayscale:
-                gradient =
-                    juce::ColourGradient(juce::Colours::black, 0.0f, 0.0f, juce::Colours::white, 1.0f, 0.0f, false);
-                break;
-            case GradientPreset::Heat:
-                gradient = juce::ColourGradient(juce::Colour(0xffffffff), 0.0f, 0.0f, juce::Colour(0xff1a0000), 1.0f,
-                                                0.0f, false);
-                gradient.addColour(0.30, juce::Colour(0xffffcc99));
-                gradient.addColour(0.60, juce::Colour(0xffcc3300));
-                gradient.addColour(0.85, juce::Colour(0xff660000));
-                break;
-            case GradientPreset::Ink:
-                gradient = juce::ColourGradient(juce::Colour(0xffffffff), 0.0f, 0.0f, juce::Colour(0xff0d0221), 1.0f,
-                                                0.0f, false);
-                gradient.addColour(0.35, juce::Colour(0xffc8b8e8));
-                gradient.addColour(0.65, juce::Colour(0xff4b1fa8));
-                break;
-            case GradientPreset::Teal:
-                gradient = juce::ColourGradient(juce::Colour(0xffffffff), 0.0f, 0.0f, juce::Colour(0xff001a1a), 1.0f,
-                                                0.0f, false);
-                gradient.addColour(0.35, juce::Colour(0xffb2dfdb));
-                gradient.addColour(0.65, juce::Colour(0xff00695c));
-                break;
+            gradient.addColour(stops[i].position, juce::Colour(stops[i].argb));
         }
+        return gradient;
+    }
 
+    // Smooth blend inside each zone, sharp edge at the warn/danger thresholds.
+    static juce::ColourGradient makeZoneGradient(const Themes::MeterZoneColors& zones, const float warnPosition,
+                                                 const float dangerPosition)
+    {
+        constexpr float kEdge = 0.002f;
+        constexpr float kZoneBrighten = 0.25f;
+
+        const juce::Colour safe{zones.safe};
+        const juce::Colour warn{zones.warn};
+        const juce::Colour danger{zones.danger};
+
+        juce::ColourGradient gradient(safe, 0.0f, 0.0f, danger.brighter(kZoneBrighten), 1.0f, 0.0f, false);
+        gradient.addColour(warnPosition - kEdge, safe.brighter(kZoneBrighten));
+        gradient.addColour(warnPosition + kEdge, warn);
+        gradient.addColour(dangerPosition - kEdge, warn.brighter(kZoneBrighten));
+        gradient.addColour(dangerPosition + kEdge, danger);
         return gradient;
     }
 };

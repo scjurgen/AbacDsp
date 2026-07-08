@@ -31,12 +31,13 @@ if(BUILD_FULL_PROJECT)
     add_executable(${PROJECT_NAME} main.cpp)
 
     # EXAMPLES - only when building full project
+    add_subdirectory(examples/SamplePlayer)
     add_subdirectory(examples/delay)
     add_subdirectory(examples/guisandbox)
     add_subdirectory(examples/metronome)
     add_subdirectory(examples/minireverb)
     add_subdirectory(examples/plaingain)
-    add_subdirectory(examples/sampleplayer)
+    add_subdirectory(examples/sampleplayertimestretched)
 else()
     # For tests-only builds, just include DSP headers
     include_directories(src/includes)

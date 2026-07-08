@@ -1,7 +1,7 @@
 #pragma once
 
-#include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_graphics/juce_graphics.h>
+#include <juce_gui_basics/juce_gui_basics.h>
 
 #include "Analysis/Spectrogram.h"
 #include "GuiConstants.h"
@@ -18,7 +18,7 @@ class SpectrogramBackground : public juce::Component
   public:
     SpectrogramBackground()
     {
-        backgroundApp = juce::Colour(GuiConstants::instance().colors.bg_App);
+        backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
         setBufferedToImage(true);
     }
 
@@ -30,6 +30,12 @@ class SpectrogramBackground : public juce::Component
 
     void resized() override
     {
+        repaint();
+    }
+
+    void updateColors()
+    {
+        backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
         repaint();
     }
 
@@ -121,7 +127,7 @@ class SpectrogramOverlay : public juce::Component
     {
         setInterceptsMouseClicks(false, false);
         labelColour = juce::Colour(GuiConstants::instance().colors.statusOutline);
-        labelBgColour = juce::Colour(GuiConstants::instance().colors.bg_App).withAlpha(0.55f);
+        labelBgColour = juce::Colour(GuiConstants::instance().colors.background).withAlpha(0.55f);
     }
 
     void update(const AbacDsp::SpectrumImageSet& imageSet)
@@ -188,6 +194,13 @@ class SpectrogramOverlay : public juce::Component
         }
     }
 
+    void updateColors()
+    {
+        labelColour = juce::Colour(GuiConstants::instance().colors.statusOutline);
+        labelBgColour = juce::Colour(GuiConstants::instance().colors.background).withAlpha(0.55f);
+        repaint();
+    }
+
   private:
     float m_sampleRate{0.f};
     unsigned m_fftLength{0};
@@ -206,7 +219,7 @@ class SpectrogramDisplay : public juce::Component
         addAndMakeVisible(spectrogramBg);
         addAndMakeVisible(spectrogramImage);
         addAndMakeVisible(spectrogramOverlay);
-        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey);
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.backgroundDark);
     }
 
     void paint(juce::Graphics& g) override
@@ -241,6 +254,10 @@ class SpectrogramDisplay : public juce::Component
     void setGradientPreset(GuiConstants::GradientPreset preset)
     {
         spectrogramImage.setGradientPreset(preset);
+        spectrogramBg.updateColors();
+        spectrogramOverlay.updateColors();
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.backgroundDark);
+        repaint();
     }
 
   private:

@@ -15,8 +15,8 @@ class MeterBackground : public juce::Component
         maxValue = 0;
         step = 20;
         mode = 3;
-        backgroundLightGrey = juce::Colour(GuiConstants::instance().colors.bg_LightGrey);
-        backgroundApp = juce::Colour(GuiConstants::instance().colors.bg_App);
+        backgroundLightGrey = juce::Colour(GuiConstants::instance().colors.backgroundLight);
+        backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
         setBufferedToImage(true);
     }
 
@@ -202,7 +202,7 @@ class Meter : public juce::Component
         addAndMakeVisible(needle);
         addAndMakeVisible(modeBox);
 
-        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey);
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.backgroundDark);
     }
 
     void paint(juce::Graphics& g) override

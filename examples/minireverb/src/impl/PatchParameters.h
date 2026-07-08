@@ -35,27 +35,27 @@ struct PatchParameters
         pitch1Inplace  , // dial
         pitch2Inplace   // dial
     };
-size_t order{};
-float dry{};
-float wet{};
-float stereoWidth{};
-float baseSize{};
-float sizeFactor{};
-float bulge{};
-bool uniqueDelay{};
-float decay{};
-float allPassUp{};
-float allPassDown{};
-float lowPass{};
-size_t lowPassCount{};
-float highPass{};
-size_t highPassCount{};
-float modulationDepth{};
-float modulationSpeed{};
-bool reversePitch{};
-float pitchStrength{};
-float pitch1Inplace{};
-float pitch2Inplace{};
+size_t order{8};
+float dry{0.0f};
+float wet{0.0f};
+float stereoWidth{100.0f};
+float baseSize{10.0f};
+float sizeFactor{3.1f};
+float bulge{0.0f};
+bool uniqueDelay{true};
+float decay{2000.0f};
+float allPassUp{10000.0f};
+float allPassDown{100.0f};
+float lowPass{3000.0f};
+size_t lowPassCount{0};
+float highPass{3000.0f};
+size_t highPassCount{0};
+float modulationDepth{0.02f};
+float modulationSpeed{0.25f};
+bool reversePitch{false};
+float pitchStrength{0.5f};
+float pitch1Inplace{0.0f};
+float pitch2Inplace{0.0f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({

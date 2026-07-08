@@ -3,6 +3,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <juce_core/juce_core.h>
 #include <string>
 #include <vector>
 
@@ -79,13 +80,30 @@ public:
   }
 
 private:
+  // JUCE's userApplicationDataDirectory is bare "~/Library" on macOS; the
+  // "Application Support" segment is a convention apps must add themselves.
+  // On Windows/Linux it already points at the right per-user data folder.
+  static juce::File getPatchDirectory() {
+    auto base = juce::File::getSpecialLocation(
+        juce::File::userApplicationDataDirectory);
+#if JUCE_MAC
+    base = base.getChildFile("Application Support");
+#endif
+    const auto dir = base.getChildFile("AbacDsp").getChildFile("Delay");
+    dir.createDirectory();
+    return dir;
+  }
+
   static std::string getPatchFilename(const std::vector<int> &patchIndex) {
     std::string filename = "patch";
     for (size_t i = 0; i < patchIndex.size(); ++i) {
       filename += "." + std::to_string(patchIndex[i] + 1);
     }
     filename += ".json";
-    return filename;
+    return getPatchDirectory()
+        .getChildFile(filename)
+        .getFullPathName()
+        .toStdString();
   }
 
   static int getParameterId(const std::string_view &paramName) {

@@ -18,10 +18,10 @@ struct PatchParameters
         position, // dial
         advance  // dial
     };
-float vol{};
-size_t type{};
-float position{};
-float advance{};
+float vol{0.0f};
+size_t type{0};
+float position{0.0f};
+float advance{1.0f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({

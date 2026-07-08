@@ -1,31 +1,42 @@
 #pragma once
 
-#include "EffectBase.h"
-#include "Audio/AudioBuffer.h"
-#include "AudioFile/LoadWav.h"
-#include "Sampler/ResamplingPitchShifter.h"
-#include "Sampler/StretchedSampleProducer.h"
-
 #include <array>
 #include <cmath>
 #include <memory>
 #include <vector>
 
+#include "AudioFile/LoadWav.h"
+
+#include "Audio/AudioBuffer.h"
+#include "EffectBase.h"
+#include "Sampler/ResamplingPitchShifter.h"
+#include "Sampler/StretchedSampleProducer.h"
+
 template <size_t BlockSize>
 class SamplePlayerTimeStretched final : public EffectBase
 {
   public:
-    exokicit SamplePlayerTimeStretched(const float sampleRate)
+    explicit SamplePlayerTimeStretched(const float sampleRate)
         : EffectBase(sampleRate)
         , m_producer(sampleRate)
         , m_player(&m_producer, 4096)
     {
         std::array samples{"samples/drossel.wav", "samples/quena-c4.wav", "samples/hh_crash_foot_mono.WAV",
                            "samples/bassclarinet_c3.wav"};
+        const auto loadInterleavedStereo = [](const char* filename)
+        {
+            const auto [left, right] = AudioUtility::LoadWav::loadStereoFromFile(filename);
+            std::vector<float> interleaved(left.size() * 2);
+            for (size_t s = 0; s < left.size(); ++s)
+            {
+                interleaved[s * 2] = left[s];
+                interleaved[s * 2 + 1] = right[s];
+            }
+            return interleaved;
+        };
         for (size_t i = 0; i < samples.size(); ++i)
         {
-            m_sample[i] =
-                std::make_shared<std::vector<float>>(AudioUtility::LoadWav::loadInterleavedStereoFromFile(samples[i]));
+            m_sample[i] = std::make_shared<std::vector<float>>(loadInterleavedStereo(samples[i]));
         }
         m_producer.setRawStereoSample(m_sample[m_currentSampleBuffer]);
     }

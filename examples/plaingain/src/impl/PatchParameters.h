@@ -18,10 +18,10 @@ struct PatchParameters
         highShelving, // dial
         latency      // dial
     };
-float gain{};
-float lowShelving{};
-float highShelving{};
-float latency{};
+float gain{0.0f};
+float lowShelving{0.0f};
+float highShelving{0.0f};
+float latency{0.0f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({

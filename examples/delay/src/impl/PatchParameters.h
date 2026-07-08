@@ -24,16 +24,16 @@ struct PatchParameters
         modDepth, // dial
         modSpeed // dial
     };
-float gain{};
-float dry{};
-float wet{};
-float timeInMs{};
-float feedback{};
-float lowPass{};
-float highPass{};
-float allPass{};
-float modDepth{};
-float modSpeed{};
+float gain{0.0f};
+float dry{0.0f};
+float wet{0.0f};
+float timeInMs{0.0f};
+float feedback{0.0f};
+float lowPass{12000.0f};
+float highPass{50.0f};
+float allPass{1500.0f};
+float modDepth{0.0f};
+float modSpeed{0.25f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({

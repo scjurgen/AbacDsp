@@ -14,8 +14,6 @@
 #include "impl/FileIo.h"
 #include "impl/GainImpl.h"
 
-const auto CLutPreset{GuiConstants::GradientPreset::Heat};
-
 class AudioPluginAudioProcessor
     : public juce::AudioProcessor,
       public juce::AudioProcessorValueTreeState::Listener {
@@ -203,24 +201,35 @@ public:
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("gain", 1), "Gain",
         juce::NormalisableRange<float>(-60, 60, 0.1, 1, false), 0,
-        juce::String("Gain"), juce::AudioProcessorParameter::genericParameter,
-        [](float value, float) { return juce::String(value, 1) + " dB"; }));
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("dB")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 1) + " dB";
+            })));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("lowShelving", 1), "Low",
         juce::NormalisableRange<float>(-24, 24, 0.1, 1, false), 0,
-        juce::String("Low"), juce::AudioProcessorParameter::genericParameter,
-        [](float value, float) { return juce::String(value, 1) + " dB"; }));
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("dB")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 1) + " dB";
+            })));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("highShelving", 1), "High",
         juce::NormalisableRange<float>(-24, 24, 0.1, 1, false), 0,
-        juce::String("High"), juce::AudioProcessorParameter::genericParameter,
-        [](float value, float) { return juce::String(value, 1) + " dB"; }));
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("dB")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 1) + " dB";
+            })));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("latency", 1), "Latency",
         juce::NormalisableRange<float>(0, 100, 0.1, 0.25, false), 0,
-        juce::String("Latency"),
-        juce::AudioProcessorParameter::genericParameter,
-        [](float value, float) { return juce::String(value, 1) + " ms"; }));
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("ms")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 1) + " ms";
+            })));
 
     return {params.begin(), params.end()};
   }
@@ -238,12 +247,19 @@ public:
       }
 
       if (m_fileIo.areParametersModified()) {
-        const int result = juce::NativeMessageBox::showYesNoBox(
-            juce::MessageBoxIconType::QuestionIcon, "Save Parameters",
-            "Parameters have changed, do you want to save before loading new "
-            "patch?",
-            nullptr, nullptr);
-        handlePatchChange(m_patchIndex, result == 1);
+        juce::NativeMessageBox::showAsync(
+            juce::MessageBoxOptions()
+                .withIconType(juce::MessageBoxIconType::QuestionIcon)
+                .withTitle("Save Parameters")
+                .withMessage("Parameters have changed, do you want to save "
+                             "before loading new patch?")
+                .withButton("Yes")
+                .withButton("No"),
+            [this, patchIndex = m_patchIndex](int result) {
+              // showAsync returns the plain index of the clicked button (0 =
+              // "Yes", 1 = "No").
+              handlePatchChange(patchIndex, result == 0);
+            });
       } else {
         loadPatchDirect(m_patchIndex);
       }
