@@ -868,6 +868,7 @@ def createPackageFromJsonDict(m: dict):
         shutil.copyfile(f"{templateFiles}/init-project.sh", f"{dir}/init-project.sh")
     for file_name in cppSourceFilesFixed:
         shutil.copyfile(f"{sourceFiles}/{file_name}", f"{dir}/src/{file_name}")
+    shutil.copytree(f"{sourceFiles}/inc/themes", f"{dir}/src/inc/themes", dirs_exist_ok=True)
     if stand_alone:
         for file_name in cppSourceFiles3rdParty:
             shutil.copyfile(f"{sourceFiles}/{file_name}", f"{dir}/{file_name}")

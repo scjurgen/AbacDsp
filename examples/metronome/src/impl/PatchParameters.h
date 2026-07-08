@@ -22,14 +22,14 @@ struct PatchParameters
         preset     , // drop
         swingRatio  // dial
     };
-float bpm{};
-size_t dropBars{};
-float metroVolume{};
-float inputVolume{};
-float subVolume{};
-bool onOff{};
-size_t preset{};
-float swingRatio{};
+float bpm{120.0f};
+size_t dropBars{0};
+float metroVolume{-6.0f};
+float inputVolume{0.0f};
+float subVolume{-15.0f};
+bool onOff{false};
+size_t preset{6};
+float swingRatio{1.5f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({

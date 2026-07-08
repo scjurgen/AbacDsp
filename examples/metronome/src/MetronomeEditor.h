@@ -227,12 +227,9 @@ public:
                                   const juce::String &) override {
     juce::PopupMenu menu;
     if (menuIndex == 0) {
-      static constexpr auto kThemeNames =
-          std::to_array<const char *>({"Classic", "Viridis", "Inferno",
-                                       "Grayscale", "Heat", "Ink", "Teal"});
       juce::PopupMenu themeMenu;
-      for (int i = 0; i < static_cast<int>(kThemeNames.size()); ++i) {
-        themeMenu.addItem(i + 1, kThemeNames[static_cast<size_t>(i)]);
+      for (size_t i = 0; i < Themes::kThemes.size(); ++i) {
+        themeMenu.addItem(static_cast<int>(i) + 1, Themes::kThemes[i].name);
       }
       menu.addSubMenu("Theme", themeMenu);
     }
@@ -240,22 +237,13 @@ public:
   }
 
   void menuItemSelected(int menuItemID, int /*topLevelMenuIndex*/) override {
-    static constexpr auto kPresets =
-        std::to_array<GuiConstants::GradientPreset>({
-            GuiConstants::GradientPreset::Classic,
-            GuiConstants::GradientPreset::Viridis,
-            GuiConstants::GradientPreset::Inferno,
-            GuiConstants::GradientPreset::Grayscale,
-            GuiConstants::GradientPreset::Heat,
-            GuiConstants::GradientPreset::Ink,
-            GuiConstants::GradientPreset::Teal,
-        });
-    if (menuItemID >= 1 && menuItemID <= static_cast<int>(kPresets.size())) {
-      applyTheme(kPresets[static_cast<size_t>(menuItemID - 1)]);
+    if (menuItemID >= 1 &&
+        menuItemID <= static_cast<int>(Themes::kThemes.size())) {
+      applyTheme(static_cast<GuiConstants::Theme>(menuItemID - 1));
     }
   }
 
-  void applyTheme(GuiConstants::GradientPreset preset) {
+  void applyTheme(GuiConstants::Theme preset) {
     AppSettings::saveTheme(preset);
     GuiConstants::setPreset(preset);
     setLookAndFeel(nullptr);

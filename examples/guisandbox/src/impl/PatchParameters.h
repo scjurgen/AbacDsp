@@ -21,13 +21,13 @@ struct PatchParameters
         threshold      , // dial
         knee            // dial
     };
-bool onOff{};
-float input{};
-float modulationDepth{};
-float mix{};
-float density{};
-float threshold{};
-float knee{};
+bool onOff{false};
+float input{2.0f};
+float modulationDepth{2.0f};
+float mix{0.0f};
+float density{1.0f};
+float threshold{1.0f};
+float knee{1.0f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({

@@ -1,16 +1,15 @@
 #pragma once
-#include "GuiConstants.h"
-
 #include <juce_gui_basics/juce_gui_basics.h>
-
 #include <vector>
+
+#include "GuiConstants.h"
 
 class GaugeBackground : public juce::Component
 {
   public:
     GaugeBackground()
     {
-        backgroundApp = juce::Colour(GuiConstants::instance().colors.bg_Component);
+        backgroundApp = juce::Colour(GuiConstants::instance().colors.backgroundComponent);
         setBufferedToImage(true);
     }
 
@@ -24,6 +23,12 @@ class GaugeBackground : public juce::Component
     void resized() override
     {
         GaugeArea = getLocalBounds().reduced(3);
+        repaint();
+    }
+
+    void updateColors()
+    {
+        backgroundApp = juce::Colour(GuiConstants::instance().colors.backgroundComponent);
         repaint();
     }
 
@@ -81,17 +86,19 @@ class GaugeValue : public juce::Component
             juce::Rectangle<float> columnBounds{meterBounds.getX() + i * channelWidth + padC, meterBounds.getY(),
                                                 channelWidth - padC * 2, height};
 
-            auto gradient = GuiConstants::instance().getGradient();
+            auto gradient = GuiConstants::instance().getLevelGradient();
             gradient.point1 = columnBounds.getBottomLeft();
             gradient.point2 = columnBounds.getTopLeft();
 
             g.setGradientFill(gradient);
             g.fillRect(columnBounds);
 
-            float linValue = std::clamp(values[i], -84.f, 12.f) + 84;
-            float visibleHeight = juce::jmap(std::clamp(linValue, 0.f, 100.f), 0.f, 100.f, 0.0f, height);
+            constexpr float span = GuiConstants::kMeterMaxDb - GuiConstants::kMeterMinDb;
+            const float linValue =
+                std::clamp(values[i], GuiConstants::kMeterMinDb, GuiConstants::kMeterMaxDb) - GuiConstants::kMeterMinDb;
+            const float visibleHeight = juce::jmap(linValue, 0.f, span, 0.0f, height);
 
-            g.setColour(juce::Colour(GuiConstants::instance().colors.bg_Component));
+            g.setColour(juce::Colour(GuiConstants::instance().colors.backgroundComponent));
             columnBounds.expand(1, 0);
             g.fillRect(columnBounds.withBottom(height - visibleHeight));
         }
@@ -126,7 +133,8 @@ class GaugeIndicators : public juce::Component
     }
 
   private:
-    float minValue_{-60.f}, maxValue_{12.f};
+    // Match the bar's dB mapping so the 0 dB line sits exactly on the gradient's danger edge.
+    float minValue_{GuiConstants::kMeterMinDb}, maxValue_{GuiConstants::kMeterMaxDb};
     juce::Colour lineIndicatorColor;
 };
 
@@ -138,7 +146,7 @@ class Gauge : public juce::Component
         addAndMakeVisible(gaugeBg);
         addAndMakeVisible(gaugeValue);
         addAndMakeVisible(gaugeIndicators);
-        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.bg_DarkGrey);
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.backgroundDark);
     }
 
     void paint(juce::Graphics& g) override
@@ -183,6 +191,13 @@ class Gauge : public juce::Component
     void setLabelText(const juce::String& label)
     {
         m_label = label;
+        repaint();
+    }
+
+    void updateColors()
+    {
+        backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.backgroundDark);
+        gaugeBg.updateColors();
         repaint();
     }
 

@@ -39,7 +39,7 @@ class CpuValue : public juce::Component
 
         juce::Rectangle<float> meterBounds(pad, pad, channelWidth, height);
 
-        auto gradient = GuiConstants::instance().getGradient();
+        auto gradient = GuiConstants::instance().getCpuGradient();
         gradient.point1 = meterBounds.getBottomLeft();
         gradient.point2 = meterBounds.getTopLeft();
         g.setGradientFill(gradient);

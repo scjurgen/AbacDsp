@@ -297,12 +297,19 @@ public:
       }
 
       if (m_fileIo.areParametersModified()) {
-        const int result = juce::NativeMessageBox::showYesNoBox(
-            juce::MessageBoxIconType::QuestionIcon, "Save Parameters",
-            "Parameters have changed, do you want to save before loading new "
-            "patch?",
-            nullptr, nullptr);
-        handlePatchChange(m_patchIndex, result == 1);
+        juce::NativeMessageBox::showAsync(
+            juce::MessageBoxOptions()
+                .withIconType(juce::MessageBoxIconType::QuestionIcon)
+                .withTitle("Save Parameters")
+                .withMessage("Parameters have changed, do you want to save "
+                             "before loading new patch?")
+                .withButton("Yes")
+                .withButton("No"),
+            [this, patchIndex = m_patchIndex](int result) {
+              // showAsync returns the plain index of the clicked button (0 =
+              // "Yes", 1 = "No").
+              handlePatchChange(patchIndex, result == 0);
+            });
       } else {
         loadPatchDirect(m_patchIndex);
       }
