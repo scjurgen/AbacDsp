@@ -173,12 +173,16 @@ class ModulatingDelayPitchedAdjust
         }
     }
 
+    static constexpr size_t InitialDistance{MaxSizeInSamples / 10};
+
     const float m_sampleRate{48000.0f};
     float m_feedback{0.0f};
-    float m_headRead{0.0f};
+    // start with the actual head distance matching m_currentDistance, otherwise the first
+    // setSize() glides in the wrong direction across nearly the whole buffer
+    float m_headRead{static_cast<float>(MaxSizeInSamples - InitialDistance)};
     size_t m_headWrite{0};
     float m_decayMsecs{100.0f};
-    size_t m_currentDistance{MaxSizeInSamples / 10};
+    size_t m_currentDistance{InitialDistance};
     size_t m_newDistance{0};
     size_t m_lastDistanceRequested{0};
     bool m_advanceSteps{false};
@@ -190,4 +194,4 @@ class ModulatingDelayPitchedAdjust
     std::vector<float> m_buffer;
 };
 
-}  // namespace AbacDsp
+} // namespace AbacDsp
