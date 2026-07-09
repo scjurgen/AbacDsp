@@ -7,7 +7,7 @@
 
 #include "themes/Themes.h"
 
-class GuiConstants : public juce::DeletedAtShutdown
+class GuiConstants
 {
   public:
     using Theme = Themes::Theme;
@@ -59,45 +59,26 @@ class GuiConstants : public juce::DeletedAtShutdown
     static constexpr float kCpuWarnFraction = 0.60f;
     static constexpr float kCpuDangerFraction = 0.75f;
 
+    // Function-local static: thread-safe lazy init guaranteed by C++11, and
+    // instance() is always valid even if setPreset() is never called (defaults
+    // to Theme::Ink). The previous heap-allocated-singleton-with-raw-pointer
+    // pattern required setPreset() to run before the first instance() call or
+    // it dereferenced a null/dangling pointer (UB in Release, since the guard
+    // was only a jassert) - a real risk in a plugin host that may not call
+    // createEditor() (which called setPreset()) on the thread/order expected.
     static GuiConstants& instance()
     {
-        jassert(instance_ != nullptr); // must call setPreset() before first use
-        return *instance_;
+        static GuiConstants inst;
+        return inst;
     }
 
     static void setPreset(Theme theme)
     {
-        delete instance_;
-        instance_ = new GuiConstants(theme);
+        instance().applyTheme(theme);
     }
 
-    explicit GuiConstants(Theme theme = Theme::Ink)
-    {
-        const auto& def = Themes::definition(theme);
-
-        m_spectrogramGradient = makeSpectrogramGradient(def);
-        m_cpuGradient = makeZoneGradient(def.cpuZones, kCpuWarnFraction, kCpuDangerFraction);
-        m_levelGradient = makeZoneGradient(def.levelZones, levelPosition(kLevelWarnDb), levelPosition(kLevelDangerDb));
-
-        std::generate(colors.cols.begin(), colors.cols.end(),
-                      [&, i = size_t{0}]() mutable
-                      {
-                          return m_spectrogramGradient
-                              .getColourAtPosition(static_cast<double>(i++) / colors.cols.size())
-                              .getARGB();
-                      });
-
-        colors.background = def.background;
-        colors.backgroundComponent = def.backgroundComponent;
-        colors.backgroundDark = def.backgroundDark;
-        colors.backgroundMid = def.backgroundMid;
-        colors.backgroundLight = def.backgroundLight;
-        colors.gradientDark = def.gradientDark;
-        colors.knobGradientStart = def.knobGradientStart;
-        colors.knobGradientCenter = def.knobGradientCenter;
-        colors.knobGradientEnd = def.knobGradientEnd;
-        colors.statusOutline = def.statusOutline;
-    }
+    GuiConstants(const GuiConstants&) = delete;
+    GuiConstants& operator=(const GuiConstants&) = delete;
 
     [[nodiscard]] juce::ColourGradient getSpectrogramGradient() const
     {
@@ -130,10 +111,42 @@ class GuiConstants : public juce::DeletedAtShutdown
     InitJuce init;
 
   private:
+    GuiConstants()
+    {
+        applyTheme(Theme::Ink);
+    }
+
+    void applyTheme(Theme theme)
+    {
+        const auto& def = Themes::definition(theme);
+
+        m_spectrogramGradient = makeSpectrogramGradient(def);
+        m_cpuGradient = makeZoneGradient(def.cpuZones, kCpuWarnFraction, kCpuDangerFraction);
+        m_levelGradient = makeZoneGradient(def.levelZones, levelPosition(kLevelWarnDb), levelPosition(kLevelDangerDb));
+
+        std::generate(colors.cols.begin(), colors.cols.end(),
+                      [&, i = size_t{0}]() mutable
+                      {
+                          return m_spectrogramGradient
+                              .getColourAtPosition(static_cast<double>(i++) / colors.cols.size())
+                              .getARGB();
+                      });
+
+        colors.background = def.background;
+        colors.backgroundComponent = def.backgroundComponent;
+        colors.backgroundDark = def.backgroundDark;
+        colors.backgroundMid = def.backgroundMid;
+        colors.backgroundLight = def.backgroundLight;
+        colors.gradientDark = def.gradientDark;
+        colors.knobGradientStart = def.knobGradientStart;
+        colors.knobGradientCenter = def.knobGradientCenter;
+        colors.knobGradientEnd = def.knobGradientEnd;
+        colors.statusOutline = def.statusOutline;
+    }
+
     juce::ColourGradient m_spectrogramGradient;
     juce::ColourGradient m_cpuGradient;
     juce::ColourGradient m_levelGradient;
-    static inline GuiConstants* instance_ = nullptr;
 
     static juce::ColourGradient makeSpectrogramGradient(const Themes::ThemeDefinition& def)
     {

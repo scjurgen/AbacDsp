@@ -179,12 +179,15 @@ public:
 
     if (xmlState != nullptr) {
       if (xmlState->hasTagName(m_parameters.state.getType())) {
-        // Applied immediately, not deferred to prepareToPlay:
-        // parameterChanged() already no-ops safely while pluginRunner is null,
-        // and deferring let a stale restore silently clobber values set after
-        // this call but before the next prepareToPlay (observed via auval's
+        // Hosts may call setStateInformation() from any thread, so
+        // replaceState() (which touches editor-attached listeners) must hop to
+        // the message thread rather than running here directly or being
+        // deferred to some arbitrary future prepareToPlay(), which let a stale
+        // restore clobber values set in between (observed via auval's
         // parameter-retention test).
-        m_parameters.replaceState(juce::ValueTree::fromXml(*xmlState));
+        juce::ValueTree newState = juce::ValueTree::fromXml(*xmlState);
+        juce::MessageManager::callAsync(
+            [this, newState] { m_parameters.replaceState(newState); });
       }
     }
   }

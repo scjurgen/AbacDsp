@@ -11,6 +11,8 @@
 #include "Analysis/Spectrogram.h"
 #include "Audio/FixedSizeProcessor.h"
 #include "UiElements.h"
+#include "impl/CcMapping.h"
+#include "impl/CcSettings.h"
 #include "impl/FileIo.h"
 #include "impl/MaxDiffuserImpl.h"
 
@@ -82,9 +84,6 @@ public:
         p->sendValueChangedMessageToListeners(normalizedValue);
       }
     }
-    if (m_newState.isValid()) {
-      m_parameters.replaceState(m_newState);
-    }
 
     juce::ignoreUnused(samplesPerBlock);
     m_fileIo.enable();
@@ -94,17 +93,9 @@ public:
     std::cout << "releaseResources: Called on shutdown" << std::endl;
 
     if (m_fileIo.areParametersModified()) {
-      std::cout << "releaseResources: Parameters modified, prompting for save"
+      std::cout << "releaseResources: Parameters modified, autosaving"
                 << std::endl;
-
-      int result = juce::NativeMessageBox::showYesNoBox(
-          juce::MessageBoxIconType::QuestionIcon, "Save Parameters",
-          "Parameters have changed. Do you want to save before exiting?",
-          nullptr, nullptr);
-      if (result == 1) {
-        std::cout << "Saving data\n";
-        m_fileIo.forceSave();
-      }
+      m_fileIo.forceSave();
     }
 
     pluginRunner = nullptr;
@@ -203,7 +194,15 @@ public:
 
     if (xmlState != nullptr) {
       if (xmlState->hasTagName(m_parameters.state.getType())) {
-        m_newState = juce::ValueTree::fromXml(*xmlState);
+        // Hosts may call setStateInformation() from any thread, so
+        // replaceState() (which touches editor-attached listeners) must hop to
+        // the message thread rather than running here directly or being
+        // deferred to some arbitrary future prepareToPlay(), which let a stale
+        // restore clobber values set in between (observed via auval's
+        // parameter-retention test).
+        juce::ValueTree newState = juce::ValueTree::fromXml(*xmlState);
+        juce::MessageManager::callAsync(
+            [this, newState] { m_parameters.replaceState(newState); });
       }
     }
   }
@@ -539,7 +538,6 @@ private:
   }
 
   int m_program{0};
-  juce::ValueTree m_newState;
 
   AbacDsp::FixedSizeProcessor<2, NumSamplesPerBlock, juce::AudioBuffer<float>>
       fixedRunner;

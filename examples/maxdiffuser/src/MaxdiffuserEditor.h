@@ -27,10 +27,21 @@ public:
     setResizable(true, true);
     setResizeLimits(GuiConstants::instance().init.WindowWidth,
                     GuiConstants::instance().init.WindowHeight, 4000, 3000);
-    const auto saved = AppSettings::loadWindowBounds(
-        GuiConstants::instance().init.WindowWidth,
-        GuiConstants::instance().init.WindowHeight);
-    setSize(saved.getWidth(), saved.getHeight());
+    // Saved window bounds (position in particular) only make sense for the
+    // Standalone app's own OS window. Applying a remembered on-screen X/Y to
+    // a hosted plugin editor's top-level component can push its native peer
+    // to coordinates outside any connected display, leaving the host with
+    // an empty content area even though the editor itself constructed fine.
+    if (processorRef.wrapperType ==
+        juce::AudioProcessor::wrapperType_Standalone) {
+      const auto saved = AppSettings::loadWindowBounds(
+          GuiConstants::instance().init.WindowWidth,
+          GuiConstants::instance().init.WindowHeight);
+      setSize(saved.getWidth(), saved.getHeight());
+    } else {
+      setSize(GuiConstants::instance().init.WindowWidth,
+              GuiConstants::instance().init.WindowHeight);
+    }
     startTimerHz(GuiConstants::instance().init.TimerHertz);
   }
 
@@ -209,7 +220,9 @@ public:
       m_topLevel->addComponentListener(this);
     }
 
-    if (!m_boundsRestored && m_topLevel->isOnDesktop()) {
+    if (processorRef.wrapperType ==
+            juce::AudioProcessor::wrapperType_Standalone &&
+        !m_boundsRestored && m_topLevel->isOnDesktop()) {
       const auto saved = AppSettings::loadWindowBounds(getWidth(), getHeight());
       m_topLevel->setTopLeftPosition(saved.getX(), saved.getY());
       m_boundsRestored = true;
