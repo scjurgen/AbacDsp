@@ -198,7 +198,10 @@ def createPatchIndexAssign(m:dict) -> str:
     idx = 0
     for item in m["ports-control"]:
         if "patch" in item:
-            res += (f''' if (parameterID == "{item['symbol']}") {{ m_patchIndex[{idx}] = static_cast<int>(newValue);}} ''')
+            res += (f''' if (parameterID == "{item['symbol']}") {{
+                const int newIdx = static_cast<int>(newValue);
+                if (m_patchIndex[{idx}] != newIdx) {{ m_patchIndex[{idx}] = newIdx; patchIndexChanged = true; }}
+            }} ''')
             idx = idx + 1
     return res
 

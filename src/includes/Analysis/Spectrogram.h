@@ -250,8 +250,11 @@ class SpectrogramBase
 
     virtual ~SpectrogramBase()
     {
-        m_shouldExit.store(true, std::memory_order_release);
-        m_workerThread.join();
+        // Safety net only: by the time this runs, the derived class's vtable
+        // slot is already gone. Every concrete subclass must call stopWorker()
+        // as the first line of its own destructor, before that happens, or a
+        // still-running worker thread calls the now-pure onNewFFTData().
+        stopWorker();
     }
 
     void setSampleRate(const float sr)
@@ -291,7 +294,23 @@ class SpectrogramBase
         }
     }
 
+    void processBlock(const float* data, const size_t numSamples)
+    {
+        processBlock(std::span<const float>{data, numSamples});
+    }
+
   protected:
+    // Every concrete subclass must call this as the first line of its own
+    // destructor. Idempotent: safe to also let ~SpectrogramBase() call it.
+    void stopWorker()
+    {
+        if (m_workerThread.joinable())
+        {
+            m_shouldExit.store(true, std::memory_order_release);
+            m_workerThread.join();
+        }
+    }
+
     virtual void onNewFFTData(const std::vector<float>& magnitudes) = 0;
     virtual void onFftLengthChanged() {}
 
@@ -361,6 +380,11 @@ class SimpleSpectrogram : public SpectrogramBase
     {
     }
 
+    ~SimpleSpectrogram() override
+    {
+        stopWorker();
+    }
+
     [[nodiscard]] SpectrumImageSet getImageSet() const
     {
         return {m_currentSlice, m_slices,    m_fftLength / 2,     m_spectrogram.data(),
@@ -409,6 +433,11 @@ class FloatingHorizonFFTImage : public SpectrogramBase
         , m_horizon(m_width)
         , m_image(m_width * m_height)
     {
+    }
+
+    ~FloatingHorizonFFTImage() override
+    {
+        stopWorker();
     }
 
     [[nodiscard]] SpectrumImageSet getImageSet() const
@@ -508,4 +537,4 @@ class FloatingHorizonFFTImage : public SpectrogramBase
     std::vector<float> m_image;
 };
 
-}  // namespace AbacDsp
+} // namespace AbacDsp

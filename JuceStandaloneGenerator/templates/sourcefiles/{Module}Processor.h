@@ -72,10 +72,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                 p->sendValueChangedMessageToListeners(normalizedValue);
             }
         }
-        if (m_newState.isValid())
-        {
-            m_parameters.replaceState(m_newState);
-        }
         /*START_MIDICC*/
         for (const auto& entry : CcSettings::load())
         {
@@ -102,16 +98,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 
         if (m_fileIo.areParametersModified())
         {
-            std::cout << "releaseResources: Parameters modified, prompting for save" << std::endl;
-
-            int result = juce::NativeMessageBox::showYesNoBox(
-                juce::MessageBoxIconType::QuestionIcon, "Save Parameters",
-                "Parameters have changed. Do you want to save before exiting?", nullptr, nullptr);
-            if (result == 1)
-            {
-                std::cout << "Saving data\n";
-                m_fileIo.forceSave();
-            }
+            std::cout << "releaseResources: Parameters modified, autosaving" << std::endl;
+            m_fileIo.forceSave();
         }
 
         pluginRunner = nullptr;
@@ -239,7 +227,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             if (xmlState->hasTagName(m_parameters.state.getType()))
             {
-                m_newState = juce::ValueTree::fromXml(*xmlState);
+                // Applied immediately, not deferred to prepareToPlay: parameterChanged()
+                // already no-ops safely while pluginRunner is null, and deferring let a
+                // stale restore silently clobber values set after this call but before
+                // the next prepareToPlay (observed via auval's parameter-retention test).
+                m_parameters.replaceState(juce::ValueTree::fromXml(*xmlState));
             }
         }
     }
@@ -265,26 +257,30 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         /*START_PATCHSUPPORT*/
         if (/*PatchChanged*/)
         {
+            bool patchIndexChanged = false;
             /*PatchIndexAssign*/
 
-            if (m_fileIo.areParametersModified())
+            if (patchIndexChanged)
             {
-                juce::NativeMessageBox::showAsync(
-                    juce::MessageBoxOptions()
-                        .withIconType(juce::MessageBoxIconType::QuestionIcon)
-                        .withTitle("Save Parameters")
-                        .withMessage("Parameters have changed, do you want to save before loading new patch?")
-                        .withButton("Yes")
-                        .withButton("No"),
-                    [this, patchIndex = m_patchIndex](int result)
-                    {
-                        // showAsync returns the plain index of the clicked button (0 = "Yes", 1 = "No").
-                        handlePatchChange(patchIndex, result == 0);
-                    });
-            }
-            else
-            {
-                loadPatchDirect(m_patchIndex);
+                if (m_fileIo.areParametersModified())
+                {
+                    juce::NativeMessageBox::showAsync(
+                        juce::MessageBoxOptions()
+                            .withIconType(juce::MessageBoxIconType::QuestionIcon)
+                            .withTitle("Save Parameters")
+                            .withMessage("Parameters have changed, do you want to save before loading new patch?")
+                            .withButton("Yes")
+                            .withButton("No"),
+                        [this, patchIndex = m_patchIndex](int result)
+                        {
+                            // showAsync returns the plain index of the clicked button (0 = "Yes", 1 = "No").
+                            handlePatchChange(patchIndex, result == 0);
+                        });
+                }
+                else
+                {
+                    loadPatchDirect(m_patchIndex);
+                }
             }
         }
         else
@@ -496,7 +492,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     }
 
     int m_program{0};
-    juce::ValueTree m_newState;
 
     AbacDsp::FixedSizeProcessor<2, NumSamplesPerBlock, juce::AudioBuffer<float>> fixedRunner;
     std::unique_ptr</*CLASS_NAME*/> pluginRunner;
