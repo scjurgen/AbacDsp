@@ -11,6 +11,8 @@
 #include "Analysis/Spectrogram.h"
 #include "Audio/FixedSizeProcessor.h"
 #include "UiElements.h"
+#include "impl/CcMapping.h"
+#include "impl/CcSettings.h"
 #include "impl/FileIo.h"
 #include "impl/GainImpl.h"
 
@@ -65,9 +67,6 @@ public:
         p->sendValueChangedMessageToListeners(normalizedValue);
       }
     }
-    if (m_newState.isValid()) {
-      m_parameters.replaceState(m_newState);
-    }
 
     juce::ignoreUnused(samplesPerBlock);
     m_fileIo.enable();
@@ -77,17 +76,9 @@ public:
     std::cout << "releaseResources: Called on shutdown" << std::endl;
 
     if (m_fileIo.areParametersModified()) {
-      std::cout << "releaseResources: Parameters modified, prompting for save"
+      std::cout << "releaseResources: Parameters modified, autosaving"
                 << std::endl;
-
-      int result = juce::NativeMessageBox::showYesNoBox(
-          juce::MessageBoxIconType::QuestionIcon, "Save Parameters",
-          "Parameters have changed. Do you want to save before exiting?",
-          nullptr, nullptr);
-      if (result == 1) {
-        std::cout << "Saving data\n";
-        m_fileIo.forceSave();
-      }
+      m_fileIo.forceSave();
     }
 
     pluginRunner = nullptr;
@@ -186,7 +177,12 @@ public:
 
     if (xmlState != nullptr) {
       if (xmlState->hasTagName(m_parameters.state.getType())) {
-        m_newState = juce::ValueTree::fromXml(*xmlState);
+        // Applied immediately, not deferred to prepareToPlay:
+        // parameterChanged() already no-ops safely while pluginRunner is null,
+        // and deferring let a stale restore silently clobber values set after
+        // this call but before the next prepareToPlay (observed via auval's
+        // parameter-retention test).
+        m_parameters.replaceState(juce::ValueTree::fromXml(*xmlState));
       }
     }
   }
@@ -242,26 +238,33 @@ public:
     }
 
     if (parameterID == "subset") {
+      bool patchIndexChanged = false;
       if (parameterID == "subset") {
-        m_patchIndex[0] = static_cast<int>(newValue);
+        const int newIdx = static_cast<int>(newValue);
+        if (m_patchIndex[0] != newIdx) {
+          m_patchIndex[0] = newIdx;
+          patchIndexChanged = true;
+        }
       }
 
-      if (m_fileIo.areParametersModified()) {
-        juce::NativeMessageBox::showAsync(
-            juce::MessageBoxOptions()
-                .withIconType(juce::MessageBoxIconType::QuestionIcon)
-                .withTitle("Save Parameters")
-                .withMessage("Parameters have changed, do you want to save "
-                             "before loading new patch?")
-                .withButton("Yes")
-                .withButton("No"),
-            [this, patchIndex = m_patchIndex](int result) {
-              // showAsync returns the plain index of the clicked button (0 =
-              // "Yes", 1 = "No").
-              handlePatchChange(patchIndex, result == 0);
-            });
-      } else {
-        loadPatchDirect(m_patchIndex);
+      if (patchIndexChanged) {
+        if (m_fileIo.areParametersModified()) {
+          juce::NativeMessageBox::showAsync(
+              juce::MessageBoxOptions()
+                  .withIconType(juce::MessageBoxIconType::QuestionIcon)
+                  .withTitle("Save Parameters")
+                  .withMessage("Parameters have changed, do you want to save "
+                               "before loading new patch?")
+                  .withButton("Yes")
+                  .withButton("No"),
+              [this, patchIndex = m_patchIndex](int result) {
+                // showAsync returns the plain index of the clicked button (0 =
+                // "Yes", 1 = "No").
+                handlePatchChange(patchIndex, result == 0);
+              });
+        } else {
+          loadPatchDirect(m_patchIndex);
+        }
       }
     } else {
       m_fileIo.updateParameter(parameterID.toStdString(), newValue);
@@ -385,7 +388,6 @@ private:
   }
 
   int m_program{0};
-  juce::ValueTree m_newState;
 
   AbacDsp::FixedSizeProcessor<2, NumSamplesPerBlock, juce::AudioBuffer<float>>
       fixedRunner;
