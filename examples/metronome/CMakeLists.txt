@@ -74,7 +74,7 @@ juce_add_plugin("${PROJECT_NAME}"
         BUNDLE_ID de.krachpedale.metronome
         PLIST_TO_MERGE "${PLIST_EXTRAS_CONTENT}"
         IS_SYNTH  FALSE
-        NEEDS_MIDI_INPUT FALSE
+        NEEDS_MIDI_INPUT TRUE
         NEEDS_MIDI_OUTPUT FALSE
         IS_MIDI_EFFECT FALSE
         EDITOR_WANTS_KEYBOARD_FOCUS FALSE

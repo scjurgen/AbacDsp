@@ -143,6 +143,7 @@ public:
             processorRef.getSubdivisionPositions());
         irisGauge.update(processorRef.getInputSpectrogram());
       }
+      processorRef.consumeLastLearnedCc();
     }
   }
 
@@ -156,6 +157,14 @@ public:
     addAndMakeVisible(bpmDial);
     bpmDial.reset(valueTreeState, "bpm");
     bpmDial.setLabelText(juce::String::fromUTF8("BPM"));
+    bpmDial.setCcMappable(
+        true, {[this] { processorRef.beginCcLearn(CcTarget::bpm); },
+               [this] { return processorRef.getCcRange(CcTarget::bpm); },
+               [this](float lo, float hi) {
+                 processorRef.setCcRange(CcTarget::bpm, lo, hi);
+               },
+               [this] { processorRef.clearCcAssignment(CcTarget::bpm); },
+               [this] { return processorRef.getCcController(CcTarget::bpm); }});
     addAndMakeVisible(dropBarsDrop);
     dropBarsDrop.addItemList(
         valueTreeState.getParameter("dropBars")->getAllValueStrings(), 1);
@@ -165,12 +174,43 @@ public:
     addAndMakeVisible(metroVolumeDial);
     metroVolumeDial.reset(valueTreeState, "metroVolume");
     metroVolumeDial.setLabelText(juce::String::fromUTF8("Metro Volume"));
+    metroVolumeDial.setCcMappable(
+        true,
+        {[this] { processorRef.beginCcLearn(CcTarget::metroVolume); },
+         [this] { return processorRef.getCcRange(CcTarget::metroVolume); },
+         [this](float lo, float hi) {
+           processorRef.setCcRange(CcTarget::metroVolume, lo, hi);
+         },
+         [this] { processorRef.clearCcAssignment(CcTarget::metroVolume); },
+         [this] {
+           return processorRef.getCcController(CcTarget::metroVolume);
+         }});
     addAndMakeVisible(inputVolumeDial);
     inputVolumeDial.reset(valueTreeState, "inputVolume");
     inputVolumeDial.setLabelText(juce::String::fromUTF8("Input Volume"));
+    inputVolumeDial.setCcMappable(
+        true,
+        {[this] { processorRef.beginCcLearn(CcTarget::inputVolume); },
+         [this] { return processorRef.getCcRange(CcTarget::inputVolume); },
+         [this](float lo, float hi) {
+           processorRef.setCcRange(CcTarget::inputVolume, lo, hi);
+         },
+         [this] { processorRef.clearCcAssignment(CcTarget::inputVolume); },
+         [this] {
+           return processorRef.getCcController(CcTarget::inputVolume);
+         }});
     addAndMakeVisible(subVolumeDial);
     subVolumeDial.reset(valueTreeState, "subVolume");
     subVolumeDial.setLabelText(juce::String::fromUTF8("Sub Volume"));
+    subVolumeDial.setCcMappable(
+        true,
+        {[this] { processorRef.beginCcLearn(CcTarget::subVolume); },
+         [this] { return processorRef.getCcRange(CcTarget::subVolume); },
+         [this](float lo, float hi) {
+           processorRef.setCcRange(CcTarget::subVolume, lo, hi);
+         },
+         [this] { processorRef.clearCcAssignment(CcTarget::subVolume); },
+         [this] { return processorRef.getCcController(CcTarget::subVolume); }});
     addAndMakeVisible(onOffSwitch);
     onOffSwitchAttachment =
         std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -187,6 +227,16 @@ public:
     addChildComponent(swingRatioDial);
     swingRatioDial.reset(valueTreeState, "swingRatio");
     swingRatioDial.setLabelText(juce::String::fromUTF8("Swing"));
+    swingRatioDial.setCcMappable(
+        true, {[this] { processorRef.beginCcLearn(CcTarget::swingRatio); },
+               [this] { return processorRef.getCcRange(CcTarget::swingRatio); },
+               [this](float lo, float hi) {
+                 processorRef.setCcRange(CcTarget::swingRatio, lo, hi);
+               },
+               [this] { processorRef.clearCcAssignment(CcTarget::swingRatio); },
+               [this] {
+                 return processorRef.getCcController(CcTarget::swingRatio);
+               }});
     addAndMakeVisible(signalGauge);
     signalGauge.setLabelText(juce::String::fromUTF8("Beat"));
     addAndMakeVisible(irisGauge);

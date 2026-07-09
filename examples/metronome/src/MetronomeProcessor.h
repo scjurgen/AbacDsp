@@ -11,6 +11,8 @@
 #include "Analysis/Spectrogram.h"
 #include "Audio/FixedSizeProcessor.h"
 #include "UiElements.h"
+#include "impl/CcMapping.h"
+#include "impl/CcSettings.h"
 #include "impl/FileIo.h"
 #include "impl/MetronomeImpl.h"
 
@@ -46,6 +48,14 @@ public:
     m_parameters.addParameterListener("preset", this);
     m_parameters.addParameterListener("swingRatio", this);
 
+    for (size_t i = 0; i < 5; ++i) {
+      m_ccActive[i].controller.store(kDefaultCcMappings[i].controller,
+                                     std::memory_order_relaxed);
+      m_ccActive[i].valueLow.store(kDefaultCcMappings[i].valueLow,
+                                   std::memory_order_relaxed);
+      m_ccActive[i].valueHigh.store(kDefaultCcMappings[i].valueHigh,
+                                    std::memory_order_relaxed);
+    }
     m_fileIo.initialize(m_patchIndex);
   }
   ~AudioPluginAudioProcessor() override {
@@ -73,6 +83,19 @@ public:
     }
     if (m_newState.isValid()) {
       m_parameters.replaceState(m_newState);
+    }
+    for (const auto &entry : CcSettings::load()) {
+      for (size_t i = 0; i < 5; ++i) {
+        if (kCcTargetParamIds[i] != entry.paramId) {
+          continue;
+        }
+        m_ccActive[i].controller.store(entry.controller,
+                                       std::memory_order_relaxed);
+        m_ccActive[i].valueLow.store(clampToParamRange(i, entry.valueLow),
+                                     std::memory_order_relaxed);
+        m_ccActive[i].valueHigh.store(clampToParamRange(i, entry.valueHigh),
+                                      std::memory_order_relaxed);
+      }
     }
 
     juce::ignoreUnused(samplesPerBlock);
@@ -423,6 +446,9 @@ public:
     if (!midiMessages.isEmpty()) {
       for (const auto &msg : midiMessages) {
         pluginRunner->processMidi(msg.data);
+        if ((msg.data[0] & 0xF0) == 0xB0) {
+          handleMidiCc(msg.data[1], msg.data[2]);
+        }
       }
     }
     if ((getTotalNumInputChannels() == 2) &&
@@ -459,6 +485,52 @@ public:
   }
 
   [[nodiscard]] bool hasRunner() const { return pluginRunner.get() != nullptr; }
+  void beginCcLearn(const CcTarget target) noexcept {
+    m_learnTargetIndex.store(static_cast<int>(target),
+                             std::memory_order_relaxed);
+  }
+
+  [[nodiscard]] std::pair<float, float>
+  getCcRange(const CcTarget target) const noexcept {
+    const auto idx = static_cast<size_t>(target);
+    return {m_ccActive[idx].valueLow.load(std::memory_order_relaxed),
+            m_ccActive[idx].valueHigh.load(std::memory_order_relaxed)};
+  }
+
+  void setCcRange(const CcTarget target, const float lo, const float hi) {
+    const auto idx = static_cast<size_t>(target);
+    m_ccActive[idx].valueLow.store(clampToParamRange(idx, lo),
+                                   std::memory_order_relaxed);
+    m_ccActive[idx].valueHigh.store(clampToParamRange(idx, hi),
+                                    std::memory_order_relaxed);
+    saveCcSettings();
+  }
+
+  void clearCcAssignment(const CcTarget target) {
+    m_ccActive[static_cast<size_t>(target)].controller.store(
+        -1, std::memory_order_relaxed);
+    saveCcSettings();
+  }
+
+  [[nodiscard]] int getCcController(const CcTarget target) const noexcept {
+    return m_ccActive[static_cast<size_t>(target)].controller.load(
+        std::memory_order_relaxed);
+  }
+
+  // Called from the message thread (Editor timer poll); safe to log/save here,
+  // unlike inside handleMidiCc which runs on the audio thread.
+  int consumeLastLearnedCc() {
+    const auto idx = m_lastLearnedIndex.exchange(-1, std::memory_order_relaxed);
+    if (idx >= 0) {
+      std::cout << "MIDI CC learn: cc"
+                << m_ccActive[static_cast<size_t>(idx)].controller.load(
+                       std::memory_order_relaxed)
+                << " -> " << kCcTargetParamIds[static_cast<size_t>(idx)]
+                << std::endl;
+      saveCcSettings();
+    }
+    return idx;
+  }
   float m_maxValue{0.f};
 
 private:
@@ -475,6 +547,57 @@ private:
       fixedRunner;
   std::unique_ptr<MetronomeImpl<NumSamplesPerBlock>> pluginRunner;
   juce::AudioProcessorValueTreeState m_parameters;
+  struct CcSlot {
+    std::atomic<int> controller{-1};
+    std::atomic<float> valueLow{0.f};
+    std::atomic<float> valueHigh{0.f};
+  };
+  std::array<CcSlot, 5> m_ccActive{};
+  std::atomic<int> m_learnTargetIndex{-1};
+  std::atomic<int> m_lastLearnedIndex{-1};
+
+  [[nodiscard]] static float clampToParamRange(const size_t idx,
+                                               const float value) noexcept {
+    const auto &r = kCcTargetFullRange[idx];
+    return std::clamp(value, r.lo, r.hi);
+  }
+
+  void saveCcSettings() const {
+    std::vector<CcMappingOverride> overrides;
+    overrides.reserve(5);
+    for (size_t i = 0; i < 5; ++i) {
+      overrides.push_back(
+          {std::string(kCcTargetParamIds[i]),
+           m_ccActive[i].controller.load(std::memory_order_relaxed),
+           m_ccActive[i].valueLow.load(std::memory_order_relaxed),
+           m_ccActive[i].valueHigh.load(std::memory_order_relaxed)});
+    }
+    CcSettings::save(overrides);
+  }
+
+  void handleMidiCc(const uint8_t controller, const uint8_t value7bit) {
+    const auto learnIndex = m_learnTargetIndex.load(std::memory_order_relaxed);
+    if (learnIndex >= 0) {
+      m_ccActive[static_cast<size_t>(learnIndex)].controller.store(
+          controller, std::memory_order_relaxed);
+      m_learnTargetIndex.store(-1, std::memory_order_relaxed);
+      m_lastLearnedIndex.store(learnIndex, std::memory_order_relaxed);
+      return;
+    }
+    for (size_t i = 0; i < 5; ++i) {
+      if (m_ccActive[i].controller.load(std::memory_order_relaxed) !=
+          controller) {
+        continue;
+      }
+      const auto lo = m_ccActive[i].valueLow.load(std::memory_order_relaxed);
+      const auto hi = m_ccActive[i].valueHigh.load(std::memory_order_relaxed);
+      const auto raw = lo + (hi - lo) * (static_cast<float>(value7bit) / 127.f);
+      if (auto *param = m_parameters.getParameter(juce::String(
+              kCcTargetParamIds[i].data(), kCcTargetParamIds[i].size()))) {
+        param->setValueNotifyingHost(param->convertTo0to1(raw));
+      }
+    }
+  }
   std::vector<int> m_patchIndex;
   FileIo m_fileIo;
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessor)

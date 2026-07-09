@@ -77,6 +77,8 @@ cppJuceFileConstants = "{Module}Constants.h"
 cppSourceFilesImpl = "impl/GenericImpl.h"
 cppSourceFilesImplFileIo  = "impl/FileIo.h"
 cppPatchParameters = "impl/PatchParameters.h"
+cppCcMapping = "impl/CcMapping.h"
+cppCcSettings = "impl/CcSettings.h"
 cppSourceFilesUnitTest = "unittests/{Module}_tests.cpp"
 
 cppConstants = [
@@ -119,7 +121,12 @@ cppJuceFileVars = [
     "LoadPatches",
     "PatchChanged",
     "PatchIndexAssign",
-    "PatchCount"
+    "PatchCount",
+    "CC_TARGET_ENUM_LIST",
+    "CC_DEFAULT_MAPPINGS",
+    "CC_TARGET_PARAMID_LIST",
+    "CC_TARGET_FULL_RANGE",
+    "NUM_CC_TARGETS"
 ]
 
 firstMidiIn = True
@@ -155,6 +162,8 @@ def createGaugeCallbacks(m:dict) -> str:
     extra = m.get("extra_timer_callbacks", [])
     if extra:
         res += "\n" + "\n".join(extra) + "\n"
+    if cc_enabled_dials(m):
+        res += "processorRef.consumeLastLearnedCc();\n"
     return res
 
 
@@ -365,6 +374,15 @@ def createInitWidgets(m: dict) -> str:
                 res += f"""{add_fn}({varname});
                 {varname}.reset(valueTreeState, "{item['symbol']}");
                 {varname}.setLabelText(juce::String::fromUTF8("{item['display']}"));\n"""
+                if item['type'] == 'dial' and 'cc' in item:
+                    symbol = item['symbol']
+                    res += f"""{varname}.setCcMappable(true, {{
+                        [this] {{ processorRef.beginCcLearn(CcTarget::{symbol}); }},
+                        [this] {{ return processorRef.getCcRange(CcTarget::{symbol}); }},
+                        [this] (float lo, float hi) {{ processorRef.setCcRange(CcTarget::{symbol}, lo, hi); }},
+                        [this] {{ processorRef.clearCcAssignment(CcTarget::{symbol}); }},
+                        [this] {{ return processorRef.getCcController(CcTarget::{symbol}); }}
+                    }});\n"""
             case "switch":
                 varname += "Switch"
                 res += f"""{add_fn}({varname});
@@ -616,6 +634,32 @@ def fillRange(item):
         item.update(parse_and_fill_range([0, 1, 0, 1, "false"]))
     return item
 
+def fillCc(item: dict):
+    cc = item['cc']
+    if 'valueLow' not in cc:
+        cc['valueLow'] = item['rangeStart']
+    if 'valueHigh' not in cc:
+        cc['valueHigh'] = item['rangeEnd']
+    return item
+
+def cc_enabled_dials(m: dict) -> list:
+    return [item for item in m["ports-control"] if item['type'] == 'dial' and 'cc' in item]
+
+def createCcMapping(m: dict) -> dict:
+    items = cc_enabled_dials(m)
+    return {
+        "CC_TARGET_ENUM_LIST": ", ".join(item['symbol'] for item in items),
+        "CC_DEFAULT_MAPPINGS": "\n".join(
+            f'{{{item["cc"]["controller"]}, {float(item["cc"]["valueLow"])}f, {float(item["cc"]["valueHigh"])}f}},'
+            for item in items
+        ),
+        "CC_TARGET_PARAMID_LIST": "\n".join(f'"{item["symbol"]}",' for item in items),
+        "CC_TARGET_FULL_RANGE": "\n".join(
+            f'{{{float(item["rangeStart"])}f, {float(item["rangeEnd"])}f}},' for item in items
+        ),
+        "NUM_CC_TARGETS": str(len(items)),
+    }
+
 
 def enrich(m: dict):
     items_to_remove = []
@@ -678,6 +722,8 @@ def createPackageFromJsonDict(m: dict):
         item = fillDefaults(m["ports-control"][idx])
         if item['type'] in ['dial', 'slider']:
             item = fillRange(item)
+        if item['type'] == 'dial' and 'cc' in item:
+            item = fillCc(item)
         item["keyUpper"] = item['symbol'][0].upper() + item['symbol'][1:]
         item["setter"] = "set"+item["keyUpper"]
 
@@ -699,6 +745,7 @@ def createPackageFromJsonDict(m: dict):
     m["CPP"]["PatchIndexAssign"] = createPatchIndexAssign(m)
     m["CPP"]["PatchCount"] = getPatchCount(m)
     m["CPP"]["ParamStructMembers"] = createtructVariablesImplementation(m)
+    m["CPP"].update(createCcMapping(m))
 
     m["CPP"]["INIT_WIDGETS"] = createInitWidgets(m)
     m["CPP"]["WIDGETS_DECL"] = createWidgetsDecl(m)
@@ -778,6 +825,8 @@ def createPackageFromJsonDict(m: dict):
     m["CPP"]["GAUGES"] = gauge_present(m)
     if getPatchCount(m) > 0:
         m["CPP"]["GAUGES"].append("PATCHSUPPORT")
+    if int(m["CPP"]["NUM_CC_TARGETS"]) > 0:
+        m["CPP"]["GAUGES"].append("MIDICC")
 
     cppTargetFile = f"{cppTmpDir}/src/{cppJuceFile}"
     createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{cppJuceFile}", m["CPP"], cppJuceFileVars)
@@ -809,6 +858,18 @@ def createPackageFromJsonDict(m: dict):
     cmd = f"clang-format -i -style=file {clangFormatFile}"
     os.system(cmd)
 
+    cppTargetFile = f"{cppTmpDir}/src/{cppCcMapping}"
+    createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{cppCcMapping}", m["CPP"], cppJuceFileVars)
+    clangFormatFile = getTargetName(cppTargetFile, m)
+    cmd = f"clang-format -i -style=file {clangFormatFile}"
+    os.system(cmd)
+
+    cppTargetFile = f"{cppTmpDir}/src/{cppCcSettings}"
+    createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{cppCcSettings}", m["CPP"], cppJuceFileVars)
+    clangFormatFile = getTargetName(cppTargetFile, m)
+    cmd = f"clang-format -i -style=file {clangFormatFile}"
+    os.system(cmd)
+
     cppTargetFile = f"{cppTmpDir}/src/{cppJuceFileEditor}"
     createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{cppJuceFileEditor}", m["CPP"], cppJuceFileVars)
     clangFormatFile = getTargetName(cppTargetFile, m)
@@ -836,7 +897,7 @@ def createPackageFromJsonDict(m: dict):
 
     m["CPP"]["PluginCode"] = m["plugintype"][0] + digest[1:4].upper()
     m["CPP"]['IsSynth'] = "FALSE"
-    m["CPP"]['NeedsMidiInput'] = "FALSE"
+    m["CPP"]['NeedsMidiInput'] = "TRUE" if int(m["CPP"]["NUM_CC_TARGETS"]) > 0 else "FALSE"
     m["CPP"]['NeedsMidiOutput'] = "FALSE"
     m["CPP"]['IsMidiEffect'] = "FALSE"
     m["CPP"]['EditorWantsKeyboardFocus'] = "FALSE"
