@@ -138,6 +138,11 @@ def construct_boxes(m: dict):
                         flex_line += ".withFlex(0).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::stretch)"
                     else:
                         flex_line += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
+                case 'presetbrowser':
+                    if item['flex'] == 'abs':
+                        flex_line += f""".{withDirection}({item["size"]})"""
+                    else:
+                        flex_line += f""".withFlex({item["size"]})"""
             flex_line += ".withMargin(knobMarginSmall));\n"
             if "visible_when" in p:
                 result += f"""if ({var}.isVisible()) {{\n{flex_line}}}\n"""

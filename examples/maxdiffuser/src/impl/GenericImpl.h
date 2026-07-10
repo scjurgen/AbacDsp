@@ -23,6 +23,8 @@ public:
   void setModulationDepth(const float value) { m_modulationDepth = value; }
   void setModulationSpeed(const float value) { m_modulationSpeed = value; }
   void setLowPass(const float value) { m_lowPass = value; }
+  void setMix(const float value) { m_mix = value; }
+  void setPitch(const float value) { m_pitch = value; }
 
   void processBlock(const AbacDsp::AudioBuffer<2, BlockSize> &in,
                     AbacDsp::AudioBuffer<2, BlockSize> &out) {
@@ -44,4 +46,6 @@ private:
   float m_modulationDepth{};
   float m_modulationSpeed{};
   float m_lowPass{};
+  float m_mix{};
+  float m_pitch{};
 };

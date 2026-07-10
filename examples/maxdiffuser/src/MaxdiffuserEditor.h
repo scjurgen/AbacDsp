@@ -69,23 +69,28 @@ public:
     // juce::FlexItem::Margin(Constants::Margins::small);
     const juce::FlexItem::Margin knobMarginSmall =
         juce::FlexItem::Margin(Constants::Margins::medium);
-    std::vector<juce::Rectangle<int>> areas(5);
-    const auto colWidth = area.getWidth() / 9;
+    std::vector<juce::Rectangle<int>> areas(6);
+    const auto colWidth = area.getWidth() / 13;
     areas[0] =
-        area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+        area.removeFromLeft(colWidth * 3).reduced(Constants::Margins::small);
     areas[1] =
         area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
     areas[2] =
         area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
     areas[3] =
         area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
-    areas[4] = area.reduced(Constants::Margins::small);
+    areas[4] =
+        area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
+    areas[5] = area.reduced(Constants::Margins::small);
 
     {
       juce::FlexBox box;
       box.flexWrap = juce::FlexBox::Wrap::noWrap;
       box.flexDirection = juce::FlexBox::Direction::column;
       box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+      box.items.add(juce::FlexItem(patchPresetbrowser)
+                        .withFlex(1)
+                        .withMargin(knobMarginSmall));
       box.items.add(
           juce::FlexItem(levelGauge).withFlex(1).withMargin(knobMarginSmall));
       box.items.add(
@@ -145,6 +150,17 @@ public:
           juce::FlexItem(lowPassDial).withFlex(1).withMargin(knobMarginSmall));
       box.performLayout(areas[4].toFloat());
     }
+    {
+      juce::FlexBox box;
+      box.flexWrap = juce::FlexBox::Wrap::noWrap;
+      box.flexDirection = juce::FlexBox::Direction::column;
+      box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+      box.items.add(
+          juce::FlexItem(mixDial).withFlex(1).withMargin(knobMarginSmall));
+      box.items.add(
+          juce::FlexItem(pitchDial).withFlex(1).withMargin(knobMarginSmall));
+      box.performLayout(areas[5].toFloat());
+    }
   }
 #pragma GCC diagnostic pop
 
@@ -158,6 +174,24 @@ public:
   }
 
   void initWidgets() {
+    addAndMakeVisible(patchPresetbrowser);
+    patchPresetbrowser.setLabelText(juce::String::fromUTF8("Patch"));
+    patchPresetbrowser.onListNames = [this] {
+      return processorRef.listPatchNames();
+    };
+    patchPresetbrowser.onGetCurrentName = [this] {
+      return processorRef.getCurrentPatchName();
+    };
+    patchPresetbrowser.onLoad = [this](const juce::String &name) {
+      processorRef.requestLoadPatch(name);
+    };
+    patchPresetbrowser.onSaveAs = [this](const juce::String &name) {
+      return processorRef.saveCurrentPatchAs(name);
+    };
+    patchPresetbrowser.onDelete = [this](const juce::String &name) {
+      return processorRef.deletePatchNamed(name);
+    };
+    patchPresetbrowser.refresh();
     addAndMakeVisible(dryDial);
     dryDial.reset(valueTreeState, "dry");
     dryDial.setLabelText(juce::String::fromUTF8("Dry"));
@@ -293,6 +327,29 @@ public:
          },
          [this] { processorRef.clearCcAssignment(CcTarget::lowPass); },
          [this] { return processorRef.getCcController(CcTarget::lowPass); }});
+    addAndMakeVisible(mixDial);
+    mixDial.reset(valueTreeState, "mix");
+    mixDial.setLabelText(juce::String::fromUTF8("Pitch Mix"));
+    mixDial.setCcMappable(
+        true, {[this] { processorRef.beginCcLearn(CcTarget::mix); },
+               [this] { return processorRef.getCcRange(CcTarget::mix); },
+               [this](float lo, float hi) {
+                 processorRef.setCcRange(CcTarget::mix, lo, hi);
+               },
+               [this] { processorRef.clearCcAssignment(CcTarget::mix); },
+               [this] { return processorRef.getCcController(CcTarget::mix); }});
+    addAndMakeVisible(pitchDial);
+    pitchDial.reset(valueTreeState, "pitch");
+    pitchDial.setLabelText(juce::String::fromUTF8("Pitch"));
+    pitchDial.setCcMappable(
+        true,
+        {[this] { processorRef.beginCcLearn(CcTarget::pitch); },
+         [this] { return processorRef.getCcRange(CcTarget::pitch); },
+         [this](float lo, float hi) {
+           processorRef.setCcRange(CcTarget::pitch, lo, hi);
+         },
+         [this] { processorRef.clearCcAssignment(CcTarget::pitch); },
+         [this] { return processorRef.getCcController(CcTarget::pitch); }});
     addAndMakeVisible(cpuGauge);
     cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
     addAndMakeVisible(levelGauge);
@@ -374,6 +431,7 @@ private:
   juce::Component *m_topLevel{nullptr};
   bool m_boundsRestored{false};
 
+  PatchBrowser patchPresetbrowser{};
   CustomRotaryDial dryDial{this};
   CustomRotaryDial wetDial{this};
   CustomRotaryDial preDelayDial{this};
@@ -385,6 +443,8 @@ private:
   CustomRotaryDial modulationDepthDial{this};
   CustomRotaryDial modulationSpeedDial{this};
   CustomRotaryDial lowPassDial{this};
+  CustomRotaryDial mixDial{this};
+  CustomRotaryDial pitchDial{this};
   CpuGauge cpuGauge{};
   Gauge levelGauge{};
 

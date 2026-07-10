@@ -13,6 +13,7 @@
   "description": ["Diffuser delay chain: up to 50 modulated allpass delays in series with pre-delay, bulge size distribution and damping."],
   "ports-control":
   [
+    {"short": "PBR", "type": "presetbrowser", "display": "Patch", "symbol": "patch"},
     {"short": "DRY", "type": "dial", "display": "Dry", "symbol": "dry", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB",
       "cc": {"controller": 20}},
     {"short": "WET", "type": "dial", "display": "Wet", "symbol": "wet", "default": -6, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB",
@@ -35,14 +36,18 @@
       "cc": {"controller": 29}},
     {"short": "LPF", "type": "dial", "display": "Low Pass", "symbol": "lowPass", "default": 12000, "range": [20, 20000, 1, 0.5, false], "precision": 0, "unit": "Hz",
       "cc": {"controller": 30}},
+    {"short": "MIX", "type": "dial", "display": "Pitch Mix", "symbol": "mix", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%",
+      "cc": {"controller": 31}},
+    {"short": "PTCH", "type": "dial", "display": "Pitch", "symbol": "pitch", "default": 0, "range": [-24, 24, 0.01, 1, false], "precision": 2, "unit": "st",
+      "cc": {"controller": 32}},
     {"short": "CPU", "type": "gauge", "gaugetype": "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
     {"short": "LVL", "type": "gauge", "gaugetype": "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"}
   ],
   "layout": {
-    "WINDOW_WIDTH": "400",
+    "WINDOW_WIDTH": "560",
     "WINDOW_HEIGHT": "300",
-    "type": "|||||",
-    "composition": "C=(1:2:2:2:2) A1=(LVL,CPU) A2=(DRY,WET,PRED) A3=(ELM,FDBK) A4=(BLG,BSZ,TSZ) A5=(MDPT,MDSP,LPF)"
+    "type": "||||||",
+    "composition": "C=(3:2:2:2:2:2) A1=(PBR,LVL,CPU) A2=(DRY,WET,PRED) A3=(ELM,FDBK) A4=(BLG,BSZ,TSZ) A5=(MDPT,MDSP,LPF) A6=(MIX,PTCH)"
   },
   "CPP":
   {

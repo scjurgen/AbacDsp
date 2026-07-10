@@ -34,7 +34,7 @@ constexpr float big = 8.0f;
 } // namespace Margins
 
 namespace InitJuce {
-constexpr auto WindowWidth{400};
+constexpr auto WindowWidth{560};
 constexpr auto WindowHeight{300};
 constexpr auto TimerHertz = 60;
 } // namespace InitJuce

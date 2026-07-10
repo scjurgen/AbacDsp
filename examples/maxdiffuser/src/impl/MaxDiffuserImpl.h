@@ -4,6 +4,7 @@
 #include <cstddef>
 
 #include "Audio/AudioBuffer.h"
+#include "BlockProcessors/BlockProcPitch.h"
 #include "Delays/NaiveDelay.h"
 #include "Diffuser/DiffusorDelayChain.h"
 #include "EffectBase.h"
@@ -20,10 +21,12 @@ class MaxDiffuserImpl final : public EffectBase
 
     using Chain = AbacDsp::DiffuserDelayChain<MaxDelaySamples, MaxElements, AbacDsp::AllpassFeedbackStyle::Schroeder>;
     using PreDelay = AbacDsp::NaiveDelay<MaxPreDelaySamples>;
+    using Pitcher = AbacDsp::BlockProc::Pitch<BlockSize>;
 
     explicit MaxDiffuserImpl(const float sampleRate)
         : EffectBase(sampleRate)
         , m_diffuser{AbacDsp::constructArray<Chain, 2>(sampleRate, BlockSize)}
+        , m_pitcher{AbacDsp::constructArray<Pitcher, 2>(sampleRate)}
     {
         for (auto& chain : m_diffuser)
         {
@@ -123,6 +126,22 @@ class MaxDiffuserImpl final : public EffectBase
         }
     }
 
+    void setMix(const float valueInPercentage)
+    {
+        for (auto& pitcher : m_pitcher)
+        {
+            pitcher.setPitchMix(valueInPercentage * 0.01f);
+        }
+    }
+
+    void setPitch(const float semitones)
+    {
+        for (auto& pitcher : m_pitcher)
+        {
+            pitcher.setPitch(semitones);
+        }
+    }
+
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
         std::array<float, BlockSize> wetData{};
@@ -133,6 +152,7 @@ class MaxDiffuserImpl final : public EffectBase
                 wetData[i] = in(i, c);
             }
             m_preDelay[c].processBlock(wetData, wetData);
+            m_pitcher[c].process(wetData);
             m_diffuser[c].processBlock(wetData.data(), wetData.data(), BlockSize);
             for (size_t i = 0; i < BlockSize; ++i)
             {
@@ -148,4 +168,5 @@ class MaxDiffuserImpl final : public EffectBase
     float m_wet{0.5f};
     std::array<Chain, 2> m_diffuser;
     std::array<PreDelay, 2> m_preDelay{};
+    std::array<Pitcher, 2> m_pitcher;
 };

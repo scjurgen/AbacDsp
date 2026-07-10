@@ -52,8 +52,10 @@ public:
     m_parameters.addParameterListener("modulationDepth", this);
     m_parameters.addParameterListener("modulationSpeed", this);
     m_parameters.addParameterListener("lowPass", this);
+    m_parameters.addParameterListener("mix", this);
+    m_parameters.addParameterListener("pitch", this);
 
-    for (size_t i = 0; i < 11; ++i) {
+    for (size_t i = 0; i < 13; ++i) {
       m_ccActive[i].controller.store(kDefaultCcMappings[i].controller,
                                      std::memory_order_relaxed);
       m_ccActive[i].valueLow.store(kDefaultCcMappings[i].valueLow,
@@ -75,6 +77,8 @@ public:
     m_parameters.removeParameterListener("modulationDepth", this);
     m_parameters.removeParameterListener("modulationSpeed", this);
     m_parameters.removeParameterListener("lowPass", this);
+    m_parameters.removeParameterListener("mix", this);
+    m_parameters.removeParameterListener("pitch", this);
   }
 
   void prepareToPlay(const double sampleRate,
@@ -89,7 +93,7 @@ public:
       }
     }
     for (const auto &entry : CcSettings::load()) {
-      for (size_t i = 0; i < 11; ++i) {
+      for (size_t i = 0; i < 13; ++i) {
         if (kCcTargetParamIds[i] != entry.paramId) {
           continue;
         }
@@ -316,6 +320,22 @@ public:
             .withStringFromValueFunction([](float value, int) {
               return juce::String(value, 0) + " Hz";
             })));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("mix", 1), "Pitch Mix",
+        juce::NormalisableRange<float>(0, 100, 0.1, 1, false), 0,
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("%")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 1) + " %";
+            })));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("pitch", 1), "Pitch",
+        juce::NormalisableRange<float>(-24, 24, 0.01, 1, false), 0,
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("st")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 2) + " st";
+            })));
 
     return {params.begin(), params.end()};
   }
@@ -387,6 +407,16 @@ public:
                p.pluginRunner->setLowPass(v);
                p.m_fileIo.updateParameter(PatchParameters::Id::lowPass, v);
              }},
+            {"mix",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setMix(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::mix, v);
+             }},
+            {"pitch",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setPitch(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::pitch, v);
+             }},
 
         };
     if (auto it = parameterMap.find(parameterID); it != parameterMap.end()) {
@@ -405,9 +435,14 @@ public:
 
   void loadPatchDirect(const std::vector<int> &patchIndex) {
     m_fileIo.loadPatchDirect(patchIndex);
-    const auto &params = m_fileIo.getCurrentParameters();
+    applyLoadedParametersToHost();
+  }
 
-    // Apply loaded parameters to APVTS (triggers UI update)
+  // Pushes m_fileIo's currently loaded patch into the APVTS (triggers UI
+  // update); shared by both the fixed-slot patch selector and any named-patch
+  // browser using m_fileIo directly.
+  void applyLoadedParametersToHost() {
+    const auto &params = m_fileIo.getCurrentParameters();
     if (auto *p = m_parameters.getParameter("dry")) {
       const auto &range = m_parameters.getParameterRange("dry");
       float normalized = range.convertTo0to1(params.dry);
@@ -463,6 +498,63 @@ public:
       float normalized = range.convertTo0to1(params.lowPass);
       p->setValueNotifyingHost(normalized);
     }
+    if (auto *p = m_parameters.getParameter("mix")) {
+      const auto &range = m_parameters.getParameterRange("mix");
+      float normalized = range.convertTo0to1(params.mix);
+      p->setValueNotifyingHost(normalized);
+    }
+    if (auto *p = m_parameters.getParameter("pitch")) {
+      const auto &range = m_parameters.getParameterRange("pitch");
+      float normalized = range.convertTo0to1(params.pitch);
+      p->setValueNotifyingHost(normalized);
+    }
+  }
+
+  [[nodiscard]] std::vector<juce::String> listPatchNames() const {
+    std::vector<juce::String> result;
+    for (const auto &n : m_fileIo.listPatchNames()) {
+      result.push_back(juce::String(n));
+    }
+    return result;
+  }
+
+  [[nodiscard]] juce::String getCurrentPatchName() const {
+    return juce::String(m_fileIo.currentPatchName());
+  }
+
+  void requestLoadPatch(const juce::String &name) {
+    if (m_fileIo.areParametersModified()) {
+      juce::NativeMessageBox::showAsync(
+          juce::MessageBoxOptions()
+              .withIconType(juce::MessageBoxIconType::QuestionIcon)
+              .withTitle("Save Parameters")
+              .withMessage("Parameters have changed, do you want to save "
+                           "before loading this patch?")
+              .withButton("Yes")
+              .withButton("No"),
+          [this, name](int result) {
+            finishLoadNamedPatch(name, result == 0);
+          });
+    } else {
+      finishLoadNamedPatch(name, false);
+    }
+  }
+
+  void finishLoadNamedPatch(const juce::String &name, bool shouldSave) {
+    if (shouldSave) {
+      m_fileIo.forceSave();
+    }
+    if (m_fileIo.loadPatchNamed(name.toStdString())) {
+      applyLoadedParametersToHost();
+    }
+  }
+
+  bool saveCurrentPatchAs(const juce::String &name) {
+    return m_fileIo.savePatchNamed(name.toStdString());
+  }
+
+  bool deletePatchNamed(const juce::String &name) {
+    return m_fileIo.deletePatchNamed(name.toStdString());
   }
 
   void computeCpuLoad(std::chrono::nanoseconds elapsed, size_t numSamples) {
@@ -602,7 +694,7 @@ private:
     std::atomic<float> valueLow{0.f};
     std::atomic<float> valueHigh{0.f};
   };
-  std::array<CcSlot, 11> m_ccActive{};
+  std::array<CcSlot, 13> m_ccActive{};
   std::atomic<int> m_learnTargetIndex{-1};
   std::atomic<int> m_lastLearnedIndex{-1};
 
@@ -614,8 +706,8 @@ private:
 
   void saveCcSettings() const {
     std::vector<CcMappingOverride> overrides;
-    overrides.reserve(11);
-    for (size_t i = 0; i < 11; ++i) {
+    overrides.reserve(13);
+    for (size_t i = 0; i < 13; ++i) {
       overrides.push_back(
           {std::string(kCcTargetParamIds[i]),
            m_ccActive[i].controller.load(std::memory_order_relaxed),
@@ -634,7 +726,7 @@ private:
       m_lastLearnedIndex.store(learnIndex, std::memory_order_relaxed);
       return;
     }
-    for (size_t i = 0; i < 11; ++i) {
+    for (size_t i = 0; i < 13; ++i) {
       if (m_ccActive[i].controller.load(std::memory_order_relaxed) !=
           controller) {
         continue;

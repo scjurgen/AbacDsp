@@ -23,7 +23,9 @@ struct PatchParameters
         topSize        , // dial
         modulationDepth, // dial
         modulationSpeed, // dial
-        lowPass         // dial
+        lowPass        , // dial
+        mix            , // dial
+        pitch           // dial
     };
 float dry{0.0f};
 float wet{-6.0f};
@@ -36,6 +38,8 @@ float topSize{1000.0f};
 float modulationDepth{0.0f};
 float modulationSpeed{0.5f};
 float lowPass{12000.0f};
+float mix{0.0f};
+float pitch{0.0f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
@@ -49,7 +53,9 @@ float lowPass{12000.0f};
 "topSize",
 "modulationDepth",
 "modulationSpeed",
-"lowPass"
+"lowPass",
+"mix",
+"pitch"
     });
 //        "onOff", "patch", "input", "modulationDepth", "mix", "density", "threshold", "knee"});
 
@@ -79,6 +85,8 @@ float lowPass{12000.0f};
         else if constexpr (ParamId == Id::modulationDepth) return modulationDepth;
         else if constexpr (ParamId == Id::modulationSpeed) return modulationSpeed;
         else if constexpr (ParamId == Id::lowPass) return lowPass;
+        else if constexpr (ParamId == Id::mix) return mix;
+        else if constexpr (ParamId == Id::pitch) return pitch;
 
     }
 
@@ -112,6 +120,10 @@ break;
  case Id::modulationSpeed: if (!isEqual(get<Id::modulationSpeed>(), value)) {get<Id::modulationSpeed>() = value;m_modified = true;}
 break;
  case Id::lowPass: if (!isEqual(get<Id::lowPass>(), value)) {get<Id::lowPass>() = value;m_modified = true;}
+break;
+ case Id::mix: if (!isEqual(get<Id::mix>(), value)) {get<Id::mix>() = value;m_modified = true;}
+break;
+ case Id::pitch: if (!isEqual(get<Id::pitch>(), value)) {get<Id::pitch>() = value;m_modified = true;}
 break;
 
             default:
@@ -161,5 +173,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         topSize        , // dial
         modulationDepth, // dial
         modulationSpeed, // dial
-        lowPass         // dial
+        lowPass        , // dial
+        mix            , // dial
+        pitch           // dial
 )

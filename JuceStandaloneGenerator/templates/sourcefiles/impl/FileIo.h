@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -92,6 +93,73 @@ class FileIo
         m_currentParams.clearModified();
     }
 
+    [[nodiscard]] std::vector<std::string> listPatchNames() const
+    {
+        std::vector<std::string> names;
+        for (const auto& f : getPatchDirectory().findChildFiles(juce::File::findFiles, false, "*.json"))
+        {
+            names.push_back(f.getFileNameWithoutExtension().toStdString());
+        }
+        std::sort(names.begin(), names.end());
+        return names;
+    }
+
+    [[nodiscard]] const std::string& currentPatchName() const
+    {
+        return m_currentPatchName;
+    }
+
+    bool savePatchNamed(const std::string& name)
+    {
+        const std::string filename = getNamedPatchFilename(name);
+        if (filename.empty())
+        {
+            return false;
+        }
+        std::ofstream out(filename);
+        if (!out)
+        {
+            std::cerr << "FileIo: ERROR - Failed to open " << filename << " for writing" << std::endl;
+            return false;
+        }
+        const nlohmann::json j = m_currentParams;
+        out << j.dump(2);
+        m_currentPatchName = name;
+        m_currentParams.clearModified();
+        return true;
+    }
+
+    bool loadPatchNamed(const std::string& name)
+    {
+        const std::string filename = getNamedPatchFilename(name);
+        std::ifstream in(filename);
+        if (filename.empty() || !in)
+        {
+            std::cerr << "FileIo: ERROR - Failed to open " << filename << " for reading" << std::endl;
+            return false;
+        }
+        nlohmann::json j;
+        in >> j;
+        m_currentParams = j.get<PatchParameters>();
+        m_currentPatchName = name;
+        m_currentParams.clearModified();
+        return true;
+    }
+
+    bool deletePatchNamed(const std::string& name)
+    {
+        const std::string filename = getNamedPatchFilename(name);
+        if (filename.empty())
+        {
+            return false;
+        }
+        if (name == m_currentPatchName)
+        {
+            m_currentPatchName.clear();
+        }
+        return juce::File(filename).deleteFile();
+    }
+
   private:
     // JUCE's userApplicationDataDirectory is bare "~/Library" on macOS; the
     // "Application Support" segment is a convention apps must add themselves.
@@ -128,6 +196,18 @@ class FileIo
             }
         }
         return -1;
+    }
+
+    // Named patches are stored one file per name, so the name has to survive as a filename;
+    // strip characters that are invalid (or awkward, e.g. path separators) across platforms.
+    static std::string getNamedPatchFilename(const std::string& name)
+    {
+        const juce::String sanitized = juce::String(name).removeCharacters("/\\:*?\"<>|").trim();
+        if (sanitized.isEmpty())
+        {
+            return {};
+        }
+        return getPatchDirectory().getChildFile(sanitized + ".json").getFullPathName().toStdString();
     }
 
     bool savePatch(const std::vector<int>& patchIndex)
@@ -168,4 +248,5 @@ class FileIo
     bool m_enabled = false;
     std::vector<int> m_currentPatch;
     PatchParameters m_currentParams;
+    std::string m_currentPatchName;
 };
