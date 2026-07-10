@@ -1,14 +1,14 @@
 #pragma once
 
-#include "EffectBase.h"
+#include <array>
+#include <cstddef>
+
 #include "Audio/AudioBuffer.h"
 #include "Delays/NaiveDelay.h"
 #include "Diffuser/DiffusorDelayChain.h"
+#include "EffectBase.h"
 #include "Helpers/ConstructArray.h"
 #include "Numbers/Convert.h"
-
-#include <array>
-#include <cstddef>
 
 template <size_t BlockSize>
 class MaxDiffuserImpl final : public EffectBase
@@ -18,7 +18,7 @@ class MaxDiffuserImpl final : public EffectBase
     static constexpr size_t MaxElements{24};
     static constexpr size_t MaxPreDelaySamples{96000};
 
-    using Chain = AbacDsp::DiffuserDelayChain<MaxDelaySamples, MaxElements>;
+    using Chain = AbacDsp::DiffuserDelayChain<MaxDelaySamples, MaxElements, AbacDsp::AllpassFeedbackStyle::Schroeder>;
     using PreDelay = AbacDsp::NaiveDelay<MaxPreDelaySamples>;
 
     explicit MaxDiffuserImpl(const float sampleRate)

@@ -16,12 +16,12 @@
 namespace AbacDsp
 {
 
-template <size_t MaxDelayLength, size_t NumElements>
+template <size_t MaxDelayLength, size_t NumElements, AllpassFeedbackStyle Style = AllpassFeedbackStyle::Direct>
 class DiffuserDelayChain
 {
   public:
     explicit DiffuserDelayChain(const float sampleRate, const size_t blkSize)
-        : m_delay{constructArray<ModulatingAllPassDelay<MaxDelayLength>, NumElements>(sampleRate)}
+        : m_delay{constructArray<ModulatingAllPassDelay<MaxDelayLength, Style>, NumElements>(sampleRate)}
         , tmpFadeIn(blkSize, 0.f)
         , tmpFadeOut(blkSize, 0.f)
     {
@@ -345,7 +345,7 @@ class DiffuserDelayChain
     float m_allPassFirst{200.f};
     float m_allPassLast{2000.f};
 
-    std::array<ModulatingAllPassDelay<MaxDelayLength>, NumElements> m_delay{};
+    std::array<ModulatingAllPassDelay<MaxDelayLength, Style>, NumElements> m_delay{};
     std::array<size_t, NumElements> m_decayTimeInSamples{};
 
     bool m_hasNewElementsScheduled{false};
