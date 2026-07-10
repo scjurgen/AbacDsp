@@ -296,31 +296,59 @@ public:
       return;
     }
 
-    m_fileIo.updateParameter(parameterID.toStdString(), newValue);
-
     static const std::map<
         juce::String, std::function<void(AudioPluginAudioProcessor &, float)>>
         parameterMap{
-            {"gain", [](const AudioPluginAudioProcessor &p,
-                        const float v) { p.pluginRunner->setGain(v); }},
-            {"dry", [](const AudioPluginAudioProcessor &p,
-                       const float v) { p.pluginRunner->setDry(v); }},
-            {"wet", [](const AudioPluginAudioProcessor &p,
-                       const float v) { p.pluginRunner->setWet(v); }},
-            {"timeInMs", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setTimeInMs(v); }},
-            {"feedback", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setFeedback(v); }},
-            {"lowPass", [](const AudioPluginAudioProcessor &p,
-                           const float v) { p.pluginRunner->setLowPass(v); }},
-            {"highPass", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setHighPass(v); }},
-            {"allPass", [](const AudioPluginAudioProcessor &p,
-                           const float v) { p.pluginRunner->setAllPass(v); }},
-            {"modDepth", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setModDepth(v); }},
-            {"modSpeed", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setModSpeed(v); }},
+            {"gain",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setGain(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::gain, v);
+             }},
+            {"dry",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setDry(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::dry, v);
+             }},
+            {"wet",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setWet(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::wet, v);
+             }},
+            {"timeInMs",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setTimeInMs(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::timeInMs, v);
+             }},
+            {"feedback",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setFeedback(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::feedback, v);
+             }},
+            {"lowPass",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setLowPass(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::lowPass, v);
+             }},
+            {"highPass",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setHighPass(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::highPass, v);
+             }},
+            {"allPass",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setAllPass(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::allPass, v);
+             }},
+            {"modDepth",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setModDepth(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::modDepth, v);
+             }},
+            {"modSpeed",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setModSpeed(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::modSpeed, v);
+             }},
 
         };
     if (auto it = parameterMap.find(parameterID); it != parameterMap.end()) {

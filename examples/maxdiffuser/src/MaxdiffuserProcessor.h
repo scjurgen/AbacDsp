@@ -326,46 +326,75 @@ public:
       return;
     }
 
-    m_fileIo.updateParameter(parameterID.toStdString(), newValue);
-
     static const std::map<
         juce::String, std::function<void(AudioPluginAudioProcessor &, float)>>
         parameterMap{
-            {"dry", [](const AudioPluginAudioProcessor &p,
-                       const float v) { p.pluginRunner->setDry(v); }},
-            {"wet", [](const AudioPluginAudioProcessor &p,
-                       const float v) { p.pluginRunner->setWet(v); }},
-            {"preDelay", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setPreDelay(v); }},
-            {"elements", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setElements(v); }},
-            {"feedback", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setFeedback(v); }},
-            {"bulge", [](const AudioPluginAudioProcessor &p,
-                         const float v) { p.pluginRunner->setBulge(v); }},
-            {"bottomSize",
-             [](const AudioPluginAudioProcessor &p, const float v) {
-               p.pluginRunner->setBottomSize(v);
+            {"dry",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setDry(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::dry, v);
              }},
-            {"topSize", [](const AudioPluginAudioProcessor &p,
-                           const float v) { p.pluginRunner->setTopSize(v); }},
+            {"wet",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setWet(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::wet, v);
+             }},
+            {"preDelay",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setPreDelay(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::preDelay, v);
+             }},
+            {"elements",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setElements(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::elements, v);
+             }},
+            {"feedback",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setFeedback(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::feedback, v);
+             }},
+            {"bulge",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setBulge(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::bulge, v);
+             }},
+            {"bottomSize",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setBottomSize(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::bottomSize, v);
+             }},
+            {"topSize",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setTopSize(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::topSize, v);
+             }},
             {"modulationDepth",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setModulationDepth(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::modulationDepth,
+                                          v);
              }},
             {"modulationSpeed",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setModulationSpeed(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::modulationSpeed,
+                                          v);
              }},
-            {"lowPass", [](const AudioPluginAudioProcessor &p,
-                           const float v) { p.pluginRunner->setLowPass(v); }},
+            {"lowPass",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setLowPass(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::lowPass, v);
+             }},
             {"allPassFirst",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setAllPassFirst(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::allPassFirst, v);
              }},
             {"allPassLast",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setAllPassLast(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::allPassLast, v);
              }},
 
         };

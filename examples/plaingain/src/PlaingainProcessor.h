@@ -269,25 +269,31 @@ public:
           loadPatchDirect(m_patchIndex);
         }
       }
-    } else {
-      m_fileIo.updateParameter(parameterID.toStdString(), newValue);
     }
 
     static const std::map<
         juce::String, std::function<void(AudioPluginAudioProcessor &, float)>>
         parameterMap{
-            {"gain", [](const AudioPluginAudioProcessor &p,
-                        const float v) { p.pluginRunner->setGain(v); }},
+            {"gain",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setGain(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::gain, v);
+             }},
             {"lowShelving",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setLowShelving(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::lowShelving, v);
              }},
             {"highShelving",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setHighShelving(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::highShelving, v);
              }},
-            {"latency", [](const AudioPluginAudioProcessor &p,
-                           const float v) { p.pluginRunner->setLatency(v); }},
+            {"latency",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setLatency(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::latency, v);
+             }},
 
         };
     if (auto it = parameterMap.find(parameterID); it != parameterMap.end()) {

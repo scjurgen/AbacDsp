@@ -269,23 +269,31 @@ public:
           loadPatchDirect(m_patchIndex);
         }
       }
-    } else {
-      m_fileIo.updateParameter(parameterID.toStdString(), newValue);
     }
 
     static const std::map<
         juce::String, std::function<void(AudioPluginAudioProcessor &, float)>>
         parameterMap{
-            {"vol", [](const AudioPluginAudioProcessor &p,
-                       const float v) { p.pluginRunner->setVol(v); }},
-            {"type",
-             [](const AudioPluginAudioProcessor &p, const float v) {
-               p.pluginRunner->setType(static_cast<int>(v));
+            {"vol",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setVol(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::vol, v);
              }},
-            {"position", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setPosition(v); }},
-            {"advance", [](const AudioPluginAudioProcessor &p,
-                           const float v) { p.pluginRunner->setAdvance(v); }},
+            {"type",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setType(static_cast<int>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::type, v);
+             }},
+            {"position",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setPosition(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::position, v);
+             }},
+            {"advance",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setAdvance(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::advance, v);
+             }},
 
         };
     if (auto it = parameterMap.find(parameterID); it != parameterMap.end()) {

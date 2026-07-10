@@ -593,101 +593,198 @@ public:
           loadPatchDirect(m_patchIndex);
         }
       }
-    } else {
-      m_fileIo.updateParameter(parameterID.toStdString(), newValue);
     }
 
     static const std::map<
         juce::String, std::function<void(AudioPluginAudioProcessor &, float)>>
         parameterMap{
             {"sync",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setSync(static_cast<bool>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::sync, v);
              }},
             {"type",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setType(static_cast<int>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::type, v);
              }},
             {"solo",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setSolo(static_cast<int>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::solo, v);
              }},
-            {"vol", [](const AudioPluginAudioProcessor &p,
-                       const float v) { p.pluginRunner->setVol(v); }},
+            {"vol",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setVol(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::vol, v);
+             }},
             {"reverbLevelWet",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setReverbLevelWet(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::reverbLevelWet,
+                                          v);
              }},
             {"reverbDecay",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setReverbDecay(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::reverbDecay, v);
              }},
             {"reverbShimmer",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setReverbShimmer(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::reverbShimmer,
+                                          v);
              }},
-            {"vol1", [](const AudioPluginAudioProcessor &p,
-                        const float v) { p.pluginRunner->setVol1(v); }},
-            {"vol2", [](const AudioPluginAudioProcessor &p,
-                        const float v) { p.pluginRunner->setVol2(v); }},
-            {"vol3", [](const AudioPluginAudioProcessor &p,
-                        const float v) { p.pluginRunner->setVol3(v); }},
-            {"vol4", [](const AudioPluginAudioProcessor &p,
-                        const float v) { p.pluginRunner->setVol4(v); }},
-            {"vol5", [](const AudioPluginAudioProcessor &p,
-                        const float v) { p.pluginRunner->setVol5(v); }},
-            {"vol6", [](const AudioPluginAudioProcessor &p,
-                        const float v) { p.pluginRunner->setVol6(v); }},
-            {"vol7", [](const AudioPluginAudioProcessor &p,
-                        const float v) { p.pluginRunner->setVol7(v); }},
-            {"vol8", [](const AudioPluginAudioProcessor &p,
-                        const float v) { p.pluginRunner->setVol8(v); }},
-            {"vol9", [](const AudioPluginAudioProcessor &p,
-                        const float v) { p.pluginRunner->setVol9(v); }},
-            {"vol10", [](const AudioPluginAudioProcessor &p,
-                         const float v) { p.pluginRunner->setVol10(v); }},
-            {"revFeed1", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setRevFeed1(v); }},
-            {"revFeed2", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setRevFeed2(v); }},
-            {"revFeed3", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setRevFeed3(v); }},
-            {"revFeed4", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setRevFeed4(v); }},
-            {"revFeed5", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setRevFeed5(v); }},
-            {"revFeed6", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setRevFeed6(v); }},
-            {"revFeed7", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setRevFeed7(v); }},
-            {"revFeed8", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setRevFeed8(v); }},
-            {"revFeed9", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setRevFeed9(v); }},
+            {"vol1",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setVol1(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::vol1, v);
+             }},
+            {"vol2",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setVol2(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::vol2, v);
+             }},
+            {"vol3",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setVol3(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::vol3, v);
+             }},
+            {"vol4",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setVol4(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::vol4, v);
+             }},
+            {"vol5",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setVol5(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::vol5, v);
+             }},
+            {"vol6",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setVol6(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::vol6, v);
+             }},
+            {"vol7",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setVol7(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::vol7, v);
+             }},
+            {"vol8",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setVol8(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::vol8, v);
+             }},
+            {"vol9",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setVol9(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::vol9, v);
+             }},
+            {"vol10",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setVol10(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::vol10, v);
+             }},
+            {"revFeed1",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setRevFeed1(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::revFeed1, v);
+             }},
+            {"revFeed2",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setRevFeed2(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::revFeed2, v);
+             }},
+            {"revFeed3",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setRevFeed3(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::revFeed3, v);
+             }},
+            {"revFeed4",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setRevFeed4(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::revFeed4, v);
+             }},
+            {"revFeed5",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setRevFeed5(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::revFeed5, v);
+             }},
+            {"revFeed6",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setRevFeed6(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::revFeed6, v);
+             }},
+            {"revFeed7",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setRevFeed7(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::revFeed7, v);
+             }},
+            {"revFeed8",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setRevFeed8(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::revFeed8, v);
+             }},
+            {"revFeed9",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setRevFeed9(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::revFeed9, v);
+             }},
             {"revFeed10",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setRevFeed10(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::revFeed10, v);
              }},
-            {"pitch1", [](const AudioPluginAudioProcessor &p,
-                          const float v) { p.pluginRunner->setPitch1(v); }},
-            {"pitch2", [](const AudioPluginAudioProcessor &p,
-                          const float v) { p.pluginRunner->setPitch2(v); }},
-            {"pitch3", [](const AudioPluginAudioProcessor &p,
-                          const float v) { p.pluginRunner->setPitch3(v); }},
-            {"pitch4", [](const AudioPluginAudioProcessor &p,
-                          const float v) { p.pluginRunner->setPitch4(v); }},
-            {"pitch5", [](const AudioPluginAudioProcessor &p,
-                          const float v) { p.pluginRunner->setPitch5(v); }},
-            {"pitch6", [](const AudioPluginAudioProcessor &p,
-                          const float v) { p.pluginRunner->setPitch6(v); }},
-            {"pitch7", [](const AudioPluginAudioProcessor &p,
-                          const float v) { p.pluginRunner->setPitch7(v); }},
-            {"pitch8", [](const AudioPluginAudioProcessor &p,
-                          const float v) { p.pluginRunner->setPitch8(v); }},
-            {"pitch9", [](const AudioPluginAudioProcessor &p,
-                          const float v) { p.pluginRunner->setPitch9(v); }},
-            {"pitch10", [](const AudioPluginAudioProcessor &p,
-                           const float v) { p.pluginRunner->setPitch10(v); }},
+            {"pitch1",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setPitch1(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::pitch1, v);
+             }},
+            {"pitch2",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setPitch2(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::pitch2, v);
+             }},
+            {"pitch3",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setPitch3(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::pitch3, v);
+             }},
+            {"pitch4",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setPitch4(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::pitch4, v);
+             }},
+            {"pitch5",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setPitch5(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::pitch5, v);
+             }},
+            {"pitch6",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setPitch6(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::pitch6, v);
+             }},
+            {"pitch7",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setPitch7(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::pitch7, v);
+             }},
+            {"pitch8",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setPitch8(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::pitch8, v);
+             }},
+            {"pitch9",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setPitch9(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::pitch9, v);
+             }},
+            {"pitch10",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setPitch10(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::pitch10, v);
+             }},
 
         };
     if (auto it = parameterMap.find(parameterID); it != parameterMap.end()) {

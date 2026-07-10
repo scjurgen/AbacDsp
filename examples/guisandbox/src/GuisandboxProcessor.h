@@ -311,33 +311,47 @@ public:
           loadPatchDirect(m_patchIndex);
         }
       }
-    } else {
-      m_fileIo.updateParameter(parameterID.toStdString(), newValue);
     }
 
     static const std::map<
         juce::String, std::function<void(AudioPluginAudioProcessor &, float)>>
         parameterMap{
             {"onOff",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setOnOff(static_cast<bool>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::onOff, v);
              }},
-            {"input", [](const AudioPluginAudioProcessor &p,
-                         const float v) { p.pluginRunner->setInput(v); }},
+            {"input",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setInput(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::input, v);
+             }},
             {"modulationDepth",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setModulationDepth(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::modulationDepth,
+                                          v);
              }},
-            {"mix", [](const AudioPluginAudioProcessor &p,
-                       const float v) { p.pluginRunner->setMix(v); }},
-            {"density", [](const AudioPluginAudioProcessor &p,
-                           const float v) { p.pluginRunner->setDensity(v); }},
+            {"mix",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setMix(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::mix, v);
+             }},
+            {"density",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setDensity(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::density, v);
+             }},
             {"threshold",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setThreshold(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::threshold, v);
              }},
-            {"knee", [](const AudioPluginAudioProcessor &p,
-                        const float v) { p.pluginRunner->setKnee(v); }},
+            {"knee",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setKnee(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::knee, v);
+             }},
 
         };
     if (auto it = parameterMap.find(parameterID); it != parameterMap.end()) {
