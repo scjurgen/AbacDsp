@@ -4,6 +4,7 @@
  * Keep the file readonly
  */
 
+#include "/*MODULE_UPPER*/Constants.h"
 #include "/*MODULE_UPPER*/Editor.h"
 #include "/*MODULE_UPPER*/Processor.h"
 
@@ -11,6 +12,9 @@
 juce::AudioProcessorEditor* AudioPluginAudioProcessor::createEditor()
 {
     GuiConstants::setPreset(AppSettings::loadTheme());
+    GuiConstants::instance().init.WindowWidth = Constants::InitJuce::WindowWidth;
+    GuiConstants::instance().init.WindowHeight = Constants::InitJuce::WindowHeight;
+    GuiConstants::instance().init.TimerHertz = Constants::InitJuce::TimerHertz;
     return new AudioPluginAudioProcessorEditor(*this, m_parameters);
 }
 
