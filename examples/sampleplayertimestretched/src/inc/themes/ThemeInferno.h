@@ -17,6 +17,7 @@ inline constexpr ThemeDefinition kInferno{
     .knobGradientCenter = 0xff4e0f64,
     .knobGradientEnd = 0xfffaa528,
     .statusOutline = 0xfffaa528,
+    .labelColour = 0xfffaa528,
 
     .spectrogramStops =
         {{{0.0f, 0xff000004}, {0.33f, 0xff56106e}, {0.55f, 0xffbc3754}, {0.75f, 0xfff98e09}, {1.0f, 0xfffcffa4}}},

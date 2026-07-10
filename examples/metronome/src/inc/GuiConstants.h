@@ -27,6 +27,7 @@ class GuiConstants
         uint32_t knobGradientCenter{};
         uint32_t knobGradientEnd{};
         uint32_t statusOutline{};
+        uint32_t labelColour{};
     };
 
     struct Text
@@ -142,6 +143,7 @@ class GuiConstants
         colors.knobGradientCenter = def.knobGradientCenter;
         colors.knobGradientEnd = def.knobGradientEnd;
         colors.statusOutline = def.statusOutline;
+        colors.labelColour = def.labelColour;
     }
 
     juce::ColourGradient m_spectrogramGradient;

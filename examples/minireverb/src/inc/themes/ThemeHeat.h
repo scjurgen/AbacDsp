@@ -17,6 +17,7 @@ inline constexpr ThemeDefinition kHeat{
     .knobGradientCenter = 0xffffcc99,
     .knobGradientEnd = 0xff7a0a00,
     .statusOutline = 0xff7a0a00,
+    .labelColour = 0xff7a0a00,
 
     .spectrogramStops =
         {{{0.0f, 0xffffffff}, {0.30f, 0xffffcc99}, {0.60f, 0xffcc3300}, {0.85f, 0xff660000}, {1.0f, 0xff1a0000}}},

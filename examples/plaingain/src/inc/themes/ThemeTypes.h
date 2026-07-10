@@ -33,6 +33,7 @@ struct ThemeDefinition
     uint32_t knobGradientCenter{};
     uint32_t knobGradientEnd{};
     uint32_t statusOutline{};
+    uint32_t labelColour{};
 
     std::array<GradientStop, 6> spectrogramStops{};
     size_t spectrogramStopCount{};

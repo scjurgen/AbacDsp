@@ -17,6 +17,7 @@ inline constexpr ThemeDefinition kGrayscale{
     .knobGradientCenter = 0xff4d4d4d,
     .knobGradientEnd = 0xffcccccc,
     .statusOutline = 0xffcccccc,
+    .labelColour = 0xffcccccc,
 
     .spectrogramStops = {{{0.0f, 0xff000000}, {1.0f, 0xffffffff}}},
     .spectrogramStopCount = 2,

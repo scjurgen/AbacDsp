@@ -126,7 +126,7 @@ class SpectrogramOverlay : public juce::Component
     SpectrogramOverlay()
     {
         setInterceptsMouseClicks(false, false);
-        labelColour = juce::Colour(GuiConstants::instance().colors.statusOutline);
+        labelColour = juce::Colour(GuiConstants::instance().colors.labelColour);
         labelBgColour = juce::Colour(GuiConstants::instance().colors.background).withAlpha(0.55f);
     }
 
@@ -196,7 +196,7 @@ class SpectrogramOverlay : public juce::Component
 
     void updateColors()
     {
-        labelColour = juce::Colour(GuiConstants::instance().colors.statusOutline);
+        labelColour = juce::Colour(GuiConstants::instance().colors.labelColour);
         labelBgColour = juce::Colour(GuiConstants::instance().colors.background).withAlpha(0.55f);
         repaint();
     }
@@ -226,7 +226,7 @@ class SpectrogramDisplay : public juce::Component
     {
         g.setColour(backgroundDarkGrey);
         g.fillRoundedRectangle(getLocalBounds().toFloat(), 3);
-        g.setColour(juce::Colours::white);
+        g.setColour(juce::Colour(GuiConstants::instance().colors.labelColour));
         g.drawText(m_label, getLocalBounds().removeFromTop(20), juce::Justification::centred);
     }
 

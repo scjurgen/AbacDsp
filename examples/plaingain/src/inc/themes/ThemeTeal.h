@@ -17,6 +17,7 @@ inline constexpr ThemeDefinition kTeal{
     .knobGradientCenter = 0xffbde4e0,
     .knobGradientEnd = 0xff004740,
     .statusOutline = 0xff004740,
+    .labelColour = 0xff004740,
 
     .spectrogramStops = {{{0.0f, 0xffffffff}, {0.35f, 0xffb2dfdb}, {0.65f, 0xff00695c}, {1.0f, 0xff001a1a}}},
     .spectrogramStopCount = 4,

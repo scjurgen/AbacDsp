@@ -159,7 +159,7 @@ class Gauge : public juce::Component
     {
         g.setColour(backgroundDarkGrey);
         g.fillRoundedRectangle(getLocalBounds().toFloat(), 3);
-        g.setColour(juce::Colours::white);
+        g.setColour(juce::Colour(GuiConstants::instance().colors.labelColour));
         g.drawText(m_label, getLocalBounds().removeFromTop(20), juce::Justification::centred);
     }
 

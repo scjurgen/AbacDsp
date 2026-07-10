@@ -17,6 +17,7 @@ inline constexpr ThemeDefinition kViridis{
     .knobGradientCenter = 0xff335f89,
     .knobGradientEnd = 0xff87cb56,
     .statusOutline = 0xff87cb56,
+    .labelColour = 0xff87cb56,
 
     .spectrogramStops = {{{0.0f, 0xff440154}, {0.33f, 0xff31688e}, {0.66f, 0xff35b779}, {1.0f, 0xfffde725}}},
     .spectrogramStopCount = 4,

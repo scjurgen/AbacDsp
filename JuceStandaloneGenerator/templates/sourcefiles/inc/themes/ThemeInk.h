@@ -17,6 +17,7 @@ inline constexpr ThemeDefinition kInk{
     .knobGradientCenter = 0xffd0c2eb,
     .knobGradientEnd = 0xff30136e,
     .statusOutline = 0xff30136e,
+    .labelColour = 0xff30136e,
 
     .spectrogramStops = {{{0.0f, 0xffffffff}, {0.35f, 0xffc8b8e8}, {0.65f, 0xff4b1fa8}, {1.0f, 0xff0d0221}}},
     .spectrogramStopCount = 4,

@@ -17,6 +17,7 @@ inline constexpr ThemeDefinition kClassic{
     .knobGradientCenter = 0xff4d0000,
     .knobGradientEnd = 0xffcc0000,
     .statusOutline = 0xffcc0000,
+    .labelColour = 0xffcccccc,
 
     .spectrogramStops = {{{0.0f, 0xff000000}, {1.0f, 0xffff0000}}},
     .spectrogramStopCount = 2,
