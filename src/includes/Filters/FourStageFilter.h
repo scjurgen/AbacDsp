@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <functional>
 #include <numbers>
 
 namespace AbacDsp
@@ -60,7 +61,7 @@ class FourStageFilter
 
     float setCutoff(const float cutoff)
     {
-        if (cutoff == m_lastCutoffIn)
+        if (std::equal_to<float>{}(cutoff, m_lastCutoffIn))
         {
             return 0.f;
         }

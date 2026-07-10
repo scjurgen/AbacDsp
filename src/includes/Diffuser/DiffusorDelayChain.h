@@ -150,7 +150,7 @@ class DiffuserDelayChain
 
     void setFeedback(const float newFeedback)
     {
-        if (newFeedback == m_feedback)
+        if (std::equal_to<float>{}(newFeedback, m_feedback))
         {
             return;
         }

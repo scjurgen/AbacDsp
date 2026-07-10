@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <utility>
 
 namespace AbacDsp
@@ -24,7 +25,7 @@ class Modulation
 
     void setModulationDepth(const float depth) noexcept
     {
-        if (m_depth != depth)
+        if (!std::equal_to<float>{}(m_depth, depth))
         {
             m_depth = depth;
             m_hasNewData = true;
