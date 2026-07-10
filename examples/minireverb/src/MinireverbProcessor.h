@@ -11,6 +11,8 @@
 #include "Analysis/Spectrogram.h"
 #include "Audio/FixedSizeProcessor.h"
 #include "UiElements.h"
+#include "impl/CcMapping.h"
+#include "impl/CcSettings.h"
 #include "impl/FileIo.h"
 #include "impl/MiniReverbImpl.h"
 
@@ -98,9 +100,6 @@ public:
         p->sendValueChangedMessageToListeners(normalizedValue);
       }
     }
-    if (m_newState.isValid()) {
-      m_parameters.replaceState(m_newState);
-    }
 
     juce::ignoreUnused(samplesPerBlock);
     m_fileIo.enable();
@@ -110,17 +109,9 @@ public:
     std::cout << "releaseResources: Called on shutdown" << std::endl;
 
     if (m_fileIo.areParametersModified()) {
-      std::cout << "releaseResources: Parameters modified, prompting for save"
+      std::cout << "releaseResources: Parameters modified, autosaving"
                 << std::endl;
-
-      int result = juce::NativeMessageBox::showYesNoBox(
-          juce::MessageBoxIconType::QuestionIcon, "Save Parameters",
-          "Parameters have changed. Do you want to save before exiting?",
-          nullptr, nullptr);
-      if (result == 1) {
-        std::cout << "Saving data\n";
-        m_fileIo.forceSave();
-      }
+      m_fileIo.forceSave();
     }
 
     pluginRunner = nullptr;
@@ -219,7 +210,15 @@ public:
 
     if (xmlState != nullptr) {
       if (xmlState->hasTagName(m_parameters.state.getType())) {
-        m_newState = juce::ValueTree::fromXml(*xmlState);
+        // Hosts may call setStateInformation() from any thread, so
+        // replaceState() (which touches editor-attached listeners) must hop to
+        // the message thread rather than running here directly or being
+        // deferred to some arbitrary future prepareToPlay(), which let a stale
+        // restore clobber values set in between (observed via auval's
+        // parameter-retention test).
+        juce::ValueTree newState = juce::ValueTree::fromXml(*xmlState);
+        juce::MessageManager::callAsync(
+            [this, newState] { m_parameters.replaceState(newState); });
       }
     }
   }
@@ -383,80 +382,119 @@ public:
       return;
     }
 
-    m_fileIo.updateParameter(parameterID.toStdString(), newValue);
-
     static const std::map<
         juce::String, std::function<void(AudioPluginAudioProcessor &, float)>>
         parameterMap{
             {"order",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setOrder(static_cast<int>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::order, v);
              }},
-            {"dry", [](const AudioPluginAudioProcessor &p,
-                       const float v) { p.pluginRunner->setDry(v); }},
-            {"wet", [](const AudioPluginAudioProcessor &p,
-                       const float v) { p.pluginRunner->setWet(v); }},
+            {"dry",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setDry(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::dry, v);
+             }},
+            {"wet",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setWet(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::wet, v);
+             }},
             {"stereoWidth",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setStereoWidth(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::stereoWidth, v);
              }},
-            {"baseSize", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setBaseSize(v); }},
+            {"baseSize",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setBaseSize(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::baseSize, v);
+             }},
             {"sizeFactor",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setSizeFactor(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::sizeFactor, v);
              }},
-            {"bulge", [](const AudioPluginAudioProcessor &p,
-                         const float v) { p.pluginRunner->setBulge(v); }},
+            {"bulge",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setBulge(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::bulge, v);
+             }},
             {"uniqueDelay",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setUniqueDelay(static_cast<bool>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::uniqueDelay, v);
              }},
-            {"decay", [](const AudioPluginAudioProcessor &p,
-                         const float v) { p.pluginRunner->setDecay(v); }},
+            {"decay",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setDecay(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::decay, v);
+             }},
             {"allPassUp",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setAllPassUp(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::allPassUp, v);
              }},
             {"allPassDown",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setAllPassDown(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::allPassDown, v);
              }},
-            {"lowPass", [](const AudioPluginAudioProcessor &p,
-                           const float v) { p.pluginRunner->setLowPass(v); }},
+            {"lowPass",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setLowPass(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::lowPass, v);
+             }},
             {"lowPassCount",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setLowPassCount(static_cast<int>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::lowPassCount, v);
              }},
-            {"highPass", [](const AudioPluginAudioProcessor &p,
-                            const float v) { p.pluginRunner->setHighPass(v); }},
+            {"highPass",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setHighPass(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::highPass, v);
+             }},
             {"highPassCount",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setHighPassCount(static_cast<int>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::highPassCount,
+                                          v);
              }},
             {"modulationDepth",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setModulationDepth(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::modulationDepth,
+                                          v);
              }},
             {"modulationSpeed",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setModulationSpeed(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::modulationSpeed,
+                                          v);
              }},
             {"reversePitch",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setReversePitch(static_cast<bool>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::reversePitch, v);
              }},
             {"pitchStrength",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setPitchStrength(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::pitchStrength,
+                                          v);
              }},
             {"pitch1Inplace",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setPitch1Inplace(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::pitch1Inplace,
+                                          v);
              }},
             {"pitch2Inplace",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setPitch2Inplace(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::pitch2Inplace,
+                                          v);
              }},
 
         };
@@ -669,7 +707,6 @@ private:
   }
 
   int m_program{0};
-  juce::ValueTree m_newState;
 
   AbacDsp::FixedSizeProcessor<2, NumSamplesPerBlock, juce::AudioBuffer<float>>
       fixedRunner;
