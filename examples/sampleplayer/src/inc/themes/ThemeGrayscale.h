@@ -21,7 +21,7 @@ inline constexpr ThemeDefinition kGrayscale{
     .spectrogramStops = {{{0.0f, 0xff000000}, {1.0f, 0xffffffff}}},
     .spectrogramStopCount = 2,
 
-    .cpuZones = {.safe = 0xff3ca03c, .warn = 0xffd0a020, .danger = 0xffd02828},
-    .levelZones = {.safe = 0xff3ca03c, .warn = 0xffd0a020, .danger = 0xffd02828},
+    .cpuZones = {.safe = 0xff808080, .warn = 0xffb3b3b3, .danger = 0xffe6e6e6},
+    .levelZones = {.safe = 0xff808080, .warn = 0xffb3b3b3, .danger = 0xffe6e6e6},
 };
 }

@@ -132,6 +132,12 @@ class GaugeIndicators : public juce::Component
         }
     }
 
+    void updateColors()
+    {
+        lineIndicatorColor = juce::Colour(GuiConstants::instance().colors.statusOutline);
+        repaint();
+    }
+
   private:
     // Match the bar's dB mapping so the 0 dB line sits exactly on the gradient's danger edge.
     float minValue_{GuiConstants::kMeterMinDb}, maxValue_{GuiConstants::kMeterMaxDb};
@@ -198,6 +204,7 @@ class Gauge : public juce::Component
     {
         backgroundDarkGrey = juce::Colour(GuiConstants::instance().colors.backgroundDark);
         gaugeBg.updateColors();
+        gaugeIndicators.updateColors();
         repaint();
     }
 
