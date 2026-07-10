@@ -17,6 +17,12 @@
 namespace AbacDsp
 {
 
+enum class AllpassFeedbackStyle
+{
+    Direct,    // feeds the raw delayed sample back into the write path (legacy behavior)
+    Schroeder, // classic Schroeder allpass: feeds the filter output back into the write path
+};
+
 template <size_t MaxSize48Khz, size_t BlockSize>
 class AllPassDelay
 {
@@ -171,7 +177,7 @@ class AllPassDelay
     std::vector<float> m_buffer{};
 };
 
-template <size_t MaxSize48Khz>
+template <size_t MaxSize48Khz, AllpassFeedbackStyle Style = AllpassFeedbackStyle::Direct>
 class ModulatingAllPassDelay
 {
   public:
@@ -315,8 +321,14 @@ class ModulatingAllPassDelay
         };
         const float delayed = getResult();
         const auto output = -m_feedback * in + delayed;
-        const auto toWrite = in + m_feedback * delayed;
-        feedWrite(toWrite);
+        if constexpr (Style == AllpassFeedbackStyle::Schroeder)
+        {
+            feedWrite(in + m_feedback * output);
+        }
+        else
+        {
+            feedWrite(in + m_feedback * delayed);
+        }
         return output;
     }
 
@@ -694,4 +706,4 @@ class FixedAllpassDelay
     size_t m_delaySteps;
 };
 
-}  // namespace AbacDsp
+} // namespace AbacDsp
