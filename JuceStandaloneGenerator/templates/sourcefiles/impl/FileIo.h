@@ -52,20 +52,13 @@ class FileIo
         m_currentParams.clearModified();
     }
 
-    void updateParameter(const std::string& paramName, const float value)
+    void updateParameter(const PatchParameters::Id id, const float value)
     {
         if (!m_isInitialized)
         {
             return;
         }
-        for (size_t i = 0; i < PatchParameters::count(); ++i)
-        {
-            if (PatchParameters::paramNames[i] == paramName)
-            {
-                m_currentParams.updateById(static_cast<PatchParameters::Id>(i), value);
-                return;
-            }
-        }
+        m_currentParams.updateById(id, value);
     }
 
     bool handlePatchChange(const std::vector<int>& newPatchIndex, const PromptCallback& promptCallback)

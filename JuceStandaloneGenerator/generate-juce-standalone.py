@@ -209,13 +209,14 @@ def createParameterChanged(m:dict) -> str:
     res = ""
     for item in m["ports-control"]:
         if 'patch' not in item:
+            symbol = item['symbol']
             match item["type"]:
                 case 'dial':
-                    res += f"""{{"{item['symbol']}", [](const AudioPluginAudioProcessor& p, const float v) {{ p.pluginRunner->{item['setter']}(v); }}}},\n"""
+                    res += f"""{{"{symbol}", [](AudioPluginAudioProcessor& p, const float v) {{ p.pluginRunner->{item['setter']}(v); p.m_fileIo.updateParameter(PatchParameters::Id::{symbol}, v); }}}},\n"""
                 case 'drop':
-                    res += f"""{{"{item['symbol']}", [](const AudioPluginAudioProcessor& p, const float v) {{ p.pluginRunner->{item['setter']}(static_cast<int>(v)); }}}},\n"""
+                    res += f"""{{"{symbol}", [](AudioPluginAudioProcessor& p, const float v) {{ p.pluginRunner->{item['setter']}(static_cast<int>(v)); p.m_fileIo.updateParameter(PatchParameters::Id::{symbol}, v); }}}},\n"""
                 case 'switch':
-                     res += f"""{{"{item['symbol']}", [](const AudioPluginAudioProcessor& p, const float v) {{ p.pluginRunner->{item['setter']}(static_cast<bool>(v)); }}}},\n"""
+                     res += f"""{{"{symbol}", [](AudioPluginAudioProcessor& p, const float v) {{ p.pluginRunner->{item['setter']}(static_cast<bool>(v)); p.m_fileIo.updateParameter(PatchParameters::Id::{symbol}, v); }}}},\n"""
     return res
 
 

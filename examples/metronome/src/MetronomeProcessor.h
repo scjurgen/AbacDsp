@@ -340,42 +340,50 @@ public:
           loadPatchDirect(m_patchIndex);
         }
       }
-    } else {
-      m_fileIo.updateParameter(parameterID.toStdString(), newValue);
     }
 
     static const std::map<
         juce::String, std::function<void(AudioPluginAudioProcessor &, float)>>
         parameterMap{
-            {"bpm", [](const AudioPluginAudioProcessor &p,
-                       const float v) { p.pluginRunner->setBpm(v); }},
+            {"bpm",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setBpm(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::bpm, v);
+             }},
             {"dropBars",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setDropBars(static_cast<int>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::dropBars, v);
              }},
             {"metroVolume",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setMetroVolume(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::metroVolume, v);
              }},
             {"inputVolume",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setInputVolume(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::inputVolume, v);
              }},
             {"subVolume",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setSubVolume(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::subVolume, v);
              }},
             {"onOff",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setOnOff(static_cast<bool>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::onOff, v);
              }},
             {"preset",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setPreset(static_cast<int>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::preset, v);
              }},
             {"swingRatio",
-             [](const AudioPluginAudioProcessor &p, const float v) {
+             [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setSwingRatio(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::swingRatio, v);
              }},
 
         };
