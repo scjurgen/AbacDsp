@@ -23,23 +23,19 @@ struct PatchParameters
         topSize        , // dial
         modulationDepth, // dial
         modulationSpeed, // dial
-        lowPass        , // dial
-        allPassFirst   , // dial
-        allPassLast     // dial
+        lowPass         // dial
     };
 float dry{0.0f};
 float wet{-6.0f};
 float preDelay{0.0f};
 float elements{6.0f};
-float feedback{0.5f};
+float feedback{50.0f};
 float bulge{0.46f};
 float bottomSize{100.0f};
 float topSize{1000.0f};
 float modulationDepth{0.0f};
 float modulationSpeed{0.5f};
 float lowPass{12000.0f};
-float allPassFirst{200.0f};
-float allPassLast{2000.0f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
@@ -53,9 +49,7 @@ float allPassLast{2000.0f};
 "topSize",
 "modulationDepth",
 "modulationSpeed",
-"lowPass",
-"allPassFirst",
-"allPassLast"
+"lowPass"
     });
 //        "onOff", "patch", "input", "modulationDepth", "mix", "density", "threshold", "knee"});
 
@@ -85,8 +79,6 @@ float allPassLast{2000.0f};
         else if constexpr (ParamId == Id::modulationDepth) return modulationDepth;
         else if constexpr (ParamId == Id::modulationSpeed) return modulationSpeed;
         else if constexpr (ParamId == Id::lowPass) return lowPass;
-        else if constexpr (ParamId == Id::allPassFirst) return allPassFirst;
-        else if constexpr (ParamId == Id::allPassLast) return allPassLast;
 
     }
 
@@ -120,10 +112,6 @@ break;
  case Id::modulationSpeed: if (!isEqual(get<Id::modulationSpeed>(), value)) {get<Id::modulationSpeed>() = value;m_modified = true;}
 break;
  case Id::lowPass: if (!isEqual(get<Id::lowPass>(), value)) {get<Id::lowPass>() = value;m_modified = true;}
-break;
- case Id::allPassFirst: if (!isEqual(get<Id::allPassFirst>(), value)) {get<Id::allPassFirst>() = value;m_modified = true;}
-break;
- case Id::allPassLast: if (!isEqual(get<Id::allPassLast>(), value)) {get<Id::allPassLast>() = value;m_modified = true;}
 break;
 
             default:
@@ -173,7 +161,5 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         topSize        , // dial
         modulationDepth, // dial
         modulationSpeed, // dial
-        lowPass        , // dial
-        allPassFirst   , // dial
-        allPassLast     // dial
+        lowPass         // dial
 )

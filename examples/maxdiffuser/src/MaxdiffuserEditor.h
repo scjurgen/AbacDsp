@@ -69,16 +69,29 @@ public:
     // juce::FlexItem::Margin(Constants::Margins::small);
     const juce::FlexItem::Margin knobMarginSmall =
         juce::FlexItem::Margin(Constants::Margins::medium);
-    std::vector<juce::Rectangle<int>> areas(4);
-    const auto colWidth = area.getWidth() / 8;
+    std::vector<juce::Rectangle<int>> areas(5);
+    const auto colWidth = area.getWidth() / 9;
     areas[0] =
         area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
     areas[1] =
-        area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+        area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
     areas[2] =
-        area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-    areas[3] = area.reduced(Constants::Margins::small);
+        area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
+    areas[3] =
+        area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
+    areas[4] = area.reduced(Constants::Margins::small);
 
+    {
+      juce::FlexBox box;
+      box.flexWrap = juce::FlexBox::Wrap::noWrap;
+      box.flexDirection = juce::FlexBox::Direction::column;
+      box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+      box.items.add(
+          juce::FlexItem(levelGauge).withFlex(1).withMargin(knobMarginSmall));
+      box.items.add(
+          juce::FlexItem(cpuGauge).withFlex(1).withMargin(knobMarginSmall));
+      box.performLayout(areas[0].toFloat());
+    }
     {
       juce::FlexBox box;
       box.flexWrap = juce::FlexBox::Wrap::noWrap;
@@ -90,12 +103,7 @@ public:
           juce::FlexItem(wetDial).withFlex(1).withMargin(knobMarginSmall));
       box.items.add(
           juce::FlexItem(preDelayDial).withFlex(1).withMargin(knobMarginSmall));
-      box.items.add(juce::FlexItem(levelGauge)
-                        .withHeight(100)
-                        .withMargin(knobMarginSmall));
-      box.items.add(
-          juce::FlexItem(cpuGauge).withHeight(100).withMargin(knobMarginSmall));
-      box.performLayout(areas[0].toFloat());
+      box.performLayout(areas[1].toFloat());
     }
     {
       juce::FlexBox box;
@@ -106,6 +114,13 @@ public:
           juce::FlexItem(elementsDial).withFlex(1).withMargin(knobMarginSmall));
       box.items.add(
           juce::FlexItem(feedbackDial).withFlex(1).withMargin(knobMarginSmall));
+      box.performLayout(areas[2].toFloat());
+    }
+    {
+      juce::FlexBox box;
+      box.flexWrap = juce::FlexBox::Wrap::noWrap;
+      box.flexDirection = juce::FlexBox::Direction::column;
+      box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
       box.items.add(
           juce::FlexItem(bulgeDial).withFlex(1).withMargin(knobMarginSmall));
       box.items.add(juce::FlexItem(bottomSizeDial)
@@ -113,7 +128,7 @@ public:
                         .withMargin(knobMarginSmall));
       box.items.add(
           juce::FlexItem(topSizeDial).withFlex(1).withMargin(knobMarginSmall));
-      box.performLayout(areas[1].toFloat());
+      box.performLayout(areas[3].toFloat());
     }
     {
       juce::FlexBox box;
@@ -128,23 +143,7 @@ public:
                         .withMargin(knobMarginSmall));
       box.items.add(
           juce::FlexItem(lowPassDial).withFlex(1).withMargin(knobMarginSmall));
-      box.items.add(juce::FlexItem(allPassFirstDial)
-                        .withFlex(1)
-                        .withMargin(knobMarginSmall));
-      box.items.add(juce::FlexItem(allPassLastDial)
-                        .withFlex(1)
-                        .withMargin(knobMarginSmall));
-      box.performLayout(areas[2].toFloat());
-    }
-    {
-      juce::FlexBox box;
-      box.flexWrap = juce::FlexBox::Wrap::noWrap;
-      box.flexDirection = juce::FlexBox::Direction::column;
-      box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-      box.items.add(juce::FlexItem(spectrogramGauge)
-                        .withFlex(1)
-                        .withMargin(knobMarginSmall));
-      box.performLayout(areas[3].toFloat());
+      box.performLayout(areas[4].toFloat());
     }
   }
 #pragma GCC diagnostic pop
@@ -154,7 +153,7 @@ public:
       cpuGauge.update(processorRef.getCpuLoad());
       levelGauge.update(processorRef.getInputDbLoad(),
                         processorRef.getOutputDbLoad());
-      spectrogramGauge.update(processorRef.getSpectrogram());
+      processorRef.consumeLastLearnedCc();
     }
   }
 
@@ -162,48 +161,142 @@ public:
     addAndMakeVisible(dryDial);
     dryDial.reset(valueTreeState, "dry");
     dryDial.setLabelText(juce::String::fromUTF8("Dry"));
+    dryDial.setCcMappable(
+        true, {[this] { processorRef.beginCcLearn(CcTarget::dry); },
+               [this] { return processorRef.getCcRange(CcTarget::dry); },
+               [this](float lo, float hi) {
+                 processorRef.setCcRange(CcTarget::dry, lo, hi);
+               },
+               [this] { processorRef.clearCcAssignment(CcTarget::dry); },
+               [this] { return processorRef.getCcController(CcTarget::dry); }});
     addAndMakeVisible(wetDial);
     wetDial.reset(valueTreeState, "wet");
     wetDial.setLabelText(juce::String::fromUTF8("Wet"));
+    wetDial.setCcMappable(
+        true, {[this] { processorRef.beginCcLearn(CcTarget::wet); },
+               [this] { return processorRef.getCcRange(CcTarget::wet); },
+               [this](float lo, float hi) {
+                 processorRef.setCcRange(CcTarget::wet, lo, hi);
+               },
+               [this] { processorRef.clearCcAssignment(CcTarget::wet); },
+               [this] { return processorRef.getCcController(CcTarget::wet); }});
     addAndMakeVisible(preDelayDial);
     preDelayDial.reset(valueTreeState, "preDelay");
     preDelayDial.setLabelText(juce::String::fromUTF8("Pre Delay"));
+    preDelayDial.setCcMappable(
+        true,
+        {[this] { processorRef.beginCcLearn(CcTarget::preDelay); },
+         [this] { return processorRef.getCcRange(CcTarget::preDelay); },
+         [this](float lo, float hi) {
+           processorRef.setCcRange(CcTarget::preDelay, lo, hi);
+         },
+         [this] { processorRef.clearCcAssignment(CcTarget::preDelay); },
+         [this] { return processorRef.getCcController(CcTarget::preDelay); }});
     addAndMakeVisible(elementsDial);
     elementsDial.reset(valueTreeState, "elements");
     elementsDial.setLabelText(juce::String::fromUTF8("Elements"));
+    elementsDial.setCcMappable(
+        true,
+        {[this] { processorRef.beginCcLearn(CcTarget::elements); },
+         [this] { return processorRef.getCcRange(CcTarget::elements); },
+         [this](float lo, float hi) {
+           processorRef.setCcRange(CcTarget::elements, lo, hi);
+         },
+         [this] { processorRef.clearCcAssignment(CcTarget::elements); },
+         [this] { return processorRef.getCcController(CcTarget::elements); }});
     addAndMakeVisible(feedbackDial);
     feedbackDial.reset(valueTreeState, "feedback");
     feedbackDial.setLabelText(juce::String::fromUTF8("Diffusion"));
+    feedbackDial.setCcMappable(
+        true,
+        {[this] { processorRef.beginCcLearn(CcTarget::feedback); },
+         [this] { return processorRef.getCcRange(CcTarget::feedback); },
+         [this](float lo, float hi) {
+           processorRef.setCcRange(CcTarget::feedback, lo, hi);
+         },
+         [this] { processorRef.clearCcAssignment(CcTarget::feedback); },
+         [this] { return processorRef.getCcController(CcTarget::feedback); }});
     addAndMakeVisible(bulgeDial);
     bulgeDial.reset(valueTreeState, "bulge");
     bulgeDial.setLabelText(juce::String::fromUTF8("Bulge"));
+    bulgeDial.setCcMappable(
+        true,
+        {[this] { processorRef.beginCcLearn(CcTarget::bulge); },
+         [this] { return processorRef.getCcRange(CcTarget::bulge); },
+         [this](float lo, float hi) {
+           processorRef.setCcRange(CcTarget::bulge, lo, hi);
+         },
+         [this] { processorRef.clearCcAssignment(CcTarget::bulge); },
+         [this] { return processorRef.getCcController(CcTarget::bulge); }});
     addAndMakeVisible(bottomSizeDial);
     bottomSizeDial.reset(valueTreeState, "bottomSize");
     bottomSizeDial.setLabelText(juce::String::fromUTF8("Bottom Size"));
+    bottomSizeDial.setCcMappable(
+        true, {[this] { processorRef.beginCcLearn(CcTarget::bottomSize); },
+               [this] { return processorRef.getCcRange(CcTarget::bottomSize); },
+               [this](float lo, float hi) {
+                 processorRef.setCcRange(CcTarget::bottomSize, lo, hi);
+               },
+               [this] { processorRef.clearCcAssignment(CcTarget::bottomSize); },
+               [this] {
+                 return processorRef.getCcController(CcTarget::bottomSize);
+               }});
     addAndMakeVisible(topSizeDial);
     topSizeDial.reset(valueTreeState, "topSize");
     topSizeDial.setLabelText(juce::String::fromUTF8("Top Size"));
+    topSizeDial.setCcMappable(
+        true,
+        {[this] { processorRef.beginCcLearn(CcTarget::topSize); },
+         [this] { return processorRef.getCcRange(CcTarget::topSize); },
+         [this](float lo, float hi) {
+           processorRef.setCcRange(CcTarget::topSize, lo, hi);
+         },
+         [this] { processorRef.clearCcAssignment(CcTarget::topSize); },
+         [this] { return processorRef.getCcController(CcTarget::topSize); }});
     addAndMakeVisible(modulationDepthDial);
     modulationDepthDial.reset(valueTreeState, "modulationDepth");
     modulationDepthDial.setLabelText(juce::String::fromUTF8("Mod Depth"));
+    modulationDepthDial.setCcMappable(
+        true,
+        {[this] { processorRef.beginCcLearn(CcTarget::modulationDepth); },
+         [this] { return processorRef.getCcRange(CcTarget::modulationDepth); },
+         [this](float lo, float hi) {
+           processorRef.setCcRange(CcTarget::modulationDepth, lo, hi);
+         },
+         [this] { processorRef.clearCcAssignment(CcTarget::modulationDepth); },
+         [this] {
+           return processorRef.getCcController(CcTarget::modulationDepth);
+         }});
     addAndMakeVisible(modulationSpeedDial);
     modulationSpeedDial.reset(valueTreeState, "modulationSpeed");
     modulationSpeedDial.setLabelText(juce::String::fromUTF8("Mod Speed"));
+    modulationSpeedDial.setCcMappable(
+        true,
+        {[this] { processorRef.beginCcLearn(CcTarget::modulationSpeed); },
+         [this] { return processorRef.getCcRange(CcTarget::modulationSpeed); },
+         [this](float lo, float hi) {
+           processorRef.setCcRange(CcTarget::modulationSpeed, lo, hi);
+         },
+         [this] { processorRef.clearCcAssignment(CcTarget::modulationSpeed); },
+         [this] {
+           return processorRef.getCcController(CcTarget::modulationSpeed);
+         }});
     addAndMakeVisible(lowPassDial);
     lowPassDial.reset(valueTreeState, "lowPass");
     lowPassDial.setLabelText(juce::String::fromUTF8("Low Pass"));
-    addAndMakeVisible(allPassFirstDial);
-    allPassFirstDial.reset(valueTreeState, "allPassFirst");
-    allPassFirstDial.setLabelText(juce::String::fromUTF8("All Pass First"));
-    addAndMakeVisible(allPassLastDial);
-    allPassLastDial.reset(valueTreeState, "allPassLast");
-    allPassLastDial.setLabelText(juce::String::fromUTF8("All Pass Last"));
+    lowPassDial.setCcMappable(
+        true,
+        {[this] { processorRef.beginCcLearn(CcTarget::lowPass); },
+         [this] { return processorRef.getCcRange(CcTarget::lowPass); },
+         [this](float lo, float hi) {
+           processorRef.setCcRange(CcTarget::lowPass, lo, hi);
+         },
+         [this] { processorRef.clearCcAssignment(CcTarget::lowPass); },
+         [this] { return processorRef.getCcController(CcTarget::lowPass); }});
     addAndMakeVisible(cpuGauge);
     cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
     addAndMakeVisible(levelGauge);
     levelGauge.setLabelText(juce::String::fromUTF8("Level"));
-    addAndMakeVisible(spectrogramGauge);
-    spectrogramGauge.setLabelText(juce::String::fromUTF8("Spectrogram"));
   }
 
   void parentHierarchyChanged() override {
@@ -268,7 +361,6 @@ public:
     backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
     cpuGauge.updateColors();
     levelGauge.updateColors();
-    spectrogramGauge.setGradientPreset(preset);
 
     repaint();
   }
@@ -293,11 +385,8 @@ private:
   CustomRotaryDial modulationDepthDial{this};
   CustomRotaryDial modulationSpeedDial{this};
   CustomRotaryDial lowPassDial{this};
-  CustomRotaryDial allPassFirstDial{this};
-  CustomRotaryDial allPassLastDial{this};
   CpuGauge cpuGauge{};
   Gauge levelGauge{};
-  SpectrogramDisplay spectrogramGauge{AppSettings::loadTheme()};
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
 };

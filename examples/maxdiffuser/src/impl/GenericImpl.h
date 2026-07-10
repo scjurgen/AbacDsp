@@ -23,8 +23,6 @@ public:
   void setModulationDepth(const float value) { m_modulationDepth = value; }
   void setModulationSpeed(const float value) { m_modulationSpeed = value; }
   void setLowPass(const float value) { m_lowPass = value; }
-  void setAllPassFirst(const float value) { m_allPassFirst = value; }
-  void setAllPassLast(const float value) { m_allPassLast = value; }
 
   void processBlock(const AbacDsp::AudioBuffer<2, BlockSize> &in,
                     AbacDsp::AudioBuffer<2, BlockSize> &out) {
@@ -46,6 +44,4 @@ private:
   float m_modulationDepth{};
   float m_modulationSpeed{};
   float m_lowPass{};
-  float m_allPassFirst{};
-  float m_allPassLast{};
 };

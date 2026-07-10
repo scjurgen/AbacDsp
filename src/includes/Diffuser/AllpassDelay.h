@@ -240,7 +240,7 @@ class ModulatingAllPassDelay
 
     void setFeedback(const float gain) noexcept
     {
-        m_feedback = std::clamp(gain, -0.99f, 0.99f);
+        m_feedback = std::clamp(gain, -0.999f, 0.999f);
     }
 
     void setSize(const size_t newSize) noexcept
@@ -334,21 +334,21 @@ class ModulatingAllPassDelay
 
     float nextHeadRead(const size_t index)
     {
-        auto getReturnValue = [this](const size_t index)
+        auto getReturnValue = [this](const size_t idx)
         {
             if (m_modulation.isModulating())
             {
                 const auto [depth, fraction] = m_modulation.lastValuePair();
-                auto dHead = m_headRead[index] + static_cast<size_t>(depth);
+                auto dHead = m_headRead[idx] + static_cast<size_t>(depth);
                 if (dHead >= m_maxBufferSize)
                 {
                     dHead -= m_maxBufferSize;
                 }
-                return Interpolation::bspline43x(&m_buffer[dHead], fraction);
+                return Interpolation::hermite43x(&m_buffer[dHead], fraction);
             }
             else
             {
-                return m_buffer[m_headRead[index]];
+                return m_buffer[m_headRead[idx]];
             }
         };
 

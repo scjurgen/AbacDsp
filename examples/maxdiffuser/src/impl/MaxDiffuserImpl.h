@@ -15,7 +15,7 @@ class MaxDiffuserImpl final : public EffectBase
 {
   public:
     static constexpr size_t MaxDelaySamples{24000};
-    static constexpr size_t MaxElements{24};
+    static constexpr size_t MaxElements{50};
     static constexpr size_t MaxPreDelaySamples{96000};
 
     using Chain = AbacDsp::DiffuserDelayChain<MaxDelaySamples, MaxElements, AbacDsp::AllpassFeedbackStyle::Schroeder>;
@@ -65,11 +65,12 @@ class MaxDiffuserImpl final : public EffectBase
         }
     }
 
-    void setFeedback(const float value)
+    void setFeedback(const float valueInPercentage)
     {
+        const auto feedback = valueInPercentage * 0.00999f;
         for (auto& chain : m_diffuser)
         {
-            chain.setFeedback(value);
+            chain.setFeedback(feedback);
         }
     }
 
@@ -119,22 +120,6 @@ class MaxDiffuserImpl final : public EffectBase
         for (auto& chain : m_diffuser)
         {
             chain.setDamper(cutoff);
-        }
-    }
-
-    void setAllPassFirst(const float cutoff)
-    {
-        for (auto& chain : m_diffuser)
-        {
-            chain.setAllPassFirstCutoff(cutoff);
-        }
-    }
-
-    void setAllPassLast(const float cutoff)
-    {
-        for (auto& chain : m_diffuser)
-        {
-            chain.setAllPassLastCutoff(cutoff);
         }
     }
 
