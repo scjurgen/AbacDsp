@@ -1,14 +1,12 @@
 # TODO
 
+## Code quality
+### Sanitizier
+- Add asan, valgrind or similar
+
+
 ## Cleanup
 
-- Fix pre-existing unit test failures (unrelated to the diffuser work, found 2026-07-08):
-  - DelaysTests: ModulatingDelayPitchedAdjustTest.simpleFeedAndEat
-  - ModulationTests: WowTest.RateAffectsFrequency, WowTest.OutputRangeIsReasonable,
-    WowTest.DriftAffectsFrequencyStability
-- Rename test/Diffuser/DiffuserDelayChain_test.cpp: despite its name it tests
-  SchroederDiffuser (should be SchroederDiffuser_test.cpp). The actual chain is
-  covered by test/Diffuser/DiffusorDelayChain_test.cpp.
 
 
 
