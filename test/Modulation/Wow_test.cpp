@@ -1,12 +1,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <numeric>
 #include <vector>
-
-#include "AudioFile/SaveWav.h"
 
 #include "Analysis/SimpleStats.h"
 #include "Analysis/ZeroCrossings.h"
@@ -194,6 +191,32 @@ TEST_F(WowTest, DriftAffectsFrequencyStability)
     EXPECT_LT(noDriftStats.max, withDriftStats.max);
     EXPECT_LT(withDriftStats.min, -0.0001f);
     EXPECT_GT(withDriftStats.max, 0.0001f);
+}
+
+TEST_F(WowTest, PerceptualDepthMatchesRawDepth)
+{
+    constexpr float targetDepth = 0.5f;
+    const float root = std::pow(targetDepth, 1.0f / Wow::perceptualDepthExponent);
+
+    m_wow->setRate(3.5f);
+    m_wow->setVariance(0.0f);
+    m_wow->setDrift(0.0f);
+    m_wow->setPerceptualDepth(root);
+    settle(2000);
+    const auto perceptualResults = generateSteps(500);
+
+    m_wow = std::make_unique<Wow>(m_sampleRate);
+    m_wow->setRate(3.5f);
+    m_wow->setVariance(0.0f);
+    m_wow->setDrift(0.0f);
+    m_wow->setDepth(targetDepth);
+    settle(2000);
+    const auto rawResults = generateSteps(500);
+
+    for (size_t i = 0; i < perceptualResults.size(); ++i)
+    {
+        EXPECT_NEAR(perceptualResults[i], rawResults[i], 1e-5f) << "mismatch at step " << i;
+    }
 }
 
 TEST_F(WowTest, BoundaryValues)

@@ -41,7 +41,7 @@ class VariSpeedTapeDelay
         m_flutter.setRate(.4f);
         m_flutter.setDepth(0.1f);
         m_wow.setRate(0.4f);
-        m_wow.setDepth(0.1f);
+        m_wow.setPerceptualDepth(0.1f);
         m_wow.setVariance(0.1f);
         m_wow.setDrift(0.05f);
     }
@@ -68,7 +68,7 @@ class VariSpeedTapeDelay
     {
         const auto w = m_wow.step();
         const auto f = m_flutter.step();
-        const auto ratio = m_ratio.getValue(TileSize) * w * f;
+        const auto ratio = m_ratio.getValue(TileSize) * (1.0f + w) * f;
 
         m_input = in.data();
         m_inputSize = TileSize;
@@ -133,7 +133,7 @@ class VariSpeedTapeDelay
 
     void setWowDepth(const float value) noexcept
     {
-        m_wow.setDepth(value);
+        m_wow.setPerceptualDepth(value);
     }
 
     void setWowRate(const float value) noexcept

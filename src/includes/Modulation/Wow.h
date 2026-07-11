@@ -14,6 +14,9 @@ namespace AbacDsp
 class Wow
 {
   public:
+    // Exponent for the perceptual depth taper; tuned by ear against alternatives (e.g. 2.5).
+    static constexpr float perceptualDepthExponent{3.0f};
+
     explicit Wow(const float sampleRate)
         : m_sampleRate(sampleRate)
         , m_invSampleRate(1.0f / sampleRate)
@@ -42,7 +45,14 @@ class Wow
 
     void setDepth(const float v) noexcept
     {
-        m_depth = std::pow(v, 3.0f);
+        m_depth = v;
+    }
+
+    // Taper so a linear UI knob feels natural: low settings barely modulate,
+    // and depth only ramps up steeply near the top of the range.
+    void setPerceptualDepth(const float v) noexcept
+    {
+        setDepth(std::pow(v, perceptualDepthExponent));
     }
 
     void setVariance(const float v) noexcept
@@ -94,16 +104,12 @@ class Wow
         const auto ouValue = m_ouProcess.step();
         const auto filteredOU = m_lowpass.step(ouValue);
 
-        const auto maxDelayMs = depth * 10.0f;
-        const auto currentDelay = maxDelayMs * (std::sin(m_phase) + filteredOU);
+        const auto currentDelay = depth * (std::sin(m_phase) + filteredOU);
 
-        // Calculate derivative for speed factor
-        // Speed factor = 1 + d(delay)/dt
-        // For discrete time: d(delay)/dt ≈ (current - previous) * sampleRate / 1000
         const auto delayDerivative = (currentDelay - m_previousDelay) * m_sampleRate / 1000.0f;
         m_previousDelay = currentDelay;
 
-        return 1.0f + delayDerivative;
+        return delayDerivative;
     }
 
   private:

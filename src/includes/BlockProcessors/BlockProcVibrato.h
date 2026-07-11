@@ -27,7 +27,7 @@ class Vibrato final : public BlockProcessorBase<BlockSize>
     }
     void setModDepth(const float v) noexcept
     {
-        m_wow.setDepth(v);
+        m_wow.setPerceptualDepth(v);
     }
     void setVariance(const float v) noexcept
     {
