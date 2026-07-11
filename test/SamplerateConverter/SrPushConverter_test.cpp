@@ -65,7 +65,8 @@ TEST(SrPushConverterTest, DownsampleRatioHalfFrameCountMono)
 
     auto generated = sut.fetchBlock(0.5f, in.data(), kFrames, out.data(), out.size());
 
-    EXPECT_NEAR(static_cast<double>(generated), static_cast<double>(kFrames / 2), kFrames / 2 * kCountTolerance);
+    EXPECT_NEAR(static_cast<double>(generated), static_cast<double>(kFrames) / 2.0,
+                static_cast<double>(kFrames) / 2.0 * kCountTolerance);
 }
 
 TEST(SrPushConverterTest, DownsampleRatioQuarterFrameCountMono)
@@ -76,7 +77,8 @@ TEST(SrPushConverterTest, DownsampleRatioQuarterFrameCountMono)
 
     auto generated = sut.fetchBlock(0.25f, in.data(), kFrames, out.data(), out.size());
 
-    EXPECT_NEAR(static_cast<double>(generated), static_cast<double>(kFrames / 4), kFrames / 4 * kCountTolerance);
+    EXPECT_NEAR(static_cast<double>(generated), static_cast<double>(kFrames) / 4.0,
+                static_cast<double>(kFrames) / 4.0 * kCountTolerance);
 }
 
 // ----- DC preservation tests (converters must not alter DC level) -----
@@ -158,7 +160,8 @@ TEST(SrPushConverterTest, DownsampleRatioHalfFrameCountStereo)
 
     auto generated = sut.fetchBlock(0.5f, in.data(), kFrames, out.data(), out.size());
 
-    EXPECT_NEAR(static_cast<double>(generated), static_cast<double>(kFrames / 2), kFrames / 2 * kCountTolerance);
+    EXPECT_NEAR(static_cast<double>(generated), static_cast<double>(kFrames) / 2.0,
+                static_cast<double>(kFrames) / 2.0 * kCountTolerance);
 }
 
 // ----- reset clears all internal state -----

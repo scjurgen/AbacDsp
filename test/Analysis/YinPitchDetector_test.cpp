@@ -15,6 +15,8 @@ namespace AbacDsp::Test
 constexpr float kSampleRate = 48000.0f;
 constexpr float kPitchTolerance = 2.0f; // Hz tolerance for pitch detection
 
+namespace
+{
 class YinPitchDetectorTest : public ::testing::Test
 {
   protected:
@@ -23,7 +25,7 @@ class YinPitchDetectorTest : public ::testing::Test
         m_detector = std::make_unique<YinPitchDetector>(kSampleRate, 80.0f, 1000.0f, 50.f);
     }
 
-    void feedSignalAndMeasurePitch(const std::vector<float>& signal, float& detectedPitch, float& confidence)
+    void feedSignalAndMeasurePitch(const std::vector<float>& signal, float& detectedPitch, float& confidence) const
     {
         std::vector<float> pitchResults;
         pitchResults.reserve(signal.size());
@@ -49,22 +51,24 @@ class YinPitchDetectorTest : public ::testing::Test
         }
 
         // Calculate median pitch for robustness against outliers
-        std::sort(pitchResults.begin(), pitchResults.end());
+        std::ranges::sort(pitchResults);
         detectedPitch = pitchResults[pitchResults.size() / 2];
 
         // Calculate confidence as inverse of standard deviation
-        const float mean = std::accumulate(pitchResults.begin(), pitchResults.end(), 0.0f) / pitchResults.size();
+        const float mean =
+            std::accumulate(pitchResults.begin(), pitchResults.end(), 0.0f) / static_cast<float>(pitchResults.size());
         float variance = 0.0f;
         for (const auto pitch : pitchResults)
         {
             variance += (pitch - mean) * (pitch - mean);
         }
-        variance /= pitchResults.size();
+        variance /= static_cast<float>(pitchResults.size());
         confidence = 1.0f / (1.0f + std::sqrt(variance));
     }
 
     std::unique_ptr<YinPitchDetector> m_detector;
 };
+}
 
 TEST_F(YinPitchDetectorTest, feedSine)
 {
@@ -76,7 +80,7 @@ TEST_F(YinPitchDetectorTest, feedSine)
 
         Generator<Wave::Sine> generator(kSampleRate, targetFreq);
 
-        const size_t numSamples = static_cast<size_t>(80.0f * kSampleRate / targetFreq);
+        const auto numSamples = static_cast<size_t>(80.0f * kSampleRate / targetFreq);
         std::vector<float> signal(numSamples);
         generator.render(signal.begin(), signal.end());
 
@@ -102,7 +106,7 @@ TEST_F(YinPitchDetectorTest, feedSineWithNoise)
         Generator<Wave::Sine> sineGen(kSampleRate, targetFreq);
         Generator<Wave::Noise> noiseGen(kSampleRate, 2000.0f); // High-frequency noise
 
-        const size_t numSamples = static_cast<size_t>(40.0f * kSampleRate / targetFreq);
+        const auto numSamples = static_cast<size_t>(40.0f * kSampleRate / targetFreq);
         std::vector<float> signal(numSamples);
 
         for (size_t i = 0; i < numSamples; ++i)
@@ -134,7 +138,7 @@ TEST_F(YinPitchDetectorTest, feedSawtooth)
 
         Generator<Wave::Saw> generator(kSampleRate, targetFreq);
 
-        const size_t numSamples = static_cast<size_t>(40.0f * kSampleRate / targetFreq);
+        const auto numSamples = static_cast<size_t>(40.0f * kSampleRate / targetFreq);
         std::vector<float> signal(numSamples);
         generator.render(signal.begin(), signal.end());
 
@@ -158,7 +162,7 @@ TEST_F(YinPitchDetectorTest, feedTriangle)
 
         Generator<Wave::Triangle> generator(kSampleRate, targetFreq);
 
-        const size_t numSamples = static_cast<size_t>(40.0f * kSampleRate / targetFreq);
+        const auto numSamples = static_cast<size_t>(40.0f * kSampleRate / targetFreq);
         std::vector<float> signal(numSamples);
         generator.render(signal.begin(), signal.end());
 
@@ -181,7 +185,7 @@ TEST_F(YinPitchDetectorTest, feedSquare)
 
         Generator<Wave::Square> generator(kSampleRate, targetFreq);
 
-        const size_t numSamples = static_cast<size_t>(40.0f * kSampleRate / targetFreq);
+        const auto numSamples = static_cast<size_t>(40.0f * kSampleRate / targetFreq);
         std::vector<float> signal(numSamples);
         generator.render(signal.begin(), signal.end());
 
@@ -198,7 +202,7 @@ TEST_F(YinPitchDetectorTest, noiseSignal)
 {
     Generator<Wave::Noise> generator(kSampleRate, 1000.0f);
 
-    const size_t numSamples = 8192; // Longer sample for noise test
+    constexpr size_t numSamples = 8192; // Longer sample for noise test
     std::vector<float> signal(numSamples);
     generator.render(signal.begin(), signal.end());
 
@@ -214,7 +218,7 @@ TEST_F(YinPitchDetectorTest, noiseSignal)
 
 TEST_F(YinPitchDetectorTest, silenceSignal)
 {
-    const size_t numSamples = 4096;
+    constexpr size_t numSamples = 4096;
     std::vector<float> signal(numSamples, 0.0f); // Silence
 
     float detectedPitch, confidence;
@@ -234,7 +238,7 @@ TEST_F(YinPitchDetectorTest, frequencyRange)
 
         Generator<Wave::Sine> generator(kSampleRate, targetFreq);
 
-        const size_t numSamples = static_cast<size_t>(60.0f * kSampleRate / targetFreq); // More periods
+        const auto numSamples = static_cast<size_t>(60.0f * kSampleRate / targetFreq); // More periods
         std::vector<float> signal(numSamples);
         generator.render(signal.begin(), signal.end());
 
