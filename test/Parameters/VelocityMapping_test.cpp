@@ -1,5 +1,6 @@
-#include <gtest/gtest.h>
 #include <cmath>
+#include <gtest/gtest.h>
+#include <tuple>
 
 #include "Parameters/VelocityMapping.h"
 
@@ -86,8 +87,8 @@ TEST_F(VelocityMappingTest, NormalizedInputRangeClamping)
     EXPECT_GE(VelocityMapping::getNormalized(0.0f, dr_6db), 0.0f);
     EXPECT_LE(VelocityMapping::getNormalized(1.0f, dr_6db), 1.0f);
 
-    EXPECT_NO_THROW(VelocityMapping::getNormalized(-0.1f, dr_6db));
-    EXPECT_NO_THROW(VelocityMapping::getNormalized(1.1f, dr_6db));
+    EXPECT_NO_THROW(std::ignore = VelocityMapping::getNormalized(-0.1f, dr_6db));
+    EXPECT_NO_THROW(std::ignore = VelocityMapping::getNormalized(1.1f, dr_6db));
 }
 
 TEST_F(VelocityMappingTest, ZeroDynamicRange)

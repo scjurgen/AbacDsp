@@ -1,15 +1,14 @@
 
-#include "Filters/Biquad.h"
-#include "Filters/BiquadReference.h"
-#include "Generators/ReferenceWave.h"
-
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
-
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <numbers>
+
+#include "gtest/gtest.h"
+
+#include "Filters/Biquad.h"
+#include "Filters/BiquadReference.h"
+#include "Generators/ReferenceWave.h"
 
 namespace AbacDsp::Test
 {
@@ -218,7 +217,10 @@ TEST_P(DspBiquadFilterTests, allMagnitudesMono)
 class WrapperOfSpecializedBiquadsStereo
 {
   public:
-    void setType(BiquadFilterType type) {}
+    void setType(BiquadFilterType type)
+    {
+        m_currentFilterType = type;
+    }
 
     void computeCoefficients(BiquadFilterType type, const float sampleRate, const float frequency, const float Q,
                              const float peakGain)

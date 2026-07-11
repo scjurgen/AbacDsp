@@ -1,16 +1,15 @@
 
-#include "Filters/Biquad.h"
-#include "Filters/BiquadResoBP.h"
-#include "Numbers/Convert.h"
-
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
-
 #include <algorithm>
-
 #include <array>
 #include <cmath>
 #include <numbers>
+#include <tuple>
+
+#include "gtest/gtest.h"
+
+#include "Filters/Biquad.h"
+#include "Filters/BiquadResoBP.h"
+#include "Numbers/Convert.h"
 
 namespace AbacDsp::Test
 {
@@ -59,7 +58,7 @@ TEST(BiquadResoBPTest, quickReleaseDamping)
     sut.setByDecay(1, f, 0.01f);
     for (size_t i = 0; i < 4800; ++i)
     {
-        sut.step(i < 7 ? 1024.f : 0.f);
+        std::ignore = sut.step(i < 7 ? 1024.f : 0.f);
     }
     float preDecayMax = sut.step(0.f);
     for (size_t i = 0; i < 480; ++i)
@@ -69,7 +68,7 @@ TEST(BiquadResoBPTest, quickReleaseDamping)
     sut.damp(true);
     for (size_t i = 0; i < 700; ++i)
     {
-        sut.step(0.f);
+        std::ignore = sut.step(0.f);
     }
     float currentMax = sut.step(0.f);
     for (size_t i = 0; i < 400; ++i)

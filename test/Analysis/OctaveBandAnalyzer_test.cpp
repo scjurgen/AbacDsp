@@ -1,7 +1,8 @@
-#include <gtest/gtest.h>
-#include <cmath>
-#include <numbers>
 #include <algorithm>
+#include <cmath>
+#include <gtest/gtest.h>
+#include <numbers>
+
 #include "Analysis/OctaveBandAnalyzer.h"
 
 namespace AbacDsp::Test
@@ -156,7 +157,6 @@ TEST_F(OctaveBandAnalyzerTest, SilenceProducesZeroLevels)
 TEST_F(OctaveBandAnalyzerTest, SineWaveDetectedInCorrectBand)
 {
     OctaveBandAnalyzer<TestBlockSize, 3> analyzer(TestSampleRate);
-    auto cf = analyzer.getCenterFrequencies();
     for (int midiNote = 20; midiNote < 122; midiNote += 4)
     {
         const float frequency = midiNoteToFrequency(midiNote);
@@ -213,9 +213,13 @@ TEST_F(OctaveBandAnalyzerTest, DifferentBinsPerOctave)
     float total1 = 0.0f;
     float total3 = 0.0f;
     for (auto level : levels1)
+    {
         total1 += level;
+    }
     for (auto level : levels3)
+    {
         total3 += level;
+    }
 
     EXPECT_GT(total1, 0.1f);
     EXPECT_GT(total3, 0.1f);

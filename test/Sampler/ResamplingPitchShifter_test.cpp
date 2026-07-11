@@ -1,10 +1,12 @@
-#include <gtest/gtest.h>
 #include <cmath>
-#include <numbers>
-#include <vector>
+#include <gtest/gtest.h>
 #include <memory>
-#include "Sampler/ResamplingPitchShifter.h"
+#include <numbers>
+#include <tuple>
+#include <vector>
+
 #include "Analysis/ZeroCrossings.h"
+#include "Sampler/ResamplingPitchShifter.h"
 
 namespace AbacDsp::Test
 {
@@ -179,7 +181,7 @@ TEST_F(ResamplingPitchShifterTest, StereoSymmetry)
     std::vector<float> rightOut(bufferSize);
 
     m_pitchShifter->setPitchRatio(1.5f);
-    m_pitchShifter->produceSamples(leftOut.data(), rightOut.data(), bufferSize);
+    std::ignore = m_pitchShifter->produceSamples(leftOut.data(), rightOut.data(), bufferSize);
 
     for (size_t i = 0; i < bufferSize; ++i)
     {

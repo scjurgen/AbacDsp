@@ -1,6 +1,6 @@
-#include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <tuple>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -159,7 +159,7 @@ TEST(PeakEnvelopeFollowerTest, AttackBehavior)
     constexpr auto lowValue = 0.1f;
     constexpr auto highValue = 0.9f;
 
-    sut.step(lowValue);
+    std::ignore = sut.step(lowValue);
     const auto envelopeAfterLow = sut.getEnvelope();
 
     const auto envelopeAfterHigh = sut.step(highValue);
@@ -177,7 +177,7 @@ TEST(PeakEnvelopeFollowerTest, ReleaseBehavior)
     constexpr auto highValue = 0.9f;
     constexpr auto lowValue = 0.1f;
 
-    sut.step(highValue);
+    std::ignore = sut.step(highValue);
     const auto envelopeAfterHigh = sut.getEnvelope();
 
     const auto envelopeAfterLow = sut.step(lowValue);
@@ -253,8 +253,8 @@ TEST(PeakEnvelopeFollowerTest, ReleaseTimeComparison)
     constexpr auto highValue = 1.0f;
     constexpr auto lowValue = 0.1f;
 
-    sutFast.step(highValue);
-    sutSlow.step(highValue);
+    std::ignore = sutFast.step(highValue);
+    std::ignore = sutSlow.step(highValue);
 
     const auto fastResult = sutFast.step(lowValue);
     const auto slowResult = sutSlow.step(lowValue);
@@ -286,7 +286,7 @@ TEST(PeakEnvelopeFollowerTest, ZeroInputHandling)
     sut.setAttackInMsecs(1.0f);
     sut.setReleaseInMsecs(100.0f);
 
-    sut.step(0.5f);
+    std::ignore = sut.step(0.5f);
     EXPECT_GT(sut.getEnvelope(), 0.0f);
 
     auto previousEnvelope = sut.getEnvelope();

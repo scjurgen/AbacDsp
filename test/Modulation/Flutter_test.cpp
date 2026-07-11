@@ -1,9 +1,8 @@
-#include "Analysis/ZeroCrossings.h"
-
-
 #include <gtest/gtest.h>
 #include <numbers>
-#include <cmath>
+#include <tuple>
+
+#include "Analysis/ZeroCrossings.h"
 #include "Modulation/Flutter.h"
 
 namespace AbacDsp::Test
@@ -40,7 +39,7 @@ TEST_F(FlutterLfoTest, ResetRestoresInitialPhase)
 
     for (int i = 0; i < 10; ++i)
     {
-        lfo.step(1.0f);
+        std::ignore = lfo.step(1.0f);
     }
     lfo.reset();
     const auto resetOutput = lfo.step(0.0f);

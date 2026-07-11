@@ -1,10 +1,10 @@
-#include "SamplerateConverter/SrPushConverter.h"
-#include "Filters/Sinc/sinc_4.h"
+#include <tuple>
+#include <vector>
 
 #include "gtest/gtest.h"
-#include "gmock/gmock.h"
 
-#include <vector>
+#include "Filters/Sinc/sinc_4.h"
+#include "SamplerateConverter/SrPushConverter.h"
 
 namespace AbacDsp::Test
 {
@@ -91,7 +91,9 @@ TEST(SrPushConverterTest, DcPreservedNeutralRatio)
 
     ASSERT_GT(generated, kStartupSkip);
     for (size_t i = kStartupSkip; i < generated; ++i)
+    {
         EXPECT_NEAR(out[i], 1.0f, kDcTolerance) << "at index " << i;
+    }
 }
 
 TEST(SrPushConverterTest, DcPreservedUpsampleRatio2)
@@ -104,7 +106,9 @@ TEST(SrPushConverterTest, DcPreservedUpsampleRatio2)
 
     ASSERT_GT(generated, kStartupSkip);
     for (size_t i = kStartupSkip; i < generated; ++i)
+    {
         EXPECT_NEAR(out[i], 1.0f, kDcTolerance) << "at index " << i;
+    }
 }
 
 TEST(SrPushConverterTest, DcPreservedDownsampleRatioHalf)
@@ -117,7 +121,9 @@ TEST(SrPushConverterTest, DcPreservedDownsampleRatioHalf)
 
     ASSERT_GT(generated, kStartupSkip);
     for (size_t i = kStartupSkip; i < generated; ++i)
+    {
         EXPECT_NEAR(out[i], 1.0f, kDcTolerance) << "at index " << i;
+    }
 }
 
 // ----- stereo (MAXCHANNELS=2) -----
@@ -165,7 +171,7 @@ TEST(SrPushConverterTest, ResetRestoresInitialState)
 
     // warm up, then reset
     std::vector<float> dummy(kFrames + 500);
-    sut.fetchBlock(1.0f, in.data(), kFrames, dummy.data(), dummy.size());
+    std::ignore = sut.fetchBlock(1.0f, in.data(), kFrames, dummy.data(), dummy.size());
     sut.reset();
     auto gen = sut.fetchBlock(1.0f, in.data(), kFrames, outAfterReset.data(), outAfterReset.size());
 
@@ -175,7 +181,9 @@ TEST(SrPushConverterTest, ResetRestoresInitialState)
 
     ASSERT_EQ(gen, genFresh);
     for (size_t i = 0; i < gen; ++i)
+    {
         EXPECT_NEAR(outAfterReset[i], outFresh[i], 1e-5f) << "at index " << i;
+    }
 }
 
 }

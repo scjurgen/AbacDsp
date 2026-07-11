@@ -1,10 +1,10 @@
-#include <gtest/gtest.h>
-#include <vector>
-#include <numeric>
 #include <cmath>
+#include <gtest/gtest.h>
+#include <numeric>
+#include <tuple>
+#include <vector>
 
 #include "Generators/OrnsteinUhlenbeckProcess.h"
-#include "Analysis/SimpleStats.h"
 
 namespace AbacDsp::Test
 {
@@ -105,7 +105,7 @@ TEST_F(OrnsteinUhlenbeckProcessTest, ResetClearsState)
     // Advance to arbitrary state, then reset
     for (int i = 0; i < 1234; ++i)
     {
-        m_ouProcess->step();
+        std::ignore = m_ouProcess->step();
     }
     m_ouProcess->reset(seed);
     const float outputAfterReset = m_ouProcess->step();
@@ -127,7 +127,7 @@ TEST_F(OrnsteinUhlenbeckProcessTest, OutputRemainsConfined)
     constexpr int burnInSamples = 2000;
     for (int i = 0; i < burnInSamples; ++i)
     {
-        m_ouProcess->step();
+        std::ignore = m_ouProcess->step();
     }
 
     // Calculate theoretical steady-state bounds from OU parameters
@@ -165,7 +165,7 @@ TEST_F(OrnsteinUhlenbeckProcessTest, MeanReversionBehavior)
     // Burn-in to reach steady state
     for (size_t i = 0; i < longSequence.size(); ++i)
     {
-        m_ouProcess->step();
+        std::ignore = m_ouProcess->step();
     }
     for (float& sample : longSequence)
     {

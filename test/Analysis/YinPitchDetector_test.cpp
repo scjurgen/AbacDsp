@@ -1,17 +1,17 @@
-#include "gtest/gtest.h"
-#include "Analysis/YinPitchDetector.h"
-#include "NaiveGenerators/Generator.h"
-
-#include <vector>
+#include <algorithm>
 #include <cmath>
 #include <numeric>
-#include <algorithm>
-#include <random>
+#include <tuple>
+#include <vector>
+
+#include "gtest/gtest.h"
+
+#include "Analysis/YinPitchDetector.h"
+#include "NaiveGenerators/Generator.h"
 
 namespace AbacDsp::Test
 {
 
-constexpr float kTolerance = 1e-5f;
 constexpr float kSampleRate = 48000.0f;
 constexpr float kPitchTolerance = 2.0f; // Hz tolerance for pitch detection
 
@@ -30,7 +30,7 @@ class YinPitchDetectorTest : public ::testing::Test
 
         for (const auto sample : signal)
         {
-            m_detector->step(sample);
+            std::ignore = m_detector->step(sample);
         }
         for (const auto sample : signal)
         {

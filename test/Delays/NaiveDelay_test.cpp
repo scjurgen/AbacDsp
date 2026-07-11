@@ -1,8 +1,9 @@
 
-#include "Delays/NaiveDelay.h"
+#include <tuple>
 
 #include "gtest/gtest.h"
-#include "gmock/gmock.h"
+
+#include "Delays/NaiveDelay.h"
 
 namespace AbacDsp::Test
 {
@@ -10,7 +11,7 @@ TEST(NaiveDelayTest, simpleFeedAndEat)
 {
     NaiveDelay<1000> sut{};
     sut.setSize(100);
-    sut.step(1);
+    std::ignore = sut.step(1);
     for (size_t i = 0; i < 99; ++i)
     {
         EXPECT_EQ(sut.step(0), 0.f) << "failed at " << i;
