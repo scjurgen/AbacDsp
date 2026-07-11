@@ -152,4 +152,4 @@ class FracReadHead
     Scheduled m_scheduled{false, 0.0f, 0.0f};
 };
 
-}  // namespace AbacDsp
+}

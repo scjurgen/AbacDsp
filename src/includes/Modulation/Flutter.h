@@ -121,4 +121,4 @@ class Flutter
     std::array<FlutterLfo, 3> m_lfos;
 };
 
-}  // namespace AbacDsp
+}

@@ -205,4 +205,4 @@ class SustainPedalHandler
     int m_counter{};
 };
 
-}  // namespace AbacDsp
+}

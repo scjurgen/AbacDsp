@@ -137,4 +137,4 @@ inline void printAsTestVector(const std::vector<float>& data, const int precisio
     return ss.str();
 }
 
-} // namespace CreateExpectedSet
+}

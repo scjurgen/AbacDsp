@@ -123,4 +123,4 @@ class VelvetCrackleGenerator
     std::array<FilterState, 4> m_filter_states;
 };
 
-}  // namespace AbacDsp
+}

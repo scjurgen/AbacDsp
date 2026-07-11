@@ -219,4 +219,4 @@ class YinPitchDetector
     }
 };
 
-}  // namespace AbacDsp
+}

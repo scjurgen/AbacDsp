@@ -151,4 +151,4 @@ class Excitation
     float m_noiseFactor{0.0f};
 };
 
-}  // namespace AbacDsp
+}

@@ -114,4 +114,4 @@ class JuliaWalk : public JuliaIter
     float m_advance{};
 };
 
-}  // namespace AbacDsp
+}

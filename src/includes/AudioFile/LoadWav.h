@@ -80,4 +80,4 @@ class LoadWav
     }
 };
 
-} // namespace AudioUtility
+}

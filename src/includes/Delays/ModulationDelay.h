@@ -194,4 +194,4 @@ class ModulatingDelayPitchedAdjust
     std::vector<float> m_buffer;
 };
 
-} // namespace AbacDsp
+}

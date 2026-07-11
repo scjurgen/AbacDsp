@@ -116,4 +116,4 @@ class ParallelPlainDelay
     size_t m_head{};
 };
 
-}  // namespace AbacDsp
+}

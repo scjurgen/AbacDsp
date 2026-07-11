@@ -61,4 +61,4 @@ class OrnsteinUhlenbeckProcess
     std::normal_distribution<float> m_normalDist;
 };
 
-} // namespace AbacDsp
+}

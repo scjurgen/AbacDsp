@@ -242,4 +242,4 @@ class SchroederAllPassSoftTransition
     std::vector<float> m_buffer{};
 };
 
-}  // namespace AbacDsp
+}

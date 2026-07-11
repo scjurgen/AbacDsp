@@ -20,7 +20,7 @@ constexpr size_t kFrames = 4096;
 constexpr double kCountTolerance = 0.02; // 2 %
 constexpr float kDcTolerance = 0.01f;
 constexpr size_t kStartupSkip = 100; // skip initial FIR transient
-} // namespace
+}
 
 // ----- frame-count tests (ratio determines how many output frames are generated) -----
 
@@ -178,4 +178,4 @@ TEST(SrPushConverterTest, ResetRestoresInitialState)
         EXPECT_NEAR(outAfterReset[i], outFresh[i], 1e-5f) << "at index " << i;
 }
 
-} // namespace AbacDsp::Test
+}

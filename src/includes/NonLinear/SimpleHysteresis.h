@@ -55,4 +55,4 @@ class SimpleHysteresis
     const float m_smoothingCoeff;
 };
 
-}  // namespace AbacDsp
+}

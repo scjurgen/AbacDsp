@@ -21,7 +21,7 @@ constexpr size_t kFrames = 4096;
 constexpr double kCountTolerance = 0.02; // 2 %
 constexpr float kDcTolerance = 0.01f;
 constexpr size_t kStartupSkipSamples = 200; // skip 100 frames × 2 channels
-} // namespace
+}
 
 TEST(ConvertSampleBufferTest, NeutralRatioSampleCount)
 {
@@ -116,4 +116,4 @@ TEST(ConvertSampleBufferTest, DcPreservedDownsampleRatioHalf)
     }
 }
 
-} // namespace AbacDsp::Test
+}

@@ -537,4 +537,4 @@ class FloatingHorizonFFTImage : public SpectrogramBase
     std::vector<float> m_image;
 };
 
-} // namespace AbacDsp
+}

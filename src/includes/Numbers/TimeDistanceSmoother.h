@@ -189,4 +189,4 @@ class TimeDistanceSmoother
     int m_correctionCooldown{0};
 };
 
-}  // namespace AbacDsp
+}

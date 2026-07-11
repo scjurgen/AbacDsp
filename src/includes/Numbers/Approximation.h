@@ -293,4 +293,4 @@ template <>
         1.000067706f);
 }
 
-} // namespace Approximation
+}

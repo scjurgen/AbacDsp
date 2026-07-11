@@ -53,4 +53,4 @@ class NaiveDelay
     std::vector<float> m_buffer;
 };
 
-}  // namespace AbacDsp
+}

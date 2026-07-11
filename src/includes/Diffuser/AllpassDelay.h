@@ -706,4 +706,4 @@ class FixedAllpassDelay
     size_t m_delaySteps;
 };
 
-} // namespace AbacDsp
+}

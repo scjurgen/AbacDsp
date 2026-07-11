@@ -40,7 +40,7 @@ PullCb makeCallback(const std::vector<float>& data, size_t numChannels = 1)
         return static_cast<long>(data.size() / numChannels);
     }};
 }
-} // namespace
+}
 
 // ----- frame-count tests -----
 // For the pull converter, numSamples is the requested OUTPUT frame count.
@@ -194,4 +194,4 @@ TEST(SrPullConverterTest, ResetRestoresInitialState)
         EXPECT_NEAR(outAfterReset[i], outFresh[i], 1e-5f) << "at index " << i;
 }
 
-} // namespace AbacDsp::Test
+}
