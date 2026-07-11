@@ -37,6 +37,11 @@ class MaxDiffuserImpl final : public EffectBase
         {
             delay.setSize(0);
         }
+        for (auto& pitcher : m_pitcher)
+        {
+            pitcher.setReverse(true);
+        }
+
     }
 
     void setDry(const float value)

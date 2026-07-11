@@ -141,6 +141,7 @@ class PitchFadeWindowDelay
         const auto idx = static_cast<size_t>(std::floor(position));
         const float fractional = position - static_cast<float>(idx);
         // whenever using another interpolation set the MaxInterpolationWidth
+        // good alternative is a hermite43
         return Interpolation::linearPt2(&m_buffer[idx % m_maxSize], fractional);
     }
 
@@ -215,4 +216,4 @@ class PitchFadeWindowDelay
     std::uniform_int_distribution<size_t> m_randDistribution{0, m_randomVariation};
 };
 
-}  // namespace AbacDsp
+} // namespace AbacDsp

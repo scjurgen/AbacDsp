@@ -50,7 +50,12 @@ class RmsFollower
         m_currentWidth = newWidth;
     }
 
-    void feed(std::span<const float> buffer) noexcept
+    void feed(const float* data, const size_t numSamples) noexcept
+    {
+        feed(std::span<const float>{data, numSamples});
+    }
+
+    void feed(const std::span<const float> buffer) noexcept
     {
         size_t indexBuffer = 0;
         while (indexBuffer < buffer.size())

@@ -10,7 +10,7 @@
   "minor": 1,
   "major": 0,
   "shortdescription": "Diffuser delay chain (up to 50 modulated allpass delays in series)",
-  "description": ["Diffuser delay chain: up to 50 modulated allpass delays in series with pre-delay, bulge size distribution and damping."],
+  "description": ["Diffuser delay chain: up to 50 modulated allpass delays in series with pre-delay, pitching, bulge size distribution and damping."],
   "ports-control":
   [
     {"short": "PBR", "type": "presetbrowser", "display": "Patch", "symbol": "patch"},

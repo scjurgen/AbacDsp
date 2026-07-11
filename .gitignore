@@ -1,15 +1,27 @@
-.DS_Store
-cmake-build-*
+# Editor / IDE
+.claude
 .idea
+
+# OS files
+.DS_Store
+
+# Build directories
+build
+cmake-build-*
+.build*
+external
+packages
+
+# Logs and archives
 *.log
+*.tar.gz
+
+# Misc
 tmp
 *venv
-.DS_Store
 *.lv2
-.build*
-packages
-*.tar.gz
 __pycache__
+
 # Prerequisites
 *.d
 

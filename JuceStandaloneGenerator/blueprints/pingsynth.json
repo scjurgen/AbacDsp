@@ -18,14 +18,14 @@
   "audio-ports-out": [{ "name": "left", "symbol":  "left"},{ "name": "right", "symbol":  "right"}],
   "ports-control":
   [
-    {"short": "MODE", "type": "drop", "display": "Mode", "symbol": "mode", "default": 0, "listitems": ["classic", "mpe"]},
+    {"short": "MODE", "type": "drop", "display": "Mode", "symbol": "mode", "default": 1, "listitems": ["classic", "mpe"]},
     {"short": "PTCH", "type": "drop", "display": "Patch", "symbol": "patch", "default": 0, "listitems": "#{}", "count": 10, "patch": true},
     {"short": "VOL", "type": "dial", "display": "Vol", "symbol": "vol", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
     {"short": "REV", "type": "dial", "display": "Reverb", "symbol": "reverbLevel", "default": -24, "range": [-120, 0, 1, 1, false], "precision": 0, "unit": "dB"},
-    {"short": "XPOS", "type": "dial", "display": "X", "symbol": "x", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
-    {"short": "YPOS", "type": "dial", "display": "Y", "symbol": "y", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "XPOS", "type": "dial", "display": "X", "symbol": "x", "default": 25, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "YPOS", "type": "dial", "display": "Y", "symbol": "y", "default": 25, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
     {"short": "ATK", "type": "dial", "display": "Attack", "symbol": "attack", "default": 1, "range": [0, 1000, 0.1, 0.5, false], "precision": 1, "unit": "ms"},
-    {"short": "DCY", "type": "dial", "display": "Decay", "symbol": "decay", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "DCY", "type": "dial", "display": "Decay", "symbol": "decay", "default": 2, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
     {"short": "DCYSK", "type": "dial", "display": "Decay Skew", "symbol": "decaySkew", "default": 0, "range": [-100, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
     {"short": "SPRD", "type": "dial", "display": "Spread", "symbol": "spread", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
     {"short": "TYPE", "type": "drop", "display": "Type #1", "symbol": "type", "default": 0, "listitems": ["odd", "even", "stretched", "pythagorean", "bell", "cymbal", "plate", "golden", "fibonacci", "prime"]},
@@ -40,7 +40,7 @@
     {"short": "MAXH", "type": "dial", "display": "Max Harmonics", "symbol": "maxHarmonics", "default": 10, "range": [1, 100, 1, 1, false], "precision": 1, "unit": ""},
     {"short": "MINPB", "type": "dial", "display": "Min PB note", "symbol": "minPbNote", "default": 25, "range": [1, 127, 1, 1, false], "precision": 1, "unit": ""},
     {"short": "MAXPB", "type": "dial", "display": "Max PB note", "symbol": "maxPbNote", "default": 120, "range": [1, 127, 1, 1, false], "precision": 1, "unit": ""},
-    {"short": "RANGPB", "type": "dial", "display": "Range PB", "symbol": "rangePb", "default": 2, "range": [0, 24, 1, 1, false], "precision": 1, "unit": ""},
+    {"short": "RANGPB", "type": "dial", "display": "Range PB", "symbol": "rangePb", "default": 12, "range": [0, 24, 1, 1, false], "precision": 1, "unit": ""},
 
     {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
     {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
