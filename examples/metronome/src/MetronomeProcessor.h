@@ -79,8 +79,8 @@ public:
     m_sampleRate = static_cast<size_t>(sampleRate);
     for (auto *param : getParameters()) {
       if (auto *p = dynamic_cast<juce::RangedAudioParameter *>(param)) {
-        const auto normalizedValue = p->getValue();
-        p->sendValueChangedMessageToListeners(normalizedValue);
+        // APVTS suppresses this as a no-change re-send, so call directly.
+        parameterChanged(p->paramID, p->convertFrom0to1(p->getValue()));
       }
     }
     for (const auto &entry : CcSettings::load()) {

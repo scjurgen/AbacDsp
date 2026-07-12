@@ -372,10 +372,8 @@ class MetronomeImpl final : public EffectBase
         return m_hostSync ? hostTransport().isPlaying : m_running;
     }
 
-    // Bar length uses the preset's own barBeats count, not the host time
-    // signature denominator (compound/odd presets have none to convert from).
-    // Only resync on a fresh transport sample (updateCount changed); otherwise
-    // the per-sample increment below carries the phase between host callbacks.
+    // Bar length uses the preset's own barBeats, not the host time signature.
+    // Only resync on a fresh transport sample; the loop below carries phase between.
     void syncToHostTransport() noexcept
     {
         const auto& transport = hostTransport();

@@ -29,7 +29,7 @@ struct PatchParameters
 float gain{0.0f};
 float dry{0.0f};
 float wet{0.0f};
-float timeInMs{0.0f};
+float timeInMs{200.0f};
 bool hostSync{false};
 size_t syncDivision{4};
 float feedback{0.0f};

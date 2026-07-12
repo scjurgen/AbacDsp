@@ -78,8 +78,8 @@ public:
     m_sampleRate = static_cast<size_t>(sampleRate);
     for (auto *param : getParameters()) {
       if (auto *p = dynamic_cast<juce::RangedAudioParameter *>(param)) {
-        const auto normalizedValue = p->getValue();
-        p->sendValueChangedMessageToListeners(normalizedValue);
+        // APVTS suppresses this as a no-change re-send, so call directly.
+        parameterChanged(p->paramID, p->convertFrom0to1(p->getValue()));
       }
     }
 
@@ -235,7 +235,7 @@ public:
             })));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("timeInMs", 1), "Time",
-        juce::NormalisableRange<float>(1, 10000, 0.1, 0.3, false), 0,
+        juce::NormalisableRange<float>(1, 10000, 0.1, 0.3, false), 200,
         juce::AudioParameterFloatAttributes{}
             .withLabel("ms")
             .withStringFromValueFunction([](float value, int) {
@@ -266,7 +266,7 @@ public:
             })));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("highPass", 1), "High pass cutoff",
-        juce::NormalisableRange<float>(100, 20000, 1, 0.3, false), 50,
+        juce::NormalisableRange<float>(20, 20000, 1, 0.3, false), 50,
         juce::AudioParameterFloatAttributes{}
             .withLabel("Hz")
             .withStringFromValueFunction([](float value, int) {
