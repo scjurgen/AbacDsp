@@ -47,6 +47,23 @@ which should be self-explanatory.
 Unit tests use GoogleTest/CTest (see CLAUDE.md for build commands, or `dev-scripts/`
 for wrapper scripts that build and run tests without cd-ing around).
 
+### Test coverage
+
+`./check_test_coverage.sh` is a fast static check: it just verifies that every
+`src/includes/**/*.h` has a matching `*_test.cpp` with at least one non-empty test.
+
+For real line/branch coverage (which lines are actually exercised, not just
+whether a test file exists), run:
+```bash
+./dev-scripts/dev-coverage.sh
+# or: ./check_test_coverage.sh -c
+```
+This configures a separate `build-coverage/` directory with `-DENABLE_COVERAGE=ON`,
+builds and runs all unit tests instrumented with `--coverage`, and generates a
+per-file Markdown summary at `COVERAGE.md` in the repo root, plus a full annotated
+HTML report at `build-coverage/coverage/index.html`. Requires `gcovr`
+(`brew install gcovr` or `pip install gcovr`).
+
 ### Why Valgrind, not AddressSanitizer
 
 Memory checking is done with Valgrind, run through `docker-unit-tests/run-on-mac.sh`

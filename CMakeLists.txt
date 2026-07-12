@@ -48,6 +48,11 @@ endif()
 add_subdirectory(3rdparty/googletest EXCLUDE_FROM_ALL)
 
 option(PACKAGE_TESTS "Build the tests" ON)
+option(
+    ENABLE_COVERAGE
+    "Instrument tests with --coverage and add a 'coverage' target (gcovr)"
+    OFF
+)
 
 if(PACKAGE_TESTS)
     # Prevent CTest from creating dashboard targets but keep DartConfiguration.tcl

@@ -44,6 +44,11 @@ if(LIB_SOURCES)
         )
     endif()
 
+    if(ENABLE_COVERAGE)
+        target_compile_options(audio_dsp_lib PRIVATE --coverage -O0 -g)
+        target_link_options(audio_dsp_lib PUBLIC --coverage)
+    endif()
+
     message(
         STATUS
         "Created audio_dsp_lib with ${CMAKE_MATCH_COUNT} source files"
@@ -76,6 +81,11 @@ macro(package_add_test TESTNAME)
     endif()
 
     add_executable(${TESTNAME} ${SOURCE_FILES})
+
+    if(ENABLE_COVERAGE)
+        target_compile_options(${TESTNAME} PRIVATE --coverage -O0 -g)
+        target_link_options(${TESTNAME} PRIVATE --coverage)
+    endif()
 
     if(TARGET audio_dsp_lib)
         target_link_libraries(
@@ -160,3 +170,32 @@ add_custom_target(
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Building and running all unit tests"
 )
+
+if(ENABLE_COVERAGE)
+    find_program(GCOVR_PATH gcovr)
+    if(GCOVR_PATH)
+        set(COVERAGE_DIR "${CMAKE_BINARY_DIR}/coverage")
+        set(COVERAGE_MD "${PROJECT_SOURCE_DIR}/COVERAGE.md")
+        add_custom_target(
+            coverage
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${COVERAGE_DIR}
+            COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+            COMMAND
+                ${GCOVR_PATH} --root ${PROJECT_SOURCE_DIR} --filter
+                "${PROJECT_SOURCE_DIR}/src/includes/"
+                --exclude-unreachable-branches --exclude-throw-branches
+                --print-summary --html-details "${COVERAGE_DIR}/index.html"
+                --markdown --markdown-title "AbacDsp Coverage Report" -o
+                "${COVERAGE_MD}" "${CMAKE_BINARY_DIR}"
+            DEPENDS unit_tests
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            COMMENT
+                "Running tests and generating coverage report at ${COVERAGE_MD}"
+        )
+    else()
+        message(
+            WARNING
+            "ENABLE_COVERAGE is ON but gcovr was not found on PATH; install it (brew install gcovr) to use the 'coverage' target"
+        )
+    endif()
+endif()

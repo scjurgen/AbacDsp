@@ -24,10 +24,18 @@ exit 1
 fi
 
 DEBUG=false
-if [[ "$1" == "-d" || "$1" == "--debug" ]]; then
-DEBUG=true
-echo -e "${CYAN}DEBUG MODE ENABLED${NC}"
-fi
+REAL_COVERAGE=false
+for arg in "$@"; do
+    case "$arg" in
+        -d|--debug)
+            DEBUG=true
+            echo -e "${CYAN}DEBUG MODE ENABLED${NC}"
+            ;;
+        -c|--coverage)
+            REAL_COVERAGE=true
+            ;;
+    esac
+done
 
 analyze_test_file() {
     local test_file="$1"
@@ -153,8 +161,36 @@ echo -e "${ORANGE} • $class_name${NC} ($test_file)"
 done
 fi
 
+structural_exit_code=0
 if [ $missing_count -gt 0 ] || [ ${#empty_test_files[@]} -gt 0 ]; then
-exit 1
-else
-exit 0
+structural_exit_code=1
 fi
+
+echo
+echo -e "${BLUE}========================================${NC}"
+echo -e "${YELLOW}Note:${NC} this only checks that a *_test.cpp file with tests exists per header."
+echo -e "For real line/branch coverage, run with ${CYAN}-c${NC}/${CYAN}--coverage${NC}, or directly:"
+echo -e "  ${CYAN}./dev-scripts/dev-coverage.sh${NC}"
+
+if [ "$REAL_COVERAGE" = true ]; then
+    echo
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE} Real Coverage (gcovr, via dev-coverage.sh)${NC}"
+    echo -e "${BLUE}========================================${NC}"
+
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    if [ -x "$SCRIPT_DIR/dev-scripts/dev-coverage.sh" ]; then
+        if "$SCRIPT_DIR/dev-scripts/dev-coverage.sh"; then
+            coverage_exit_code=0
+        else
+            coverage_exit_code=1
+        fi
+    else
+        echo -e "${RED}dev-scripts/dev-coverage.sh not found or not executable${NC}"
+        coverage_exit_code=1
+    fi
+
+    exit $((structural_exit_code || coverage_exit_code))
+fi
+
+exit $structural_exit_code
