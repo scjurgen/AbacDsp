@@ -4,9 +4,9 @@
 
 | Metric        | Coverage |
 |---------------|----------|
-| **Lines**     | 🟢 8745/9389 (93.1%) |
-| **Functions** | 🟢 1332/1366 (97.5%) |
-| **Branches**  | 🔴 2498/3759 (66.5%) |
+| **Lines**     | 🟢 8806/9411 (93.6%) |
+| **Functions** | 🟢 1360/1393 (97.6%) |
+| **Branches**  | 🔴 2570/3837 (67.0%) |
 
 ## 📄 File coverage
 
@@ -20,7 +20,7 @@
 | **`src/includes/Analysis/ZeroCrossings.h`** | 🟡 166/185 (89.7%) | 🟡 29/36 (80.6%) | 🔴 155/260 (59.6%) |
 | **`src/includes/Audio/AudioBuffer.h`** | 🟢 84/84 (100.0%) | 🟢 45/45 (100.0%) | 🔴 26/36 (72.2%) |
 | **`src/includes/Audio/Fader.h`** | 🟢 40/43 (93.0%) | 🟢 11/11 (100.0%) | 🔴 14/22 (63.6%) |
-| **`src/includes/Audio/FixedSizeProcessor.h`** | 🟢 29/29 (100.0%) | 🟢 6/6 (100.0%) | 🟢 15/16 (93.8%) |
+| **`src/includes/Audio/FixedSizeProcessor.h`** | 🟢 32/32 (100.0%) | 🟢 7/7 (100.0%) | 🟡 16/18 (88.9%) |
 | **`src/includes/AudioFile/SaveWav.h`** | 🟢 27/27 (100.0%) | 🟢 4/4 (100.0%) | 🔴 11/22 (50.0%) |
 | **`src/includes/BlockProcessors/BlockProcessorBase.h`** | 🟢 39/43 (90.7%) | 🟡 14/16 (87.5%) | 🟢 17/18 (94.4%) |
 | **`src/includes/BlockProcessors/BlockProcHighpass.h`** | 🟢 15/15 (100.0%) | 🟡 3/4 (75.0%) | 🟢 2/2 (100.0%) |
@@ -29,7 +29,7 @@
 | **`src/includes/BlockProcessors/BlockProcVibrato.h`** | 🟢 36/36 (100.0%) | 🟡 7/8 (87.5%) | 🔴 5/8 (62.5%) |
 | **`src/includes/Delays/DispersionDelay.h`** | 🟢 82/90 (91.1%) | 🟢 6/6 (100.0%) | 🟡 19/24 (79.2%) |
 | **`src/includes/Delays/FracReadHead.h`** | 🟡 55/64 (85.9%) | 🟢 13/13 (100.0%) | 🔴 20/28 (71.4%) |
-| **`src/includes/Delays/ModulationDelay.h`** | 🔴 55/98 (56.1%) | 🔴 5/8 (62.5%) | 🔴 13/34 (38.2%) |
+| **`src/includes/Delays/ModulationDelay.h`** | 🟢 115/117 (98.3%) | 🟢 32/34 (94.1%) | 🟡 84/110 (76.4%) |
 | **`src/includes/Delays/NaiveDelay.h`** | 🟡 41/46 (89.1%) | 🟢 16/16 (100.0%) | 🔴 20/32 (62.5%) |
 | **`src/includes/Delays/ParallelPlainDelay.h`** | 🟡 277/315 (87.9%) | 🟢 26/26 (100.0%) | 🔴 167/240 (69.6%) |
 | **`src/includes/Delays/PitchFadeWindowDelay.h`** | 🟢 94/96 (97.9%) | 🟢 13/13 (100.0%) | 🟡 32/40 (80.0%) |
@@ -38,8 +38,8 @@
 | **`src/includes/Diffuser/DiffusorDelayChain.h`** | 🟢 200/210 (95.2%) | 🟢 28/28 (100.0%) | 🟡 55/68 (80.9%) |
 | **`src/includes/Diffuser/SchroederAllpass.h`** | 🟢 111/120 (92.5%) | 🟢 19/20 (95.0%) | 🔴 26/42 (61.9%) |
 | **`src/includes/Diffuser/SchroederDiffuser.h`** | 🟢 40/41 (97.6%) | 🟢 8/8 (100.0%) | 🟡 8/10 (80.0%) |
-| **`src/includes/Filters/Biquad.h`** | 🟢 478/515 (92.8%) | 🟢 99/106 (93.4%) | 🟡 85/103 (82.5%) |
-| **`src/includes/Filters/BiquadReference.h`** | 🟢 135/135 (100.0%) | 🟢 13/13 (100.0%) | 🟢 12/13 (92.3%) |
+| **`src/includes/Filters/Biquad.h`** | 🟢 477/515 (92.6%) | 🟢 99/106 (93.4%) | 🟡 85/103 (82.5%) |
+| **`src/includes/Filters/BiquadReference.h`** | 🟢 134/135 (99.3%) | 🟢 13/13 (100.0%) | 🟢 12/13 (92.3%) |
 | **`src/includes/Filters/BiquadResoBandPassParallel.h`** | 🟢 37/37 (100.0%) | 🟢 4/4 (100.0%) | 🟡 7/8 (87.5%) |
 | **`src/includes/Filters/BiquadResoBP.h`** | 🟡 42/52 (80.8%) | 🟢 5/5 (100.0%) | 🔴 1/2 (50.0%) |
 | **`src/includes/Filters/BiquadResoBPParallelSIMD.h`** | 🟢 62/62 (100.0%) | 🟢 4/4 (100.0%) | 🟡 14/18 (77.8%) |
