@@ -18,6 +18,8 @@ public:
   void setDry(const float value) { m_dry = std::pow(10.f, value / 20.f); }
   void setWet(const float value) { m_wet = std::pow(10.f, value / 20.f); }
   void setTimeInMs(const float value) { m_timeInMs = value; }
+  void setHostSync(const bool value) { m_hostSync = value; }
+  void setSyncDivision(const size_t value) { m_syncDivision = value; }
   void setFeedback(const float value) { m_feedback = value; }
   void setLowPass(const float value) { m_lowPass = value; }
   void setHighPass(const float value) { m_highPass = value; }
@@ -51,6 +53,8 @@ private:
   float m_dry{};
   float m_wet{};
   float m_timeInMs{};
+  bool m_hostSync{};
+  size_t m_syncDivision{};
   float m_feedback{};
   float m_lowPass{};
   float m_highPass{};

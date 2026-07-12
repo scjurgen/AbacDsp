@@ -45,6 +45,7 @@ public:
     m_parameters.addParameterListener("inputVolume", this);
     m_parameters.addParameterListener("subVolume", this);
     m_parameters.addParameterListener("onOff", this);
+    m_parameters.addParameterListener("hostSync", this);
     m_parameters.addParameterListener("preset", this);
     m_parameters.addParameterListener("swingRatio", this);
 
@@ -66,6 +67,7 @@ public:
     m_parameters.removeParameterListener("inputVolume", this);
     m_parameters.removeParameterListener("subVolume", this);
     m_parameters.removeParameterListener("onOff", this);
+    m_parameters.removeParameterListener("hostSync", this);
     m_parameters.removeParameterListener("preset", this);
     m_parameters.removeParameterListener("swingRatio", this);
   }
@@ -263,6 +265,8 @@ public:
             })));
     params.push_back(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID("onOff", 1), "Start", 0));
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID("hostSync", 1), "Host Sync", 0));
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID("preset", 1), "Preset",
         juce::StringArray{"3/4",
@@ -375,6 +379,11 @@ public:
                p.pluginRunner->setOnOff(static_cast<bool>(v));
                p.m_fileIo.updateParameter(PatchParameters::Id::onOff, v);
              }},
+            {"hostSync",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setHostSync(static_cast<bool>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::hostSync, v);
+             }},
             {"preset",
              [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setPreset(static_cast<int>(v));
@@ -403,9 +412,14 @@ public:
 
   void loadPatchDirect(const std::vector<int> &patchIndex) {
     m_fileIo.loadPatchDirect(patchIndex);
-    const auto &params = m_fileIo.getCurrentParameters();
+    applyLoadedParametersToHost();
+  }
 
-    // Apply loaded parameters to APVTS (triggers UI update)
+  // Pushes m_fileIo's currently loaded patch into the APVTS (triggers UI
+  // update); shared by both the fixed-slot patch selector and any named-patch
+  // browser using m_fileIo directly.
+  void applyLoadedParametersToHost() {
+    const auto &params = m_fileIo.getCurrentParameters();
     if (auto *p = m_parameters.getParameter("bpm")) {
       const auto &range = m_parameters.getParameterRange("bpm");
       float normalized = range.convertTo0to1(params.bpm);
@@ -436,6 +450,11 @@ public:
       float normalized = range.convertTo0to1(params.onOff);
       p->setValueNotifyingHost(normalized);
     }
+    if (auto *p = m_parameters.getParameter("hostSync")) {
+      const auto &range = m_parameters.getParameterRange("hostSync");
+      float normalized = range.convertTo0to1(params.hostSync);
+      p->setValueNotifyingHost(normalized);
+    }
     if (auto *p = m_parameters.getParameter("preset")) {
       const auto &range = m_parameters.getParameterRange("preset");
       float normalized = range.convertTo0to1(params.preset);
@@ -463,6 +482,23 @@ public:
         }
       }
     }
+    if (auto *playHead = getPlayHead()) {
+      if (const auto position = playHead->getPosition()) {
+        auto transport = pluginRunner->hostTransport();
+        ++transport.updateCount;
+        transport.isPlaying = position->getIsPlaying();
+        if (const auto bpm = position->getBpm()) {
+          transport.bpm = *bpm;
+        }
+        if (const auto ppq = position->getPpqPosition()) {
+          transport.ppqPosition = *ppq;
+        }
+        if (const auto timeSig = position->getTimeSignature()) {
+          transport.beatsPerBar = static_cast<float>(timeSig->numerator);
+        }
+        pluginRunner->setHostTransport(transport);
+      }
+    }
     if ((getTotalNumInputChannels() == 2) &&
         (getTotalNumOutputChannels() == 2)) {
       fixedRunner.processBlock(buffer);
@@ -476,6 +512,12 @@ public:
   }
   [[nodiscard]] bool presetHasSwing(int idx) const noexcept {
     return pluginRunner && pluginRunner->isPresetSwing(idx);
+  }
+  [[nodiscard]] float getCurrentClickBpm() const noexcept {
+    return pluginRunner ? pluginRunner->currentClickBpm() : 120.f;
+  }
+  [[nodiscard]] bool isHostSynced() const noexcept {
+    return pluginRunner && pluginRunner->isHostSynced();
   }
   [[nodiscard]] size_t getWaveDataBeatIndex() const noexcept {
     return pluginRunner ? pluginRunner->getBeatIndex() : 0u;

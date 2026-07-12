@@ -105,6 +105,11 @@ public:
                         .withHeight(Constants::Text::labelHeight)
                         .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                         .withMargin(knobMarginSmall));
+      box.items.add(juce::FlexItem(hostSyncSwitch)
+                        .withFlex(0)
+                        .withHeight(Constants::Text::labelHeight)
+                        .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                        .withMargin(knobMarginSmall));
       box.items.add(
           juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
       box.items.add(juce::FlexItem(subVolumeDial)
@@ -138,9 +143,13 @@ public:
 
       {
         const float sr = static_cast<float>(processorRef.getSampleRate());
-        const float bpm = static_cast<float>(
-            valueTreeState.getParameterAsValue("bpm").getValue());
+        const float bpm = processorRef.getCurrentClickBpm();
         const size_t spb = static_cast<size_t>(sr * 60.f / bpm);
+        bpmDial.setEnabled(!processorRef.isHostSynced());
+        if (processorRef.isHostSynced()) {
+          bpmDial.setValue(bpm);
+        }
+        onOffSwitch.setEnabled(!processorRef.isHostSynced());
         signalGauge.setSampleRate(sr);
         signalGauge.setSamplesPerBeat(spb);
         signalGauge.setBeatIndex(processorRef.getWaveDataBeatIndex());
@@ -226,6 +235,11 @@ public:
     onOffSwitchAttachment =
         std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "onOff", onOffSwitch);
+
+    addAndMakeVisible(hostSyncSwitch);
+    hostSyncSwitchAttachment =
+        std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "hostSync", hostSyncSwitch);
 
     addAndMakeVisible(presetDrop);
     presetDrop.addItemList(
@@ -348,6 +362,9 @@ private:
   juce::ToggleButton onOffSwitch{juce::String::fromUTF8("Start")};
   std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>
       onOffSwitchAttachment;
+  juce::ToggleButton hostSyncSwitch{juce::String::fromUTF8("Host Sync")};
+  std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>
+      hostSyncSwitchAttachment;
   juce::ComboBox presetDrop{};
   std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>
       presetDropAttachment;

@@ -19,6 +19,7 @@ struct PatchParameters
         inputVolume, // dial
         subVolume  , // dial
         onOff      , // switch
+        hostSync   , // switch
         preset     , // drop
         swingRatio  // dial
     };
@@ -28,6 +29,7 @@ float metroVolume{-6.0f};
 float inputVolume{0.0f};
 float subVolume{-15.0f};
 bool onOff{false};
+bool hostSync{false};
 size_t preset{6};
 float swingRatio{1.5f};
 
@@ -39,6 +41,7 @@ float swingRatio{1.5f};
 "inputVolume",
 "subVolume",
 "onOff",
+"hostSync",
 "preset",
 "swingRatio"
     });
@@ -65,6 +68,7 @@ float swingRatio{1.5f};
         else if constexpr (ParamId == Id::inputVolume) return inputVolume;
         else if constexpr (ParamId == Id::subVolume) return subVolume;
         else if constexpr (ParamId == Id::onOff) return onOff;
+        else if constexpr (ParamId == Id::hostSync) return hostSync;
         else if constexpr (ParamId == Id::preset) return preset;
         else if constexpr (ParamId == Id::swingRatio) return swingRatio;
 
@@ -90,6 +94,8 @@ break;
  case Id::subVolume: if (!isEqual(get<Id::subVolume>(), value)) {get<Id::subVolume>() = value;m_modified = true;}
 break;
  case Id::onOff: if (!isEqual(get<Id::onOff>(), value)) {get<Id::onOff>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::hostSync: if (!isEqual(get<Id::hostSync>(), value)) {get<Id::hostSync>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::preset: if (!isEqual(get<Id::preset>(), value)) {get<Id::preset>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
@@ -139,6 +145,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         inputVolume, // dial
         subVolume  , // dial
         onOff      , // switch
+        hostSync   , // switch
         preset     , // drop
         swingRatio  // dial
 )

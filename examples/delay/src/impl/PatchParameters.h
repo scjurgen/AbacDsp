@@ -13,21 +13,25 @@ struct PatchParameters
 {
     enum class Id : int
     {
-        gain    , // dial
-        dry     , // dial
-        wet     , // dial
-        timeInMs, // dial
-        feedback, // dial
-        lowPass , // dial
-        highPass, // dial
-        allPass , // dial
-        modDepth, // dial
-        modSpeed // dial
+        gain        , // dial
+        dry         , // dial
+        wet         , // dial
+        timeInMs    , // dial
+        hostSync    , // switch
+        syncDivision, // drop
+        feedback    , // dial
+        lowPass     , // dial
+        highPass    , // dial
+        allPass     , // dial
+        modDepth    , // dial
+        modSpeed     // dial
     };
 float gain{0.0f};
 float dry{0.0f};
 float wet{0.0f};
 float timeInMs{0.0f};
+bool hostSync{false};
+size_t syncDivision{4};
 float feedback{0.0f};
 float lowPass{12000.0f};
 float highPass{50.0f};
@@ -41,6 +45,8 @@ float modSpeed{0.25f};
 "dry",
 "wet",
 "timeInMs",
+"hostSync",
+"syncDivision",
 "feedback",
 "lowPass",
 "highPass",
@@ -69,6 +75,8 @@ float modSpeed{0.25f};
         else if constexpr (ParamId == Id::dry) return dry;
         else if constexpr (ParamId == Id::wet) return wet;
         else if constexpr (ParamId == Id::timeInMs) return timeInMs;
+        else if constexpr (ParamId == Id::hostSync) return hostSync;
+        else if constexpr (ParamId == Id::syncDivision) return syncDivision;
         else if constexpr (ParamId == Id::feedback) return feedback;
         else if constexpr (ParamId == Id::lowPass) return lowPass;
         else if constexpr (ParamId == Id::highPass) return highPass;
@@ -94,6 +102,10 @@ break;
  case Id::wet: if (!isEqual(get<Id::wet>(), value)) {get<Id::wet>() = value;m_modified = true;}
 break;
  case Id::timeInMs: if (!isEqual(get<Id::timeInMs>(), value)) {get<Id::timeInMs>() = value;m_modified = true;}
+break;
+ case Id::hostSync: if (!isEqual(get<Id::hostSync>(), value)) {get<Id::hostSync>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::syncDivision: if (!isEqual(get<Id::syncDivision>(), value)) {get<Id::syncDivision>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
  case Id::feedback: if (!isEqual(get<Id::feedback>(), value)) {get<Id::feedback>() = value;m_modified = true;}
 break;
@@ -145,14 +157,16 @@ private:
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     PatchParameters,
-        gain    , // dial
-        dry     , // dial
-        wet     , // dial
-        timeInMs, // dial
-        feedback, // dial
-        lowPass , // dial
-        highPass, // dial
-        allPass , // dial
-        modDepth, // dial
-        modSpeed // dial
+        gain        , // dial
+        dry         , // dial
+        wet         , // dial
+        timeInMs    , // dial
+        hostSync    , // switch
+        syncDivision, // drop
+        feedback    , // dial
+        lowPass     , // dial
+        highPass    , // dial
+        allPass     , // dial
+        modDepth    , // dial
+        modSpeed     // dial
 )

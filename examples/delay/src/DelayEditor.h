@@ -104,6 +104,16 @@ public:
       box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
       box.items.add(
           juce::FlexItem(timeInMsDial).withFlex(1).withMargin(knobMarginSmall));
+      box.items.add(juce::FlexItem(hostSyncSwitch)
+                        .withFlex(0)
+                        .withHeight(Constants::Text::labelHeight)
+                        .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                        .withMargin(knobMarginSmall));
+      box.items.add(juce::FlexItem(syncDivisionDrop)
+                        .withFlex(0)
+                        .withHeight(Constants::Text::labelHeight)
+                        .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                        .withMargin(knobMarginSmall));
       box.items.add(
           juce::FlexItem(feedbackDial).withFlex(1).withMargin(knobMarginSmall));
       box.items.add(
@@ -163,6 +173,17 @@ public:
     addAndMakeVisible(timeInMsDial);
     timeInMsDial.reset(valueTreeState, "timeInMs");
     timeInMsDial.setLabelText(juce::String::fromUTF8("Time"));
+    addAndMakeVisible(hostSyncSwitch);
+    hostSyncSwitchAttachment =
+        std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "hostSync", hostSyncSwitch);
+
+    addAndMakeVisible(syncDivisionDrop);
+    syncDivisionDrop.addItemList(
+        valueTreeState.getParameter("syncDivision")->getAllValueStrings(), 1);
+    syncDivisionDropAttachment = std::make_unique<
+        juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        valueTreeState, "syncDivision", syncDivisionDrop);
     addAndMakeVisible(feedbackDial);
     feedbackDial.reset(valueTreeState, "feedback");
     feedbackDial.setLabelText(juce::String::fromUTF8("Feedback"));
@@ -272,6 +293,12 @@ private:
   CustomRotaryDial dryDial{this};
   CustomRotaryDial wetDial{this};
   CustomRotaryDial timeInMsDial{this};
+  juce::ToggleButton hostSyncSwitch{juce::String::fromUTF8("Host Sync")};
+  std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>
+      hostSyncSwitchAttachment;
+  juce::ComboBox syncDivisionDrop{};
+  std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>
+      syncDivisionDropAttachment;
   CustomRotaryDial feedbackDial{this};
   CustomRotaryDial lowPassDial{this};
   CustomRotaryDial highPassDial{this};

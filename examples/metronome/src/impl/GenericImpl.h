@@ -26,6 +26,7 @@ public:
     m_subVolume = std::pow(10.f, value / 20.f);
   }
   void setOnOff(const bool value) { m_onOff = value; }
+  void setHostSync(const bool value) { m_hostSync = value; }
   void setPreset(const size_t value) { m_preset = value; }
   void setSwingRatio(const float value) { m_swingRatio = value; }
 
@@ -57,6 +58,7 @@ private:
   float m_inputVolume{};
   float m_subVolume{};
   bool m_onOff{};
+  bool m_hostSync{};
   size_t m_preset{};
   float m_swingRatio{};
 

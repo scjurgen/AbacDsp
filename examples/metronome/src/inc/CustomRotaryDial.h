@@ -204,6 +204,13 @@ class CustomRotaryDial : public juce::Component
         m_label.setText(text, juce::dontSendNotification);
     }
 
+    // Moves the displayed value without touching the bound parameter (mirrors
+    // how SliderAttachment itself reflects external parameter changes).
+    void setValue(const double value, const juce::NotificationType notification = juce::dontSendNotification)
+    {
+        m_slider.setValue(value, notification);
+    }
+
     void resized() override
     {
         const auto bounds = getLocalBounds().reduced(2);

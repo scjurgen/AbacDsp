@@ -1,5 +1,9 @@
 #pragma once
 
+#include <algorithm>
+#include <array>
+#include <string_view>
+
 #include "Audio/AudioBuffer.h"
 #include "Delays/ModulationDelay.h"
 #include "EffectBase.h"
@@ -11,6 +15,21 @@ class DelayImpl final : public EffectBase
 {
   public:
     static constexpr size_t MaxDelaySamples{10 * 48000};
+
+    struct SyncDivision
+    {
+        std::string_view name;
+        float quarterNotes;
+    };
+
+    // clang-format off
+    static constexpr auto kSyncDivisions = std::to_array<SyncDivision>({
+        {"1/1",   4.f},      {"1/2",   2.f},      {"1/2.",  3.f},      {"1/2T",  4.f / 3.f},
+        {"1/4",   1.f},      {"1/4.",  1.5f},     {"1/4T",  2.f / 3.f},
+        {"1/8",   0.5f},     {"1/8.",  0.75f},    {"1/8T",  1.f / 3.f},
+        {"1/16",  0.25f},    {"1/16.", 0.375f},   {"1/16T", 1.f / 6.f},
+    });
+    // clang-format on
     using Delay = AbacDsp::ModulatingDelayPitchedAdjust<MaxDelaySamples>;
     using LowPass = AbacDsp::OnePoleFilter<AbacDsp::OnePoleFilterCharacteristic::LowPass>;
     using HighPass = AbacDsp::OnePoleFilter<AbacDsp::OnePoleFilterCharacteristic::HighPass>;
@@ -104,6 +123,16 @@ class DelayImpl final : public EffectBase
         }
     }
 
+    void setHostSync(const bool value) noexcept
+    {
+        m_hostSync = value;
+    }
+
+    void setSyncDivision(const int index) noexcept
+    {
+        m_syncDivisionIndex = static_cast<size_t>(std::clamp(index, 0, static_cast<int>(kSyncDivisions.size()) - 1));
+    }
+
     void setWet(const float value)
     {
         m_wetGain = std::pow(10.f, value / 20.f);
@@ -132,6 +161,11 @@ class DelayImpl final : public EffectBase
     }
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
+        if (m_hostSync)
+        {
+            applyHostSyncedTime();
+        }
+
         for (size_t i = 0; i < BlockSize; ++i)
         {
             for (size_t c = 0; c < 2; ++c)
@@ -159,6 +193,13 @@ class DelayImpl final : public EffectBase
     }
 
   private:
+    void applyHostSyncedTime() noexcept
+    {
+        const float bpm = std::clamp(static_cast<float>(hostTransport().bpm), 20.f, 300.f);
+        const float msPerQuarterNote = 60000.f / bpm;
+        setTimeInMs(kSyncDivisions[m_syncDivisionIndex].quarterNotes * msPerQuarterNote);
+    }
+
     float m_gain{};
     std::array<float, 2> m_lastValue{};
     std::array<Delay, 2> m_delay;
@@ -171,4 +212,6 @@ class DelayImpl final : public EffectBase
     float m_wetGain{0.2f};
     float m_dryGain{1.f};
     float m_feedBack{0.f};
+    bool m_hostSync{false};
+    size_t m_syncDivisionIndex{4};
 };

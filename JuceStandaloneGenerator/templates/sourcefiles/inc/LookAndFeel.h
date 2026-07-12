@@ -83,19 +83,21 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         auto toggleBounds = bounds.removeFromLeft(static_cast<int>(bounds.getHeight() * 1.5f));
         auto textBounds = bounds.reduced(2);
 
-        g.setColour(backgroundDark);
+        g.setColour(button.isEnabled() ? backgroundDark : backgroundDarkDisabled);
         g.fillRoundedRectangle(toggleBounds.toFloat().reduced(2.0f), toggleBounds.getHeight() / 2.0f);
 
         auto diameter = toggleBounds.getHeight() - 13.0f;
         auto circleX = button.getToggleState() ? toggleBounds.getRight() - diameter - 6.5f : toggleBounds.getX() + 6.5f;
         auto circleY = toggleBounds.getY() + 6.5f;
 
-        g.setColour(button.getToggleState() ? statusOutline : gradientDark);
+        g.setColour(button.isEnabled() ? (button.getToggleState() ? statusOutline : gradientDark)
+                                       : (button.getToggleState() ? statusOutlineDisabled : gradientDarkDisabled));
         g.fillEllipse(circleX, circleY, diameter, diameter);
 
         if (!button.getButtonText().isEmpty())
         {
-            g.setColour(button.findColour(juce::ToggleButton::textColourId));
+            g.setColour(button.findColour(juce::ToggleButton::textColourId)
+                            .withMultipliedAlpha(button.isEnabled() ? 1.0f : 0.5f));
             g.setFont(juce::FontOptions(mainFont, fontHeight, juce::Font::plain));
             g.setFont(fontHeight);
             g.drawFittedText(button.getButtonText(), textBounds, juce::Justification::centredLeft, 1);

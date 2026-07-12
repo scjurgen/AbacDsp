@@ -73,10 +73,22 @@ class MetronomeImpl final : public EffectBase
 
     void setBpm(const float value)
     {
-        m_bpm = std::clamp(value, 40.f, 250.f);
-        m_samplesPerBeat = beatsToSamples(m_bpm);
-        updateWindowSizes();
-        updateSubPositions();
+        applyBpm(std::clamp(value, 40.f, 250.f));
+    }
+
+    void setHostSync(const bool value) noexcept
+    {
+        m_hostSync = value;
+    }
+
+    [[nodiscard]] bool isHostSynced() const noexcept
+    {
+        return m_hostSync;
+    }
+
+    [[nodiscard]] float currentClickBpm() const noexcept
+    {
+        return m_bpm;
     }
 
     void setDropBars(const size_t value)
@@ -140,6 +152,11 @@ class MetronomeImpl final : public EffectBase
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
+        if (m_hostSync)
+        {
+            syncToHostTransport();
+        }
+
         std::array<float, BlockSize> inMono{};
         for (size_t i = 0; i < BlockSize; ++i)
         {
@@ -180,7 +197,7 @@ class MetronomeImpl final : public EffectBase
             const float tick = m_tickFilter.step0();
             const float beatOne = m_beatOneFilter.step0();
             const float sub = m_subFilter.step0();
-            const float output = m_running && !isMuted ? (tick + beatOne + sub) : 0.f;
+            const float output = effectiveRunning() && !isMuted ? (tick + beatOne + sub) : 0.f;
 
             out(i, 0) = in(i, 0) * m_inputGain + output;
             out(i, 1) = in(i, 1) * m_inputGain + output;
@@ -342,6 +359,53 @@ class MetronomeImpl final : public EffectBase
         }
     }
 
+    void applyBpm(const float value) noexcept
+    {
+        m_bpm = value;
+        m_samplesPerBeat = beatsToSamples(m_bpm);
+        updateWindowSizes();
+        updateSubPositions();
+    }
+
+    [[nodiscard]] bool effectiveRunning() const noexcept
+    {
+        return m_hostSync ? hostTransport().isPlaying : m_running;
+    }
+
+    // Bar length uses the preset's own barBeats count, not the host time
+    // signature denominator (compound/odd presets have none to convert from).
+    // Only resync on a fresh transport sample (updateCount changed); otherwise
+    // the per-sample increment below carries the phase between host callbacks.
+    void syncToHostTransport() noexcept
+    {
+        const auto& transport = hostTransport();
+        if (!transport.isPlaying)
+        {
+            return;
+        }
+        if (transport.updateCount == m_lastSyncedUpdateCount)
+        {
+            return;
+        }
+        m_lastSyncedUpdateCount = transport.updateCount;
+        applyBpm(std::clamp(static_cast<float>(transport.bpm), 20.f, 999.f));
+
+        const double barBeats = static_cast<double>(getBarBeats());
+        if (barBeats <= 0.0 || m_samplesPerBeat == 0)
+        {
+            return;
+        }
+        double phaseInBar = std::fmod(transport.ppqPosition, barBeats);
+        if (phaseInBar < 0.0)
+        {
+            phaseInBar += barBeats;
+        }
+        const auto beatIndex = static_cast<size_t>(phaseInBar);
+        const double beatFraction = phaseInBar - static_cast<double>(beatIndex);
+        m_barBeatCount = beatIndex;
+        m_beatSamplePos = static_cast<size_t>(beatFraction * static_cast<double>(m_samplesPerBeat));
+    }
+
     void updateWindowSizes() noexcept
     {
         m_preWindow = m_samplesPerBeat / 4;
@@ -391,6 +455,8 @@ class MetronomeImpl final : public EffectBase
     float m_subGain{std::pow(10.f, (-6.f + subDefaultOffsetDb + tickBoostDb) / 20.f)};
     float m_inputGain{1.f};
     bool m_running{false};
+    bool m_hostSync{false};
+    uint64_t m_lastSyncedUpdateCount{0};
     int m_dropModeIndex{0};
     int m_barCount{0};
 

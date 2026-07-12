@@ -45,6 +45,8 @@ public:
     m_parameters.addParameterListener("dry", this);
     m_parameters.addParameterListener("wet", this);
     m_parameters.addParameterListener("timeInMs", this);
+    m_parameters.addParameterListener("hostSync", this);
+    m_parameters.addParameterListener("syncDivision", this);
     m_parameters.addParameterListener("feedback", this);
     m_parameters.addParameterListener("lowPass", this);
     m_parameters.addParameterListener("highPass", this);
@@ -59,6 +61,8 @@ public:
     m_parameters.removeParameterListener("dry", this);
     m_parameters.removeParameterListener("wet", this);
     m_parameters.removeParameterListener("timeInMs", this);
+    m_parameters.removeParameterListener("hostSync", this);
+    m_parameters.removeParameterListener("syncDivision", this);
     m_parameters.removeParameterListener("feedback", this);
     m_parameters.removeParameterListener("lowPass", this);
     m_parameters.removeParameterListener("highPass", this);
@@ -237,6 +241,13 @@ public:
             .withStringFromValueFunction([](float value, int) {
               return juce::String(value, 1) + " ms";
             })));
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID("hostSync", 1), "Host Sync", 0));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID("syncDivision", 1), "Sync Division",
+        juce::StringArray{"1/1", "1/2", "1/2.", "1/2T", "1/4", "1/4.", "1/4T",
+                          "1/8", "1/8.", "1/8T", "1/16", "1/16.", "1/16T"},
+        4));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("feedback", 1), "Feedback",
         juce::NormalisableRange<float>(-100, 100, 0.1, 1, false), 0,
@@ -319,6 +330,16 @@ public:
                p.pluginRunner->setTimeInMs(v);
                p.m_fileIo.updateParameter(PatchParameters::Id::timeInMs, v);
              }},
+            {"hostSync",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setHostSync(static_cast<bool>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::hostSync, v);
+             }},
+            {"syncDivision",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setSyncDivision(static_cast<int>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::syncDivision, v);
+             }},
             {"feedback",
              [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setFeedback(v);
@@ -367,9 +388,14 @@ public:
 
   void loadPatchDirect(const std::vector<int> &patchIndex) {
     m_fileIo.loadPatchDirect(patchIndex);
-    const auto &params = m_fileIo.getCurrentParameters();
+    applyLoadedParametersToHost();
+  }
 
-    // Apply loaded parameters to APVTS (triggers UI update)
+  // Pushes m_fileIo's currently loaded patch into the APVTS (triggers UI
+  // update); shared by both the fixed-slot patch selector and any named-patch
+  // browser using m_fileIo directly.
+  void applyLoadedParametersToHost() {
+    const auto &params = m_fileIo.getCurrentParameters();
     if (auto *p = m_parameters.getParameter("gain")) {
       const auto &range = m_parameters.getParameterRange("gain");
       float normalized = range.convertTo0to1(params.gain);
@@ -388,6 +414,16 @@ public:
     if (auto *p = m_parameters.getParameter("timeInMs")) {
       const auto &range = m_parameters.getParameterRange("timeInMs");
       float normalized = range.convertTo0to1(params.timeInMs);
+      p->setValueNotifyingHost(normalized);
+    }
+    if (auto *p = m_parameters.getParameter("hostSync")) {
+      const auto &range = m_parameters.getParameterRange("hostSync");
+      float normalized = range.convertTo0to1(params.hostSync);
+      p->setValueNotifyingHost(normalized);
+    }
+    if (auto *p = m_parameters.getParameter("syncDivision")) {
+      const auto &range = m_parameters.getParameterRange("syncDivision");
+      float normalized = range.convertTo0to1(params.syncDivision);
       p->setValueNotifyingHost(normalized);
     }
     if (auto *p = m_parameters.getParameter("feedback")) {
@@ -458,6 +494,23 @@ public:
           std::span{buffer.getReadPointer(c),
                     static_cast<size_t>(buffer.getNumSamples())});
       m_inputDb[c].store(std::log10(m_envInput[c].getRms()) * 20.f);
+    }
+    if (auto *playHead = getPlayHead()) {
+      if (const auto position = playHead->getPosition()) {
+        auto transport = pluginRunner->hostTransport();
+        ++transport.updateCount;
+        transport.isPlaying = position->getIsPlaying();
+        if (const auto bpm = position->getBpm()) {
+          transport.bpm = *bpm;
+        }
+        if (const auto ppq = position->getPpqPosition()) {
+          transport.ppqPosition = *ppq;
+        }
+        if (const auto timeSig = position->getTimeSignature()) {
+          transport.beatsPerBar = static_cast<float>(timeSig->numerator);
+        }
+        pluginRunner->setHostTransport(transport);
+      }
     }
     if ((getTotalNumInputChannels() == 2) &&
         (getTotalNumOutputChannels() == 2)) {

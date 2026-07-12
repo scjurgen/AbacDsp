@@ -429,6 +429,30 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_inputDb[c].store(std::log10(m_envInput[c].getRms()) * 20.f);
         }
         /*END_SHOWVUMETER*/
+        /*START_HOSTTRANSPORT*/
+        if (auto* playHead = getPlayHead())
+        {
+            if (const auto position = playHead->getPosition())
+            {
+                auto transport = pluginRunner->hostTransport();
+                ++transport.updateCount;
+                transport.isPlaying = position->getIsPlaying();
+                if (const auto bpm = position->getBpm())
+                {
+                    transport.bpm = *bpm;
+                }
+                if (const auto ppq = position->getPpqPosition())
+                {
+                    transport.ppqPosition = *ppq;
+                }
+                if (const auto timeSig = position->getTimeSignature())
+                {
+                    transport.beatsPerBar = static_cast<float>(timeSig->numerator);
+                }
+                pluginRunner->setHostTransport(transport);
+            }
+        }
+        /*END_HOSTTRANSPORT*/
         if ((getTotalNumInputChannels() == 2) && (getTotalNumOutputChannels() == 2))
         {
             fixedRunner.processBlock(buffer);

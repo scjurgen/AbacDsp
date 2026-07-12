@@ -914,6 +914,8 @@ def createPackageFromJsonDict(m: dict):
         m["CPP"]["GAUGES"].append("MIDICC")
     if any(item['type'] == 'presetbrowser' for item in m["ports-control"]):
         m["CPP"]["GAUGES"].append("PRESETBROWSER")
+    if m.get("host_transport", False):
+        m["CPP"]["GAUGES"].append("HOSTTRANSPORT")
 
     cppTargetFile = f"{cppTmpDir}/src/{cppJuceFile}"
     createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{cppJuceFile}", m["CPP"], cppJuceFileVars)

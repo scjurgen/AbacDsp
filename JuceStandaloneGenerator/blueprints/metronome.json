@@ -21,6 +21,7 @@
     {"short": "SVOL", "type": "dial",   "display": "Sub Volume",     "symbol": "subVolume",   "default": -15, "range": [-60, 0, 0.1, 1, false],   "precision": 1, "unit": "dB",
       "cc": {"controller": 23}},
     {"short": "ONF",  "type": "switch", "display": "Start",          "symbol": "onOff",       "default": 0},
+    {"short": "SYNC", "type": "switch", "display": "Host Sync",      "symbol": "hostSync",    "default": 0},
     {"short": "PRE",  "type": "drop",   "display": "Preset",         "symbol": "preset",      "default": 6,
       "listitems": ["3/4", "3/4 8th", "3/4 16th", "3/4 shuffle", "3/4 triplet", "4/4", "4/4 8th", "4/4 16th",
         "4/4 shuffle", "4/4 triplet", "4/4 swing", "5/4 (3+2)", "5/4 8th (3+2)", "5/4 (2+3)", "5/4 8th (2+3)",
@@ -37,7 +38,7 @@
     "WINDOW_WIDTH": "960",
     "WINDOW_HEIGHT": "660",
     "type": "||",
-    "composition": "C=(1:5) A1=(SUB, PRE, DRP, SWG, ONF, BPM, SVOL, MVOL, IVOL) A2=(SIG%1, IRIS%2)"
+    "composition": "C=(1:5) A1=(SUB, PRE, DRP, SWG, ONF, SYNC, BPM, SVOL, MVOL, IVOL) A2=(SIG%1, IRIS%2)"
   },
   "extra_ui_includes": [
     "inc/CircularBeatDisplay.h",
@@ -45,8 +46,11 @@
   ],
   "extra_timer_callbacks": [
     "{ const float sr = static_cast<float>(processorRef.getSampleRate());",
-    "const float bpm = static_cast<float>(valueTreeState.getParameterAsValue(\"bpm\").getValue());",
+    "const float bpm = processorRef.getCurrentClickBpm();",
     "const size_t spb = static_cast<size_t>(sr * 60.f / bpm);",
+    "bpmDial.setEnabled(!processorRef.isHostSynced());",
+    "if (processorRef.isHostSynced()) { bpmDial.setValue(bpm); }",
+    "onOffSwitch.setEnabled(!processorRef.isHostSynced());",
     "signalGauge.setSampleRate(sr);",
     "signalGauge.setSamplesPerBeat(spb);",
     "signalGauge.setBeatIndex(processorRef.getWaveDataBeatIndex());",
@@ -60,6 +64,8 @@
   ],
   "extra_processor_methods": [
     "[[nodiscard]] bool presetHasSwing(int idx) const noexcept { return pluginRunner && pluginRunner->isPresetSwing(idx); }",
+    "[[nodiscard]] float getCurrentClickBpm() const noexcept { return pluginRunner ? pluginRunner->currentClickBpm() : 120.f; }",
+    "[[nodiscard]] bool isHostSynced() const noexcept { return pluginRunner && pluginRunner->isHostSynced(); }",
     "[[nodiscard]] size_t getWaveDataBeatIndex() const noexcept { return pluginRunner ? pluginRunner->getBeatIndex() : 0u; }",
     "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }",
     "[[nodiscard]] int getBarBeats() const noexcept { return pluginRunner ? pluginRunner->getBarBeats() : 4; }",
@@ -67,6 +73,7 @@
     "[[nodiscard]] AbacDsp::SpectrumImageSet getInputSpectrogram() const { return pluginRunner ? pluginRunner->getSpectrogramData() : AbacDsp::SpectrumImageSet{}; }"
   ],
   "protected_files": [],
+  "host_transport": true,
   "CPP":
   {
     "CLASS_NAME": "MetronomeImpl<NumSamplesPerBlock>",
