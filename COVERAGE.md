@@ -4,9 +4,9 @@
 
 | Metric        | Coverage |
 |---------------|----------|
-| **Lines**     | 🟢 8632/9368 (92.1%) |
-| **Functions** | 🟢 1320/1361 (97.0%) |
-| **Branches**  | 🔴 2488/3759 (66.2%) |
+| **Lines**     | 🟢 8745/9389 (93.1%) |
+| **Functions** | 🟢 1332/1366 (97.5%) |
+| **Branches**  | 🔴 2498/3759 (66.5%) |
 
 ## 📄 File coverage
 
@@ -38,8 +38,8 @@
 | **`src/includes/Diffuser/DiffusorDelayChain.h`** | 🟢 200/210 (95.2%) | 🟢 28/28 (100.0%) | 🟡 55/68 (80.9%) |
 | **`src/includes/Diffuser/SchroederAllpass.h`** | 🟢 111/120 (92.5%) | 🟢 19/20 (95.0%) | 🔴 26/42 (61.9%) |
 | **`src/includes/Diffuser/SchroederDiffuser.h`** | 🟢 40/41 (97.6%) | 🟢 8/8 (100.0%) | 🟡 8/10 (80.0%) |
-| **`src/includes/Filters/Biquad.h`** | 🟢 469/506 (92.7%) | 🟢 96/103 (93.2%) | 🟡 85/103 (82.5%) |
-| **`src/includes/Filters/BiquadReference.h`** | 🔴 31/123 (25.2%) | 🔴 4/11 (36.4%) | 🔴 2/13 (15.4%) |
+| **`src/includes/Filters/Biquad.h`** | 🟢 478/515 (92.8%) | 🟢 99/106 (93.4%) | 🟡 85/103 (82.5%) |
+| **`src/includes/Filters/BiquadReference.h`** | 🟢 135/135 (100.0%) | 🟢 13/13 (100.0%) | 🟢 12/13 (92.3%) |
 | **`src/includes/Filters/BiquadResoBandPassParallel.h`** | 🟢 37/37 (100.0%) | 🟢 4/4 (100.0%) | 🟡 7/8 (87.5%) |
 | **`src/includes/Filters/BiquadResoBP.h`** | 🟡 42/52 (80.8%) | 🟢 5/5 (100.0%) | 🔴 1/2 (50.0%) |
 | **`src/includes/Filters/BiquadResoBPParallelSIMD.h`** | 🟢 62/62 (100.0%) | 🟢 4/4 (100.0%) | 🟡 14/18 (77.8%) |
