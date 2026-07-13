@@ -3,17 +3,21 @@
 
 #include "gtest/gtest.h"
 
-#include "Reverbs/FdnReverb.h"
+#include "Reverbs/FdnTankSpicedBase.h"
 
 namespace AbacDsp::Test
 {
 
-TEST(FdnTank, processBlockProducesFiniteDecayingOutput)
+TEST(FdnTankSpicedBase, processBlockProducesFiniteDecayingOutput)
 {
-    constexpr size_t maxSizePerElement{128};
-    constexpr size_t maxOrder{4};
+    constexpr size_t maxSizePerElement{4096};
+    constexpr size_t order{4};
     constexpr size_t blockSize{16};
-    FdnTank<maxSizePerElement, maxOrder, blockSize> tank(48000.f);
+    FdnTankSpicedBase<maxSizePerElement, order, blockSize> tank(48000.f);
+    tank.setDecay(200.f);
+    tank.setMinSize(0.1f);
+    tank.setMaxSize(1.0f);
+    tank.setSpreadBulge(-0.4f);
 
     std::array<float, blockSize> in{};
     in[0] = 1.f;
@@ -33,13 +37,14 @@ TEST(FdnTank, processBlockProducesFiniteDecayingOutput)
     EXPECT_TRUE(sawNonZero);
 }
 
-TEST(FdnTank, processBlockSplitKeepsBothChannelsFinite)
+TEST(FdnTankSpicedBase, processBlockSplitKeepsBothChannelsFinite)
 {
-    constexpr size_t maxSizePerElement{128};
-    constexpr size_t maxOrder{4};
+    constexpr size_t maxSizePerElement{4096};
+    constexpr size_t order{4};
     constexpr size_t blockSize{16};
-    FdnTank<maxSizePerElement, maxOrder, blockSize> tank(48000.f);
-    tank.setSpreadStereo(1.f);
+    FdnTankSpicedBase<maxSizePerElement, order, blockSize> tank(48000.f);
+    tank.setDecay(200.f);
+    tank.initUniformItd();
 
     std::array<float, blockSize> in{};
     in[0] = 1.f;
@@ -48,7 +53,7 @@ TEST(FdnTank, processBlockSplitKeepsBothChannelsFinite)
 
     for (int block = 0; block < 10; ++block)
     {
-        tank.processBlockSplit(in.data(), left.data(), right.data(), blockSize);
+        tank.processBlockSplit(in.data(), left.data(), right.data());
         for (size_t i = 0; i < blockSize; ++i)
         {
             EXPECT_TRUE(std::isfinite(left[i]));

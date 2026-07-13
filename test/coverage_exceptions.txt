@@ -13,3 +13,5 @@
 # cannot silently drift the way test/COVERAGE_GAPS.md used to.
 
 src/Skeleton.h : copy-paste scaffold for starting a new processor; not included by anything, not a real component
+AudioFile/LoadOgg.h : depends on libvorbis, which is not linked anywhere in this CMake build; cannot compile in any current target
+Sampler/SamplePlayer.h : SamplePlayer<MaxVoices> references a nonexistent BasicSamplePlayer type (real class is SamplePlayerBasic, with an incompatible constructor and voice API); needs real design work before it can compile, not a quick stub

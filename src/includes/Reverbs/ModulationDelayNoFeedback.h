@@ -5,8 +5,8 @@
 #include <cmath>
 #include <vector>
 
-#include "AudioProcessing.h"
-#include "InterpolationCollection.h"
+#include "Audio/FixedSizeProcessor.h"
+#include "Numbers/Interpolation.h"
 
 namespace AbacDsp
 {
@@ -279,7 +279,7 @@ class ModulationDelayNoFeedback
             }
             float intTailPosition{};
             const auto fraction = std::modf(dHead, &intTailPosition);
-            returnValue = Interpolation<float>::linearPt2(&m_buffer[static_cast<size_t>(intTailPosition)], fraction);
+            returnValue = Interpolation::linearPt2(&m_buffer[static_cast<size_t>(intTailPosition)], fraction);
         }
         else
         {
