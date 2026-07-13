@@ -52,21 +52,21 @@ inline void hadamardFeed16(const std::array<float, 16>& col, std::array<float, 1
 
 inline void hadamardFeed16_simd(const float* col, float* sum) noexcept
 {
-    simd_float4 v0 = simd_make_float4(col[0], col[1], col[2], col[3]);
-    simd_float4 v1 = simd_make_float4(col[4], col[5], col[6], col[7]);
-    simd_float4 v2 = simd_make_float4(col[8], col[9], col[10], col[11]);
-    simd_float4 v3 = simd_make_float4(col[12], col[13], col[14], col[15]);
+    const simd_float4 v0 = simd_make_float4(col[0], col[1], col[2], col[3]);
+    const simd_float4 v1 = simd_make_float4(col[4], col[5], col[6], col[7]);
+    const simd_float4 v2 = simd_make_float4(col[8], col[9], col[10], col[11]);
+    const simd_float4 v3 = simd_make_float4(col[12], col[13], col[14], col[15]);
 
     auto hsum = [](simd_float4 v) -> float { return simd_reduce_add(v); };
 
-    simd_float4 all_pos = simd_make_float4(1.0f, 1.0f, 1.0f, 1.0f);
-    simd_float4 all_neg = simd_make_float4(-1.0f, -1.0f, -1.0f, -1.0f);
-    simd_float4 alt_pn = simd_make_float4(1.0f, -1.0f, 1.0f, -1.0f);
-    simd_float4 alt_np = simd_make_float4(-1.0f, 1.0f, -1.0f, 1.0f);
-    simd_float4 pp_nn = simd_make_float4(1.0f, 1.0f, -1.0f, -1.0f);
-    simd_float4 nn_pp = simd_make_float4(-1.0f, -1.0f, 1.0f, 1.0f);
-    simd_float4 p_nnp = simd_make_float4(1.0f, -1.0f, -1.0f, 1.0f);
-    simd_float4 n_ppn = simd_make_float4(-1.0f, 1.0f, 1.0f, -1.0f);
+    const simd_float4 all_pos = simd_make_float4(1.0f, 1.0f, 1.0f, 1.0f);
+    const simd_float4 all_neg = simd_make_float4(-1.0f, -1.0f, -1.0f, -1.0f);
+    const simd_float4 alt_pn = simd_make_float4(1.0f, -1.0f, 1.0f, -1.0f);
+    const simd_float4 alt_np = simd_make_float4(-1.0f, 1.0f, -1.0f, 1.0f);
+    const simd_float4 pp_nn = simd_make_float4(1.0f, 1.0f, -1.0f, -1.0f);
+    const simd_float4 nn_pp = simd_make_float4(-1.0f, -1.0f, 1.0f, 1.0f);
+    const simd_float4 p_nnp = simd_make_float4(1.0f, -1.0f, -1.0f, 1.0f);
+    const simd_float4 n_ppn = simd_make_float4(-1.0f, 1.0f, 1.0f, -1.0f);
 
     sum[0] = hsum(v0 * all_pos + v1 * all_pos + v2 * all_pos + v3 * all_pos);
     sum[1] = hsum(v0 * alt_pn + v1 * alt_pn + v2 * alt_pn + v3 * alt_pn);

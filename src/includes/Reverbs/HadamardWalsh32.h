@@ -9,7 +9,7 @@ namespace AbacDsp
 
 inline void hadamardWalsh32(const float* input, float* output) noexcept
 {
-    std::array<float, 32> temp1, temp2, temp3, temp4;
+    std::array<float, 32> temp1{}, temp2{}, temp3{}, temp4{};
 
     // Stage 1: stride 1
     for (size_t i = 0; i < 32; i += 2)

@@ -19,14 +19,14 @@ inline void hadamardFeed4(const std::array<float, 4>& col, std::array<float, 4>&
 
 inline void hadamardFeed4_simd(const float* col, float* sum) noexcept
 {
-    simd_float4 v0 = simd_make_float4(col[0], col[1], col[2], col[3]);
+    const simd_float4 v0 = simd_make_float4(col[0], col[1], col[2], col[3]);
 
-    simd_float4 all_pos = simd_make_float4(1.0f, 1.0f, 1.0f, 1.0f);
-    simd_float4 alt_pn = simd_make_float4(1.0f, -1.0f, 1.0f, -1.0f);
-    simd_float4 pp_nn = simd_make_float4(1.0f, 1.0f, -1.0f, -1.0f);
-    simd_float4 p_nnp = simd_make_float4(1.0f, -1.0f, -1.0f, 1.0f);
+    const simd_float4 all_pos = simd_make_float4(1.0f, 1.0f, 1.0f, 1.0f);
+    const simd_float4 alt_pn = simd_make_float4(1.0f, -1.0f, 1.0f, -1.0f);
+    const simd_float4 pp_nn = simd_make_float4(1.0f, 1.0f, -1.0f, -1.0f);
+    const simd_float4 p_nnp = simd_make_float4(1.0f, -1.0f, -1.0f, 1.0f);
 
-    auto hsum = [](simd_float4 v) -> float { return simd_reduce_add(v); };
+    auto hsum = [](const simd_float4 v) -> float { return simd_reduce_add(v); };
 
     sum[0] = hsum(v0 * all_pos);
     sum[1] = hsum(v0 * alt_pn);
