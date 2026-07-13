@@ -4,9 +4,9 @@
 
 | Metric        | Coverage |
 |---------------|----------|
-| **Lines**     | 🟢 8806/9411 (93.6%) |
-| **Functions** | 🟢 1360/1393 (97.6%) |
-| **Branches**  | 🔴 2570/3837 (67.0%) |
+| **Lines**     | 🟢 8891/9422 (94.4%) |
+| **Functions** | 🟢 1369/1395 (98.1%) |
+| **Branches**  | 🔴 2602/3839 (67.8%) |
 
 ## 📄 File coverage
 
@@ -84,13 +84,13 @@
 | **`src/includes/Reverbs/HadamardWalsh4.h`** | 🟢 31/31 (100.0%) | 🟢 4/4 (100.0%) | ⚫ 0/0 (0.0%) |
 | **`src/includes/Reverbs/HadamardWalsh8.h`** | 🟢 52/52 (100.0%) | 🟢 4/4 (100.0%) | ⚫ 0/0 (0.0%) |
 | **`src/includes/Reverbs/HadamardWalsh16.h`** | 🟢 66/66 (100.0%) | 🟢 4/4 (100.0%) | 🟢 10/10 (100.0%) |
-| **`src/includes/Reverbs/HadamardWalsh32.h`** | 🟢 116/116 (100.0%) | 🟢 4/4 (100.0%) | 🟢 14/14 (100.0%) |
+| **`src/includes/Reverbs/HadamardWalsh32.h`** | 🟢 117/117 (100.0%) | 🟢 4/4 (100.0%) | 🟢 14/14 (100.0%) |
 | **`src/includes/Sampler/ResamplingPitchShifter.h`** | 🟢 69/70 (98.6%) | 🟢 9/9 (100.0%) | 🟡 16/18 (88.9%) |
 | **`src/includes/Sampler/SamplePlayerBasic.h`** | 🟢 68/72 (94.4%) | 🟢 6/6 (100.0%) | 🔴 11/16 (68.8%) |
 | **`src/includes/Sampler/StretchedSampleProducer.h`** | 🟢 201/220 (91.4%) | 🟢 17/17 (100.0%) | 🟡 52/68 (76.5%) |
 | **`src/includes/SamplerateConverter/ConvertSampleBuffer.h`** | 🟢 6/6 (100.0%) | 🟢 1/1 (100.0%) | 🔴 3/6 (50.0%) |
 | **`src/includes/SamplerateConverter/SrPullConverter.h`** | 🟡 163/193 (84.5%) | 🟢 11/11 (100.0%) | 🔴 44/78 (56.4%) |
 | **`src/includes/SamplerateConverter/SrPushConverter.h`** | 🟢 287/304 (94.4%) | 🟢 20/20 (100.0%) | 🔴 80/192 (41.7%) |
-| **`src/includes/Wavetables/WaveTableOscillator.h`** | 🔴 110/184 (59.8%) | 🔴 14/21 (66.7%) | 🔴 30/68 (44.1%) |
+| **`src/includes/Wavetables/WaveTableOscillator.h`** | 🟢 194/194 (100.0%) | 🟢 23/23 (100.0%) | 🟡 62/70 (88.6%) |
 | **`src/includes/Wavetables/WaveTableStorage.cpp`** | 🟢 86/87 (98.9%) | 🟢 6/6 (100.0%) | 🔴 32/44 (72.7%) |
 | **`src/includes/Wavetables/WaveTableStorage.h`** | 🟢 98/99 (99.0%) | 🟢 25/25 (100.0%) | 🔴 48/71 (67.6%) |
