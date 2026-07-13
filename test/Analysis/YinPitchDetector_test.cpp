@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <cmath>
-#include <numeric>
 #include <tuple>
 #include <vector>
 
@@ -54,16 +53,18 @@ class YinPitchDetectorTest : public ::testing::Test
         std::ranges::sort(pitchResults);
         detectedPitch = pitchResults[pitchResults.size() / 2];
 
-        // Calculate confidence as inverse of standard deviation
-        const float mean =
-            std::accumulate(pitchResults.begin(), pitchResults.end(), 0.0f) / static_cast<float>(pitchResults.size());
-        float variance = 0.0f;
+        // Confidence as inverse of the median absolute deviation: under harsh noise, a lone
+        // octave-error window (a well-known YIN failure mode) otherwise dominates a mean-based
+        // variance and collapses confidence even when most windows agree with the median.
+        std::vector<float> absoluteDeviations;
+        absoluteDeviations.reserve(pitchResults.size());
         for (const auto pitch : pitchResults)
         {
-            variance += (pitch - mean) * (pitch - mean);
+            absoluteDeviations.push_back(std::abs(pitch - detectedPitch));
         }
-        variance /= static_cast<float>(pitchResults.size());
-        confidence = 1.0f / (1.0f + std::sqrt(variance));
+        std::ranges::sort(absoluteDeviations);
+        const float medianAbsoluteDeviation = absoluteDeviations[absoluteDeviations.size() / 2];
+        confidence = 1.0f / (1.0f + medianAbsoluteDeviation);
     }
 
     std::unique_ptr<YinPitchDetector> m_detector;
