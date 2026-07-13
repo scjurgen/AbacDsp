@@ -1,0 +1,15 @@
+# Headers intentionally excluded from the check_test_coverage.sh reachability
+# check: dev-scripts/check_test_coverage.py walks the local #include graph
+# starting from every test/**/*_test.cpp file and flags any src header that
+# is never reached, directly or transitively. Some headers are legitimately
+# unreachable that way; list them here with a reason so the check stays
+# green without hiding a real gap.
+#
+# Format: <path relative to repo root, or to src/includes/> : <reason>
+#
+# A line whose header becomes reachable from a test is reported as a STALE
+# EXCEPTION (remove it); a line whose header no longer exists is reported as
+# an INVALID EXCEPTION (fix or remove it). Both fail the check, so this file
+# cannot silently drift the way test/COVERAGE_GAPS.md used to.
+
+src/Skeleton.h : copy-paste scaffold for starting a new processor; not included by anything, not a real component

@@ -49,8 +49,25 @@ for wrapper scripts that build and run tests without cd-ing around).
 
 ### Test coverage
 
-`./check_test_coverage.sh` is a fast static check: it just verifies that every
-`src/includes/**/*.h` has a matching `*_test.cpp` with at least one non-empty test.
+`./check_test_coverage.sh` is a fast static check (no build required). It walks
+the local `#include` graph starting from every `test/**/*_test.cpp` file and
+flags any `src` header that is never reached, directly or transitively. This
+means grouped test files (one file testing several related headers) and
+headers only reached indirectly (e.g. a coefficient table pulled in by the
+filter that uses it) are recognized automatically, with no per-file
+bookkeeping. It also reports:
+
+- **empty test files** (a `*_test.cpp` exists but has no `TEST`/`TEST_F`/
+  `TEST_P`/`TYPED_TEST`/`INSTANTIATE_TEST_SUITE_P`),
+- **naming mismatches** (a test file that includes exactly one project header
+  but isn't named after it), and
+- **exceptions hygiene**: headers intentionally excluded from the check are
+  declared with a reason in `test/coverage_exceptions.txt`; an entry that has
+  become reachable (stale) or points at a header that no longer exists
+  (invalid) fails the check, so that file can't silently drift out of date.
+
+A Markdown summary is regenerated at `test/COVERAGE_GAPS.md` on every run
+(auto-generated, do not hand-edit).
 
 For real line/branch coverage (which lines are actually exercised, not just
 whether a test file exists), run:

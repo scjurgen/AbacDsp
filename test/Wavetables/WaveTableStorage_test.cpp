@@ -1,10 +1,9 @@
 
-#include "WaveTables/WaveTableOscillator.h"
+#include <vector>
 
 #include "gtest/gtest.h"
 
-#include <numbers>
-#include <vector>
+#include "Wavetables/WaveTableStorage.h"
 
 namespace AbacDsp::Test
 {
