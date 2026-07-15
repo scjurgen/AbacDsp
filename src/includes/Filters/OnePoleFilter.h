@@ -163,7 +163,7 @@ class OnePoleFilter : public OnePoleBase<OnePoleFilter<FilterCharacteristic, Cla
 
     void processBlock(float* inPlace, const size_t numSamples) noexcept
     {
-        if (this->m_fdbk <= 1E-8f)
+        if (std::abs(this->m_fdbk) <= 1E-8f) // negligible feedback: pass-through (AllPass feedback is negative)
         {
             return;
         }
@@ -280,7 +280,7 @@ class OnePoleFilterStereo
 // --- Arbitrary channel count version (MultiChannel) ---
 template <OnePoleFilterCharacteristic FilterCharacteristic, size_t NumChannels, bool ClampValues = false>
 class MultiChannelOnePoleFilter
-    : public OnePoleBase<MultiChannelOnePoleFilter<FilterCharacteristic, ClampValues, NumChannels>,
+    : public OnePoleBase<MultiChannelOnePoleFilter<FilterCharacteristic, NumChannels, ClampValues>,
                          FilterCharacteristic>
 {
   public:
@@ -332,7 +332,7 @@ class MultiChannelOnePoleFilter
 
     void processBlock(float* inPlace, const size_t numSamples) noexcept
     {
-        if (this->m_fdbk <= 1E-8f)
+        if (std::abs(this->m_fdbk) <= 1E-8f) // negligible feedback: pass-through (AllPass feedback is negative)
         {
             return;
         }

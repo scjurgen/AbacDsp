@@ -1,12 +1,11 @@
 
-#include "Filters/OnePoleFilter.h"
-
-#include "gtest/gtest.h"
-
 #include <algorithm>
 #include <array>
 #include <cmath>
 
+#include "gtest/gtest.h"
+
+#include "Filters/OnePoleFilter.h"
 #include "NaiveGenerators/Generator.h"
 namespace AbacDsp::Test
 {
@@ -82,73 +81,268 @@ TEST(DspOnePoleFilterTest, AllPassMatchTheoreticalMagnitudes)
     testFilterMagnitude<OnePoleFilterCharacteristic::AllPass>(48000.f);
 }
 
-//
-// TEST(DspOnePoleFilterTest, MultiChannelLowPassMatchTheoreticalMagnitudes)
-// {
-//     constexpr size_t NumChannels = 2;
-//     float sampleRate = 48000.f;
-//
-//     for (size_t cf = 100; cf <= 6400; cf *= 4) // cutoff
-//     {
-//         for (size_t hz = 50; hz <= 12800; hz *= 2) // test frequency
-//         {
-//             AbacDsp::MultiChannelOnePoleFilter<AbacDsp::OnePoleFilterCharacteristic::LowPass, NumChannels> sut{
-//                 sampleRate};
-//             sut.setCutoff(static_cast<float>(cf));
-//             std::vector<float> wave(4000 * NumChannels);
-//             NaiveDsp::Generator<NaiveDsp::Wave::Sine> sineWave{sampleRate, static_cast<float>(hz)};
-//             sineWave.render(wave.begin(), wave.end(), NumChannels);
-//             sut.processBlock(wave.data(), wave.size() / NumChannels);
-//
-//             // Check each channel
-//             for (size_t channel = 0; channel < NumChannels; ++channel)
-//             {
-//                 std::vector<float> channelData(wave.size() / NumChannels);
-//                 for (size_t i = 0; i < channelData.size(); ++i)
-//                 {
-//                     channelData[i] = wave[i * NumChannels + channel];
-//                 }
-//
-//                 const auto [minV, maxV] =
-//                     std::minmax_element(channelData.begin() + channelData.size() / 2, channelData.end());
-//                 auto maxValue = std::max(std::abs(*minV), std::abs(*maxV));
-//                 auto db = std::log10(std::abs(maxValue)) * 20.0f;
-//
-//                 auto magnitude = sut.magnitude(static_cast<float>(hz));
-//                 auto expectedDb = std::log10(magnitude) * 20.0;
-//                 auto maxDt = 1.2f;
-//                 EXPECT_NEAR(db, expectedDb, maxDt);
-//             }
-//         }
-//     }
-// }
-//
-// // You can add similar tests for MultiChannel HighPass and AllPass if needed
-//
-// TEST(DspOnePoleFilterTest, MultiChannelIndependence)
-// {
-//     constexpr size_t NumChannels = 2;
-//     float sampleRate = 48000.f;
-//     float cutoff = 1000.f;
-//
-//     AbacDsp::MultiChannelOnePoleFilter<AbacDsp::OnePoleFilterCharacteristic::LowPass, NumChannels> sut{sampleRate};
-//     sut.setCutoff(cutoff);
-//
-//     std::vector<float> input(1000 * NumChannels, 0.0f);
-//     // Set channel 0 to all 1's and channel 1 to all -1's
-//     for (size_t i = 0; i < input.size(); i += NumChannels)
-//     {
-//         input[i] = 1.0f;
-//         input[i + 1] = -1.0f;
-//     }
-//
-//     sut.processBlock(input.data(), input.size() / NumChannels);
-//
-//     // Check that the channels remain independent
-//     for (size_t i = 0; i < input.size(); i += NumChannels)
-//     {
-//         EXPECT_GT(input[i], 0.0f);
-//         EXPECT_LT(input[i + 1], 0.0f);
-//     }
-// }
+// --- Mono edge branches ---
+
+TEST(DspOnePoleFilterTest, CutoffAtOrAboveNyquistZeroesFeedback)
+{
+    OnePoleFilter<OnePoleFilterCharacteristic::LowPass> sut{48000.f};
+    sut.setCutoff(24000.f); // == sampleRate / 2: feedback forced to 0, low-pass becomes a pass-through
+    EXPECT_FLOAT_EQ(sut.step(0.5f), 0.5f);
+    sut.setCutoff(30000.f); // above Nyquist: same branch
+    EXPECT_FLOAT_EQ(sut.step(-0.25f), -0.25f);
+}
+
+template <OnePoleFilterCharacteristic Characteristic>
+void exerciseCutoffAboveNyquist()
+{
+    OnePoleFilter<Characteristic> sut{48000.f, 1000.f};
+    sut.setCutoff(30000.f); // above Nyquist: feedback branch taken for every characteristic
+    EXPECT_TRUE(std::isfinite(sut.step(0.5f)));
+}
+
+TEST(DspOnePoleFilterTest, CutoffAboveNyquistHandledForAllCharacteristics)
+{
+    exerciseCutoffAboveNyquist<OnePoleFilterCharacteristic::LowPass>();
+    exerciseCutoffAboveNyquist<OnePoleFilterCharacteristic::HighPass>();
+    exerciseCutoffAboveNyquist<OnePoleFilterCharacteristic::HighPassLeaky>();
+    exerciseCutoffAboveNyquist<OnePoleFilterCharacteristic::AllPass>();
+}
+
+TEST(DspOnePoleFilterStereoTest, CutoffAboveNyquistHandled)
+{
+    OnePoleFilterStereo<OnePoleFilterCharacteristic::LowPass> sut{48000.f, 30000.f};
+    float outLeft = 0.0f;
+    float outRight = 0.0f;
+    sut.stepStereo(0.5f, -0.5f, outLeft, outRight);
+    EXPECT_TRUE(std::isfinite(outLeft));
+    EXPECT_TRUE(std::isfinite(outRight));
+}
+
+TEST(DspMultiChannelOnePoleFilterTest, CutoffAboveNyquistHandled)
+{
+    constexpr size_t numChannels = 2;
+    MultiChannelOnePoleFilter<OnePoleFilterCharacteristic::LowPass, numChannels> sut{48000.f, 30000.f};
+    std::array<float, numChannels> frame{0.5f, -0.5f};
+    sut.step(frame.data());
+    EXPECT_TRUE(std::isfinite(frame[0]));
+    EXPECT_TRUE(std::isfinite(frame[1]));
+}
+
+TEST(DspOnePoleFilterTest, InPlaceAndCopyBlockAgree)
+{
+    OnePoleFilter<OnePoleFilterCharacteristic::LowPass> inPlaceFilter{48000.f, 1000.f};
+    OnePoleFilter<OnePoleFilterCharacteristic::LowPass> copyFilter{48000.f, 1000.f};
+    std::array<float, 8> input{1.f, -1.f, 1.f, -1.f, 1.f, -1.f, 1.f, -1.f};
+
+    std::array<float, 8> copied{};
+    copyFilter.processBlock(input.data(), copied.data(), input.size());
+
+    std::array<float, 8> inPlace = input;
+    inPlaceFilter.processBlock(inPlace.data(), inPlace.size());
+
+    for (size_t i = 0; i < input.size(); ++i)
+    {
+        EXPECT_FLOAT_EQ(inPlace[i], copied[i]);
+    }
+}
+
+TEST(DspOnePoleFilterTest, InPlaceBlockLeavesBufferUntouchedWhenFeedbackZero)
+{
+    OnePoleFilter<OnePoleFilterCharacteristic::LowPass> sut{48000.f};
+    sut.setCutoff(24000.f); // feedback 0 <= 1E-8: early return
+    std::array<float, 4> buffer{0.1f, 0.2f, 0.3f, 0.4f};
+    const auto original = buffer;
+    sut.processBlock(buffer.data(), buffer.size());
+    EXPECT_EQ(buffer, original);
+}
+
+template <OnePoleFilterCharacteristic Characteristic>
+void exerciseCopyBlockZeroFeedback()
+{
+    OnePoleFilter<Characteristic> sut{48000.f};
+    sut.setFeedback(0.0f);
+    std::array<float, 4> input{0.1f, 0.2f, 0.3f, 0.4f};
+    std::array<float, 4> output{};
+    sut.processBlock(input.data(), output.data(), input.size());
+    EXPECT_EQ(output, input);
+}
+
+TEST(DspOnePoleFilterTest, CopyBlockCopiesInputWhenFeedbackZero)
+{
+    exerciseCopyBlockZeroFeedback<OnePoleFilterCharacteristic::LowPass>();
+    exerciseCopyBlockZeroFeedback<OnePoleFilterCharacteristic::HighPass>();
+    exerciseCopyBlockZeroFeedback<OnePoleFilterCharacteristic::HighPassLeaky>();
+    exerciseCopyBlockZeroFeedback<OnePoleFilterCharacteristic::AllPass>();
+}
+
+template <OnePoleFilterCharacteristic Characteristic>
+void exerciseMonoClamp()
+{
+    OnePoleFilter<Characteristic, true> sut{48000.f, 100.f};
+    float out = 0.0f;
+    for (int i = 0; i < 4000; ++i)
+    {
+        out = sut.step((i % 2) == 0 ? 1.0e6f : -1.0e6f);
+    }
+    EXPECT_TRUE(std::isfinite(out));
+}
+
+TEST(DspOnePoleFilterTest, ClampKeepsStateFiniteForAllCharacteristics)
+{
+    exerciseMonoClamp<OnePoleFilterCharacteristic::LowPass>();
+    exerciseMonoClamp<OnePoleFilterCharacteristic::HighPass>();
+    exerciseMonoClamp<OnePoleFilterCharacteristic::HighPassLeaky>();
+    exerciseMonoClamp<OnePoleFilterCharacteristic::AllPass>();
+}
+
+// --- Stereo version (AllPass, LowPass, HighPass; no HighPassLeaky) ---
+
+template <OnePoleFilterCharacteristic Characteristic>
+void exerciseStereoBlockOverloadsAgree()
+{
+    OnePoleFilterStereo<Characteristic> inPlaceFilter{48000.f, 1000.f};
+    OnePoleFilterStereo<Characteristic> copyFilter{48000.f, 1000.f};
+
+    std::array<float, 8> left{};
+    std::array<float, 8> right{};
+    left.fill(1.0f);
+    right.fill(-1.0f);
+    auto leftIn = left;
+    auto rightIn = right;
+
+    inPlaceFilter.processBlock(left.data(), right.data(), left.size());
+
+    std::array<float, 8> leftOut{};
+    std::array<float, 8> rightOut{};
+    copyFilter.processBlock(leftIn.data(), rightIn.data(), leftOut.data(), rightOut.data(), leftIn.size());
+
+    for (size_t i = 0; i < left.size(); ++i)
+    {
+        EXPECT_FLOAT_EQ(left[i], leftOut[i]);
+        EXPECT_FLOAT_EQ(right[i], rightOut[i]);
+        EXPECT_TRUE(std::isfinite(left[i]));
+    }
+}
+
+TEST(DspOnePoleFilterStereoTest, BlockOverloadsAgree)
+{
+    exerciseStereoBlockOverloadsAgree<OnePoleFilterCharacteristic::LowPass>();
+    exerciseStereoBlockOverloadsAgree<OnePoleFilterCharacteristic::HighPass>();
+    exerciseStereoBlockOverloadsAgree<OnePoleFilterCharacteristic::AllPass>();
+}
+
+TEST(DspOnePoleFilterStereoTest, ChannelsRemainIndependent)
+{
+    OnePoleFilterStereo<OnePoleFilterCharacteristic::LowPass> sut{48000.f, 1000.f};
+    std::array<float, 2000> left{};
+    std::array<float, 2000> right{};
+    left.fill(1.0f);
+    right.fill(-1.0f);
+    sut.processBlock(left.data(), right.data(), left.size());
+    EXPECT_GT(left.back(), 0.5f);
+    EXPECT_LT(right.back(), -0.5f);
+}
+
+template <OnePoleFilterCharacteristic Characteristic>
+void exerciseStereoClamp()
+{
+    OnePoleFilterStereo<Characteristic, true> sut{48000.f, 100.f};
+    float outLeft = 0.0f;
+    float outRight = 0.0f;
+    for (int i = 0; i < 4000; ++i)
+    {
+        sut.stepStereo(1.0e6f, -1.0e6f, outLeft, outRight);
+    }
+    EXPECT_TRUE(std::isfinite(outLeft));
+    EXPECT_TRUE(std::isfinite(outRight));
+}
+
+TEST(DspOnePoleFilterStereoTest, ClampKeepsStateFinite)
+{
+    exerciseStereoClamp<OnePoleFilterCharacteristic::LowPass>();
+    exerciseStereoClamp<OnePoleFilterCharacteristic::HighPass>();
+    exerciseStereoClamp<OnePoleFilterCharacteristic::AllPass>();
+}
+
+// --- Arbitrary channel count version ---
+
+template <OnePoleFilterCharacteristic Characteristic>
+void exerciseMultiChannelBlockOverloadsAgree()
+{
+    constexpr size_t numChannels = 2;
+    MultiChannelOnePoleFilter<Characteristic, numChannels> inPlaceFilter{48000.f, 1000.f};
+    MultiChannelOnePoleFilter<Characteristic, numChannels> copyFilter{48000.f, 1000.f};
+
+    constexpr size_t numFrames = 8;
+    std::array<float, numChannels * numFrames> input{};
+    for (size_t i = 0; i < input.size(); ++i)
+    {
+        input[i] = (i % 2) == 0 ? 1.0f : -1.0f;
+    }
+
+    auto inPlace = input;
+    inPlaceFilter.processBlock(inPlace.data(), numFrames);
+
+    std::array<float, numChannels * numFrames> output{};
+    copyFilter.processBlock(input.data(), output.data(), numFrames);
+
+    for (size_t i = 0; i < input.size(); ++i)
+    {
+        EXPECT_FLOAT_EQ(inPlace[i], output[i]);
+        EXPECT_TRUE(std::isfinite(output[i]));
+    }
+}
+
+TEST(DspMultiChannelOnePoleFilterTest, BlockOverloadsAgree)
+{
+    exerciseMultiChannelBlockOverloadsAgree<OnePoleFilterCharacteristic::LowPass>();
+    exerciseMultiChannelBlockOverloadsAgree<OnePoleFilterCharacteristic::HighPass>();
+    exerciseMultiChannelBlockOverloadsAgree<OnePoleFilterCharacteristic::AllPass>();
+}
+
+template <OnePoleFilterCharacteristic Characteristic>
+void exerciseMultiChannelZeroFeedback()
+{
+    constexpr size_t numChannels = 2;
+    constexpr size_t numFrames = 4;
+    MultiChannelOnePoleFilter<Characteristic, numChannels> sut{48000.f};
+    sut.setFeedback(0.0f);
+
+    std::array<float, numChannels * numFrames> input{};
+    for (size_t i = 0; i < input.size(); ++i)
+    {
+        input[i] = 0.1f * static_cast<float>(i + 1);
+    }
+
+    std::array<float, numChannels * numFrames> output{};
+    sut.processBlock(input.data(), output.data(), numFrames); // fdbk == 0: copy path
+    EXPECT_EQ(output, input);
+
+    auto inPlace = input;
+    sut.processBlock(inPlace.data(), numFrames); // |fdbk| <= 1E-8: early return
+    EXPECT_EQ(inPlace, input);
+}
+
+TEST(DspMultiChannelOnePoleFilterTest, BlocksPassThroughWhenFeedbackZero)
+{
+    exerciseMultiChannelZeroFeedback<OnePoleFilterCharacteristic::LowPass>();
+    exerciseMultiChannelZeroFeedback<OnePoleFilterCharacteristic::HighPass>();
+    exerciseMultiChannelZeroFeedback<OnePoleFilterCharacteristic::AllPass>();
+}
+
+TEST(DspMultiChannelOnePoleFilterTest, ClampKeepsStateBounded)
+{
+    constexpr size_t numChannels = 2;
+    MultiChannelOnePoleFilter<OnePoleFilterCharacteristic::LowPass, numChannels, true> sut{48000.f, 100.f};
+    std::array<float, numChannels> frame{1.0e6f, -1.0e6f};
+    for (int i = 0; i < 4000; ++i)
+    {
+        frame = {1.0e6f, -1.0e6f};
+        sut.step(frame.data());
+    }
+    EXPECT_LE(frame[0], 1.0f);
+    EXPECT_GE(frame[0], -1.0f);
+    EXPECT_LE(frame[1], 1.0f);
+    EXPECT_GE(frame[1], -1.0f);
+}
 }
