@@ -4,9 +4,10 @@
 
 | Metric        | Coverage |
 |---------------|----------|
-| **Lines**     | 🟢 10556/11363 (92.9%) |
-| **Functions** | 🟢 1617/1655 (97.7%) |
-| **Branches**  | 🔴 3131/4739 (66.1%) |
+| **Lines**     | 🟢 10819/11614 (93.2%) |
+| **Functions** | 🟢 1730/1769 (97.8%) |
+| **Branches**  | 🔴 3273/4911 (66.6%) |
+| **Decisions** | 🔴 1747/2332 (74.9%) |
 
 ## 📄 File coverage
 
@@ -45,10 +46,9 @@
 | **`src/includes/Filters/BiquadResoBandPassParallel.h`** | 🟢 37/37 (100.0%) | 🟢 4/4 (100.0%) | 🟡 7/8 (87.5%) |
 | **`src/includes/Filters/BiquadResoBP.h`** | 🟡 42/52 (80.8%) | 🟢 5/5 (100.0%) | 🔴 1/2 (50.0%) |
 | **`src/includes/Filters/BiquadResoBPParallelSIMD.h`** | 🟢 62/62 (100.0%) | 🟢 4/4 (100.0%) | 🟡 14/18 (77.8%) |
-| **`src/includes/Filters/FourStageFilter.h`** | 🟡 49/58 (84.5%) | 🟢 7/7 (100.0%) | 🔴 5/14 (35.7%) |
-| **`src/includes/Filters/LadderFilter.h`** | 🟢 111/113 (98.2%) | 🟢 18/18 (100.0%) | 🔴 13/20 (65.0%) |
-| **`src/includes/Filters/OnePoleFilter.h`** | 🟢 113/122 (92.6%) | 🟢 34/34 (100.0%) | 🔴 18/44 (40.9%) |
+| **`src/includes/Filters/OnePoleFilter.h`** | 🟢 234/240 (97.5%) | 🟢 113/113 (100.0%) | 🔴 127/188 (67.6%) |
 | **`src/includes/Filters/PinkFilter.h`** | 🟢 10/10 (100.0%) | 🟢 4/4 (100.0%) | 🟢 8/8 (100.0%) |
+| **`src/includes/Filters/PoleMixingFilter.h`** | 🟢 302/304 (99.3%) | 🟢 59/60 (98.3%) | 🟡 51/62 (82.3%) |
 | **`src/includes/Filters/Sinc/SincFilter.h`** | 🟢 121/128 (94.5%) | 🟢 19/20 (95.0%) | 🔴 73/110 (66.4%) |
 | **`src/includes/Filters/SvfResoBP.h`** | 🟢 104/106 (98.1%) | 🟢 15/15 (100.0%) | 🔴 14/24 (58.3%) |
 | **`src/includes/Generators/AttackRamp.h`** | 🟢 64/65 (98.5%) | 🟢 9/9 (100.0%) | 🟡 13/16 (81.2%) |

@@ -184,9 +184,10 @@ if(ENABLE_COVERAGE)
                 ${GCOVR_PATH} --root ${PROJECT_SOURCE_DIR} --filter
                 "${PROJECT_SOURCE_DIR}/src/includes/"
                 --exclude-unreachable-branches --exclude-throw-branches
-                --print-summary --html-details "${COVERAGE_DIR}/index.html"
-                --markdown --markdown-title "AbacDsp Coverage Report" -o
-                "${COVERAGE_MD}" "${CMAKE_BINARY_DIR}"
+                --decisions --print-summary --html-details
+                "${COVERAGE_DIR}/index.html" --markdown --markdown-title
+                "AbacDsp Coverage Report" -o "${COVERAGE_MD}"
+                "${CMAKE_BINARY_DIR}"
             DEPENDS unit_tests
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
             COMMENT

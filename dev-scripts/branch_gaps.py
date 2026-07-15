@@ -93,6 +93,37 @@ def run_gcovr_json(build_dir: Path) -> dict:
         out_path.unlink(missing_ok=True)
 
 
+def run_gcovr_decisions(build_dir: Path) -> tuple[int, int] | None:
+    """gcovr decision coverage: only branches tied to a real source-level decision
+    (if / ?: / && / || / switch). Strips the float/SIMD/library/exception noise that
+    inflates raw branch counts. Returns (covered, total) or None if gcovr fails."""
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+        out_path = Path(tmp.name)
+    try:
+        # --json-summary takes an optional value, so give it the path via -o and
+        # keep the build dir strictly positional (else it is read as the output file).
+        cmd = [
+            "gcovr", "--root", str(ROOT), "--filter", f"{INCLUDE_ROOT}/",
+            "--exclude-unreachable-branches", "--exclude-throw-branches", "--decisions",
+            "--json-summary", "-o", str(out_path), str(build_dir),
+        ]
+        out = subprocess.run(cmd, capture_output=True, text=True)
+        if out.returncode != 0:
+            return None
+        try:
+            summary = json.loads(out_path.read_text())
+        except json.JSONDecodeError:
+            return None
+    finally:
+        out_path.unlink(missing_ok=True)
+    total = summary.get("decision_total")
+    covered = summary.get("decision_covered")
+    if total is None or covered is None:
+        return None
+    return covered, total
+
+
 def parse_exceptions() -> dict[str, str]:
     exceptions: dict[str, str] = {}
     if not EXCEPTIONS_FILE.exists():
@@ -195,11 +226,17 @@ def main() -> int:
     phantom_gaps = sum(f.phantom_uncovered for rel, f in files.items() if rel not in exceptions)
 
     stale, invalid = validate_exceptions(files, exceptions)
+    decisions = None if args.json else run_gcovr_decisions(Path(args.build_dir))
 
     print(f"{BLUE}{'=' * 64}{NC}")
     print(f"{BLUE} Branch-coverage gap analysis{NC}")
     print(f"{BLUE}{'=' * 64}{NC}")
     print(f"Raw branches:            {raw_cov}/{raw_total} ({100 * raw_cov / raw_total:.1f}%)")
+    if decisions is not None:
+        dcov, dtot = decisions
+        dpct = 100 * dcov / dtot if dtot else 0.0
+        print(f"Decision coverage:       {GREEN}{dcov}/{dtot} ({dpct:.1f}%){NC}"
+              f" (clean: source-level decisions only, no float/SIMD/library noise)")
     print(f"Exempt (noise) headers:  {len(exceptions)} files, {exempt_total} branches set aside")
     print(f"Actionable branches:     {act_cov}/{act_total} ({100 * act_cov / act_total:.1f}%)")
     print(f"  real logic gaps left:  {RED}{logic_gaps}{NC}")
@@ -222,13 +259,13 @@ def main() -> int:
             print(f"  {RED}- {rel}{NC}")
 
     if not args.no_report:
-        write_report(ranked, exceptions, raw_cov, raw_total, act_cov, act_total, logic_gaps)
+        write_report(ranked, exceptions, raw_cov, raw_total, act_cov, act_total, logic_gaps, decisions)
         print(f"\n{BLUE}Report written to {REPORT_FILE.relative_to(ROOT)}{NC}")
 
     return 0 if not stale and not invalid else 1
 
 
-def write_report(ranked, exceptions, raw_cov, raw_total, act_cov, act_total, logic_gaps) -> None:
+def write_report(ranked, exceptions, raw_cov, raw_total, act_cov, act_total, logic_gaps, decisions) -> None:
     lines = [
         "# Branch Coverage Gaps",
         "",
@@ -236,6 +273,13 @@ def write_report(ranked, exceptions, raw_cov, raw_total, act_cov, act_total, log
         " `test/branch_coverage_exceptions.txt` and re-run the script.",
         "",
         f"- Raw branches: {raw_cov}/{raw_total} ({100 * raw_cov / raw_total:.1f}%)",
+    ]
+    if decisions is not None:
+        dcov, dtot = decisions
+        dpct = 100 * dcov / dtot if dtot else 0.0
+        lines.append(f"- Decision coverage (clean, no float/SIMD/library noise): "
+                     f"**{dcov}/{dtot} ({dpct:.1f}%)**")
+    lines += [
         f"- Actionable (noise headers excluded): {act_cov}/{act_total} ({100 * act_cov / act_total:.1f}%)",
         f"- Real logic-branch gaps remaining: **{logic_gaps}**",
         "",

@@ -45,8 +45,8 @@ GCOVR_FILTER="$ROOT_DIR/src/includes/.*$FILTER"
 echo
 echo "=== coverage: $FILTER ==="
 gcovr --root "$ROOT_DIR" --filter "$GCOVR_FILTER" \
-    --exclude-unreachable-branches --exclude-throw-branches \
-    --print-summary "$BUILD_DIR" 2>/dev/null | grep -E "^(lines|functions|branches):" || true
+    --exclude-unreachable-branches --exclude-throw-branches --decisions \
+    --print-summary "$BUILD_DIR" 2>/dev/null | grep -E "^(lines|functions|branches|decisions):" || true
 
 echo
 echo "=== branch gaps: $FILTER ==="

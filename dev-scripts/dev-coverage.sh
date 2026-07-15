@@ -33,6 +33,12 @@ echo "Coverage report: $ROOT_DIR/COVERAGE.md"
 echo "HTML report: $BUILD_DIR/coverage/index.html"
 echo "Full build log: $BUILD_LOG"
 
+# gcovr's markdown output has no decision column, so inject a Decisions row into
+# the overall table of COVERAGE.md. Decision coverage counts only source-level
+# decisions (if / ?: / && / || / switch), dropping the float/SIMD/library/throw
+# branch noise that makes the raw Branches figure misleading here.
+python3 "$SCRIPT_DIR/inject_decisions.py" "$BUILD_DIR" "$ROOT_DIR/COVERAGE.md" || true
+
 # Refresh the actionable branch-gap report (real logic gaps vs float/SIMD noise).
 python3 "$SCRIPT_DIR/branch_gaps.py" --build-dir "$BUILD_DIR" >"$SCRATCH_DIR/branch_gaps.log" 2>&1 || true
 echo "Branch-gap report: $ROOT_DIR/test/BRANCH_GAPS.md"
