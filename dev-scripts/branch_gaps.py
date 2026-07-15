@@ -74,15 +74,23 @@ class FileGaps:
 
 
 def run_gcovr_json(build_dir: Path) -> dict:
-    cmd = [
-        "gcovr", "--root", str(ROOT), "--filter", f"{INCLUDE_ROOT}/",
-        "--exclude-unreachable-branches", "--exclude-throw-branches",
-        "--json", str(build_dir),
-    ]
-    out = subprocess.run(cmd, capture_output=True, text=True)
-    if out.returncode != 0:
-        sys.exit(f"{RED}gcovr failed:{NC}\n{out.stderr}")
-    return json.loads(out.stdout)
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+        out_path = Path(tmp.name)
+    try:
+        # --json takes an optional value, so hand it the output path via -o and
+        # keep the build dir strictly positional to avoid it being swallowed.
+        cmd = [
+            "gcovr", "--root", str(ROOT), "--filter", f"{INCLUDE_ROOT}/",
+            "--exclude-unreachable-branches", "--exclude-throw-branches",
+            "--json", "-o", str(out_path), str(build_dir),
+        ]
+        out = subprocess.run(cmd, capture_output=True, text=True)
+        if out.returncode != 0:
+            sys.exit(f"{RED}gcovr failed:{NC}\n{out.stderr}")
+        return json.loads(out_path.read_text())
+    finally:
+        out_path.unlink(missing_ok=True)
 
 
 def parse_exceptions() -> dict[str, str]:
