@@ -189,4 +189,42 @@ TEST(SrPushConverterTest, ResetRestoresInitialState)
     }
 }
 
+// ----- ratio glide (consecutive blocks with a changing ratio) -----
+
+// A second fetchBlock at a different ratio exercises the interpolation that ramps
+// the ratio across the block, plus the already-initialized last-ratio path.
+TEST(SrPushConverterTest, RatioGlideAcrossConsecutiveBlocksMono)
+{
+    SrPushConverter<1> sut{makeSincFilter()};
+    std::vector<float> in(kFrames, 0.5f);
+    std::vector<float> out(kFrames * 3);
+
+    std::ignore = sut.fetchBlock(1.0f, in.data(), kFrames, out.data(), out.size());          // sets last ratio
+    const auto generated = sut.fetchBlock(2.0f, in.data(), kFrames, out.data(), out.size()); // glides 1 -> 2
+
+    EXPECT_GT(generated, 0u);
+    for (size_t i = kStartupSkip; i < generated; ++i)
+    {
+        EXPECT_TRUE(std::isfinite(out[i]));
+    }
+}
+
+TEST(SrPushConverterTest, StreamingAlternatingRatiosStereo)
+{
+    SrPushConverter<2> sut{makeSincFilter()};
+    constexpr size_t frames = 1024;
+    std::vector<float> in(frames * 2, 0.3f); // interleaved stereo
+    std::vector<float> out(frames * 6);
+
+    for (int block = 0; block < 8; ++block)
+    {
+        const float ratio = (block % 2 == 0) ? 0.5f : 2.0f; // down then up: both scale paths + a glide each block
+        const auto generated = sut.fetchBlock(ratio, in.data(), frames, out.data(), out.size());
+        for (size_t i = 0; i < generated * 2; ++i)
+        {
+            EXPECT_TRUE(std::isfinite(out[i]));
+        }
+    }
+}
+
 }
