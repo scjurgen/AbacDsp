@@ -1,14 +1,31 @@
+#include <array>
+#include <span>
+#include <vector>
+
 #include "gtest/gtest.h"
 
 #include "Analysis/ZeroCrossings.h"
 #include "NaiveGenerators/Generator.h"
 #include "Numbers/Convert.h"
 
-#include <array>
-
 namespace AbacDsp::Test
 {
 constexpr float sampleRate{48000.f};
+
+// N periods of a period-4 square wave (optionally DC-shifted). Rising zero
+// crossings land at samples 2, 6, 10, ... so every period length is exactly 4.
+[[nodiscard]] inline std::vector<float> squarePeriods(const size_t periods, const float dc = 0.f)
+{
+    std::vector<float> v;
+    for (size_t p = 0; p < periods; ++p)
+    {
+        for (const float x : {-1.f, -1.f, 1.f, 1.f})
+        {
+            v.push_back(x + dc);
+        }
+    }
+    return v;
+}
 
 
 TEST(ZeroCrossingsTest, correctPeriod)
@@ -116,5 +133,82 @@ TEST(ZeroCrossingsTest, statisticsModulatedFrequency)
     EXPECT_GT(stats.maxPeriodLength, expectedMax - 1);
     EXPECT_NEAR(stats.minPeriodLength, expectedMin, 1.f);
     EXPECT_NEAR(stats.maxPeriodLength, expectedMax, 1.f);
+}
+
+TEST(ZeroCrossingsTest, calculateDcEmptyAndNonEmpty)
+{
+    EXPECT_FLOAT_EQ(calculateDC<float>(nullptr, 0), 0.f); // size == 0 guard
+    const std::array<float, 4> d{1.f, 2.f, 3.f, 4.f};
+    EXPECT_FLOAT_EQ(calculateDC(d.data(), d.size()), 2.5f);
+}
+
+TEST(ZeroCrossingsTest, findFirstZeroCrossingEdgesAndBoolOverload)
+{
+    const auto sig = squarePeriods(3);
+    EXPECT_EQ(findFirstZeroCrossingNP(sig.data(), sig.size(), [](const float x) { return x; }), 2u);
+
+    // maxSize < 2 returns maxSize unchanged
+    const std::array<float, 1> one{-1.f};
+    EXPECT_EQ(findFirstZeroCrossingNP(one.data(), one.size(), [](const float x) { return x; }), 1u);
+    EXPECT_EQ(findFirstZeroCrossingNP(one.data(), size_t{0}, [](const float x) { return x; }), 0u);
+
+    // no rising crossing returns maxSize
+    const std::array<float, 4> allNeg{-1.f, -2.f, -1.f, -2.f};
+    EXPECT_EQ(findFirstZeroCrossingNP(allNeg.data(), allNeg.size(), [](const float x) { return x; }), allNeg.size());
+
+    // bool overload: both removeDC branches
+    EXPECT_EQ(findFirstZeroCrossingNP(sig.data(), sig.size(), false), 2u);
+    const auto shifted = squarePeriods(3, 2.f);
+    EXPECT_EQ(findFirstZeroCrossingNP(shifted.data(), shifted.size(), true), 2u);              // DC removed
+    EXPECT_EQ(findFirstZeroCrossingNP(shifted.data(), shifted.size(), false), shifted.size()); // stays positive
+}
+
+TEST(ZeroCrossingsTest, periodLengthBoolOverloadAndEmptyCases)
+{
+    const auto sig = squarePeriods(6);
+    EXPECT_NEAR(periodLengthByZeroCrossingAverage(sig.data(), sig.size(), false), 4.f, 1e-5f);
+
+    const auto shifted = squarePeriods(6, 2.f);
+    EXPECT_NEAR(periodLengthByZeroCrossingAverage(shifted.data(), shifted.size(), true), 4.f, 1e-5f);
+
+    // no crossing at all -> 0 (firstIndex == size)
+    EXPECT_FLOAT_EQ(periodLengthByZeroCrossingAverage(shifted.data(), shifted.size(), false), 0.f);
+
+    // exactly one crossing -> cnt == 0 -> 0
+    const std::array<float, 4> single{-1.f, -1.f, 1.f, 1.f};
+    EXPECT_FLOAT_EQ(periodLengthByZeroCrossingAverage(single.data(), single.size(), [](const float x) { return x; }),
+                    0.f);
+}
+
+TEST(ZeroCrossingsTest, statisticsOverloadsAndEmptyCases)
+{
+    const auto sig = squarePeriods(6); // period lengths all 4, five of them
+    const auto shifted = squarePeriods(6, 2.f);
+
+    const auto ptrFalse = calculateZeroCrossingStatistics(sig.data(), sig.size(), false);
+    EXPECT_EQ(ptrFalse.periodCount, 5u);
+    EXPECT_FLOAT_EQ(ptrFalse.meanPeriodLen, 4.f);
+    EXPECT_FLOAT_EQ(ptrFalse.minPeriodLength, 4.f);
+    EXPECT_FLOAT_EQ(ptrFalse.maxPeriodLength, 4.f);
+    EXPECT_FLOAT_EQ(ptrFalse.standardDeviation, 0.f);
+
+    EXPECT_EQ(calculateZeroCrossingStatistics(shifted.data(), shifted.size(), true).periodCount, 5u);
+
+    // span + preprocess, span + removeDC (both branches)
+    EXPECT_EQ(calculateZeroCrossingStatistics(std::span<const float>{sig}, [](const float x) { return x; }).periodCount,
+              5u);
+    EXPECT_EQ(calculateZeroCrossingStatistics(std::span<const float>{sig}, false).periodCount, 5u);
+    EXPECT_EQ(calculateZeroCrossingStatistics(std::span<const float>{shifted}, true).periodCount, 5u);
+
+    // contiguous-iterator + removeDC (both branches)
+    EXPECT_EQ(calculateZeroCrossingStatistics<float>(sig.begin(), sig.end(), false).periodCount, 5u);
+    EXPECT_EQ(calculateZeroCrossingStatistics<float>(shifted.begin(), shifted.end(), true).periodCount, 5u);
+
+    // no crossing -> empty stats (firstIndex == size)
+    EXPECT_EQ(calculateZeroCrossingStatistics(shifted.data(), shifted.size(), false).periodCount, 0u);
+
+    // one crossing -> empty period list -> empty stats
+    const std::array<float, 4> single{-1.f, -1.f, 1.f, 1.f};
+    EXPECT_EQ(calculateZeroCrossingStatistics(single.data(), single.size(), false).periodCount, 0u);
 }
 }
