@@ -1,0 +1,23 @@
+# Headers whose *branch* coverage is excluded from the actionable branch-gap
+# report produced by dev-scripts/branch_gaps.py.
+#
+# gcov/gcovr attribute machine-level branches to straight-line floating-point
+# and SIMD code (e.g. simd_make_float4(...), FFT butterflies, constexpr array
+# construction). Those "branches" have no source-level decision behind them and
+# cannot be reached by any test, so counting them as missing coverage is noise.
+# Line and function coverage for these headers is still tracked normally in
+# COVERAGE.md; only their branch counts are set aside here.
+#
+# Format: <path relative to repo root, or to src/includes/> : <reason>
+#
+# branch_gaps.py cross-checks this file: an entry that has since grown a real,
+# source-level, testable branch gap is reported as STALE (re-classify it), and
+# an entry for a header that no longer exists is reported as INVALID. Keep the
+# list honest; do not add a file here just to make the number go up.
+
+Reverbs/Hadamard4.h : straight-line SIMD/scalar butterfly, no source-level branches; all reported branches are machine-level float noise
+Reverbs/Hadamard8.h : straight-line SIMD/scalar butterfly, no source-level branches; all reported branches are machine-level float noise
+Reverbs/Hadamard16.h : straight-line SIMD/scalar butterfly, no source-level branches; all reported branches are machine-level float noise
+Helpers/ConstructArray.h : constexpr std::array construction helpers; reported branches are per-instantiation template noise, not testable decisions
+AudioFile/SaveWav.h : linear byte serialization of WAV data; reported branches are float/library-call noise with no source-level decision
+Generators/OrnsteinUhlenbeckProcess.h : straight-line stochastic update math; reported branches are float noise, no source-level decision

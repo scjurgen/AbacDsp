@@ -32,3 +32,7 @@ fi
 echo "Coverage report: $ROOT_DIR/COVERAGE.md"
 echo "HTML report: $BUILD_DIR/coverage/index.html"
 echo "Full build log: $BUILD_LOG"
+
+# Refresh the actionable branch-gap report (real logic gaps vs float/SIMD noise).
+python3 "$SCRIPT_DIR/branch_gaps.py" --build-dir "$BUILD_DIR" >"$SCRATCH_DIR/branch_gaps.log" 2>&1 || true
+echo "Branch-gap report: $ROOT_DIR/test/BRANCH_GAPS.md"
