@@ -5,9 +5,8 @@
 #include <cmath>
 #include <vector>
 
-#include "Filters/FourStageFilter.h"
-#include "Filters/LadderFilter.h"
 #include "Filters/OnePoleFilter.h"
+#include "Filters/PoleMixingFilter.h"
 #include "Helpers/SkipSmoothing.h"
 #include "Modulation/Modulation.h"
 #include "Numbers/Convert.h"

@@ -4,13 +4,61 @@
 #include <array>
 #include <cmath>
 #include <complex>
+#include <cstddef>
+#include <functional>
 #include <numbers>
 #include <stdexcept>
 #include <string_view>
 #include <vector>
 
+/*
+ * Four-stage one-pole (pole-mixing / multimode VCF) filter family.
+ *
+ * All variants share one topology: four cascaded one-pole lowpass stages, an
+ * optional resonance feedback, and an output that is a weighted mix of the
+ * stage outputs (pole mixing). Mixing small integer weights yields low-, high-,
+ * band-, all-pass and notch responses; see poleMixingList for named presets.
+ *
+ * refs:
+ *   http://electronotes.netfirms.com/EN85VCF.pdf
+ *   https://expeditionelectronics.com/Diy/Polemixing/math
+ */
+
 namespace AbacDsp
 {
+
+// --- shared four-stage core ---
+
+inline void advanceFourStages(std::array<float, 4>& v, const float feed, const float pole) noexcept
+{
+    v[0] = feed + pole * (v[0] - feed);
+    v[1] = v[0] + pole * (v[1] - v[0]);
+    v[2] = v[1] + pole * (v[2] - v[1]);
+    v[3] = v[2] + pole * (v[3] - v[2]);
+}
+
+// second-order bandpass tap of the cascade, used for resonance feedback
+[[nodiscard]] inline float bandpassTap(const std::array<float, 4>& v) noexcept
+{
+    return -v[3] + 2.f * v[2] - v[1];
+}
+
+// tap0 is the pre-cascade input (or saturated feedback); v holds the four stage outputs
+template <int w0, int w1, int w2, int w3, int w4>
+[[nodiscard]] constexpr float mixTaps(const float tap0, const std::array<float, 4>& v) noexcept
+{
+    return w0 * tap0 + w1 * v[0] + w2 * v[1] + w3 * v[2] + w4 * v[3];
+}
+
+[[nodiscard]] inline float mixTaps(const std::array<float, 5>& w, const float tap0,
+                                   const std::array<float, 4>& v) noexcept
+{
+    return w[0] * tap0 + w[1] * v[0] + w[2] * v[1] + w[3] * v[2] + w[4] * v[3];
+}
+
+
+// --- named coefficient presets ---
+
 struct PoleMixingList
 {
     std::string_view name;
@@ -269,17 +317,228 @@ class FourStageFilterTheoretical
     T x0{0}, x1{0}, x2{0}, x3{0}, x4{0};
 };
 
-/*
- * 4 one pole lowpass filters (standard 6dB/oct, -3dB at cutoff) in series,
- * mixing their outputs yields various filter characteristics (called multimode mixing)
- * this filter is very suitable for fast voltage control (CC).
- *
- * refs:
- * http://electronotes.netfirms.com/EN85VCF.pdf
- * https://expeditionelectronics.com/Diy/Polemixing/math
- *
- */
 
+/*
+ * Resonant four-stage filter with atan input saturation, resonance feedback
+ * from the last stage, and step-count-smoothed cutoff transitions. Derived
+ * classes fold compile-time integer mixing weights (f0..f4) into the output,
+ * see the aliases at the end of the file.
+ */
+class FourStageFilter
+{
+  public:
+    explicit FourStageFilter(const float sampleRate)
+        : FourStageFilter(sampleRate, 1000.f)
+    {
+    }
+
+    FourStageFilter(const float sampleRate, const float defaultCutoff)
+        : m_sampleRate(sampleRate)
+    {
+        setCutoff(defaultCutoff);
+        m_stepsAdvance = 0;
+        m_pole = m_newPole;
+    }
+
+    virtual ~FourStageFilter() = default;
+    FourStageFilter(const FourStageFilter&) = default;
+    FourStageFilter& operator=(const FourStageFilter&) = default;
+    FourStageFilter(FourStageFilter&&) noexcept = default;
+    FourStageFilter& operator=(FourStageFilter&&) noexcept = default;
+
+    void reset() noexcept
+    {
+        std::ranges::fill(m_v, 0.f);
+    }
+
+    void setSmoothingSteps(const size_t steps) noexcept
+    {
+        m_stepsAdvanceSetting = steps;
+    }
+
+    void setResonance(const float value) noexcept
+    {
+        m_reso = value * 4.f;
+        m_gain = std::clamp(1 + m_adaptGain, 1.f, 10.f);
+    }
+
+    void setAdaptGain(const float value) noexcept
+    {
+        m_adaptGain = value;
+    }
+
+    float setCutoff(const float cutoff)
+    {
+        if (std::equal_to<float>{}(cutoff, m_lastCutoffIn))
+        {
+            return 0.f;
+        }
+        m_lastCutoffIn = cutoff;
+        const auto cF = std::clamp(warpCutoffForSampleRate(cutoff), 10.f, 22000.f);
+        m_cutoff = cF;
+        m_newPole = std::exp(-2.f * std::numbers::pi_v<float> * cF / m_sampleRate);
+        if (m_stepsAdvanceSetting == 0)
+        {
+            m_pole = m_newPole;
+        }
+        else
+        {
+            m_advance = (m_newPole - m_pole) / static_cast<float>(m_stepsAdvanceSetting);
+        }
+        m_stepsAdvance = m_stepsAdvanceSetting;
+        return m_cutoff;
+    }
+
+    [[nodiscard]] float currentFactor() const noexcept
+    {
+        return m_pole;
+    }
+
+    virtual float step(float in) = 0;
+
+    void processBlockInplace(float* source, const size_t numSamples)
+    {
+        processBlock(source, source, numSamples);
+    }
+
+    void processBlock(const float* source, float* target, const size_t numSamples)
+    {
+        size_t index = 0;
+        size_t toIndex = numSamples;
+
+        // split into if-less blocks
+        if (m_stepsAdvance)
+        {
+            if (m_stepsAdvance < numSamples)
+            {
+                toIndex = m_stepsAdvance;
+                m_stepsAdvance = 0;
+            }
+            else
+            {
+                m_stepsAdvance -= numSamples;
+            }
+            while (index < toIndex)
+            {
+                m_pole += m_advance;
+                target[index] = step(source[index]);
+                ++index;
+            }
+            if (!m_stepsAdvance)
+            {
+                m_pole = m_newPole;
+            }
+        }
+        while (index < numSamples)
+        {
+            target[index] = step(source[index]);
+            ++index;
+        }
+    }
+
+    [[nodiscard]] float correctGain() const noexcept
+    {
+        return m_gain;
+    }
+
+  private:
+    // per-rate cubic corrections so a requested cutoff lands on the measured response
+    [[nodiscard]] float warpCutoffForSampleRate(const float cutoff) const noexcept
+    {
+        const float x = cutoff;
+        if (m_sampleRate == 44100.f)
+        {
+            return 0.1070741493f + 1.000163615f * x + -6.77430211e-05f * x * x + 3.441634626e-09f * x * x * x;
+        }
+        if (m_sampleRate == 48000.f)
+        {
+            return 0.1409743683f + 0.9999793344f * x + -6.203395634e-05f * x * x + 2.855230937e-09f * x * x * x;
+        }
+        if (m_sampleRate == 96000.f)
+        {
+            return 0.2635405566f + 1.000099839f * x + -3.105817148e-05f * x * x + 7.1736266e-10f * x * x * x;
+        }
+        if (m_sampleRate == 192000.f)
+        {
+            return -0.01065210969f + 1.001839706f * x + -1.61077305e-05f * x * x + 2.229968241e-10f * x * x * x;
+        }
+        if (m_sampleRate == 384000.f)
+        {
+            return -0.1060540674f + 1.002323759f * x + -8.204298197e-06f * x * x + 6.640562956e-11f * x * x * x;
+        }
+        return x;
+    }
+
+    float m_sampleRate;
+    float m_lastCutoffIn{1.f};
+    float m_advance{0.f};
+    size_t m_stepsAdvance{0};
+    size_t m_stepsAdvanceSetting{0};
+    float m_newPole{0.5f};
+    float m_cutoff{1000.f};
+    float m_gain{1.f};
+    float m_adaptGain{0.f};
+
+  protected:
+    float m_reso{0.f};
+    float m_pole{0.5f};
+    std::array<float, 4> m_v{};
+};
+
+// optimized for fixed coefficients, small integer weights fold into adds
+template <int f0, int f1, int f2, int f3, int f4>
+class FixedFourStageFilter final : public FourStageFilter
+{
+  public:
+    explicit FixedFourStageFilter(const float sampleRate)
+        : FourStageFilter(sampleRate, 1000.f)
+    {
+    }
+
+    float step(const float in) override
+    {
+        const auto feed = std::atan(in - m_v[3] * m_reso);
+        advanceFourStages(m_v, feed, m_pole);
+        return mixTaps<f0, f1, f2, f3, f4>(feed, m_v);
+    }
+};
+
+// with resonance the atan stage acts as a gentle saturator, hence bypass is not pointless
+using ByPassSmooth = FixedFourStageFilter<1, 0, 0, 0, 0>;
+using Lp6Smooth = FixedFourStageFilter<0, 1, 0, 0, 0>;
+using Lp12Smooth = FixedFourStageFilter<0, 0, 1, 0, 0>;
+using Lp18Smooth = FixedFourStageFilter<0, 0, 0, 1, 0>;
+using Lp24Smooth = FixedFourStageFilter<0, 0, 0, 0, 1>;
+
+using Ap6Smooth = FixedFourStageFilter<1, -2, 0, 0, 0>;
+using Ap12Smooth = FixedFourStageFilter<1, -4, 4, 0, 0>;
+using Ap18Smooth = FixedFourStageFilter<1, -6, 12, -8, 0>;
+using Ap24Smooth = FixedFourStageFilter<1, -8, 24, -32, 16>;
+
+using Bp12Smooth = FixedFourStageFilter<0, -2, 2, 0, 0>;
+using Bp24Smooth = FixedFourStageFilter<0, 0, 4, -8, 4>;
+
+using Hp6Smooth = FixedFourStageFilter<1, -1, 0, 0, 0>;
+using Hp12Smooth = FixedFourStageFilter<1, -2, 1, 0, 0>;
+using Hp18Smooth = FixedFourStageFilter<1, -3, 3, -1, 0>;
+using Hp24Smooth = FixedFourStageFilter<1, -4, 6, -4, 1>;
+
+using Phaser12Smooth = FixedFourStageFilter<1, -2, 2, 0, 0>;
+using Phaser24Smooth = FixedFourStageFilter<1, -4, 12, -16, 8>;
+
+using DoubleNotch = FixedFourStageFilter<1, -4, 11, -14, 7>;
+using Notch12Smooth = FixedFourStageFilter<1, -2, 2, 0, 0>;
+using Hp12Lp6Smooth = FixedFourStageFilter<0, -3, 6, -3, 0>;
+using Hp18Lp6Smooth = FixedFourStageFilter<0, -3, 9, -9, 3>;
+using Notch12Lp6Smooth = FixedFourStageFilter<0, -1, 2, -2, 0>;
+using Allpass18Lp6Smooth = FixedFourStageFilter<0, -1, 3, -6, 4>;
+
+
+/*
+ * Resonant four-stage filter with runtime mixing coefficients, x/sqrt(1+x^2)
+ * input saturation, bandpass-tap resonance feedback and exponentially smoothed
+ * cutoff/resonance. Suited to fast voltage control (CC).
+ */
 class Filter1Pole4StageSmooth
 {
   public:
@@ -354,17 +613,9 @@ class Filter1Pole4StageSmooth
         m_pole += m_smoothingAlpha * (m_targetPole - m_pole);
         m_reso += m_smoothingAlpha * (m_targetResonance - m_reso);
 
-        const auto bandpass = -m_v[3] + 2 * m_v[2] - m_v[1];
-        const auto feedback = compress(in - bandpass * m_reso);
-
-        m_v[0] = feedback + m_pole * (m_v[0] - feedback);
-        m_v[1] = m_v[0] + m_pole * (m_v[1] - m_v[0]);
-        m_v[2] = m_v[1] + m_pole * (m_v[2] - m_v[1]);
-        m_v[3] = m_v[2] + m_pole * (m_v[3] - m_v[2]);
-
-        const float tmpSum = m_coefficients[0] * feedback + m_coefficients[1] * m_v[0] + m_coefficients[2] * m_v[1] +
-                             m_coefficients[3] * m_v[2] + m_coefficients[4] * m_v[3];
-        return tmpSum;
+        const auto feedback = compress(in - bandpassTap(m_v) * m_reso);
+        advanceFourStages(m_v, feedback, m_pole);
+        return mixTaps(m_coefficients, feedback, m_v);
     }
 
     void processBlock(const float* source, float* target, const size_t numSamples) noexcept
@@ -399,6 +650,7 @@ class Filter1Pole4StageSmooth
     std::array<float, 5> m_coefficients{0.f, -1.f, 0.f, 0.f, 0.f};
 };
 
+// four one-pole stages with compile-time mixing weights, no resonance or saturation
 template <int f0, int f1, int f2, int f3, int f4>
 class FourStageOnePoleFilterNoResonance
 {
@@ -420,11 +672,8 @@ class FourStageOnePoleFilterNoResonance
 
     [[nodiscard]] float singleStep(const float in) noexcept
     {
-        m_v[0] = in + m_pole * (m_v[0] - in);
-        m_v[1] = m_v[0] + m_pole * (m_v[1] - m_v[0]);
-        m_v[2] = m_v[1] + m_pole * (m_v[2] - m_v[1]);
-        m_v[3] = m_v[2] + m_pole * (m_v[3] - m_v[2]);
-        return f0 * in + f1 * m_v[0] + f2 * m_v[1] + f3 * m_v[2] + f4 * m_v[3];
+        advanceFourStages(m_v, in, m_pole);
+        return mixTaps<f0, f1, f2, f3, f4>(in, m_v);
     }
 
     void processBlock(const float* source, float* target, const size_t numSamples) noexcept

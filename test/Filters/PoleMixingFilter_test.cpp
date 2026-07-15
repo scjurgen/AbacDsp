@@ -1,12 +1,12 @@
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
-#include <vector>
+#include <algorithm>
 #include <array>
 #include <cmath>
-#include <algorithm>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
 #include <string_view>
+#include <vector>
 
-#include "Filters/LadderFilter.h"
+#include "Filters/PoleMixingFilter.h"
 namespace AbacDsp::Test
 {
 class FilterTestFixture : public ::testing::Test
@@ -103,7 +103,7 @@ TEST_F(FilterTestFixture, Resonance3p5)
     runMagnitudeTest(findFilterIndex("AP4"), resonance, maxDbError);
 }
 
-TEST(LadderFilterTests, magnitudeFunction)
+TEST(PoleMixingFilterTests, magnitudeFunction)
 {
     constexpr float sampleRate{48000.f};
     FourStageFilterTheoretical<float> sut(sampleRate, {0, 0, 0, 0, 1});
