@@ -19,6 +19,8 @@ set(CMAKE_XCODE_GENERATE_SCHEME OFF)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Support macOS down to High Sierra")
 set_property(GLOBAL PROPERTY USE_FOLDERS YES)
 
+set(CMAKE_FOLDER "Dependencies")
+
 option(JUCE_ENABLE_MODULE_SOURCE_GROUPS "Show all module sources in IDE projects" ON)
 
 include(FetchContent)
@@ -53,6 +55,8 @@ set(PLIST_EXTRAS_CONTENT [=[
 </dict>
 </plist>
 ]=])
+
+set(CMAKE_FOLDER "Examples/${PROJECT_NAME}")
 
 juce_add_plugin("${PROJECT_NAME}"
         VERSION "{VersionString}"
@@ -89,7 +93,6 @@ list(FILTER SourceFiles EXCLUDE REGEX ".*GenericImpl\\.h$")
 target_include_directories("${PROJECT_NAME}" PUBLIC ../../src/includes)
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
-set_target_properties("${PROJECT_NAME}" PROPERTIES FOLDER "")
 
 # Fix source_group to use correct root path for this project
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src PREFIX "" FILES ${SourceFiles})
@@ -98,16 +101,13 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src PREFIX "" FILES ${SourceFiles}
 juce_add_binary_data({Module}Assets SOURCES logo.png)
 set_target_properties({Module}Assets PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 
-# Set folder properties for all formats
 foreach (target ${FORMATS} "All")
     if (TARGET ${PROJECT_NAME}_${target})
         set_target_properties(${PROJECT_NAME}_${target} PROPERTIES
-                FOLDER "Targets"
                 XCODE_SCHEME_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/../../3rdparty/JUCE/extras/AudioPluginHost/Builds/MacOSX/build/Debug/AudioPluginHost.app"
                 XCODE_GENERATE_SCHEME ON)
     endif ()
 endforeach ()
-set_target_properties({Module}Assets PROPERTIES FOLDER "Targets")
 
 set(JUCE_DEPENDENCIES
         juce::juce_audio_utils

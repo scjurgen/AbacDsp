@@ -23,6 +23,8 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET
 )
 set_property(GLOBAL PROPERTY USE_FOLDERS YES)
 
+set(CMAKE_FOLDER "Dependencies")
+
 option(
     JUCE_ENABLE_MODULE_SOURCE_GROUPS
     "Show all module sources in IDE projects"
@@ -67,6 +69,8 @@ FetchContent_MakeAvailable(ogg vorbis nlohmann_json)
 # Add pffft from submodule
 set(PFFFT_DIR "${PROJECT_SOURCE_DIR}/../../3rdparty/pffft")
 
+set(CMAKE_FOLDER "Examples/${PROJECT_NAME}")
+
 juce_add_plugin("${PROJECT_NAME}"
         VERSION "0.0.0"
         ICON_BIG "logo.png"
@@ -107,10 +111,6 @@ target_sources(
     "${PROJECT_NAME}"
     PRIVATE ${SourceFiles} ${PFFFT_DIR}/pffft.c ${PFFFT_DIR}/pffft_common.c
 )
-set_property(
-    TARGET "${PROJECT_NAME}"
-    PROPERTY FOLDER "Sampleplayertimestretched"
-)
 
 # Fix source_group to use correct root path for this project
 source_group(
@@ -131,18 +131,12 @@ foreach(target ${FORMATS} "All")
         set_target_properties(
             ${PROJECT_NAME}_${target}
             PROPERTIES
-                FOLDER "Targets"
                 XCODE_SCHEME_EXECUTABLE
                     "${CMAKE_CURRENT_SOURCE_DIR}/../../3rdparty/JUCE/extras/AudioPluginHost/Builds/MacOSX/build/Debug/AudioPluginHost.app"
                 XCODE_GENERATE_SCHEME ON
         )
     endif()
 endforeach()
-
-set_target_properties(
-    SampleplayertimestretchedAssets
-    PROPERTIES FOLDER "Targets"
-)
 
 set(JUCE_DEPENDENCIES juce::juce_audio_utils)
 

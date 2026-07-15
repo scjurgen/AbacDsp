@@ -25,7 +25,9 @@ include_directories(3rdparty/AudioFile)
 
 if(BUILD_FULL_PROJECT)
     # Add JUCE first - this prevents duplicate target errors
+    set(CMAKE_FOLDER "Dependencies")
     add_subdirectory(3rdparty/JUCE)
+    unset(CMAKE_FOLDER)
 
     include_directories(src/includes)
     add_executable(${PROJECT_NAME} main.cpp)
@@ -45,7 +47,9 @@ else()
 endif()
 
 # Add other 3rdparty dependencies (always needed for tests)
+set(CMAKE_FOLDER "Dependencies")
 add_subdirectory(3rdparty/googletest EXCLUDE_FROM_ALL)
+unset(CMAKE_FOLDER)
 
 option(PACKAGE_TESTS "Build the tests" ON)
 option(

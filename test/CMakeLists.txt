@@ -157,6 +157,8 @@ foreach(subdir ${TEST_SUBDIRS})
     endif()
 endforeach()
 
+set(CMAKE_FOLDER "tests")
+
 add_custom_target(
     unit_tests
     DEPENDS ${ALL_TEST_TARGETS}
