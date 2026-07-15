@@ -57,7 +57,7 @@ TEST(SvfResoBPTest, quickReleaseDamping)
 
     for (size_t i = 0; i < 4800; ++i)
     {
-        (void)sut.step(i < 7 ? 1024.f : 0.f);
+        (void) sut.step(i < 7 ? 1024.f : 0.f);
     }
 
     float preDecayMax = sut.step(0.f);
@@ -69,7 +69,7 @@ TEST(SvfResoBPTest, quickReleaseDamping)
     sut.damp(true);
     for (size_t i = 0; i < 700; ++i)
     {
-        (void)sut.step(0.f);
+        (void) sut.step(0.f);
     }
 
     float currentMax = sut.step(0.f);
@@ -230,6 +230,76 @@ TEST(SvfResoBPTest, pitchBendUpRemainsStable)
             }
         }
         EXPECT_LT(pitchMaxValue, maxValue);
+    }
+}
+
+TEST(SvfResoBPTest, triggeredForcesActiveWindowThenGoesInactive)
+{
+    SvfResoBP sut{sampleRate};
+    sut.setByDecay(0, 1000.f, 0.001f); // decayMax = sampleRate * 0.001 = 48 samples
+    sut.reset();                       // no state energy, so activity hinges on the forced window
+    sut.triggered();                   // decayCount = decayMax > 0
+
+    EXPECT_TRUE(sut.isActive()); // forced-active branch (m_decayCount > 0)
+
+    size_t activeCalls = 1;
+    while (sut.isActive())
+    {
+        ++activeCalls;
+        ASSERT_LT(activeCalls, 1000u); // must terminate well before this
+    }
+    EXPECT_FALSE(sut.isActive()); // quiet state exceeded the inactivity budget
+    EXPECT_GE(activeCalls, 48u);  // at least the whole forced window reported active
+}
+
+TEST(SvfResoBPTest, activeWhileStateHasEnergy)
+{
+    SvfResoBP sut{sampleRate};
+    sut.setByDecay(0, 1000.f, 0.05f);
+    sut.reset();
+    (void) sut.step(1024.f); // inject energy without triggering the forced window
+    EXPECT_GT(sut.currentMagnitude(), 0.f);
+    EXPECT_TRUE(sut.isActive()); // ringing state keeps it active
+}
+
+TEST(SvfResoBPTest, setDecayUpdatesResonanceInPlace)
+{
+    SvfResoBP sut{sampleRate};
+    sut.computeCoefficients(0, 1000.f); // establishes g for coefficient set 0
+    sut.setDecay(0, 200.f);             // t in ms: updateK recomputes a1..a3 from the stored g
+    sut.reset();
+    float peak = 0.f;
+    for (int i = 0; i < 2000; ++i)
+    {
+        peak = std::max(std::abs(sut.step(i < 3 ? 1024.f : 0.f)), peak);
+    }
+    EXPECT_GT(peak, 0.f);
+    EXPECT_TRUE(std::isfinite(peak));
+}
+
+TEST(SvfResoBPTest, pumpScalesStateAndResetClears)
+{
+    SvfResoBP sut{sampleRate};
+    sut.setByDecay(0, 1000.f, 0.05f);
+    sut.reset(0.5f, -0.5f);
+    EXPECT_FLOAT_EQ(sut.currentMagnitudeSquared(), 0.5f); // 0.25 + 0.25
+    sut.pump(0.5f);                                       // halves each state
+    EXPECT_NEAR(sut.currentMagnitudeSquared(), 0.125f, 1e-6f);
+    sut.reset();
+    EXPECT_FLOAT_EQ(sut.currentMagnitude(), 0.f);
+}
+
+TEST(SvfResoBPTest, setSampleRateMatchesConstructionAtThatRate)
+{
+    SvfResoBP constructed{44100.f};
+    SvfResoBP reconfigured{}; // default rate 48000
+    reconfigured.setSampleRate(44100.f);
+    constructed.computeCoefficients(0, 1000.f);
+    reconfigured.computeCoefficients(0, 1000.f);
+    for (int i = 0; i < 64; ++i)
+    {
+        const float x = i == 0 ? 1024.f : 0.f;
+        EXPECT_FLOAT_EQ(constructed.step(x), reconfigured.step(x)) << "at sample " << i;
     }
 }
 

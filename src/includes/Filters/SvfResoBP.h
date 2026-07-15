@@ -61,8 +61,8 @@ class ResonanceCompensation
             static_cast<size_t>(std::clamp(std::log2(time) + logFirst, 0.f, static_cast<float>(m_times.size() - 2)));
         const auto col_frac = std::clamp((time - m_times[col]) / (m_times[col + 1] - m_times[col]), 0.0f, 1.0f);
 
-        const auto row = static_cast<int>(
-            std::clamp(std::floor(index / 12), 0.f, static_cast<float>(m_lut.size() - 2)));
+        const auto row =
+            static_cast<int>(std::clamp(std::floor(index / 12), 0.f, static_cast<float>(m_lut.size() - 2)));
         const auto row_frac = std::clamp(index / 12.f - static_cast<float>(row), 0.0f, 1.0f);
 
         // Bilinear interpolation in log-space
@@ -102,6 +102,7 @@ class SvfResoBP
     void setSampleRate(const float sampleRate)
     {
         m_sampleRate = sampleRate;
+        m_piDivSampleRate = std::numbers::pi_v<float> / m_sampleRate;
     }
 
     void setByDecay(const size_t index, const float frequency, const float t)
