@@ -13,6 +13,11 @@
 #   dev-cov-file.sh FiltersTests Filters/OnePoleFilter.h
 #
 # Assumes build-coverage/ is already configured (run dev-coverage.sh once first).
+#
+# Caveat: this rebuilds only ONE target. If the source file is #include'd by
+# several test targets, the others keep stale instrumentation and gcovr aborts
+# on a line-number mismatch ("Got function ... on multiple lines"). For a header
+# shared across targets, run the full dev-coverage.sh instead.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
