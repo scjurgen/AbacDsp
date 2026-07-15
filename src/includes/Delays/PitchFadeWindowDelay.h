@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <random>
 #include <span>
@@ -13,29 +14,24 @@ template <size_t MAXSIZE>
 class PitchFadeWindowDelay
 {
   public:
-    static constexpr size_t MaxInterpolationWidth{2};
+    static constexpr size_t MaxInterpolationWidth{4};
 
     PitchFadeWindowDelay()
         : m_buffer(MAXSIZE + MaxInterpolationWidth, 0.f)
-        , m_fadeBuffer(MAXSIZE / 2, 0.f)
     {
-        setFadeTime(10000);
+        updateGeometry();
     }
 
     void setSize(const size_t newSize) noexcept
     {
-        m_readHeads.size = std::min(newSize, m_maxSize - 1);
+        m_requestedWindow = newSize;
+        updateGeometry();
     }
 
     void setFadeTime(const size_t t) noexcept
     {
-        m_readHeads.fadeTime = std::min(t, m_fadeBuffer.size() - 1);
-        m_readHeads.fadeStep = 1.0f / static_cast<float>(m_readHeads.fadeTime);
-        const float invFadeTime = 1.0f / static_cast<float>(m_readHeads.fadeTime);
-        for (size_t i = 0; i < m_readHeads.fadeTime; ++i)
-        {
-            m_fadeBuffer[i] = static_cast<float>(i) * invFadeTime;
-        }
+        m_requestedFadeTime = t;
+        updateGeometry();
     }
 
     [[nodiscard]] float step(const float in)
@@ -45,7 +41,10 @@ class PitchFadeWindowDelay
         auto& rdHd = m_readHeads;
         if (!rdHd.fade)
         {
-            returnValue += getFractional(rdHd.fadeInPos);
+            returnValue = getFractional(rdHd.fadeInPos);
+            // the handoff in triggerFade takes over this position, so it has to advance
+            // first: otherwise the outgoing head repeats its last sample and clicks
+            advanceFade(rdHd.fadeInPos);
             if (--rdHd.plainSteps == 0)
             {
                 triggerFade();
@@ -53,26 +52,17 @@ class PitchFadeWindowDelay
         }
         else
         {
-            const auto fadeInFactor = m_fadeBuffer[rdHd.fadeTime - rdHd.fadeCount];
-            const auto fadeOutFactor = m_fadeBuffer[rdHd.fadeCount - 1];
-            returnValue = getFractional(rdHd.fadeInPos) * fadeInFactor + getFractional(rdHd.fadeOutPos) * fadeOutFactor;
-            rdHd.fadeInGain += rdHd.fadeStep;
-            rdHd.fadeOutGain -= rdHd.fadeStep;
+            const auto fadeInGain = static_cast<float>(rdHd.fadeTime - rdHd.fadeCount) * rdHd.fadeStep;
+            returnValue =
+                getFractional(rdHd.fadeInPos) * fadeInGain + getFractional(rdHd.fadeOutPos) * (1.f - fadeInGain);
+            advanceFade(rdHd.fadeInPos);
             advanceFade(rdHd.fadeOutPos);
-            if (--rdHd.fadeCount <= 0)
+            if (--rdHd.fadeCount == 0)
             {
                 rdHd.fade = false;
-                if (rdHd.fadeTime * 2 > rdHd.size)
-                {
-                    rdHd.plainSteps = 1;
-                }
-                else
-                {
-                    rdHd.plainSteps = rdHd.size - rdHd.fadeTime * 2;
-                }
+                rdHd.plainSteps = m_window - m_fadeTime * 2;
             }
         }
-        advanceFade(rdHd.fadeInPos);
 
         if (m_head < MaxInterpolationWidth)
         {
@@ -87,12 +77,12 @@ class PitchFadeWindowDelay
     void setReverse(const bool reverse) noexcept
     {
         m_reverse = reverse;
+        updateGeometry();
     }
 
-    void setPitch(const float semitones)
+    void setPitch(const float semitones) noexcept
     {
-        const float ratio = std::pow(2.f, semitones / 12.f);
-        setPitchRatio(ratio);
+        setPitchRatio(std::pow(2.f, semitones / 12.f));
     }
 
     void setPitchRatio(const float ratio) noexcept
@@ -102,6 +92,7 @@ class PitchFadeWindowDelay
             return;
         }
         m_readHeads.advance = ratio;
+        updateGeometry();
     }
 
     void processBlock(std::span<const float> source, std::span<float> target)
@@ -117,9 +108,9 @@ class PitchFadeWindowDelay
     {
         m_readHeads.fade = true;
         m_readHeads.fadeOutPos = m_readHeads.fadeInPos;
-        m_readHeads.fadeCount = m_readHeads.fadeTime;
-        m_readHeads.fadeInGain = 0.0f;
-        m_readHeads.fadeOutGain = 1.0f;
+        m_readHeads.fadeTime = m_fadeTime;
+        m_readHeads.fadeCount = m_fadeTime;
+        m_readHeads.fadeStep = 1.f / static_cast<float>(m_fadeTime - 1);
         m_readHeads.fadeInPos = calcMaterialInPosition();
     }
 
@@ -140,9 +131,37 @@ class PitchFadeWindowDelay
     {
         const auto idx = static_cast<size_t>(std::floor(position));
         const float fractional = position - static_cast<float>(idx);
-        // whenever using another interpolation set the MaxInterpolationWidth
-        // good alternative is a hermite43
-        return Interpolation::linearPt2(&m_buffer[idx % m_maxSize], fractional);
+        // hermite43x interpolates between y[1] and y[2], so the window starts one sample early
+        const auto base = (idx + m_maxSize - 1) % m_maxSize;
+        return Interpolation::hermite43x(&m_buffer[base], fractional);
+    }
+
+    /*
+     * How far a read head drifts against the write head per sample. A grain lives
+     * exactly m_window samples, so its total drift is factor * m_window; once that
+     * exceeds the buffer the head laps the write head mid-grain and the material
+     * jumps by a whole buffer length, which is the audible click.
+     */
+    [[nodiscard]] float driftFactor() const noexcept
+    {
+        const float advance = m_readHeads.advance;
+        if (m_reverse)
+        {
+            return 1.f + advance;
+        }
+        return advance > 1.f ? advance : 1.f - advance;
+    }
+
+    void updateGeometry() noexcept
+    {
+        constexpr float MinDrift{1.f / 1024.f};
+        const float headRoom = static_cast<float>(m_maxSize - m_randomVariation - MaxInterpolationWidth - 2);
+        const float driftLimit = std::floor(headRoom / std::max(driftFactor(), MinDrift));
+        const auto maxWindow = static_cast<size_t>(std::min(driftLimit, static_cast<float>(m_maxSize - 1)));
+
+        m_window = std::clamp(std::min(m_requestedWindow, maxWindow), MinWindow, m_maxSize - 1);
+        // a grain must be fadeIn + at least one plain sample + fadeOut
+        m_fadeTime = std::clamp(m_requestedFadeTime, size_t{2}, (m_window - 1) / 2);
     }
 
     [[nodiscard]] float calcMaterialInPosition()
@@ -174,17 +193,19 @@ class PitchFadeWindowDelay
          * max t = w/(1+v)
          *
          */
-        float pos = m_head + (m_reverse || (m_readHeads.advance <= 1.0f) ? m_maxSize - 2.f
-                                                                         : -m_readHeads.advance * m_readHeads.size - 1);
-        pos -= m_randDistribution(m_randomGenerator);
+        const float advance = m_readHeads.advance;
+        const float offset = m_reverse || (advance <= 1.0f) ? static_cast<float>(m_maxSize) - 2.f
+                                                            : -advance * static_cast<float>(m_window) - 1.f;
+        float pos = static_cast<float>(m_head) + offset;
+        pos -= static_cast<float>(m_randDistribution(m_randomGenerator));
 
-        while (pos >= m_maxSize)
+        while (pos >= static_cast<float>(m_maxSize))
         {
-            pos -= m_maxSize;
+            pos -= static_cast<float>(m_maxSize);
         }
         while (pos < 0.f)
         {
-            pos += m_maxSize;
+            pos += static_cast<float>(m_maxSize);
         }
         return std::round(pos);
     }
@@ -194,21 +215,23 @@ class PitchFadeWindowDelay
         float fadeInPos{MAXSIZE * 0.25f};
         float fadeOutPos{MAXSIZE * 0.75f};
         float advance{0.001f};
-        size_t size{MAXSIZE};
-        float fadeInGain{1.0f};
-        float fadeOutGain{0.0f};
-        size_t fadeTime{MAXSIZE / 4};
+        size_t fadeTime{2};
         size_t fadeCount{0};
         size_t plainSteps{1};
-        float fadeStep{1.f / fadeTime};
+        float fadeStep{1.f};
         bool fade{false};
     };
+
+    static constexpr size_t MinWindow{5};
 
     ReadHead m_readHeads{};
 
     std::vector<float> m_buffer;
-    std::vector<float> m_fadeBuffer;
     static constexpr size_t m_maxSize{MAXSIZE};
+    size_t m_requestedWindow{MAXSIZE};
+    size_t m_requestedFadeTime{MAXSIZE / 4};
+    size_t m_window{MAXSIZE};
+    size_t m_fadeTime{MAXSIZE / 4};
     size_t m_head{0};
     bool m_reverse{false};
     static constexpr size_t m_randomVariation{200};

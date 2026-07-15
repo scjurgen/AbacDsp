@@ -84,7 +84,10 @@ TEST(BlockProcPitchTest, ZeroMixIsBitExactBypass)
 
 TEST(BlockProcPitchTest, PlusOneOctaveDoublesFrequency)
 {
-    const auto totalSamples = static_cast<size_t>(80.0 * kSampleRate / kBaseFrequency);
+    // Yin reports once per hop (960 samples), and the grain crossfade spreads the
+    // individual estimates out, so the median needs a few dozen frames to settle. Half of
+    // this is fed as the settled part, which leaves about 45.
+    const auto totalSamples = static_cast<size_t>(400.0 * kSampleRate / kBaseFrequency);
     const auto input = generateSine(kBaseFrequency, totalSamples);
     const auto output = processThroughPitch(input, 12.0f, 1.0f);
 
