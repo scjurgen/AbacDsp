@@ -48,6 +48,16 @@ class ModulationDelayNoFeedback
         m_sampleRate = rate;
     }
 
+    void setChangeSizeMode(const ChangeSizeMode mode) noexcept
+    {
+        m_changeSizeMode = mode;
+    }
+
+    [[nodiscard]] ChangeSizeMode changeSizeMode() const noexcept
+    {
+        return m_changeSizeMode;
+    }
+
     void relaxedInit()
     {
         if (!m_buffer.size())
