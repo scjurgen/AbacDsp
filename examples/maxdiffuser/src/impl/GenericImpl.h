@@ -25,6 +25,9 @@ public:
   void setLowPass(const float value) { m_lowPass = value; }
   void setMix(const float value) { m_mix = value; }
   void setPitch(const float value) { m_pitch = value; }
+  void setFdnMix(const float value) { m_fdnMix = std::pow(10.f, value / 20.f); }
+  void setFdnSize(const float value) { m_fdnSize = value; }
+  void setFdnDecay(const float value) { m_fdnDecay = value; }
 
   void processBlock(const AbacDsp::AudioBuffer<2, BlockSize> &in,
                     AbacDsp::AudioBuffer<2, BlockSize> &out) {
@@ -48,4 +51,7 @@ private:
   float m_lowPass{};
   float m_mix{};
   float m_pitch{};
+  float m_fdnMix{};
+  float m_fdnSize{};
+  float m_fdnDecay{};
 };

@@ -69,8 +69,8 @@ public:
     // juce::FlexItem::Margin(Constants::Margins::small);
     const juce::FlexItem::Margin knobMarginSmall =
         juce::FlexItem::Margin(Constants::Margins::medium);
-    std::vector<juce::Rectangle<int>> areas(6);
-    const auto colWidth = area.getWidth() / 13;
+    std::vector<juce::Rectangle<int>> areas(7);
+    const auto colWidth = area.getWidth() / 15;
     areas[0] =
         area.removeFromLeft(colWidth * 3).reduced(Constants::Margins::small);
     areas[1] =
@@ -81,7 +81,9 @@ public:
         area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
     areas[4] =
         area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
-    areas[5] = area.reduced(Constants::Margins::small);
+    areas[5] =
+        area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
+    areas[6] = area.reduced(Constants::Margins::small);
 
     {
       juce::FlexBox box;
@@ -160,6 +162,19 @@ public:
       box.items.add(
           juce::FlexItem(pitchDial).withFlex(1).withMargin(knobMarginSmall));
       box.performLayout(areas[5].toFloat());
+    }
+    {
+      juce::FlexBox box;
+      box.flexWrap = juce::FlexBox::Wrap::noWrap;
+      box.flexDirection = juce::FlexBox::Direction::column;
+      box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+      box.items.add(
+          juce::FlexItem(fdnMixDial).withFlex(1).withMargin(knobMarginSmall));
+      box.items.add(
+          juce::FlexItem(fdnSizeDial).withFlex(1).withMargin(knobMarginSmall));
+      box.items.add(
+          juce::FlexItem(fdnDecayDial).withFlex(1).withMargin(knobMarginSmall));
+      box.performLayout(areas[6].toFloat());
     }
   }
 #pragma GCC diagnostic pop
@@ -350,6 +365,42 @@ public:
          },
          [this] { processorRef.clearCcAssignment(CcTarget::pitch); },
          [this] { return processorRef.getCcController(CcTarget::pitch); }});
+    addAndMakeVisible(fdnMixDial);
+    fdnMixDial.reset(valueTreeState, "fdnMix");
+    fdnMixDial.setLabelText(juce::String::fromUTF8("FDN Mix"));
+    fdnMixDial.setCcMappable(
+        true,
+        {[this] { processorRef.beginCcLearn(CcTarget::fdnMix); },
+         [this] { return processorRef.getCcRange(CcTarget::fdnMix); },
+         [this](float lo, float hi) {
+           processorRef.setCcRange(CcTarget::fdnMix, lo, hi);
+         },
+         [this] { processorRef.clearCcAssignment(CcTarget::fdnMix); },
+         [this] { return processorRef.getCcController(CcTarget::fdnMix); }});
+    addAndMakeVisible(fdnSizeDial);
+    fdnSizeDial.reset(valueTreeState, "fdnSize");
+    fdnSizeDial.setLabelText(juce::String::fromUTF8("FDN Size"));
+    fdnSizeDial.setCcMappable(
+        true,
+        {[this] { processorRef.beginCcLearn(CcTarget::fdnSize); },
+         [this] { return processorRef.getCcRange(CcTarget::fdnSize); },
+         [this](float lo, float hi) {
+           processorRef.setCcRange(CcTarget::fdnSize, lo, hi);
+         },
+         [this] { processorRef.clearCcAssignment(CcTarget::fdnSize); },
+         [this] { return processorRef.getCcController(CcTarget::fdnSize); }});
+    addAndMakeVisible(fdnDecayDial);
+    fdnDecayDial.reset(valueTreeState, "fdnDecay");
+    fdnDecayDial.setLabelText(juce::String::fromUTF8("FDN Decay"));
+    fdnDecayDial.setCcMappable(
+        true,
+        {[this] { processorRef.beginCcLearn(CcTarget::fdnDecay); },
+         [this] { return processorRef.getCcRange(CcTarget::fdnDecay); },
+         [this](float lo, float hi) {
+           processorRef.setCcRange(CcTarget::fdnDecay, lo, hi);
+         },
+         [this] { processorRef.clearCcAssignment(CcTarget::fdnDecay); },
+         [this] { return processorRef.getCcController(CcTarget::fdnDecay); }});
     addAndMakeVisible(cpuGauge);
     cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
     addAndMakeVisible(levelGauge);
@@ -445,6 +496,9 @@ private:
   CustomRotaryDial lowPassDial{this};
   CustomRotaryDial mixDial{this};
   CustomRotaryDial pitchDial{this};
+  CustomRotaryDial fdnMixDial{this};
+  CustomRotaryDial fdnSizeDial{this};
+  CustomRotaryDial fdnDecayDial{this};
   CpuGauge cpuGauge{};
   Gauge levelGauge{};
 

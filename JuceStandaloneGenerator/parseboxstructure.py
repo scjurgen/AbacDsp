@@ -13,6 +13,7 @@ patterns = ["-",  # (C1) (A1) (h)
             "||||",  # (C1:C2:C3:C4) (A1-4) (vvvv)
             "|||||",  # (C1:C2:C3:C4:C5) (A1-5) (vvvvv)
             "||||||",  # (C1:C2:C3:C4:C5:C6) (A1-6) (vvvvvv)
+            "|||||||",  # (C1:C2:C3:C4:C5:C6:C7) (A1-7) (vvvvvvv)
             "|-"  # (C1:C2) (A1-2) (vh)
             "=",  # (R1:R2) (A1-2) (hh)
             "≡",  # (R1:R2:R3) (A1-A) (hhh)
@@ -245,6 +246,23 @@ def construct_boxes(m: dict):
             result += saveAreaColumn(areas, 4)
             result += saveAreaColumn(areas, 5)
             result += saveAreaColumn(areas, 6)
+        case '|||||||':
+            result += f"""std::vector<juce::Rectangle<int>> areas(7);
+                        const auto colWidth = area.getWidth() / {virtual_columns};
+                               areas[0] = area.removeFromLeft(colWidth*{columns[0]}).reduced(Constants::Margins::small);
+                               areas[1] = area.removeFromLeft(colWidth*{columns[1]}).reduced(Constants::Margins::small);
+                               areas[2] = area.removeFromLeft(colWidth*{columns[2]}).reduced(Constants::Margins::small);
+                               areas[3] = area.removeFromLeft(colWidth*{columns[3]}).reduced(Constants::Margins::small);
+                               areas[4] = area.removeFromLeft(colWidth*{columns[4]}).reduced(Constants::Margins::small);
+                               areas[5] = area.removeFromLeft(colWidth*{columns[5]}).reduced(Constants::Margins::small);
+                               areas[6] = area.reduced(Constants::Margins::small);\n\n"""
+            result += saveAreaColumn(areas, 1)
+            result += saveAreaColumn(areas, 2)
+            result += saveAreaColumn(areas, 3)
+            result += saveAreaColumn(areas, 4)
+            result += saveAreaColumn(areas, 5)
+            result += saveAreaColumn(areas, 6)
+            result += saveAreaColumn(areas, 7)
         case '=':
             result += f"""std::vector<juce::Rectangle<int>> areas(2);
                    const auto rowHeight = area.getHeight() / {virtual_rows};

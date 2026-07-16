@@ -25,7 +25,10 @@ struct PatchParameters
         modulationSpeed, // dial
         lowPass        , // dial
         mix            , // dial
-        pitch           // dial
+        pitch          , // dial
+        fdnMix         , // dial
+        fdnSize        , // dial
+        fdnDecay        // dial
     };
 float dry{0.0f};
 float wet{-6.0f};
@@ -40,6 +43,9 @@ float modulationSpeed{0.5f};
 float lowPass{12000.0f};
 float mix{0.0f};
 float pitch{0.0f};
+float fdnMix{-100.0f};
+float fdnSize{30.0f};
+float fdnDecay{2000.0f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
@@ -55,7 +61,10 @@ float pitch{0.0f};
 "modulationSpeed",
 "lowPass",
 "mix",
-"pitch"
+"pitch",
+"fdnMix",
+"fdnSize",
+"fdnDecay"
     });
 //        "onOff", "patch", "input", "modulationDepth", "mix", "density", "threshold", "knee"});
 
@@ -87,6 +96,9 @@ float pitch{0.0f};
         else if constexpr (ParamId == Id::lowPass) return lowPass;
         else if constexpr (ParamId == Id::mix) return mix;
         else if constexpr (ParamId == Id::pitch) return pitch;
+        else if constexpr (ParamId == Id::fdnMix) return fdnMix;
+        else if constexpr (ParamId == Id::fdnSize) return fdnSize;
+        else if constexpr (ParamId == Id::fdnDecay) return fdnDecay;
 
     }
 
@@ -124,6 +136,12 @@ break;
  case Id::mix: if (!isEqual(get<Id::mix>(), value)) {get<Id::mix>() = value;m_modified = true;}
 break;
  case Id::pitch: if (!isEqual(get<Id::pitch>(), value)) {get<Id::pitch>() = value;m_modified = true;}
+break;
+ case Id::fdnMix: if (!isEqual(get<Id::fdnMix>(), value)) {get<Id::fdnMix>() = value;m_modified = true;}
+break;
+ case Id::fdnSize: if (!isEqual(get<Id::fdnSize>(), value)) {get<Id::fdnSize>() = value;m_modified = true;}
+break;
+ case Id::fdnDecay: if (!isEqual(get<Id::fdnDecay>(), value)) {get<Id::fdnDecay>() = value;m_modified = true;}
 break;
 
             default:
@@ -175,5 +193,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         modulationSpeed, // dial
         lowPass        , // dial
         mix            , // dial
-        pitch           // dial
+        pitch          , // dial
+        fdnMix         , // dial
+        fdnSize        , // dial
+        fdnDecay        // dial
 )

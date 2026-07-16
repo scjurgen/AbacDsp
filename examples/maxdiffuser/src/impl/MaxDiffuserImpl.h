@@ -10,6 +10,7 @@
 #include "EffectBase.h"
 #include "Helpers/ConstructArray.h"
 #include "Numbers/Convert.h"
+#include "Reverbs/FdnTankSpiced.h"
 
 template <size_t BlockSize>
 class MaxDiffuserImpl final : public EffectBase
@@ -18,15 +19,22 @@ class MaxDiffuserImpl final : public EffectBase
     static constexpr size_t MaxDelaySamples{24000};
     static constexpr size_t MaxElements{50};
     static constexpr size_t MaxPreDelaySamples{96000};
+    static constexpr size_t FdnOrder{32};
+    static constexpr size_t FdnMaxSizePerElement{100000};
+    static constexpr float FdnSizeSpread{2.1f};
+    static constexpr float FdnInScale{1.f / static_cast<float>(FdnOrder)};
+    static constexpr float FdnPresetBulge{0.4f};
 
     using Chain = AbacDsp::DiffuserDelayChain<MaxDelaySamples, MaxElements, AbacDsp::AllpassFeedbackStyle::Schroeder>;
     using PreDelay = AbacDsp::NaiveDelay<MaxPreDelaySamples>;
     using Pitcher = AbacDsp::BlockProc::Pitch<BlockSize>;
+    using Fdn = AbacDsp::FdnTankSpiced<FdnMaxSizePerElement, FdnOrder, BlockSize>;
 
     explicit MaxDiffuserImpl(const float sampleRate)
         : EffectBase(sampleRate)
         , m_diffuser{AbacDsp::constructArray<Chain, 2>(sampleRate, BlockSize)}
         , m_pitcher{AbacDsp::constructArray<Pitcher, 2>(sampleRate)}
+        , m_fdn{sampleRate}
     {
         for (auto& chain : m_diffuser)
         {
@@ -42,6 +50,9 @@ class MaxDiffuserImpl final : public EffectBase
             pitcher.setReverse(false);
         }
 
+        m_fdn.setSpreadBulge(FdnPresetBulge);
+        setFdnSize(30.f);
+        setFdnDecay(2000.f);
     }
 
     void setDry(const float value)
@@ -92,12 +103,12 @@ class MaxDiffuserImpl final : public EffectBase
     void setBottomSize(const float value)
     {
         m_diffuser[0].setBottomSize(value);
-        m_diffuser[1].setBottomSize(value*1.1f);
+        m_diffuser[1].setBottomSize(value * 1.1f);
     }
 
     void setTopSize(const float value)
     {
-        m_diffuser[0].setTopSize(value*1.1f);
+        m_diffuser[0].setTopSize(value * 1.1f);
         m_diffuser[1].setTopSize(value);
     }
 
@@ -141,21 +152,49 @@ class MaxDiffuserImpl final : public EffectBase
         }
     }
 
+    void setFdnMix(const float value)
+    {
+        m_fdnMix = Convert::dbToGain(value);
+    }
+
+    void setFdnSize(const float meters)
+    {
+        m_fdn.setMinSize(meters);
+        m_fdn.setMaxSize(meters * FdnSizeSpread);
+    }
+
+    void setFdnDecay(const float msecs)
+    {
+        m_fdn.setDecay(msecs);
+    }
+
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
+        std::array<std::array<float, BlockSize>, 2> wetData{};
         for (size_t c = 0; c < 2; ++c)
         {
-            std::array<float, BlockSize> wetData{};
             for (size_t i = 0; i < BlockSize; ++i)
             {
-                wetData[i] = in(i, c);
+                wetData[c][i] = in(i, c);
             }
-            m_preDelay[c].processBlock(wetData, wetData);
-            m_pitcher[c].process(wetData);
-            m_diffuser[c].processBlock(wetData.data(), wetData.data(), BlockSize);
+            m_preDelay[c].processBlock(wetData[c], wetData[c]);
+            m_pitcher[c].process(wetData[c]);
+            m_diffuser[c].processBlock(wetData[c].data(), wetData[c].data(), BlockSize);
+        }
+
+        std::array<float, BlockSize> fdnIn{};
+        for (size_t i = 0; i < BlockSize; ++i)
+        {
+            fdnIn[i] = FdnInScale * (wetData[0][i] + wetData[1][i]);
+        }
+        std::array<std::array<float, BlockSize>, 2> fdnOut{};
+        m_fdn.processBlockSplit(fdnIn.data(), fdnOut[0].data(), fdnOut[1].data());
+
+        for (size_t c = 0; c < 2; ++c)
+        {
             for (size_t i = 0; i < BlockSize; ++i)
             {
-                out(i, c) = m_dry * in(i, c) + m_wet * wetData[i];
+                out(i, c) = m_dry * in(i, c) + m_wet * wetData[c][i] + m_fdnMix * fdnOut[c][i];
             }
         }
     }
@@ -165,7 +204,9 @@ class MaxDiffuserImpl final : public EffectBase
     float m_bulge{0.46f};
     float m_dry{1.f};
     float m_wet{0.5f};
+    float m_fdnMix{0.f};
     std::array<Chain, 2> m_diffuser;
     std::array<PreDelay, 2> m_preDelay{};
     std::array<Pitcher, 2> m_pitcher;
+    Fdn m_fdn;
 };

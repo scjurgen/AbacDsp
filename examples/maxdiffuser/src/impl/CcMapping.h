@@ -16,7 +16,10 @@ enum class CcTarget : int {
   modulationSpeed,
   lowPass,
   mix,
-  pitch
+  pitch,
+  fdnMix,
+  fdnSize,
+  fdnDecay
 };
 
 struct CcMapping {
@@ -30,7 +33,7 @@ struct CcFullRange {
   float hi;
 };
 
-inline constexpr std::array<CcMapping, 13> kDefaultCcMappings{{
+inline constexpr std::array<CcMapping, 16> kDefaultCcMappings{{
     {20, -100.0f, 12.0f},
     {21, -100.0f, 12.0f},
     {22, 0.0f, 1000.0f},
@@ -44,17 +47,21 @@ inline constexpr std::array<CcMapping, 13> kDefaultCcMappings{{
     {30, 20.0f, 20000.0f},
     {31, 0.0f, 100.0f},
     {32, -24.0f, 24.0f},
+    {33, -100.0f, 12.0f},
+    {34, 1.0f, 330.0f},
+    {35, 1.0f, 99000.0f},
 }};
 
-inline constexpr std::array<std::string_view, 13> kCcTargetParamIds{
-    "dry",     "wet",        "preDelay", "elements",        "feedback",
-    "bulge",   "bottomSize", "topSize",  "modulationDepth", "modulationSpeed",
-    "lowPass", "mix",        "pitch",
+inline constexpr std::array<std::string_view, 16> kCcTargetParamIds{
+    "dry",      "wet",        "preDelay", "elements",        "feedback",
+    "bulge",    "bottomSize", "topSize",  "modulationDepth", "modulationSpeed",
+    "lowPass",  "mix",        "pitch",    "fdnMix",          "fdnSize",
+    "fdnDecay",
 };
 
 // The dial's own full range (blueprint "range"), independent of the CC
 // sub-range, used to clamp user-editable CC value ranges.
-inline constexpr std::array<CcFullRange, 13> kCcTargetFullRange{{
+inline constexpr std::array<CcFullRange, 16> kCcTargetFullRange{{
     {-100.0f, 12.0f},
     {-100.0f, 12.0f},
     {0.0f, 1000.0f},
@@ -68,4 +75,7 @@ inline constexpr std::array<CcFullRange, 13> kCcTargetFullRange{{
     {20.0f, 20000.0f},
     {0.0f, 100.0f},
     {-24.0f, 24.0f},
+    {-100.0f, 12.0f},
+    {1.0f, 330.0f},
+    {1.0f, 99000.0f},
 }};

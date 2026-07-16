@@ -54,8 +54,11 @@ public:
     m_parameters.addParameterListener("lowPass", this);
     m_parameters.addParameterListener("mix", this);
     m_parameters.addParameterListener("pitch", this);
+    m_parameters.addParameterListener("fdnMix", this);
+    m_parameters.addParameterListener("fdnSize", this);
+    m_parameters.addParameterListener("fdnDecay", this);
 
-    for (size_t i = 0; i < 13; ++i) {
+    for (size_t i = 0; i < 16; ++i) {
       m_ccActive[i].controller.store(kDefaultCcMappings[i].controller,
                                      std::memory_order_relaxed);
       m_ccActive[i].valueLow.store(kDefaultCcMappings[i].valueLow,
@@ -79,6 +82,9 @@ public:
     m_parameters.removeParameterListener("lowPass", this);
     m_parameters.removeParameterListener("mix", this);
     m_parameters.removeParameterListener("pitch", this);
+    m_parameters.removeParameterListener("fdnMix", this);
+    m_parameters.removeParameterListener("fdnSize", this);
+    m_parameters.removeParameterListener("fdnDecay", this);
   }
 
   void prepareToPlay(const double sampleRate,
@@ -88,12 +94,12 @@ public:
     m_sampleRate = static_cast<size_t>(sampleRate);
     for (auto *param : getParameters()) {
       if (auto *p = dynamic_cast<juce::RangedAudioParameter *>(param)) {
-        const auto normalizedValue = p->getValue();
-        p->sendValueChangedMessageToListeners(normalizedValue);
+        // APVTS suppresses this as a no-change re-send, so call directly.
+        parameterChanged(p->paramID, p->convertFrom0to1(p->getValue()));
       }
     }
     for (const auto &entry : CcSettings::load()) {
-      for (size_t i = 0; i < 13; ++i) {
+      for (size_t i = 0; i < 16; ++i) {
         if (kCcTargetParamIds[i] != entry.paramId) {
           continue;
         }
@@ -336,6 +342,30 @@ public:
             .withStringFromValueFunction([](float value, int) {
               return juce::String(value, 2) + " st";
             })));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("fdnMix", 1), "FDN Mix",
+        juce::NormalisableRange<float>(-100, 12, 0.1, 1, false), -100,
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("dB")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 1) + " dB";
+            })));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("fdnSize", 1), "FDN Size",
+        juce::NormalisableRange<float>(1, 330, 0.1, 0.4, false), 30,
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("m")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 1) + " m";
+            })));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("fdnDecay", 1), "FDN Decay",
+        juce::NormalisableRange<float>(1, 99000, 1, 0.2, false), 2000,
+        juce::AudioParameterFloatAttributes{}
+            .withLabel("ms")
+            .withStringFromValueFunction([](float value, int) {
+              return juce::String(value, 0) + " ms";
+            })));
 
     return {params.begin(), params.end()};
   }
@@ -416,6 +446,21 @@ public:
              [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setPitch(v);
                p.m_fileIo.updateParameter(PatchParameters::Id::pitch, v);
+             }},
+            {"fdnMix",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setFdnMix(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::fdnMix, v);
+             }},
+            {"fdnSize",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setFdnSize(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::fdnSize, v);
+             }},
+            {"fdnDecay",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setFdnDecay(v);
+               p.m_fileIo.updateParameter(PatchParameters::Id::fdnDecay, v);
              }},
 
         };
@@ -506,6 +551,21 @@ public:
     if (auto *p = m_parameters.getParameter("pitch")) {
       const auto &range = m_parameters.getParameterRange("pitch");
       float normalized = range.convertTo0to1(params.pitch);
+      p->setValueNotifyingHost(normalized);
+    }
+    if (auto *p = m_parameters.getParameter("fdnMix")) {
+      const auto &range = m_parameters.getParameterRange("fdnMix");
+      float normalized = range.convertTo0to1(params.fdnMix);
+      p->setValueNotifyingHost(normalized);
+    }
+    if (auto *p = m_parameters.getParameter("fdnSize")) {
+      const auto &range = m_parameters.getParameterRange("fdnSize");
+      float normalized = range.convertTo0to1(params.fdnSize);
+      p->setValueNotifyingHost(normalized);
+    }
+    if (auto *p = m_parameters.getParameter("fdnDecay")) {
+      const auto &range = m_parameters.getParameterRange("fdnDecay");
+      float normalized = range.convertTo0to1(params.fdnDecay);
       p->setValueNotifyingHost(normalized);
     }
   }
@@ -694,7 +754,7 @@ private:
     std::atomic<float> valueLow{0.f};
     std::atomic<float> valueHigh{0.f};
   };
-  std::array<CcSlot, 13> m_ccActive{};
+  std::array<CcSlot, 16> m_ccActive{};
   std::atomic<int> m_learnTargetIndex{-1};
   std::atomic<int> m_lastLearnedIndex{-1};
 
@@ -706,8 +766,8 @@ private:
 
   void saveCcSettings() const {
     std::vector<CcMappingOverride> overrides;
-    overrides.reserve(13);
-    for (size_t i = 0; i < 13; ++i) {
+    overrides.reserve(16);
+    for (size_t i = 0; i < 16; ++i) {
       overrides.push_back(
           {std::string(kCcTargetParamIds[i]),
            m_ccActive[i].controller.load(std::memory_order_relaxed),
@@ -726,7 +786,7 @@ private:
       m_lastLearnedIndex.store(learnIndex, std::memory_order_relaxed);
       return;
     }
-    for (size_t i = 0; i < 13; ++i) {
+    for (size_t i = 0; i < 16; ++i) {
       if (m_ccActive[i].controller.load(std::memory_order_relaxed) !=
           controller) {
         continue;

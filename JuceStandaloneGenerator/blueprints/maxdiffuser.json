@@ -40,14 +40,20 @@
       "cc": {"controller": 31}},
     {"short": "PTCH", "type": "dial", "display": "Pitch", "symbol": "pitch", "default": 0, "range": [-24, 24, 0.01, 1, false], "precision": 2, "unit": "st",
       "cc": {"controller": 32}},
+    {"short": "FMIX", "type": "dial", "display": "FDN Mix", "symbol": "fdnMix", "default": -100, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB",
+      "cc": {"controller": 33}},
+    {"short": "FSZ", "type": "dial", "display": "FDN Size", "symbol": "fdnSize", "default": 30, "range": [1, 330, 0.1, 0.4, false], "precision": 1, "unit": "m",
+      "cc": {"controller": 34}},
+    {"short": "FDEC", "type": "dial", "display": "FDN Decay", "symbol": "fdnDecay", "default": 2000, "range": [1, 99000, 1, 0.2, false], "precision": 0, "unit": "ms",
+      "cc": {"controller": 35}},
     {"short": "CPU", "type": "gauge", "gaugetype": "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
     {"short": "LVL", "type": "gauge", "gaugetype": "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"}
   ],
   "layout": {
-    "WINDOW_WIDTH": "560",
+    "WINDOW_WIDTH": "650",
     "WINDOW_HEIGHT": "300",
-    "type": "||||||",
-    "composition": "C=(3:2:2:2:2:2) A1=(PBR,LVL,CPU) A2=(DRY,WET,PRED) A3=(ELM,FDBK) A4=(BLG,BSZ,TSZ) A5=(MDPT,MDSP,LPF) A6=(MIX,PTCH)"
+    "type": "|||||||",
+    "composition": "C=(3:2:2:2:2:2:2) A1=(PBR,LVL,CPU) A2=(DRY,WET,PRED) A3=(ELM,FDBK) A4=(BLG,BSZ,TSZ) A5=(MDPT,MDSP,LPF) A6=(MIX,PTCH) A7=(FMIX,FSZ,FDEC)"
   },
   "CPP":
   {
