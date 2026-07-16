@@ -60,7 +60,7 @@ class PitchFadeWindowDelay
             if (--rdHd.fadeCount == 0)
             {
                 rdHd.fade = false;
-                rdHd.plainSteps = m_window - m_fadeTime * 2;
+                rdHd.plainSteps = rdHd.plainAfterFade;
             }
         }
 
@@ -106,12 +106,14 @@ class PitchFadeWindowDelay
   private:
     void triggerFade()
     {
+        const auto grain = planGrain();
         m_readHeads.fade = true;
         m_readHeads.fadeOutPos = m_readHeads.fadeInPos;
-        m_readHeads.fadeTime = m_fadeTime;
-        m_readHeads.fadeCount = m_fadeTime;
-        m_readHeads.fadeStep = 1.f / static_cast<float>(m_fadeTime - 1);
-        m_readHeads.fadeInPos = calcMaterialInPosition();
+        m_readHeads.fadeTime = std::clamp(m_requestedFadeTime, size_t{2}, (grain.life - 1) / 2);
+        m_readHeads.fadeCount = m_readHeads.fadeTime;
+        m_readHeads.fadeStep = 1.f / static_cast<float>(m_readHeads.fadeTime - 1);
+        m_readHeads.plainAfterFade = grain.life - m_readHeads.fadeTime * 2;
+        m_readHeads.fadeInPos = calcMaterialInPosition(grain.span);
     }
 
     void advanceFade(float& fadePos) noexcept
@@ -136,12 +138,7 @@ class PitchFadeWindowDelay
         return Interpolation::hermite43x(&m_buffer[base], fractional);
     }
 
-    /*
-     * How far a read head drifts against the write head per sample. A grain lives
-     * exactly m_window samples, so its total drift is factor * m_window; once that
-     * exceeds the buffer the head laps the write head mid-grain and the material
-     * jumps by a whole buffer length, which is the audible click.
-     */
+    // How far a read head moves against the write head per sample.
     [[nodiscard]] float driftFactor() const noexcept
     {
         const float advance = m_readHeads.advance;
@@ -149,56 +146,63 @@ class PitchFadeWindowDelay
         {
             return 1.f + advance;
         }
-        return advance > 1.f ? advance : 1.f - advance;
+        return advance > 1.f ? advance - 1.f : 1.f - advance;
+    }
+
+    struct Grain
+    {
+        size_t life{MinLife};
+        float span{0.f};
+    };
+
+    /*
+     * A grain only has to be reset once its head has drifted a window away from where it
+     * started, which is what takes window/drift samples: the smaller the pitch shift, the
+     * longer a grain stays valid, and at unity it never expires at all. MaxGrainLife caps
+     * that, both to keep refreshing the material and to bound the excursion, since span is
+     * how far the delay wanders before the head is put back.
+     */
+    [[nodiscard]] Grain planGrain() const noexcept
+    {
+        constexpr float MinDrift{1.f / 1024.f};
+        const float drift = driftFactor();
+        const float lifeLimit = static_cast<float>(m_window) / std::max(drift, MinDrift);
+        const auto life = std::max(static_cast<size_t>(std::min(lifeLimit, static_cast<float>(MaxGrainLife))), MinLife);
+        return {life, drift * static_cast<float>(life)};
     }
 
     void updateGeometry() noexcept
     {
-        constexpr float MinDrift{1.f / 1024.f};
-        const float headRoom = static_cast<float>(m_maxSize - m_randomVariation - MaxInterpolationWidth - 2);
-        const float driftLimit = std::floor(headRoom / std::max(driftFactor(), MinDrift));
-        const auto maxWindow = static_cast<size_t>(std::min(driftLimit, static_cast<float>(m_maxSize - 1)));
-
-        m_window = std::clamp(std::min(m_requestedWindow, maxWindow), MinWindow, m_maxSize - 1);
-        // a grain must be fadeIn + at least one plain sample + fadeOut
-        m_fadeTime = std::clamp(m_requestedFadeTime, size_t{2}, (m_window - 1) / 2);
+        constexpr size_t HeadRoom{m_randomVariation + MinAge + MaxInterpolationWidth};
+        m_window = std::clamp(m_requestedWindow, MinWindow, m_maxSize - HeadRoom);
     }
 
-    [[nodiscard]] float calcMaterialInPosition()
+    /*
+     * Where to drop a new head, as an age: how far behind the write head it reads.
+     *
+     * forward, v > 1
+     * 0            r                        h
+     * |------------|>>-------------------->||
+     * the head reads faster than the write head, so it starts a span back and closes on
+     * it, arriving at MinAge exactly as the grain ends: t = span/(v-1)
+     *
+     * forward v < 1, or reverse
+     * 0            r                        h
+     * |<<----------|<--------------------->||
+     * the head loses ground, so it starts at MinAge and falls back by a span over its
+     * life: t = span/(1-v) forward, t = span/(1+v) reverse
+     *
+     * The jitter always pushes away from the write head, never toward it: a catching up
+     * head that started jitter closer would end up jitter past it, reading unwritten
+     * samples.
+     */
+    [[nodiscard]] float calcMaterialInPosition(const float span)
     {
-        /*
-         * play out slower: m_head-2 (fade over set time)
-         * play out faster: m_head - speed * size e.g.
-         *
-         * forward
-         * 0       r           h           w
-         * |-------|>----------|>----------|
-         * h = head, v=speed, w = windowsize
-         * pr = h-w+t*v
-         * pf = h+t
-         * -w+t*v = t ==>  t = w/(v-1)   v!=1
-         *
-         * max t = w/(v-1)
-         * w = t*(v-1)
-         *
-         * backward
-         * 0                   h            w
-         * |-----------------<||>----------|
-         * h = head, v=speed, w = windowsize
-         *
-         * pr = h-t*v
-         * ph = h-w+t
-         * h-t*v = h-w+t  => -t*v = -w+t    w = t+t*v => t = w/(1+v)    v != -1
-         *
-         * max t = w/(1+v)
-         *
-         */
-        const float advance = m_readHeads.advance;
-        const float offset = m_reverse || (advance <= 1.0f) ? static_cast<float>(m_maxSize) - 2.f
-                                                            : -advance * static_cast<float>(m_window) - 1.f;
-        float pos = static_cast<float>(m_head) + offset;
-        pos -= static_cast<float>(m_randDistribution(m_randomGenerator));
+        const bool catchingUp = !m_reverse && m_readHeads.advance > 1.f;
+        const auto jitter = static_cast<float>(m_randDistribution(m_randomGenerator));
+        const float age = static_cast<float>(MinAge) + jitter + (catchingUp ? span : 0.f);
 
+        float pos = static_cast<float>(m_head) - age;
         while (pos >= static_cast<float>(m_maxSize))
         {
             pos -= static_cast<float>(m_maxSize);
@@ -218,11 +222,19 @@ class PitchFadeWindowDelay
         size_t fadeTime{2};
         size_t fadeCount{0};
         size_t plainSteps{1};
+        size_t plainAfterFade{1};
         float fadeStep{1.f};
         bool fade{false};
     };
 
+    // hermite43x reads one sample either side, so a head any closer would interpolate
+    // across samples the write head has not reached yet
+    static constexpr size_t MinAge{4};
     static constexpr size_t MinWindow{5};
+    // a grain must be fadeIn + at least one plain sample + fadeOut
+    static constexpr size_t MinLife{5};
+    // bounds how far the delay wanders before a head is put back near the write head
+    static constexpr size_t MaxGrainLife{5000};
 
     ReadHead m_readHeads{};
 
@@ -231,7 +243,6 @@ class PitchFadeWindowDelay
     size_t m_requestedWindow{MAXSIZE};
     size_t m_requestedFadeTime{MAXSIZE / 4};
     size_t m_window{MAXSIZE};
-    size_t m_fadeTime{MAXSIZE / 4};
     size_t m_head{0};
     bool m_reverse{false};
     static constexpr size_t m_randomVariation{200};
