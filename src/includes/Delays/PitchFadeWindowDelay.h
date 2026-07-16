@@ -10,6 +10,96 @@
 
 namespace AbacDsp
 {
+
+/*
+ * Granular time domain pitch shifter.
+ *
+ * One ring buffer. The write head advances one sample per input sample; a read head
+ * advances at `advance` (the pitch ratio v), so it drifts against the write head and has
+ * to be picked up and put back periodically. Two heads overlap and crossfade so that the
+ * reset is not heard.
+ *
+ *
+ * GEOMETRY
+ *
+ * drift is how fast a head moves against the write head:
+ *
+ *   forward, v > 1    drift = v - 1    the head catches up
+ *   forward, v < 1    drift = 1 - v    the head falls back
+ *   reverse           drift = 1 + v    the head runs away
+ *
+ * A head may drift `window` before it has to be reset, so its life is window/drift: the
+ * smaller the shift, the longer a grain stays valid, and at v == 1 it never expires at
+ * all. MaxGrainLife caps that; see the delay note further down.
+ *
+ * span = drift * life is how far a head actually travels, and is what the placement uses,
+ * NOT window. That distinction matters. Placing a head `v * window` back, as this once
+ * did, costs a 53 ms delay for a half semitone detune when 3 ms of runway is all it
+ * needs. window is the ceiling on the excursion, not the excursion itself.
+ *
+ * A head is placed at age MinAge + jitter + (catching up ? span : 0): a catching up head
+ * starts a span back and closes on the write head, every other head starts close and
+ * falls back by a span. The jitter always pushes away from the write head, never toward
+ * it, since a catching up head that started jitter closer would end up jitter past it,
+ * interpolating across samples that have not been written yet.
+ *
+ * A grain's life is fadeIn + at least one plain sample + fadeOut, so fadeTime is clamped
+ * to (life - 1) / 2. Do not instead absorb an over long fade by shortening the plain part
+ * to a token value: a grain is placed with runway for exactly one life, and stretching
+ * its life beyond that walks the head into material it was never given room for. That was
+ * a real defect here, and a loud one: the head lapped the write head mid grain, at full
+ * gain, and the material jumped a whole buffer length.
+ *
+ *
+ * THE HANDOFF
+ *
+ * triggerFade takes over the fade in head's position, so that position has to advance
+ * BEFORE the handoff. Otherwise the outgoing head re-reads its own last sample and the
+ * output holds for two samples at every grain boundary. One held sample is nothing on its
+ * own, but it repeats at the grain rate, and it was the source of a long standing crackle
+ * that was audible at every pitch setting including unity.
+ *
+ *
+ * MEASURING THIS THING
+ *
+ * All of these were learned the hard way while chasing that crackle:
+ *
+ * - Never probe at a frequency commensurate with MAXSIZE. 220 Hz fits exactly 22 times
+ *   into 4800 samples, so a buffer length jump lands back on the same phase and cancels,
+ *   hiding precisely the defects worth finding. 237 Hz or similar.
+ *
+ * - Yin needs a lot of settled audio. A one second median wanders +-3 Hz on grain
+ *   modulated output and will happily read 446 Hz for a 440 Hz tone; by 30 s it settles
+ *   inside 1.2 Hz. Conclude nothing about pitch from a short run.
+ *
+ * - A click is concentrated in time, so an FFT smears it over thousands of bins and no
+ *   single bin stands out. Sum the energy above a cutoff rather than taking the loudest
+ *   bin: a stalled handoff measures about -60 dB above 5 kHz against about -89 dB for a
+ *   clean one, while the per bin maximum does not separate them at all.
+ *
+ * - Separate clicks from warble by bandwidth. The jitter comb and the crossfade modulate
+ *   near the carrier; a step discontinuity reaches Nyquist.
+ *
+ *
+ * KNOWN AND ACCEPTED
+ *
+ * The jitter combs the crossfade. At 200 Hz the period is 240 samples while the jitter
+ * spans 0..200, so grains land at near arbitrary phase and only about 10 dB of spurious
+ * free range survives at unity. This is wanted; phase alignment is the intended answer
+ * rather than dropping the jitter.
+ *
+ * MaxGrainLife bounds how far the delay wanders, but it also makes unity retrigger at
+ * about 18 Hz where drift is zero and there is nothing to reset. Capping span instead of
+ * life (life = span / drift, uncapped in time) would bound the delay just as well at a
+ * lower artifact rate, and would make unity genuinely free. Deliberately not done, since
+ * phase alignment would make most of it moot.
+ *
+ * Output pitch carries a residual bias of +0.3 to +1.2 Hz (2 to 4 cents) that depends on
+ * the probe frequency and on the retrigger period R. Each reset jumps the material by R
+ * samples, a phase step of 2*pi*f*R/sr, which accumulates as roughly
+ * (phase step)/(2*pi) * sr/R. The bias moved when R changed from 1149 to 1201, which fits
+ * that model. Not chased further; it is inaudible and phase alignment would change it.
+ */
 template <size_t MAXSIZE>
 class PitchFadeWindowDelay
 {
