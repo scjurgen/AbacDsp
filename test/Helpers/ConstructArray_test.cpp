@@ -1,9 +1,8 @@
 #include <gtest/gtest.h>
+#include <memory>
+#include <string>
 
 #include "Helpers/ConstructArray.h"
-
-#include <string>
-#include <memory>
 
 namespace AbacDsp
 {
@@ -35,6 +34,8 @@ class TestClass
     int m_channels = 1;
 };
 
+namespace
+{
 class SimpleClass
 {
   public:
@@ -52,8 +53,11 @@ class SimpleClass
   private:
     int m_value = 42;
 };
+}
 
 
+namespace
+{
 class ConstructArrayTest : public ::testing::Test
 {
   protected:
@@ -64,6 +68,7 @@ class ConstructArrayTest : public ::testing::Test
     static constexpr float kSampleRate = 48000.0f;
     static constexpr int kChannels = 2;
 };
+}
 
 TEST_F(ConstructArrayTest, ConstructArrayWithSingleParameter)
 {

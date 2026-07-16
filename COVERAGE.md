@@ -4,10 +4,10 @@
 
 | Metric        | Coverage |
 |---------------|----------|
-| **Lines**     | 🟢 10819/11614 (93.2%) |
-| **Functions** | 🟢 1730/1769 (97.8%) |
-| **Branches**  | 🔴 3273/4911 (66.6%) |
-| **Decisions** | 🔴 1747/2332 (74.9%) |
+| **Lines**     | 🟢 11010/11688 (94.2%) |
+| **Functions** | 🟢 1797/1826 (98.4%) |
+| **Branches**  | 🔴 3559/5261 (67.6%) |
+| **Decisions** | 🟡 1809/2340 (77.3%) |
 
 ## 📄 File coverage
 
@@ -17,9 +17,9 @@
 | **`src/includes/Analysis/FftMisc.h`** | 🟡 369/444 (83.1%) | 🟢 61/63 (96.8%) | 🔴 191/308 (62.0%) |
 | **`src/includes/Analysis/OctaveBandAnalyzer.h`** | 🟢 135/135 (100.0%) | 🟢 28/28 (100.0%) | 🟢 70/70 (100.0%) |
 | **`src/includes/Analysis/SimpleStats.h`** | 🟢 177/180 (98.3%) | 🟢 41/41 (100.0%) | 🔴 24/34 (70.6%) |
-| **`src/includes/Analysis/Spectrogram.h`** | 🟡 235/282 (83.3%) | 🟢 32/35 (91.4%) | 🔴 55/94 (58.5%) |
+| **`src/includes/Analysis/Spectrogram.h`** | 🟢 287/291 (98.6%) | 🟢 37/37 (100.0%) | 🟡 74/94 (78.7%) |
 | **`src/includes/Analysis/YinPitchDetector.h`** | 🟢 99/100 (99.0%) | 🟢 12/12 (100.0%) | 🟡 33/42 (78.6%) |
-| **`src/includes/Analysis/ZeroCrossings.h`** | 🟡 166/185 (89.7%) | 🟡 29/36 (80.6%) | 🔴 155/260 (59.6%) |
+| **`src/includes/Analysis/ZeroCrossings.h`** | 🟢 197/207 (95.2%) | 🟢 69/69 (100.0%) | 🔴 351/542 (64.8%) |
 | **`src/includes/Audio/AudioBuffer.h`** | 🟢 84/84 (100.0%) | 🟢 45/45 (100.0%) | 🔴 26/36 (72.2%) |
 | **`src/includes/Audio/Fader.h`** | 🟢 40/43 (93.0%) | 🟢 11/11 (100.0%) | 🔴 14/22 (63.6%) |
 | **`src/includes/Audio/FixedSizeProcessor.h`** | 🟢 32/32 (100.0%) | 🟢 7/7 (100.0%) | 🟡 16/18 (88.9%) |
@@ -49,8 +49,8 @@
 | **`src/includes/Filters/OnePoleFilter.h`** | 🟢 234/240 (97.5%) | 🟢 113/113 (100.0%) | 🔴 127/188 (67.6%) |
 | **`src/includes/Filters/PinkFilter.h`** | 🟢 10/10 (100.0%) | 🟢 4/4 (100.0%) | 🟢 8/8 (100.0%) |
 | **`src/includes/Filters/PoleMixingFilter.h`** | 🟢 302/304 (99.3%) | 🟢 59/60 (98.3%) | 🟡 51/62 (82.3%) |
-| **`src/includes/Filters/Sinc/SincFilter.h`** | 🟢 121/128 (94.5%) | 🟢 19/20 (95.0%) | 🔴 73/110 (66.4%) |
-| **`src/includes/Filters/SvfResoBP.h`** | 🟢 104/106 (98.1%) | 🟢 15/15 (100.0%) | 🔴 14/24 (58.3%) |
+| **`src/includes/Filters/Sinc/SincFilter.h`** | 🟢 123/128 (96.1%) | 🟢 19/20 (95.0%) | 🔴 75/110 (68.2%) |
+| **`src/includes/Filters/SvfResoBP.h`** | 🟢 135/135 (100.0%) | 🟢 21/21 (100.0%) | 🔴 16/26 (61.5%) |
 | **`src/includes/Generators/AttackRamp.h`** | 🟢 64/65 (98.5%) | 🟢 9/9 (100.0%) | 🟡 13/16 (81.2%) |
 | **`src/includes/Generators/Excitation.h`** | 🟢 80/81 (98.8%) | 🟢 13/13 (100.0%) | 🔴 20/30 (66.7%) |
 | **`src/includes/Generators/FileIo/ReadResoVoice.h`** | 🟢 18/18 (100.0%) | 🟢 1/1 (100.0%) | 🔴 23/36 (63.9%) |
@@ -96,13 +96,13 @@
 | **`src/includes/Reverbs/HadamardWalsh8.h`** | 🟢 52/52 (100.0%) | 🟢 4/4 (100.0%) | ⚫ 0/0 (0.0%) |
 | **`src/includes/Reverbs/HadamardWalsh16.h`** | 🟢 66/66 (100.0%) | 🟢 4/4 (100.0%) | 🟢 10/10 (100.0%) |
 | **`src/includes/Reverbs/HadamardWalsh32.h`** | 🟢 117/117 (100.0%) | 🟢 4/4 (100.0%) | 🟢 14/14 (100.0%) |
-| **`src/includes/Reverbs/ModulationDelayNoFeedback.h`** | 🔴 135/195 (69.2%) | 🟢 27/30 (90.0%) | 🔴 42/116 (36.2%) |
+| **`src/includes/Reverbs/ModulationDelayNoFeedback.h`** | 🟢 205/209 (98.1%) | 🟢 43/46 (93.5%) | 🔴 105/182 (57.7%) |
 | **`src/includes/Sampler/ResamplingPitchShifter.h`** | 🟢 69/70 (98.6%) | 🟢 9/9 (100.0%) | 🟡 16/18 (88.9%) |
 | **`src/includes/Sampler/SamplePlayerBasic.h`** | 🟢 68/72 (94.4%) | 🟢 6/6 (100.0%) | 🔴 11/16 (68.8%) |
 | **`src/includes/Sampler/StretchedSampleProducer.h`** | 🟢 201/220 (91.4%) | 🟢 17/17 (100.0%) | 🟡 52/68 (76.5%) |
 | **`src/includes/SamplerateConverter/ConvertSampleBuffer.h`** | 🟢 6/6 (100.0%) | 🟢 1/1 (100.0%) | 🔴 3/6 (50.0%) |
 | **`src/includes/SamplerateConverter/SrPullConverter.h`** | 🟡 163/193 (84.5%) | 🟢 11/11 (100.0%) | 🔴 44/78 (56.4%) |
-| **`src/includes/SamplerateConverter/SrPushConverter.h`** | 🟢 287/304 (94.4%) | 🟢 20/20 (100.0%) | 🔴 80/192 (41.7%) |
+| **`src/includes/SamplerateConverter/SrPushConverter.h`** | 🟢 292/304 (96.1%) | 🟢 20/20 (100.0%) | 🔴 84/192 (43.8%) |
 | **`src/includes/SynthHandling/SustainPedalHandler.h`** | 🟢 100/106 (94.3%) | 🟢 10/10 (100.0%) | 🔴 47/70 (67.1%) |
 | **`src/includes/Wavetables/WaveTableOscillator.h`** | 🟢 194/194 (100.0%) | 🟢 23/23 (100.0%) | 🟡 62/70 (88.6%) |
 | **`src/includes/Wavetables/WaveTableStorage.cpp`** | 🟢 86/87 (98.9%) | 🟢 6/6 (100.0%) | 🔴 32/44 (72.7%) |

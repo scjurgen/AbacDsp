@@ -39,7 +39,7 @@ class MaxDiffuserImpl final : public EffectBase
         }
         for (auto& pitcher : m_pitcher)
         {
-            pitcher.setReverse(true);
+            pitcher.setReverse(false);
         }
 
     }
@@ -85,26 +85,20 @@ class MaxDiffuserImpl final : public EffectBase
     void setBulge(const float value)
     {
         m_bulge = value;
-        for (auto& chain : m_diffuser)
-        {
-            chain.setBulge(m_elements, m_bulge);
-        }
+        m_diffuser[0].setBulge(m_elements, m_bulge);
+        m_diffuser[1].setBulge(m_elements, m_bulge);
     }
 
     void setBottomSize(const float value)
     {
-        for (auto& chain : m_diffuser)
-        {
-            chain.setBottomSize(value);
-        }
+        m_diffuser[0].setBottomSize(value);
+        m_diffuser[1].setBottomSize(value*1.1f);
     }
 
     void setTopSize(const float value)
     {
-        for (auto& chain : m_diffuser)
-        {
-            chain.setTopSize(value);
-        }
+        m_diffuser[0].setTopSize(value*1.1f);
+        m_diffuser[1].setTopSize(value);
     }
 
     void setModulationDepth(const float value)
@@ -149,9 +143,9 @@ class MaxDiffuserImpl final : public EffectBase
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
-        std::array<float, BlockSize> wetData{};
         for (size_t c = 0; c < 2; ++c)
         {
+            std::array<float, BlockSize> wetData{};
             for (size_t i = 0; i < BlockSize; ++i)
             {
                 wetData[i] = in(i, c);
