@@ -691,6 +691,11 @@ public:
 
   [[nodiscard]] float getCpuLoad() const { return m_cpuLoad.load(); }
 
+  [[nodiscard]] std::array<float, 51> getProcessingBinLevels() const noexcept {
+    static constexpr std::array<float, 51> empty{};
+    return pluginRunner ? pluginRunner->getProcessingBinLevels() : empty;
+  }
+
   [[nodiscard]] std::pair<float, float> getInputDbLoad() const {
     return {m_inputDb[0].load(), m_inputDb[1].load()};
   }

@@ -70,9 +70,9 @@ public:
     const juce::FlexItem::Margin knobMarginSmall =
         juce::FlexItem::Margin(Constants::Margins::medium);
 
-    std::vector<juce::Rectangle<int>> areas(5);
+    std::vector<juce::Rectangle<int>> areas(6);
     const auto colWidth = area.getWidth() / 7;
-    const auto rowHeight = area.getHeight() / 5;
+    const auto rowHeight = area.getHeight() / 6;
     areas[0] =
         area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
     auto keepArea = area;
@@ -82,7 +82,9 @@ public:
         area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
     areas[3] =
         area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-    areas[4] = area.reduced(Constants::Margins::small);
+    areas[4] =
+        area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+    areas[5] = area.reduced(Constants::Margins::small);
 
     {
       juce::FlexBox box;
@@ -169,6 +171,15 @@ public:
           juce::FlexItem(fdnDecayDial).withFlex(1).withMargin(knobMarginSmall));
       box.performLayout(areas[4].toFloat());
     }
+    {
+      juce::FlexBox box;
+      box.flexWrap = juce::FlexBox::Wrap::noWrap;
+      box.flexDirection = juce::FlexBox::Direction::row;
+      box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+      box.items.add(
+          juce::FlexItem(binsGauge).withFlex(1).withMargin(knobMarginSmall));
+      box.performLayout(areas[5].toFloat());
+    }
   }
 #pragma GCC diagnostic pop
 
@@ -177,6 +188,11 @@ public:
       cpuGauge.update(processorRef.getCpuLoad());
       levelGauge.update(processorRef.getInputDbLoad(),
                         processorRef.getOutputDbLoad());
+
+      binsGauge.update(
+          processorRef.getProcessingBinLevels(),
+          static_cast<size_t>(
+              valueTreeState.getRawParameterValue("elements")->load()));
       processorRef.consumeLastLearnedCc();
     }
   }
@@ -408,6 +424,8 @@ public:
     cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
     addAndMakeVisible(levelGauge);
     levelGauge.setLabelText(juce::String::fromUTF8("Level"));
+    addAndMakeVisible(binsGauge);
+    binsGauge.setLabelText(juce::String::fromUTF8("Bins"));
   }
 
   void parentHierarchyChanged() override {
@@ -472,6 +490,7 @@ public:
     backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
     cpuGauge.updateColors();
     levelGauge.updateColors();
+    binsGauge.updateColors();
 
     repaint();
   }
@@ -508,6 +527,7 @@ private:
   CustomRotaryDial fdnDecayDial{this};
   CpuGauge cpuGauge{};
   Gauge levelGauge{};
+  ShowProcessingBins binsGauge{};
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
 };

@@ -49,14 +49,24 @@
     {"short": "FDEC", "type": "dial", "display": "FDN Decay", "symbol": "fdnDecay", "default": 2000, "range": [1, 100000, 1, 0.2, false], "precision": 0, "unit": "ms",
       "cc": {"controller": 35}},
     {"short": "CPU", "type": "gauge", "gaugetype": "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
-    {"short": "LVL", "type": "gauge", "gaugetype": "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"}
+    {"short": "LVL", "type": "gauge", "gaugetype": "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "BINS", "type": "gauge", "gaugetype": "processingbins", "display": "Bins", "symbol": "bins", "customtype": "ShowProcessingBins"}
   ],
   "layout": {
     "WINDOW_WIDTH": "1100",
-    "WINDOW_HEIGHT": "750",
-    "type": "|=4",
-    "composition": "C=(1:6) R=(1:2:1:1) A1=(PBR*40,STAT*30,LVL,CPU) A2=(DRY,WET,PRED,MIX,PTCH,PSYN) A3=(ELM,FDBK,BLG,BSZ,TSZ) A4=(MDPT,MDSP,LPF) A5=(FMIX,FSZ,FDEC)"
+    "WINDOW_HEIGHT": "850",
+    "type": "|=5",
+    "composition": "C=(1:6) R=(1:2:1:1:1) A1=(PBR*40,STAT*30,LVL,CPU) A2=(DRY,WET,PRED,MIX,PTCH,PSYN) A3=(ELM,FDBK,BLG,BSZ,TSZ) A4=(MDPT,MDSP,LPF) A5=(FMIX,FSZ,FDEC) A6=(BINS)"
   },
+  "extra_ui_includes": [
+    "impl/ShowProcessingBins.h"
+  ],
+  "extra_processor_methods": [
+    "[[nodiscard]] std::array<float, 51> getProcessingBinLevels() const noexcept { static constexpr std::array<float, 51> empty{}; return pluginRunner ? pluginRunner->getProcessingBinLevels() : empty; }"
+  ],
+  "extra_timer_callbacks": [
+    "binsGauge.update(processorRef.getProcessingBinLevels(), static_cast<size_t>(valueTreeState.getRawParameterValue(\"elements\")->load()));"
+  ],
   "CPP":
   {
     "CLASS_NAME": "MaxDiffuserImpl<NumSamplesPerBlock>",

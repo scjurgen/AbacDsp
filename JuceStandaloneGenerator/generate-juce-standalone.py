@@ -176,7 +176,7 @@ def createThemeCallbacks(m: dict) -> str:
             match item.get("gaugetype"):
                 case "spectrogram" | "iris":
                     res += f"""{item["symbol"]}Gauge.setGradientPreset(preset);\n"""
-                case "cpuload" | "levels" | "signal":
+                case "cpuload" | "levels" | "signal" | "processingbins":
                     res += f"""{item["symbol"]}Gauge.updateColors();\n"""
     return res
 

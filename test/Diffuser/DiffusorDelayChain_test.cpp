@@ -1,10 +1,12 @@
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <cmath>
 #include <gtest/gtest.h>
+#include <numeric>
 
 #include "Diffuser/DiffusorDelayChain.h"
-
-#include <array>
-#include <cmath>
-#include <numeric>
+#include "Numbers/Convert.h"
 
 namespace AbacDsp::Test
 {
@@ -122,6 +124,90 @@ TEST_F(DiffuserDelayChainTest, parameterChangesStayFinite)
     for (const auto v : out)
     {
         EXPECT_TRUE(std::isfinite(v));
+    }
+}
+
+TEST_F(DiffuserDelayChainTest, levelSinkStaysNullSafeByDefault)
+{
+    std::array<float, kBlockSize> in{};
+    in[0] = 1.f;
+    std::array<float, kBlockSize> out{};
+    m_sut.processBlock(in.data(), out.data(), kBlockSize);
+    for (const auto v : out)
+    {
+        EXPECT_TRUE(std::isfinite(v));
+    }
+}
+
+TEST_F(DiffuserDelayChainTest, levelSinkBin0ConvergesToInputPeak)
+{
+    std::array<std::atomic<float>, 25> sink{};
+    m_sut.setLevelMeterSink(&sink);
+    std::array<float, kBlockSize> in{};
+    std::fill(in.begin(), in.end(), 0.5f);
+    std::array<float, kBlockSize> out{};
+    // Sustain the input well past the meter's attack time so the envelope has settled.
+    for (size_t block = 0; block < 20; ++block)
+    {
+        m_sut.processBlock(in.data(), out.data(), kBlockSize);
+    }
+    EXPECT_NEAR(sink[0].load(), Convert::gainToDb(0.5f), 1E-2f);
+}
+
+TEST_F(DiffuserDelayChainTest, levelSinkLastActiveBinTracksSustainedSignal)
+{
+    std::array<std::atomic<float>, 25> sink{};
+    m_sut.setLevelMeterSink(&sink);
+    std::array<float, kBlockSize> in{};
+    std::fill(in.begin(), in.end(), 1.f);
+    std::array<float, kBlockSize> out{};
+    for (size_t block = 0; block < 20; ++block)
+    {
+        m_sut.processBlock(in.data(), out.data(), kBlockSize);
+    }
+    EXPECT_GT(sink[6].load(), -40.f);
+    EXPECT_TRUE(std::isfinite(sink[6].load()));
+}
+
+TEST_F(DiffuserDelayChainTest, levelSinkDecaysGraduallyNotInstantly)
+{
+    std::array<std::atomic<float>, 25> sink{};
+    m_sut.setLevelMeterSink(&sink);
+    std::array<float, kBlockSize> in{};
+    std::fill(in.begin(), in.end(), 1.f);
+    std::array<float, kBlockSize> out{};
+    for (size_t block = 0; block < 20; ++block)
+    {
+        m_sut.processBlock(in.data(), out.data(), kBlockSize);
+    }
+    const float peakDb = sink[0].load();
+
+    std::array<float, kBlockSize> silence{};
+    m_sut.processBlock(silence.data(), out.data(), kBlockSize);
+    // One block of silence (16 samples, ~0.33ms) is much shorter than the 300ms release time,
+    // so the meter should still read close to the peak rather than having snapped to floor.
+    EXPECT_GT(sink[0].load(), peakDb - 1.f);
+
+    for (size_t block = 0; block < static_cast<size_t>(2.0 * kSampleRate) / kBlockSize; ++block)
+    {
+        m_sut.processBlock(silence.data(), out.data(), kBlockSize);
+    }
+    // After ~2s of silence (many multiples of the release time), it should have decayed to floor.
+    EXPECT_LT(sink[0].load(), -60.f);
+}
+
+TEST_F(DiffuserDelayChainTest, levelSinkBinsBeyondActiveCountSitAtFloor)
+{
+    std::array<std::atomic<float>, 25> sink{};
+    m_sut.setLevelMeterSink(&sink);
+    std::array<float, kBlockSize> in{};
+    in[0] = 1.f;
+    std::array<float, kBlockSize> out{};
+    m_sut.processBlock(in.data(), out.data(), kBlockSize);
+
+    for (size_t bin = 7; bin <= 24; ++bin)
+    {
+        EXPECT_LE(sink[bin].load(), -99.f);
     }
 }
 
