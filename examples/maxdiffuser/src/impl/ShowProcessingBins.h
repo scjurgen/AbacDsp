@@ -6,6 +6,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "../inc/GuiConstants.h"
+#include "Numbers/Interpolation.h"
 
 enum class BinsDisplayMode
 {
@@ -109,8 +110,8 @@ class ShowProcessingBins : public juce::Component
         return {bounds.getX() + static_cast<float>(bin) * stepX, binY(bounds, bin)};
     }
 
-    // Catmull-Rom: a cubic Hermite spline whose tangents are estimated from each point's
-    // neighbours, giving a smooth curve through every bin without overshoot between samples.
+    // bspline43x is a uniform cubic B-spline: it approximates the bin values rather than
+    // passing through them exactly, giving a smoother curve with less overshoot than Hermite.
     void buildSmoothPath(juce::Path& path, const juce::Rectangle<float>& bounds) const
     {
         constexpr int kSubSteps = 8;
@@ -128,19 +129,14 @@ class ShowProcessingBins : public juce::Component
             const auto p2 = pointAt(bin + 1);
             const auto p3 = pointAt(bin + 2);
 
+            const std::array<float, 4> xs{p0.x, p1.x, p2.x, p3.x};
+            const std::array<float, 4> ys{p0.y, p1.y, p2.y, p3.y};
+
             for (int step = 1; step <= kSubSteps; ++step)
             {
                 const float t = static_cast<float>(step) / static_cast<float>(kSubSteps);
-                const float t2 = t * t;
-                const float t3 = t2 * t;
-                const float h1 = 2.f * t3 - 3.f * t2 + 1.f;
-                const float h2 = t3 - 2.f * t2 + t;
-                const float h3 = -2.f * t3 + 3.f * t2;
-                const float h4 = t3 - t2;
-
-                const float x = h1 * p1.x + h2 * 0.5f * (p2.x - p0.x) + h3 * p2.x + h4 * 0.5f * (p3.x - p1.x);
-                const float y = h1 * p1.y + h2 * 0.5f * (p2.y - p0.y) + h3 * p2.y + h4 * 0.5f * (p3.y - p1.y);
-                path.lineTo(x, y);
+                path.lineTo(AbacDsp::Interpolation::bspline43x(xs.data(), t),
+                            AbacDsp::Interpolation::bspline43x(ys.data(), t));
             }
         }
     }
