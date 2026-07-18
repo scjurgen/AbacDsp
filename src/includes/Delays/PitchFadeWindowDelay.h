@@ -2,10 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 #include <random>
 #include <span>
 #include <vector>
 
+#include "Analysis/YinPitchDetector.h"
 #include "Numbers/Interpolation.h"
 
 namespace AbacDsp
@@ -85,8 +87,9 @@ namespace AbacDsp
  *
  * The jitter combs the crossfade. At 200 Hz the period is 240 samples while the jitter
  * spans 0..200, so grains land at near arbitrary phase and only about 10 dB of spurious
- * free range survives at unity. This is wanted; phase alignment is the intended answer
- * rather than dropping the jitter.
+ * free range survives at unity. This is wanted for GrainMode::DriftJitter; the phase
+ * alignment mentioned below as the fix is GrainMode::PitchSynchronous, see
+ * phaseLockedPosition.
  *
  * MaxGrainLife bounds how far the delay wanders, but it also makes unity retrigger at
  * about 18 Hz where drift is zero and there is nothing to reset. Capping span instead of
@@ -106,6 +109,12 @@ class PitchFadeWindowDelay
   public:
     static constexpr size_t MaxInterpolationWidth{4};
 
+    enum class GrainMode
+    {
+        DriftJitter,
+        PitchSynchronous
+    };
+
     PitchFadeWindowDelay()
         : m_buffer(MAXSIZE + MaxInterpolationWidth, 0.f)
     {
@@ -124,8 +133,29 @@ class PitchFadeWindowDelay
         updateGeometry();
     }
 
+    // Constructs the pitch tracker and switches to GrainMode::PitchSynchronous. Call
+    // setGrainMode(GrainMode::DriftJitter) to switch back without tearing it down.
+    void enablePitchSynchronousMode(const float sampleRate, const float minFreq = 80.f, const float maxFreq = 1000.f)
+    {
+        m_pitchTracker.emplace(sampleRate, minFreq, maxFreq);
+        m_sampleRate = sampleRate;
+        m_minPeriodSamples = sampleRate / maxFreq;
+        m_maxPeriodSamples = sampleRate / minFreq;
+        m_grainMode = GrainMode::PitchSynchronous;
+    }
+
+    void setGrainMode(const GrainMode mode) noexcept
+    {
+        m_grainMode = mode;
+    }
+
     [[nodiscard]] float step(const float in)
     {
+        if (m_grainMode == GrainMode::PitchSynchronous)
+        {
+            updatePeriodEstimate(in);
+        }
+
         float returnValue = 0.f;
 
         auto& rdHd = m_readHeads;
@@ -194,6 +224,23 @@ class PitchFadeWindowDelay
     }
 
   private:
+    // Feeds the tracker and stashes the resulting period in samples; a pitch of 0 Hz
+    // (silence/unvoiced/out of range) clears it, which is how planGrain and
+    // calcMaterialInPosition fall back to the drift/jitter geometry.
+    void updatePeriodEstimate(const float in) noexcept
+    {
+        const auto pitchHz = m_pitchTracker->step(in);
+        if (pitchHz > 0.f)
+        {
+            const auto period = m_sampleRate / pitchHz;
+            m_currentPeriod = std::clamp(period, m_minPeriodSamples, m_maxPeriodSamples);
+        }
+        else
+        {
+            m_currentPeriod.reset();
+        }
+    }
+
     void triggerFade()
     {
         const auto grain = planGrain();
@@ -252,7 +299,7 @@ class PitchFadeWindowDelay
      * that, both to keep refreshing the material and to bound the excursion, since span is
      * how far the delay wanders before the head is put back.
      */
-    [[nodiscard]] Grain planGrain() const noexcept
+    [[nodiscard]] Grain planDriftJitterGrain() const noexcept
     {
         constexpr float MinDrift{1.f / 1024.f};
         const float drift = driftFactor();
@@ -261,38 +308,40 @@ class PitchFadeWindowDelay
         return {life, drift * static_cast<float>(life)};
     }
 
+    /*
+     * Classic PSOLA analysis windows span two periods with 50% overlap, so life targets
+     * 2*period; triggerFade then clamps the requested fade time to (life-1)/2, which lands
+     * fadeTime on roughly one period on its own. life is still bounded by window/drift and
+     * MaxGrainLife exactly as the drift/jitter path is, so a very low detected pitch can
+     * never push a grain past the same safety ceiling the existing geometry already has.
+     */
+    [[nodiscard]] Grain planPitchSynchronousGrain(const float period) const noexcept
+    {
+        constexpr float MinDrift{1.f / 1024.f};
+        const float drift = std::max(driftFactor(), MinDrift);
+        const auto periodLife = static_cast<size_t>(std::round(period * 2.f));
+        const auto spanLimitedLife = static_cast<size_t>(static_cast<float>(m_window) / drift);
+        const auto life = std::clamp(std::min({periodLife, spanLimitedLife, MaxGrainLife}), MinLife, MaxGrainLife);
+        return {life, drift * static_cast<float>(life)};
+    }
+
+    [[nodiscard]] Grain planGrain() const noexcept
+    {
+        if (m_grainMode == GrainMode::PitchSynchronous && m_currentPeriod)
+        {
+            return planPitchSynchronousGrain(*m_currentPeriod);
+        }
+        return planDriftJitterGrain();
+    }
+
     void updateGeometry() noexcept
     {
         constexpr size_t HeadRoom{m_randomVariation + MinAge + MaxInterpolationWidth};
         m_window = std::clamp(m_requestedWindow, MinWindow, m_maxSize - HeadRoom);
     }
 
-    /*
-     * Where to drop a new head, as an age: how far behind the write head it reads.
-     *
-     * forward, v > 1
-     * 0            r                        h
-     * |------------|>>-------------------->||
-     * the head reads faster than the write head, so it starts a span back and closes on
-     * it, arriving at MinAge exactly as the grain ends: t = span/(v-1)
-     *
-     * forward v < 1, or reverse
-     * 0            r                        h
-     * |<<----------|<--------------------->||
-     * the head loses ground, so it starts at MinAge and falls back by a span over its
-     * life: t = span/(1-v) forward, t = span/(1+v) reverse
-     *
-     * The jitter always pushes away from the write head, never toward it: a catching up
-     * head that started jitter closer would end up jitter past it, reading unwritten
-     * samples.
-     */
-    [[nodiscard]] float calcMaterialInPosition(const float span)
+    [[nodiscard]] float wrapPosition(float pos) const noexcept
     {
-        const bool catchingUp = !m_reverse && m_readHeads.advance > 1.f;
-        const auto jitter = static_cast<float>(m_randDistribution(m_randomGenerator));
-        const float age = static_cast<float>(MinAge) + jitter + (catchingUp ? span : 0.f);
-
-        float pos = static_cast<float>(m_head) - age;
         while (pos >= static_cast<float>(m_maxSize))
         {
             pos -= static_cast<float>(m_maxSize);
@@ -301,7 +350,86 @@ class PitchFadeWindowDelay
         {
             pos += static_cast<float>(m_maxSize);
         }
-        return std::round(pos);
+        return pos;
+    }
+
+    /*
+     * Where to drop a new head, as an age: how far behind the write head it reads. A
+     * catching-up head starts a span back and closes on the write head, arriving at
+     * MinAge as the grain ends; every other head starts at MinAge and falls back by a
+     * span over its life. Jitter always pushes away from the write head, never toward it,
+     * or a catching-up head would end up reading samples not written yet.
+     */
+    [[nodiscard]] float jitterPosition(const bool catchingUp, const float span)
+    {
+        const auto jitter = static_cast<float>(m_randDistribution(m_randomGenerator));
+        const float age = static_cast<float>(MinAge) + jitter + (catchingUp ? span : 0.f);
+        return std::round(wrapPosition(static_cast<float>(m_head) - age));
+    }
+
+    /*
+     * Snaps to the nearest period-multiple of the OUTGOING head's own position
+     * (fadeOutPos) that still has at least idealAge of margin from the write head, rather
+     * than quantizing against the write head itself. Material is only locally periodic,
+     * so phase only matches the head being crossfaded against if anchored to where THAT
+     * head actually is; anchoring to the write head instead only coincides at unity pitch
+     * and otherwise drifts, which measured as wrong output pitch, not just noise. Falling
+     * short of idealAge for a catching-up head runs it into the write head before its
+     * planned life is up (a real, measured mid-grain click), so idealAge is a hard floor
+     * here, not just a preference.
+     */
+    [[nodiscard]] float phaseLockedPosition(const bool catchingUp, const float span, const float period)
+    {
+        const float idealAge = static_cast<float>(MinAge) + (catchingUp ? span : 0.f);
+        const float idealPos = wrapPosition(static_cast<float>(m_head) - idealAge);
+
+        const float delta = idealPos - m_readHeads.fadeOutPos;
+        // shortest signed distance on the ring, so the period count is correct across a
+        // buffer wraparound too
+        const float wrappedDelta =
+            delta - static_cast<float>(m_maxSize) * std::round(delta / static_cast<float>(m_maxSize));
+        const float baseK = std::floor(wrappedDelta / period);
+
+        auto candidate = [&](const float count) { return wrapPosition(m_readHeads.fadeOutPos + count * period); };
+        auto ageOf = [&](const float pos) { return wrapPosition(static_cast<float>(m_head) - pos); };
+
+        // try a small neighborhood of period counts and keep the one closest to idealAge
+        // from above; a plain nearest-k round can land short of idealAge or even on the
+        // wrong side of the write head entirely
+        float bestPos = candidate(baseK);
+        float bestScore = -1.f;
+        for (float k = baseK - 1.f; k <= baseK + 3.f; k += 1.f)
+        {
+            const float pos = candidate(k);
+            const float age = ageOf(pos);
+            if (age < idealAge)
+            {
+                continue;
+            }
+            const float score = age - idealAge;
+            if (bestScore < 0.f || score < bestScore)
+            {
+                bestScore = score;
+                bestPos = pos;
+            }
+        }
+        if (bestScore < 0.f)
+        {
+            // no candidate in the neighborhood respected the safety margin; fall back to
+            // the jittered placement rather than risk an unsafe position
+            return jitterPosition(catchingUp, span);
+        }
+        return std::round(bestPos);
+    }
+
+    [[nodiscard]] float calcMaterialInPosition(const float span)
+    {
+        const bool catchingUp = !m_reverse && m_readHeads.advance > 1.f;
+        if (m_grainMode == GrainMode::PitchSynchronous && m_currentPeriod)
+        {
+            return phaseLockedPosition(catchingUp, span, *m_currentPeriod);
+        }
+        return jitterPosition(catchingUp, span);
     }
 
     struct ReadHead
@@ -338,6 +466,13 @@ class PitchFadeWindowDelay
     static constexpr size_t m_randomVariation{200};
     std::minstd_rand m_randomGenerator;
     std::uniform_int_distribution<size_t> m_randDistribution{0, m_randomVariation};
+
+    GrainMode m_grainMode{GrainMode::DriftJitter};
+    std::optional<YinPitchDetector> m_pitchTracker;
+    std::optional<float> m_currentPeriod;
+    float m_sampleRate{0.f};
+    float m_minPeriodSamples{0.f};
+    float m_maxPeriodSamples{0.f};
 };
 
 }

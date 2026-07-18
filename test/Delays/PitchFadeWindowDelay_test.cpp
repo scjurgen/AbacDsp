@@ -29,6 +29,7 @@ struct Config
     bool reverse{false};
     size_t window{MaxSize / 2};
     size_t fadeTime{MaxSize / 2};
+    bool pitchSynchronous{false};
 };
 
 // A pitch shifted sine is still a sine, so its sample-to-sample step cannot exceed the
@@ -40,6 +41,10 @@ struct Config
     sut.setSize(cfg.window);
     sut.setFadeTime(cfg.fadeTime);
     sut.setReverse(cfg.reverse);
+    if (cfg.pitchSynchronous)
+    {
+        sut.enablePitchSynchronousMode(SampleRate);
+    }
     sut.setPitch(cfg.semitones);
 
     constexpr size_t NumSamples{48000 * 2};
@@ -100,11 +105,16 @@ struct Config
 constexpr size_t FftSize{16384};
 
 // renders past the startup transient, in the geometry BlockProcPitch asks for
-[[nodiscard]] std::vector<float> renderSettled(const float freq, const float semitones)
+[[nodiscard]] std::vector<float> renderSettled(const float freq, const float semitones,
+                                               const bool pitchSynchronous = false)
 {
     PitchFadeWindowDelay<MaxSize> sut;
     sut.setSize(MaxSize / 2);
     sut.setFadeTime(MaxSize / 2);
+    if (pitchSynchronous)
+    {
+        sut.enablePitchSynchronousMode(SampleRate);
+    }
     sut.setPitch(semitones);
 
     constexpr size_t Skip{MaxSize * 2};
@@ -125,6 +135,49 @@ constexpr size_t FftSize{16384};
 {
     const auto ratio = std::pow(2.f, semitones / 12.f);
     return 2.f * std::numbers::pi_v<float> * ProbeFreq * std::max(ratio, 1.f) / SampleRate;
+}
+
+/*
+ * Spurious-free dynamic range around the carrier, in dB: the largest bin outside a guard
+ * band around the fundamental, relative to the fundamental peak itself. The grain machine
+ * legitimately puts sidebands close to the carrier (the per grain placement combs it,
+ * the crossfade amplitude modulates it), so this is exactly the metric that separates a
+ * randomly jittered placement from a period-locked one - a lower (more negative) number
+ * is cleaner.
+ */
+[[nodiscard]] float carrierSfdrDb(const std::vector<float>& signal, const float carrierHz)
+{
+    std::vector<float> magnitude;
+    BasicFFT::realDataToMagnitude<float, FftHannWindow>(signal, magnitude);
+
+    const auto binHz = SampleRate / static_cast<float>(signal.size());
+    const auto carrierBin = static_cast<size_t>(std::lround(carrierHz / binHz));
+    constexpr size_t GuardBins{5};
+    const auto guardLow = carrierBin > GuardBins ? carrierBin - GuardBins : size_t{0};
+    const auto guardHigh = std::min(carrierBin + GuardBins, magnitude.size() - 1);
+
+    double peakEnergy{0.0};
+    for (size_t i = guardLow; i <= guardHigh; ++i)
+    {
+        peakEnergy = std::max(peakEnergy, static_cast<double>(magnitude[i]) * static_cast<double>(magnitude[i]));
+    }
+
+    double spuriousEnergy{0.0};
+    for (size_t i = 1; i < magnitude.size(); ++i)
+    {
+        if (i >= guardLow && i <= guardHigh)
+        {
+            continue;
+        }
+        const auto energy = static_cast<double>(magnitude[i]) * static_cast<double>(magnitude[i]);
+        spuriousEnergy = std::max(spuriousEnergy, energy);
+    }
+
+    if (peakEnergy <= 0.0 || spuriousEnergy <= 0.0)
+    {
+        return -std::numeric_limits<float>::infinity();
+    }
+    return static_cast<float>(10.0 * std::log10(spuriousEnergy / peakEnergy));
 }
 }
 
@@ -229,6 +282,87 @@ TEST(PitchFadeWindowDelayTest, changingPitchWhileRunningStaysBounded)
     PitchFadeWindowDelay<MaxSize> sut;
     sut.setSize(MaxSize / 2);
     sut.setFadeTime(MaxSize / 4);
+
+    for (size_t i = 0; i < 48000; ++i)
+    {
+        const auto phase = 2.f * std::numbers::pi_v<float> * ProbeFreq * static_cast<float>(i) / SampleRate;
+        // sweep the pitch the way a host automating a dial would
+        sut.setPitch(12.f * std::sin(static_cast<float>(i) / 4000.f));
+        const auto value = sut.step(std::sin(phase));
+        ASSERT_TRUE(std::isfinite(value));
+        ASSERT_LE(std::fabs(value), 1.5f) << "at sample " << i;
+    }
+}
+
+TEST(PitchFadeWindowDelayTest, pitchSynchronousModeIsFreeOfDiscontinuities)
+{
+    for (const float semitones : {-12.f, -5.f, 0.f, 7.f, 12.f})
+    {
+        const Config cfg{semitones, false, MaxSize / 2, MaxSize / 2, true};
+        EXPECT_LT(worstJump(cfg), maxSineSlope(semitones) * 1.5f) << "semitones " << semitones;
+    }
+}
+
+// The whole point of pitch-synchronous placement: locking grain starts to the detected
+// period should measurably reduce the comb sidebands the random jitter placement leaves
+// around the carrier. See the class comment in PitchFadeWindowDelay.h ("~10 dB SFDR at
+// 200 Hz" for the jittered path).
+TEST(PitchFadeWindowDelayTest, pitchSynchronousReducesCombArtifactVsJitter)
+{
+    constexpr float Freq{200.f};
+
+    for (const float semitones : {0.f, 7.f})
+    {
+        // the class resamples on readback, so the output tone sits at Freq * ratio, not
+        // at the input Freq the analysis marks are detected on
+        const auto ratio = std::pow(2.f, semitones / 12.f);
+        const auto outputFreq = Freq * ratio;
+
+        const auto jittered = renderSettled(Freq, semitones, false);
+        const auto pitchSync = renderSettled(Freq, semitones, true);
+
+        const auto jitteredSfdr = carrierSfdrDb(jittered, outputFreq);
+        const auto pitchSyncSfdr = carrierSfdrDb(pitchSync, outputFreq);
+
+        EXPECT_LT(pitchSyncSfdr, jitteredSfdr - 3.f)
+            << "at " << semitones << " semitones: jittered SFDR " << jitteredSfdr << " dB, pitch-synchronous SFDR "
+            << pitchSyncSfdr << " dB";
+    }
+}
+
+TEST(PitchFadeWindowDelayTest, pitchSynchronousFallsBackOnSilence)
+{
+    PitchFadeWindowDelay<MaxSize> sut;
+    sut.setSize(MaxSize / 2);
+    sut.setFadeTime(MaxSize / 2);
+    sut.enablePitchSynchronousMode(SampleRate);
+    sut.setPitch(7.f);
+
+    // silence first: Yin never reports a confident pitch, so this exercises the
+    // drift/jitter fallback exclusively
+    for (size_t i = 0; i < MaxSize * 2; ++i)
+    {
+        const auto value = sut.step(0.f);
+        ASSERT_TRUE(std::isfinite(value));
+        ASSERT_LE(std::fabs(value), 1.5f) << "during silence at sample " << i;
+    }
+
+    // then a steady tone: the tracker should lock on and stay bounded through the switch
+    for (size_t i = 0; i < 48000; ++i)
+    {
+        const auto phase = 2.f * std::numbers::pi_v<float> * ProbeFreq * static_cast<float>(i) / SampleRate;
+        const auto value = sut.step(std::sin(phase));
+        ASSERT_TRUE(std::isfinite(value));
+        ASSERT_LE(std::fabs(value), 1.5f) << "during tone at sample " << i;
+    }
+}
+
+TEST(PitchFadeWindowDelayTest, pitchSynchronousModeHandlesPitchChangesGracefully)
+{
+    PitchFadeWindowDelay<MaxSize> sut;
+    sut.setSize(MaxSize / 2);
+    sut.setFadeTime(MaxSize / 4);
+    sut.enablePitchSynchronousMode(SampleRate);
 
     for (size_t i = 0; i < 48000; ++i)
     {
