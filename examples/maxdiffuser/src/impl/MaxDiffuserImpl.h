@@ -11,7 +11,7 @@
 #include "EffectBase.h"
 #include "Helpers/ConstructArray.h"
 #include "Numbers/Convert.h"
-#include "Reverbs/FdnTankSpiced.h"
+#include "Reverbs/FdnTankGlide.h"
 
 template <size_t BlockSize>
 class MaxDiffuserImpl final : public EffectBase
@@ -29,7 +29,7 @@ class MaxDiffuserImpl final : public EffectBase
     using Chain = AbacDsp::DiffuserDelayChain<MaxDelaySamples, MaxElements, AbacDsp::AllpassFeedbackStyle::Schroeder>;
     using PreDelay = AbacDsp::NaiveDelay<MaxPreDelaySamples>;
     using Pitcher = AbacDsp::BlockProc::Pitch<BlockSize>;
-    using Fdn = AbacDsp::FdnTankSpiced<FdnMaxSizePerElement, FdnOrder, BlockSize>;
+    using Fdn = AbacDsp::FdnTankGlide<FdnMaxSizePerElement, FdnOrder, BlockSize>;
 
     explicit MaxDiffuserImpl(const float sampleRate)
         : EffectBase(sampleRate)
