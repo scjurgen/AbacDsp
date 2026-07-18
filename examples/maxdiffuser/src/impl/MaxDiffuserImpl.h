@@ -44,7 +44,7 @@ class MaxDiffuserImpl final : public EffectBase
         }
         // Only the left channel is metered for the bin-level display: both channels share
         // the same size/feedback/bulge and differ only in modulation phase.
-        m_diffuser[0].setLevelMeterSink(&m_binLevelsDb);
+        m_diffuser[0].setLevelMeterSink(&m_binLevels);
         for (auto& delay : m_preDelay)
         {
             delay.setSize(0);
@@ -185,7 +185,7 @@ class MaxDiffuserImpl final : public EffectBase
         std::array<float, MaxElements + 1> levels{};
         for (size_t i = 0; i < levels.size(); ++i)
         {
-            levels[i] = m_binLevelsDb[i].load(std::memory_order_relaxed);
+            levels[i] = m_binLevels[i].load(std::memory_order_relaxed);
         }
         return levels;
     }
@@ -228,7 +228,7 @@ class MaxDiffuserImpl final : public EffectBase
     float m_wet{0.5f};
     float m_fdnMix{0.f};
     std::array<Chain, 2> m_diffuser;
-    std::array<std::atomic<float>, MaxElements + 1> m_binLevelsDb{};
+    std::array<std::atomic<float>, MaxElements + 1> m_binLevels{};
     std::array<PreDelay, 2> m_preDelay{};
     std::array<Pitcher, 2> m_pitcher;
     Fdn m_fdn;

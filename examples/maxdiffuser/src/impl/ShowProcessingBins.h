@@ -6,6 +6,9 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "../inc/GuiConstants.h"
+#include "Analysis/EnvelopeFollower.h"
+#include "Helpers/ConstructArray.h"
+#include "Numbers/Convert.h"
 #include "Numbers/Interpolation.h"
 
 enum class BinsDisplayMode
@@ -14,20 +17,50 @@ enum class BinsDisplayMode
     ShowContinuousLine
 };
 
+enum class LevelUnit
+{
+    Linear,
+    Decibel
+};
+
 // Per-element level meter for the diffuser chain: bin 0 is the raw input level, bin N is the
 // level after the N-th active element has processed. Bins beyond the currently active element
 // count sit at the DSP-side floor, so they naturally read as "off" in either display mode.
-template <BinsDisplayMode Mode>
+template <BinsDisplayMode Mode, LevelUnit Unit>
 class ShowProcessingBins : public juce::Component
 {
   public:
     static constexpr size_t kNumBins{51};
+    static constexpr size_t kMeterDbRange{100};
 
-    ShowProcessingBins() = default;
-
-    void update(const std::array<float, kNumBins>& levels, const size_t activeCount)
+    ShowProcessingBins()
+        : m_envelopes{AbacDsp::constructArray<AbacDsp::PeakEnvelopeFollower<kMeterDbRange>, kNumBins>(
+              static_cast<float>(GuiConstants::instance().init.TimerHertz))}
     {
-        m_levels = levels;
+        for (auto& env : m_envelopes)
+        {
+            // Fast attack, slow release: matches how most volume meters ballistically decay.
+            env.setAttackInMsecs(200.f);
+            env.setReleaseInMsecs(200.f);
+        }
+    }
+
+    // peaks are raw, unfiltered per-block peaks (linear gain); this is where the ballistic
+    // smoothing and dB/linear conversion for display happen.
+    void update(const std::array<float, kNumBins>& peaks, const size_t activeCount)
+    {
+        for (size_t i = 0; i < kNumBins; ++i)
+        {
+            const auto smoothed = m_envelopes[i].step(peaks[i]);
+            if constexpr (Unit == LevelUnit::Decibel)
+            {
+                m_levels[i] = Convert::gainToDb(std::max(smoothed, 1E-5f));
+            }
+            else
+            {
+                m_levels[i] = smoothed * 10.f;
+            }
+        }
         m_activeCount = activeCount;
         repaint();
     }
@@ -63,15 +96,27 @@ class ShowProcessingBins : public juce::Component
     }
 
   private:
-    // Maps a bin's level to its y coordinate within bounds (same dB clamp/scale used by both
-    // display modes, so the two stay visually comparable).
+    // Maps a bin's level to its y coordinate within bounds. Decibel and Linear modes clamp to
+    // the same underlying dB window (GuiConstants::kMeterMinDb..kMeterMaxDb), just mapped
+    // logarithmically vs. linearly, so the two stay visually comparable.
     [[nodiscard]] float binY(const juce::Rectangle<float>& bounds, const size_t bin) const noexcept
     {
-        constexpr float span = GuiConstants::kMeterMaxDb - GuiConstants::kMeterMinDb;
-        const float clampedDb =
-            std::clamp(m_levels[bin], GuiConstants::kMeterMinDb, GuiConstants::kMeterMaxDb) - GuiConstants::kMeterMinDb;
-        const float visibleHeight = juce::jmap(clampedDb, 0.f, span, 0.f, bounds.getHeight());
-        return bounds.getBottom() - visibleHeight;
+        if constexpr (Unit == LevelUnit::Decibel)
+        {
+            constexpr float span = GuiConstants::kMeterMaxDb - GuiConstants::kMeterMinDb;
+            const float clamped = std::clamp(m_levels[bin], GuiConstants::kMeterMinDb, GuiConstants::kMeterMaxDb) -
+                                  GuiConstants::kMeterMinDb;
+            const float visibleHeight = juce::jmap(clamped, 0.f, span, 0.f, bounds.getHeight());
+            return bounds.getBottom() - visibleHeight;
+        }
+        else
+        {
+            const float minGain = Convert::dbToGain(GuiConstants::kMeterMinDb);
+            const float maxGain = Convert::dbToGain(GuiConstants::kMeterMaxDb);
+            const float clamped = std::clamp(m_levels[bin], minGain, maxGain) - minGain;
+            const float visibleHeight = juce::jmap(clamped, 0.f, maxGain - minGain, 0.f, bounds.getHeight());
+            return bounds.getBottom() - visibleHeight;
+        }
     }
 
     void paintBars(juce::Graphics& g, const juce::Rectangle<float>& bounds) const
@@ -163,6 +208,7 @@ class ShowProcessingBins : public juce::Component
         g.strokePath(linePath, juce::PathStrokeType(1.5f));
     }
 
+    std::array<AbacDsp::PeakEnvelopeFollower<kMeterDbRange>, kNumBins> m_envelopes;
     std::array<float, kNumBins> m_levels{};
     size_t m_activeCount{0};
 };

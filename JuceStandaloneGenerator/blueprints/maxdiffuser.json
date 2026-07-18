@@ -50,7 +50,7 @@
       "cc": {"controller": 35}},
     {"short": "CPU", "type": "gauge", "gaugetype": "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
     {"short": "LVL", "type": "gauge", "gaugetype": "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
-    {"short": "BINS", "type": "gauge", "gaugetype": "processingbins", "display": "Bins", "symbol": "bins", "customtype": "ShowProcessingBins<BinsDisplayMode::ShowContinuousLine>"}
+    {"short": "BINS", "type": "gauge", "gaugetype": "processingbins", "display": "Bins", "symbol": "bins", "customtype": "ShowProcessingBins<BinsDisplayMode::ShowContinuousLine, LevelUnit::Decibel>"}
   ],
   "layout": {
     "WINDOW_WIDTH": "1100",

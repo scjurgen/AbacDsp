@@ -6,7 +6,6 @@
 #include <numeric>
 
 #include "Diffuser/DiffusorDelayChain.h"
-#include "Numbers/Convert.h"
 
 namespace AbacDsp::Test
 {
@@ -139,19 +138,15 @@ TEST_F(DiffuserDelayChainTest, levelSinkStaysNullSafeByDefault)
     }
 }
 
-TEST_F(DiffuserDelayChainTest, levelSinkBin0ConvergesToInputPeak)
+TEST_F(DiffuserDelayChainTest, levelSinkBin0ReflectsInputPeak)
 {
     std::array<std::atomic<float>, 25> sink{};
     m_sut.setLevelMeterSink(&sink);
     std::array<float, kBlockSize> in{};
     std::fill(in.begin(), in.end(), 0.5f);
     std::array<float, kBlockSize> out{};
-    // Sustain the input well past the meter's attack time so the envelope has settled.
-    for (size_t block = 0; block < 20; ++block)
-    {
-        m_sut.processBlock(in.data(), out.data(), kBlockSize);
-    }
-    EXPECT_NEAR(sink[0].load(), Convert::gainToDb(0.5f), 1E-2f);
+    m_sut.processBlock(in.data(), out.data(), kBlockSize);
+    EXPECT_NEAR(sink[0].load(), 0.5f, 1E-6f);
 }
 
 TEST_F(DiffuserDelayChainTest, levelSinkLastActiveBinTracksSustainedSignal)
@@ -165,35 +160,25 @@ TEST_F(DiffuserDelayChainTest, levelSinkLastActiveBinTracksSustainedSignal)
     {
         m_sut.processBlock(in.data(), out.data(), kBlockSize);
     }
-    EXPECT_GT(sink[6].load(), -40.f);
+    EXPECT_GT(sink[6].load(), 0.01f);
     EXPECT_TRUE(std::isfinite(sink[6].load()));
 }
 
-TEST_F(DiffuserDelayChainTest, levelSinkDecaysGraduallyNotInstantly)
+TEST_F(DiffuserDelayChainTest, levelSinkTracksInstantaneousPeakPerBlock)
 {
     std::array<std::atomic<float>, 25> sink{};
     m_sut.setLevelMeterSink(&sink);
     std::array<float, kBlockSize> in{};
     std::fill(in.begin(), in.end(), 1.f);
     std::array<float, kBlockSize> out{};
-    for (size_t block = 0; block < 20; ++block)
-    {
-        m_sut.processBlock(in.data(), out.data(), kBlockSize);
-    }
-    const float peakDb = sink[0].load();
+    m_sut.processBlock(in.data(), out.data(), kBlockSize);
+    EXPECT_NEAR(sink[0].load(), 1.f, 1E-6f);
 
+    // No ballistic smoothing at this layer anymore: a silent block reads back as silence
+    // immediately, rather than decaying gradually.
     std::array<float, kBlockSize> silence{};
     m_sut.processBlock(silence.data(), out.data(), kBlockSize);
-    // One block of silence (16 samples, ~0.33ms) is much shorter than the 300ms release time,
-    // so the meter should still read close to the peak rather than having snapped to floor.
-    EXPECT_GT(sink[0].load(), peakDb - 1.f);
-
-    for (size_t block = 0; block < static_cast<size_t>(2.0 * kSampleRate) / kBlockSize; ++block)
-    {
-        m_sut.processBlock(silence.data(), out.data(), kBlockSize);
-    }
-    // After ~2s of silence (many multiples of the release time), it should have decayed to floor.
-    EXPECT_LT(sink[0].load(), -60.f);
+    EXPECT_NEAR(sink[0].load(), 0.f, 1E-6f);
 }
 
 TEST_F(DiffuserDelayChainTest, levelSinkBinsBeyondActiveCountSitAtFloor)
@@ -207,8 +192,68 @@ TEST_F(DiffuserDelayChainTest, levelSinkBinsBeyondActiveCountSitAtFloor)
 
     for (size_t bin = 7; bin <= 24; ++bin)
     {
-        EXPECT_LE(sink[bin].load(), -99.f);
+        EXPECT_EQ(sink[bin].load(), 0.f);
     }
 }
 
+// A constant-DC input settles to a bit-exact steady output (delaying a constant is still that
+// same constant, so modulation has no effect on it), which would make a "does it change"
+// check pass trivially once things settle. Feed a slowly moving signal instead so a real,
+// continuously live meter is expected to keep changing no matter how long it has been running.
+[[nodiscard]] std::array<float, kBlockSize> slowlyVaryingBlock(const size_t block) noexcept
+{
+    std::array<float, kBlockSize> blockData{};
+    std::fill(blockData.begin(), blockData.end(), 0.7f + 0.3f * std::sin(static_cast<float>(block) * 0.05f));
+    return blockData;
+}
+
+TEST_F(DiffuserDelayChainTest, levelSinkKeepsUpdatingWhileElementCountGrows)
+{
+    std::array<std::atomic<float>, 25> sink{};
+    m_sut.setLevelMeterSink(&sink);
+    std::array<float, kBlockSize> out{};
+    for (size_t block = 0; block < 20; ++block)
+    {
+        m_sut.processBlock(slowlyVaryingBlock(block).data(), out.data(), kBlockSize);
+    }
+    const float readingBeforeFade = sink[3].load();
+    ASSERT_GT(readingBeforeFade, 0.f);
+
+    // 6 -> 12 elements enters the crossfade path (increaseNumElements) for many blocks (fade
+    // length is clamped to at least 12000 samples), so the loop below stays inside the fade.
+    m_sut.setElements(12);
+    bool bin3Changed = false;
+    for (size_t block = 20; block < 70 && !bin3Changed; ++block)
+    {
+        m_sut.processBlock(slowlyVaryingBlock(block).data(), out.data(), kBlockSize);
+        bin3Changed = sink[3].load() != readingBeforeFade;
+    }
+    EXPECT_TRUE(bin3Changed);
+}
+
+TEST_F(DiffuserDelayChainTest, levelSinkKeepsUpdatingWhileElementCountShrinks)
+{
+    std::array<std::atomic<float>, 25> sink{};
+    m_sut.setLevelMeterSink(&sink);
+    std::array<float, kBlockSize> out{};
+    m_sut.setElements(12);
+    size_t block = 0;
+    for (; block < 48000 / kBlockSize; ++block)
+    {
+        m_sut.processBlock(slowlyVaryingBlock(block).data(), out.data(), kBlockSize);
+    }
+    ASSERT_EQ(m_sut.elements(), 12u);
+    const float readingBeforeFade = sink[3].load();
+
+    // 12 -> 3 elements enters the crossfade path (decreaseNumElements); bin 3 stays within the
+    // settled (new, shorter) portion of the chain for the whole transition.
+    m_sut.setElements(3);
+    bool bin3Changed = false;
+    for (size_t endBlock = block + 50; block < endBlock && !bin3Changed; ++block)
+    {
+        m_sut.processBlock(slowlyVaryingBlock(block).data(), out.data(), kBlockSize);
+        bin3Changed = sink[3].load() != readingBeforeFade;
+    }
+    EXPECT_TRUE(bin3Changed);
+}
 }

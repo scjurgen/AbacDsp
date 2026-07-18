@@ -8,12 +8,10 @@
 #include <vector>
 
 #include "AllpassDelay.h"
-#include "Analysis/EnvelopeFollower.h"
 #include "Audio/Fader.h"
 #include "Helpers/ConstructArray.h"
 #include "Helpers/SkipSmoothing.h"
 #include "Numbers/BulgeControl.h"
-#include "Numbers/Convert.h"
 #include "Numbers/PrimeDispatcher.h"
 
 namespace AbacDsp
@@ -25,10 +23,6 @@ class DiffuserDelayChain
   public:
     explicit DiffuserDelayChain(const float sampleRate, const size_t blkSize)
         : m_delay{constructArray<ModulatingAllPassDelay<MaxDelayLength, Style>, NumElements>(sampleRate)}
-        // meterBin() calls step() once per processBlock (i.e. once per blkSize samples), so the
-        // envelope's own notion of "sample rate" must be the block rate, not the audio sample rate.
-        , m_meterEnvelopes{constructArray<PeakEnvelopeFollower<kLevelFloorDbRange>, NumElements + 1>(
-              sampleRate / static_cast<float>(blkSize))}
         , tmpFadeIn(blkSize, 0.f)
         , tmpFadeOut(blkSize, 0.f)
     {
@@ -38,12 +32,6 @@ class DiffuserDelayChain
             d.setModulationSpeed(f);
             d.setModulationDepth(0.05f);
             f *= 0.96f;
-        }
-        for (auto& env : m_meterEnvelopes)
-        {
-            // Fast attack, slow release: matches how most volume meters ballistically decay.
-            env.setAttackInMsecs(3.f);
-            env.setReleaseInMsecs(300.f);
         }
         resetDiffuser(NumElements, 0.5f, 0.6f, 100.f, 1000.f, skipSmoothing);
     }
@@ -209,9 +197,8 @@ class DiffuserDelayChain
     }
 
   private:
-    // Peak-to-dB tap for the visualisation sink; no-ops when no sink is registered. Runs the
-    // block peak through a fast-attack/slow-release envelope first, matching how volume meters
-    // ballistically decay rather than jittering block to block.
+    // Raw peak tap for the visualisation sink; no-ops when no sink is registered. Reports the
+    // unfiltered per-block peak (linear gain) and leaves any ballistic smoothing to the consumer.
     void meterBin(const size_t bin, const float* buf, const size_t numSamples) noexcept
     {
         if (!m_levelSink)
@@ -223,8 +210,7 @@ class DiffuserDelayChain
         {
             peak = std::max(peak, std::abs(buf[i]));
         }
-        const auto smoothed = m_meterEnvelopes[bin].step(peak);
-        (*m_levelSink)[bin].store(Convert::gainToDb(std::max(smoothed, 1E-5f)), std::memory_order_relaxed);
+        (*m_levelSink)[bin].store(peak, std::memory_order_relaxed);
     }
 
     void clearInactiveBins() noexcept
@@ -235,7 +221,7 @@ class DiffuserDelayChain
         }
         for (size_t i = m_elementsToUse + 1; i <= NumElements; ++i)
         {
-            (*m_levelSink)[i].store(kLevelFloorDb, std::memory_order_relaxed);
+            (*m_levelSink)[i].store(0.f, std::memory_order_relaxed);
         }
     }
 
@@ -359,11 +345,14 @@ class DiffuserDelayChain
         }
     }
 
+    // Meters the settled part of the chain (shared by both fade directions) so the bins gauge
+    // keeps updating during a crossfade instead of freezing at its pre-change reading.
     void processFade(float* target, size_t numSamples, size_t elements)
     {
         for (size_t i = 0; i < elements; ++i)
         {
             m_delay[i].processBlockInplace(target, numSamples);
+            meterBin(i + 1, target, numSamples);
         }
         m_fadeIn.processBlock(target, tmpFadeIn.data(), numSamples);
         m_fadeOut.processBlock(target, tmpFadeOut.data(), numSamples);
@@ -373,9 +362,11 @@ class DiffuserDelayChain
     {
         processFade(target, numSamples, m_elementsToUse);
         m_delay[m_elementsToUse].processBlockInplace(tmpFadeIn.data(), numSamples);
+        meterBin(m_elementsToUse + 1, tmpFadeIn.data(), numSamples);
         for (size_t i = m_elementsToUse + 1; i < m_newElementsToUse; ++i)
         {
             m_delay[i].processBlockInplace(tmpFadeIn.data(), numSamples);
+            meterBin(i + 1, tmpFadeIn.data(), numSamples);
         }
         checkChangeElementsDone();
         std::copy_n(tmpFadeIn.data(), numSamples, target);
@@ -386,15 +377,15 @@ class DiffuserDelayChain
     {
         processFade(target, numSamples, m_newElementsToUse);
         m_delay[m_newElementsToUse].processBlock(tmpFadeOut.data(), target, numSamples);
+        meterBin(m_newElementsToUse + 1, target, numSamples);
         for (size_t i = m_newElementsToUse + 1; i < m_elementsToUse; ++i)
         {
             m_delay[i].processBlockInplace(target, numSamples);
+            meterBin(i + 1, target, numSamples);
         }
         checkChangeElementsDone();
         std::transform(target, target + numSamples, tmpFadeIn.data(), target, std::plus<>{});
     }
-
-    static constexpr size_t kLevelFloorDbRange{100};
 
     float m_bottomSize{100.f};
     float m_topSize{1000.f};
@@ -405,7 +396,6 @@ class DiffuserDelayChain
     float m_allPassLast{2000.f};
 
     std::array<ModulatingAllPassDelay<MaxDelayLength, Style>, NumElements> m_delay{};
-    std::array<PeakEnvelopeFollower<kLevelFloorDbRange>, NumElements + 1> m_meterEnvelopes;
     std::array<size_t, NumElements> m_decayTimeInSamples{};
 
     bool m_hasNewElementsScheduled{false};
@@ -413,7 +403,6 @@ class DiffuserDelayChain
     size_t m_newElementsToUse{NumElements};
     size_t m_elementsToUse{NumElements};
 
-    static constexpr float kLevelFloorDb{-100.f};
     std::array<std::atomic<float>, NumElements + 1>* m_levelSink{nullptr};
 
     Fader<FadeMode::In, FadeCurve::Sine> m_fadeIn;
