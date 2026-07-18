@@ -17,7 +17,7 @@ class ShowProcessingBins : public juce::Component
 
     ShowProcessingBins() = default;
 
-    void update(const std::array<float, kNumBins>& levels, size_t activeCount)
+    void update(const std::array<float, kNumBins>& levels, const size_t activeCount)
     {
         m_levels = levels;
         m_activeCount = activeCount;

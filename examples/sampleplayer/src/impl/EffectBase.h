@@ -12,24 +12,25 @@ class EffectBase
     {
     }
 
-    [[maybe_unused]] virtual void setBpm(float bpm)
+    struct HostTransport
     {
-        m_bpm = bpm;
+        double bpm{120.0};
+        double ppqPosition{0.0}; // quarter notes since session start
+        float beatsPerBar{4.f};  // host time-signature numerator
+        bool isPlaying{false};
+        // Bumped once per host processBlock(), not per internal sub-block;
+        // consumers use it to detect a fresh transport sample.
+        uint64_t updateCount{0};
+    };
+
+    [[maybe_unused]] virtual void setHostTransport(const HostTransport& transport) noexcept
+    {
+        m_hostTransport = transport;
     }
 
-    [[maybe_unused]] virtual void setSpeed(float speed)
+    [[nodiscard]] [[maybe_unused]] const HostTransport& hostTransport() const noexcept
     {
-        m_playing = speed == 1.f;
-    }
-
-    [[maybe_unused]] virtual void setBeat(float beat)
-    {
-        m_beat = beat;
-    }
-
-    [[maybe_unused]] virtual void setBeatsPerBar(float beatPerBar)
-    {
-        m_beatsPerBar = beatPerBar;
+        return m_hostTransport;
     }
 
     [[maybe_unused]] virtual void processMidi(const uint8_t* msg)
@@ -52,26 +53,6 @@ class EffectBase
         return m_sampleRate;
     }
 
-    [[nodiscard]] [[maybe_unused]] float currentBpm() const
-    {
-        return m_bpm;
-    }
-
-    [[nodiscard]] [[maybe_unused]] bool isPlaying() const
-    {
-        return m_playing;
-    }
-
-    [[nodiscard]] [[maybe_unused]] float currentBeat() const
-    {
-        return m_beat;
-    }
-
-    [[nodiscard]] [[maybe_unused]] float currentBeatsPerBar() const
-    {
-        return m_beatsPerBar;
-    }
-
     [[nodiscard]] [[maybe_unused]] size_t noteOnCount() const
     {
         return countNoteOn;
@@ -85,10 +66,7 @@ class EffectBase
   private:
     const float m_sampleRate;
 
-    float m_bpm{120.f};
-    bool m_playing{false};
-    float m_beat{0};
-    float m_beatsPerBar{4};
+    HostTransport m_hostTransport{};
 
     size_t countNoteOn{0};
     size_t countNoteOff{0};

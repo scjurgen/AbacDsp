@@ -12,6 +12,7 @@
 #include "inc/CustomRotaryDial.h"
 #include "inc/GenericMeter.h"
 #include "inc/PatchBrowser.h"
+#include "inc/StatusBar.h"
 #include "inc/SpectrogramDisplay.h"
 #include "inc/VuMeter.h"
 #include "inc/WaveformMeter.h"

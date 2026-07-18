@@ -3,6 +3,7 @@
 
 #include "impl/GenericImpl.h"
 
-TEST(Maxdiffusertest, failed) {
-  EXPECT_EQ(1, 2) << "implement your unit-tests";
+TEST(Maxdiffusertest, failed)
+{
+    EXPECT_EQ(1, 2) << "implement your unit-tests";
 }

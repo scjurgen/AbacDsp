@@ -22,6 +22,7 @@ tmp
 *venv
 *.lv2
 __pycache__
+explore
 
 # Prerequisites
 *.d

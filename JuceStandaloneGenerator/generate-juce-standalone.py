@@ -518,8 +518,12 @@ def getTargetName(target: str, m: dict):
 
 # clang-format leaves existing namespace-closing comments untouched even with
 # FixNamespaceComments:false, so strip them explicitly after formatting.
+# cppTmpDir stages files under /tmp, outside the repo, so a plain
+# -style=file lookup can never find ../.clang-format and silently falls
+# back to LLVM style; point at it explicitly instead.
 def runClangFormat(target: str):
-    os.system(f"clang-format -i -style=file {target}")
+    clangFormatConfig = os.path.abspath("../.clang-format")
+    os.system(f"clang-format -i -style=file:{clangFormatConfig} {target}")
     with open(target, "r") as f:
         content = f.read()
     stripped = re.sub(r'^(\})\s*//\s*namespace\b.*$', r'\1', content, flags=re.MULTILINE)

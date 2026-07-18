@@ -5,13 +5,21 @@
  */
 
 #include "SamplePlayerProcessor.h"
+
+#include "SamplePlayerConstants.h"
 #include "SamplePlayerEditor.h"
 
-juce::AudioProcessorEditor *AudioPluginAudioProcessor::createEditor() {
-  GuiConstants::setPreset(AppSettings::loadTheme());
-  return new AudioPluginAudioProcessorEditor(*this, m_parameters);
+
+juce::AudioProcessorEditor* AudioPluginAudioProcessor::createEditor()
+{
+    GuiConstants::setPreset(AppSettings::loadTheme());
+    GuiConstants::instance().init.WindowWidth = Constants::InitJuce::WindowWidth;
+    GuiConstants::instance().init.WindowHeight = Constants::InitJuce::WindowHeight;
+    GuiConstants::instance().init.TimerHertz = Constants::InitJuce::TimerHertz;
+    return new AudioPluginAudioProcessorEditor(*this, m_parameters);
 }
 
-juce::AudioProcessor *JUCE_CALLTYPE createPluginFilter() {
-  return new AudioPluginAudioProcessor();
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+{
+    return new AudioPluginAudioProcessor();
 }

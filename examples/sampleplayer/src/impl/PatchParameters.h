@@ -2,9 +2,8 @@
 
 #include <array>
 #include <cmath>
-#include <string_view>
-
 #include <nlohmann/json.hpp>
+#include <string_view>
 
 using json = nlohmann::json;
 

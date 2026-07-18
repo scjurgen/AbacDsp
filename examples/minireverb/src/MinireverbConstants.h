@@ -7,8 +7,10 @@
 
 #include <cstdint>
 
-namespace Constants {
-namespace Colors {
+namespace Constants
+{
+namespace Colors
+{
 constexpr uint32_t background{0xff101010};
 constexpr uint32_t backgroundDark{0xff505050};
 constexpr uint32_t backgroundMid{0xff404040};
@@ -21,19 +23,22 @@ constexpr uint32_t gradientDark{0xff101010};
 constexpr uint32_t statusOutline{0xffdddddd};
 }
 
-namespace Text {
+namespace Text
+{
 constexpr float labelHeight = 30.f;
 constexpr float labelWidth = 90.f;
 constexpr float fontHeight = 16.f;
 }
 
-namespace Margins {
+namespace Margins
+{
 constexpr float small = 2.0f;
 constexpr float medium = 4.0f;
 constexpr float big = 8.0f;
 }
 
-namespace InitJuce {
+namespace InitJuce
+{
 constexpr auto WindowWidth{1280};
 constexpr auto WindowHeight{1024};
 constexpr auto TimerHertz = 60;

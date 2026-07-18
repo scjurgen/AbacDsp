@@ -46,8 +46,9 @@ class AppSettings
     [[nodiscard]] static std::unique_ptr<juce::PropertiesFile> makePropsFile()
     {
         juce::PropertiesFile::Options opts;
-        opts.applicationName = "AbacDsp";
+        opts.applicationName = JucePlugin_Name;
         opts.filenameSuffix = ".xml";
+        opts.folderName = "AbacDsp";
         opts.osxLibrarySubFolder = "Application Support";
         return std::make_unique<juce::PropertiesFile>(opts);
     }
