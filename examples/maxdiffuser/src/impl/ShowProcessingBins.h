@@ -7,9 +7,16 @@
 
 #include "../inc/GuiConstants.h"
 
+enum class BinsDisplayMode
+{
+    ShowBins,
+    ShowContinuousLine
+};
+
 // Per-element level meter for the diffuser chain: bin 0 is the raw input level, bin N is the
 // level after the N-th active element has processed. Bins beyond the currently active element
-// count are drawn dimmed, so it's visually obvious how many elements are actually in the chain.
+// count sit at the DSP-side floor, so they naturally read as "off" in either display mode.
+template <BinsDisplayMode Mode>
 class ShowProcessingBins : public juce::Component
 {
   public:
@@ -39,10 +46,38 @@ class ShowProcessingBins : public juce::Component
 
         constexpr float pad = 3.f;
         const auto bounds = getLocalBounds().toFloat().reduced(pad);
+        if (bounds.getWidth() <= 0.f || bounds.getHeight() <= 0.f)
+        {
+            return;
+        }
+
+        if constexpr (Mode == BinsDisplayMode::ShowBins)
+        {
+            paintBars(g, bounds);
+        }
+        else
+        {
+            paintContinuousLine(g, bounds);
+        }
+    }
+
+  private:
+    // Maps a bin's level to its y coordinate within bounds (same dB clamp/scale used by both
+    // display modes, so the two stay visually comparable).
+    [[nodiscard]] float binY(const juce::Rectangle<float>& bounds, const size_t bin) const noexcept
+    {
+        constexpr float span = GuiConstants::kMeterMaxDb - GuiConstants::kMeterMinDb;
+        const float clampedDb =
+            std::clamp(m_levels[bin], GuiConstants::kMeterMinDb, GuiConstants::kMeterMaxDb) - GuiConstants::kMeterMinDb;
+        const float visibleHeight = juce::jmap(clampedDb, 0.f, span, 0.f, bounds.getHeight());
+        return bounds.getBottom() - visibleHeight;
+    }
+
+    void paintBars(juce::Graphics& g, const juce::Rectangle<float>& bounds) const
+    {
+        const auto& colors = GuiConstants::instance().colors;
         const float columnWidth = bounds.getWidth() / static_cast<float>(kNumBins);
         auto gradient = GuiConstants::instance().getLevelGradient();
-
-        constexpr float span = GuiConstants::kMeterMaxDb - GuiConstants::kMeterMinDb;
 
         for (size_t i = 0; i < kNumBins; ++i)
         {
@@ -63,15 +98,75 @@ class ShowProcessingBins : public juce::Component
             }
             g.fillRect(columnBounds);
 
-            const float clampedDb = std::clamp(m_levels[i], GuiConstants::kMeterMinDb, GuiConstants::kMeterMaxDb) -
-                                    GuiConstants::kMeterMinDb;
-            const float visibleHeight = juce::jmap(clampedDb, 0.f, span, 0.f, bounds.getHeight());
             g.setColour(juce::Colour(colors.backgroundComponent));
-            g.fillRect(columnBounds.withBottom(bounds.getBottom() - visibleHeight));
+            g.fillRect(columnBounds.withBottom(binY(bounds, i)));
         }
     }
 
-  private:
+    [[nodiscard]] juce::Point<float> binPoint(const juce::Rectangle<float>& bounds, const size_t bin) const noexcept
+    {
+        const float stepX = bounds.getWidth() / static_cast<float>(kNumBins - 1);
+        return {bounds.getX() + static_cast<float>(bin) * stepX, binY(bounds, bin)};
+    }
+
+    // Catmull-Rom: a cubic Hermite spline whose tangents are estimated from each point's
+    // neighbours, giving a smooth curve through every bin without overshoot between samples.
+    void buildSmoothPath(juce::Path& path, const juce::Rectangle<float>& bounds) const
+    {
+        constexpr int kSubSteps = 8;
+        const auto pointAt = [this, &bounds](const int index) noexcept
+        {
+            const auto clamped = static_cast<size_t>(std::clamp(index, 0, static_cast<int>(kNumBins) - 1));
+            return binPoint(bounds, clamped);
+        };
+
+        path.startNewSubPath(pointAt(0));
+        for (int bin = 0; bin + 1 < static_cast<int>(kNumBins); ++bin)
+        {
+            const auto p0 = pointAt(bin - 1);
+            const auto p1 = pointAt(bin);
+            const auto p2 = pointAt(bin + 1);
+            const auto p3 = pointAt(bin + 2);
+
+            for (int step = 1; step <= kSubSteps; ++step)
+            {
+                const float t = static_cast<float>(step) / static_cast<float>(kSubSteps);
+                const float t2 = t * t;
+                const float t3 = t2 * t;
+                const float h1 = 2.f * t3 - 3.f * t2 + 1.f;
+                const float h2 = t3 - 2.f * t2 + t;
+                const float h3 = -2.f * t3 + 3.f * t2;
+                const float h4 = t3 - t2;
+
+                const float x = h1 * p1.x + h2 * 0.5f * (p2.x - p0.x) + h3 * p2.x + h4 * 0.5f * (p3.x - p1.x);
+                const float y = h1 * p1.y + h2 * 0.5f * (p2.y - p0.y) + h3 * p2.y + h4 * 0.5f * (p3.y - p1.y);
+                path.lineTo(x, y);
+            }
+        }
+    }
+
+    void paintContinuousLine(juce::Graphics& g, const juce::Rectangle<float>& bounds) const
+    {
+        juce::Path linePath;
+        buildSmoothPath(linePath, bounds);
+
+        juce::Path fillPath(linePath);
+        fillPath.lineTo(bounds.getRight(), bounds.getBottom());
+        fillPath.lineTo(bounds.getX(), bounds.getBottom());
+        fillPath.closeSubPath();
+
+        // Gradient spans the full dB range top-to-bottom, same as the bar mode, so a given
+        // height always maps to the same colour regardless of how tall the curve happens to be.
+        auto gradient = GuiConstants::instance().getLevelGradient();
+        gradient.point1 = bounds.getBottomLeft();
+        gradient.point2 = bounds.getTopLeft();
+        g.setGradientFill(gradient);
+        g.fillPath(fillPath);
+
+        g.setColour(juce::Colour(GuiConstants::instance().colors.statusOutline));
+        g.strokePath(linePath, juce::PathStrokeType(1.5f));
+    }
+
     std::array<float, kNumBins> m_levels{};
     size_t m_activeCount{0};
 };

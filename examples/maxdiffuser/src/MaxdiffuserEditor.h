@@ -448,7 +448,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial fdnDecayDial{this};
     CpuGauge cpuGauge{};
     Gauge levelGauge{};
-    ShowProcessingBins binsGauge{};
+    ShowProcessingBins<BinsDisplayMode::ShowContinuousLine> binsGauge{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
 };
