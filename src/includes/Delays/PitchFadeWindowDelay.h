@@ -133,15 +133,30 @@ class PitchFadeWindowDelay
         updateGeometry();
     }
 
-    // Constructs the pitch tracker and switches to GrainMode::PitchSynchronous. Call
-    // setGrainMode(GrainMode::DriftJitter) to switch back without tearing it down.
-    void enablePitchSynchronousMode(const float sampleRate, const float minFreq = 80.f, const float maxFreq = 1000.f)
+    /*
+     * Constructs the pitch tracker and switches to GrainMode::PitchSynchronous. Call
+     * setGrainMode(GrainMode::DriftJitter) to switch back without tearing it down.
+     *
+     * lookaheadSamples delays the material grains are cut from (not the tracker: Yin
+     * always sees the live signal) so that, like a lookahead compressor's detector,
+     * Yin's estimate for a given moment is already known by the time that moment reaches
+     * the grain machine. Left at nullopt, it defaults to the tracker's own analysis
+     * buffer size, which is the amount needed to hide both the per-hop update lag and the
+     * cold-start period before Yin has any estimate at all. Pass 0 to disable it and keep
+     * today's zero-latency behavior instead.
+     */
+    void enablePitchSynchronousMode(const float sampleRate, const float minFreq = 80.f, const float maxFreq = 1000.f,
+                                    const std::optional<size_t> lookaheadSamples = std::nullopt)
     {
         m_pitchTracker.emplace(sampleRate, minFreq, maxFreq);
         m_sampleRate = sampleRate;
         m_minPeriodSamples = sampleRate / maxFreq;
         m_maxPeriodSamples = sampleRate / minFreq;
         m_grainMode = GrainMode::PitchSynchronous;
+
+        m_lookaheadSize = lookaheadSamples.value_or(m_pitchTracker->getBufferSize());
+        m_lookahead.assign(m_lookaheadSize, 0.f);
+        m_lookaheadWrite = 0;
     }
 
     void setGrainMode(const GrainMode mode) noexcept
@@ -155,6 +170,7 @@ class PitchFadeWindowDelay
         {
             updatePeriodEstimate(in);
         }
+        const float delayed = m_lookaheadSize > 0 ? applyLookahead(in) : in;
 
         float returnValue = 0.f;
 
@@ -186,10 +202,10 @@ class PitchFadeWindowDelay
 
         if (m_head < MaxInterpolationWidth)
         {
-            m_buffer[m_head + m_maxSize] = in;
+            m_buffer[m_head + m_maxSize] = delayed;
         }
 
-        m_buffer[m_head++] = in;
+        m_buffer[m_head++] = delayed;
         m_head %= m_maxSize;
         return returnValue;
     }
@@ -224,6 +240,16 @@ class PitchFadeWindowDelay
     }
 
   private:
+    // Read-before-write ring buffer: delays the grain machine's material by
+    // m_lookaheadSize samples while updatePeriodEstimate above still sees `in` live.
+    [[nodiscard]] float applyLookahead(const float in) noexcept
+    {
+        const float delayed = m_lookahead[m_lookaheadWrite];
+        m_lookahead[m_lookaheadWrite] = in;
+        m_lookaheadWrite = (m_lookaheadWrite + 1) % m_lookaheadSize;
+        return delayed;
+    }
+
     // Feeds the tracker and stashes the resulting period in samples; a pitch of 0 Hz
     // (silence/unvoiced/out of range) clears it, which is how planGrain and
     // calcMaterialInPosition fall back to the drift/jitter geometry.
@@ -241,12 +267,37 @@ class PitchFadeWindowDelay
         }
     }
 
+    /*
+     * The new fadeTime governs both the incoming grain's fade-in AND the outgoing head's
+     * fade-out - but the outgoing head was placed earlier, with a safety margin sized for
+     * whatever fadeTime ITS OWN grain plan needed at the time. If the mode or the period
+     * estimate changes right at this trigger (PitchSynchronous's small, period-sized
+     * fadeTime handing off to DriftJitter's much larger, window-sized one, most notably),
+     * the outgoing head can be asked to keep fading out far longer than its remaining
+     * runway, catching up to and reading across the write head mid-crossfade: a measured,
+     * audible click, not just noise. Capping fadeTime at the outgoing head's actual
+     * remaining age (only relevant while it is catching up - falling back or reverse only
+     * ever gains age) keeps every fade-out inside the runway it was actually given,
+     * regardless of what the new grain's own plan would otherwise allow.
+     */
     void triggerFade()
     {
         const auto grain = planGrain();
+        const auto outgoingAge = wrapPosition(static_cast<float>(m_head) - m_readHeads.fadeInPos);
         m_readHeads.fade = true;
         m_readHeads.fadeOutPos = m_readHeads.fadeInPos;
-        m_readHeads.fadeTime = std::clamp(m_requestedFadeTime, size_t{2}, (grain.life - 1) / 2);
+
+        auto fadeTimeCeiling = (grain.life - 1) / 2;
+        if (!m_reverse && m_readHeads.advance > 1.f)
+        {
+            constexpr float MinDrift{1.f / 1024.f};
+            const auto drift = std::max(driftFactor(), MinDrift);
+            const auto safeSamples = (outgoingAge - static_cast<float>(MinAge)) / drift;
+            const auto maxOutgoingFadeTime = safeSamples > 0.f ? static_cast<size_t>(safeSamples) : size_t{0};
+            fadeTimeCeiling = std::min(fadeTimeCeiling, maxOutgoingFadeTime);
+        }
+
+        m_readHeads.fadeTime = std::max(std::min(m_requestedFadeTime, fadeTimeCeiling), size_t{2});
         m_readHeads.fadeCount = m_readHeads.fadeTime;
         m_readHeads.fadeStep = 1.f / static_cast<float>(m_readHeads.fadeTime - 1);
         m_readHeads.plainAfterFade = grain.life - m_readHeads.fadeTime * 2;
@@ -473,6 +524,10 @@ class PitchFadeWindowDelay
     float m_sampleRate{0.f};
     float m_minPeriodSamples{0.f};
     float m_maxPeriodSamples{0.f};
+
+    std::vector<float> m_lookahead;
+    size_t m_lookaheadSize{0};
+    size_t m_lookaheadWrite{0};
 };
 
 }

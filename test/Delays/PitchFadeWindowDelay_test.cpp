@@ -179,6 +179,32 @@ constexpr size_t FftSize{16384};
     }
     return static_cast<float>(10.0 * std::log10(spuriousEnergy / peakEnergy));
 }
+
+// Captures fftSize samples of REAL audio starting the moment it actually reaches the
+// grain machine (i.e. skips the lookahead's own silent fill first). Comparing a fixed
+// window starting at sample 0 instead would penalize a larger lookahead for how much of
+// that window is still silence, not for attack quality - measured that mistake first.
+[[nodiscard]] std::vector<float> renderAttack(const float freq, const size_t lookahead, const size_t fftSize)
+{
+    PitchFadeWindowDelay<MaxSize> sut;
+    sut.setSize(MaxSize / 2);
+    sut.setFadeTime(MaxSize / 2);
+    sut.enablePitchSynchronousMode(SampleRate, 80.f, 1000.f, lookahead);
+    sut.setPitch(0.f);
+
+    const auto total = lookahead + fftSize;
+    std::vector<float> out(fftSize);
+    for (size_t i = 0; i < total; ++i)
+    {
+        const auto phase = 2.f * std::numbers::pi_v<float> * freq * static_cast<float>(i) / SampleRate;
+        const auto value = sut.step(std::sin(phase));
+        if (i >= lookahead)
+        {
+            out[i - lookahead] = value;
+        }
+    }
+    return out;
+}
 }
 
 TEST(PitchFadeWindowDelayTest, forwardShiftIsFreeOfDiscontinuities)
@@ -373,6 +399,142 @@ TEST(PitchFadeWindowDelayTest, pitchSynchronousModeHandlesPitchChangesGracefully
         ASSERT_TRUE(std::isfinite(value));
         ASSERT_LE(std::fabs(value), 1.5f) << "at sample " << i;
     }
+}
+
+/*
+ * Reproduces a click reported on a real note: a guitar high-E note, shifted an octave up
+ * with PitchSynchronous engaged, released with a short (not instant) fade rather than a
+ * hard clip. A continuous note stays phase-locked throughout and is clean; releasing one
+ * lets its amplitude decay below Yin's confidence, and losing lock switches the grain
+ * geometry from PitchSynchronous (period-sized fadeTime, small) to the DriftJitter
+ * fallback (window-sized fadeTime, large) at the very next retrigger.
+ *
+ * triggerFade reuses that single new fadeTime for BOTH the incoming grain's fade-in and
+ * the outgoing grain's fade-out - but the outgoing head's position was placed earlier,
+ * with a safety margin sized for whatever fadeTime its OWN grain plan needed. A small
+ * PitchSynchronous fadeTime followed immediately by a large DriftJitter one asks the
+ * outgoing head to keep fading out far longer than its remaining runway, so it catches up
+ * to (and reads across) the write head mid-fade: an audible click, not just noise.
+ */
+TEST(PitchFadeWindowDelayTest, pitchSynchronousNoteReleaseIsFreeOfDiscontinuities)
+{
+    constexpr float HighE{329.63f}; // guitar's open high E string
+    constexpr float Semitones{12.f};
+    constexpr size_t FadeOutSamples{200};
+    constexpr size_t SustainSamples{48000};
+    constexpr size_t PreRoll{MaxSize + 1};
+    // generous: covers the default lookahead plus worst-case grain runway, so the whole
+    // pipeline has fully flushed silence through by the end of the recording
+    constexpr size_t TrailSamples{10000};
+    constexpr size_t NoteSamples{SustainSamples + FadeOutSamples};
+    constexpr size_t Total{PreRoll + NoteSamples + TrailSamples};
+
+    PitchFadeWindowDelay<MaxSize> sut;
+    sut.setSize(MaxSize / 2);
+    sut.setFadeTime(MaxSize / 2);
+    sut.enablePitchSynchronousMode(SampleRate);
+    sut.setPitch(Semitones);
+
+    std::vector<float> out(Total);
+    for (size_t i = 0; i < Total; ++i)
+    {
+        float in = 0.f;
+        if (i >= PreRoll && i < PreRoll + NoteSamples)
+        {
+            const auto notePhase = static_cast<float>(i - PreRoll);
+            const auto envelope = notePhase < SustainSamples ? 1.f
+                                                             : 1.f - (notePhase - static_cast<float>(SustainSamples)) /
+                                                                         static_cast<float>(FadeOutSamples);
+            in = envelope * std::sin(2.f * std::numbers::pi_v<float> * HighE * notePhase / SampleRate);
+        }
+        out[i] = sut.step(in);
+    }
+
+    // same bound convention as the other discontinuity tests, just at the note's own
+    // frequency rather than ProbeFreq
+    const auto ratio = std::pow(2.f, Semitones / 12.f);
+    const auto maxSlope = 2.f * std::numbers::pi_v<float> * HighE * ratio / SampleRate;
+
+    float worst = 0.f;
+    size_t worstIdx = 0;
+    for (size_t i = PreRoll + 1; i < Total; ++i)
+    {
+        const auto jump = std::fabs(out[i] - out[i - 1]);
+        if (jump > worst)
+        {
+            worst = jump;
+            worstIdx = i;
+        }
+    }
+    EXPECT_LT(worst, maxSlope * 1.5f) << "worst jump " << worst << " at sample " << worstIdx << " (note release ends "
+                                      << "at sample " << (PreRoll + NoteSamples) << ")";
+}
+
+// At unity pitch the read head advances in lockstep with the write head (no drift), so
+// the whole geometry evolves purely as a function of sample count, independent of buffer
+// content. That makes lookahead's effect exactly checkable: it must reproduce the
+// lookahead=0 output shifted by lookaheadSamples, sample for sample. (At a real shift
+// this exact relationship does not hold - the read position is not simply "now minus a
+// constant" once there is drift - so this is deliberately a unity-pitch-only check.)
+TEST(PitchFadeWindowDelayTest, lookaheadDelaysOutputByExactlyItsLengthAtUnityPitch)
+{
+    constexpr size_t Lookahead{500};
+    constexpr size_t NumSamples{48000};
+
+    PitchFadeWindowDelay<MaxSize> noLookahead;
+    noLookahead.setSize(MaxSize / 2);
+    noLookahead.setFadeTime(MaxSize / 2);
+    noLookahead.enablePitchSynchronousMode(SampleRate, 80.f, 1000.f, size_t{0});
+    noLookahead.setPitch(0.f);
+
+    PitchFadeWindowDelay<MaxSize> withLookahead;
+    withLookahead.setSize(MaxSize / 2);
+    withLookahead.setFadeTime(MaxSize / 2);
+    withLookahead.enablePitchSynchronousMode(SampleRate, 80.f, 1000.f, Lookahead);
+    withLookahead.setPitch(0.f);
+
+    std::vector<float> out0(NumSamples);
+    std::vector<float> outL(NumSamples);
+    for (size_t i = 0; i < NumSamples; ++i)
+    {
+        const auto phase = 2.f * std::numbers::pi_v<float> * ProbeFreq * static_cast<float>(i) / SampleRate;
+        const auto sample = std::sin(phase);
+        out0[i] = noLookahead.step(sample);
+        outL[i] = withLookahead.step(sample);
+    }
+
+    float worst = 0.f;
+    for (size_t i = MaxSize * 2; i < NumSamples; ++i)
+    {
+        worst = std::max(worst, std::fabs(outL[i] - out0[i - Lookahead]));
+    }
+    EXPECT_LT(worst, 1e-5f) << "worst mismatch between outL[i] and out0[i-lookahead] was " << worst;
+}
+
+// The whole point of lookahead: by the time real material reaches the grain machine, Yin
+// should already have locked on, so the attack is as clean as the settled state instead
+// of starting in the jittered fallback for the first ~50 ms. Measuring from the moment
+// real audio reaches the grain machine (not from sample 0) keeps this a fair comparison -
+// a fixed window starting at 0 would otherwise penalize a larger lookahead just for
+// having more silence inside a fixed-length capture, not for worse attack quality.
+TEST(PitchFadeWindowDelayTest, lookaheadCleansUpTheAttackToSettledQuality)
+{
+    constexpr float Freq{200.f};
+
+    const auto noLookaheadAttack = renderAttack(Freq, 0, FftSize);
+    const auto lookaheadAttack = renderAttack(Freq, 2400, FftSize);
+    const auto settled = renderSettled(Freq, 0.f, true);
+
+    const auto noLookaheadSfdr = carrierSfdrDb(noLookaheadAttack, Freq);
+    const auto lookaheadSfdr = carrierSfdrDb(lookaheadAttack, Freq);
+    const auto settledSfdr = carrierSfdrDb(settled, Freq);
+
+    EXPECT_LT(lookaheadSfdr, noLookaheadSfdr - 3.f)
+        << "no-lookahead attack SFDR " << noLookaheadSfdr << " dB, with lookahead " << lookaheadSfdr << " dB";
+    // with lookahead, the attack should already match settled-state quality, not just
+    // improve on the no-lookahead attack
+    EXPECT_NEAR(lookaheadSfdr, settledSfdr, 1.f)
+        << "lookahead attack SFDR " << lookaheadSfdr << " dB vs settled " << settledSfdr << " dB";
 }
 
 // Renders material to listen to; not an assertion. Run with:
