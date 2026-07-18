@@ -69,21 +69,20 @@ public:
     // juce::FlexItem::Margin(Constants::Margins::small);
     const juce::FlexItem::Margin knobMarginSmall =
         juce::FlexItem::Margin(Constants::Margins::medium);
-    std::vector<juce::Rectangle<int>> areas(7);
-    const auto colWidth = area.getWidth() / 15;
+
+    std::vector<juce::Rectangle<int>> areas(5);
+    const auto colWidth = area.getWidth() / 7;
+    const auto rowHeight = area.getHeight() / 5;
     areas[0] =
-        area.removeFromLeft(colWidth * 3).reduced(Constants::Margins::small);
+        area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+    auto keepArea = area;
     areas[1] =
-        area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
+        area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
     areas[2] =
-        area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
+        area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
     areas[3] =
-        area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
-    areas[4] =
-        area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
-    areas[5] =
-        area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
-    areas[6] = area.reduced(Constants::Margins::small);
+        area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+    areas[4] = area.reduced(Constants::Margins::small);
 
     {
       juce::FlexBox box;
@@ -91,7 +90,7 @@ public:
       box.flexDirection = juce::FlexBox::Direction::column;
       box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
       box.items.add(juce::FlexItem(patchPresetbrowser)
-                        .withFlex(1)
+                        .withHeight(40)
                         .withMargin(knobMarginSmall));
       box.items.add(
           juce::FlexItem(levelGauge).withFlex(1).withMargin(knobMarginSmall));
@@ -102,7 +101,7 @@ public:
     {
       juce::FlexBox box;
       box.flexWrap = juce::FlexBox::Wrap::noWrap;
-      box.flexDirection = juce::FlexBox::Direction::column;
+      box.flexDirection = juce::FlexBox::Direction::row;
       box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
       box.items.add(
           juce::FlexItem(dryDial).withFlex(1).withMargin(knobMarginSmall));
@@ -110,24 +109,26 @@ public:
           juce::FlexItem(wetDial).withFlex(1).withMargin(knobMarginSmall));
       box.items.add(
           juce::FlexItem(preDelayDial).withFlex(1).withMargin(knobMarginSmall));
+      box.items.add(
+          juce::FlexItem(mixDial).withFlex(1).withMargin(knobMarginSmall));
+      box.items.add(
+          juce::FlexItem(pitchDial).withFlex(1).withMargin(knobMarginSmall));
+      box.items.add(juce::FlexItem(psolaSwitch)
+                        .withWidth(Constants::Text::labelWidth)
+                        .withHeight(Constants::Text::labelHeight)
+                        .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                        .withMargin(knobMarginSmall));
       box.performLayout(areas[1].toFloat());
     }
     {
       juce::FlexBox box;
       box.flexWrap = juce::FlexBox::Wrap::noWrap;
-      box.flexDirection = juce::FlexBox::Direction::column;
+      box.flexDirection = juce::FlexBox::Direction::row;
       box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
       box.items.add(
           juce::FlexItem(elementsDial).withFlex(1).withMargin(knobMarginSmall));
       box.items.add(
           juce::FlexItem(feedbackDial).withFlex(1).withMargin(knobMarginSmall));
-      box.performLayout(areas[2].toFloat());
-    }
-    {
-      juce::FlexBox box;
-      box.flexWrap = juce::FlexBox::Wrap::noWrap;
-      box.flexDirection = juce::FlexBox::Direction::column;
-      box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
       box.items.add(
           juce::FlexItem(bulgeDial).withFlex(1).withMargin(knobMarginSmall));
       box.items.add(juce::FlexItem(bottomSizeDial)
@@ -135,12 +136,12 @@ public:
                         .withMargin(knobMarginSmall));
       box.items.add(
           juce::FlexItem(topSizeDial).withFlex(1).withMargin(knobMarginSmall));
-      box.performLayout(areas[3].toFloat());
+      box.performLayout(areas[2].toFloat());
     }
     {
       juce::FlexBox box;
       box.flexWrap = juce::FlexBox::Wrap::noWrap;
-      box.flexDirection = juce::FlexBox::Direction::column;
+      box.flexDirection = juce::FlexBox::Direction::row;
       box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
       box.items.add(juce::FlexItem(modulationDepthDial)
                         .withFlex(1)
@@ -150,23 +151,12 @@ public:
                         .withMargin(knobMarginSmall));
       box.items.add(
           juce::FlexItem(lowPassDial).withFlex(1).withMargin(knobMarginSmall));
-      box.performLayout(areas[4].toFloat());
+      box.performLayout(areas[3].toFloat());
     }
     {
       juce::FlexBox box;
       box.flexWrap = juce::FlexBox::Wrap::noWrap;
-      box.flexDirection = juce::FlexBox::Direction::column;
-      box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-      box.items.add(
-          juce::FlexItem(mixDial).withFlex(1).withMargin(knobMarginSmall));
-      box.items.add(
-          juce::FlexItem(pitchDial).withFlex(1).withMargin(knobMarginSmall));
-      box.performLayout(areas[5].toFloat());
-    }
-    {
-      juce::FlexBox box;
-      box.flexWrap = juce::FlexBox::Wrap::noWrap;
-      box.flexDirection = juce::FlexBox::Direction::column;
+      box.flexDirection = juce::FlexBox::Direction::row;
       box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
       box.items.add(
           juce::FlexItem(fdnMixDial).withFlex(1).withMargin(knobMarginSmall));
@@ -174,7 +164,7 @@ public:
           juce::FlexItem(fdnSizeDial).withFlex(1).withMargin(knobMarginSmall));
       box.items.add(
           juce::FlexItem(fdnDecayDial).withFlex(1).withMargin(knobMarginSmall));
-      box.performLayout(areas[6].toFloat());
+      box.performLayout(areas[4].toFloat());
     }
   }
 #pragma GCC diagnostic pop
@@ -365,6 +355,11 @@ public:
          },
          [this] { processorRef.clearCcAssignment(CcTarget::pitch); },
          [this] { return processorRef.getCcController(CcTarget::pitch); }});
+    addAndMakeVisible(psolaSwitch);
+    psolaSwitchAttachment =
+        std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "psola", psolaSwitch);
+
     addAndMakeVisible(fdnMixDial);
     fdnMixDial.reset(valueTreeState, "fdnMix");
     fdnMixDial.setLabelText(juce::String::fromUTF8("FDN Mix"));
@@ -496,6 +491,9 @@ private:
   CustomRotaryDial lowPassDial{this};
   CustomRotaryDial mixDial{this};
   CustomRotaryDial pitchDial{this};
+  juce::ToggleButton psolaSwitch{juce::String::fromUTF8("Pitch Sync")};
+  std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>
+      psolaSwitchAttachment;
   CustomRotaryDial fdnMixDial{this};
   CustomRotaryDial fdnSizeDial{this};
   CustomRotaryDial fdnDecayDial{this};

@@ -21,9 +21,9 @@ class MaxDiffuserImpl final : public EffectBase
     static constexpr size_t MaxPreDelaySamples{96000};
     static constexpr size_t FdnOrder{32};
     static constexpr size_t FdnMaxSizePerElement{100000};
-    static constexpr float FdnSizeSpread{2.1f};
+    static constexpr float FdnSizeSpread{4.3f};
     static constexpr float FdnInScale{1.f / static_cast<float>(FdnOrder)};
-    static constexpr float FdnPresetBulge{0.4f};
+    static constexpr float FdnPresetBulge{-0.4f};
 
     using Chain = AbacDsp::DiffuserDelayChain<MaxDelaySamples, MaxElements, AbacDsp::AllpassFeedbackStyle::Schroeder>;
     using PreDelay = AbacDsp::NaiveDelay<MaxPreDelaySamples>;
@@ -51,8 +51,8 @@ class MaxDiffuserImpl final : public EffectBase
         }
 
         m_fdn.setSpreadBulge(FdnPresetBulge);
-        setFdnSize(30.f);
-        setFdnDecay(2000.f);
+        setFdnSize(10.f);
+        setFdnDecay(1000.f);
     }
 
     void setDry(const float value)
@@ -149,6 +149,14 @@ class MaxDiffuserImpl final : public EffectBase
         for (auto& pitcher : m_pitcher)
         {
             pitcher.setPitch(semitones);
+        }
+    }
+
+    void setPsola(const bool enabled)
+    {
+        for (auto& pitcher : m_pitcher)
+        {
+            pitcher.setPsolaEnabled(enabled);
         }
     }
 

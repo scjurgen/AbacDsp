@@ -39,6 +39,20 @@ class Pitch final : public BlockProcessorBase<BlockSize>
         m_pdl.setReverse(reverse);
     }
 
+    // Lazily constructs the pitch tracker on first enable, so a patch that never turns
+    // this on never pays for it.
+    void setPsolaEnabled(const bool enabled)
+    {
+        if (enabled && !m_psolaReady)
+        {
+            m_pdl.enablePitchSynchronousMode(m_sampleRate);
+            m_psolaReady = true;
+            return;
+        }
+        using GrainMode = PitchFadeWindowDelay<DelayBufferSize>::GrainMode;
+        m_pdl.setGrainMode(enabled ? GrainMode::PitchSynchronous : GrainMode::DriftJitter);
+    }
+
     void process(std::array<float, BlockSize>& blk) noexcept override
     {
         std::array<float, BlockSize> tmp{};
@@ -56,6 +70,7 @@ class Pitch final : public BlockProcessorBase<BlockSize>
     const float m_sampleRate;
     float m_mixPitch{0.5f};
     float m_mixPlain{0.5f};
+    bool m_psolaReady{false};
     PitchFadeWindowDelay<DelayBufferSize> m_pdl;
     OnePoleFilter<OnePoleFilterCharacteristic::LowPass> m_lp;
 };

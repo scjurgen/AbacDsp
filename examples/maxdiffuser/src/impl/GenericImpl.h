@@ -25,6 +25,7 @@ public:
   void setLowPass(const float value) { m_lowPass = value; }
   void setMix(const float value) { m_mix = value; }
   void setPitch(const float value) { m_pitch = value; }
+  void setPsola(const bool value) { m_psola = value; }
   void setFdnMix(const float value) { m_fdnMix = std::pow(10.f, value / 20.f); }
   void setFdnSize(const float value) { m_fdnSize = value; }
   void setFdnDecay(const float value) { m_fdnDecay = value; }
@@ -51,6 +52,7 @@ private:
   float m_lowPass{};
   float m_mix{};
   float m_pitch{};
+  bool m_psola{};
   float m_fdnMix{};
   float m_fdnSize{};
   float m_fdnDecay{};

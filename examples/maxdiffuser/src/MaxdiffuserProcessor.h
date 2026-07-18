@@ -54,6 +54,7 @@ public:
     m_parameters.addParameterListener("lowPass", this);
     m_parameters.addParameterListener("mix", this);
     m_parameters.addParameterListener("pitch", this);
+    m_parameters.addParameterListener("psola", this);
     m_parameters.addParameterListener("fdnMix", this);
     m_parameters.addParameterListener("fdnSize", this);
     m_parameters.addParameterListener("fdnDecay", this);
@@ -82,6 +83,7 @@ public:
     m_parameters.removeParameterListener("lowPass", this);
     m_parameters.removeParameterListener("mix", this);
     m_parameters.removeParameterListener("pitch", this);
+    m_parameters.removeParameterListener("psola", this);
     m_parameters.removeParameterListener("fdnMix", this);
     m_parameters.removeParameterListener("fdnSize", this);
     m_parameters.removeParameterListener("fdnDecay", this);
@@ -342,6 +344,8 @@ public:
             .withStringFromValueFunction([](float value, int) {
               return juce::String(value, 2) + " st";
             })));
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID("psola", 1), "Pitch Sync", 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("fdnMix", 1), "FDN Mix",
         juce::NormalisableRange<float>(-100, 12, 0.1, 1, false), -100,
@@ -360,7 +364,7 @@ public:
             })));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("fdnDecay", 1), "FDN Decay",
-        juce::NormalisableRange<float>(1, 99000, 1, 0.2, false), 2000,
+        juce::NormalisableRange<float>(1, 100000, 1, 0.2, false), 2000,
         juce::AudioParameterFloatAttributes{}
             .withLabel("ms")
             .withStringFromValueFunction([](float value, int) {
@@ -446,6 +450,11 @@ public:
              [](AudioPluginAudioProcessor &p, const float v) {
                p.pluginRunner->setPitch(v);
                p.m_fileIo.updateParameter(PatchParameters::Id::pitch, v);
+             }},
+            {"psola",
+             [](AudioPluginAudioProcessor &p, const float v) {
+               p.pluginRunner->setPsola(static_cast<bool>(v));
+               p.m_fileIo.updateParameter(PatchParameters::Id::psola, v);
              }},
             {"fdnMix",
              [](AudioPluginAudioProcessor &p, const float v) {
@@ -551,6 +560,11 @@ public:
     if (auto *p = m_parameters.getParameter("pitch")) {
       const auto &range = m_parameters.getParameterRange("pitch");
       float normalized = range.convertTo0to1(params.pitch);
+      p->setValueNotifyingHost(normalized);
+    }
+    if (auto *p = m_parameters.getParameter("psola")) {
+      const auto &range = m_parameters.getParameterRange("psola");
+      float normalized = range.convertTo0to1(params.psola);
       p->setValueNotifyingHost(normalized);
     }
     if (auto *p = m_parameters.getParameter("fdnMix")) {
