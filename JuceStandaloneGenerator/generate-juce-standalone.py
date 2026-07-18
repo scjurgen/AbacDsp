@@ -57,6 +57,7 @@ cppSourceFilesFixed = [
     "inc/CustomRotaryDial.h",
     "inc/GenericMeter.h",
     "inc/PatchBrowser.h",
+    "inc/StatusBar.h",
     "inc/SpectrogramDisplay.h",
     "inc/VuMeter.h",
     "inc/WaveformMeter.h",
@@ -361,6 +362,9 @@ def createWidgetsDecl(m: dict) -> str:
             case "presetbrowser":
                 varname = f"{symbol}Presetbrowser"
                 res += f"PatchBrowser {varname}{{}};\n"
+            case "statusbar":
+                varname = f"{symbol}Statusbar"
+                res += f"StatusBar {varname}{{}};\n"
     return res
 
 def createInitWidgets(m: dict) -> str:
@@ -429,6 +433,13 @@ def createInitWidgets(m: dict) -> str:
                 {varname}.onSaveAs = [this] (const juce::String& name) {{ return processorRef.saveCurrentPatchAs(name); }};
                 {varname}.onDelete = [this] (const juce::String& name) {{ return processorRef.deletePatchNamed(name); }};
                 {varname}.refresh();\n"""
+                statusbars = [p for p in m["ports-control"] if p['type'] == 'statusbar']
+                if statusbars:
+                    statusVar = f"{statusbars[0]['symbol']}Statusbar"
+                    res += f"""{varname}.onStatus = [this] (const juce::String& message, bool isError) {{ {statusVar}.showMessage(message, isError); }};\n"""
+            case "statusbar":
+                varname += "Statusbar"
+                res += f"""{add_fn}({varname});\n"""
     return res
 
 

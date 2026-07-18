@@ -266,7 +266,7 @@ public:
             })));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID("elements", 1), "Elements",
-        juce::NormalisableRange<float>(1, 50, 1, 1, false), 6,
+        juce::NormalisableRange<float>(0, 50, 1, 1, false), 6,
         juce::AudioParameterFloatAttributes{}
             .withLabel("")
             .withStringFromValueFunction([](float value, int) {

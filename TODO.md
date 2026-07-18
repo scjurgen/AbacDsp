@@ -1,5 +1,17 @@
 # TODO
 
+## Maxdiffuser
+
+### Custom Delay Chain Visualisation
+Introduce to the JuceStandAloneGenerator a generic visualisation/interaction object.
+It should be a placeholder that then will be custom implemented in the impl/ part of the generated code.
+Concrete example that we implment: Object ShowProcessingBins impl/ShowProcessingBins.h where we paint bins of the single diffuser elements (up to 50) levels (dB scale)
+Bin 0 will be the actual input level, and bin 50 will be the final current output level.
+
+### Phasevocoder pitch shifter
+- Rework the src/Spectral/StretchedSampleProducer.h and create a realtime PhaseVocoderPitcher.h
+- Test thoroughly with unit-tests in a closed development cycle
+
 ## Code quality
 ### Sanitizier
 

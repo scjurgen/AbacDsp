@@ -92,6 +92,9 @@ public:
       box.items.add(juce::FlexItem(patchPresetbrowser)
                         .withHeight(40)
                         .withMargin(knobMarginSmall));
+      box.items.add(juce::FlexItem(patchStatusStatusbar)
+                        .withHeight(30)
+                        .withMargin(knobMarginSmall));
       box.items.add(
           juce::FlexItem(levelGauge).withFlex(1).withMargin(knobMarginSmall));
       box.items.add(
@@ -197,6 +200,11 @@ public:
       return processorRef.deletePatchNamed(name);
     };
     patchPresetbrowser.refresh();
+    patchPresetbrowser.onStatus = [this](const juce::String &message,
+                                         bool isError) {
+      patchStatusStatusbar.showMessage(message, isError);
+    };
+    addAndMakeVisible(patchStatusStatusbar);
     addAndMakeVisible(dryDial);
     dryDial.reset(valueTreeState, "dry");
     dryDial.setLabelText(juce::String::fromUTF8("Dry"));
@@ -478,6 +486,7 @@ private:
   bool m_boundsRestored{false};
 
   PatchBrowser patchPresetbrowser{};
+  StatusBar patchStatusStatusbar{};
   CustomRotaryDial dryDial{this};
   CustomRotaryDial wetDial{this};
   CustomRotaryDial preDelayDial{this};

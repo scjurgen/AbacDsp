@@ -14,13 +14,14 @@
   "ports-control":
   [
     {"short": "PBR", "type": "presetbrowser", "display": "Patch", "symbol": "patch"},
+    {"short": "STAT", "type": "statusbar", "display": "Status", "symbol": "patchStatus"},
     {"short": "DRY", "type": "dial", "display": "Dry", "symbol": "dry", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB",
       "cc": {"controller": 20}},
     {"short": "WET", "type": "dial", "display": "Wet", "symbol": "wet", "default": -6, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB",
       "cc": {"controller": 21}},
     {"short": "PRED", "type": "dial", "display": "Pre Delay", "symbol": "preDelay", "default": 0, "range": [0, 1000, 1, 0.5, false], "precision": 0, "unit": "ms",
       "cc": {"controller": 22}},
-    {"short": "ELM", "type": "dial", "display": "Elements", "symbol": "elements", "default": 6, "range": [1, 50, 1, 1, false], "precision": 0, "unit": "",
+    {"short": "ELM", "type": "dial", "display": "Elements", "symbol": "elements", "default": 6, "range": [0, 50, 1, 1, false], "precision": 0, "unit": "",
       "cc": {"controller": 23}},
     {"short": "FDBK", "type": "dial", "display": "Diffusion", "symbol": "feedback", "default": 50, "range": [-100, 100, 0.1, 1, false], "precision": 1, "unit": "%",
       "cc": {"controller": 24}},
@@ -54,7 +55,7 @@
     "WINDOW_WIDTH": "1100",
     "WINDOW_HEIGHT": "750",
     "type": "|=4",
-    "composition": "C=(1:6) R=(1:2:1:1) A1=(PBR*40,LVL,CPU) A2=(DRY,WET,PRED,MIX,PTCH,PSYN) A3=(ELM,FDBK,BLG,BSZ,TSZ) A4=(MDPT,MDSP,LPF) A5=(FMIX,FSZ,FDEC)"
+    "composition": "C=(1:6) R=(1:2:1:1) A1=(PBR*40,STAT*30,LVL,CPU) A2=(DRY,WET,PRED,MIX,PTCH,PSYN) A3=(ELM,FDBK,BLG,BSZ,TSZ) A4=(MDPT,MDSP,LPF) A5=(FMIX,FSZ,FDEC)"
   },
   "CPP":
   {

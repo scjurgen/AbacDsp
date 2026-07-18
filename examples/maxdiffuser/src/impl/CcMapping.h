@@ -37,7 +37,7 @@ inline constexpr std::array<CcMapping, 16> kDefaultCcMappings{{
     {20, -100.0f, 12.0f},
     {21, -100.0f, 12.0f},
     {22, 0.0f, 1000.0f},
-    {23, 1.0f, 50.0f},
+    {23, 0.0f, 50.0f},
     {24, -100.0f, 100.0f},
     {25, -1.0f, 1.0f},
     {26, 51.0f, 22000.0f},
@@ -49,7 +49,7 @@ inline constexpr std::array<CcMapping, 16> kDefaultCcMappings{{
     {32, -24.0f, 24.0f},
     {33, -100.0f, 12.0f},
     {34, 1.0f, 330.0f},
-    {35, 1.0f, 99000.0f},
+    {35, 1.0f, 100000.0f},
 }};
 
 inline constexpr std::array<std::string_view, 16> kCcTargetParamIds{
@@ -65,7 +65,7 @@ inline constexpr std::array<CcFullRange, 16> kCcTargetFullRange{{
     {-100.0f, 12.0f},
     {-100.0f, 12.0f},
     {0.0f, 1000.0f},
-    {1.0f, 50.0f},
+    {0.0f, 50.0f},
     {-100.0f, 100.0f},
     {-1.0f, 1.0f},
     {51.0f, 22000.0f},
@@ -77,5 +77,5 @@ inline constexpr std::array<CcFullRange, 16> kCcTargetFullRange{{
     {-24.0f, 24.0f},
     {-100.0f, 12.0f},
     {1.0f, 330.0f},
-    {1.0f, 99000.0f},
+    {1.0f, 100000.0f},
 }};

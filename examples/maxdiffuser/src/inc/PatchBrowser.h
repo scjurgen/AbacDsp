@@ -21,9 +21,14 @@ class PatchBrowser final : public juce::Component
 
         m_combo.onChange = [this]
         {
+            const auto name = m_combo.getText();
             if (onLoad)
             {
-                onLoad(m_combo.getText());
+                onLoad(name);
+            }
+            if (onStatus && name.isNotEmpty())
+            {
+                onStatus("Loaded '" + name + "'", false);
             }
         };
         m_saveButton.onClick = [this] { save(); };
@@ -69,6 +74,7 @@ class PatchBrowser final : public juce::Component
     std::function<void(const juce::String&)> onLoad;
     std::function<bool(const juce::String&)> onSaveAs;
     std::function<bool(const juce::String&)> onDelete;
+    std::function<void(const juce::String&, bool)> onStatus;
 
   private:
     void save()
@@ -79,9 +85,10 @@ class PatchBrowser final : public juce::Component
             promptAndSaveAs();
             return;
         }
-        if (onSaveAs)
+        const auto succeeded = onSaveAs && onSaveAs(currentName);
+        if (onStatus)
         {
-            onSaveAs(currentName);
+            onStatus(succeeded ? "Saved '" + currentName + "'" : "Save failed", !succeeded);
         }
         refresh();
     }
@@ -103,9 +110,11 @@ class PatchBrowser final : public juce::Component
                                               {
                                                   return;
                                               }
-                                              if (onSaveAs)
+                                              const auto succeeded = onSaveAs && onSaveAs(name);
+                                              if (onStatus)
                                               {
-                                                  onSaveAs(name);
+                                                  onStatus(succeeded ? "Saved '" + name + "'" : "Save failed",
+                                                           !succeeded);
                                               }
                                               refresh();
                                           }),
@@ -133,9 +142,11 @@ class PatchBrowser final : public juce::Component
                                               {
                                                   return;
                                               }
-                                              if (onDelete)
+                                              const auto succeeded = onDelete && onDelete(name);
+                                              if (onStatus)
                                               {
-                                                  onDelete(name);
+                                                  onStatus(succeeded ? "Deleted '" + name + "'" : "Delete failed",
+                                                           !succeeded);
                                               }
                                               refresh();
                                           });
