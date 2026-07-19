@@ -359,9 +359,6 @@ def createWidgetsDecl(m: dict) -> str:
             case "label":
                 varname = f"{symbol}Label"
                 res += f"juce::Label {varname}{{}};\n"
-            case "statusbar":
-                varname = f"{symbol}Statusbar"
-                res += f"StatusBar {varname}{{}};\n"
     return res
 
 def createInitWidgets(m: dict) -> str:
@@ -420,9 +417,6 @@ def createInitWidgets(m: dict) -> str:
             case "label":
                 varname += "Label"
                 res += f"""{add_fn}({varname}); {varname}.setText(juce::String::fromUTF8("{item['display']}"), juce::dontSendNotification);\n"""
-            case "statusbar":
-                varname += "Statusbar"
-                res += f"""{add_fn}({varname});\n"""
     return res
 
 

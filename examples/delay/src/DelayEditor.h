@@ -27,6 +27,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         setLookAndFeel(m_laf.get());
         juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
         addAndMakeVisible(m_menuBar);
+        addAndMakeVisible(m_statusBar);
         initWidgets();
         setResizable(true, true);
         setResizeLimits(GuiConstants::instance().init.WindowWidth, GuiConstants::instance().init.WindowHeight, 4000,
@@ -71,6 +72,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         auto area = getLocalBounds();
         m_menuBar.setBounds(area.removeFromTop(getLookAndFeel().getDefaultMenuBarHeight()));
+        m_statusBar.setBounds(area.removeFromBottom(static_cast<int>(Constants::Text::labelHeight)));
         area = area.reduced(static_cast<int>(Constants::Margins::big));
 
         // auto generated
@@ -328,7 +330,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         else if (menuItemID >= kPatchLoadIdBase &&
                  menuItemID < kPatchLoadIdBase + static_cast<int>(m_patchMenuNames.size()))
         {
-            processorRef.requestLoadPatch(m_patchMenuNames[static_cast<size_t>(menuItemID - kPatchLoadIdBase)]);
+            const auto& name = m_patchMenuNames[static_cast<size_t>(menuItemID - kPatchLoadIdBase)];
+            processorRef.requestLoadPatch(name);
+            m_statusBar.showMessage("Loaded '" + name + "'");
         }
         else if (menuItemID >= kPatchDeleteIdBase &&
                  menuItemID < kPatchDeleteIdBase + static_cast<int>(m_patchMenuNames.size()))
@@ -350,9 +354,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             promptSaveAs();
             return;
         }
-        if (!processorRef.saveCurrentPatchAs(currentName))
+        if (processorRef.saveCurrentPatchAs(currentName))
         {
-            showPatchError("Save failed");
+            m_statusBar.showMessage("Saved '" + currentName + "'");
+        }
+        else
+        {
+            m_statusBar.showMessage("Save failed", true);
         }
     }
 
@@ -363,19 +371,27 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         m_patchNameDialog->addTextEditor("name", processorRef.getCurrentPatchName());
         m_patchNameDialog->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
         m_patchNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
-        m_patchNameDialog->enterModalState(
-            true,
-            juce::ModalCallbackFunction::create(
-                [this](int result)
-                {
-                    const auto name = m_patchNameDialog->getTextEditorContents("name").trim();
-                    m_patchNameDialog.reset();
-                    if (result == 1 && name.isNotEmpty() && !processorRef.saveCurrentPatchAs(name))
-                    {
-                        showPatchError("Save failed");
-                    }
-                }),
-            false);
+        m_patchNameDialog->enterModalState(true,
+                                           juce::ModalCallbackFunction::create(
+                                               [this](int result)
+                                               {
+                                                   const auto name =
+                                                       m_patchNameDialog->getTextEditorContents("name").trim();
+                                                   m_patchNameDialog.reset();
+                                                   if (result != 1 || name.isEmpty())
+                                                   {
+                                                       return;
+                                                   }
+                                                   if (processorRef.saveCurrentPatchAs(name))
+                                                   {
+                                                       m_statusBar.showMessage("Saved '" + name + "'");
+                                                   }
+                                                   else
+                                                   {
+                                                       m_statusBar.showMessage("Save failed", true);
+                                                   }
+                                               }),
+                                           false);
     }
 
     void promptRename(const juce::String& oldName)
@@ -392,10 +408,17 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                    const auto newName =
                                                        m_patchNameDialog->getTextEditorContents("name").trim();
                                                    m_patchNameDialog.reset();
-                                                   if (result == 1 && newName.isNotEmpty() && newName != oldName &&
-                                                       !processorRef.renamePatch(oldName, newName))
+                                                   if (result != 1 || newName.isEmpty() || newName == oldName)
                                                    {
-                                                       showPatchError("Rename failed");
+                                                       return;
+                                                   }
+                                                   if (processorRef.renamePatch(oldName, newName))
+                                                   {
+                                                       m_statusBar.showMessage("Renamed to '" + newName + "'");
+                                                   }
+                                                   else
+                                                   {
+                                                       m_statusBar.showMessage("Rename failed", true);
                                                    }
                                                }),
                                            false);
@@ -411,16 +434,19 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                               .withButton("No"),
                                           [this, name](int result)
                                           {
-                                              if (result == 0 && !processorRef.deletePatchNamed(name))
+                                              if (result != 0)
                                               {
-                                                  showPatchError("Delete failed");
+                                                  return;
+                                              }
+                                              if (processorRef.deletePatchNamed(name))
+                                              {
+                                                  m_statusBar.showMessage("Deleted '" + name + "'");
+                                              }
+                                              else
+                                              {
+                                                  m_statusBar.showMessage("Delete failed", true);
                                               }
                                           });
-    }
-
-    static void showPatchError(const juce::String& message)
-    {
-        juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Patch Error", message);
     }
 
 
@@ -430,6 +456,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<GuiLookAndFeel> m_laf;
     juce::Colour backgroundApp;
     juce::MenuBarComponent m_menuBar;
+    StatusBar m_statusBar;
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     static constexpr int kPatchSaveId = 1000;
