@@ -16,6 +16,7 @@
   "midi-ports-out": [],
   "audio-ports-in": [{ "name": "in", "symbol":  "in"}],
   "audio-ports-out": [{ "name": "left", "symbol":  "left"},{ "name": "right", "symbol":  "right"}],
+  "patches": true,
   "ports-control":
   [
     {"short": "VOL", "type": "dial", "display": "Vol", "symbol": "vol", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},

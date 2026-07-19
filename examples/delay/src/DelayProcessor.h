@@ -484,6 +484,66 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
     }
 
+    [[nodiscard]] std::vector<juce::String> listPatchNames() const
+    {
+        std::vector<juce::String> result;
+        for (const auto& n : m_fileIo.listPatchNames())
+        {
+            result.push_back(juce::String(n));
+        }
+        return result;
+    }
+
+    [[nodiscard]] juce::String getCurrentPatchName() const
+    {
+        return juce::String(m_fileIo.currentPatchName());
+    }
+
+    void requestLoadPatch(const juce::String& name)
+    {
+        if (m_fileIo.areParametersModified())
+        {
+            juce::NativeMessageBox::showAsync(
+                juce::MessageBoxOptions()
+                    .withIconType(juce::MessageBoxIconType::QuestionIcon)
+                    .withTitle("Save Parameters")
+                    .withMessage("Parameters have changed, do you want to save before loading this patch?")
+                    .withButton("Yes")
+                    .withButton("No"),
+                [this, name](int result) { finishLoadNamedPatch(name, result == 0); });
+        }
+        else
+        {
+            finishLoadNamedPatch(name, false);
+        }
+    }
+
+    void finishLoadNamedPatch(const juce::String& name, bool shouldSave)
+    {
+        if (shouldSave)
+        {
+            m_fileIo.forceSave();
+        }
+        if (m_fileIo.loadPatchNamed(name.toStdString()))
+        {
+            applyLoadedParametersToHost();
+        }
+    }
+
+    bool saveCurrentPatchAs(const juce::String& name)
+    {
+        return m_fileIo.savePatchNamed(name.toStdString());
+    }
+
+    bool deletePatchNamed(const juce::String& name)
+    {
+        return m_fileIo.deletePatchNamed(name.toStdString());
+    }
+
+    bool renamePatch(const juce::String& oldName, const juce::String& newName)
+    {
+        return m_fileIo.renamePatchNamed(oldName.toStdString(), newName.toStdString());
+    }
 
     void computeCpuLoad(std::chrono::nanoseconds elapsed, size_t numSamples)
     {

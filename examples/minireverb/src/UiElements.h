@@ -11,7 +11,6 @@
 #include "inc/CpuMeter.h"
 #include "inc/CustomRotaryDial.h"
 #include "inc/GenericMeter.h"
-#include "inc/PatchBrowser.h"
 #include "inc/StatusBar.h"
 #include "inc/SpectrogramDisplay.h"
 #include "inc/VuMeter.h"

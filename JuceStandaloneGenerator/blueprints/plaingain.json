@@ -6,9 +6,9 @@
   "description": [
     "✨ Just a plain gain with latency\n"
   ],
+  "patches": true,
   "ports-control":
   [
-    {"short": "SUB", "type": "drop", "display": "Subset", "symbol": "subset", "default": 0, "patch": true, "listitems": "#{}", "count": 5},
     {"short": "GAIN", "type":"dial", "display": "Gain", "symbol": "gain", "default": 0, "range": [-60,60, 0.1, 1,false], "precision": 1, "unit": "dB" },
     {"short": "LOW", "type":"dial", "display": "Low", "symbol": "lowShelving", "default": 0, "range": [-24,24, 0.1, 1,false], "precision": 1, "unit": "dB" },
     {"short": "HIGH", "type":"dial", "display": "High", "symbol": "highShelving", "default": 0, "range": [-24,24, 0.1, 1,false], "precision": 1, "unit": "dB" },
@@ -21,7 +21,7 @@
     "WINDOW_WIDTH": "800",
     "WINDOW_HEIGHT": "600",
     "type": "|||",
-    "composition": "C=(1:1:5) A1=(SUB,LAT,LVL*400) A2=(GAIN, LOW, HIGH) A3=(FFT%1, SIG%1))"
+    "composition": "C=(1:1:5) A1=(LAT,LVL*400) A2=(GAIN, LOW, HIGH) A3=(FFT%1, SIG%1))"
   },
   "CPP":
   {

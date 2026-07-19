@@ -160,6 +160,25 @@ class FileIo
         return juce::File(filename).deleteFile();
     }
 
+    bool renamePatchNamed(const std::string& oldName, const std::string& newName)
+    {
+        const std::string oldFilename = getNamedPatchFilename(oldName);
+        const std::string newFilename = getNamedPatchFilename(newName);
+        if (oldFilename.empty() || newFilename.empty())
+        {
+            return false;
+        }
+        if (!juce::File(oldFilename).moveFileTo(juce::File(newFilename)))
+        {
+            return false;
+        }
+        if (oldName == m_currentPatchName)
+        {
+            m_currentPatchName = newName;
+        }
+        return true;
+    }
+
   private:
     // JUCE's userApplicationDataDirectory is bare "~/Library" on macOS; the
     // "Application Support" segment is a convention apps must add themselves.

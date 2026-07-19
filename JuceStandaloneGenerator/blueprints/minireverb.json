@@ -10,6 +10,7 @@
   "minor": 1,
   "major": 0,
   "description": ["✨ Just a small Reverb. "],
+  "patches": true,
   "ports-control":
   [
     {"short": "ORD", "type": "drop", "display": "Order", "symbol": "order", "default": 8, "signed": false, "listitems": ["4","8","12","16","20","24","32","48","64"]},

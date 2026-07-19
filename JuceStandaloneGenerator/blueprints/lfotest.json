@@ -16,6 +16,7 @@
   "midi-ports-out": [],
   "audio-ports-in": [{ "name": "in", "symbol":  "in"}],
   "audio-ports-out": [{ "name": "left", "symbol":  "left"},{ "name": "right", "symbol":  "right"}],
+  "patches": true,
   "ports-control":
   [
     {"short": "WAV", "type": "drop", "display": "Wave", "symbol": "wave", "default": 0, "listitems": [ "Sine", "Triangle", "Saw", "Square", "Noise", "SampleHold", "SampleHoldFlipFlop", "BrownNoise"]},

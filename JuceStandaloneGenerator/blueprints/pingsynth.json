@@ -16,10 +16,10 @@
   "midi-ports-out": [],
   "audio-ports-in": [{ "name": "in", "symbol":  "in"}],
   "audio-ports-out": [{ "name": "left", "symbol":  "left"},{ "name": "right", "symbol":  "right"}],
+  "patches": true,
   "ports-control":
   [
     {"short": "MODE", "type": "drop", "display": "Mode", "symbol": "mode", "default": 1, "listitems": ["classic", "mpe"]},
-    {"short": "PTCH", "type": "drop", "display": "Patch", "symbol": "patch", "default": 0, "listitems": "#{}", "count": 10, "patch": true},
     {"short": "VOL", "type": "dial", "display": "Vol", "symbol": "vol", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
     {"short": "REV", "type": "dial", "display": "Reverb", "symbol": "reverbLevel", "default": -24, "range": [-120, 0, 1, 1, false], "precision": 0, "unit": "dB"},
     {"short": "XPOS", "type": "dial", "display": "X", "symbol": "x", "default": 25, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
@@ -50,7 +50,7 @@
     "WINDOW_WIDTH": "1200",
     "WINDOW_HEIGHT": "800",
     "type": "|||||",
-    "composition": "C=(1:2:2:2:6) A1=(MODE,PTCH,VOL,REV,LVL*200,CPU*200) A2=(TYPE,XPOS,YPOS,ATK,DCY,DCYSK,SPRD) A3=(SKW,SPRDRD,PWRRD,RNDEX,SPRKT,SPRRD) A4=(SFTEX,MINH,MAXH,MINPB,MAXPB,RANGPB) A5=(FFT%1))"
+    "composition": "C=(1:2:2:2:6) A1=(MODE,VOL,REV,LVL*200,CPU*200) A2=(TYPE,XPOS,YPOS,ATK,DCY,DCYSK,SPRD) A3=(SKW,SPRDRD,PWRRD,RNDEX,SPRKT,SPRRD) A4=(SFTEX,MINH,MAXH,MINPB,MAXPB,RANGPB) A5=(FFT%1))"
   },
   "CPP":
   {

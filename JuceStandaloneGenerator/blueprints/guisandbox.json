@@ -21,10 +21,9 @@
   "audio-ports-in": [{ "name": "In L", "symbol":  "in[0]"}, { "name": "In R", "symbol":  "in[1]"}],
   "audio-ports-out": [{ "name": "Out L", "symbol":  "out[0]"}, { "name": "Out R", "symbol":  "out[1]"}],
   "transport": [{"name": "transport", "symbol":  "transport"}],
+  "patches": true,
   "ports-control":
   [
-    {"short": "SUB", "type":"drop", "display": "Patch", "symbol": "patch", "default": 0, "listitems": "Patch {}", "count": 10, "patch": true},
-    {"short": "SUBP", "type":"drop", "display": "Sub patch", "symbol": "subPatch", "default": 0, "listitems": "Sub {}", "count": 10, "patch": true},
     {"short": "ONF", "type":"switch", "display": "Power", "symbol": "onOff", "default": 0 },
     {"short": "INP", "type":"dial", "display": "Input", "symbol": "input", "default": 2, "range": [0,50,0.1,1,false], "precision":2, "unit": "dB" },
     {"short": "DPT", "type":"dial", "display": "Depth", "symbol": "modulationDepth", "default": 2, "range": [1,50,0.01,0.8,false], "precision":2,"unit": "ms" },
@@ -44,6 +43,6 @@
     "WINDOW_WIDTH": "1200",
     "WINDOW_HEIGHT": "800",
     "type": "||||",
-    "composition": "C=(1:2:2:8) A1=(LVL*2400, CPU*2400) A2=(SUB, SUBP, ONF, MIX, DIV2, DPT, KNE) A3=(INP, DIV1, DNS,THR) A4=(FFT, SIG))"
+    "composition": "C=(1:2:2:8) A1=(LVL*2400, CPU*2400) A2=(ONF, MIX, DIV2, DPT, KNE) A3=(INP, DIV1, DNS,THR) A4=(FFT, SIG))"
   }
 }

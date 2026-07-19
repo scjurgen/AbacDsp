@@ -140,6 +140,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 themeMenu.addItem(static_cast<int>(i) + 1, Themes::kThemes[i].name);
             }
             menu.addSubMenu("Theme", themeMenu);
+            /*START_PRESETBROWSER*/
+            menu.addSubMenu("Patches", buildPatchesMenu());
+            /*END_PRESETBROWSER*/
         }
         return menu;
     }
@@ -149,7 +152,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         if (menuItemID >= 1 && menuItemID <= static_cast<int>(Themes::kThemes.size()))
         {
             applyTheme(static_cast<GuiConstants::Theme>(menuItemID - 1));
+            return;
         }
+        /*START_PRESETBROWSER*/
+        handlePatchMenuSelection(menuItemID);
+        /*END_PRESETBROWSER*/
     }
 
     void applyTheme(GuiConstants::Theme preset)
@@ -165,6 +172,149 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         repaint();
     }
 
+    /*START_PRESETBROWSER*/
+    juce::PopupMenu buildPatchesMenu()
+    {
+        m_patchMenuNames = processorRef.listPatchNames();
+        const auto currentName = processorRef.getCurrentPatchName();
+
+        juce::PopupMenu loadMenu;
+        for (size_t i = 0; i < m_patchMenuNames.size(); ++i)
+        {
+            loadMenu.addItem(kPatchLoadIdBase + static_cast<int>(i), m_patchMenuNames[i], true,
+                             m_patchMenuNames[i] == currentName);
+        }
+
+        juce::PopupMenu deleteMenu;
+        for (size_t i = 0; i < m_patchMenuNames.size(); ++i)
+        {
+            deleteMenu.addItem(kPatchDeleteIdBase + static_cast<int>(i), m_patchMenuNames[i]);
+        }
+
+        juce::PopupMenu renameMenu;
+        for (size_t i = 0; i < m_patchMenuNames.size(); ++i)
+        {
+            renameMenu.addItem(kPatchRenameIdBase + static_cast<int>(i), m_patchMenuNames[i]);
+        }
+
+        juce::PopupMenu patches;
+        patches.addSubMenu("Load", loadMenu, !m_patchMenuNames.empty());
+        patches.addItem(kPatchSaveId, "Save");
+        patches.addItem(kPatchSaveAsId, "Save As...");
+        patches.addSubMenu("Delete", deleteMenu, !m_patchMenuNames.empty());
+        patches.addSubMenu("Rename", renameMenu, !m_patchMenuNames.empty());
+        return patches;
+    }
+
+    void handlePatchMenuSelection(int menuItemID)
+    {
+        if (menuItemID == kPatchSaveId)
+        {
+            savePatchWithPrompt();
+        }
+        else if (menuItemID == kPatchSaveAsId)
+        {
+            promptSaveAs();
+        }
+        else if (menuItemID >= kPatchLoadIdBase &&
+                 menuItemID < kPatchLoadIdBase + static_cast<int>(m_patchMenuNames.size()))
+        {
+            processorRef.requestLoadPatch(m_patchMenuNames[static_cast<size_t>(menuItemID - kPatchLoadIdBase)]);
+        }
+        else if (menuItemID >= kPatchDeleteIdBase &&
+                 menuItemID < kPatchDeleteIdBase + static_cast<int>(m_patchMenuNames.size()))
+        {
+            confirmAndDeletePatch(m_patchMenuNames[static_cast<size_t>(menuItemID - kPatchDeleteIdBase)]);
+        }
+        else if (menuItemID >= kPatchRenameIdBase &&
+                 menuItemID < kPatchRenameIdBase + static_cast<int>(m_patchMenuNames.size()))
+        {
+            promptRename(m_patchMenuNames[static_cast<size_t>(menuItemID - kPatchRenameIdBase)]);
+        }
+    }
+
+    void savePatchWithPrompt()
+    {
+        const auto currentName = processorRef.getCurrentPatchName();
+        if (currentName.isEmpty())
+        {
+            promptSaveAs();
+            return;
+        }
+        if (!processorRef.saveCurrentPatchAs(currentName))
+        {
+            showPatchError("Save failed");
+        }
+    }
+
+    void promptSaveAs()
+    {
+        m_patchNameDialog = std::make_unique<juce::AlertWindow>(
+            "Save Patch", "Enter a name for this patch:", juce::MessageBoxIconType::NoIcon);
+        m_patchNameDialog->addTextEditor("name", processorRef.getCurrentPatchName());
+        m_patchNameDialog->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
+        m_patchNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+        m_patchNameDialog->enterModalState(
+            true,
+            juce::ModalCallbackFunction::create(
+                [this](int result)
+                {
+                    const auto name = m_patchNameDialog->getTextEditorContents("name").trim();
+                    m_patchNameDialog.reset();
+                    if (result == 1 && name.isNotEmpty() && !processorRef.saveCurrentPatchAs(name))
+                    {
+                        showPatchError("Save failed");
+                    }
+                }),
+            false);
+    }
+
+    void promptRename(const juce::String& oldName)
+    {
+        m_patchNameDialog = std::make_unique<juce::AlertWindow>(
+            "Rename Patch", "Enter a new name for \"" + oldName + "\":", juce::MessageBoxIconType::NoIcon);
+        m_patchNameDialog->addTextEditor("name", oldName);
+        m_patchNameDialog->addButton("Rename", 1, juce::KeyPress(juce::KeyPress::returnKey));
+        m_patchNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+        m_patchNameDialog->enterModalState(true,
+                                           juce::ModalCallbackFunction::create(
+                                               [this, oldName](int result)
+                                               {
+                                                   const auto newName =
+                                                       m_patchNameDialog->getTextEditorContents("name").trim();
+                                                   m_patchNameDialog.reset();
+                                                   if (result == 1 && newName.isNotEmpty() && newName != oldName &&
+                                                       !processorRef.renamePatch(oldName, newName))
+                                                   {
+                                                       showPatchError("Rename failed");
+                                                   }
+                                               }),
+                                           false);
+    }
+
+    void confirmAndDeletePatch(const juce::String& name)
+    {
+        juce::NativeMessageBox::showAsync(juce::MessageBoxOptions()
+                                              .withIconType(juce::MessageBoxIconType::WarningIcon)
+                                              .withTitle("Delete Patch")
+                                              .withMessage("Delete patch \"" + name + "\"?")
+                                              .withButton("Yes")
+                                              .withButton("No"),
+                                          [this, name](int result)
+                                          {
+                                              if (result == 0 && !processorRef.deletePatchNamed(name))
+                                              {
+                                                  showPatchError("Delete failed");
+                                              }
+                                          });
+    }
+
+    static void showPatchError(const juce::String& message)
+    {
+        juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Patch Error", message);
+    }
+    /*END_PRESETBROWSER*/
+
     /*EXTRA_PRIVATE_METHODS*/
   private:
     AudioPluginAudioProcessor& processorRef;
@@ -174,6 +324,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::MenuBarComponent m_menuBar;
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
+    /*START_PRESETBROWSER*/
+    static constexpr int kPatchSaveId = 1000;
+    static constexpr int kPatchSaveAsId = 1001;
+    static constexpr int kPatchLoadIdBase = 2000;
+    static constexpr int kPatchDeleteIdBase = 3000;
+    static constexpr int kPatchRenameIdBase = 4000;
+    std::unique_ptr<juce::AlertWindow> m_patchNameDialog;
+    std::vector<juce::String> m_patchMenuNames;
+    /*END_PRESETBROWSER*/
 
     /*WIDGETS_DECL*/
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)

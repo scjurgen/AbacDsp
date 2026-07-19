@@ -11,6 +11,7 @@
   "audio-in": true,
   "audio-out": true,
   "transport": false,
+  "patches": true,
   "parameters":
   [
     {"short": "GAIN", "type":"dial", "display": "Gain", "symbol": "gain", "default": 0, "range": [-60,60,0.1,1,false], "precision":1, "unit": "dB" }

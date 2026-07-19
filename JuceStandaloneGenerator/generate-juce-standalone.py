@@ -56,7 +56,6 @@ cppSourceFilesFixed = [
     "inc/CpuMeter.h",
     "inc/CustomRotaryDial.h",
     "inc/GenericMeter.h",
-    "inc/PatchBrowser.h",
     "inc/StatusBar.h",
     "inc/SpectrogramDisplay.h",
     "inc/VuMeter.h",
@@ -360,9 +359,6 @@ def createWidgetsDecl(m: dict) -> str:
             case "label":
                 varname = f"{symbol}Label"
                 res += f"juce::Label {varname}{{}};\n"
-            case "presetbrowser":
-                varname = f"{symbol}Presetbrowser"
-                res += f"PatchBrowser {varname}{{}};\n"
             case "statusbar":
                 varname = f"{symbol}Statusbar"
                 res += f"StatusBar {varname}{{}};\n"
@@ -424,20 +420,6 @@ def createInitWidgets(m: dict) -> str:
             case "label":
                 varname += "Label"
                 res += f"""{add_fn}({varname}); {varname}.setText(juce::String::fromUTF8("{item['display']}"), juce::dontSendNotification);\n"""
-            case "presetbrowser":
-                varname += "Presetbrowser"
-                res += f"""{add_fn}({varname});
-                {varname}.setLabelText(juce::String::fromUTF8("{item['display']}"));
-                {varname}.onListNames = [this] {{ return processorRef.listPatchNames(); }};
-                {varname}.onGetCurrentName = [this] {{ return processorRef.getCurrentPatchName(); }};
-                {varname}.onLoad = [this] (const juce::String& name) {{ processorRef.requestLoadPatch(name); }};
-                {varname}.onSaveAs = [this] (const juce::String& name) {{ return processorRef.saveCurrentPatchAs(name); }};
-                {varname}.onDelete = [this] (const juce::String& name) {{ return processorRef.deletePatchNamed(name); }};
-                {varname}.refresh();\n"""
-                statusbars = [p for p in m["ports-control"] if p['type'] == 'statusbar']
-                if statusbars:
-                    statusVar = f"{statusbars[0]['symbol']}Statusbar"
-                    res += f"""{varname}.onStatus = [this] (const juce::String& message, bool isError) {{ {statusVar}.showMessage(message, isError); }};\n"""
             case "statusbar":
                 varname += "Statusbar"
                 res += f"""{add_fn}({varname});\n"""
@@ -928,7 +910,7 @@ def createPackageFromJsonDict(m: dict):
         m["CPP"]["GAUGES"].append("PATCHSUPPORT")
     if int(m["CPP"]["NUM_CC_TARGETS"]) > 0:
         m["CPP"]["GAUGES"].append("MIDICC")
-    if any(item['type'] == 'presetbrowser' for item in m["ports-control"]):
+    if m.get("patches", False):
         m["CPP"]["GAUGES"].append("PRESETBROWSER")
     if m.get("host_transport", False):
         m["CPP"]["GAUGES"].append("HOSTTRANSPORT")

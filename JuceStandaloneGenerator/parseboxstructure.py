@@ -139,11 +139,6 @@ def construct_boxes(m: dict):
                         flex_line += ".withFlex(0).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::stretch)"
                     else:
                         flex_line += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
-                case 'presetbrowser':
-                    if item['flex'] == 'abs':
-                        flex_line += f""".{withDirection}({item["size"]})"""
-                    else:
-                        flex_line += f""".withFlex({item["size"]})"""
                 case 'statusbar':
                     if item['flex'] == 'abs':
                         flex_line += f""".{withDirection}({item["size"]})"""

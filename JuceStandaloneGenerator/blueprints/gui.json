@@ -30,6 +30,7 @@
     { "name": "Out R", "symbol":  "out[1]"}
   ],
   "transport": [{"name": "transport", "symbol":  "transport"}],
+  "patches": true,
   "ports-control":
   [
     {"hasUI": 1, "short": "MIX", "display": "Mix", "symbol": "mix", "default": 0.0, "minimum": -100, "maximum": 100, "unit": "", "transform": "/100.f", "property":""},

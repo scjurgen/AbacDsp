@@ -11,6 +11,7 @@
   "shortdescription" : "Distortion",
   "description": ["✨ Distortion\n"],
   "transport": [{"name": "transport", "symbol":  "transport"}],
+  "patches": true,
   "ports-control":
   [
     {"short": "LEVL", "type":"dial", "display": "Level", "symbol": "level", "default": 0, "range": [-60,12,0.1,1,false], "precision":1, "unit": "dB" },

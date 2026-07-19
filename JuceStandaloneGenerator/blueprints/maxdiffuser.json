@@ -11,10 +11,9 @@
   "major": 0,
   "shortdescription": "Diffuser delay chain (up to 50 modulated allpass delays in series)",
   "description": ["Diffuser delay chain: up to 50 modulated allpass delays in series with pre-delay, pitching, bulge size distribution and damping."],
+  "patches": true,
   "ports-control":
   [
-    {"short": "PBR", "type": "presetbrowser", "display": "Patch", "symbol": "patch"},
-    {"short": "STAT", "type": "statusbar", "display": "Status", "symbol": "patchStatus"},
     {"short": "DRY", "type": "dial", "display": "Dry", "symbol": "dry", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB",
       "cc": {"controller": 20}},
     {"short": "WET", "type": "dial", "display": "Wet", "symbol": "wet", "default": -6, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB",
@@ -56,7 +55,7 @@
     "WINDOW_WIDTH": "1100",
     "WINDOW_HEIGHT": "850",
     "type": "|=5",
-    "composition": "C=(1:6) R=(1:2:1:1:1) A1=(PBR*40,STAT*30,LVL,CPU) A2=(DRY,WET,PRED,MIX,PTCH,PSYN) A3=(ELM,FDBK,BLG,BSZ,TSZ) A4=(MDPT,MDSP,LPF) A5=(FMIX,FSZ,FDEC) A6=(BINS)"
+    "composition": "C=(1:6) R=(1:2:1:1:1) A1=(LVL,CPU) A2=(DRY,WET,PRED,MIX,PTCH,PSYN) A3=(ELM,FDBK,BLG,BSZ,TSZ) A4=(MDPT,MDSP,LPF) A5=(FMIX,FSZ,FDEC) A6=(BINS)"
   },
   "extra_ui_includes": [
     "impl/ShowProcessingBins.h"

@@ -380,6 +380,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return m_fileIo.deletePatchNamed(name.toStdString());
     }
+
+    bool renamePatch(const juce::String& oldName, const juce::String& newName)
+    {
+        return m_fileIo.renamePatchNamed(oldName.toStdString(), newName.toStdString());
+    }
     /*END_PRESETBROWSER*/
 
     /*START_SHOWCPULOAD*/

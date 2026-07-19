@@ -16,14 +16,13 @@
   "midi-ports-out": [],
   "audio-ports-in": [{ "name": "in", "symbol":  "in"}],
   "audio-ports-out": [{ "name": "left", "symbol":  "left"},{ "name": "right", "symbol":  "right"}],
+  "patches": true,
   "ports-control":
   [
     {"short": "TYPE", "type": "drop", "display": "Type", "symbol": "type", "default": 0, "listitems": ["PITCHONLY", "DOLPHINS", "WIND", "RAINFOREST", "FOREST", "RAIN", "THUNDER", "TANPURA",
                               "STREAM", "OCEAN", "BOWLS", "CAFE", "RPGFOREST", "WHITEBURSTS" ]},
     {"short": "SUB", "type": "drop", "display": "Subset", "symbol": "subset", "default": 0, "listitems": ["#1","#2","#3","#4","#5","#6","#7","#8","#9","#10"]},
     {"short": "SOLO", "type": "drop", "display": "Solo", "symbol": "solo", "default": 0, "listitems": ["None","Track 1","Track 2","Track 3","Track 4","Track 5","Track 6","Track 7","Track 8","Track 9","Track 10"]},
-    {"short": "DRP", "type":"drop", "display": "Patch", "symbol": "patch", "default": 0, "listitems": "Patch {}", "count": 10, "patch": true},
-    {"short": "SUBP", "type":"drop", "display": "Sub patch", "symbol": "subPatch", "default": 0, "listitems": "Sub {}", "count": 10, "patch": true},
     {"short": "VOL", "type": "dial", "display": "Vol", "symbol": "vol", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
     {"short": "REV", "type": "dial", "display": "Reverb Wet", "symbol": "reverbLevelWet", "default": -120, "range": [-120, 0, 1, 1, false], "precision": 0, "unit": "dB"},
     {"short": "REVDC", "type": "dial", "display": "Rev Decay", "symbol": "reverbDecay", "default": 1000, "range": [100, 100000, 1, 0.2, false], "precision": 0, "unit": "ms"},

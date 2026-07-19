@@ -38,11 +38,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         , m_envInput{AbacDsp::RmsFollower(10000), AbacDsp::RmsFollower(10000)}
         , m_envOutput{AbacDsp::RmsFollower(10000), AbacDsp::RmsFollower(10000)}
         , m_spectrogram{}
-        , m_patchIndex(1, 0)
+        , m_patchIndex(0, 0)
     {
         m_parameters.addParameterListener("sync", this);
         m_parameters.addParameterListener("type", this);
-        m_parameters.addParameterListener("subset", this);
         m_parameters.addParameterListener("solo", this);
         m_parameters.addParameterListener("vol", this);
         m_parameters.addParameterListener("reverbLevelWet", this);
@@ -85,7 +84,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         m_parameters.removeParameterListener("sync", this);
         m_parameters.removeParameterListener("type", this);
-        m_parameters.removeParameterListener("subset", this);
         m_parameters.removeParameterListener("solo", this);
         m_parameters.removeParameterListener("vol", this);
         m_parameters.removeParameterListener("reverbLevelWet", this);
@@ -303,11 +301,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                               "STREAM", "OCEAN", "BOWLS", "CAFE", "RPGFOREST", "WHITEPULSE"},
             0));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
-            juce::ParameterID("subset", 1), "Subset",
-            juce::StringArray{"#1",  "#2",  "#3",  "#4",  "#5",  "#6",  "#7",  "#8",  "#9",  "#10",
-                              "#11", "#12", "#13", "#14", "#15", "#16", "#17", "#18", "#19", "#20"},
-            0));
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID("solo", 1), "Solo",
             juce::StringArray{"None", "Track 1", "Track 2", "Track 3", "Track 4", "Track 5", "Track 6", "Track 7",
                               "Track 8", "Track 9", "Track 10"},
@@ -463,43 +456,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             return;
         }
 
-
-        if (parameterID == "subset")
-        {
-            bool patchIndexChanged = false;
-            if (parameterID == "subset")
-            {
-                const int newIdx = static_cast<int>(newValue);
-                if (m_patchIndex[0] != newIdx)
-                {
-                    m_patchIndex[0] = newIdx;
-                    patchIndexChanged = true;
-                }
-            }
-
-            if (patchIndexChanged)
-            {
-                if (m_fileIo.areParametersModified())
-                {
-                    juce::NativeMessageBox::showAsync(
-                        juce::MessageBoxOptions()
-                            .withIconType(juce::MessageBoxIconType::QuestionIcon)
-                            .withTitle("Save Parameters")
-                            .withMessage("Parameters have changed, do you want to save before loading new patch?")
-                            .withButton("Yes")
-                            .withButton("No"),
-                        [this, patchIndex = m_patchIndex](int result)
-                        {
-                            // showAsync returns the plain index of the clicked button (0 = "Yes", 1 = "No").
-                            handlePatchChange(patchIndex, result == 0);
-                        });
-                }
-                else
-                {
-                    loadPatchDirect(m_patchIndex);
-                }
-            }
-        }
 
         static const std::map<juce::String, std::function<void(AudioPluginAudioProcessor&, float)>> parameterMap{
             {"sync",
@@ -977,6 +933,66 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
     }
 
+    [[nodiscard]] std::vector<juce::String> listPatchNames() const
+    {
+        std::vector<juce::String> result;
+        for (const auto& n : m_fileIo.listPatchNames())
+        {
+            result.push_back(juce::String(n));
+        }
+        return result;
+    }
+
+    [[nodiscard]] juce::String getCurrentPatchName() const
+    {
+        return juce::String(m_fileIo.currentPatchName());
+    }
+
+    void requestLoadPatch(const juce::String& name)
+    {
+        if (m_fileIo.areParametersModified())
+        {
+            juce::NativeMessageBox::showAsync(
+                juce::MessageBoxOptions()
+                    .withIconType(juce::MessageBoxIconType::QuestionIcon)
+                    .withTitle("Save Parameters")
+                    .withMessage("Parameters have changed, do you want to save before loading this patch?")
+                    .withButton("Yes")
+                    .withButton("No"),
+                [this, name](int result) { finishLoadNamedPatch(name, result == 0); });
+        }
+        else
+        {
+            finishLoadNamedPatch(name, false);
+        }
+    }
+
+    void finishLoadNamedPatch(const juce::String& name, bool shouldSave)
+    {
+        if (shouldSave)
+        {
+            m_fileIo.forceSave();
+        }
+        if (m_fileIo.loadPatchNamed(name.toStdString()))
+        {
+            applyLoadedParametersToHost();
+        }
+    }
+
+    bool saveCurrentPatchAs(const juce::String& name)
+    {
+        return m_fileIo.savePatchNamed(name.toStdString());
+    }
+
+    bool deletePatchNamed(const juce::String& name)
+    {
+        return m_fileIo.deletePatchNamed(name.toStdString());
+    }
+
+    bool renamePatch(const juce::String& oldName, const juce::String& newName)
+    {
+        return m_fileIo.renamePatchNamed(oldName.toStdString(), newName.toStdString());
+    }
 
     void computeCpuLoad(std::chrono::nanoseconds elapsed, size_t numSamples)
     {

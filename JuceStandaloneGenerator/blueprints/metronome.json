@@ -7,9 +7,9 @@
   "description": [
     "✨ Metronome with settable BPM, start/stop and damped sine tick\n"
   ],
+  "patches": true,
   "ports-control":
   [
-    {"short": "SUB",  "type": "drop",   "display": "Subset",        "symbol": "subset",      "default": 0,   "patch": true, "listitems": "#{}", "count": 5},
     {"short": "BPM",  "type": "dial",   "display": "BPM",           "symbol": "bpm",         "default": 120, "range": [40, 250, 0.1, 1, false],  "precision": 1, "unit": "BPM",
       "cc": {"controller": 20, "valueLow": 60, "valueHigh": 180}},
     {"short": "DRP",  "type": "drop",   "display": "Drop Bars",      "symbol": "dropBars",   "default": 0, "signed": false,
@@ -38,7 +38,7 @@
     "WINDOW_WIDTH": "960",
     "WINDOW_HEIGHT": "660",
     "type": "||",
-    "composition": "C=(1:5) A1=(SUB, PRE, DRP, SWG, ONF, SYNC, BPM, SVOL, MVOL, IVOL) A2=(SIG%1, IRIS%2)"
+    "composition": "C=(1:5) A1=(PRE, DRP, SWG, ONF, SYNC, BPM, SVOL, MVOL, IVOL) A2=(SIG%1, IRIS%2)"
   },
   "extra_ui_includes": [
     "inc/CircularBeatDisplay.h",
