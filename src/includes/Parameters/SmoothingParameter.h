@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 namespace AbacDsp
 {
@@ -48,7 +49,7 @@ class LinearSmoothing
     void newTransition(const float newValue, const float smoothingTimeInSeconds, const float sampleRate,
                        const bool forceValue = false) noexcept
     {
-        if (newValue == m_currentValue)
+        if (std::equal_to<float>{}(newValue, m_currentValue))
         {
             m_transitionSteps = 0;
             return;

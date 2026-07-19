@@ -16,8 +16,8 @@ class Vibrato final : public BlockProcessorBase<BlockSize>
     static constexpr size_t DelayBufferSize = 4800;
     static constexpr size_t MaxDepth{(DelayBufferSize - 100) / 2};
     explicit Vibrato(const float sampleRate)
-        : m_wow(sampleRate)
-        , m_sampleRate(sampleRate)
+        : m_sampleRate(sampleRate)
+        , m_wow(sampleRate)
     {
     }
 

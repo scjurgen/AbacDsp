@@ -8,10 +8,10 @@
 
 #include "../BlockProcessors/BlockProcessorBase.h"
 #include "Delays/ParallelPlainDelay.h"
-#include "HadamardWalsh4.h"
-#include "HadamardWalsh8.h"
 #include "HadamardWalsh16.h"
 #include "HadamardWalsh32.h"
+#include "HadamardWalsh4.h"
+#include "HadamardWalsh8.h"
 #include "Numbers/PrimeDispatcher.h"
 
 namespace AbacDsp
@@ -72,18 +72,18 @@ class FdnTankSpiced
     {
         constexpr float maxItdMs = 0.33f;
         const int maxItdSamples = static_cast<int>(std::round(maxItdMs / 1000.f * m_sampleRate));
-        for (int i = 0; i < ORDER; ++i)
+        for (size_t i = 0; i < ORDER; ++i)
         {
             const float panPos = 2.f * static_cast<float>(i) / static_cast<float>(ORDER - 1) - 1.f;
             const int itd = static_cast<int>(std::round(panPos * maxItdSamples));
             if (itd > 0)
             {
                 m_itdTaps[0][i] = 0;
-                m_itdTaps[1][i] = itd;
+                m_itdTaps[1][i] = static_cast<size_t>(itd);
             }
             else
             {
-                m_itdTaps[0][i] = -itd;
+                m_itdTaps[0][i] = static_cast<size_t>(-itd);
                 m_itdTaps[1][i] = 0;
             }
         }
@@ -97,17 +97,17 @@ class FdnTankSpiced
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<int> dist(-maxItdSamples, maxItdSamples);
-        for (int i = 0; i < ORDER; ++i)
+        for (size_t i = 0; i < ORDER; ++i)
         {
             const int itd = dist(gen);
             if (itd > 0)
             {
                 m_itdTaps[0][i] = 0;
-                m_itdTaps[1][i] = itd;
+                m_itdTaps[1][i] = static_cast<size_t>(itd);
             }
             else
             {
-                m_itdTaps[0][i] = -itd;
+                m_itdTaps[0][i] = static_cast<size_t>(-itd);
                 m_itdTaps[1][i] = 0;
             }
         }
@@ -133,8 +133,8 @@ class FdnTankSpiced
         m_itdTaps = taps;
         for (size_t i = 0; i < ORDER; ++i)
         {
-            m_delay.setRelativeHead(1, i, m_itdTaps[0][i]);
-            m_delay.setRelativeHead(2, i, m_itdTaps[1][i]);
+            m_delay.setRelativeHead(1, i, static_cast<int>(m_itdTaps[0][i]));
+            m_delay.setRelativeHead(2, i, static_cast<int>(m_itdTaps[1][i]));
         }
     }
 
