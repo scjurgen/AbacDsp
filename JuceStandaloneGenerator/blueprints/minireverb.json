@@ -12,7 +12,7 @@
   "description": ["✨ Just a small Reverb. "],
   "ports-control":
   [
-    {"short": "ORD", "type": "drop", "display": "Order", "symbol": "order", "default": 8, "listitems": ["4","8","12","16","20","24","32","48","64"]},
+    {"short": "ORD", "type": "drop", "display": "Order", "symbol": "order", "default": 8, "signed": false, "listitems": ["4","8","12","16","20","24","32","48","64"]},
     {"short": "DRY", "type": "dial", "display": "Dry", "symbol": "dry", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
     {"short": "WET", "type": "dial", "display": "Wet", "symbol": "wet", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
     {"short": "WIDE", "type": "dial", "display": "Stereo Width", "symbol": "stereoWidth", "default": 100, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": ""},

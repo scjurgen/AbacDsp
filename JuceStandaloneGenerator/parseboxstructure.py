@@ -168,8 +168,7 @@ def construct_boxes(m: dict):
         std::vector<juce::Rectangle<int>> areas({rowCnt + 1});
         const auto colWidth = area.getWidth() / {virtual_columns};
         const auto rowHeight = area.getHeight() / {virtual_rows};
-        areas[0] = area.removeFromLeft(colWidth*{columns[0]}).reduced(Constants::Margins::small);
-        auto keepArea = area;\n"""
+        areas[0] = area.removeFromLeft(colWidth*{columns[0]}).reduced(Constants::Margins::small);\n"""
         for idx in range(rowCnt - 1):
             result += f"""areas[{idx + 1}] = area.removeFromTop(rowHeight*{rows[idx]}).reduced(Constants::Margins::small);\n"""
         result += f"""areas[{rowCnt}] = area.reduced(Constants::Margins::small);\n\n"""

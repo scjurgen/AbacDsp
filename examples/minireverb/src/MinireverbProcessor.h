@@ -368,7 +368,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             {"order",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setOrder(static_cast<int>(v));
+                 p.pluginRunner->setOrder(static_cast<size_t>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::order, v);
              }},
             {"dry",

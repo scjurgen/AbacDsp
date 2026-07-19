@@ -19,7 +19,7 @@
   "ports-control":
   [
     {"short": "VOL", "type": "dial", "display": "Vol", "symbol": "vol", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
-    {"short": "TYPE", "type": "drop", "display": "Sample", "symbol": "type", "default": 0,
+    {"short": "TYPE", "type": "drop", "display": "Sample", "symbol": "type", "default": 0, "signed": false,
       "listitems": ["Sample1", "Sample2", "Sample3", "Sample4" ]},
     {"short": "SUB", "type": "drop", "display": "Subset", "symbol": "subset", "default": 0, "patch": true, "listitems": "#{}", "count": 20},
     {"short": "POS", "type": "dial", "display": "Position", "symbol": "position", "default": 0, "range": [0, 100, 0.01, 1, false], "precision": 2, "unit": "%"},

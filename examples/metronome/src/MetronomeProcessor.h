@@ -351,7 +351,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             {"dropBars",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setDropBars(static_cast<int>(v));
+                 p.pluginRunner->setDropBars(static_cast<size_t>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::dropBars, v);
              }},
             {"metroVolume",

@@ -511,13 +511,13 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             {"type",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setType(static_cast<int>(v));
+                 p.pluginRunner->setType(static_cast<size_t>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::type, v);
              }},
             {"solo",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setSolo(static_cast<int>(v));
+                 p.pluginRunner->setSolo(static_cast<size_t>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::solo, v);
              }},
             {"vol",

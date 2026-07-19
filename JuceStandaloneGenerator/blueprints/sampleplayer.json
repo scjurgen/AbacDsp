@@ -19,10 +19,10 @@
   "ports-control":
   [
     {"short": "SYNC", "type":"switch", "display": "Sync", "symbol": "sync", "default": 0 },
-    {"short": "TYPE", "type": "drop", "display": "Type", "symbol": "type", "default": 0,
+    {"short": "TYPE", "type": "drop", "display": "Type", "symbol": "type", "default": 0, "signed": false,
       "listitems": ["PITCHONLY", "DOLPHINS","WIND", "RAINFOREST","FOREST","RAIN","THUNDER","TANPURA","STREAM","OCEAN", "BOWLS","CAFE", "RPGFOREST", "WHITEPULSE" ]},
     {"short": "SUB", "type": "drop", "display": "Subset", "symbol": "subset", "default": 0, "patch": true, "listitems": "#{}", "count": 20},
-    {"short": "SOLO", "type": "drop", "display": "Solo", "symbol": "solo", "default": 0, "listitems": ["None","Track 1","Track 2","Track 3","Track 4","Track 5","Track 6","Track 7","Track 8","Track 9","Track 10"]},
+    {"short": "SOLO", "type": "drop", "display": "Solo", "symbol": "solo", "default": 0, "signed": false, "listitems": ["None","Track 1","Track 2","Track 3","Track 4","Track 5","Track 6","Track 7","Track 8","Track 9","Track 10"]},
     {"short": "VOL", "type": "dial", "display": "Vol", "symbol": "vol", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
     {"short": "REV", "type": "dial", "display": "Reverb Wet", "symbol": "reverbLevelWet", "default": -120, "range": [-120, 0, 1, 1, false], "precision": 0, "unit": "dB"},
     {"short": "REVDC", "type": "dial", "display": "Rev Decay", "symbol": "reverbDecay", "default": 1000, "range": [100, 100000, 1, 0.2, false], "precision": 0, "unit": "ms"},

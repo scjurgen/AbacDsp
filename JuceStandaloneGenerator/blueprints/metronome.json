@@ -12,7 +12,7 @@
     {"short": "SUB",  "type": "drop",   "display": "Subset",        "symbol": "subset",      "default": 0,   "patch": true, "listitems": "#{}", "count": 5},
     {"short": "BPM",  "type": "dial",   "display": "BPM",           "symbol": "bpm",         "default": 120, "range": [40, 250, 0.1, 1, false],  "precision": 1, "unit": "BPM",
       "cc": {"controller": 20, "valueLow": 60, "valueHigh": 180}},
-    {"short": "DRP",  "type": "drop",   "display": "Drop Bars",      "symbol": "dropBars",   "default": 0,
+    {"short": "DRP",  "type": "drop",   "display": "Drop Bars",      "symbol": "dropBars",   "default": 0, "signed": false,
       "listitems": ["Drop none", "Play 1 Drop 1", "Play 3 Drop 1", "Play 2 Drop 2", "Play 1 Drop 3"]},
     {"short": "MVOL", "type": "dial",   "display": "Metro Volume",   "symbol": "metroVolume", "default": -6,  "range": [-60, 0, 0.1, 1, false],   "precision": 1, "unit": "dB",
       "cc": {"controller": 21, "valueLow": -20, "valueHigh": -10}},

@@ -81,7 +81,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         const auto colWidth = area.getWidth() / 7;
         const auto rowHeight = area.getHeight() / 6;
         areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-        auto keepArea = area;
         areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
         areas[2] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
         areas[3] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
