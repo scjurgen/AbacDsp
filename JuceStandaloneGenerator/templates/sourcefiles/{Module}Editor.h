@@ -251,7 +251,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         }
         else
         {
-            m_statusBar.showMessage("Save failed", true);
+            m_statusBar.showMessage("Save failed");
         }
     }
 
@@ -279,7 +279,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                    }
                                                    else
                                                    {
-                                                       m_statusBar.showMessage("Save failed", true);
+                                                       m_statusBar.showMessage("Save failed");
                                                    }
                                                }),
                                            false);
@@ -309,7 +309,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                    }
                                                    else
                                                    {
-                                                       m_statusBar.showMessage("Rename failed", true);
+                                                       m_statusBar.showMessage("Rename failed");
                                                    }
                                                }),
                                            false);
@@ -335,7 +335,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                               }
                                               else
                                               {
-                                                  m_statusBar.showMessage("Delete failed", true);
+                                                  m_statusBar.showMessage("Delete failed");
                                               }
                                           });
     }

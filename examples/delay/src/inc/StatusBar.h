@@ -2,39 +2,39 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
-// Transient status line: shows a short message (e.g. from PatchBrowser::onStatus), then
-// fades back to empty on its own. Purely a display widget; callers just call showMessage().
+// Transient status line: shows a short message (e.g. from the Settings > Patches menu), then
+// fades back to empty on its own. Paints itself directly rather than hosting a juce::Label,
+// since GuiLookAndFeel::drawLabel hardcodes centred justification for every label in the app,
+// which this bar's left-aligned text doesn't want.
 class StatusBar final : public juce::Component, private juce::Timer
 {
   public:
-    StatusBar()
-    {
-        addAndMakeVisible(m_label);
-        m_label.setJustificationType(juce::Justification::centredLeft);
-    }
-
     // Kept for interface parity with the generated gauge/dial widgets, which all get a
     // setLabelText() call from the generator; this bar has no separate title of its own.
     void setLabelText(const juce::String& /*label*/) noexcept {}
 
-    void showMessage(const juce::String& message, bool isError = false)
+    void showMessage(const juce::String& message)
     {
-        m_label.setText(message, juce::dontSendNotification);
-        m_label.setColour(juce::Label::textColourId, isError ? juce::Colours::orangered : juce::Colours::lightgreen);
-        startTimer(2500);
+        m_message = message;
+        startTimer(60000);
+        repaint();
     }
 
-    void resized() override
+    void paint(juce::Graphics& g) override
     {
-        m_label.setBounds(getLocalBounds());
+        g.setColour(juce::Colour(GuiConstants::instance().colors.labelColour));
+        g.setFont(Constants::Text::fontHeight);
+        g.drawFittedText(m_message, getLocalBounds().reduced(static_cast<int>(Constants::Margins::medium), 0),
+                         juce::Justification::centredLeft, 1);
     }
 
   private:
     void timerCallback() override
     {
         stopTimer();
-        m_label.setText({}, juce::dontSendNotification);
+        m_message.clear();
+        repaint();
     }
 
-    juce::Label m_label;
+    juce::String m_message;
 };
