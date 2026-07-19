@@ -10,7 +10,7 @@
 #include "/*INCLUDE_PEDAL*/"
 #include "Analysis/EnvelopeFollower.h"
 #include "Analysis/Spectrogram.h"
-#include "Audio/FixedSizeProcessor.h"
+#include "SamplerateConverter/InternalRateNormalizingProcessor.h"
 #include "UiElements.h"
 #include "impl/CcMapping.h"
 #include "impl/CcSettings.h"
@@ -20,6 +20,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 {
   public:
     static constexpr size_t NumSamplesPerBlock = 16;
+    using RateNormalizer = AbacDsp::InternalRateNormalizingProcessor<2, NumSamplesPerBlock, juce::AudioBuffer<float>>;
+
     AudioPluginAudioProcessor()
         : AudioProcessor(BusesProperties()
 #if !JucePlugin_IsMidiEffect
@@ -29,9 +31,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                              .withOutput("Output", juce::AudioChannelSet::stereo(), true)
 #endif
                              )
-        , fixedRunner([this](const AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& input,
-                             AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& output)
-                      { pluginRunner->processBlock(input, output); })
         , m_parameters(*this, nullptr, "PARAMETERS", createParameterLayout())
         /*START_SHOWCPULOAD*/
         , m_avgCpu(8, 0)
@@ -62,7 +61,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 
     void prepareToPlay(const double sampleRate, const int samplesPerBlock) override
     {
-        pluginRunner = std::make_unique</*CLASS_NAME*/>(static_cast<float>(sampleRate));
+        pluginRunner = std::make_unique</*CLASS_NAME*/>(RateNormalizer::kInternalSampleRate);
+        fixedRunner = std::make_unique<RateNormalizer>(static_cast<float>(sampleRate),
+                                                       [this](const AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& input,
+                                                              AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& output)
+                                                       { pluginRunner->processBlock(input, output); });
         m_sampleRate = static_cast<size_t>(sampleRate);
         for (auto* param : getParameters())
         {
@@ -103,6 +106,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
 
         pluginRunner = nullptr;
+        fixedRunner = nullptr;
     }
 
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override
@@ -455,7 +459,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         /*END_HOSTTRANSPORT*/
         if ((getTotalNumInputChannels() == 2) && (getTotalNumOutputChannels() == 2))
         {
-            fixedRunner.processBlock(buffer);
+            fixedRunner->processBlock(buffer);
         }
         /*START_SHOWVUMETER*/
         for (int c = 0; c < std::min(2, buffer.getNumChannels()); ++c)
@@ -575,7 +579,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 
     int m_program{0};
 
-    AbacDsp::FixedSizeProcessor<2, NumSamplesPerBlock, juce::AudioBuffer<float>> fixedRunner;
+    std::unique_ptr<RateNormalizer> fixedRunner;
     std::unique_ptr</*CLASS_NAME*/> pluginRunner;
     juce::AudioProcessorValueTreeState m_parameters;
     /*START_MIDICC*/

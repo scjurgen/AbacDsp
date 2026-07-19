@@ -9,7 +9,7 @@
 
 #include "Analysis/EnvelopeFollower.h"
 #include "Analysis/Spectrogram.h"
-#include "Audio/FixedSizeProcessor.h"
+#include "SamplerateConverter/InternalRateNormalizingProcessor.h"
 #include "UiElements.h"
 #include "impl/CcMapping.h"
 #include "impl/CcSettings.h"
@@ -20,6 +20,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 {
   public:
     static constexpr size_t NumSamplesPerBlock = 16;
+    using RateNormalizer = AbacDsp::InternalRateNormalizingProcessor<2, NumSamplesPerBlock, juce::AudioBuffer<float>>;
+
     AudioPluginAudioProcessor()
         : AudioProcessor(BusesProperties()
 #if !JucePlugin_IsMidiEffect
@@ -29,9 +31,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                              .withOutput("Output", juce::AudioChannelSet::stereo(), true)
 #endif
                              )
-        , fixedRunner([this](const AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& input,
-                             AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& output)
-                      { pluginRunner->processBlock(input, output); })
         , m_parameters(*this, nullptr, "PARAMETERS", createParameterLayout())
         , m_avgCpu(8, 0)
         , m_head{0}
@@ -89,7 +88,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 
     void prepareToPlay(const double sampleRate, const int samplesPerBlock) override
     {
-        pluginRunner = std::make_unique<MaxDiffuserImpl<NumSamplesPerBlock>>(static_cast<float>(sampleRate));
+        pluginRunner = std::make_unique<MaxDiffuserImpl<NumSamplesPerBlock>>(RateNormalizer::kInternalSampleRate);
+        fixedRunner = std::make_unique<RateNormalizer>(static_cast<float>(sampleRate),
+                                                       [this](const AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& input,
+                                                              AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& output)
+                                                       { pluginRunner->processBlock(input, output); });
         m_sampleRate = static_cast<size_t>(sampleRate);
         for (auto* param : getParameters())
         {
@@ -128,6 +131,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
 
         pluginRunner = nullptr;
+        fixedRunner = nullptr;
     }
 
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override
@@ -293,14 +297,15 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("bottomSize", 1), "Bottom Size", juce::NormalisableRange<float>(51, 22000, 1, 0.5, false),
-            100,
-            juce::AudioParameterFloatAttributes{}.withLabel("smp").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " smp"; })));
+            juce::ParameterID("bottomSize", 1), "Bottom Size",
+            juce::NormalisableRange<float>(0.5, 100.0, 0.1, 0.4, false), 0.7,
+            juce::AudioParameterFloatAttributes{}.withLabel("m").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " m"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("topSize", 1), "Top Size", juce::NormalisableRange<float>(51, 22000, 1, 0.5, false), 1000,
-            juce::AudioParameterFloatAttributes{}.withLabel("smp").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " smp"; })));
+            juce::ParameterID("topSize", 1), "Top Size", juce::NormalisableRange<float>(0.5, 100.0, 0.1, 0.4, false),
+            7.0,
+            juce::AudioParameterFloatAttributes{}.withLabel("m").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " m"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("modulationDepth", 1), "Mod Depth", juce::NormalisableRange<float>(0, 1, 0.01, 1, false),
             0,
@@ -688,7 +693,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
         if ((getTotalNumInputChannels() == 2) && (getTotalNumOutputChannels() == 2))
         {
-            fixedRunner.processBlock(buffer);
+            fixedRunner->processBlock(buffer);
         }
         for (int c = 0; c < std::min(2, buffer.getNumChannels()); ++c)
         {
@@ -786,7 +791,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 
     int m_program{0};
 
-    AbacDsp::FixedSizeProcessor<2, NumSamplesPerBlock, juce::AudioBuffer<float>> fixedRunner;
+    std::unique_ptr<RateNormalizer> fixedRunner;
     std::unique_ptr<MaxDiffuserImpl<NumSamplesPerBlock>> pluginRunner;
     juce::AudioProcessorValueTreeState m_parameters;
     struct CcSlot
