@@ -12,6 +12,7 @@
 #include "Helpers/ConstructArray.h"
 #include "Helpers/SkipSmoothing.h"
 #include "Numbers/BulgeControl.h"
+#include "Numbers/Convert.h"
 #include "Numbers/PrimeDispatcher.h"
 
 namespace AbacDsp
@@ -22,7 +23,8 @@ class DiffuserDelayChain
 {
   public:
     explicit DiffuserDelayChain(const float sampleRate, const size_t blkSize)
-        : m_delay{constructArray<ModulatingAllPassDelay<MaxDelayLength, Style>, NumElements>(sampleRate)}
+        : m_sampleRate(sampleRate)
+        , m_delay{constructArray<ModulatingAllPassDelay<MaxDelayLength, Style>, NumElements>(sampleRate)}
         , tmpFadeIn(blkSize, 0.f)
         , tmpFadeOut(blkSize, 0.f)
     {
@@ -33,19 +35,19 @@ class DiffuserDelayChain
             d.setModulationDepth(0.05f);
             f *= 0.96f;
         }
-        resetDiffuser(NumElements, 0.5f, 0.6f, 100.f, 1000.f, skipSmoothing);
+        resetDiffuser(NumElements, 0.5f, 0.6f, 0.5f, 5.f, skipSmoothing);
     }
 
-    void resetDiffuser(const size_t elements, const float feedback, const float bulge, const float bottomSize,
-                       const float topSize, const SkipSmoothing_t&)
+    void resetDiffuser(const size_t elements, const float feedback, const float bulge, const float bottomSizeInMeters,
+                       const float topSizeInMeters, const SkipSmoothing_t&)
     {
-        resetDiffuserImpl<true>(elements, feedback, bulge, bottomSize, topSize);
+        resetDiffuserImpl<true>(elements, feedback, bulge, bottomSizeInMeters, topSizeInMeters);
     }
 
-    void resetDiffuser(const size_t elements, const float feedback, const float bulge, const float bottomSize,
-                       const float topSize)
+    void resetDiffuser(const size_t elements, const float feedback, const float bulge, const float bottomSizeInMeters,
+                       const float topSizeInMeters)
     {
-        resetDiffuserImpl<false>(elements, feedback, bulge, bottomSize, topSize);
+        resetDiffuserImpl<false>(elements, feedback, bulge, bottomSizeInMeters, topSizeInMeters);
     }
 
     void setBulge(const size_t elements, const float value)
@@ -55,15 +57,15 @@ class DiffuserDelayChain
         scaleDiffuser<false>();
     }
 
-    void setTopSize(const float value)
+    void setTopSize(const float valueInMeters)
     {
-        m_topSize = value;
+        m_topSize = valueInMeters;
         scaleDiffuser<false>();
     }
 
-    void setBottomSize(const float value)
+    void setBottomSize(const float valueInMeters)
     {
-        m_bottomSize = value;
+        m_bottomSize = valueInMeters;
         scaleDiffuser<false>();
     }
 
@@ -226,13 +228,13 @@ class DiffuserDelayChain
     }
 
     template <bool SetFastNoFade>
-    void resetDiffuserImpl(const size_t elements, const float feedback, const float bulge, const float bottomSize,
-                           const float topSize)
+    void resetDiffuserImpl(const size_t elements, const float feedback, const float bulge,
+                           const float bottomSizeInMeters, const float topSizeInMeters)
     {
         m_elementsToUse = elements;
         m_bulge = bulge;
-        m_bottomSize = bottomSize;
-        m_topSize = topSize;
+        m_bottomSize = bottomSizeInMeters;
+        m_topSize = topSizeInMeters;
         Bulge::fillNormalizedTable(m_ratios.data(), elements, m_bulge);
         scaleDiffuser<SetFastNoFade>();
         m_feedback = feedback;
@@ -278,6 +280,13 @@ class DiffuserDelayChain
         }
     }
 
+    // Converts the meters-based bottomSize/topSize to samples, clamped to what MaxDelayLength can
+    // hold, before the existing ratio interpolation and prime search run unchanged on sample counts.
+    [[nodiscard]] float metersToClampedSamples(const float meters) const noexcept
+    {
+        return std::clamp(Convert::metersToSamples(meters, m_sampleRate), 11.f, static_cast<float>(MaxDelayLength));
+    }
+
     template <bool fastSet>
     void scaleDiffuser()
     {
@@ -288,8 +297,11 @@ class DiffuserDelayChain
         std::array<size_t, NumElements> sourceSizes{};
         std::array<size_t, NumElements> primeValues{};
 
-        std::transform(m_ratios.begin(), m_ratios.end(), sourceSizes.begin(), [this](const float ratio)
-                       { return static_cast<size_t>(m_bottomSize + (m_topSize - m_bottomSize) * ratio); });
+        const auto bottomSamples = metersToClampedSamples(m_bottomSize);
+        const auto topSamples = metersToClampedSamples(m_topSize);
+        std::transform(m_ratios.begin(), m_ratios.end(), sourceSizes.begin(),
+                       [bottomSamples, topSamples](const float ratio)
+                       { return static_cast<size_t>(bottomSamples + (topSamples - bottomSamples) * ratio); });
         generateUniquePrimeSet<11u>(sourceSizes.data(), primeValues.data(), m_elementsToUse);
         for (size_t i = 0; i < m_elementsToUse; ++i)
         {
@@ -387,8 +399,9 @@ class DiffuserDelayChain
         std::transform(target, target + numSamples, tmpFadeIn.data(), target, std::plus<>{});
     }
 
-    float m_bottomSize{100.f};
-    float m_topSize{1000.f};
+    float m_sampleRate;
+    float m_bottomSize{0.5f};
+    float m_topSize{5.f};
     float m_feedback{0.0f};
     std::array<float, NumElements> m_ratios{};
     float m_bulge{0.6f};

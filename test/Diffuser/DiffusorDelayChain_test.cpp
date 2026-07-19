@@ -18,7 +18,7 @@ class DiffuserDelayChainTest : public ::testing::Test
   protected:
     void SetUp() override
     {
-        m_sut.resetDiffuser(6, 0.5f, 0.46f, 100.f, 1000.f, skipSmoothing);
+        m_sut.resetDiffuser(6, 0.5f, 0.46f, 0.7f, 7.f, skipSmoothing);
     }
 
     [[nodiscard]] float blockEnergy(const std::array<float, kBlockSize>& block) const
@@ -104,8 +104,8 @@ TEST_F(DiffuserDelayChainTest, changingElementsWhileProcessingStaysFinite)
 TEST_F(DiffuserDelayChainTest, parameterChangesStayFinite)
 {
     m_sut.setBulge(6, 0.8f);
-    m_sut.setBottomSize(200.f);
-    m_sut.setTopSize(5000.f);
+    m_sut.setBottomSize(2.f);
+    m_sut.setTopSize(50.f);
     m_sut.setDamper(8000.f);
     m_sut.setAllPassFirstCutoff(300.f);
     m_sut.setAllPassLastCutoff(3000.f);

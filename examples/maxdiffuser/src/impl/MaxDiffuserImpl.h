@@ -39,7 +39,7 @@ class MaxDiffuserImpl final : public EffectBase
     {
         for (auto& chain : m_diffuser)
         {
-            chain.resetDiffuser(m_elements, 0.5f, m_bulge, 100.f, 1000.f, AbacDsp::skipSmoothing);
+            chain.resetDiffuser(m_elements, 0.5f, m_bulge, 0.7f, 7.f, AbacDsp::skipSmoothing);
             chain.setModulationDepth(0.f);
         }
         // Only the left channel is metered for the bin-level display: both channels share

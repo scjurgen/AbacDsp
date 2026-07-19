@@ -87,4 +87,16 @@ template <std::floating_point T>
     return std::exp2(cents / T(1200));
 }
 
+template <std::floating_point T>
+[[nodiscard]] T metersToSamples(const T meters, const T sampleRate, const T speedOfSoundMps = T(333.3))
+{
+    return sampleRate * meters / speedOfSoundMps;
+}
+
+template <std::floating_point T>
+[[nodiscard]] T samplesToMeters(const T samples, const T sampleRate, const T speedOfSoundMps = T(333.3))
+{
+    return samples * speedOfSoundMps / sampleRate;
+}
+
 }

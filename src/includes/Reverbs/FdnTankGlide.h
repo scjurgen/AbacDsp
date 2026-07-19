@@ -12,6 +12,7 @@
 #include "HadamardWalsh8.h"
 #include "Helpers/ConstructArray.h"
 #include "ModulationDelayNoFeedback.h"
+#include "Numbers/Convert.h"
 #include "Numbers/PrimeDispatcher.h"
 
 namespace AbacDsp
@@ -19,10 +20,9 @@ namespace AbacDsp
 
 // FDN reverb tank whose per-line delay lengths never jump or crossfade when changed: they
 // pitch-glide to the new length (ModulationDelayNoFeedback, ChangeSizeMode::PITCH), so a resize
-// produces a brief, intentional pitch-bend rather than a click. Leaner than FdnTankSpiced: no
-// ITD/stereo taps, no callback manager. Up to NumDampedLines lines get a lowpass in the feedback
-// path to absorb highs; up to NumModulatedLines lines keep their delay's built-in modulation for
-// extra dispersion.
+// produces a brief, intentional pitch-bend rather than a click. Leaner than FdnTankSpiced: no interaural time
+// difference ITD/stereo taps, no callback manager. Up to NumDampedLines lines get a lowpass in the feedback path to
+// absorb highs; up to NumModulatedLines lines keep their delay's built-in modulation for extra dispersion.
 template <size_t MaxSizePerElement, size_t ORDER, size_t BlockSize, size_t NumDampedLines = 4,
           size_t NumModulatedLines = 4>
     requires(ORDER == 4 || ORDER == 8 || ORDER == 16 || ORDER == 32) && (NumDampedLines <= ORDER) &&
@@ -95,7 +95,7 @@ class FdnTankGlide
 
     [[nodiscard]] size_t computeSizeFromMeters(const float meters) const
     {
-        auto w = static_cast<size_t>(m_sampleRate * meters / 333.3f);
+        auto w = static_cast<size_t>(Convert::metersToSamples(meters, m_sampleRate));
         w = std::clamp<size_t>(w, 11, MaxSizePerElement);
         w = getUsefulPrime<11>(w);
         return w;
