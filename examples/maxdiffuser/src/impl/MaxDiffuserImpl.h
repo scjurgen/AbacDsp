@@ -57,6 +57,7 @@ class MaxDiffuserImpl final : public EffectBase
         m_fdn.setSpreadBulge(FdnPresetBulge);
         setFdnSize(10.f);
         setFdnDecay(1000.f);
+        m_fdn.setModulation(m_modulationDepth, m_modulationSpeed);
     }
 
     void setDry(const float value)
@@ -118,18 +119,22 @@ class MaxDiffuserImpl final : public EffectBase
 
     void setModulationDepth(const float value)
     {
+        m_modulationDepth = value;
         for (auto& chain : m_diffuser)
         {
             chain.setModulationDepth(value);
         }
+        m_fdn.setModulation(m_modulationDepth, m_modulationSpeed);
     }
 
     void setModulationSpeed(const float value)
     {
+        m_modulationSpeed = value;
         for (auto& chain : m_diffuser)
         {
             chain.setModulationSpeed(value);
         }
+        m_fdn.setModulation(m_modulationDepth, m_modulationSpeed);
     }
 
     void setLowPass(const float cutoff)
@@ -227,6 +232,8 @@ class MaxDiffuserImpl final : public EffectBase
     float m_dry{1.f};
     float m_wet{0.5f};
     float m_fdnMix{0.f};
+    float m_modulationDepth{0.f};
+    float m_modulationSpeed{0.5f};
     std::array<Chain, 2> m_diffuser;
     std::array<std::atomic<float>, MaxElements + 1> m_binLevels{};
     std::array<PreDelay, 2> m_preDelay{};

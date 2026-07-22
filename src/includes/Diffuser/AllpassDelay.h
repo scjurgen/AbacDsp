@@ -184,6 +184,8 @@ class ModulatingAllPassDelay
         20001.f}; // lowpass only active if frequency under 20001 (20kHz inclusive)
     static constexpr size_t minDelaySize{
         51u}; // don't allow delay lines shorter than 51, ( a wall at the distance of 30cm [@ 48kHz] )
+    static constexpr float modulationSafetyMargin{
+        8.f}; // headroom kept between the modulated read head and the write head, in samples
 
     explicit ModulatingAllPassDelay(const float sampleRate)
         : m_sampleRate(sampleRate)
@@ -216,6 +218,7 @@ class ModulatingAllPassDelay
             m_fadeAdvance = 1.0f / static_cast<float>(m_fadeSteps);
             m_headRead[1] = (m_headWrite + m_maxBufferSize - m_newFadeSize) % m_maxBufferSize;
             m_currentDelayWidth = m_newFadeSize;
+            trimModulationDepth();
         }
     }
 
@@ -254,7 +257,7 @@ class ModulatingAllPassDelay
 
     void setModulationDepth(const float depth) noexcept
     {
-        m_modulationDepth = depth * 100.f;
+        m_modulationDepth = depth * 500.f;
         trimModulationDepth();
     }
 
@@ -387,6 +390,7 @@ class ModulatingAllPassDelay
             m_newFadeSize = 0;
             m_headWrite = m_currentDelayWidth;
             m_headRead[0] = 0;
+            trimModulationDepth();
             return;
         }
         if (m_newFadeSize)
@@ -399,10 +403,15 @@ class ModulatingAllPassDelay
         }
     }
 
-
+    // Keeps the modulated read head from ever reaching the write head: the LFO's own peak
+    // amplitude is capped to the active delay width (minus a small interpolation margin), not
+    // just the total buffer capacity, so a short delay with high depth degrades to a smaller
+    // wobble instead of the read head overtaking (or colliding with) the write head.
     void trimModulationDepth() noexcept
     {
-        m_modulation.setModulationDepth(std::min(static_cast<float>(m_maxBufferSize - 3), m_modulationDepth));
+        const auto maxSafeDepth = std::max(0.f, static_cast<float>(m_currentDelayWidth) - modulationSafetyMargin);
+        m_modulation.setModulationDepth(
+            std::min({maxSafeDepth, static_cast<float>(m_maxBufferSize - 3), m_modulationDepth}));
     }
 
     const float m_sampleRate;

@@ -124,4 +124,39 @@ TEST(FdnTankGlide, resizingDuringSignalStaysArtifactFree)
     EXPECT_LT(maxDuringResize, maxSteadyDelta * 4.f + 1E-4f);
 }
 
+// setModulation() was previously never called by any caller in the codebase, so this path -
+// including its interaction with a very short tank line - had no test coverage at all. 1m /
+// 2.3 spread (MaxDiffuserImpl::FdnSizeSpread) is the shortest line reachable via the "FDN Size"
+// UI dial at its minimum (~0.43m, well inside the collision-prone range fixed alongside the
+// diffuser's ModulatingAllPassDelay).
+TEST(FdnTankGlide, setModulationAtShortestReachableSizeStaysFiniteAndBounded)
+{
+    constexpr size_t maxSizePerElement{100000};
+    constexpr size_t order{32};
+    constexpr size_t blockSize{16};
+    FdnTankGlide<maxSizePerElement, order, blockSize> tank(48000.f);
+    tank.setDecay(1000.f);
+    tank.setMinSize(1.0f / 2.3f);
+    tank.setMaxSize(1.0f * 2.3f);
+    tank.setModulation(1.0f, 2.0f);
+
+    std::array<float, blockSize> in{};
+    std::array<float, blockSize> left{};
+    std::array<float, blockSize> right{};
+
+    float maxAbs = 0.f;
+    for (int block = 0; block < 3000; ++block)
+    {
+        in[0] = block == 0 ? 1.f : 0.f;
+        tank.processBlockSplit(in.data(), left.data(), right.data());
+        for (size_t i = 0; i < blockSize; ++i)
+        {
+            ASSERT_TRUE(std::isfinite(left[i]));
+            ASSERT_TRUE(std::isfinite(right[i]));
+            maxAbs = std::max({maxAbs, std::abs(left[i]), std::abs(right[i])});
+        }
+    }
+    EXPECT_LT(maxAbs, 50.f);
+}
+
 }

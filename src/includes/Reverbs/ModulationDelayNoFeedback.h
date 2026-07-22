@@ -32,6 +32,9 @@ template <size_t MAXSIZE>
 class ModulationDelayNoFeedback
 {
   public:
+    static constexpr float modulationSafetyMargin{
+        8.f}; // headroom kept between the modulated read head and the write head, in samples
+
     explicit ModulationDelayNoFeedback()
     {
         m_buffer.resize(MAXSIZE + 6, 0.f);
@@ -146,6 +149,10 @@ class ModulationDelayNoFeedback
                         mhd += MAXSIZE;
                     }
                 }
+                // Was previously left stale here (unlike the PITCH/FADE branches), which meant
+                // size()/the modulation-depth safety clamp (see nextHeadRead()) both still saw
+                // whatever width was set before, not the one HARDSWITCH just jumped to.
+                m_currentDelayWidth = newSize;
                 break;
             case ChangeSizeMode::FADE:
                 if (m_newFadeSize)
@@ -162,7 +169,7 @@ class ModulationDelayNoFeedback
 
     void setModDepth(const float depth)
     {
-        m_newModWidth = depth * 100.f;
+        m_newModWidth = depth * 500.f;
         m_setNewModWidth = true;
     }
 
@@ -275,13 +282,19 @@ class ModulationDelayNoFeedback
         }
     }
 
+    // Clamping m_modWidth here (rather than only where it's set) matters because
+    // m_currentDelayWidth can keep shrinking sample by sample while PITCH-gliding towards a
+    // shorter target - a depth that was safe for the old width could otherwise let the read
+    // head reach the write head mid-glide, before any setModDepth/setSize call re-checks it.
     [[nodiscard]] float nextHeadRead(const size_t index)
     {
         auto dHead = m_headRead[index];
         float returnValue{};
         if (std::abs(m_modWidth) > 1E-7f)
         {
-            const auto depth = m_modWidth * std::abs(m_currentPhase) + 1.f;
+            const auto maxSafeWidth = std::max(0.f, static_cast<float>(m_currentDelayWidth) - modulationSafetyMargin);
+            const auto safeModWidth = std::clamp(m_modWidth, -maxSafeWidth, maxSafeWidth);
+            const auto depth = safeModWidth * std::abs(m_currentPhase) + 1.f;
             dHead += depth;
             if (dHead >= MAXSIZE)
             {

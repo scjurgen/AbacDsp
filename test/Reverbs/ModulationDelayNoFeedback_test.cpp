@@ -1,4 +1,7 @@
+#include <algorithm>
 #include <cmath>
+#include <limits>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -182,6 +185,74 @@ TEST(ModulationDelayNoFeedback, modulationSweepStaysFinite)
         out = delay.step(std::sin(static_cast<float>(i) * 0.03f));
     }
     EXPECT_TRUE(std::isfinite(out));
+}
+
+namespace
+{
+// Encoding the sample index directly as the input value lets us recover the actual read/write
+// separation at every sample from the output alone (this class has no feedback and no write-path
+// filter, so it's already a pure delay pass-through): output[i] == input[i - effectiveDelay], so
+// effectiveDelay = i - output[i]. This exposes exactly what a modulation-depth bug looks like -
+// the effective delay collapsing to (or near) zero, going negative, or jumping to a wildly
+// different value via ring-buffer wraparound - none of which a plain isfinite()/boundedness check
+// on a musical test signal would necessarily catch (the collided read position is still reading
+// real, bounded samples, just from the wrong place in time).
+[[nodiscard]] std::pair<float, float> effectiveDelayRange(ModulationDelayNoFeedback<24000>& delay,
+                                                          const size_t settleSamples, const size_t numSamples)
+{
+    float minDelay = std::numeric_limits<float>::max();
+    float maxDelay = std::numeric_limits<float>::lowest();
+    for (size_t i = 0; i < numSamples; ++i)
+    {
+        const float out = delay.step(static_cast<float>(i));
+        if (i >= settleSamples)
+        {
+            const float effectiveDelay = static_cast<float>(i) - out;
+            minDelay = std::min(minDelay, effectiveDelay);
+            maxDelay = std::max(maxDelay, effectiveDelay);
+        }
+    }
+    return {minDelay, maxDelay};
+}
+}
+
+// Same collision bug as ModulatingAllPassDelay (see AllpassDelay_test.cpp): a short delay with
+// max modulation depth previously had no clamp at all here (weaker than the diffuser's, which at
+// least clamped to buffer capacity), letting the modulated read head reach the write head.
+TEST(ModulationDelayNoFeedback, shortDelayWithMaxModulationDepthNeverReachesWriteHead)
+{
+    constexpr size_t width{70}; // roughly the ~0.5m case from the reported bug
+    ModulationDelayNoFeedback<24000> delay(48000.f);
+    delay.setChangeSizeMode(ChangeSizeMode::HARDSWITCH);
+    delay.setSize(width);
+    delay.setModDepth(1.0f);
+    delay.setModSpeed(2.f);
+
+    const auto [minDelay, maxDelay] = effectiveDelayRange(delay, width * 2, 48000);
+    EXPECT_GT(minDelay, 0.0f) << "read head reached or passed the write head";
+    EXPECT_LE(maxDelay, static_cast<float>(width) + 4.0f);
+}
+
+// PITCH mode lets m_currentDelayWidth shrink continuously, sample by sample, independent of
+// when setModDepth() was last called - a depth safe for the starting width can become unsafe
+// mid-glide, so the clamp must be re-evaluated every read (see nextHeadRead()), not just when
+// the depth or size setter runs.
+TEST(ModulationDelayNoFeedback, pitchGlideToShortSizeNeverReachesWriteHead)
+{
+    ModulationDelayNoFeedback<24000> delay(48000.f);
+    delay.setChangeSizeMode(ChangeSizeMode::HARDSWITCH);
+    delay.setSize(5000);
+    delay.setChangeSizeMode(ChangeSizeMode::PITCH);
+    delay.setModDepth(1.0f);
+    delay.setModSpeed(2.f);
+    delay.setSize(60); // glide target well under the depth that was safe at width 5000
+
+    // Long enough for the glide to fully converge (see pitchModeConvergesDelayWidthUpThenDown),
+    // only checking the effective-delay bound over the tail once the target width has settled.
+    const auto [minDelay, maxDelay] = effectiveDelayRange(delay, 50000, 60000);
+    ASSERT_NEAR(static_cast<float>(delay.size()), 60.f, 4.f);
+    EXPECT_GT(minDelay, 0.0f) << "read head reached or passed the write head mid-glide";
+    EXPECT_LE(maxDelay, 64.0f);
 }
 
 }
