@@ -40,22 +40,21 @@
       "cc": {"controller": 31}},
     {"short": "PTCH", "type": "dial", "display": "Pitch", "symbol": "pitch", "default": 0, "range": [-24, 24, 0.01, 1, false], "precision": 2, "unit": "st",
       "cc": {"controller": 32}},
-    {"short": "PSYN", "type": "switch", "display": "Pitch Sync", "symbol": "psola", "default": 0},
+    {"short": "PMOD", "type": "drop", "display": "Pitch Mode", "symbol": "pitchMode", "default": 0,
+      "listitems": ["Drift", "Sync", "Vocoder"]},
     {"short": "FMIX", "type": "dial", "display": "FDN Mix", "symbol": "fdnMix", "default": -100, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB",
       "cc": {"controller": 33}},
     {"short": "FSZ", "type": "dial", "display": "FDN Size", "symbol": "fdnSize", "default": 30, "range": [1, 330, 0.1, 0.4, false], "precision": 1, "unit": "m",
       "cc": {"controller": 34}},
     {"short": "FDEC", "type": "dial", "display": "FDN Decay", "symbol": "fdnDecay", "default": 2000, "range": [1, 100000, 1, 0.2, false], "precision": 0, "unit": "ms",
       "cc": {"controller": 35}},
-    {"short": "CPU", "type": "gauge", "gaugetype": "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
-    {"short": "LVL", "type": "gauge", "gaugetype": "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
     {"short": "BINS", "type": "gauge", "gaugetype": "processingbins", "display": "Bins", "symbol": "bins", "customtype": "ShowProcessingBins<BinsDisplayMode::ShowContinuousLine, LevelUnit::Decibel>"}
   ],
   "layout": {
     "WINDOW_WIDTH": "1100",
     "WINDOW_HEIGHT": "850",
-    "type": "|=5",
-    "composition": "C=(1:6) R=(1:2:1:1:1) A1=(LVL,CPU) A2=(DRY,WET,PRED,MIX,PTCH,PSYN) A3=(ELM,FDBK,BLG,BSZ,TSZ) A4=(MDPT,MDSP,LPF) A5=(FMIX,FSZ,FDEC) A6=(BINS)"
+    "type": "=5",
+    "composition": "R=(2:2:2:2:2) A1=(DRY,WET,PRED,MIX,PTCH,PMOD) A2=(ELM,FDBK,BLG,BSZ,TSZ) A3=(MDPT,MDSP,LPF) A4=(FMIX,FSZ,FDEC) A5=(BINS)"
   },
   "extra_ui_includes": [
     "impl/ShowProcessingBins.h"

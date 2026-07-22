@@ -32,11 +32,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 #endif
                              )
         , m_parameters(*this, nullptr, "PARAMETERS", createParameterLayout())
-        , m_avgCpu(8, 0)
-        , m_head{0}
-        , m_runningWindowCpu(8 * 300)
-        , m_envInput{AbacDsp::RmsFollower(10000), AbacDsp::RmsFollower(10000)}
-        , m_envOutput{AbacDsp::RmsFollower(10000), AbacDsp::RmsFollower(10000)}
         , m_patchIndex(0, 0)
     {
         m_parameters.addParameterListener("dry", this);
@@ -52,7 +47,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("lowPass", this);
         m_parameters.addParameterListener("mix", this);
         m_parameters.addParameterListener("pitch", this);
-        m_parameters.addParameterListener("psola", this);
+        m_parameters.addParameterListener("pitchMode", this);
         m_parameters.addParameterListener("fdnMix", this);
         m_parameters.addParameterListener("fdnSize", this);
         m_parameters.addParameterListener("fdnDecay", this);
@@ -80,7 +75,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("lowPass", this);
         m_parameters.removeParameterListener("mix", this);
         m_parameters.removeParameterListener("pitch", this);
-        m_parameters.removeParameterListener("psola", this);
+        m_parameters.removeParameterListener("pitchMode", this);
         m_parameters.removeParameterListener("fdnMix", this);
         m_parameters.removeParameterListener("fdnSize", this);
         m_parameters.removeParameterListener("fdnDecay", this);
@@ -329,7 +324,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::ParameterID("pitch", 1), "Pitch", juce::NormalisableRange<float>(-24, 24, 0.01, 1, false), 0,
             juce::AudioParameterFloatAttributes{}.withLabel("st").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " st"; })));
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("psola", 1), "Pitch Sync", 0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("pitchMode", 1), "Pitch Mode", juce::StringArray{"Drift", "Sync", "Vocoder"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("fdnMix", 1), "FDN Mix", juce::NormalisableRange<float>(-100, 12, 0.1, 1, false), -100,
             juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
@@ -435,11 +431,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                  p.pluginRunner->setPitch(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::pitch, v);
              }},
-            {"psola",
+            {"pitchMode",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setPsola(static_cast<bool>(v));
-                 p.m_fileIo.updateParameter(PatchParameters::Id::psola, v);
+                 p.pluginRunner->setPitchMode(static_cast<int>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::pitchMode, v);
              }},
             {"fdnMix",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -566,10 +562,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             float normalized = range.convertTo0to1(params.pitch);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("psola"))
+        if (auto* p = m_parameters.getParameter("pitchMode"))
         {
-            const auto& range = m_parameters.getParameterRange("psola");
-            float normalized = range.convertTo0to1(params.psola);
+            const auto& range = m_parameters.getParameterRange("pitchMode");
+            float normalized = range.convertTo0to1(params.pitchMode);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("fdnMix"))
@@ -653,24 +649,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         return m_fileIo.renamePatchNamed(oldName.toStdString(), newName.toStdString());
     }
 
-    void computeCpuLoad(std::chrono::nanoseconds elapsed, size_t numSamples)
-    {
-        samplesProcessed += numSamples;
-        elapsedTotalNanoSeconds += static_cast<size_t>(elapsed.count());
-        constexpr float secondsPoll = 0.5f;
-        if (samplesProcessed > m_sampleRate * secondsPoll)
-        {
-            const auto pRate = static_cast<float>(100.0 * static_cast<double>(elapsedTotalNanoSeconds) /
-                                                  (secondsPoll * 1'000'000'000.0));
-            m_runningWindowCpu += static_cast<size_t>(pRate * 100.f);
-            m_runningWindowCpu -= m_avgCpu[m_head];
-            m_avgCpu[m_head++] = static_cast<size_t>(pRate * 100.f);
-            m_head = m_head % m_avgCpu.size();
-            m_cpuLoad.store(m_runningWindowCpu * 0.01f / m_avgCpu.size());
-            elapsedTotalNanoSeconds = 0;
-            samplesProcessed = 0;
-        }
-    }
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-conversion"
@@ -678,7 +656,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override
     {
         juce::ScopedNoDenormals noDenormals;
-        const auto beginTime = std::chrono::high_resolution_clock::now();
 
         if (!midiMessages.isEmpty())
         {
@@ -691,31 +668,14 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                 }
             }
         }
-        for (int c = 0; c < std::min(2, buffer.getNumChannels()); ++c)
-        {
-            m_envInput[c].feed(std::span{buffer.getReadPointer(c), static_cast<size_t>(buffer.getNumSamples())});
-            m_inputDb[c].store(std::log10(m_envInput[c].getRms()) * 20.f);
-        }
         if ((getTotalNumInputChannels() == 2) && (getTotalNumOutputChannels() == 2))
         {
             fixedRunner->processBlock(buffer);
         }
-        for (int c = 0; c < std::min(2, buffer.getNumChannels()); ++c)
-        {
-            m_envOutput[c].feed(std::span{buffer.getReadPointer(c), static_cast<size_t>(buffer.getNumSamples())});
-            m_outputDb[c].store(std::log10(m_envOutput[c].getRms()) * 20.f);
-        }
-        const auto endTime = std::chrono::high_resolution_clock::now();
-        computeCpuLoad(std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - beginTime),
-                       static_cast<size_t>(buffer.getNumSamples()));
     }
 
 #pragma GCC diagnostic pop
 
-    [[nodiscard]] float getCpuLoad() const
-    {
-        return m_cpuLoad.load();
-    }
 
     [[nodiscard]] std::array<float, 51> getProcessingBinLevels() const noexcept
     {
@@ -723,15 +683,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         return pluginRunner ? pluginRunner->getProcessingBinLevels() : empty;
     }
 
-    [[nodiscard]] std::pair<float, float> getInputDbLoad() const
-    {
-        return {m_inputDb[0].load(), m_inputDb[1].load()};
-    }
-
-    [[nodiscard]] std::pair<float, float> getOutputDbLoad() const
-    {
-        return {m_outputDb[0].load(), m_outputDb[1].load()};
-    }
 
     [[nodiscard]] bool hasRunner() const
     {
@@ -783,8 +734,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         return idx;
     }
     float m_maxValue{0.f};
-    size_t elapsedTotalNanoSeconds{0};
-    size_t samplesProcessed = 0;
 
   private:
     size_t m_sampleRate{48000};
@@ -855,16 +804,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             }
         }
     }
-    // CPU-Load
-    std::atomic<float> m_cpuLoad;
-    std::vector<size_t> m_avgCpu;
-    size_t m_head{};
-    size_t m_runningWindowCpu;
-    // VU-Meter
-    std::atomic<float> m_inputDb[2];
-    std::atomic<float> m_outputDb[2];
-    std::array<AbacDsp::RmsFollower, 2> m_envInput;
-    std::array<AbacDsp::RmsFollower, 2> m_envOutput;
     std::vector<int> m_patchIndex;
     FileIo m_fileIo;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessor)

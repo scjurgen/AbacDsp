@@ -78,26 +78,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         // auto generated
         // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
         const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-
-        std::vector<juce::Rectangle<int>> areas(6);
-        const auto colWidth = area.getWidth() / 7;
-        const auto rowHeight = area.getHeight() / 6;
-        areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-        areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+        std::vector<juce::Rectangle<int>> areas(5);
+        const auto rowHeight = area.getHeight() / 10;
+        areas[0] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
+        areas[1] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
         areas[2] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
-        areas[3] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-        areas[4] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-        areas[5] = area.reduced(Constants::Margins::small);
+        areas[3] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
+        areas[4] = area.reduced(Constants::Margins::small);
 
-        {
-            juce::FlexBox box;
-            box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::column;
-            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(levelGauge).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(cpuGauge).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[0].toFloat());
-        }
         {
             juce::FlexBox box;
             box.flexWrap = juce::FlexBox::Wrap::noWrap;
@@ -108,12 +96,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.items.add(juce::FlexItem(preDelayDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(mixDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(pitchDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(psolaSwitch)
-                              .withWidth(Constants::Text::labelWidth)
+            box.items.add(juce::FlexItem(pitchModeDrop)
+                              .withFlex(1)
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::center)
                               .withMargin(knobMarginSmall));
-            box.performLayout(areas[1].toFloat());
+            box.performLayout(areas[0].toFloat());
         }
         {
             juce::FlexBox box;
@@ -125,7 +113,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.items.add(juce::FlexItem(bulgeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(bottomSizeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(topSizeDial).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[2].toFloat());
+            box.performLayout(areas[1].toFloat());
         }
         {
             juce::FlexBox box;
@@ -135,7 +123,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.items.add(juce::FlexItem(modulationDepthDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(modulationSpeedDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(lowPassDial).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[3].toFloat());
+            box.performLayout(areas[2].toFloat());
         }
         {
             juce::FlexBox box;
@@ -145,7 +133,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.items.add(juce::FlexItem(fdnMixDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(fdnSizeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(fdnDecayDial).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[4].toFloat());
+            box.performLayout(areas[3].toFloat());
         }
         {
             juce::FlexBox box;
@@ -153,7 +141,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.flexDirection = juce::FlexBox::Direction::row;
             box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
             box.items.add(juce::FlexItem(binsGauge).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[5].toFloat());
+            box.performLayout(areas[4].toFloat());
         }
     }
 #pragma GCC diagnostic pop
@@ -162,9 +150,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         if (processorRef.hasRunner())
         {
-            cpuGauge.update(processorRef.getCpuLoad());
-            levelGauge.update(processorRef.getInputDbLoad(), processorRef.getOutputDbLoad());
-
             binsGauge.update(processorRef.getProcessingBinLevels(),
                              static_cast<size_t>(valueTreeState.getRawParameterValue("elements")->load()));
             processorRef.consumeLastLearnedCc();
@@ -285,10 +270,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                        [this](float lo, float hi) { processorRef.setCcRange(CcTarget::pitch, lo, hi); },
                                        [this] { processorRef.clearCcAssignment(CcTarget::pitch); },
                                        [this] { return processorRef.getCcController(CcTarget::pitch); }});
-        addAndMakeVisible(psolaSwitch);
-        psolaSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
-            valueTreeState, "psola", psolaSwitch);
-
+        addAndMakeVisible(pitchModeDrop);
+        pitchModeDrop.addItemList(valueTreeState.getParameter("pitchMode")->getAllValueStrings(), 1);
+        pitchModeDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "pitchMode", pitchModeDrop);
         addAndMakeVisible(fdnMixDial);
         fdnMixDial.reset(valueTreeState, "fdnMix");
         fdnMixDial.setLabelText(juce::String::fromUTF8("FDN Mix"));
@@ -316,10 +301,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                     [this](float lo, float hi) { processorRef.setCcRange(CcTarget::fdnDecay, lo, hi); },
                                     [this] { processorRef.clearCcAssignment(CcTarget::fdnDecay); },
                                     [this] { return processorRef.getCcController(CcTarget::fdnDecay); }});
-        addAndMakeVisible(cpuGauge);
-        cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
-        addAndMakeVisible(levelGauge);
-        levelGauge.setLabelText(juce::String::fromUTF8("Level"));
         addAndMakeVisible(binsGauge);
         binsGauge.setLabelText(juce::String::fromUTF8("Bins"));
     }
@@ -399,8 +380,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         setLookAndFeel(m_laf.get());
         juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
         backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
-        cpuGauge.updateColors();
-        levelGauge.updateColors();
         binsGauge.updateColors();
 
         repaint();
@@ -602,13 +581,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial lowPassDial{this};
     CustomRotaryDial mixDial{this};
     CustomRotaryDial pitchDial{this};
-    juce::ToggleButton psolaSwitch{juce::String::fromUTF8("Pitch Sync")};
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> psolaSwitchAttachment;
+    juce::ComboBox pitchModeDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> pitchModeDropAttachment;
     CustomRotaryDial fdnMixDial{this};
     CustomRotaryDial fdnSizeDial{this};
     CustomRotaryDial fdnDecayDial{this};
-    CpuGauge cpuGauge{};
-    Gauge levelGauge{};
     ShowProcessingBins<BinsDisplayMode::ShowContinuousLine, LevelUnit::Decibel> binsGauge{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
