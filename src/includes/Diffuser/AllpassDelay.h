@@ -9,6 +9,7 @@
 #include "Filters/PoleMixingFilter.h"
 #include "Helpers/SkipSmoothing.h"
 #include "Modulation/Modulation.h"
+#include "Modulation/SineModulation.h"
 #include "Numbers/Convert.h"
 #include "Numbers/Interpolation.h"
 
@@ -435,7 +436,7 @@ class ModulatingAllPassDelay
 
     size_t m_currentDelayWidth{MaxSize48Khz / 8};
     size_t m_tick{0};
-    Modulation m_modulation;
+    SineModulation m_modulation;
     float m_modulationDepth{0.0f};
     size_t m_maxBufferSize{MaxSize48Khz};
     std::vector<float> m_buffer{};

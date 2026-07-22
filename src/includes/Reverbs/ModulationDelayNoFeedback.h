@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <numbers>
 #include <vector>
 
 #include "Audio/FixedSizeProcessor.h"
@@ -294,7 +295,15 @@ class ModulationDelayNoFeedback
         {
             const auto maxSafeWidth = std::max(0.f, static_cast<float>(m_currentDelayWidth) - modulationSafetyMargin);
             const auto safeModWidth = std::clamp(m_modWidth, -maxSafeWidth, maxSafeWidth);
-            const auto depth = safeModWidth * std::abs(m_currentPhase) + 1.f;
+            // m_currentPhase is a sawtooth in (-1, 1]; std::abs() of it would trace a *linear*
+            // triangle (0 at the trough, 1 at both edges) whose rate of change is a constant that
+            // flips sign at the trough - an abruptly alternating pitch shift rather than a smooth
+            // one (see SineModulation.h / Modulation_test.cpp for the same issue and fix). Shaping
+            // it as a raised cosine instead keeps the same 0-at-trough/1-at-edges range (so the
+            // existing depth/size clamping and trough-only deferred update below stay correct)
+            // but with a continuously-varying derivative.
+            const auto shapedPhase = 0.5f * (1.0f - std::cos(std::numbers::pi_v<float> * m_currentPhase));
+            const auto depth = safeModWidth * shapedPhase + 1.f;
             dHead += depth;
             if (dHead >= MAXSIZE)
             {
