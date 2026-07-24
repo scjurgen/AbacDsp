@@ -176,6 +176,24 @@ class LooperImpl final : public EffectBase
         return static_cast<int>(m_seq.beatsPerBar());
     }
 
+    // Angular span of the outer loop ring, in whole bars. Empty shows one bar so
+    // the clock still reads; while recording the ring extends one bar ahead of the
+    // playhead so the bar in progress is already drawn full.
+    [[nodiscard]] int getOuterRingBars() const noexcept
+    {
+        const size_t spb = getSamplesPerBar();
+        if (spb == 0)
+        {
+            return 1;
+        }
+        if (isRecording())
+        {
+            return static_cast<int>(m_recorder.recordedFrames() / spb) + 1;
+        }
+        const size_t len = m_recorder.loopLengthFrames();
+        return (len > 0) ? static_cast<int>(std::max<size_t>(1, len / spb)) : 1;
+    }
+
     [[nodiscard]] float getBarPhase() const noexcept
     {
         return m_seq.barPhase();
@@ -276,11 +294,10 @@ class LooperImpl final : public EffectBase
             const float loopR = (overdub ? recorderOut(i, 1) : sliceOut(i, 1)) * loopGain;
             out(i, 0) = in(i, 0) + loopL + click[i];
             out(i, 1) = in(i, 1) + loopR + click[i];
-            // Feed the bar display with the musical signal (dry + loop, no click)
-            // so it animates during playback, not just while recording input.
+            // Feed the bar display with the dry input only (no loop, no click).
             // A noise gate keeps the ring flat on quiet sections: the signed
             // sample passes only while the envelope stays above the threshold.
-            const float visSignal = in(i, 0) + in(i, 1) + loopL + loopR;
+            const float visSignal = in(i, 0) + in(i, 1);
             m_visEnv = std::max(std::abs(visSignal), m_visEnv * kVisualGateRelease);
             if (m_barPos[i] < m_visualWindowSize)
             {

@@ -20,6 +20,6 @@
 #include "inc/AppSettings.h"
 #include "impl/EffectBase.h"
 #include "inc/SliceWaveDisplay.h"
-#include "inc/CircularBarDisplay.h"
+#include "inc/CircularLoopDisplay.h"
 
 #include "inc/LookAndFeel.h"

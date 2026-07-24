@@ -649,6 +649,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner ? pluginRunner->getBarBeats() : 4;
     }
+    [[nodiscard]] int getOuterRingBars() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getOuterRingBars() : 1;
+    }
     [[nodiscard]] float getBarPhase() const noexcept
     {
         return pluginRunner ? pluginRunner->getBarPhase() : 0.f;

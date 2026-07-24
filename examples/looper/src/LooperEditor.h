@@ -80,10 +80,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
 
         std::vector<juce::Rectangle<int>> areas(3);
-        const auto colWidth = area.getWidth() / 11;
+        const auto colWidth = area.getWidth() / 7;
         const auto rowHeight = area.getHeight() / 6;
-        areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-        areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+        areas[0] = area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
+        areas[1] = area.removeFromTop(rowHeight * 5).reduced(Constants::Margins::small);
         areas[2] = area.reduced(Constants::Margins::small);
 
         {
@@ -131,6 +131,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(swingDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
             box.performLayout(areas[0].toFloat());
         }
         {
@@ -138,11 +143,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.flexWrap = juce::FlexBox::Wrap::noWrap;
             box.flexDirection = juce::FlexBox::Direction::row;
             box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(swingDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(beatGauge).withFlex(1).withMargin(knobMarginSmall));
             box.performLayout(areas[1].toFloat());
         }
@@ -176,6 +176,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 beatGauge.setBarBeats(processorRef.getBarBeats());
                 beatGauge.setBarPhase(processorRef.getBarPhase());
                 beatGauge.setSubdivisionPositions(processorRef.getSubdivisionPositions());
+                beatGauge.setLoopWaveform(processorRef.getLoopWaveform());
+                beatGauge.setSliceBoundaries(processorRef.getSliceBoundaries());
+                beatGauge.setPlayheadNormalized(processorRef.getPlayheadNormalized());
+                beatGauge.setOuterRingBars(processorRef.getOuterRingBars());
+                beatGauge.setStateLabel(processorRef.getLooperStateLabel());
                 recordSwitch.setButtonText(processorRef.isRecording()
                                                ? juce::String::fromUTF8("Recording")
                                                : (processorRef.isArmed() ? juce::String::fromUTF8("Armed")
@@ -573,7 +578,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial clickVolumeDial{this};
     CustomRotaryDial loopVolumeDial{this};
     CustomRotaryDial recThresholdDial{this};
-    CircularBarDisplay beatGauge{};
+    CircularLoopDisplay beatGauge{};
     SliceWaveDisplay sliceGauge{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)

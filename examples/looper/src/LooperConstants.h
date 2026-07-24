@@ -39,8 +39,8 @@ constexpr float big = 8.0f;
 
 namespace InitJuce
 {
-constexpr auto WindowWidth{1600};
-constexpr auto WindowHeight{620};
+constexpr auto WindowWidth{1200};
+constexpr auto WindowHeight{640};
 constexpr auto TimerHertz = 60;
 }
 
