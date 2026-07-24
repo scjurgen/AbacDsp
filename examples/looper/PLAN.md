@@ -35,8 +35,9 @@ Input -> [LoopRecorder] --record/overdub--> loop buffer
       GridEvent (beatStart/subdivision/barWrapped), swing sub-positions, ppq sync. Metronome
       rewired onto it; verified byte-for-byte identical output vs the pre-refactor version across
       straight/shuffle/odd-meter+dropbars/host-sync (golden comparison, 0 mismatches).
-- [ ] **1** `Sampler/LoopRecorder.h` + test (record/overdub/clear state machine,
-      bar-quantized length, no RT allocation).
+- [x] **1** `Sampler/LoopRecorder.h` + test (18 cases): Empty/Recording/Playing/Overdubbing/
+      Stopped state machine, bar-quantized loop length on stop (tail zeroed, stale-tail leak
+      guarded), overdub with decay, auto-stop when full, play/pause/stop, no RT allocation.
 - [ ] **2** `Analysis/Slicer.h` + test (grid + transient-with-grid-snap, zero-crossing edges).
 - [ ] **3** `Sampler/SlicePlayer.h` + test (beat-locked slice playback, swing,
       click-free boundaries).
