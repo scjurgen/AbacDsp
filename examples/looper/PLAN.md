@@ -42,8 +42,10 @@ Input -> [LoopRecorder] --record/overdub--> loop buffer
       grid boundaries, slices-from-boundaries (implied leading 0, dedupe/sort), transient onset
       detection (magnitude envelope + relative threshold + min-gap), grid snap with max distance,
       zero-crossing edge snap, stereo->mono downmix.
-- [ ] **3** `Sampler/SlicePlayer.h` + test (beat-locked slice playback, swing,
-      click-free boundaries).
+- [x] **3** `Sampler/SlicePlayer.h` + test (10 cases): 16-voice pool plays loop slices launched by
+      index, per-sample linear fade-in/out (click-free edges), playLength caps a slice to the grid
+      step, overlapping triggers sum, oldest-voice stealing caps polyphony, short-slice fade clamp.
+      Beat-grid triggering is wired in Phase 4 (looper drives triggerSlice from BeatSequencer).
 - [ ] **4** `examples/looper/`: blueprint `looper.json`, hand-written `impl/LooperImpl.h`,
       new `SliceWaveDisplay.h` promoted to the generator template library, CMake wiring,
       generate + build.
