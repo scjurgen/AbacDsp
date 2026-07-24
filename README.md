@@ -23,15 +23,18 @@ No dependencies for the dsp code it self (examples and unit-test have submodules
 - testability
 
 ## What
-- Analysis (FFT, Yin pitch detection, spectrogram, envelope follower)
+- Analysis (FFT, Yin pitch detection, spectrogram, envelope follower, onset/transient
+  slicing, zero-crossings, octave-band analysis)
 - Audio buffers, fader and fixed-size block processor building blocks
 - Delays, Diffuser and Reverbs (FDN with Hadamard mixing)
 - Filters (biquad, ladder, SVF bandpass, one-pole)
-- Generators (naive and band-limited) and Wavetables
+- Generators (naive and band-limited), plus a beat sequencer and metronome click generator
 - Modulation (wow/flutter)
 - Non-linear (hysteresis / saturation)
 - Parameter smoothing and ramping
-- Sample playback, pitch/time-stretching and sample-rate conversion
+- Sampler: loop recorder, beat-locked slice player, sample playback,
+  pitch/time-stretching and sample-rate conversion
+- Spectral processing and Wavetables
 - Numbers: math/conversion helpers (interpolation, easing, dB/frequency)
 - WAV/OGG file I/O
 
@@ -41,6 +44,20 @@ No dependencies for the dsp code it self (examples and unit-test have submodules
 
 For usage check always the unit-tests or examples, these contain implementations that should cover and 
 which should be self-explanatory.
+
+### Example plugins
+
+JUCE-based plugins under `examples/` (built with `-DBUILD_FULL_PROJECT=ON`, see below):
+
+- `plaingain` (passthrough with metering), `guisandbox` (UI experimentation)
+- `minireverb` / `maxdiffuser` (FDN reverb and diffuser)
+- `delay`, `resonik` (resonator)
+- `metronome` (damped-sine click, circular beat/spectrogram displays)
+- `looper` (bar-quantized slicing looper with a concentric bar/loop clock display)
+- `sampleplayer`, `sampleplayertimestretched`
+
+Most are generated from a blueprint via `JuceStandaloneGenerator/`; the hand-written
+DSP lives in each example's `src/impl/`.
 
 ## Testing
 
