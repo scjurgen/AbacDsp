@@ -56,6 +56,10 @@ class LooperImpl final : public EffectBase
     {
         m_clickVol.store(value, std::memory_order_relaxed);
     }
+    void setLoopVolume(const float value) noexcept
+    {
+        m_loopVol.store(value, std::memory_order_relaxed);
+    }
     void setSliceMode(const int value) noexcept
     {
         m_sliceMode.store(value, std::memory_order_relaxed);
@@ -207,13 +211,18 @@ class LooperImpl final : public EffectBase
         std::array<float, BlockSize> click{};
         renderClick(click);
 
-        const bool monitorInput = isRecording() || isOverdubbing();
+        // Dry input is always monitored; the loop plays back at its own volume.
+        // While overdubbing, the slice voices would re-read the buffer at the very
+        // position the recorder is writing input into, combing the live input back
+        // in. Monitor the recorder's pre-write linear output instead during overdub.
+        const bool overdub = isOverdubbing();
+        const float loopGain = m_loopGain;
         for (size_t i = 0; i < BlockSize; ++i)
         {
-            const float dryL = monitorInput ? in(i, 0) : 0.f;
-            const float dryR = monitorInput ? in(i, 1) : 0.f;
-            out(i, 0) = dryL + sliceOut(i, 0) + click[i];
-            out(i, 1) = dryR + sliceOut(i, 1) + click[i];
+            const float loopL = (overdub ? recorderOut(i, 0) : sliceOut(i, 0)) * loopGain;
+            const float loopR = (overdub ? recorderOut(i, 1) : sliceOut(i, 1)) * loopGain;
+            out(i, 0) = in(i, 0) + loopL + click[i];
+            out(i, 1) = in(i, 1) + loopR + click[i];
         }
     }
 
@@ -242,6 +251,7 @@ class LooperImpl final : public EffectBase
             m_appliedDivision = division;
         }
         m_click.setVolumeDb(m_clickVol.load(std::memory_order_relaxed));
+        m_loopGain = std::pow(10.f, m_loopVol.load(std::memory_order_relaxed) / 20.f);
         m_hostSync = m_hostSyncReq.load(std::memory_order_relaxed);
     }
 
@@ -463,6 +473,8 @@ class LooperImpl final : public EffectBase
     std::atomic<float> m_bpm{120.f};
     std::atomic<float> m_swing{50.f};
     std::atomic<float> m_clickVol{-12.f};
+    std::atomic<float> m_loopVol{0.f};
+    float m_loopGain{1.f};
     std::atomic<int> m_sliceMode{0};
     std::atomic<int> m_sliceDivision{1};
     std::atomic<bool> m_hostSyncReq{false};

@@ -78,10 +78,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         // auto generated
         // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
         const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-        std::vector<juce::Rectangle<int>> areas(2);
-        const auto colWidth = area.getWidth() / 4;
+
+        std::vector<juce::Rectangle<int>> areas(3);
+        const auto colWidth = area.getWidth() / 11;
+        const auto rowHeight = area.getHeight() / 6;
         areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-        areas[1] = area.reduced(Constants::Margins::small);
+        areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+        areas[2] = area.reduced(Constants::Margins::small);
 
         {
             juce::FlexBox box;
@@ -123,18 +126,26 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(swingDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
             box.performLayout(areas[0].toFloat());
         }
         {
             juce::FlexBox box;
             box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::column;
+            box.flexDirection = juce::FlexBox::Direction::row;
+            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+            box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(swingDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+            box.performLayout(areas[1].toFloat());
+        }
+        {
+            juce::FlexBox box;
+            box.flexWrap = juce::FlexBox::Wrap::noWrap;
+            box.flexDirection = juce::FlexBox::Direction::row;
             box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
             box.items.add(juce::FlexItem(sliceGauge).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[1].toFloat());
+            box.performLayout(areas[2].toFloat());
         }
     }
 #pragma GCC diagnostic pop
@@ -234,6 +245,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                              { processorRef.setCcRange(CcTarget::clickVolume, lo, hi); },
                                              [this] { processorRef.clearCcAssignment(CcTarget::clickVolume); },
                                              [this] { return processorRef.getCcController(CcTarget::clickVolume); }});
+        addAndMakeVisible(loopVolumeDial);
+        loopVolumeDial.reset(valueTreeState, "loopVolume");
+        loopVolumeDial.setLabelText(juce::String::fromUTF8("Loop Volume"));
+        loopVolumeDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::loopVolume); },
+                                            [this] { return processorRef.getCcRange(CcTarget::loopVolume); },
+                                            [this](float lo, float hi)
+                                            { processorRef.setCcRange(CcTarget::loopVolume, lo, hi); },
+                                            [this] { processorRef.clearCcAssignment(CcTarget::loopVolume); },
+                                            [this] { return processorRef.getCcController(CcTarget::loopVolume); }});
         addAndMakeVisible(sliceGauge);
         sliceGauge.setLabelText(juce::String::fromUTF8("Loop"));
     }
@@ -518,6 +538,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial bpmDial{this};
     CustomRotaryDial swingDial{this};
     CustomRotaryDial clickVolumeDial{this};
+    CustomRotaryDial loopVolumeDial{this};
     SliceWaveDisplay sliceGauge{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)

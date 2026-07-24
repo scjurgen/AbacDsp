@@ -21,7 +21,8 @@ struct PatchParameters
         sliceDivision, // drop
         bpm          , // dial
         swing        , // dial
-        clickVolume   // dial
+        clickVolume  , // dial
+        loopVolume    // dial
     };
 bool record{false};
 bool play{false};
@@ -33,6 +34,7 @@ size_t sliceDivision{1};
 float bpm{120.0f};
 float swing{50.0f};
 float clickVolume{-12.0f};
+float loopVolume{0.0f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
@@ -45,7 +47,8 @@ float clickVolume{-12.0f};
 "sliceDivision",
 "bpm",
 "swing",
-"clickVolume"
+"clickVolume",
+"loopVolume"
     });
 //        "onOff", "patch", "input", "modulationDepth", "mix", "density", "threshold", "knee"});
 
@@ -74,6 +77,7 @@ float clickVolume{-12.0f};
         else if constexpr (ParamId == Id::bpm) return bpm;
         else if constexpr (ParamId == Id::swing) return swing;
         else if constexpr (ParamId == Id::clickVolume) return clickVolume;
+        else if constexpr (ParamId == Id::loopVolume) return loopVolume;
 
     }
 
@@ -105,6 +109,8 @@ break;
  case Id::swing: if (!isEqual(get<Id::swing>(), value)) {get<Id::swing>() = value;m_modified = true;}
 break;
  case Id::clickVolume: if (!isEqual(get<Id::clickVolume>(), value)) {get<Id::clickVolume>() = value;m_modified = true;}
+break;
+ case Id::loopVolume: if (!isEqual(get<Id::loopVolume>(), value)) {get<Id::loopVolume>() = value;m_modified = true;}
 break;
 
             default:
@@ -153,5 +159,6 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         sliceDivision, // drop
         bpm          , // dial
         swing        , // dial
-        clickVolume   // dial
+        clickVolume  , // dial
+        loopVolume    // dial
 )
