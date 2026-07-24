@@ -82,8 +82,9 @@ class FdnTankGlide
     {
         for (size_t o = 0; o < NumModulatedLines; ++o)
         {
+            const float speedFactor = 1 + 0.2f * static_cast<float>(o) / static_cast<float>(NumModulatedLines);
             m_delay[o].setModDepth(depth);
-            m_delay[o].setModSpeed(speedHz);
+            m_delay[o].setModSpeed(speedHz * speedFactor);
         }
     }
 

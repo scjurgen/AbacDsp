@@ -69,9 +69,9 @@ class GenericImpl final : public EffectBase
     {
         m_pitch = value;
     }
-    void setPsola(const bool value)
+    void setPitchMode(const size_t value)
     {
-        m_psola = value;
+        m_pitchMode = value;
     }
     void setFdnMix(const float value)
     {
@@ -109,7 +109,7 @@ class GenericImpl final : public EffectBase
     float m_lowPass{};
     float m_mix{};
     float m_pitch{};
-    bool m_psola{};
+    size_t m_pitchMode{};
     float m_fdnMix{};
     float m_fdnSize{};
     float m_fdnDecay{};

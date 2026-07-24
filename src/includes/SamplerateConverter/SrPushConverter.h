@@ -27,8 +27,8 @@ class SrPushConverter
 {
   public:
     explicit SrPushConverter(const std::shared_ptr<SincFilter>& sincFilter)
-        : m_bufferSize(sincFilter->getBufferSize(SrConvertMaxRatio, MAXCHANNELS))
-        , m_buffer(m_bufferSize)
+        : m_bufferSize(static_cast<int>(sincFilter->getBufferSize(SrConvertMaxRatio, MAXCHANNELS)))
+        , m_buffer(static_cast<size_t>(m_bufferSize))
         , m_sincFilter(sincFilter)
     {
         reset();
@@ -46,17 +46,17 @@ class SrPushConverter
     }
 
     [[nodiscard]] size_t fetchBlock(const float currentRatio, const float* in, const size_t numSamples, float* data,
-                                     const size_t maxNumSamples) noexcept
+                                    const size_t maxNumSamples) noexcept
     {
         srData.ratio = std::clamp(currentRatio, 1.f / SrConvertMaxRatio, SrConvertMaxRatio);
         srData.dataOut = data;
-        srData.outputFrames = maxNumSamples;
+        srData.outputFrames = static_cast<long>(maxNumSamples);
         srData.dataIn = in;
-        srData.inputFrames = numSamples;
+        srData.inputFrames = static_cast<long>(numSamples);
 
         process();
-        assert(srData.inputFramesConsumed == numSamples);
-        return srData.outputFramesGenerated;
+        assert(srData.inputFramesConsumed == static_cast<long>(numSamples));
+        return static_cast<size_t>(srData.outputFramesGenerated);
     }
 
   private:
@@ -72,7 +72,7 @@ class SrPushConverter
         return variProcess(srData.ratio);
     }
 
-    bool prepareData(const float* data_in, const int halfFilterChannelWidth, const size_t numChannels) noexcept
+    bool prepareData(const float* data_in, const int halfFilterChannelWidth, const int numChannels) noexcept
     {
         int len = 0;
 
@@ -125,42 +125,48 @@ class SrPushConverter
     {
         const auto increment = std::lrint(floatIncrement * DStepsFloat);
         const auto startFilterIdx = std::lrint(inputIndex * floatIncrement * DStepsFloat);
-        const auto maxFilterIdx = m_sincFilter->halfCoeffWidth() * DSteps;
+        const size_t maxFilterIdx = m_sincFilter->halfCoeffWidth() * static_cast<size_t>(DSteps);
 
-        auto numCoeff = (maxFilterIdx - startFilterIdx) / increment;
-        auto filterIdx = startFilterIdx + numCoeff * increment;
+        // The mixed int/long inputs above were always implicitly promoted to size_t here (size_t
+        // has equal-or-greater rank than long on every supported platform); the casts below make
+        // that existing promotion explicit instead of relying on the compiler to do it silently.
+        size_t numCoeff = (maxFilterIdx - static_cast<size_t>(startFilterIdx)) / static_cast<size_t>(increment);
+        size_t filterIdx = static_cast<size_t>(startFilterIdx) + numCoeff * static_cast<size_t>(increment);
         float left[CHANNELS]{};
         if (scale == 1.f)
         {
             const auto fraction = static_cast<float>(filterIdx & (DSteps - 1)) / DStepsFloat;
-            const auto dataIdx = m_bufferCurrent - CHANNELS * numCoeff;
+            const auto dataIdx = static_cast<size_t>(m_bufferCurrent) - CHANNELS * numCoeff;
             m_sincFilter->processFixUp<CHANNELS>(numCoeff + 1, m_buffer.data(), dataIdx, fraction, filterIdx / DSteps,
                                                  left);
         }
         else
         {
             m_sincFilter->processFilterHalf<CHANNELS, DSteps, 1, -1>(
-                filterIdx, m_buffer.data(), m_bufferCurrent - CHANNELS * numCoeff, increment, left);
+                static_cast<int32_t>(filterIdx), m_buffer.data(),
+                static_cast<size_t>(m_bufferCurrent) - CHANNELS * numCoeff, static_cast<int32_t>(increment), left);
         }
-        filterIdx = increment - startFilterIdx;
-        numCoeff = (maxFilterIdx - filterIdx) / increment;
-        filterIdx = filterIdx + numCoeff * increment;
+        filterIdx = static_cast<size_t>(increment - startFilterIdx);
+        numCoeff = (maxFilterIdx - filterIdx) / static_cast<size_t>(increment);
+        filterIdx = filterIdx + numCoeff * static_cast<size_t>(increment);
         float right[CHANNELS]{};
         if (scale == 1.f)
         {
             const auto fraction = static_cast<float>(filterIdx & (DSteps - 1)) / DStepsFloat;
-            const auto dataIdx = m_bufferCurrent + CHANNELS * (1 + numCoeff) + (CHANNELS - 1);
+            const auto dataIdx = static_cast<size_t>(m_bufferCurrent) + CHANNELS * (1 + numCoeff) + (CHANNELS - 1);
 
             m_sincFilter->processFixDown<CHANNELS>(numCoeff + 1, m_buffer.data(), dataIdx, fraction, filterIdx / DSteps,
                                                    right);
         }
         else
         {
-            m_sincFilter->processFilterHalf<CHANNELS, DSteps, -1, 0>(
-                filterIdx, m_buffer.data(), m_bufferCurrent + CHANNELS * (1 + numCoeff), increment, right);
+            m_sincFilter->processFilterHalf<CHANNELS, DSteps, -1, 0>(static_cast<int32_t>(filterIdx), m_buffer.data(),
+                                                                     static_cast<size_t>(m_bufferCurrent) +
+                                                                         CHANNELS * (1 + numCoeff),
+                                                                     static_cast<int32_t>(increment), right);
         }
 
-        for (int ch = 0; ch < CHANNELS; ch++)
+        for (size_t ch = 0; ch < CHANNELS; ++ch)
         {
             output[ch] = scale * (left[ch] + right[ch]);
         }
@@ -168,8 +174,8 @@ class SrPushConverter
 
     bool variProcess(const float targetRatio) noexcept
     {
-        m_inCount = srData.inputFrames * MAXCHANNELS;
-        m_outCount = srData.outputFrames * MAXCHANNELS;
+        m_inCount = srData.inputFrames * static_cast<long>(MAXCHANNELS);
+        m_outCount = srData.outputFrames * static_cast<long>(MAXCHANNELS);
         m_usedCount = m_outGenerated = 0;
 
         auto currentRatio = m_lastRatio;
@@ -179,26 +185,29 @@ class SrPushConverter
         const auto mn = std::min(m_lastRatio, targetRatio);
         const auto count = mn < 1 ? cnt / mn : cnt;
 
-        halfFilterChannelWidth = MAXCHANNELS * (std::lrint(count) + 1);
+        halfFilterChannelWidth = static_cast<unsigned int>(static_cast<long>(MAXCHANNELS) * (std::lrint(count) + 1));
 
         auto inputIndex = m_lastPosition;
         auto remainder = std::fmod(inputIndex, 1.f);
 
-        m_bufferCurrent = (m_bufferCurrent + MAXCHANNELS * std::lrint(inputIndex - remainder)) % m_bufferSize;
+        m_bufferCurrent = static_cast<int>(
+            (m_bufferCurrent + static_cast<long>(MAXCHANNELS) * std::lrint(inputIndex - remainder)) % m_bufferSize);
         inputIndex = remainder;
 
         static auto terminate = currentRatioReciprocal + 1e-10f;
 
         while (m_outGenerated < m_outCount)
         {
-            size_t samplesAvailable = (m_bufferEnd - m_bufferCurrent + m_bufferSize) % m_bufferSize;
+            size_t samplesAvailable =
+                static_cast<size_t>((m_bufferEnd - m_bufferCurrent + m_bufferSize) % m_bufferSize);
             if (samplesAvailable <= halfFilterChannelWidth)
             {
-                if (!prepareData(srData.dataIn, halfFilterChannelWidth, MAXCHANNELS))
+                if (!prepareData(srData.dataIn, static_cast<int>(halfFilterChannelWidth),
+                                 static_cast<int>(MAXCHANNELS)))
                 {
                     return false;
                 }
-                samplesAvailable = (m_bufferEnd - m_bufferCurrent + m_bufferSize) % m_bufferSize;
+                samplesAvailable = static_cast<size_t>((m_bufferEnd - m_bufferCurrent + m_bufferSize) % m_bufferSize);
                 if (samplesAvailable <= halfFilterChannelWidth)
                 {
                     break;
@@ -226,13 +235,14 @@ class SrPushConverter
             inputIndex += currentRatioReciprocal;
 
             remainder = std::fmod(inputIndex, 1.0f);
-            m_bufferCurrent = (m_bufferCurrent + MAXCHANNELS * std::lrint(inputIndex - remainder)) % m_bufferSize;
+            m_bufferCurrent = static_cast<int>(
+                (m_bufferCurrent + static_cast<long>(MAXCHANNELS) * std::lrint(inputIndex - remainder)) % m_bufferSize);
             inputIndex = remainder;
         }
         m_lastPosition = inputIndex;
         m_lastRatio = targetRatio;
-        srData.inputFramesConsumed = m_usedCount / MAXCHANNELS;
-        srData.outputFramesGenerated = m_outGenerated / MAXCHANNELS;
+        srData.inputFramesConsumed = m_usedCount / static_cast<long>(MAXCHANNELS);
+        srData.outputFramesGenerated = m_outGenerated / static_cast<long>(MAXCHANNELS);
         return true;
     }
 

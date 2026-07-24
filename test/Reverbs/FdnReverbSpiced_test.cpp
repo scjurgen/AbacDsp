@@ -1,9 +1,8 @@
 
 
-#include <gtest/gtest.h>
 #include <cmath>
+#include <gtest/gtest.h>
 #include <random>
-
 
 #include "Reverbs/FdnTankSpiced.h"
 

@@ -116,7 +116,8 @@ class SincFilter
     {
         float intPart{};
         const auto addFraction = std::modf(static_cast<float>(increment) / static_cast<float>(DiscreteSteps), &intPart);
-        float fraction = (filterIdx & (DiscreteSteps - 1)) / static_cast<float>(DiscreteSteps);
+        float fraction =
+            static_cast<float>(filterIdx & static_cast<int32_t>(DiscreteSteps - 1)) / static_cast<float>(DiscreteSteps);
         while (filterIdx > term)
         {
             const auto idx = filterIdx / static_cast<int32_t>(DiscreteSteps);

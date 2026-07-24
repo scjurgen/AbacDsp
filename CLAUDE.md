@@ -82,6 +82,10 @@ All are git submodules: `googletest`, `JUCE` (v8), `AudioFile` (WAV I/O), `pffft
 Standard: **C++20**. Compiler flags: `-Wall -Wextra -Wpedantic`. clang-format configured (`.clang-format` present).
 Float-based by default; templates for type flexibility; block operations preferred over sample-by-sample.
 
+### Realtime
+dsp code is realtime, no allocations (if really needed we implement our own memory handling with a pool)
+Optimise code in hot pathes.
+
 ### Type Safety
 - Use `std::variant` + `std::visit` instead of raw unions or `void*`.
 - Prefer `enum class` over unscoped `enum` to avoid implicit conversions.

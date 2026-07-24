@@ -41,6 +41,7 @@ if(BUILD_FULL_PROJECT)
     add_subdirectory(examples/metronome)
     add_subdirectory(examples/minireverb)
     add_subdirectory(examples/plaingain)
+    add_subdirectory(examples/resonik)
     add_subdirectory(examples/sampleplayertimestretched)
 else()
     # For tests-only builds, just include DSP headers

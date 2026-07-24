@@ -1,7 +1,9 @@
 #pragma once
 
 #include <array>
+#include <memory>
 
+#include "BlockProcPhaseVocoderPitch.h"
 #include "BlockProcessorBase.h"
 #include "Delays/PitchFadeWindowDelay.h"
 #include "Filters/OnePoleFilter.h"
@@ -26,13 +28,22 @@ class Pitch final : public BlockProcessorBase<BlockSize>
 
     void setPitch(const float semiTones) noexcept
     {
+        m_pitch = semiTones;
         m_pdl.setPitch(semiTones);
+        if (m_pvPitcher)
+        {
+            m_pvPitcher->setPitch(semiTones);
+        }
     }
 
     void setPitchMix(const float value) noexcept
     {
         m_mixPitch = value;
         m_mixPlain = 1.0f - value;
+        if (m_pvPitcher)
+        {
+            m_pvPitcher->setPitchMix(value);
+        }
     }
     void setReverse(const bool reverse) noexcept
     {
@@ -53,8 +64,27 @@ class Pitch final : public BlockProcessorBase<BlockSize>
         m_pdl.setGrainMode(enabled ? GrainMode::PitchSynchronous : GrainMode::DriftJitter);
     }
 
+    // Lazily constructs the (heavier) phase-vocoder engine on first enable, same
+    // rationale as setPsolaEnabled above.
+    void setPhaseVocoderEnabled(const bool enabled)
+    {
+        if (enabled && !m_pvPitcher)
+        {
+            m_pvPitcher = std::make_unique<PhaseVocoderPitch<BlockSize>>(m_sampleRate);
+            m_pvPitcher->setPitch(m_pitch);
+            m_pvPitcher->setPitchMix(m_mixPitch);
+        }
+        m_phaseVocoderEnabled = enabled;
+    }
+
     void process(std::array<float, BlockSize>& blk) noexcept override
     {
+        if (m_phaseVocoderEnabled && m_pvPitcher)
+        {
+            m_pvPitcher->process(blk);
+            return;
+        }
+
         std::array<float, BlockSize> tmp{};
         m_pdl.processBlock(blk, tmp);
         m_lp.processBlock(tmp.data(), BlockSize);
@@ -68,10 +98,13 @@ class Pitch final : public BlockProcessorBase<BlockSize>
 
   private:
     const float m_sampleRate;
+    float m_pitch{0.0f};
     float m_mixPitch{0.5f};
     float m_mixPlain{0.5f};
     bool m_psolaReady{false};
+    bool m_phaseVocoderEnabled{false};
     PitchFadeWindowDelay<DelayBufferSize> m_pdl;
     OnePoleFilter<OnePoleFilterCharacteristic::LowPass> m_lp;
+    std::unique_ptr<PhaseVocoderPitch<BlockSize>> m_pvPitcher;
 };
 }

@@ -25,7 +25,7 @@ struct PatchParameters
         lowPass        , // dial
         mix            , // dial
         pitch          , // dial
-        psola          , // switch
+        pitchMode      , // drop
         fdnMix         , // dial
         fdnSize        , // dial
         fdnDecay        // dial
@@ -43,7 +43,7 @@ float modulationSpeed{0.5f};
 float lowPass{12000.0f};
 float mix{0.0f};
 float pitch{0.0f};
-bool psola{false};
+size_t pitchMode{0};
 float fdnMix{-100.0f};
 float fdnSize{30.0f};
 float fdnDecay{2000.0f};
@@ -63,7 +63,7 @@ float fdnDecay{2000.0f};
 "lowPass",
 "mix",
 "pitch",
-"psola",
+"pitchMode",
 "fdnMix",
 "fdnSize",
 "fdnDecay"
@@ -98,7 +98,7 @@ float fdnDecay{2000.0f};
         else if constexpr (ParamId == Id::lowPass) return lowPass;
         else if constexpr (ParamId == Id::mix) return mix;
         else if constexpr (ParamId == Id::pitch) return pitch;
-        else if constexpr (ParamId == Id::psola) return psola;
+        else if constexpr (ParamId == Id::pitchMode) return pitchMode;
         else if constexpr (ParamId == Id::fdnMix) return fdnMix;
         else if constexpr (ParamId == Id::fdnSize) return fdnSize;
         else if constexpr (ParamId == Id::fdnDecay) return fdnDecay;
@@ -140,7 +140,7 @@ break;
 break;
  case Id::pitch: if (!isEqual(get<Id::pitch>(), value)) {get<Id::pitch>() = value;m_modified = true;}
 break;
- case Id::psola: if (!isEqual(get<Id::psola>(), value)) {get<Id::psola>() = static_cast<bool>(value) ;m_modified = true;}
+ case Id::pitchMode: if (!isEqual(get<Id::pitchMode>(), value)) {get<Id::pitchMode>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
  case Id::fdnMix: if (!isEqual(get<Id::fdnMix>(), value)) {get<Id::fdnMix>() = value;m_modified = true;}
 break;
@@ -199,7 +199,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         lowPass        , // dial
         mix            , // dial
         pitch          , // dial
-        psola          , // switch
+        pitchMode      , // drop
         fdnMix         , // dial
         fdnSize        , // dial
         fdnDecay        // dial

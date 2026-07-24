@@ -1,0 +1,46 @@
+{
+  "name": "resonik",
+  "displayname": "Resonik",
+  "status": "beta",
+  "plugintype": "FilterPlugin",
+  "color": "#ffaa33",
+  "boxy": "boxy",
+  "plugintype-see-also": "http://lv2plug.in/ns/lv2core#FilterPlugin",
+  "micro": 1,
+  "minor": 0,
+  "major": 0,
+  "shortdescription": "Parallel bank of resonant filter chains (BiquadResoBP -> SvfResoBP)",
+  "description": ["A bank of up to 100 parallel resonator chains, each a BiquadResoBP feeding an SvfResoBP, spread across a frequency range with distributed decay, gain and delay to turn audio into ringing, decaying tones."],
+  "patches": true,
+  "ports-control":
+  [
+    {"short": "NCH", "type": "dial", "display": "Chains", "symbol": "numChains", "default": 48, "range": [1, 100, 1, 0.5, false], "precision": 0, "unit": ""},
+    {"short": "DRY", "type": "dial", "display": "Dry", "symbol": "dry", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "WET", "type": "dial", "display": "Wet", "symbol": "wet", "default": -6, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "LFRQ", "type": "dial", "display": "Low Freq", "symbol": "lowFreq", "default": 80, "range": [20, 20000, 1, 0.5, false], "precision": 0, "unit": "Hz"},
+    {"short": "HFRQ", "type": "dial", "display": "High Freq", "symbol": "highFreq", "default": 6000, "range": [20, 20000, 1, 0.5, false], "precision": 0, "unit": "Hz"},
+    {"short": "DIST", "type": "drop", "display": "Distribution", "symbol": "distribution", "default": 1, "listitems": ["Linear", "Logarithmic"]},
+    {"short": "DCMN", "type": "dial", "display": "Decay Min", "symbol": "decayMin", "default": 0.3, "range": [0.01, 20, 0.001, 0.3, false], "precision": 2, "unit": "s"},
+    {"short": "DCMX", "type": "dial", "display": "Decay Max", "symbol": "decayMax", "default": 4.0, "range": [0.01, 20, 0.001, 0.3, false], "precision": 2, "unit": "s"},
+    {"short": "GMN", "type": "dial", "display": "Gain Min", "symbol": "gainMin", "default": -18, "range": [-60, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "GMX", "type": "dial", "display": "Gain Max", "symbol": "gainMax", "default": 0, "range": [-60, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "DLMN", "type": "dial", "display": "Delay Min", "symbol": "delayMin", "default": 0, "range": [0, 2000, 1, 0.4, false], "precision": 0, "unit": "ms"},
+    {"short": "DLMX", "type": "dial", "display": "Delay Max", "symbol": "delayMax", "default": 300, "range": [0, 2000, 1, 0.4, false], "precision": 0, "unit": "ms"},
+    {"short": "Q", "type": "dial", "display": "Q", "symbol": "q", "default": 6, "range": [0.3, 50, 0.01, 0.35, false], "precision": 2, "unit": ""},
+    {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1200",
+    "WINDOW_HEIGHT": "800",
+    "type": "|=4",
+    "composition": "C=(1:12) R=(2:1:1:1) A1=(CPU*200, LVL*500) A2=(NCH, DRY, WET, FFT*600) A3=(LFRQ, HFRQ, DIST) A4=(DCMN, DCMX, DLMN, DLMX, Q) A5=(GMN, GMX)"
+  },
+  "CPP":
+  {
+    "CLASS_NAME": "ResonikImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/ResonikImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

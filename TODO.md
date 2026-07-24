@@ -1,16 +1,27 @@
 # TODO
 
-## Maxdiffuser
+## Looper
 
-### Custom Delay Chain Visualisation
-Introduce to the JuceStandAloneGenerator a generic visualisation/interaction object.
-It should be a placeholder that then will be custom implemented in the impl/ part of the generated code.
-Concrete example that we implment: Object ShowProcessingBins impl/ShowProcessingBins.h where we paint bins of the single diffuser elements (up to 50) levels (dB scale)
-Bin 0 will be the actual input level, and bin 50 will be the final current output level.
+Next steps:
+slices material after recording (in parallel to recording in another process).
 
-### Phasevocoder pitch shifter
+play out the extracted samples when looping.
+ 
+
+future additions:
+- extract BPM
+- pitch shift slices (saves new sample, needs good memory handling, we are realtime)
+- shuffle slices
+- reverse play, the beginning lands on the beat (so the playout position is before the beat with the length of the sample)
+
+Hints: slicing, pitchshifting, beat extraction, click, sequencer will be added to the DSP library as testable includes.
+use modern c++20, realtime, speed optimised 
+
+
+## Maxdiffuser: add Phasevocoder pitch shifter
 - Rework the src/Spectral/StretchedSampleProducer.h and create a realtime PhaseVocoderPitcher.h
 - Test thoroughly with unit-tests in a closed development cycle
+- the phasevocoder is a third option for the pitch shifter in the maxdiffuser (so we change to a drop box)
 
 ## Code quality
 ### Sanitizier
@@ -23,10 +34,6 @@ Bin 0 will be the actual input level, and bin 50 will be the final current outpu
   either once Apple/LLVM fixes this, or by running it in the Linux Docker
   container instead of natively.
 
-### Test coverage
-- Discuss what to use for unit test coverage
-
-
 ## Cleanup
 
 ## Project Generator
@@ -38,3 +45,4 @@ Bin 0 will be the actual input level, and bin 50 will be the final current outpu
 - Enhanced save presets (with names)
 - Synth modules without AudioIn
 - 5.1
+- Background silkmask

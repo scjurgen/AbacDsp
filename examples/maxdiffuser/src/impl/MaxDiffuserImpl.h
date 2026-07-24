@@ -22,7 +22,7 @@ class MaxDiffuserImpl final : public EffectBase
     static constexpr size_t MaxPreDelaySamples{96000};
     static constexpr size_t FdnOrder{32};
     static constexpr size_t FdnMaxSizePerElement{100000};
-    static constexpr float FdnSizeSpread{4.3f};
+    static constexpr float FdnSizeSpread{2.3f};
     static constexpr float FdnInScale{1.f / static_cast<float>(FdnOrder)};
     static constexpr float FdnPresetBulge{-0.4f};
 
@@ -130,9 +130,11 @@ class MaxDiffuserImpl final : public EffectBase
     void setModulationSpeed(const float value)
     {
         m_modulationSpeed = value;
-        for (auto& chain : m_diffuser)
+
+        for (size_t o = 0; o < m_diffuser.size(); ++o)
         {
-            chain.setModulationSpeed(value);
+            const float speedFactor = 1 + 0.2f * static_cast<float>(o) / static_cast<float>(m_elements);
+            m_diffuser[o].setModulationSpeed(value * speedFactor);
         }
         m_fdn.setModulation(m_modulationDepth, m_modulationSpeed);
     }
@@ -143,6 +145,7 @@ class MaxDiffuserImpl final : public EffectBase
         {
             chain.setDamper(cutoff);
         }
+        m_fdn.setDamping(cutoff);
     }
 
     void setMix(const float valueInPercentage)
@@ -161,11 +164,12 @@ class MaxDiffuserImpl final : public EffectBase
         }
     }
 
-    void setPsola(const bool enabled)
+    void setPitchMode(const int mode)
     {
         for (auto& pitcher : m_pitcher)
         {
-            pitcher.setPsolaEnabled(enabled);
+            pitcher.setPsolaEnabled(mode == 1);
+            pitcher.setPhaseVocoderEnabled(mode == 2);
         }
     }
 
@@ -176,7 +180,7 @@ class MaxDiffuserImpl final : public EffectBase
 
     void setFdnSize(const float meters)
     {
-        m_fdn.setMinSize(meters);
+        m_fdn.setMinSize(meters / FdnSizeSpread);
         m_fdn.setMaxSize(meters * FdnSizeSpread);
     }
 
