@@ -60,6 +60,7 @@ cppSourceFilesFixed = [
     "inc/SpectrogramDisplay.h",
     "inc/VuMeter.h",
     "inc/WaveformMeter.h",
+    "inc/SliceWaveDisplay.h",
     "inc/AppSettings.h",
     "impl/EffectBase.h",
 ]
@@ -163,7 +164,7 @@ def createGaugeCallbacks(m:dict) -> str:
     extra = m.get("extra_timer_callbacks", [])
     if extra:
         res += "\n" + "\n".join(extra) + "\n"
-    if cc_enabled_dials(m):
+    if cc_enabled_controls(m):
         res += "processorRef.consumeLastLearnedCc();\n"
     return res
 
@@ -718,11 +719,14 @@ def printParameterTable(m: dict):
     for row in rows:
         print(f"\t{formatRow(row)}")
 
-def cc_enabled_dials(m: dict) -> list:
-    return [item for item in m["ports-control"] if item['type'] == 'dial' and 'cc' in item]
+# Switches map like sustain/damper pedals (CC64-66): the runtime scales the 0..127
+# CC value across the parameter's 0..1 range, so an AudioParameterBool flips at the
+# 63/64 split automatically. No runtime change is needed beyond listing them here.
+def cc_enabled_controls(m: dict) -> list:
+    return [item for item in m["ports-control"] if item['type'] in ('dial', 'switch') and 'cc' in item]
 
 def createCcMapping(m: dict) -> dict:
-    items = cc_enabled_dials(m)
+    items = cc_enabled_controls(m)
     return {
         "CC_TARGET_ENUM_LIST": ", ".join(item['symbol'] for item in items),
         "CC_DEFAULT_MAPPINGS": "\n".join(
@@ -798,7 +802,10 @@ def createPackageFromJsonDict(m: dict):
         item = fillDefaults(m["ports-control"][idx])
         if item['type'] in ['dial', 'slider']:
             item = fillRange(item)
-        if item['type'] == 'dial' and 'cc' in item:
+        if item['type'] == 'switch' and 'cc' in item:
+            item['rangeStart'] = 0
+            item['rangeEnd'] = 1
+        if item['type'] in ['dial', 'switch'] and 'cc' in item:
             item = fillCc(item)
         item["keyUpper"] = item['symbol'][0].upper() + item['symbol'][1:]
         item["setter"] = "set"+item["keyUpper"]
