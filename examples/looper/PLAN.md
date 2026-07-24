@@ -21,6 +21,12 @@ plays the slices back locked to a BPM/swing grid with a metronome click.
 - **Playback source:** slices are extracted into an owned `SliceBank` (per-slice buffers) and
   played from there, not read from the record buffer; extraction runs on a worker thread with a
   raw-loop fallback until ready. Precondition for reverse/pitch-shift. (Phase 6)
+- **Pivot (Phase 7):** always-slicing-the-whole-loop was the wrong shape. The looper is now a
+  plain, traditional single-buffer record/play/overdub loop (no automatic slicing at all); a
+  sample sequencer that requests individual slices on demand, copied lazily from the loop
+  buffer and positioned relative to the beat grid, will be designed and added on top later
+  (Phase 10, TBD by the user). `Slicer.h`/`SlicePlayer.h`/`SliceBank.h` are kept in
+  `src/includes/` for that future phase but are currently unused by `LooperImpl`.
 
 ## Signal flow
 
@@ -106,26 +112,47 @@ Input -> [LoopRecorder] --record/overdub--> loop buffer
       - Known: slice count capped to SlicePlayer::kMaxSlices (256) to keep the swap allocation-free.
       - Smoke-test feedback: slicing a bit imprecise (tune spectral flux later); overdub to become a
         separate item, not a mix-in; show slice start/end as a shaded overlay on the spectrogram.
-- [ ] **7** Independent overdub layers (reshaped from smoke-test). Each recording is an immutable,
-      loop-length layer with its own buffer + marker table + SlicePlayer voices; playback sums active
-      layers; overdub records a NEW layer, never touching the base.
-      - [ ] Master loop playhead in `LooperImpl` (sample-accurate, wraps at loopLength) drives all
-        layer triggering + overdub write + display; `LoopRecorder` demotes to base-take capture.
-      - [ ] Layer pool (cap 4). Base take -> layer 0 (worker copies bar-quantized loop + slices);
-        overdub -> next free layer, input written at the playhead (punch in/out) while others play, then
-        sliced on overdub-end. Clear drops all layers.
-      - [ ] Worker request carries a layer index; slices that layer, swaps its markers in at a loop
-        boundary. Mode/division change re-slices all active layers.
-      - [ ] Slice start/end shaded overlay on the spectrogram ring (per layer).
-      - [ ] Spectral-flux precision tuning pass.
-      - Cost: ~4 loop buffers + spectrogram ~110 MB worst case at 60 s max loop.
-- [ ] **8** Future, each standalone (remaining TODO bullets):
+- [x] **7 (revised)** Pivot cleanup: the independent-overdub-layers design above (the original
+      Phase 7) is superseded. "Slice everything up front" was the wrong shape; reverted to a plain,
+      traditional single-buffer looper and removed all automatic whole-loop slicing, ready for an
+      on-demand sample sequencer to be designed later (Phase 10).
+      - [x] Removed from `LooperImpl.h`: the slice-request worker (`std::jthread`, double-buffered
+        `SliceSet`/marker-swap machinery), the independent overdub `Layer` pool, and `SlicePlayer`
+        position-driven triggering. Base loop now plays straight from `LoopRecorder`'s own output.
+      - [x] Overdub reverted to `LoopRecorder`'s built-in single-buffer decay-overdub
+        (`beginOverdub`/`endOverdub`, `Overdubbing` state) -- this was already implemented, just
+        bypassed by the old Phase 7 layer design.
+      - [x] `getSliceBoundaries()` now always returns `{}`. `CircularLoopDisplay`'s slice/transient
+        spokes (`drawSliceSpokes`) removed since they had no data source left; the live spectrogram
+        and waveform band stay. `setSliceBoundaries()` kept as a no-op on both display widgets (the
+        generated `Processor.h` wiring calls it; changing that needs a blueprint/generator edit, not
+        done here to keep the UI untouched per the TODO).
+      - [x] `Slicer.h`, `SlicePlayer.h`, `SliceBank.h` (+ tests) untouched, just unreferenced from
+        `LooperImpl` -- kept for the future on-demand sequencer.
+      - Verified: `dev-explore.sh --example looper` end-to-end, JUCE `Looper_Standalone` builds
+        warning-clean.
+- [ ] **8a** Beat-quantized loop length + configurable boundary fade. `LoopRecorder::setSamplesPerBar`
+      -> `setSamplesPerBeat` / `quantizeToBar` -> `quantizeToBeat` (loop length becomes a whole-beat
+      multiple, not a whole-bar multiple). New `setFadeFrames(size_t)`; `finalizeLoop()` applies a
+      linear fade-in over the first N frames and fade-out over the last N (click-free wrap seam,
+      clamped for short loops). `LooperImpl` gets a fade-ms setter plumbed through.
+- [ ] **8b** Pre/post-roll ring buffer + beat-relative snap on record start/stop. A continuous
+      always-on ring buffer (`fadeFrames / 2`) in `LooperImpl`. Threshold-armed record start/stop snap
+      to the nearest running beat boundary within an eighth-note tolerance: early hits splice the
+      pre-roll onto the loop tail (pickup wraps forward); late hits pad the start with silence up to
+      the boundary. New `BeatSequencer::samplesToNearestBeat()`-style query; new `LoopRecorder`
+      `beginRecord(silentPrefixFrames)` / `stopRecord(tailSplice)` overloads. Both boundaries use the
+      8a fade for click-free splices/pads, not just the loop-wrap seam.
+- [ ] **9** Future, each standalone (remaining original TODO bullets, renumbered):
       - [ ] free recording (no BPM), extract the actual BPM when recording stops
         (`Analysis/TempoEstimator.h`)
       - [ ] reverse play (beat lands on the slice end)
       - [ ] shuffle slices
       - [ ] pitch-shift slices (reuse `Spectral/PhaseVocoderPitcher.h`, saves a new sample into the
         `SliceBank`, RT-safe pool)
+- [ ] **10** On-demand sample sequencer (TODO "Looper with Sample Sequencer" step 3). Fed individual
+      slices copied lazily from the loop buffer, positioned relative to the beat grid; design TBD by
+      the user once 8a/8b land.
 
 ## Parameters (all CC-mappable)
 

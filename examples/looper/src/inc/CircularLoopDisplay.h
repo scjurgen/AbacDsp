@@ -64,10 +64,10 @@ class CircularLoopDisplay : public juce::Component
     {
         m_loopPeaks = peaks;
     }
-    void setSliceBoundaries(const std::vector<float>& normalized)
-    {
-        m_boundaries = normalized;
-    }
+    // No slice table while this looper is plain (pivot away from auto-slicing); kept
+    // as a stable no-op so the generated wiring (blueprint extra_timer_callbacks)
+    // doesn't need to change.
+    void setSliceBoundaries(const std::vector<float>&) noexcept {}
     void setPlayheadNormalized(float normalized) noexcept
     {
         m_playhead = normalized;
@@ -263,7 +263,6 @@ class CircularLoopDisplay : public juce::Component
 
         drawLoopWaveformBand(g, geo, c);
         drawBarSpokes(g, geo, c);
-        drawSliceSpokes(g, geo, c);
     }
 
     void drawLoopWaveformBand(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
@@ -293,16 +292,6 @@ class CircularLoopDisplay : public juce::Component
             g.drawLine(
                 juce::Line<float>(polar(geo, angle, geo.ringInnerR * 0.98f), polar(geo, angle, geo.ringOuterR * 1.02f)),
                 first ? 2.5f : 1.2f);
-        }
-    }
-
-    void drawSliceSpokes(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
-    {
-        g.setColour(juce::Colour(c.cols[6]).withAlpha(0.60f));
-        for (const float b : m_boundaries)
-        {
-            const float angle = kBeatAngle + juce::jlimit(0.f, 1.f, b) * k2Pi;
-            g.drawLine(juce::Line<float>(polar(geo, angle, geo.ringInnerR), polar(geo, angle, geo.ringOuterR)), 1.0f);
         }
     }
 
@@ -418,7 +407,6 @@ class CircularLoopDisplay : public juce::Component
 
     std::vector<float> m_data;
     std::vector<float> m_loopPeaks;
-    std::vector<float> m_boundaries;
     std::vector<size_t> m_subdivisionPositions;
     float m_sampleRate{48000.f};
     size_t m_samplesPerBar{0};
