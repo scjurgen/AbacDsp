@@ -97,6 +97,17 @@ the harness against the hand labels:
 - Parameter effects are non-monotonic (for example bass false positives swing
   6 -> 5 -> 0 as `lambda` goes 1.6 -> 2.0 -> 2.5), so tune across all files, not
   one at a time.
+- Slice-start refinement (`refine.enabled = 1`) cuts mean onset-timing error
+  2-3x on real material (guitar 425 -> 197, bass 417 -> 219 samples) and to ~1
+  sample on the synthetic fixture, with **no** change to precision/recall since
+  it only nudges onsets within the match tolerance. A 100 ms preroll is what
+  makes it work, because the flux onsets sit late. It cannot fix legato slurs,
+  which have no attack edge to snap to.
+- Offset-transient rejection (the Python slicer's `_remove_offset_transients`)
+  was prototyped and **rejected**: on top of the adaptive detector it only
+  removes real onsets (legato, ghosts, trailing notes) without a precision gain
+  to show for it. The adaptive threshold already handles the false positives it
+  was meant to catch.
 
 ## Output
 

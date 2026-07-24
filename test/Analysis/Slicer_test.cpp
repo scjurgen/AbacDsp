@@ -388,4 +388,49 @@ TEST(SlicerTest, AdaptiveTransientSlicesTileTheLoop)
     EXPECT_EQ(covered, 8000u);
 }
 
+// A coarse onset that sits late, inside the sustain, is pulled back onto the
+// attack edge (the silence-to-burst transition at frame 4000).
+TEST(SlicerTest, RefineSnapsLateOnsetTowardAttack)
+{
+    const auto mono = noiseBursts(8000, {{4000, 8000}});
+    const std::vector<size_t> coarse = {4400}; // 400 samples late
+    Slicer::RefineParams rp{};                 // tuned defaults
+
+    const auto refined = Slicer::refineSliceStarts(coarse, mono, 8000, rp);
+
+    ASSERT_EQ(refined.size(), 1u);
+    EXPECT_LE(nearestDistance(refined, 4000), 600u);
+    // improved on the coarse position and did not overshoot past it
+    EXPECT_LT(refined[0], 4400u);
+}
+
+TEST(SlicerTest, RefineKeepsOnsetsSortedAndBounded)
+{
+    const auto mono = noiseBursts(12000, {{2000, 4000}, {6000, 8000}, {10000, 12000}});
+    const std::vector<size_t> coarse = {2400, 6400, 10400};
+    Slicer::RefineParams rp{};
+
+    const auto refined = Slicer::refineSliceStarts(coarse, mono, 12000, rp);
+
+    ASSERT_EQ(refined.size(), coarse.size());
+    for (size_t i = 0; i < refined.size(); ++i)
+    {
+        if (i > 0)
+        {
+            EXPECT_LT(refined[i - 1], refined[i]); // sorted, de-duplicated
+        }
+        // stays within its own search window around the coarse onset
+        EXPECT_GE(refined[i] + rp.prerollSamples, coarse[i]);
+        EXPECT_LE(refined[i], coarse[i] + rp.postrollSamples);
+    }
+}
+
+TEST(SlicerTest, RefineEmptyOnsetsYieldsEmpty)
+{
+    const std::vector<float> mono(4000, 0.5f);
+    const std::vector<size_t> none;
+    Slicer::RefineParams rp{};
+    EXPECT_TRUE(Slicer::refineSliceStarts(none, mono, 4000, rp).empty());
+}
+
 }

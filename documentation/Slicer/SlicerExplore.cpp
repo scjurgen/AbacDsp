@@ -58,6 +58,8 @@ struct Settings
     AbacDsp::Slicer::TransientParams transient{};
     AbacDsp::Slicer::SpectralParams spectral{};
     AbacDsp::Slicer::AdaptiveParams adaptive{};
+    AbacDsp::Slicer::RefineParams refine{};
+    bool refineEnabled{false};
     size_t gridSliceCount{8};
 };
 
@@ -262,6 +264,46 @@ void applySetting(Settings& s, const std::string& key, const std::string& value)
     else if (key == "adaptive.minGapFrames")
     {
         s.adaptive.minGapFrames = asSize();
+    }
+    else if (key == "refine.enabled")
+    {
+        s.refineEnabled = asSize() != 0;
+    }
+    else if (key == "refine.prerollSamples")
+    {
+        s.refine.prerollSamples = asSize();
+    }
+    else if (key == "refine.postrollSamples")
+    {
+        s.refine.postrollSamples = asSize();
+    }
+    else if (key == "refine.onsetDeviationSamples")
+    {
+        s.refine.onsetDeviationSamples = asFloat();
+    }
+    else if (key == "refine.stepWidthSamples")
+    {
+        s.refine.stepWidthSamples = asSize();
+    }
+    else if (key == "refine.attackHalfLifeSamples")
+    {
+        s.refine.attackHalfLifeSamples = asSize();
+    }
+    else if (key == "refine.decayHalfLifeSamples")
+    {
+        s.refine.decayHalfLifeSamples = asSize();
+    }
+    else if (key == "refine.wOnset")
+    {
+        s.refine.wOnset = asFloat();
+    }
+    else if (key == "refine.wNoise")
+    {
+        s.refine.wNoise = asFloat();
+    }
+    else if (key == "refine.wIncrease")
+    {
+        s.refine.wIncrease = asFloat();
     }
     else if (key == "grid.sliceCount")
     {
@@ -524,13 +566,13 @@ int main(int argc, char* argv[])
 
     const std::vector<float> mono = loadMono(audio);
     const size_t loopLength = mono.size();
-    const std::vector<AbacDsp::Slice> slices = runSlicer(settings, mono, loopLength);
+    const std::vector<AbacDsp::Slice> rawSlices = runSlicer(settings, mono, loopLength);
 
     // Interior onsets are slice starts excluding the implied 0 at the loop head,
     // which is what maps to a hand-labelled transient.
     std::vector<size_t> onsets;
-    onsets.reserve(slices.size());
-    for (const AbacDsp::Slice& s : slices)
+    onsets.reserve(rawSlices.size());
+    for (const AbacDsp::Slice& s : rawSlices)
     {
         if (s.startFrame > 0)
         {
@@ -538,6 +580,29 @@ int main(int argc, char* argv[])
         }
     }
 
+    if (settings.refineEnabled)
+    {
+        const MatchStats before = matchOnsets(truth, onsets, settings.toleranceSamples);
+        onsets = AbacDsp::Slicer::refineSliceStarts(onsets, mono, loopLength, settings.refine);
+        const MatchStats after = matchOnsets(truth, onsets, settings.toleranceSamples);
+        const auto meanAbs = [](const MatchStats& m)
+        {
+            if (m.errors.empty())
+            {
+                return 0.0;
+            }
+            long long s = 0;
+            for (const long long e : m.errors)
+            {
+                s += std::llabs(e);
+            }
+            return static_cast<double>(s) / static_cast<double>(m.errors.size());
+        };
+        std::cout << "slice-start refinement: mean |onset err| " << meanAbs(before) << " -> " << meanAbs(after)
+                  << " samples\n";
+    }
+
+    const std::vector<AbacDsp::Slice> slices = AbacDsp::Slicer::slicesFromBoundaries(onsets, loopLength);
     const MatchStats stats = matchOnsets(truth, onsets, settings.toleranceSamples);
     printReport(settings, audio.getSampleRate(), truth, slices, onsets, stats);
 

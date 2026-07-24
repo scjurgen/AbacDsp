@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <span>
 #include <utility>
 #include <vector>
@@ -55,6 +56,25 @@ class Slicer
         float lambda{2.5f};     // multiplier on the local average flux
         float delta{0.05f};     // absolute floor as a fraction of the peak flux
         size_t minGapFrames{1}; // reject onsets closer than this to the previous one
+    };
+
+    // Slice-start refinement: nudge each (coarse, often window-centred) onset to
+    // the nearby sample that best balances staying close to the detected onset,
+    // sitting near the local noise floor (a clean, quiet cut edge), and landing on
+    // the local energy increase (the attack). Improves timing accuracy and yields
+    // click-free edges. Sample counts are at the loop's own rate; the defaults were
+    // tuned at 48 kHz. Cannot help legato transitions, which have no attack edge.
+    struct RefineParams
+    {
+        size_t prerollSamples{4800};        // search this far before the onset
+        size_t postrollSamples{480};        // and this far after
+        float onsetDeviationSamples{960.f}; // Gaussian width of the proximity prior
+        size_t stepWidthSamples{480};       // half-width of the energy-increase edge detector
+        size_t attackHalfLifeSamples{5};    // envelope follower fast attack
+        size_t decayHalfLifeSamples{240};   // envelope follower slower decay
+        float wOnset{1.0f};                 // weight: proximity to the detected onset
+        float wNoise{0.5f};                 // weight: closeness to the noise floor
+        float wIncrease{0.5f};              // weight: local energy increase
     };
 
     // Split [0, loopLength) into sliceCount slices, distributing any remainder.
@@ -196,6 +216,41 @@ class Slicer
             }
         }
         return slicesFromBoundaries(onsets, loopLength);
+    }
+
+    // Refine detected onsets to precise slice starts (see RefineParams). Runs once
+    // off the audio thread, so it may allocate. Returns sorted, de-duplicated
+    // positions; each onset stays within its own [previous, next] neighbours.
+    [[nodiscard]] static std::vector<size_t> refineSliceStarts(std::span<const size_t> onsets,
+                                                               std::span<const float> mono, const size_t loopLength,
+                                                               const RefineParams& params)
+    {
+        std::vector<size_t> refined;
+        const size_t n = std::min(loopLength, mono.size());
+        if (onsets.empty() || n == 0)
+        {
+            return refined;
+        }
+        const std::vector<float> env =
+            envelopeFollower(mono, n, params.attackHalfLifeSamples, params.decayHalfLifeSamples);
+        refined.reserve(onsets.size());
+        for (size_t i = 0; i < onsets.size(); ++i)
+        {
+            const size_t onset = onsets[i];
+            const size_t prev = (i > 0) ? onsets[i - 1] : 0;
+            const size_t next = (i + 1 < onsets.size()) ? onsets[i + 1] : n;
+            const size_t lo = std::max(prev, (onset > params.prerollSamples) ? onset - params.prerollSamples : 0);
+            const size_t hi = std::min({next, onset + params.postrollSamples, n});
+            if (hi <= lo + 2 || onset >= n)
+            {
+                refined.push_back(onset);
+                continue;
+            }
+            refined.push_back(lo + refineWindow(std::span<const float>(env).subspan(lo, hi - lo), onset - lo, params));
+        }
+        std::sort(refined.begin(), refined.end());
+        refined.erase(std::unique(refined.begin(), refined.end()), refined.end());
+        return refined;
     }
 
     // Onset positions (in frames) from half-wave-rectified spectral flux peaks. The
@@ -406,6 +461,100 @@ class Slicer
     }
 
   private:
+    // Causal two-stage (fast attack / slow decay) envelope follower on |x|, with
+    // half-life expressed in samples: alpha = 2^(-1/halfLife).
+    [[nodiscard]] static std::vector<float> envelopeFollower(std::span<const float> mono, const size_t n,
+                                                             const size_t attackHalfLife, const size_t decayHalfLife)
+    {
+        const auto alpha = [](const size_t halfLife)
+        { return halfLife == 0 ? 0.f : std::exp(std::log(0.5f) / static_cast<float>(halfLife)); };
+        const float aAttack = alpha(attackHalfLife);
+        const float aDecay = alpha(decayHalfLife);
+
+        std::vector<float> env(n, 0.f);
+        float y = 0.f;
+        for (size_t i = 0; i < n; ++i)
+        {
+            const float x = std::abs(mono[i]);
+            const float a = (x > y) ? aAttack : aDecay;
+            y = (1.f - a) * x + a * y;
+            env[i] = y;
+        }
+        return env;
+    }
+
+    [[nodiscard]] static float lowQuantile(std::vector<float> values, const float q)
+    {
+        if (values.empty())
+        {
+            return 0.f;
+        }
+        const size_t idx = std::min(values.size() - 1, static_cast<size_t>(q * static_cast<float>(values.size())));
+        std::nth_element(values.begin(), values.begin() + static_cast<std::ptrdiff_t>(idx), values.end());
+        return values[idx];
+    }
+
+    // Score every sample in a linear-envelope window and return the argmax. The
+    // window is peak-referenced to dB, then scored by proximity to the onset
+    // (Gaussian), closeness to the noise floor, and local energy increase.
+    [[nodiscard]] static size_t refineWindow(std::span<const float> envSeg, const size_t onsetLocal,
+                                             const RefineParams& p)
+    {
+        const size_t len = envSeg.size();
+        if (len < 3)
+        {
+            return onsetLocal;
+        }
+        float peakLin = 1e-9f;
+        for (const float v : envSeg)
+        {
+            peakLin = std::max(peakLin, v);
+        }
+        std::vector<float> envDb(len, 0.f);
+        for (size_t k = 0; k < len; ++k)
+        {
+            envDb[k] = std::max(-80.f, 20.f * std::log10(std::max(envSeg[k], 1e-9f) / peakLin));
+        }
+
+        const float noise = lowQuantile(envDb, 0.05f);
+        const float denom = std::max(1e-3f, -noise); // peak is 0 dB after peak-referencing
+        const float sigma = std::max(1.f, p.onsetDeviationSamples);
+        const size_t w = std::max<size_t>(1, p.stepWidthSamples);
+
+        float best = -std::numeric_limits<float>::infinity();
+        size_t bestIdx = onsetLocal;
+        for (size_t k = 0; k < len; ++k)
+        {
+            const float z = (static_cast<float>(k) - static_cast<float>(onsetLocal)) / sigma;
+            const float distOnset = std::exp(-0.5f * z * z);
+            const float distNoise = 1.f - std::clamp((envDb[k] - noise) / denom, 0.f, 1.f);
+
+            const size_t aLo = (k > w) ? k - w : 0;
+            const size_t aHi = std::min(len - 1, k + w);
+            float before = 0.f;
+            for (size_t i = aLo; i < k; ++i)
+            {
+                before += envDb[i];
+            }
+            float after = 0.f;
+            for (size_t i = k; i <= aHi; ++i)
+            {
+                after += envDb[i];
+            }
+            const float meanBefore = (k > aLo) ? before / static_cast<float>(k - aLo) : envDb[k];
+            const float meanAfter = after / static_cast<float>(aHi - k + 1);
+            const float increase = std::clamp((meanAfter - meanBefore) / denom, 0.f, 1.f);
+
+            const float score = p.wOnset * distOnset + p.wNoise * distNoise + p.wIncrease * increase;
+            if (score > best)
+            {
+                best = score;
+                bestIdx = k;
+            }
+        }
+        return bestIdx;
+    }
+
     // Half-wave-rectified spectral flux per STFT frame: sum of positive
     // magnitude increases between consecutive Hann-windowed frames.
     [[nodiscard]] static std::vector<float> computeSpectralFlux(std::span<const float> mono, const size_t n,

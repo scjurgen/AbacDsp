@@ -38,5 +38,23 @@ adaptive.lambda             = 2.5    # multiplier on the local average flux
 adaptive.delta              = 0.05   # absolute floor as a fraction of peak flux
 adaptive.minGapFrames       = 6000
 
+# --- slice-start refinement (post-step, applies to any detector) ---
+# Nudges each detected onset within a small search window to the sample that best
+# balances proximity to the detection (Gaussian), closeness to the local noise
+# floor (a clean, quiet cut edge), and local energy increase (the attack). A
+# measured win across the sample set: mean onset-timing error drops 2-3x on real
+# material with no change in precision/recall. 100 ms preroll (4800) is what
+# unlocks it, since the flux onsets sit late. Cannot help legato transitions.
+refine.enabled              = 1
+refine.prerollSamples       = 4800   # search this far before the onset
+refine.postrollSamples      = 480    # and this far after
+refine.onsetDeviationSamples = 960   # Gaussian width of the proximity prior
+refine.stepWidthSamples     = 480    # half-width of the energy-increase edge detector
+refine.attackHalfLifeSamples = 5     # envelope follower fast attack
+refine.decayHalfLifeSamples = 240    # envelope follower slower decay
+refine.wOnset               = 1.0    # weight: proximity to detected onset
+refine.wNoise               = 0.5    # weight: closeness to noise floor
+refine.wIncrease            = 0.5    # weight: local energy increase
+
 # --- fixed grid (method = grid) ---
 grid.sliceCount = 8
