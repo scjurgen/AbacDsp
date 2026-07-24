@@ -46,9 +46,20 @@ Input -> [LoopRecorder] --record/overdub--> loop buffer
       index, per-sample linear fade-in/out (click-free edges), playLength caps a slice to the grid
       step, overlapping triggers sum, oldest-voice stealing caps polyphony, short-slice fade clamp.
       Beat-grid triggering is wired in Phase 4 (looper drives triggerSlice from BeatSequencer).
-- [ ] **4** `examples/looper/`: blueprint `looper.json`, hand-written `impl/LooperImpl.h`,
-      new `SliceWaveDisplay.h` promoted to the generator template library, CMake wiring,
-      generate + build.
+- [~] **4** `examples/looper/` code-complete; full JUCE build + host smoke-test pending (user).
+      - Generator extended: `cc` now works on `switch` controls (sustain/damper-pedal style,
+        0..127 scaled across the 0..1 bool range -> flips at 63/64; runtime unchanged). Verified.
+      - `blueprints/looper.json`: 4 momentary transport pulses (Record/Play/Overdub/Clear, all CC,
+        auto-reset, labels reflect real state) + Host Sync; Grid/Transient mode + division drops;
+        BPM/Swing/Click dials (CC); SliceWaveDisplay gauge; patches + host_transport.
+      - `SliceWaveDisplay.h` added to generator template library (inc list + templates dir).
+      - Hand-written `impl/LooperImpl.h` wires LoopRecorder + Slicer + SlicePlayer + BeatSequencer
+        + ClickGenerator. Compiles clean (-Wall -Wextra) and runs end-to-end via dev-explore
+        (record -> bar-quantize -> 8 grid slices -> playback -> clear). Editor/Processor wiring
+        verified by grep.
+      - Known limitations to revisit: slicing runs inline on the audio thread at record-stop
+        (one-time alloc; move to a worker); swing affects the click, not slice timing yet;
+        host-sync drives tempo/click, not loop phase alignment.
 - [ ] **5** Future, each standalone:
       - [ ] tempo/beat extraction (`Analysis/TempoEstimator.h`)
       - [ ] reverse play (beat lands on the slice end)

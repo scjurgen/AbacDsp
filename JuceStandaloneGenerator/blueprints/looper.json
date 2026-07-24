@@ -1,0 +1,75 @@
+{
+  "name": "looper",
+  "displayname": "Looper",
+  "plugintype": "Looper",
+  "color": "Analyser",
+  "shortdescription": "Slicing looper with bar-quantized capture and beat-locked slice playback",
+  "description": [
+    "Records audio, quantizes the loop to whole bars, slices it (grid or transient),\n",
+    "and plays the slices back locked to a BPM/swing grid with a metronome click.\n"
+  ],
+  "patches": true,
+  "host_transport": true,
+  "ports-control": [
+    {"short": "REC",  "type": "switch", "display": "Record",   "symbol": "record",   "default": 0, "cc": {"controller": 64}},
+    {"short": "PLAY", "type": "switch", "display": "Play",      "symbol": "play",     "default": 0, "cc": {"controller": 66}},
+    {"short": "ODUB", "type": "switch", "display": "Overdub",   "symbol": "overdub",  "default": 0, "cc": {"controller": 65}},
+    {"short": "CLR",  "type": "switch", "display": "Clear",     "symbol": "clear",    "default": 0, "cc": {"controller": 69}},
+    {"short": "SYNC", "type": "switch", "display": "Host Sync", "symbol": "hostSync", "default": 0},
+    {"short": "MODE", "type": "drop",   "display": "Slice Mode", "symbol": "sliceMode", "default": 0,
+      "listitems": ["Grid", "Transient"]},
+    {"short": "DIV",  "type": "drop",   "display": "Division",   "symbol": "sliceDivision", "default": 1,
+      "listitems": ["1/4", "1/8", "1/16", "1/32"]},
+    {"short": "BPM",  "type": "dial",   "display": "BPM",         "symbol": "bpm",        "default": 120,
+      "range": [50, 250, 0.1, 1, false], "precision": 1, "unit": "BPM",
+      "cc": {"controller": 20, "valueLow": 60, "valueHigh": 180}},
+    {"short": "SWG",  "type": "dial",   "display": "Swing",       "symbol": "swing",      "default": 50,
+      "range": [0, 100, 1, 1, false], "precision": 0, "unit": "%",
+      "cc": {"controller": 21}},
+    {"short": "CVOL", "type": "dial",   "display": "Click Volume", "symbol": "clickVolume", "default": -12,
+      "range": [-60, 0, 0.1, 1, false], "precision": 1, "unit": "dB",
+      "cc": {"controller": 22}},
+    {"short": "SLICE", "type": "gauge", "gaugetype": "signal", "display": "Loop", "symbol": "slice",
+      "customtype": "SliceWaveDisplay"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1000",
+    "WINDOW_HEIGHT": "620",
+    "type": "||",
+    "composition": "C=(1:3) A1=(REC, PLAY, ODUB, CLR, SYNC, MODE, DIV, BPM, SWG, CVOL) A2=(SLICE)"
+  },
+  "extra_ui_includes": [
+    "inc/SliceWaveDisplay.h"
+  ],
+  "extra_timer_callbacks": [
+    "{ const float sr = static_cast<float>(processorRef.getSampleRate());",
+    "sliceGauge.setSampleRate(sr);",
+    "sliceGauge.setLoopWaveform(processorRef.getLoopWaveform());",
+    "sliceGauge.setSliceBoundaries(processorRef.getSliceBoundaries());",
+    "sliceGauge.setPlayheadNormalized(processorRef.getPlayheadNormalized());",
+    "sliceGauge.setStateLabel(processorRef.getLooperStateLabel());",
+    "recordSwitch.setButtonText(processorRef.isRecording() ? juce::String::fromUTF8(\"Recording\") : juce::String::fromUTF8(\"Record\"));",
+    "playSwitch.setButtonText(processorRef.isPlaying() ? juce::String::fromUTF8(\"Stop\") : juce::String::fromUTF8(\"Play\"));",
+    "overdubSwitch.setButtonText(processorRef.isOverdubbing() ? juce::String::fromUTF8(\"Overdubbing\") : juce::String::fromUTF8(\"Overdub\"));",
+    "if (recordSwitch.getToggleState()) { recordSwitch.setToggleState(false, juce::sendNotification); }",
+    "if (playSwitch.getToggleState()) { playSwitch.setToggleState(false, juce::sendNotification); }",
+    "if (overdubSwitch.getToggleState()) { overdubSwitch.setToggleState(false, juce::sendNotification); }",
+    "if (clearSwitch.getToggleState()) { clearSwitch.setToggleState(false, juce::sendNotification); } }"
+  ],
+  "extra_processor_methods": [
+    "[[nodiscard]] bool isHostSynced() const noexcept { return pluginRunner && pluginRunner->isHostSynced(); }",
+    "[[nodiscard]] bool isRecording() const noexcept { return pluginRunner && pluginRunner->isRecording(); }",
+    "[[nodiscard]] bool isPlaying() const noexcept { return pluginRunner && pluginRunner->isPlaying(); }",
+    "[[nodiscard]] bool isOverdubbing() const noexcept { return pluginRunner && pluginRunner->isOverdubbing(); }",
+    "[[nodiscard]] std::vector<float> getLoopWaveform() const { return pluginRunner ? pluginRunner->getLoopWaveform() : std::vector<float>{}; }",
+    "[[nodiscard]] std::vector<float> getSliceBoundaries() const { return pluginRunner ? pluginRunner->getSliceBoundaries() : std::vector<float>{}; }",
+    "[[nodiscard]] float getPlayheadNormalized() const noexcept { return pluginRunner ? pluginRunner->getPlayheadNormalized() : 0.f; }",
+    "[[nodiscard]] juce::String getLooperStateLabel() const { return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String(); }"
+  ],
+  "protected_files": [],
+  "CPP": {
+    "CLASS_NAME": "LooperImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/LooperImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}
