@@ -85,23 +85,41 @@ Input -> [LoopRecorder] --record/overdub--> loop buffer
         same way the waveform band does. Drawn beneath the waveform band / spokes.
       - No change to slicing or playback. Standalone, visual smoke-test.
       - Decision: live-while-recording (not a static post-record pass).
-- [ ] **6** Off-thread extraction + spectral-flux slicing + play extracted samples. TODO bullets 2+3.
-      Fixes a real hazard: slicing currently allocates on the audio thread at record-stop.
-      - [ ] `Sampler/SliceBank.h` (+ test): owns per-slice interleaved buffers from a preallocated
-        pool (sized to the recorder max, ~60 s stereo); `SlicePlayer` reads `bank[i]` + local position
-        instead of the borrowed loop span.
-      - [ ] Worker thread in `LooperImpl` (std::jthread, `SpectrogramBase`-style). On record-finalize
-        the audio thread snapshots the now-immutable loop and signals the worker; the worker runs the
-        slicer off-thread, extracts each slice into the bank back-buffer, and publishes via atomic
-        pointer swap. Can run while further recording/overdub continues.
-      - [ ] Spectral-flux onset detection: worker computes an STFT over the finalized loop (shares
-        `HannWindowMagnitudesFft`) and derives onsets from spectral flux, snapped to the grid as today.
-        Replaces the time-domain envelope path in `Slicer` for transient mode (grid mode unchanged).
-      - [ ] Transition: play the raw loop buffer until the bank is ready, then swap at the next loop
-        wrap (no jump). Gate overdub/re-record/clear while the worker is in flight (or cancel+restart).
-      - [ ] Tests (headless, worker joined -> deterministic): bank extraction correctness; spectral-flux
-        onsets vs synthetic transients; boundaries match current grid path; fallback->bank swap.
-- [ ] **7** Future, each standalone (TODO bullets 4-7):
+- [~] **6** Off-thread spectral-flux slicing, marker-based (TODO bullets 2+3). Code-complete, tests
+      green, standalone builds clean; host smoke-test pending. Fixes a real hazard: slicing used to
+      allocate on the audio thread at record-stop.
+      - [x] Worker thread in `LooperImpl` (std::jthread, declared last so it joins first). On finalize
+        (and on overdub-end) the audio thread publishes a request gen; the worker slices off-thread into
+        a double-buffered marker table; the audio thread consumes via a done-gen handshake and swaps
+        front/back at a loop boundary. Punch-in record->overdub defers slicing until overdub ends.
+      - [x] Spectral-flux onsets in `Slicer` (+ 3 tests): STFT + half-wave-rectified flux peak-pick,
+        window-centred position, snapped to grid + zero crossings. Used for transient mode; grid mode
+        unchanged. Time-domain detectOnsets kept.
+      - [x] Playback is MARKER-BASED: slices play in place from the immutable loop buffer via the
+        marker table (no extracted copies). Decision (after smoke-test): copies aren't needed once
+        overdub stops mutating the base; a real copy is deferred to the destructive pitch-shift bullet.
+      - [x] `Sampler/SliceBank.h` (+ test, 9 cases) kept in the repo for that future pitch-shift, but
+        OUT of the live path (was the earlier extract-copies design, superseded).
+      - [x] Transition: raw loop plays until markers are published, then swaps at the next loop wrap
+        (`useRawLoop = overdubbing || !slicesReady`); voices reset on overdub entry. Record/overdub/clear
+        pulses dropped while a slice request is in flight (~ms); play/stop stay live.
+      - Known: slice count capped to SlicePlayer::kMaxSlices (256) to keep the swap allocation-free.
+      - Smoke-test feedback: slicing a bit imprecise (tune spectral flux later); overdub to become a
+        separate item, not a mix-in; show slice start/end as a shaded overlay on the spectrogram.
+- [ ] **7** Independent overdub layers (reshaped from smoke-test). Each recording is an immutable,
+      loop-length layer with its own buffer + marker table + SlicePlayer voices; playback sums active
+      layers; overdub records a NEW layer, never touching the base.
+      - [ ] Master loop playhead in `LooperImpl` (sample-accurate, wraps at loopLength) drives all
+        layer triggering + overdub write + display; `LoopRecorder` demotes to base-take capture.
+      - [ ] Layer pool (cap 4). Base take -> layer 0 (worker copies bar-quantized loop + slices);
+        overdub -> next free layer, input written at the playhead (punch in/out) while others play, then
+        sliced on overdub-end. Clear drops all layers.
+      - [ ] Worker request carries a layer index; slices that layer, swaps its markers in at a loop
+        boundary. Mode/division change re-slices all active layers.
+      - [ ] Slice start/end shaded overlay on the spectrogram ring (per layer).
+      - [ ] Spectral-flux precision tuning pass.
+      - Cost: ~4 loop buffers + spectrogram ~110 MB worst case at 60 s max loop.
+- [ ] **8** Future, each standalone (remaining TODO bullets):
       - [ ] free recording (no BPM), extract the actual BPM when recording stops
         (`Analysis/TempoEstimator.h`)
       - [ ] reverse play (beat lands on the slice end)

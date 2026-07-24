@@ -1,6 +1,9 @@
 #include <cmath>
+#include <cstdint>
 #include <gtest/gtest.h>
+#include <limits>
 #include <numbers>
+#include <utility>
 #include <vector>
 
 #include "Analysis/Slicer.h"
@@ -211,6 +214,91 @@ TEST(SlicerTest, SilentLoopYieldsNoOnsets)
     ASSERT_EQ(slices.size(), 1u);
     EXPECT_EQ(slices[0].startFrame, 0u);
     EXPECT_EQ(slices[0].lengthFrames, 1000u);
+}
+
+namespace
+{
+// Deterministic broadband noise bursts over the given [start,end) frame ranges,
+// silence elsewhere, so spectral flux spikes cleanly at each burst start.
+[[nodiscard]] std::vector<float> noiseBursts(const size_t length, const std::vector<std::pair<size_t, size_t>>& ranges)
+{
+    std::vector<float> buf(length, 0.f);
+    uint32_t state = 12345u;
+    const auto next = [&state]() noexcept
+    {
+        state = state * 1664525u + 1013904223u;
+        return static_cast<float>(state >> 9) / 4194304.f - 1.f; // ~[-1, 1)
+    };
+    for (const auto& [a, b] : ranges)
+    {
+        for (size_t i = a; i < std::min(b, length); ++i)
+        {
+            buf[i] = 0.6f * next();
+        }
+    }
+    return buf;
+}
+
+[[nodiscard]] size_t nearestDistance(const std::vector<size_t>& values, const size_t target)
+{
+    size_t best = std::numeric_limits<size_t>::max();
+    for (const size_t v : values)
+    {
+        const size_t d = (v > target) ? v - target : target - v;
+        best = std::min(best, d);
+    }
+    return best;
+}
+}
+
+TEST(SlicerTest, SpectralFluxDetectsBurstOnsets)
+{
+    const auto mono = noiseBursts(8000, {{2000, 3000}, {5000, 6000}});
+    Slicer::SpectralParams sp{};
+    sp.fftSize = 1024;
+    sp.hopSize = 256;
+    sp.relativeThreshold = 0.3f;
+    sp.minGapFrames = 1000;
+
+    const auto onsets = Slicer::spectralFluxOnsets(mono, 8000, sp);
+
+    ASSERT_FALSE(onsets.empty());
+    EXPECT_LE(onsets.size(), 4u); // the two real onsets, not a spray of peaks
+    // Detected onset is window-centred, so it should land near each burst start.
+    EXPECT_LE(nearestDistance(onsets, 2000), 700u);
+    EXPECT_LE(nearestDistance(onsets, 5000), 700u);
+}
+
+TEST(SlicerTest, SpectralFluxSilenceAndTooShort)
+{
+    const std::vector<float> silent(8000, 0.f);
+    Slicer::SpectralParams sp{};
+    EXPECT_TRUE(Slicer::spectralFluxOnsets(silent, 8000, sp).empty());
+
+    const std::vector<float> tooShort(500, 0.5f); // shorter than fftSize
+    EXPECT_TRUE(Slicer::spectralFluxOnsets(tooShort, 500, sp).empty());
+}
+
+TEST(SlicerTest, SpectralTransientSlicesCutAtOnsets)
+{
+    const auto mono = noiseBursts(8000, {{2000, 3000}, {5000, 6000}});
+    Slicer::SpectralParams sp{};
+    sp.minGapFrames = 1000;
+    Slicer::TransientParams snap{}; // no grid / zero-cross snapping
+
+    const auto slices = Slicer::spectralTransientSlices(mono, 8000, sp, snap);
+
+    // Two onsets partition the loop into three slices (leading 0 implied).
+    ASSERT_GE(slices.size(), 3u);
+    EXPECT_EQ(slices.front().startFrame, 0u);
+    // Slices tile the whole loop with no gaps.
+    size_t covered = 0;
+    for (const auto& s : slices)
+    {
+        EXPECT_EQ(s.startFrame, covered);
+        covered += s.lengthFrames;
+    }
+    EXPECT_EQ(covered, 8000u);
 }
 
 }

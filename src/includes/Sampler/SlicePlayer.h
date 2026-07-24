@@ -22,11 +22,15 @@ class SlicePlayer
   public:
     static constexpr size_t kChannels = 2;
     static constexpr size_t kMaxVoices = 16;
+    static constexpr size_t kMaxSlices = 256;
 
     explicit SlicePlayer(const float sampleRate)
         : m_sampleRate(sampleRate)
     {
         setFadeMs(2.f);
+        // Reserve so setSlices() can be called from the audio thread (when a freshly
+        // sliced bank is published) without allocating.
+        m_slices.reserve(kMaxSlices);
     }
 
     void setLoop(std::span<const float> interleavedStereo, const size_t loopLengthFrames) noexcept

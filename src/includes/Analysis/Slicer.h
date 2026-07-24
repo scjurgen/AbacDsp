@@ -4,7 +4,10 @@
 #include <cmath>
 #include <cstddef>
 #include <span>
+#include <utility>
 #include <vector>
+
+#include "Analysis/FftMisc.h"
 
 namespace AbacDsp
 {
@@ -29,6 +32,14 @@ class Slicer
         size_t envelopeWindow{1};      // magnitude-envelope smoothing window in frames
         size_t snapMaxDistance{0};     // max distance to pull an onset onto the grid (0 = unlimited)
         size_t zeroCrossRadius{0};     // search radius for zero-crossing snap (0 = no snap)
+    };
+
+    struct SpectralParams
+    {
+        size_t fftSize{1024};          // STFT window length
+        size_t hopSize{256};           // STFT hop in frames
+        float relativeThreshold{0.3f}; // peak flux as a fraction of the max flux
+        size_t minGapFrames{1};        // reject onsets closer than this to the previous one
     };
 
     // Split [0, loopLength) into sliceCount slices, distributing any remainder.
@@ -117,6 +128,109 @@ class Slicer
             }
         }
         return slicesFromBoundaries(onsets, loopLength);
+    }
+
+    // Transient slices from spectral-flux onsets (STFT of the loop). Better on
+    // tonal/percussive material than the time-domain envelope; snapping to the grid
+    // and zero crossings is reused from TransientParams.
+    [[nodiscard]] static std::vector<Slice> spectralTransientSlices(std::span<const float> mono,
+                                                                    const size_t loopLength, const SpectralParams& sp,
+                                                                    const TransientParams& snap,
+                                                                    std::span<const size_t> snapGrid = {})
+    {
+        std::vector<size_t> onsets = spectralFluxOnsets(mono, loopLength, sp);
+        if (!snapGrid.empty())
+        {
+            for (size_t& onset : onsets)
+            {
+                onset = snapToNearest(onset, snapGrid, snap.snapMaxDistance);
+            }
+        }
+        if (snap.zeroCrossRadius > 0)
+        {
+            for (size_t& onset : onsets)
+            {
+                onset = snapToZeroCrossing(mono, onset, snap.zeroCrossRadius, loopLength);
+            }
+        }
+        return slicesFromBoundaries(onsets, loopLength);
+    }
+
+    // Onset positions (in frames) from half-wave-rectified spectral flux peaks. The
+    // detected position is centred on the analysis window (+fftSize/2), since the
+    // Hann window gives an entering transient its strongest weight at the centre.
+    [[nodiscard]] static std::vector<size_t> spectralFluxOnsets(std::span<const float> mono, const size_t loopLength,
+                                                                const SpectralParams& params)
+    {
+        std::vector<size_t> onsets;
+        const size_t n = std::min(loopLength, mono.size());
+        const size_t fftSize = params.fftSize;
+        const size_t hop = std::max<size_t>(1, params.hopSize);
+        if (fftSize == 0 || n < fftSize)
+        {
+            return onsets;
+        }
+
+        HannWindowMagnitudesFft fft(fftSize);
+        std::vector<float> frame(fftSize, 0.f);
+        std::vector<float> mag(fftSize / 2, 0.f);
+        std::vector<float> prevMag(fftSize / 2, 0.f);
+        std::vector<float> flux;
+        flux.reserve((n - fftSize) / hop + 1);
+
+        bool havePrev = false;
+        for (size_t start = 0; start + fftSize <= n; start += hop)
+        {
+            std::copy_n(mono.data() + start, fftSize, frame.data());
+            fft.compute(frame, mag);
+            float sf = 0.f;
+            if (havePrev)
+            {
+                for (size_t b = 0; b < mag.size(); ++b)
+                {
+                    const float d = mag[b] - prevMag[b];
+                    if (d > 0.f)
+                    {
+                        sf += d;
+                    }
+                }
+            }
+            flux.push_back(sf);
+            std::swap(prevMag, mag);
+            havePrev = true;
+        }
+
+        if (flux.size() < 3)
+        {
+            return onsets;
+        }
+        const float maxFlux = *std::max_element(flux.begin(), flux.end());
+        if (maxFlux <= 0.f)
+        {
+            return onsets;
+        }
+        const float threshold = maxFlux * std::clamp(params.relativeThreshold, 0.f, 1.f);
+        const size_t minGap = std::max<size_t>(1, params.minGapFrames);
+        const size_t centre = fftSize / 2;
+
+        bool haveOnset = false;
+        size_t lastOnset = 0;
+        for (size_t k = 1; k + 1 < flux.size(); ++k)
+        {
+            const bool localPeak = flux[k] >= threshold && flux[k] >= flux[k - 1] && flux[k] > flux[k + 1];
+            if (!localPeak)
+            {
+                continue;
+            }
+            const size_t pos = std::min(k * hop + centre, n - 1);
+            if (!haveOnset || pos - lastOnset >= minGap)
+            {
+                onsets.push_back(pos);
+                lastOnset = pos;
+                haveOnset = true;
+            }
+        }
+        return onsets;
     }
 
     [[nodiscard]] static std::vector<size_t> detectOnsets(std::span<const float> mono, const size_t loopLength,

@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <span>
+#include <thread>
 #include <vector>
 
 #include "Analysis/Slicer.h"
@@ -41,8 +44,7 @@ class LooperImpl final : public EffectBase
         m_seq.setBpm(m_appliedBpm);
         m_click.setVolumeDb(m_clickVol.load(std::memory_order_relaxed));
         m_slicePlayer.setFadeMs(3.f);
-        m_slices.reserve(64);
-        m_mono.reserve(static_cast<size_t>(sampleRate) * 4);
+        m_workerMono.reserve(static_cast<size_t>(sampleRate) * 4);
         // One bar (4 beats) at the lowest tempo (50 BPM) is ~4.8 s; size generously.
         m_visualWave.assign(static_cast<size_t>(sampleRate * 5.f) + 16, 0.f);
         m_preparedWave.reserve(m_visualWave.size());
@@ -50,6 +52,7 @@ class LooperImpl final : public EffectBase
         // Cover the whole recordable span (~60 s) so a long loop's ring is fully
         // painted, not just its tail. hop = fftLength * windowForwardRatio (1024/3).
         m_recordSpectrogram.setSlices(static_cast<size_t>(60.f * sampleRate / (1024.f / 3.f)) + 64);
+        m_sliceWorker = std::jthread([this](std::stop_token st) { sliceWorker(st); });
     }
 
     // Parameter setters (message thread): store into atomics, apply on the audio thread.
@@ -236,8 +239,9 @@ class LooperImpl final : public EffectBase
         {
             return normalized;
         }
-        normalized.reserve(m_slices.size());
-        for (const AbacDsp::Slice& slice : m_slices)
+        const std::vector<AbacDsp::Slice>& slices = m_frontSet->loopSlices;
+        normalized.reserve(slices.size());
+        for (const AbacDsp::Slice& slice : slices)
         {
             normalized.push_back(static_cast<float>(slice.startFrame) / static_cast<float>(len));
         }
@@ -304,6 +308,8 @@ class LooperImpl final : public EffectBase
         AbacDsp::AudioBuffer<2, BlockSize> recorderOut{};
         m_recorder.processBlock(in, recorderOut);
 
+        tryConsumeSlices();
+
         AbacDsp::AudioBuffer<2, BlockSize> sliceOut{};
         renderSlices(sliceOut);
 
@@ -313,15 +319,16 @@ class LooperImpl final : public EffectBase
         renderClick(click);
 
         // Dry input is always monitored; the loop plays back at its own volume.
-        // While overdubbing, the slice voices would re-read the buffer at the very
-        // position the recorder is writing input into, combing the live input back
-        // in. Monitor the recorder's pre-write linear output instead during overdub.
-        const bool overdub = isOverdubbing();
+        // The raw recorder output (sequential loop playback) is used while
+        // overdubbing (slice voices would comb the live input back in) and while a
+        // fresh slice extraction is still running on the worker (fallback until the
+        // bank is published), otherwise the beat-locked slice voices are used.
+        const bool useRawLoop = isOverdubbing() || !m_slicesReady;
         const float loopGain = m_loopGain;
         for (size_t i = 0; i < BlockSize; ++i)
         {
-            const float loopL = (overdub ? recorderOut(i, 0) : sliceOut(i, 0)) * loopGain;
-            const float loopR = (overdub ? recorderOut(i, 1) : sliceOut(i, 1)) * loopGain;
+            const float loopL = (useRawLoop ? recorderOut(i, 0) : sliceOut(i, 0)) * loopGain;
+            const float loopR = (useRawLoop ? recorderOut(i, 1) : sliceOut(i, 1)) * loopGain;
             out(i, 0) = in(i, 0) + loopL + click[i];
             out(i, 1) = in(i, 1) + loopR + click[i];
             // Feed the bar display with the dry input only (no loop, no click).
@@ -382,35 +389,64 @@ class LooperImpl final : public EffectBase
 
     void handleTransportPulses()
     {
-        if (m_clearPulse.exchange(false, std::memory_order_relaxed))
+        const bool clearReq = m_clearPulse.exchange(false, std::memory_order_relaxed);
+        const bool recordReq = m_recordPulse.exchange(false, std::memory_order_relaxed);
+        const bool playReq = m_playPulse.exchange(false, std::memory_order_relaxed);
+        const bool overdubReq = m_overdubPulse.exchange(false, std::memory_order_relaxed);
+
+        // While a slice extraction is in flight the worker is reading the loop
+        // buffer, so anything that would rewrite or drop it (record/overdub/clear)
+        // is ignored for the ~ms it takes; play/stop stay live.
+        if (m_pendingSlice)
         {
-            m_armed = false;
-            m_recorder.clear();
-            m_slices.clear();
-            m_slicePlayer.setSlices(m_slices);
-            m_lastSliceIndex = kNoSlice;
+            if (playReq)
+            {
+                togglePlay();
+            }
+            return;
         }
-        if (m_recordPulse.exchange(false, std::memory_order_relaxed))
+
+        if (clearReq)
+        {
+            clearAll();
+        }
+        if (recordReq)
         {
             toggleRecord();
         }
-        if (m_playPulse.exchange(false, std::memory_order_relaxed))
+        if (playReq)
         {
             togglePlay();
         }
-        if (m_overdubPulse.exchange(false, std::memory_order_relaxed))
+        if (overdubReq)
         {
             toggleOverdub();
         }
     }
 
-    void finishRecording()
+    void clearAll()
+    {
+        m_armed = false;
+        m_recorder.clear();
+        m_frontSet->loopSlices.clear();
+        m_slicePlayer.reset();
+        m_slicePlayer.setLoop({}, 0);
+        m_slicesReady = false;
+        m_lastSliceIndex = kNoSlice;
+    }
+
+    // requestSlices == false when punching straight into overdub: the buffer is
+    // about to be written again, so slicing waits until overdub ends.
+    void finishRecording(const bool requestSlices = true)
     {
         m_recorder.setSamplesPerBar(m_seq.samplesPerBeat() * m_seq.beatsPerBar());
         m_recorder.stopRecord();
-        computeSlices();
         m_seq.reset();
         m_lastSliceIndex = kNoSlice;
+        if (requestSlices)
+        {
+            requestSlice();
+        }
     }
 
     void toggleRecord()
@@ -455,31 +491,43 @@ class LooperImpl final : public EffectBase
         if (isRecording())
         {
             // Punch straight from recording into overdub: finish the take, then
-            // immediately start layering onto it.
-            finishRecording();
-            m_recorder.beginOverdub();
+            // immediately start layering onto it. Slicing waits until overdub ends.
+            finishRecording(false);
+            enterOverdub();
         }
         else if (isOverdubbing())
         {
             m_recorder.endOverdub();
-            computeSlices();
+            requestSlice();
         }
         else if (isPlaying())
         {
-            m_recorder.beginOverdub();
+            enterOverdub();
         }
+    }
+
+    // Slices play in place from the loop buffer, so stop any ringing voices before
+    // overdub writes into it (their output is discarded during overdub anyway).
+    void enterOverdub()
+    {
+        m_recorder.beginOverdub();
+        m_slicePlayer.reset();
+        m_lastSliceIndex = kNoSlice;
     }
 
     // Slice triggering is position-driven: whenever the loop playhead enters a new
     // slice, that slice is launched. Identity order for now; shuffle/reverse later.
+    // The playhead runs in loop space; loopSlices carry the loop-space boundaries,
+    // while the SlicePlayer reads the matching extracted audio from the front bank.
     void renderSlices(AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
-        if (isPlaying() && m_recorder.hasLoop() && !m_slices.empty())
+        const std::vector<AbacDsp::Slice>& loopSlices = m_frontSet->loopSlices;
+        if (m_slicesReady && isPlaying() && m_recorder.hasLoop() && !loopSlices.empty())
         {
             const size_t sliceIndex = sliceIndexAt(m_recorder.playPositionFrames());
             if (sliceIndex != m_lastSliceIndex && sliceIndex != kNoSlice)
             {
-                m_slicePlayer.triggerSlice(sliceIndex, m_slices[sliceIndex].lengthFrames);
+                m_slicePlayer.triggerSlice(sliceIndex, loopSlices[sliceIndex].lengthFrames);
                 m_lastSliceIndex = sliceIndex;
             }
         }
@@ -519,46 +567,110 @@ class LooperImpl final : public EffectBase
         }
     }
 
-    void computeSlices()
+    // Audio thread: hand the finalized loop to the worker to slice + extract, and
+    // fall back to raw loop playback until the new bank is published.
+    void requestSlice()
     {
-        m_slices.clear();
-        const size_t len = m_recorder.loopLengthFrames();
-        if (len == 0)
+        m_reqLoopLen = m_recorder.loopLengthFrames();
+        m_reqSliceMode = m_sliceMode.load(std::memory_order_relaxed);
+        m_reqDivision = m_appliedDivision;
+        m_reqSpb = std::max<size_t>(1, m_seq.samplesPerBeat());
+        m_slicesReady = false;
+        m_pendingSlice = true;
+        ++m_pendingReqGen;
+        m_sliceReqGen.store(m_pendingReqGen, std::memory_order_release);
+    }
+
+    // Audio thread: once the worker has filled the back set, swap it in at a loop
+    // boundary (or immediately if playback has not started) so slice playback does
+    // not jump mid-slice.
+    void tryConsumeSlices()
+    {
+        if (!m_pendingSlice || m_sliceDoneGen.load(std::memory_order_acquire) != m_pendingReqGen)
         {
-            m_slicePlayer.setLoop(m_recorder.loopView(), 0);
-            m_slicePlayer.setSlices(m_slices);
             return;
         }
-        const size_t divisionsPerBeat = divisionsPerBeatFor(m_appliedDivision);
-        const size_t spb = std::max<size_t>(1, m_seq.samplesPerBeat());
-        const size_t beats = std::max<size_t>(1, len / spb);
-        const size_t sliceCount = std::max<size_t>(1, beats * divisionsPerBeat);
-
-        if (m_sliceMode.load(std::memory_order_relaxed) == 0)
+        const bool atLoopStart = !isPlaying() || m_recorder.playPositionFrames() < BlockSize;
+        if (!atLoopStart)
         {
-            m_slices = AbacDsp::Slicer::gridSlices(len, sliceCount);
+            return;
+        }
+        std::swap(m_frontSet, m_backSet);
+        m_slicePlayer.setLoop(m_recorder.loopView(), m_recorder.loopLengthFrames());
+        m_slicePlayer.setSlices(m_frontSet->loopSlices);
+        m_slicePlayer.reset();
+        m_lastSliceIndex = kNoSlice;
+        m_slicesReady = true;
+        m_pendingSlice = false;
+    }
+
+    void sliceWorker(std::stop_token stopToken)
+    {
+        uint64_t handled = 0;
+        while (!stopToken.stop_requested())
+        {
+            const uint64_t req = m_sliceReqGen.load(std::memory_order_acquire);
+            if (req == handled)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
+            computeSlicesIntoBack();
+            m_sliceDoneGen.store(req, std::memory_order_release);
+            handled = req;
+        }
+    }
+
+    // Worker thread: slice the (immutable while pending) loop into the back set's
+    // marker table. The back set is not read by the audio thread until the done
+    // handshake is observed and the sets are swapped.
+    void computeSlicesIntoBack()
+    {
+        SliceSet& set = *m_backSet;
+        set.loopSlices.clear();
+        const size_t len = m_reqLoopLen;
+        if (len == 0)
+        {
+            return;
+        }
+        const size_t divisionsPerBeat = divisionsPerBeatFor(m_reqDivision);
+        const size_t spb = std::max<size_t>(1, m_reqSpb);
+        const size_t beats = std::max<size_t>(1, len / spb);
+        const size_t sliceCount =
+            std::clamp<size_t>(beats * divisionsPerBeat, 1, AbacDsp::SlicePlayer<BlockSize>::kMaxSlices);
+
+        if (m_reqSliceMode == 0)
+        {
+            set.loopSlices = AbacDsp::Slicer::gridSlices(len, sliceCount);
         }
         else
         {
-            AbacDsp::Slicer::downmixToMono(m_recorder.loopView(), len, m_mono);
-            AbacDsp::Slicer::TransientParams params{};
-            params.relativeThreshold = 0.25f;
-            params.minGapFrames = spb / (divisionsPerBeat * 2 + 1);
-            params.envelopeWindow = std::max<size_t>(1, spb / 100);
-            params.snapMaxDistance = spb / divisionsPerBeat / 2;
-            params.zeroCrossRadius = 64;
+            AbacDsp::Slicer::downmixToMono(m_recorder.loopView(), len, m_workerMono);
+            AbacDsp::Slicer::SpectralParams sp{};
+            sp.fftSize = 1024;
+            sp.hopSize = 256;
+            sp.relativeThreshold = 0.3f;
+            sp.minGapFrames = spb / (divisionsPerBeat * 2 + 1);
+            AbacDsp::Slicer::TransientParams snap{};
+            snap.snapMaxDistance = spb / divisionsPerBeat / 2;
+            snap.zeroCrossRadius = 64;
             const std::vector<size_t> grid = AbacDsp::Slicer::gridBoundaries(len, len / sliceCount);
-            m_slices = AbacDsp::Slicer::transientSlices(m_mono, len, params, grid);
+            set.loopSlices = AbacDsp::Slicer::spectralTransientSlices(m_workerMono, len, sp, snap, grid);
         }
-        m_slicePlayer.setLoop(m_recorder.loopView(), len);
-        m_slicePlayer.setSlices(m_slices);
+        // Keep within the reserved capacity so the audio-thread setSlices() at swap
+        // never allocates (spectral onsets are otherwise unbounded).
+        if (set.loopSlices.size() > AbacDsp::SlicePlayer<BlockSize>::kMaxSlices)
+        {
+            set.loopSlices.resize(AbacDsp::SlicePlayer<BlockSize>::kMaxSlices);
+        }
     }
 
     [[nodiscard]] size_t sliceIndexAt(const size_t position) const noexcept
     {
-        for (size_t i = 0; i < m_slices.size(); ++i)
+        const std::vector<AbacDsp::Slice>& loopSlices = m_frontSet->loopSlices;
+        for (size_t i = 0; i < loopSlices.size(); ++i)
         {
-            const AbacDsp::Slice& slice = m_slices[i];
+            const AbacDsp::Slice& slice = loopSlices[i];
             if (position >= slice.startFrame && position < slice.startFrame + slice.lengthFrames)
             {
                 return i;
@@ -604,14 +716,41 @@ class LooperImpl final : public EffectBase
 
     static constexpr size_t kNoSlice = static_cast<size_t>(-1);
 
+    // A published slice result: the loop-space start/length markers into the
+    // (immutable) loop buffer. Double-buffered: the worker fills the back set, the
+    // audio thread reads the front set, and they are swapped at a loop boundary.
+    // Slices are played in place from the loop buffer (no extracted copies); a real
+    // copy is only needed later for destructive per-slice work (pitch-shift).
+    struct SliceSet
+    {
+        SliceSet()
+        {
+            loopSlices.reserve(AbacDsp::SlicePlayer<BlockSize>::kMaxSlices);
+        }
+        std::vector<AbacDsp::Slice> loopSlices;
+    };
+
     AbacDsp::LoopRecorder<BlockSize> m_recorder;
     AbacDsp::SlicePlayer<BlockSize> m_slicePlayer;
     AbacDsp::BeatSequencer m_seq;
     AbacDsp::ClickGenerator m_click;
     AbacDsp::SimpleSpectrogram m_recordSpectrogram;
 
-    std::vector<AbacDsp::Slice> m_slices;
-    std::vector<float> m_mono;
+    SliceSet m_sliceSetA;
+    SliceSet m_sliceSetB;
+    SliceSet* m_frontSet{&m_sliceSetA};
+    SliceSet* m_backSet{&m_sliceSetB};
+    std::vector<float> m_workerMono;
+    bool m_slicesReady{false};
+    bool m_pendingSlice{false};
+    uint64_t m_pendingReqGen{0};
+    std::atomic<uint64_t> m_sliceReqGen{0};
+    std::atomic<uint64_t> m_sliceDoneGen{0};
+    size_t m_reqLoopLen{0};
+    int m_reqSliceMode{0};
+    int m_reqDivision{1};
+    size_t m_reqSpb{1};
+
     std::vector<float> m_visualWave;
     std::vector<float> m_preparedWave;
     std::array<size_t, BlockSize> m_barPos{};
@@ -646,4 +785,8 @@ class LooperImpl final : public EffectBase
     bool m_hostSync{false};
     uint64_t m_lastSyncedUpdateCount{0};
     size_t m_lastSliceIndex{kNoSlice};
+
+    // Declared last so it is destroyed (stop-requested + joined) first, before the
+    // recorder / slice sets it reads are torn down.
+    std::jthread m_sliceWorker;
 };
