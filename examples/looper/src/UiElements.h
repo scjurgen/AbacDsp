@@ -16,8 +16,10 @@
 #include "inc/VuMeter.h"
 #include "inc/WaveformMeter.h"
 #include "inc/SliceWaveDisplay.h"
+#include "inc/CircularBarDisplay.h"
 #include "inc/AppSettings.h"
 #include "impl/EffectBase.h"
 #include "inc/SliceWaveDisplay.h"
+#include "inc/CircularBarDisplay.h"
 
 #include "inc/LookAndFeel.h"

@@ -36,6 +36,8 @@
     {"short": "THR",  "type": "dial",   "display": "Rec Threshold", "symbol": "recThreshold", "default": -36,
       "range": [-60, 0, 0.1, 1, false], "precision": 1, "unit": "dB",
       "cc": {"controller": 24}},
+    {"short": "BEAT", "type": "gauge", "gaugetype": "signal", "display": "Bar", "symbol": "beat",
+      "customtype": "CircularBarDisplay"},
     {"short": "SLICE", "type": "gauge", "gaugetype": "signal", "display": "Loop", "symbol": "slice",
       "customtype": "SliceWaveDisplay"}
   ],
@@ -43,10 +45,11 @@
     "WINDOW_WIDTH": "1600",
     "WINDOW_HEIGHT": "620",
     "type": "|=",
-    "composition": "C=(1:10) R=(1:5) A1=(REC, PLAY, ODUB, CLR, TREC, SYNC, MODE, DIV) A2=(BPM, SWG, CVOL, LVOL, THR) A3=(SLICE)"
+    "composition": "C=(1:10) R=(1:5) A1=(REC, PLAY, ODUB, CLR, TREC, SYNC, MODE, DIV) A2=(BPM, SWG, CVOL, LVOL, THR, BEAT) A3=(SLICE)"
   },
   "extra_ui_includes": [
-    "inc/SliceWaveDisplay.h"
+    "inc/SliceWaveDisplay.h",
+    "inc/CircularBarDisplay.h"
   ],
   "extra_timer_callbacks": [
     "{ const float sr = static_cast<float>(processorRef.getSampleRate());",
@@ -55,6 +58,11 @@
     "sliceGauge.setSliceBoundaries(processorRef.getSliceBoundaries());",
     "sliceGauge.setPlayheadNormalized(processorRef.getPlayheadNormalized());",
     "sliceGauge.setStateLabel(processorRef.getLooperStateLabel());",
+    "beatGauge.setSampleRate(sr);",
+    "beatGauge.setSamplesPerBar(processorRef.getSamplesPerBar());",
+    "beatGauge.setBarBeats(processorRef.getBarBeats());",
+    "beatGauge.setBarPhase(processorRef.getBarPhase());",
+    "beatGauge.setSubdivisionPositions(processorRef.getSubdivisionPositions());",
     "recordSwitch.setButtonText(processorRef.isRecording() ? juce::String::fromUTF8(\"Recording\") : (processorRef.isArmed() ? juce::String::fromUTF8(\"Armed\") : juce::String::fromUTF8(\"Record\")));",
     "playSwitch.setButtonText(processorRef.isPlaying() ? juce::String::fromUTF8(\"Stop\") : juce::String::fromUTF8(\"Play\"));",
     "overdubSwitch.setButtonText(processorRef.isOverdubbing() ? juce::String::fromUTF8(\"Overdubbing\") : juce::String::fromUTF8(\"Overdub\"));",
@@ -72,6 +80,10 @@
     "[[nodiscard]] std::vector<float> getLoopWaveform() const { return pluginRunner ? pluginRunner->getLoopWaveform() : std::vector<float>{}; }",
     "[[nodiscard]] std::vector<float> getSliceBoundaries() const { return pluginRunner ? pluginRunner->getSliceBoundaries() : std::vector<float>{}; }",
     "[[nodiscard]] float getPlayheadNormalized() const noexcept { return pluginRunner ? pluginRunner->getPlayheadNormalized() : 0.f; }",
+    "[[nodiscard]] size_t getSamplesPerBar() const noexcept { return pluginRunner ? pluginRunner->getSamplesPerBar() : 0u; }",
+    "[[nodiscard]] int getBarBeats() const noexcept { return pluginRunner ? pluginRunner->getBarBeats() : 4; }",
+    "[[nodiscard]] float getBarPhase() const noexcept { return pluginRunner ? pluginRunner->getBarPhase() : 0.f; }",
+    "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }",
     "[[nodiscard]] juce::String getLooperStateLabel() const { return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String(); }"
   ],
   "protected_files": [],

@@ -641,6 +641,23 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner ? pluginRunner->getPlayheadNormalized() : 0.f;
     }
+    [[nodiscard]] size_t getSamplesPerBar() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getSamplesPerBar() : 0u;
+    }
+    [[nodiscard]] int getBarBeats() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getBarBeats() : 4;
+    }
+    [[nodiscard]] float getBarPhase() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getBarPhase() : 0.f;
+    }
+    [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
+    {
+        static const std::vector<size_t> empty{};
+        return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty;
+    }
     [[nodiscard]] juce::String getLooperStateLabel() const
     {
         return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String();

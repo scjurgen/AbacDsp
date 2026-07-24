@@ -61,6 +61,7 @@ cppSourceFilesFixed = [
     "inc/VuMeter.h",
     "inc/WaveformMeter.h",
     "inc/SliceWaveDisplay.h",
+    "inc/CircularBarDisplay.h",
     "inc/AppSettings.h",
     "impl/EffectBase.h",
 ]

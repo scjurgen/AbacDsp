@@ -41,6 +41,9 @@ class LooperImpl final : public EffectBase
         m_slicePlayer.setFadeMs(3.f);
         m_slices.reserve(64);
         m_mono.reserve(static_cast<size_t>(sampleRate) * 4);
+        // One bar (4 beats) at the lowest tempo (50 BPM) is ~4.8 s; size generously.
+        m_visualWave.assign(static_cast<size_t>(sampleRate * 5.f) + 16, 0.f);
+        m_preparedWave.reserve(m_visualWave.size());
     }
 
     // Parameter setters (message thread): store into atomics, apply on the audio thread.
@@ -153,11 +156,34 @@ class LooperImpl final : public EffectBase
         return "";
     }
 
-    // Backs the generated default "signal" gauge call; the display's real data is
-    // pushed via getLoopWaveform()/getSliceBoundaries() from the editor timer.
-    [[nodiscard]] const std::vector<float>& visualizeWaveData() const noexcept
+    // One bar of the musical signal, downbeat at index 0, for the CircularBarDisplay
+    // (fed through the generated default "signal" gauge call). SliceWaveDisplay
+    // ignores this and uses getLoopWaveform() instead.
+    [[nodiscard]] const std::vector<float>& visualizeWaveData()
     {
-        return m_emptyWave;
+        m_preparedWave.assign(m_visualWave.begin(),
+                              std::next(m_visualWave.begin(), static_cast<std::ptrdiff_t>(m_visualWindowSize)));
+        return m_preparedWave;
+    }
+
+    [[nodiscard]] size_t getSamplesPerBar() const noexcept
+    {
+        return m_seq.samplesPerBeat() * m_seq.beatsPerBar();
+    }
+
+    [[nodiscard]] int getBarBeats() const noexcept
+    {
+        return static_cast<int>(m_seq.beatsPerBar());
+    }
+
+    [[nodiscard]] float getBarPhase() const noexcept
+    {
+        return m_seq.barPhase();
+    }
+
+    [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
+    {
+        return m_seq.subPositions();
     }
 
     [[nodiscard]] float getPlayheadNormalized() const noexcept
@@ -233,6 +259,8 @@ class LooperImpl final : public EffectBase
         AbacDsp::AudioBuffer<2, BlockSize> sliceOut{};
         renderSlices(sliceOut);
 
+        m_visualWindowSize = std::min(getSamplesPerBar(), m_visualWave.size());
+
         std::array<float, BlockSize> click{};
         renderClick(click);
 
@@ -248,6 +276,16 @@ class LooperImpl final : public EffectBase
             const float loopR = (overdub ? recorderOut(i, 1) : sliceOut(i, 1)) * loopGain;
             out(i, 0) = in(i, 0) + loopL + click[i];
             out(i, 1) = in(i, 1) + loopR + click[i];
+            // Feed the bar display with the musical signal (dry + loop, no click)
+            // so it animates during playback, not just while recording input.
+            // A noise gate keeps the ring flat on quiet sections: the signed
+            // sample passes only while the envelope stays above the threshold.
+            const float visSignal = in(i, 0) + in(i, 1) + loopL + loopR;
+            m_visEnv = std::max(std::abs(visSignal), m_visEnv * kVisualGateRelease);
+            if (m_barPos[i] < m_visualWindowSize)
+            {
+                m_visualWave[m_barPos[i]] = (m_visEnv >= kVisualGate) ? visSignal : 0.f;
+            }
         }
     }
 
@@ -417,6 +455,7 @@ class LooperImpl final : public EffectBase
         for (size_t i = 0; i < BlockSize; ++i)
         {
             const auto event = m_seq.advance();
+            m_barPos[i] = event.beatIndexInBar * m_seq.samplesPerBeat() + event.beatSamplePos;
             if (active)
             {
                 if (event.beatStart)
@@ -525,7 +564,10 @@ class LooperImpl final : public EffectBase
 
     std::vector<AbacDsp::Slice> m_slices;
     std::vector<float> m_mono;
-    std::vector<float> m_emptyWave;
+    std::vector<float> m_visualWave;
+    std::vector<float> m_preparedWave;
+    std::array<size_t, BlockSize> m_barPos{};
+    size_t m_visualWindowSize{0};
 
     std::atomic<float> m_bpm{120.f};
     std::atomic<float> m_swing{50.f};
@@ -536,6 +578,11 @@ class LooperImpl final : public EffectBase
     float m_loopGain{1.f};
     float m_recThresholdLinear{0.0158f};
     bool m_armed{false};
+
+    // Noise gate for the bar display feed: gate opens above ~-40 dBFS, releases slowly.
+    static constexpr float kVisualGate{0.01f};
+    static constexpr float kVisualGateRelease{0.9997f};
+    float m_visEnv{0.f};
     std::atomic<int> m_sliceMode{0};
     std::atomic<int> m_sliceDivision{1};
     std::atomic<bool> m_hostSyncReq{false};

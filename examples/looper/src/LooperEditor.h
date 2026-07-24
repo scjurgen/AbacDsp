@@ -143,6 +143,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(beatGauge).withFlex(1).withMargin(knobMarginSmall));
             box.performLayout(areas[1].toFloat());
         }
         {
@@ -160,6 +161,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         if (processorRef.hasRunner())
         {
+            beatGauge.update(processorRef.getWaveDataToShow());
             sliceGauge.update(processorRef.getWaveDataToShow());
 
             {
@@ -169,6 +171,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 sliceGauge.setSliceBoundaries(processorRef.getSliceBoundaries());
                 sliceGauge.setPlayheadNormalized(processorRef.getPlayheadNormalized());
                 sliceGauge.setStateLabel(processorRef.getLooperStateLabel());
+                beatGauge.setSampleRate(sr);
+                beatGauge.setSamplesPerBar(processorRef.getSamplesPerBar());
+                beatGauge.setBarBeats(processorRef.getBarBeats());
+                beatGauge.setBarPhase(processorRef.getBarPhase());
+                beatGauge.setSubdivisionPositions(processorRef.getSubdivisionPositions());
                 recordSwitch.setButtonText(processorRef.isRecording()
                                                ? juce::String::fromUTF8("Recording")
                                                : (processorRef.isArmed() ? juce::String::fromUTF8("Armed")
@@ -275,6 +282,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                               { processorRef.setCcRange(CcTarget::recThreshold, lo, hi); },
                                               [this] { processorRef.clearCcAssignment(CcTarget::recThreshold); },
                                               [this] { return processorRef.getCcController(CcTarget::recThreshold); }});
+        addAndMakeVisible(beatGauge);
+        beatGauge.setLabelText(juce::String::fromUTF8("Bar"));
         addAndMakeVisible(sliceGauge);
         sliceGauge.setLabelText(juce::String::fromUTF8("Loop"));
     }
@@ -354,6 +363,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         setLookAndFeel(m_laf.get());
         juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
         backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
+        beatGauge.updateColors();
         sliceGauge.updateColors();
 
         repaint();
@@ -563,6 +573,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial clickVolumeDial{this};
     CustomRotaryDial loopVolumeDial{this};
     CustomRotaryDial recThresholdDial{this};
+    CircularBarDisplay beatGauge{};
     SliceWaveDisplay sliceGauge{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
