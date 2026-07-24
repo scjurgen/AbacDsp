@@ -38,7 +38,10 @@ Input -> [LoopRecorder] --record/overdub--> loop buffer
 - [x] **1** `Sampler/LoopRecorder.h` + test (18 cases): Empty/Recording/Playing/Overdubbing/
       Stopped state machine, bar-quantized loop length on stop (tail zeroed, stale-tail leak
       guarded), overdub with decay, auto-stop when full, play/pause/stop, no RT allocation.
-- [ ] **2** `Analysis/Slicer.h` + test (grid + transient-with-grid-snap, zero-crossing edges).
+- [x] **2** `Analysis/Slicer.h` + test (14 cases): uniform grid slicing (remainder distributed),
+      grid boundaries, slices-from-boundaries (implied leading 0, dedupe/sort), transient onset
+      detection (magnitude envelope + relative threshold + min-gap), grid snap with max distance,
+      zero-crossing edge snap, stereo->mono downmix.
 - [ ] **3** `Sampler/SlicePlayer.h` + test (beat-locked slice playback, swing,
       click-free boundaries).
 - [ ] **4** `examples/looper/`: blueprint `looper.json`, hand-written `impl/LooperImpl.h`,
