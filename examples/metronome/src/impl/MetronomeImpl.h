@@ -9,30 +9,17 @@
 #include "Analysis/Spectrogram.h"
 #include "Audio/AudioBuffer.h"
 #include "EffectBase.h"
-#include "Filters/SvfResoBP.h"
+#include "Generators/BeatSequencer.h"
+#include "Generators/ClickGenerator.h"
 
-enum class AccentLevel : uint8_t
-{
-    None,
-    Subdiv,
-    Beat,
-    Downbeat
-};
-enum class SubdivType : uint8_t
-{
-    None,
-    Eighth,
-    Sixteenth,
-    Triplet,
-    Shuffle,
-    Compound3
-};
+using AbacDsp::ClickAccent;
+using AbacDsp::SubdivType;
 
 struct RhythmPreset
 {
     std::string_view name;
     uint8_t barBeats;
-    std::array<AccentLevel, 16> pattern; // only first barBeats entries are used
+    std::array<ClickAccent, 16> pattern; // only first barBeats entries are used
     SubdivType subdivType;
     bool hasSwing;
 };
@@ -41,13 +28,6 @@ template <size_t BlockSize>
 class MetronomeImpl final : public EffectBase
 {
   public:
-    static constexpr float tickFrequencyHz = 800.f;
-    static constexpr float beatOneFrequencyHz = 400.f;
-    static constexpr float subFrequencyHz = 1600.f;
-    static constexpr float tickDecaySeconds = 0.04f;
-    static constexpr float tickBoostDb = 24.f;
-    static constexpr float subDefaultOffsetDb = -9.f;
-
     // Display window — shows one full beat: 1/4 before beat, 3/4 after
     static constexpr size_t kVisualBufferSize = 200000; // ~4s at 48kHz, covers 40 BPM
     static constexpr float kBeatPositionRatio = 0.25f;
@@ -56,19 +36,17 @@ class MetronomeImpl final : public EffectBase
 
     explicit MetronomeImpl(const float sampleRate)
         : EffectBase(sampleRate)
-        , m_tickFilter(sampleRate)
-        , m_beatOneFilter(sampleRate)
-        , m_subFilter(sampleRate)
+        , m_click(sampleRate)
+        , m_seq(sampleRate)
     {
-        m_tickFilter.setByDecay(0, tickFrequencyHz, tickDecaySeconds);
-        m_beatOneFilter.setByDecay(0, beatOneFrequencyHz, tickDecaySeconds);
-        m_subFilter.setByDecay(0, subFrequencyHz, tickDecaySeconds);
-
-        m_samplesPerBeat = beatsToSamples(m_bpm);
+        const auto& preset = kPresets[static_cast<size_t>(m_presetIndex)];
+        m_seq.setBeatsPerBar(preset.barBeats);
+        m_seq.setSubdivType(preset.subdivType);
+        m_seq.setSwingRatio(kDefaultSwingRatio);
+        m_seq.setBpm(m_bpm);
         m_visualWavedata.resize(kVisualBufferSize, 0.f);
         m_inputSpectrogram.setSampleRate(sampleRate);
         updateWindowSizes();
-        updateSubPositions();
     }
 
     void setBpm(const float value)
@@ -99,12 +77,12 @@ class MetronomeImpl final : public EffectBase
 
     void setMetroVolume(const float valueDb) noexcept
     {
-        m_metroGain = std::pow(10.f, (valueDb + tickBoostDb) / 20.f);
+        m_click.setVolumeDb(valueDb);
     }
 
     void setSubVolume(const float valueDb) noexcept
     {
-        m_subGain = std::pow(10.f, (valueDb + tickBoostDb) / 20.f);
+        m_click.setSubVolumeDb(valueDb);
     }
 
     void setInputVolume(const float valueDb) noexcept
@@ -120,15 +98,16 @@ class MetronomeImpl final : public EffectBase
     void setPreset(const int index)
     {
         m_presetIndex = std::clamp(index, 0, static_cast<int>(kPresets.size()) - 1);
-        m_barBeatCount = 0;
+        const auto& preset = kPresets[static_cast<size_t>(m_presetIndex)];
+        m_seq.setBeatsPerBar(preset.barBeats);
+        m_seq.setSubdivType(preset.subdivType);
+        m_seq.resetBarPosition();
         m_barCount = 0;
-        updateSubPositions();
     }
 
     void setSwingRatio(const float ratio)
     {
-        m_swingRatio = std::clamp(ratio, 1.f, 2.f);
-        updateSubPositions();
+        m_seq.setSwingRatio(std::clamp(ratio, 1.f, 2.f));
     }
 
     [[nodiscard]] bool presetHasSwing() const noexcept
@@ -147,7 +126,7 @@ class MetronomeImpl final : public EffectBase
 
     [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
     {
-        return m_subPositions;
+        return m_seq.subPositions();
     }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
@@ -166,48 +145,47 @@ class MetronomeImpl final : public EffectBase
 
         const size_t preWindow = m_preWindow;
         const size_t postWindow = m_postWindow;
+        const size_t samplesPerBeat = m_seq.samplesPerBeat();
 
-        auto writeToVisualWindow = [&](const float visSignal) noexcept
+        auto writeToVisualWindow = [&](const size_t beatSamplePos, const float visSignal) noexcept
         {
-            if (m_beatSamplePos < postWindow)
+            if (beatSamplePos < postWindow)
             {
-                m_visualWavedata[preWindow + m_beatSamplePos] = visSignal;
+                m_visualWavedata[preWindow + beatSamplePos] = visSignal;
             }
-            else if (m_beatSamplePos >= m_samplesPerBeat - preWindow)
+            else if (beatSamplePos >= samplesPerBeat - preWindow)
             {
-                m_visualWavedata[m_beatSamplePos - (m_samplesPerBeat - preWindow)] = visSignal;
+                m_visualWavedata[beatSamplePos - (samplesPerBeat - preWindow)] = visSignal;
             }
         };
 
         for (size_t i = 0; i < BlockSize; ++i)
         {
+            const auto event = m_seq.advance();
             const auto& mode = kDropBarModes[static_cast<size_t>(m_dropModeIndex)];
             const bool isMuted = mode.playBars > 0 && m_barCount >= mode.playBars;
 
-            if (m_beatSamplePos == 0 && !isMuted)
+            if (event.beatStart && !isMuted)
             {
-                triggerBeatAccent(kPresets[static_cast<size_t>(m_presetIndex)].pattern[m_barBeatCount]);
+                triggerBeatAccent(kPresets[static_cast<size_t>(m_presetIndex)].pattern[event.beatIndexInBar]);
             }
 
-            if (!isMuted)
+            if (event.subdivision && !isMuted)
             {
-                triggerSubdivisions();
+                m_click.triggerSub();
             }
 
-            const float tick = m_tickFilter.step0();
-            const float beatOne = m_beatOneFilter.step0();
-            const float sub = m_subFilter.step0();
-            const float output = effectiveRunning() && !isMuted ? (tick + beatOne + sub) : 0.f;
+            const float click = m_click.step0();
+            const float output = effectiveRunning() && !isMuted ? click : 0.f;
 
             out(i, 0) = in(i, 0) * m_inputGain + output;
             out(i, 1) = in(i, 1) * m_inputGain + output;
 
-            writeToVisualWindow(in(i, 0) + in(i, 1));
+            writeToVisualWindow(event.beatSamplePos, in(i, 0) + in(i, 1));
 
-            if (++m_beatSamplePos >= m_samplesPerBeat)
+            if (event.barWrapped)
             {
-                m_beatSamplePos = 0;
-                advanceBeatAndBar(mode);
+                advanceDropBar(mode);
             }
         }
     }
@@ -237,17 +215,7 @@ class MetronomeImpl final : public EffectBase
 
     [[nodiscard]] float getBarPhase() const noexcept
     {
-        if (m_samplesPerBeat == 0)
-        {
-            return 0.f;
-        }
-        const int barBeats = getBarBeats();
-        if (barBeats == 0)
-        {
-            return 0.f;
-        }
-        const float beatPhase = static_cast<float>(m_beatSamplePos) / static_cast<float>(m_samplesPerBeat);
-        return (static_cast<float>(m_barBeatCount) + beatPhase) / static_cast<float>(barBeats);
+        return m_seq.barPhase();
     }
 
   private:
@@ -269,10 +237,10 @@ class MetronomeImpl final : public EffectBase
 
     // Short aliases keep the preset table readable
     // clang-format off
-    static constexpr AccentLevel D = AccentLevel::Downbeat;
-    static constexpr AccentLevel B = AccentLevel::Beat;
-    static constexpr AccentLevel S = AccentLevel::Subdiv;
-    static constexpr AccentLevel N = AccentLevel::None;
+    static constexpr ClickAccent D = ClickAccent::Downbeat;
+    static constexpr ClickAccent B = ClickAccent::Beat;
+    static constexpr ClickAccent S = ClickAccent::Sub;
+    static constexpr ClickAccent N = ClickAccent::None;
 
     static constexpr SubdivType kEi = SubdivType::Eighth;
     static constexpr SubdivType kSi = SubdivType::Sixteenth;
@@ -318,53 +286,24 @@ class MetronomeImpl final : public EffectBase
     });
     // clang-format on
 
-    void triggerBeatAccent(const AccentLevel level) noexcept
+    void triggerBeatAccent(const ClickAccent level) noexcept
     {
-        switch (level)
+        m_click.trigger(level);
+    }
+
+    void advanceDropBar(const DropBarMode& mode) noexcept
+    {
+        if (mode.playBars > 0 && ++m_barCount >= mode.playBars + mode.dropBars)
         {
-            case AccentLevel::Downbeat:
-                m_beatOneFilter.reset(0.f, m_metroGain);
-                break;
-            case AccentLevel::Beat:
-                m_tickFilter.reset(0.f, m_metroGain);
-                break;
-            case AccentLevel::Subdiv:
-                m_subFilter.reset(0.f, m_subGain);
-                break;
-            case AccentLevel::None:
-                break;
+            m_barCount = 0;
         }
     }
 
-    void triggerSubdivisions() noexcept
-    {
-        for (const size_t subPos : m_subPositions)
-        {
-            if (m_beatSamplePos == subPos)
-            {
-                m_subFilter.reset(0.f, m_subGain);
-            }
-        }
-    }
-
-    void advanceBeatAndBar(const DropBarMode& mode) noexcept
-    {
-        if (++m_barBeatCount >= static_cast<size_t>(kPresets[static_cast<size_t>(m_presetIndex)].barBeats))
-        {
-            m_barBeatCount = 0;
-            if (mode.playBars > 0 && ++m_barCount >= mode.playBars + mode.dropBars)
-            {
-                m_barCount = 0;
-            }
-        }
-    }
-
-    void applyBpm(const float value) noexcept
+    void applyBpm(const float value)
     {
         m_bpm = value;
-        m_samplesPerBeat = beatsToSamples(m_bpm);
+        m_seq.setBpm(value);
         updateWindowSizes();
-        updateSubPositions();
     }
 
     [[nodiscard]] bool effectiveRunning() const noexcept
@@ -372,9 +311,9 @@ class MetronomeImpl final : public EffectBase
         return m_hostSync ? hostTransport().isPlaying : m_running;
     }
 
-    // Bar length uses the preset's own barBeats, not the host time signature.
-    // Only resync on a fresh transport sample; the loop below carries phase between.
-    void syncToHostTransport() noexcept
+    // Bar length uses the preset's own barBeats (via the sequencer), not the host time
+    // signature. Only resync on a fresh transport sample; advance() carries phase between.
+    void syncToHostTransport()
     {
         const auto& transport = hostTransport();
         if (!transport.isPlaying)
@@ -387,70 +326,18 @@ class MetronomeImpl final : public EffectBase
         }
         m_lastSyncedUpdateCount = transport.updateCount;
         applyBpm(std::clamp(static_cast<float>(transport.bpm), 20.f, 999.f));
-
-        const double barBeats = static_cast<double>(getBarBeats());
-        if (barBeats <= 0.0 || m_samplesPerBeat == 0)
-        {
-            return;
-        }
-        double phaseInBar = std::fmod(transport.ppqPosition, barBeats);
-        if (phaseInBar < 0.0)
-        {
-            phaseInBar += barBeats;
-        }
-        const auto beatIndex = static_cast<size_t>(phaseInBar);
-        const double beatFraction = phaseInBar - static_cast<double>(beatIndex);
-        m_barBeatCount = beatIndex;
-        m_beatSamplePos = static_cast<size_t>(beatFraction * static_cast<double>(m_samplesPerBeat));
+        m_seq.syncToPpq(transport.ppqPosition);
     }
 
     void updateWindowSizes() noexcept
     {
-        m_preWindow = m_samplesPerBeat / 4;
-        m_postWindow = m_samplesPerBeat - m_preWindow;
+        m_preWindow = m_seq.samplesPerBeat() / 4;
+        m_postWindow = m_seq.samplesPerBeat() - m_preWindow;
     }
 
-    void updateSubPositions()
-    {
-        m_subPositions.clear();
-        if (m_samplesPerBeat == 0)
-        {
-            return;
-        }
-        const size_t spb = m_samplesPerBeat;
-        switch (kPresets[static_cast<size_t>(m_presetIndex)].subdivType)
-        {
-            case SubdivType::None:
-                break;
-            case SubdivType::Eighth:
-                m_subPositions = {spb / 2};
-                break;
-            case SubdivType::Sixteenth:
-                m_subPositions = {spb / 4, spb / 2, 3 * spb / 4};
-                break;
-            case SubdivType::Triplet:
-                [[fallthrough]];
-            case SubdivType::Compound3:
-                m_subPositions = {spb / 3, 2 * spb / 3};
-                break;
-            case SubdivType::Shuffle:
-            {
-                const auto longPart =
-                    static_cast<size_t>(static_cast<float>(spb) * m_swingRatio / (1.f + m_swingRatio));
-                m_subPositions = {longPart};
-                break;
-            }
-        }
-    }
-
-    [[nodiscard]] size_t beatsToSamples(const float bpm) const noexcept
-    {
-        return static_cast<size_t>(sampleRate() * 60.f / bpm);
-    }
+    static constexpr float kDefaultSwingRatio = 1.5f;
 
     float m_bpm{120.f};
-    float m_metroGain{std::pow(10.f, (-6.f + tickBoostDb) / 20.f)};
-    float m_subGain{std::pow(10.f, (-6.f + subDefaultOffsetDb + tickBoostDb) / 20.f)};
     float m_inputGain{1.f};
     bool m_running{false};
     bool m_hostSync{false};
@@ -459,19 +346,11 @@ class MetronomeImpl final : public EffectBase
     int m_barCount{0};
 
     int m_presetIndex{kDefaultPresetIndex};
-    float m_swingRatio{1.5f};
-
-    size_t m_samplesPerBeat{0};
-    size_t m_beatSamplePos{0};
-    size_t m_barBeatCount{0};
     size_t m_preWindow{0};
     size_t m_postWindow{0};
 
-    std::vector<size_t> m_subPositions;
-
-    AbacDsp::SvfResoBP m_tickFilter;
-    AbacDsp::SvfResoBP m_beatOneFilter;
-    AbacDsp::SvfResoBP m_subFilter;
+    AbacDsp::ClickGenerator m_click;
+    AbacDsp::BeatSequencer m_seq;
 
     std::vector<float> m_visualWavedata;
     std::vector<float> m_preparedWavedata;
