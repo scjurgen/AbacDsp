@@ -1,0 +1,42 @@
+# Slicer tuning settings. Lines are key = value; '#' starts a comment.
+# All frame/sample counts are in audio samples at the file's sample rate.
+
+# Which detector to run: transient | spectral | adaptive | grid
+method = spectral
+
+# A detected onset counts as a match when it lands within this many samples
+# of a hand-labelled slice begin.
+tolerance = 2000
+
+# --- time-domain transient detector (method = transient, also used for snapping) ---
+transient.relativeThreshold = 0.20
+transient.minGapFrames      = 2000
+transient.envelopeWindow    = 256
+transient.snapMaxDistance   = 0
+transient.zeroCrossRadius   = 0
+
+# --- spectral-flux detector (method = spectral) ---
+# minGapFrames = 6000 (~125 ms) is the best no-regression setting found across
+# the sample set: it collapses guitar/bass double-triggers without dropping hits.
+spectral.fftSize            = 1024
+spectral.hopSize            = 256
+spectral.relativeThreshold  = 0.30
+spectral.minGapFrames       = 6000
+
+# --- adaptive spectral-flux detector (method = adaptive), ghost-note recovery ---
+# Instead of one global threshold (a fixed fraction of the peak flux), the
+# threshold tracks the local flux level, so a quiet ghost note that stands out
+# from its own neighbourhood is picked even though it is tiny next to the loud
+# hits. threshold(k) = floor + lambda * mean(flux around k), floor = delta * peak.
+# lambda = 2.5 is the best aggregate over the sample set: it ties or beats the
+# plain spectral detector on every file, drives guitar/bass false positives to
+# zero, and recovers ghost notes that stand out from their local neighbourhood.
+adaptive.fftSize            = 1024
+adaptive.hopSize            = 256
+adaptive.localWindow        = 16     # local-average half-window in STFT frames
+adaptive.lambda             = 2.5    # multiplier on the local average flux
+adaptive.delta              = 0.05   # absolute floor as a fraction of peak flux
+adaptive.minGapFrames       = 6000
+
+# --- fixed grid (method = grid) ---
+grid.sliceCount = 8

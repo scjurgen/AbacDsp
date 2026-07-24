@@ -59,6 +59,33 @@ JUCE-based plugins under `examples/` (built with `-DBUILD_FULL_PROJECT=ON`, see 
 Most are generated from a blueprint via `JuceStandaloneGenerator/`; the hand-written
 DSP lives in each example's `src/impl/`.
 
+## Building
+
+By default CMake configures only the header-only library and its unit tests (no
+external toolkits needed). Two option switches pull in the heavier, optional
+parts of the tree:
+
+- `-DBUILD_FULL_PROJECT=ON` builds the JUCE **example plugins** under `examples/`
+  (metronome, reverbs, looper, ...). This needs the JUCE submodule and a longer
+  build; leave it OFF for a fast tests-only build.
+- `-DEXPLORE_STUFF=ON` builds the standalone **documentation explore programs**
+  under `documentation/` (for example `documentation/Slicer/`, `VelvetNoise/`,
+  `Filters/BandpassImpulses/`). These are small offline tools for prototyping and
+  tuning DSP, not part of the library or its tests.
+
+The two switches are independent and can be combined:
+
+```bash
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..                          # library + tests only
+cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_FULL_PROJECT=ON ..  # + JUCE example plugins
+cmake -DCMAKE_BUILD_TYPE=Release -DEXPLORE_STUFF=ON ..       # + documentation explore tools
+cmake --build .
+```
+
+Each explore program has its own target (for example `SlicerExplore`), so you can
+also build just one with `cmake --build . --target <name>`.
+
 ## Testing
 
 Unit tests use GoogleTest/CTest (see CLAUDE.md for build commands, or `dev-scripts/`

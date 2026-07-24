@@ -301,4 +301,91 @@ TEST(SlicerTest, SpectralTransientSlicesCutAtOnsets)
     EXPECT_EQ(covered, 8000u);
 }
 
+namespace
+{
+// Broadband noise bursts with a per-range amplitude, so one burst can be made
+// much quieter than another (a "ghost" note) while both spike the spectral flux.
+[[nodiscard]] std::vector<float> scaledNoiseBursts(const size_t length,
+                                                   const std::vector<std::tuple<size_t, size_t, float>>& ranges)
+{
+    std::vector<float> buf(length, 0.f);
+    uint32_t state = 12345u;
+    const auto next = [&state]() noexcept
+    {
+        state = state * 1664525u + 1013904223u;
+        return static_cast<float>(state >> 9) / 4194304.f - 1.f;
+    };
+    for (const auto& [a, b, amp] : ranges)
+    {
+        for (size_t i = a; i < std::min(b, length); ++i)
+        {
+            buf[i] = amp * next();
+        }
+    }
+    return buf;
+}
+}
+
+TEST(SlicerTest, AdaptiveFluxDetectsBurstOnsets)
+{
+    const auto mono = noiseBursts(8000, {{2000, 3000}, {5000, 6000}});
+    Slicer::AdaptiveParams ap{};
+    ap.minGapFrames = 1000;
+
+    const auto onsets = Slicer::adaptiveFluxOnsets(mono, 8000, ap);
+
+    ASSERT_FALSE(onsets.empty());
+    EXPECT_LE(nearestDistance(onsets, 2000), 700u);
+    EXPECT_LE(nearestDistance(onsets, 5000), 700u);
+}
+
+TEST(SlicerTest, AdaptiveFluxSilenceAndTooShort)
+{
+    const std::vector<float> silent(8000, 0.f);
+    Slicer::AdaptiveParams ap{};
+    EXPECT_TRUE(Slicer::adaptiveFluxOnsets(silent, 8000, ap).empty());
+
+    const std::vector<float> tooShort(500, 0.5f); // shorter than fftSize
+    EXPECT_TRUE(Slicer::adaptiveFluxOnsets(tooShort, 500, ap).empty());
+}
+
+// The point of the adaptive detector: a quiet onset below the global-threshold
+// bar is still found because it stands out from its own silent neighbourhood.
+TEST(SlicerTest, AdaptiveRecoversQuietOnsetThatGlobalThresholdMisses)
+{
+    const auto mono = scaledNoiseBursts(16000, {{2000, 3000, 0.6f}, {12000, 13000, 0.08f}});
+
+    Slicer::SpectralParams sp{};
+    sp.relativeThreshold = 0.3f;
+    sp.minGapFrames = 1000;
+    const auto global = Slicer::spectralFluxOnsets(mono, 16000, sp);
+    EXPECT_GT(nearestDistance(global, 12000), 700u); // quiet burst missed globally
+
+    Slicer::AdaptiveParams ap{};
+    ap.minGapFrames = 1000;
+    const auto adaptive = Slicer::adaptiveFluxOnsets(mono, 16000, ap);
+    EXPECT_LE(nearestDistance(adaptive, 2000), 700u);
+    EXPECT_LE(nearestDistance(adaptive, 12000), 700u); // recovered
+}
+
+TEST(SlicerTest, AdaptiveTransientSlicesTileTheLoop)
+{
+    const auto mono = noiseBursts(8000, {{2000, 3000}, {5000, 6000}});
+    Slicer::AdaptiveParams ap{};
+    ap.minGapFrames = 1000;
+    Slicer::TransientParams snap{}; // no grid / zero-cross snapping
+
+    const auto slices = Slicer::adaptiveTransientSlices(mono, 8000, ap, snap);
+
+    ASSERT_GE(slices.size(), 2u);
+    EXPECT_EQ(slices.front().startFrame, 0u);
+    size_t covered = 0;
+    for (const auto& s : slices)
+    {
+        EXPECT_EQ(s.startFrame, covered);
+        covered += s.lengthFrames;
+    }
+    EXPECT_EQ(covered, 8000u);
+}
+
 }

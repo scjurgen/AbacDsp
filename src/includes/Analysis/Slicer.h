@@ -42,6 +42,21 @@ class Slicer
         size_t minGapFrames{1};        // reject onsets closer than this to the previous one
     };
 
+    // Spectral flux with a locally adaptive threshold instead of one global
+    // fraction of the peak. The threshold tracks the local flux level, so a quiet
+    // note that stands out from its own neighbourhood is detected even when it is
+    // tiny next to the loud hits, while loud-passage double-triggers stay
+    // suppressed. Recovers ghost notes that a single global threshold misses.
+    struct AdaptiveParams
+    {
+        size_t fftSize{1024};   // STFT window length
+        size_t hopSize{256};    // STFT hop in frames
+        size_t localWindow{16}; // local-average half-window in STFT frames
+        float lambda{2.5f};     // multiplier on the local average flux
+        float delta{0.05f};     // absolute floor as a fraction of the peak flux
+        size_t minGapFrames{1}; // reject onsets closer than this to the previous one
+    };
+
     // Split [0, loopLength) into sliceCount slices, distributing any remainder.
     [[nodiscard]] static std::vector<Slice> gridSlices(const size_t loopLength, const size_t sliceCount)
     {
@@ -156,6 +171,33 @@ class Slicer
         return slicesFromBoundaries(onsets, loopLength);
     }
 
+    // Transient slices from adaptive spectral-flux onsets. Like
+    // spectralTransientSlices but with a locally adaptive threshold (see
+    // AdaptiveParams), which recovers quiet notes without over-triggering on the
+    // loud passages. Grid and zero-crossing snapping are reused from TransientParams.
+    [[nodiscard]] static std::vector<Slice> adaptiveTransientSlices(std::span<const float> mono,
+                                                                    const size_t loopLength, const AdaptiveParams& ap,
+                                                                    const TransientParams& snap,
+                                                                    std::span<const size_t> snapGrid = {})
+    {
+        std::vector<size_t> onsets = adaptiveFluxOnsets(mono, loopLength, ap);
+        if (!snapGrid.empty())
+        {
+            for (size_t& onset : onsets)
+            {
+                onset = snapToNearest(onset, snapGrid, snap.snapMaxDistance);
+            }
+        }
+        if (snap.zeroCrossRadius > 0)
+        {
+            for (size_t& onset : onsets)
+            {
+                onset = snapToZeroCrossing(mono, onset, snap.zeroCrossRadius, loopLength);
+            }
+        }
+        return slicesFromBoundaries(onsets, loopLength);
+    }
+
     // Onset positions (in frames) from half-wave-rectified spectral flux peaks. The
     // detected position is centred on the analysis window (+fftSize/2), since the
     // Hann window gives an entering transient its strongest weight at the centre.
@@ -166,40 +208,7 @@ class Slicer
         const size_t n = std::min(loopLength, mono.size());
         const size_t fftSize = params.fftSize;
         const size_t hop = std::max<size_t>(1, params.hopSize);
-        if (fftSize == 0 || n < fftSize)
-        {
-            return onsets;
-        }
-
-        HannWindowMagnitudesFft fft(fftSize);
-        std::vector<float> frame(fftSize, 0.f);
-        std::vector<float> mag(fftSize / 2, 0.f);
-        std::vector<float> prevMag(fftSize / 2, 0.f);
-        std::vector<float> flux;
-        flux.reserve((n - fftSize) / hop + 1);
-
-        bool havePrev = false;
-        for (size_t start = 0; start + fftSize <= n; start += hop)
-        {
-            std::copy_n(mono.data() + start, fftSize, frame.data());
-            fft.compute(frame, mag);
-            float sf = 0.f;
-            if (havePrev)
-            {
-                for (size_t b = 0; b < mag.size(); ++b)
-                {
-                    const float d = mag[b] - prevMag[b];
-                    if (d > 0.f)
-                    {
-                        sf += d;
-                    }
-                }
-            }
-            flux.push_back(sf);
-            std::swap(prevMag, mag);
-            havePrev = true;
-        }
-
+        const std::vector<float> flux = computeSpectralFlux(mono, n, fftSize, hop);
         if (flux.size() < 3)
         {
             return onsets;
@@ -217,6 +226,52 @@ class Slicer
         size_t lastOnset = 0;
         for (size_t k = 1; k + 1 < flux.size(); ++k)
         {
+            const bool localPeak = flux[k] >= threshold && flux[k] >= flux[k - 1] && flux[k] > flux[k + 1];
+            if (!localPeak)
+            {
+                continue;
+            }
+            const size_t pos = std::min(k * hop + centre, n - 1);
+            if (!haveOnset || pos - lastOnset >= minGap)
+            {
+                onsets.push_back(pos);
+                lastOnset = pos;
+                haveOnset = true;
+            }
+        }
+        return onsets;
+    }
+
+    // Onset positions (in frames) from spectral flux peaks that clear a locally
+    // adaptive threshold: floor + lambda * (local average flux), floor a fraction
+    // of the peak (see AdaptiveParams). Same window-centred positions as
+    // spectralFluxOnsets.
+    [[nodiscard]] static std::vector<size_t> adaptiveFluxOnsets(std::span<const float> mono, const size_t loopLength,
+                                                                const AdaptiveParams& params)
+    {
+        std::vector<size_t> onsets;
+        const size_t n = std::min(loopLength, mono.size());
+        const size_t hop = std::max<size_t>(1, params.hopSize);
+        const std::vector<float> flux = computeSpectralFlux(mono, n, params.fftSize, hop);
+        if (flux.size() < 3)
+        {
+            return onsets;
+        }
+        const float peak = *std::max_element(flux.begin(), flux.end());
+        if (peak <= 0.f)
+        {
+            return onsets;
+        }
+        const float floor = std::clamp(params.delta, 0.f, 1.f) * peak;
+        const size_t half = std::max<size_t>(1, params.localWindow);
+        const size_t minGap = std::max<size_t>(1, params.minGapFrames);
+        const size_t centre = params.fftSize / 2;
+
+        bool haveOnset = false;
+        size_t lastOnset = 0;
+        for (size_t k = 1; k + 1 < flux.size(); ++k)
+        {
+            const float threshold = floor + params.lambda * localFluxMean(flux, k, half);
             const bool localPeak = flux[k] >= threshold && flux[k] >= flux[k - 1] && flux[k] > flux[k + 1];
             if (!localPeak)
             {
@@ -351,6 +406,58 @@ class Slicer
     }
 
   private:
+    // Half-wave-rectified spectral flux per STFT frame: sum of positive
+    // magnitude increases between consecutive Hann-windowed frames.
+    [[nodiscard]] static std::vector<float> computeSpectralFlux(std::span<const float> mono, const size_t n,
+                                                                const size_t fftSize, const size_t hop)
+    {
+        std::vector<float> flux;
+        if (fftSize == 0 || n < fftSize)
+        {
+            return flux;
+        }
+        HannWindowMagnitudesFft fft(fftSize);
+        std::vector<float> frame(fftSize, 0.f);
+        std::vector<float> mag(fftSize / 2, 0.f);
+        std::vector<float> prevMag(fftSize / 2, 0.f);
+        flux.reserve((n - fftSize) / hop + 1);
+
+        bool havePrev = false;
+        for (size_t start = 0; start + fftSize <= n; start += hop)
+        {
+            std::copy_n(mono.data() + start, fftSize, frame.data());
+            fft.compute(frame, mag);
+            float sf = 0.f;
+            if (havePrev)
+            {
+                for (size_t b = 0; b < mag.size(); ++b)
+                {
+                    const float d = mag[b] - prevMag[b];
+                    if (d > 0.f)
+                    {
+                        sf += d;
+                    }
+                }
+            }
+            flux.push_back(sf);
+            std::swap(prevMag, mag);
+            havePrev = true;
+        }
+        return flux;
+    }
+
+    [[nodiscard]] static float localFluxMean(const std::vector<float>& flux, const size_t k, const size_t halfWindow)
+    {
+        const size_t lo = (k > halfWindow) ? k - halfWindow : 0;
+        const size_t hi = std::min(flux.size() - 1, k + halfWindow);
+        float sum = 0.f;
+        for (size_t i = lo; i <= hi; ++i)
+        {
+            sum += flux[i];
+        }
+        return sum / static_cast<float>(hi - lo + 1);
+    }
+
     [[nodiscard]] static std::vector<float> magnitudeEnvelope(std::span<const float> mono, const size_t n,
                                                               const size_t window)
     {

@@ -1,0 +1,8 @@
+# Artificial percussion: sharp-attack decaying tone bursts.
+# name  begin(samples)  length(samples)
+kick  0  16000
+snare  16000  18000
+tom  34000  21000
+hat  55000  19000
+kick  74000  18000
+snare  92000  20000
