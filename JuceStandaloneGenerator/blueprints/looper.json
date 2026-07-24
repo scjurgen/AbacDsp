@@ -68,6 +68,8 @@
     "beatGauge.setPlayheadNormalized(processorRef.getPlayheadNormalized());",
     "beatGauge.setOuterRingBars(processorRef.getOuterRingBars());",
     "beatGauge.setStateLabel(processorRef.getLooperStateLabel());",
+    "beatGauge.setSpectrogram(processorRef.getSpectrogramData());",
+    "beatGauge.setRecordHeadFrames(processorRef.getSpectrogramHeadFrames());",
     "recordSwitch.setButtonText(processorRef.isRecording() ? juce::String::fromUTF8(\"Recording\") : (processorRef.isArmed() ? juce::String::fromUTF8(\"Armed\") : juce::String::fromUTF8(\"Record\")));",
     "playSwitch.setButtonText(processorRef.isPlaying() ? juce::String::fromUTF8(\"Stop\") : juce::String::fromUTF8(\"Play\"));",
     "overdubSwitch.setButtonText(processorRef.isOverdubbing() ? juce::String::fromUTF8(\"Overdubbing\") : juce::String::fromUTF8(\"Overdub\"));",
@@ -88,6 +90,8 @@
     "[[nodiscard]] size_t getSamplesPerBar() const noexcept { return pluginRunner ? pluginRunner->getSamplesPerBar() : 0u; }",
     "[[nodiscard]] int getBarBeats() const noexcept { return pluginRunner ? pluginRunner->getBarBeats() : 4; }",
     "[[nodiscard]] int getOuterRingBars() const noexcept { return pluginRunner ? pluginRunner->getOuterRingBars() : 1; }",
+    "[[nodiscard]] AbacDsp::SpectrumImageSet getSpectrogramData() const { return pluginRunner ? pluginRunner->getSpectrogramData() : AbacDsp::SpectrumImageSet{}; }",
+    "[[nodiscard]] size_t getSpectrogramHeadFrames() const noexcept { return pluginRunner ? pluginRunner->getSpectrogramHeadFrames() : 0u; }",
     "[[nodiscard]] float getBarPhase() const noexcept { return pluginRunner ? pluginRunner->getBarPhase() : 0.f; }",
     "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }",
     "[[nodiscard]] juce::String getLooperStateLabel() const { return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String(); }"

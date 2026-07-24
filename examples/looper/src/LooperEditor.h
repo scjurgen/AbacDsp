@@ -181,6 +181,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 beatGauge.setPlayheadNormalized(processorRef.getPlayheadNormalized());
                 beatGauge.setOuterRingBars(processorRef.getOuterRingBars());
                 beatGauge.setStateLabel(processorRef.getLooperStateLabel());
+                beatGauge.setSpectrogram(processorRef.getSpectrogramData());
+                beatGauge.setRecordHeadFrames(processorRef.getSpectrogramHeadFrames());
                 recordSwitch.setButtonText(processorRef.isRecording()
                                                ? juce::String::fromUTF8("Recording")
                                                : (processorRef.isArmed() ? juce::String::fromUTF8("Armed")

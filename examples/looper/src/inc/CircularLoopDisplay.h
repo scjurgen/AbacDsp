@@ -2,10 +2,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <juce_graphics/juce_graphics.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <numbers>
 #include <vector>
 
+#include "Analysis/Spectrogram.h"
+#include "AppSettings.h"
 #include "GuiConstants.h"
 
 // Merged looper "clock": an inner disc showing the current bar in detail and an
@@ -17,7 +20,12 @@
 class CircularLoopDisplay : public juce::Component
 {
   public:
-    CircularLoopDisplay() = default;
+    CircularLoopDisplay()
+    {
+        GuiConstants::buildLut(AppSettings::loadTheme(), m_lut);
+        m_iris = juce::Image(juce::Image::ARGB, kIrisSize, kIrisSize, true);
+        buildAnnulus();
+    }
 
     // --- Inner bar disc ---
     void setSampleRate(float sampleRate) noexcept
@@ -73,6 +81,18 @@ class CircularLoopDisplay : public juce::Component
         m_stateLabel = label;
     }
 
+    // --- Outer ring spectrogram (live while recording) ---
+    void setSpectrogram(const AbacDsp::SpectrumImageSet& spectro) noexcept
+    {
+        m_spectro = spectro;
+    }
+    // Write-head position within the ring: live record frames while capturing,
+    // the finalized loop length once stopped.
+    void setRecordHeadFrames(size_t frames) noexcept
+    {
+        m_recordHeadFrames = frames;
+    }
+
     void setLabelText(const juce::String& label)
     {
         m_label = label;
@@ -81,6 +101,7 @@ class CircularLoopDisplay : public juce::Component
 
     void updateColors()
     {
+        GuiConstants::buildLut(AppSettings::loadTheme(), m_lut);
         repaint();
     }
 
@@ -100,6 +121,7 @@ class CircularLoopDisplay : public juce::Component
         bounds.removeFromTop(kTitleH);
 
         const Geometry geo{bounds};
+        drawSpectrogram(g, geo);
         drawOuterRing(g, geo, c);
         drawInnerDisc(g, geo, c);
         drawHands(g, geo, c);
@@ -134,6 +156,101 @@ class CircularLoopDisplay : public juce::Component
     [[nodiscard]] juce::Point<float> polar(const Geometry& geo, float angle, float r) const noexcept
     {
         return {geo.cx + r * std::cos(angle), geo.cy + r * std::sin(angle)};
+    }
+
+    // Precompute, per ring-annulus pixel of the iris image, its angle (0..1
+    // clockwise from 12 o'clock) and its radial fraction across the band. The
+    // image maps to a square whose half-side is maxR, so radii use the same
+    // 0.70..0.98 fractions as Geometry's outer ring.
+    void buildAnnulus()
+    {
+        constexpr float kHalf = static_cast<float>(kIrisSize) / 2.f;
+        constexpr float innerR = kHalf * 0.70f;
+        constexpr float outerR = kHalf * 0.98f;
+        m_annulus.clear();
+        for (int py = 0; py < kIrisSize; ++py)
+        {
+            for (int px = 0; px < kIrisSize; ++px)
+            {
+                const float dx = static_cast<float>(px) - kHalf;
+                const float dy = static_cast<float>(py) - kHalf;
+                const float r = std::hypot(dx, dy);
+                if (r < innerR || r > outerR)
+                {
+                    continue;
+                }
+                float phase = std::atan2(dy, dx) - kBeatAngle;
+                phase -= k2Pi * std::floor(phase / k2Pi);
+                m_annulus.push_back({px, py, phase / k2Pi, (r - innerR) / (outerR - innerR)});
+            }
+        }
+    }
+
+    // Repaint the whole iris each tick (no persistent state), so the growing ring
+    // rescales seamlessly: every annulus pixel maps back to the spectrogram slice
+    // whose record-time falls at that angle. Pixels ahead of the head or older than
+    // the ring buffer holds stay transparent.
+    void renderSpectrogram()
+    {
+        m_iris.clear(m_iris.getBounds(), juce::Colour(0u));
+        const AbacDsp::SpectrumImageSet& s = m_spectro;
+        const float ringFrames = static_cast<float>(m_samplesPerBar * static_cast<size_t>(m_outerRingBars));
+        const size_t fftHalf = s.height;
+        if (s.data == nullptr || s.width < 2 || fftHalf == 0 || s.sampleRate <= 0.f || ringFrames <= 0.f)
+        {
+            return;
+        }
+        const float hop = static_cast<float>(s.fftLength) * s.windowForwardRatio;
+        const float headF = static_cast<float>(m_recordHeadFrames);
+        if (hop <= 0.f || headF <= 0.f)
+        {
+            return;
+        }
+        const size_t validSlices = std::min(s.width - 1, static_cast<size_t>(headF / hop));
+        if (validSlices == 0)
+        {
+            return;
+        }
+        const size_t lastSlice = (s.activeSlice + s.width - 1) % s.width;
+        const float logMin = std::log2(20.f);
+        const float logMax = std::log2(s.sampleRate / 2.f);
+        const float binHz = (s.sampleRate / 2.f) / static_cast<float>(fftHalf);
+        const int maxBin = static_cast<int>(fftHalf) - 1;
+
+        juce::Image::BitmapData bd(m_iris, juce::Image::BitmapData::writeOnly);
+        for (const AnnulusPixel& p : m_annulus)
+        {
+            const float jf = (headF - p.angleNorm * ringFrames) / hop;
+            if (jf < 0.f)
+            {
+                continue;
+            }
+            const size_t j = static_cast<size_t>(jf);
+            if (j >= validSlices)
+            {
+                continue;
+            }
+            const size_t sliceIdx = (lastSlice + s.width - j) % s.width;
+            const float hz = std::exp2(logMin + p.normR * (logMax - logMin));
+            const float fbin = hz / binHz;
+            const int bin0 = juce::jlimit(0, maxBin, static_cast<int>(fbin));
+            const int bin1 = std::min(bin0 + 1, maxBin);
+            const float bt = fbin - static_cast<float>(bin0);
+            const float* row = &s.data[sliceIdx * fftHalf];
+            float value = row[bin0] + bt * (row[bin1] - row[bin0]);
+            value = std::pow(std::max(value, 0.f), 0.15f);
+            const int lutIdx =
+                juce::jlimit(0, GuiConstants::kLutSize - 1, static_cast<int>(value * (GuiConstants::kLutSize - 1)));
+            bd.setPixelColour(p.px, p.py, juce::Colour(m_lut[static_cast<size_t>(lutIdx)]));
+        }
+    }
+
+    void drawSpectrogram(juce::Graphics& g, const Geometry& geo)
+    {
+        renderSpectrogram();
+        const float side = 2.f * geo.maxR;
+        g.drawImage(m_iris, juce::Rectangle<float>(geo.cx - geo.maxR, geo.cy - geo.maxR, side, side),
+                    juce::RectanglePlacement::stretchToFit);
     }
 
     void drawOuterRing(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
@@ -289,6 +406,16 @@ class CircularLoopDisplay : public juce::Component
         }
     }
 
+    static constexpr int kIrisSize = 256;
+
+    struct AnnulusPixel
+    {
+        int px;
+        int py;
+        float angleNorm; // 0..1 clockwise from 12 o'clock
+        float normR;     // 0..1 across the ring band (inner->outer)
+    };
+
     std::vector<float> m_data;
     std::vector<float> m_loopPeaks;
     std::vector<float> m_boundaries;
@@ -301,4 +428,10 @@ class CircularLoopDisplay : public juce::Component
     int m_outerRingBars{1};
     juce::String m_stateLabel;
     juce::String m_label;
+
+    AbacDsp::SpectrumImageSet m_spectro{};
+    size_t m_recordHeadFrames{0};
+    juce::Image m_iris;
+    juce::PixelARGB m_lut[GuiConstants::kLutSize]{};
+    std::vector<AnnulusPixel> m_annulus;
 };

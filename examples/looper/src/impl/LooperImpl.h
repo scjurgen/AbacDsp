@@ -6,9 +6,11 @@
 #include <cmath>
 #include <cstddef>
 #include <functional>
+#include <span>
 #include <vector>
 
 #include "Analysis/Slicer.h"
+#include "Analysis/Spectrogram.h"
 #include "Audio/AudioBuffer.h"
 #include "EffectBase.h"
 #include "Generators/BeatSequencer.h"
@@ -44,6 +46,10 @@ class LooperImpl final : public EffectBase
         // One bar (4 beats) at the lowest tempo (50 BPM) is ~4.8 s; size generously.
         m_visualWave.assign(static_cast<size_t>(sampleRate * 5.f) + 16, 0.f);
         m_preparedWave.reserve(m_visualWave.size());
+        m_recordSpectrogram.setSampleRate(sampleRate);
+        // Cover the whole recordable span (~60 s) so a long loop's ring is fully
+        // painted, not just its tail. hop = fftLength * windowForwardRatio (1024/3).
+        m_recordSpectrogram.setSlices(static_cast<size_t>(60.f * sampleRate / (1024.f / 3.f)) + 64);
     }
 
     // Parameter setters (message thread): store into atomics, apply on the audio thread.
@@ -199,6 +205,18 @@ class LooperImpl final : public EffectBase
         return m_seq.barPhase();
     }
 
+    [[nodiscard]] AbacDsp::SpectrumImageSet getSpectrogramData() const
+    {
+        return m_recordSpectrogram.getImageSet();
+    }
+
+    // Frame position of the spectrogram write head within the ring: the live record
+    // position while capturing, the finalized loop length once stopped.
+    [[nodiscard]] size_t getSpectrogramHeadFrames() const noexcept
+    {
+        return isRecording() ? m_recorder.recordedFrames() : m_recorder.loopLengthFrames();
+    }
+
     [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
     {
         return m_seq.subPositions();
@@ -259,6 +277,18 @@ class LooperImpl final : public EffectBase
             syncToHostTransport();
         }
         handleTransportPulses();
+
+        // Feed the record spectrogram with the dry input while capturing; it freezes
+        // (stops advancing) once recording stops, so the last image persists.
+        if (isRecording())
+        {
+            std::array<float, BlockSize> inMono{};
+            for (size_t i = 0; i < BlockSize; ++i)
+            {
+                inMono[i] = 0.5f * (in(i, 0) + in(i, 1));
+            }
+            m_recordSpectrogram.processBlock(std::span<const float>{inMono});
+        }
 
         m_recorder.setSamplesPerBar(m_seq.samplesPerBeat() * m_seq.beatsPerBar());
 
@@ -578,6 +608,7 @@ class LooperImpl final : public EffectBase
     AbacDsp::SlicePlayer<BlockSize> m_slicePlayer;
     AbacDsp::BeatSequencer m_seq;
     AbacDsp::ClickGenerator m_click;
+    AbacDsp::SimpleSpectrogram m_recordSpectrogram;
 
     std::vector<AbacDsp::Slice> m_slices;
     std::vector<float> m_mono;

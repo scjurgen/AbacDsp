@@ -653,6 +653,14 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner ? pluginRunner->getOuterRingBars() : 1;
     }
+    [[nodiscard]] AbacDsp::SpectrumImageSet getSpectrogramData() const
+    {
+        return pluginRunner ? pluginRunner->getSpectrogramData() : AbacDsp::SpectrumImageSet{};
+    }
+    [[nodiscard]] size_t getSpectrogramHeadFrames() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getSpectrogramHeadFrames() : 0u;
+    }
     [[nodiscard]] float getBarPhase() const noexcept
     {
         return pluginRunner ? pluginRunner->getBarPhase() : 0.f;
