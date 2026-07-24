@@ -34,6 +34,10 @@ class GenericImpl final : public EffectBase
     {
         m_clear = value;
     }
+    void setThreshRec(const bool value)
+    {
+        m_threshRec = value;
+    }
     void setHostSync(const bool value)
     {
         m_hostSync = value;
@@ -61,6 +65,10 @@ class GenericImpl final : public EffectBase
     void setLoopVolume(const float value)
     {
         m_loopVolume = std::pow(10.f, value / 20.f);
+    }
+    void setRecThreshold(const float value)
+    {
+        m_recThreshold = std::pow(10.f, value / 20.f);
     }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
@@ -93,6 +101,7 @@ class GenericImpl final : public EffectBase
     bool m_play{};
     bool m_overdub{};
     bool m_clear{};
+    bool m_threshRec{};
     bool m_hostSync{};
     size_t m_sliceMode{};
     size_t m_sliceDivision{};
@@ -100,6 +109,7 @@ class GenericImpl final : public EffectBase
     float m_swing{};
     float m_clickVolume{};
     float m_loopVolume{};
+    float m_recThreshold{};
 
 
     std::vector<float> m_visualWavedata;

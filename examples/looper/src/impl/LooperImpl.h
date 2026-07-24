@@ -60,6 +60,14 @@ class LooperImpl final : public EffectBase
     {
         m_loopVol.store(value, std::memory_order_relaxed);
     }
+    void setThreshRec(const bool value) noexcept
+    {
+        m_threshRecReq.store(value, std::memory_order_relaxed);
+    }
+    void setRecThreshold(const float value) noexcept
+    {
+        m_recThreshold.store(value, std::memory_order_relaxed);
+    }
     void setSliceMode(const int value) noexcept
     {
         m_sliceMode.store(value, std::memory_order_relaxed);
@@ -119,8 +127,16 @@ class LooperImpl final : public EffectBase
     {
         return m_recorder.state() == AbacDsp::LooperState::Overdubbing;
     }
+    [[nodiscard]] bool isArmed() const noexcept
+    {
+        return m_armed;
+    }
     [[nodiscard]] const char* getStateLabel() const noexcept
     {
+        if (m_armed)
+        {
+            return "Armed";
+        }
         switch (m_recorder.state())
         {
             case AbacDsp::LooperState::Empty:
@@ -202,6 +218,15 @@ class LooperImpl final : public EffectBase
 
         m_recorder.setSamplesPerBar(m_seq.samplesPerBeat() * m_seq.beatsPerBar());
 
+        // Threshold recording: while armed, wait for the input to cross the level
+        // before capture actually begins (this block is then recorded too).
+        if (m_armed && blockPeak(in) >= m_recThresholdLinear)
+        {
+            m_armed = false;
+            m_recorder.beginRecord();
+            m_seq.reset();
+        }
+
         AbacDsp::AudioBuffer<2, BlockSize> recorderOut{};
         m_recorder.processBlock(in, recorderOut);
 
@@ -252,6 +277,7 @@ class LooperImpl final : public EffectBase
         }
         m_click.setVolumeDb(m_clickVol.load(std::memory_order_relaxed));
         m_loopGain = std::pow(10.f, m_loopVol.load(std::memory_order_relaxed) / 20.f);
+        m_recThresholdLinear = std::pow(10.f, m_recThreshold.load(std::memory_order_relaxed) / 20.f);
         m_hostSync = m_hostSyncReq.load(std::memory_order_relaxed);
     }
 
@@ -273,6 +299,7 @@ class LooperImpl final : public EffectBase
     {
         if (m_clearPulse.exchange(false, std::memory_order_relaxed))
         {
+            m_armed = false;
             m_recorder.clear();
             m_slices.clear();
             m_slicePlayer.setSlices(m_slices);
@@ -292,15 +319,28 @@ class LooperImpl final : public EffectBase
         }
     }
 
+    void finishRecording()
+    {
+        m_recorder.setSamplesPerBar(m_seq.samplesPerBeat() * m_seq.beatsPerBar());
+        m_recorder.stopRecord();
+        computeSlices();
+        m_seq.reset();
+        m_lastSliceIndex = kNoSlice;
+    }
+
     void toggleRecord()
     {
         if (isRecording())
         {
-            m_recorder.setSamplesPerBar(m_seq.samplesPerBeat() * m_seq.beatsPerBar());
-            m_recorder.stopRecord();
-            computeSlices();
-            m_seq.reset();
-            m_lastSliceIndex = kNoSlice;
+            finishRecording();
+        }
+        else if (m_armed)
+        {
+            m_armed = false; // pressing Record again while armed disarms
+        }
+        else if (m_threshRecReq.load(std::memory_order_relaxed))
+        {
+            m_armed = true; // wait for the input to cross the threshold
         }
         else
         {
@@ -327,7 +367,14 @@ class LooperImpl final : public EffectBase
 
     void toggleOverdub()
     {
-        if (isOverdubbing())
+        if (isRecording())
+        {
+            // Punch straight from recording into overdub: finish the take, then
+            // immediately start layering onto it.
+            finishRecording();
+            m_recorder.beginOverdub();
+        }
+        else if (isOverdubbing())
         {
             m_recorder.endOverdub();
             computeSlices();
@@ -354,9 +401,19 @@ class LooperImpl final : public EffectBase
         m_slicePlayer.processBlock(out);
     }
 
+    [[nodiscard]] static float blockPeak(const AbacDsp::AudioBuffer<2, BlockSize>& in) noexcept
+    {
+        float peak = 0.f;
+        for (size_t i = 0; i < BlockSize; ++i)
+        {
+            peak = std::max(peak, std::max(std::abs(in(i, 0)), std::abs(in(i, 1))));
+        }
+        return peak;
+    }
+
     void renderClick(std::array<float, BlockSize>& click)
     {
-        const bool active = isRecording() || isPlaying();
+        const bool active = isRecording() || isPlaying() || m_armed;
         for (size_t i = 0; i < BlockSize; ++i)
         {
             const auto event = m_seq.advance();
@@ -474,7 +531,11 @@ class LooperImpl final : public EffectBase
     std::atomic<float> m_swing{50.f};
     std::atomic<float> m_clickVol{-12.f};
     std::atomic<float> m_loopVol{0.f};
+    std::atomic<float> m_recThreshold{-36.f};
+    std::atomic<bool> m_threshRecReq{false};
     float m_loopGain{1.f};
+    float m_recThresholdLinear{0.0158f};
+    bool m_armed{false};
     std::atomic<int> m_sliceMode{0};
     std::atomic<int> m_sliceDivision{1};
     std::atomic<bool> m_hostSyncReq{false};

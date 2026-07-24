@@ -16,18 +16,21 @@ struct PatchParameters
         play         , // switch
         overdub      , // switch
         clear        , // switch
+        threshRec    , // switch
         hostSync     , // switch
         sliceMode    , // drop
         sliceDivision, // drop
         bpm          , // dial
         swing        , // dial
         clickVolume  , // dial
-        loopVolume    // dial
+        loopVolume   , // dial
+        recThreshold  // dial
     };
 bool record{false};
 bool play{false};
 bool overdub{false};
 bool clear{false};
+bool threshRec{false};
 bool hostSync{false};
 size_t sliceMode{0};
 size_t sliceDivision{1};
@@ -35,6 +38,7 @@ float bpm{120.0f};
 float swing{50.0f};
 float clickVolume{-12.0f};
 float loopVolume{0.0f};
+float recThreshold{-36.0f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
@@ -42,13 +46,15 @@ float loopVolume{0.0f};
 "play",
 "overdub",
 "clear",
+"threshRec",
 "hostSync",
 "sliceMode",
 "sliceDivision",
 "bpm",
 "swing",
 "clickVolume",
-"loopVolume"
+"loopVolume",
+"recThreshold"
     });
 //        "onOff", "patch", "input", "modulationDepth", "mix", "density", "threshold", "knee"});
 
@@ -71,6 +77,7 @@ float loopVolume{0.0f};
         else if constexpr (ParamId == Id::play) return play;
         else if constexpr (ParamId == Id::overdub) return overdub;
         else if constexpr (ParamId == Id::clear) return clear;
+        else if constexpr (ParamId == Id::threshRec) return threshRec;
         else if constexpr (ParamId == Id::hostSync) return hostSync;
         else if constexpr (ParamId == Id::sliceMode) return sliceMode;
         else if constexpr (ParamId == Id::sliceDivision) return sliceDivision;
@@ -78,6 +85,7 @@ float loopVolume{0.0f};
         else if constexpr (ParamId == Id::swing) return swing;
         else if constexpr (ParamId == Id::clickVolume) return clickVolume;
         else if constexpr (ParamId == Id::loopVolume) return loopVolume;
+        else if constexpr (ParamId == Id::recThreshold) return recThreshold;
 
     }
 
@@ -98,6 +106,8 @@ break;
 break;
  case Id::clear: if (!isEqual(get<Id::clear>(), value)) {get<Id::clear>() = static_cast<bool>(value) ;m_modified = true;}
 break;
+ case Id::threshRec: if (!isEqual(get<Id::threshRec>(), value)) {get<Id::threshRec>() = static_cast<bool>(value) ;m_modified = true;}
+break;
  case Id::hostSync: if (!isEqual(get<Id::hostSync>(), value)) {get<Id::hostSync>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::sliceMode: if (!isEqual(get<Id::sliceMode>(), value)) {get<Id::sliceMode>() = static_cast<size_t>(value) ;m_modified = true;}
@@ -111,6 +121,8 @@ break;
  case Id::clickVolume: if (!isEqual(get<Id::clickVolume>(), value)) {get<Id::clickVolume>() = value;m_modified = true;}
 break;
  case Id::loopVolume: if (!isEqual(get<Id::loopVolume>(), value)) {get<Id::loopVolume>() = value;m_modified = true;}
+break;
+ case Id::recThreshold: if (!isEqual(get<Id::recThreshold>(), value)) {get<Id::recThreshold>() = value;m_modified = true;}
 break;
 
             default:
@@ -154,11 +166,13 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         play         , // switch
         overdub      , // switch
         clear        , // switch
+        threshRec    , // switch
         hostSync     , // switch
         sliceMode    , // drop
         sliceDivision, // drop
         bpm          , // dial
         swing        , // dial
         clickVolume  , // dial
-        loopVolume    // dial
+        loopVolume   , // dial
+        recThreshold  // dial
 )

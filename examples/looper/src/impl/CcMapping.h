@@ -9,10 +9,12 @@ enum class CcTarget : int
     play,
     overdub,
     clear,
+    threshRec,
     bpm,
     swing,
     clickVolume,
-    loopVolume
+    loopVolume,
+    recThreshold
 };
 
 struct CcMapping
@@ -28,24 +30,27 @@ struct CcFullRange
     float hi;
 };
 
-inline constexpr std::array<CcMapping, 8> kDefaultCcMappings{{
+inline constexpr std::array<CcMapping, 10> kDefaultCcMappings{{
     {64, 0.0f, 1.0f},
     {66, 0.0f, 1.0f},
     {65, 0.0f, 1.0f},
     {69, 0.0f, 1.0f},
+    {70, 0.0f, 1.0f},
     {20, 60.0f, 180.0f},
     {21, 0.0f, 100.0f},
     {22, -60.0f, 0.0f},
     {23, -60.0f, 12.0f},
+    {24, -60.0f, 0.0f},
 }};
 
-inline constexpr std::array<std::string_view, 8> kCcTargetParamIds{
-    "record", "play", "overdub", "clear", "bpm", "swing", "clickVolume", "loopVolume",
+inline constexpr std::array<std::string_view, 10> kCcTargetParamIds{
+    "record", "play", "overdub", "clear", "threshRec", "bpm", "swing", "clickVolume", "loopVolume", "recThreshold",
 };
 
 // The dial's own full range (blueprint "range"), independent of the CC sub-range,
 // used to clamp user-editable CC value ranges.
-inline constexpr std::array<CcFullRange, 8> kCcTargetFullRange{{
+inline constexpr std::array<CcFullRange, 10> kCcTargetFullRange{{
+    {0.0f, 1.0f},
     {0.0f, 1.0f},
     {0.0f, 1.0f},
     {0.0f, 1.0f},
@@ -54,4 +59,5 @@ inline constexpr std::array<CcFullRange, 8> kCcTargetFullRange{{
     {0.0f, 100.0f},
     {-60.0f, 0.0f},
     {-60.0f, 12.0f},
+    {-60.0f, 0.0f},
 }};

@@ -111,6 +111,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(threshRecSwitch)
+                              .withFlex(0)
+                              .withHeight(Constants::Text::labelHeight)
+                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                              .withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(hostSyncSwitch)
                               .withFlex(0)
                               .withHeight(Constants::Text::labelHeight)
@@ -137,6 +142,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.items.add(juce::FlexItem(swingDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
             box.performLayout(areas[1].toFloat());
         }
         {
@@ -163,8 +169,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 sliceGauge.setSliceBoundaries(processorRef.getSliceBoundaries());
                 sliceGauge.setPlayheadNormalized(processorRef.getPlayheadNormalized());
                 sliceGauge.setStateLabel(processorRef.getLooperStateLabel());
-                recordSwitch.setButtonText(processorRef.isRecording() ? juce::String::fromUTF8("Recording")
-                                                                      : juce::String::fromUTF8("Record"));
+                recordSwitch.setButtonText(processorRef.isRecording()
+                                               ? juce::String::fromUTF8("Recording")
+                                               : (processorRef.isArmed() ? juce::String::fromUTF8("Armed")
+                                                                         : juce::String::fromUTF8("Record")));
                 playSwitch.setButtonText(processorRef.isPlaying() ? juce::String::fromUTF8("Stop")
                                                                   : juce::String::fromUTF8("Play"));
                 overdubSwitch.setButtonText(processorRef.isOverdubbing() ? juce::String::fromUTF8("Overdubbing")
@@ -207,6 +215,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(clearSwitch);
         clearSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "clear", clearSwitch);
+
+        addAndMakeVisible(threshRecSwitch);
+        threshRecSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "threshRec", threshRecSwitch);
 
         addAndMakeVisible(hostSyncSwitch);
         hostSyncSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -254,6 +266,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                             { processorRef.setCcRange(CcTarget::loopVolume, lo, hi); },
                                             [this] { processorRef.clearCcAssignment(CcTarget::loopVolume); },
                                             [this] { return processorRef.getCcController(CcTarget::loopVolume); }});
+        addAndMakeVisible(recThresholdDial);
+        recThresholdDial.reset(valueTreeState, "recThreshold");
+        recThresholdDial.setLabelText(juce::String::fromUTF8("Rec Threshold"));
+        recThresholdDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::recThreshold); },
+                                              [this] { return processorRef.getCcRange(CcTarget::recThreshold); },
+                                              [this](float lo, float hi)
+                                              { processorRef.setCcRange(CcTarget::recThreshold, lo, hi); },
+                                              [this] { processorRef.clearCcAssignment(CcTarget::recThreshold); },
+                                              [this] { return processorRef.getCcController(CcTarget::recThreshold); }});
         addAndMakeVisible(sliceGauge);
         sliceGauge.setLabelText(juce::String::fromUTF8("Loop"));
     }
@@ -529,6 +550,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> overdubSwitchAttachment;
     juce::ToggleButton clearSwitch{juce::String::fromUTF8("Clear")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> clearSwitchAttachment;
+    juce::ToggleButton threshRecSwitch{juce::String::fromUTF8("Thresh Rec")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> threshRecSwitchAttachment;
     juce::ToggleButton hostSyncSwitch{juce::String::fromUTF8("Host Sync")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> hostSyncSwitchAttachment;
     juce::ComboBox sliceModeDrop{};
@@ -539,6 +562,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial swingDial{this};
     CustomRotaryDial clickVolumeDial{this};
     CustomRotaryDial loopVolumeDial{this};
+    CustomRotaryDial recThresholdDial{this};
     SliceWaveDisplay sliceGauge{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)

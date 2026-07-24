@@ -15,6 +15,7 @@
     {"short": "PLAY", "type": "switch", "display": "Play",      "symbol": "play",     "default": 0, "cc": {"controller": 66}},
     {"short": "ODUB", "type": "switch", "display": "Overdub",   "symbol": "overdub",  "default": 0, "cc": {"controller": 65}},
     {"short": "CLR",  "type": "switch", "display": "Clear",     "symbol": "clear",    "default": 0, "cc": {"controller": 69}},
+    {"short": "TREC", "type": "switch", "display": "Thresh Rec", "symbol": "threshRec", "default": 0, "cc": {"controller": 70}},
     {"short": "SYNC", "type": "switch", "display": "Host Sync", "symbol": "hostSync", "default": 0},
     {"short": "MODE", "type": "drop",   "display": "Slice Mode", "symbol": "sliceMode", "default": 0,
       "listitems": ["Grid", "Transient"]},
@@ -32,6 +33,9 @@
     {"short": "LVOL", "type": "dial",   "display": "Loop Volume",  "symbol": "loopVolume", "default": 0,
       "range": [-60, 12, 0.1, 1, false], "precision": 1, "unit": "dB",
       "cc": {"controller": 23}},
+    {"short": "THR",  "type": "dial",   "display": "Rec Threshold", "symbol": "recThreshold", "default": -36,
+      "range": [-60, 0, 0.1, 1, false], "precision": 1, "unit": "dB",
+      "cc": {"controller": 24}},
     {"short": "SLICE", "type": "gauge", "gaugetype": "signal", "display": "Loop", "symbol": "slice",
       "customtype": "SliceWaveDisplay"}
   ],
@@ -39,7 +43,7 @@
     "WINDOW_WIDTH": "1600",
     "WINDOW_HEIGHT": "620",
     "type": "|=",
-    "composition": "C=(1:10) R=(1:5) A1=(REC, PLAY, ODUB, CLR, SYNC, MODE, DIV) A2=(BPM, SWG, CVOL, LVOL) A3=(SLICE)"
+    "composition": "C=(1:10) R=(1:5) A1=(REC, PLAY, ODUB, CLR, TREC, SYNC, MODE, DIV) A2=(BPM, SWG, CVOL, LVOL, THR) A3=(SLICE)"
   },
   "extra_ui_includes": [
     "inc/SliceWaveDisplay.h"
@@ -51,7 +55,7 @@
     "sliceGauge.setSliceBoundaries(processorRef.getSliceBoundaries());",
     "sliceGauge.setPlayheadNormalized(processorRef.getPlayheadNormalized());",
     "sliceGauge.setStateLabel(processorRef.getLooperStateLabel());",
-    "recordSwitch.setButtonText(processorRef.isRecording() ? juce::String::fromUTF8(\"Recording\") : juce::String::fromUTF8(\"Record\"));",
+    "recordSwitch.setButtonText(processorRef.isRecording() ? juce::String::fromUTF8(\"Recording\") : (processorRef.isArmed() ? juce::String::fromUTF8(\"Armed\") : juce::String::fromUTF8(\"Record\")));",
     "playSwitch.setButtonText(processorRef.isPlaying() ? juce::String::fromUTF8(\"Stop\") : juce::String::fromUTF8(\"Play\"));",
     "overdubSwitch.setButtonText(processorRef.isOverdubbing() ? juce::String::fromUTF8(\"Overdubbing\") : juce::String::fromUTF8(\"Overdub\"));",
     "if (recordSwitch.getToggleState()) { recordSwitch.setToggleState(false, juce::sendNotification); }",
@@ -64,6 +68,7 @@
     "[[nodiscard]] bool isRecording() const noexcept { return pluginRunner && pluginRunner->isRecording(); }",
     "[[nodiscard]] bool isPlaying() const noexcept { return pluginRunner && pluginRunner->isPlaying(); }",
     "[[nodiscard]] bool isOverdubbing() const noexcept { return pluginRunner && pluginRunner->isOverdubbing(); }",
+    "[[nodiscard]] bool isArmed() const noexcept { return pluginRunner && pluginRunner->isArmed(); }",
     "[[nodiscard]] std::vector<float> getLoopWaveform() const { return pluginRunner ? pluginRunner->getLoopWaveform() : std::vector<float>{}; }",
     "[[nodiscard]] std::vector<float> getSliceBoundaries() const { return pluginRunner ? pluginRunner->getSliceBoundaries() : std::vector<float>{}; }",
     "[[nodiscard]] float getPlayheadNormalized() const noexcept { return pluginRunner ? pluginRunner->getPlayheadNormalized() : 0.f; }",
