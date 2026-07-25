@@ -27,6 +27,15 @@ plays the slices back locked to a BPM/swing grid with a metronome click.
   buffer and positioned relative to the beat grid, will be designed and added on top later
   (Phase 10, TBD by the user). `Slicer.h`/`SlicePlayer.h`/`SliceBank.h` are kept in
   `src/includes/` for that future phase but are currently unused by `LooperImpl`.
+- **Sample sequencer (Phase 10):** slicing is manual/on-demand, not automatic at record-stop
+  (that shape was already tried and reverted in Phase 7). Frozen tracks in the slice library
+  survive independently of the base looper's Clear/re-record. Per-voice insert effects
+  (compression, distortion), not a shared bus, but the real DSP for those is deferred: the user
+  has existing library code to drop in later, so this phase only wires a per-voice placeholder
+  (pass-through) effect slot. This design pass covers the DSP engine and a programmatic pattern
+  API only; a piano-roll/step-grid UI is a later phase. Lives entirely in `src/includes/Sampler/`
+  (not example-local, not a new top-level folder) so it is reusable by other, non-looper
+  projects, same as `SliceBank.h`/`SlicePlayer.h` today.
 
 ## Signal flow
 
@@ -290,16 +299,83 @@ Input -> [LoopRecorder] --record/overdub--> loop buffer
       up. Not the compile failure itself (both `cmake-build-release` and the user's own
       `cmake-build-debug` built and ran it fine once reconfigured), but clearly the source of "can't
       find/compile the test" confusion, so fixed regardless.
-- [ ] **9** Future, each standalone (remaining original TODO bullets, renumbered):
+- [ ] **9 (dropped for now)** Future, each standalone (remaining original TODO bullets, renumbered).
+      Deferred, not scoped for the current push; revisit after 10.
       - [ ] free recording (no BPM), extract the actual BPM when recording stops
         (`Analysis/TempoEstimator.h`)
       - [ ] reverse play (beat lands on the slice end)
       - [ ] shuffle slices
       - [ ] pitch-shift slices (reuse `Spectral/PhaseVocoderPitcher.h`, saves a new sample into the
         `SliceBank`, RT-safe pool)
-- [ ] **10** On-demand sample sequencer (TODO "Looper with Sample Sequencer" step 3). Fed individual
-      slices copied lazily from the loop buffer, positioned relative to the beat grid; design TBD by
-      the user once 8a/8b land.
+- [ ] **10** On-demand sample sequencer (TODO "Looper with Sample Sequencer" step 3), an overlay
+      engine on top of the plain looper. All new headers live in `src/includes/Sampler/` (reusable
+      outside the looper example, same as `SliceBank.h`/`SlicePlayer.h` today).
+
+      **Locked decisions** (see also the design-decisions block above): slicing a loop into the
+      library is a manual "freeze" action, not automatic at record-stop (Phase 7 already tried and
+      reverted always-slicing); frozen tracks persist independently of the base looper's
+      Clear/re-record; compression/distortion are per-voice inserts, not a shared bus; pitch change
+      is resampling only (no time-stretch), reusing `Numbers/Interpolation.h`'s hermite variants for
+      the fractional read, not `Spectral/PhaseVocoderPitcher.h`. This pass is DSP engine + a
+      programmatic pattern API only; a piano-roll/step-grid UI is a later phase.
+
+      **Data model:**
+      ```
+      [LoopRecorder] --(freeze action)--> Slicer::adaptiveTransientSlices --extract--> SliceLibrary
+                                                                                            |
+                                  SequencePattern --events--> SequencerEngine <--- reads slices
+                                         ^                          |
+                           (shuffle/humanize/reverse/random         v
+                            transform the event list)       voice pool: pitch/gain/reverse/fade
+                                                                      |
+                                  BeatSequencer (shared clock,        v
+                                   same one the looper uses)  per-voice FX (comp/distortion) --> out
+      ```
+
+      - [x] **10a** `Sampler/SliceLibrary.h` (replaces `SliceBank.h`/`SliceBank_test.cpp` outright via
+        `git rm`; nothing else referenced them, confirmed by grep). `extractTrack(loop, slices) ->
+        trackIndex` appends rather than replacing, so slices from several frozen loops coexist,
+        addressed as `(track, indexInTrack)` via `sliceInfo()`/`sample()`, plus a flat `slices()`
+        list across all tracks. `SliceInfo` adds `peak`/`rms` computed at extraction time (metadata
+        for "normalize" and default gain, not a runtime cost). `clear()` drops every track (the only
+        way to reset; per the locked lifecycle decision, extracting into it is otherwise independent
+        of the looper's own Clear). Overflow now stops extraction per-track (only that track's
+        remainder is dropped; earlier tracks are untouched) rather than for the whole bank. 13 tests
+        in `test/Sampler/SliceLibrary_test.cpp` (mirrors the old `SliceBank` coverage + 3 new
+        multi-track cases: separate tracks appended, earlier track survives a later track's overflow,
+        peak/rms correctness). Verified: `SamplerTests` (65/65) and full suite (20/20 targets) green,
+        no warnings.
+      - [x] **10b** `Sampler/SequencePattern.h`: plain event-list data structure, no engine logic.
+        Constructed with `(lengthBars, beatsPerBar, stepsPerBeat)`; `totalSteps()` is their product.
+        `SequenceEvent{stepPosition, track, sliceIndex, gain, pitchRatio, reverse, randomizeSlice,
+        timingOffsetFrames, humanizeAmountFrames}` (renamed from the earlier `gridPosition` sketch to
+        `stepPosition`, matching the constructor's step-based grid rather than a raw frame position).
+        Shuffle = edit on `timingOffsetFrames`; humanize = small RNG jitter re-rolled per pattern
+        repeat at trigger time; `randomizeSlice` = a flag meaning the engine re-picks `sliceIndex`
+        from `track` each repeat instead of using the fixed one stored here. `addEvent` rejects (no-op,
+        returns false) a `stepPosition >= totalSteps()`; `removeEvent`/`clear` mutate in place;
+        `eventIndicesAtStep()` returns every event index at a step in insertion order, supporting
+        layered (simultaneous) events at the same step. Pure data + edit operations, independently
+        testable without audio. 13 tests in `test/Sampler/SequencePattern_test.cpp`. Verified:
+        `SamplerTests` and full suite (20/20 targets) green, no warnings.
+      - [ ] **10c** `Sampler/SequencerEngine.h`: polyphonic voice pool (same shape as `SlicePlayer`'s:
+        fixed array, oldest-voice steal), driven by the same per-sample `GridEvent` stream
+        `LooperImpl` already computes from `m_seq` (not a separate clock, so it can never drift from
+        the loop or the click). Each voice reads its slice via fractional position (hermite
+        interpolation) with the read increment set by `pitchRatio`, direction negative when
+        `reverse`; reuses `SlicePlayer`'s edge-fade approach for click-free starts/stops/steals.
+      - [ ] **10d/10e (deferred, placeholders only)** Real `Dynamics/Compressor.h` and a distortion/
+        waveshaper header are NOT built in this phase; the user has existing library code for these
+        to drop in later. Stand in with a trivial per-voice `PassthroughEffect` (identity, no-op)
+        satisfying whatever effect concept/interface `SequencerEngine` defines, so the per-voice
+        insert slot exists and is exercised by tests now, without committing to a real DSP
+        implementation or folder layout ahead of time.
+      - [ ] **10f** Wire the per-voice insert slot (placeholder effects for now, swappable for real
+        ones later) into `SequencerEngine`; apply `SequenceEvent.gain` and `SliceLibrary`'s stored
+        normalize metadata at trigger time.
+      - [ ] **10g** Integrate into `LooperImpl`: the manual freeze action, hooking the engine's output
+        into `processBlock` alongside the existing loop playback, and minimal accessors for a later
+        UI (pattern/active-voice state) without building that UI now.
 
 ## Parameters (all CC-mappable)
 

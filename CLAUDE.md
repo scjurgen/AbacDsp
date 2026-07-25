@@ -151,6 +151,8 @@ Optimise code in hot pathes.
 - Only add a comment when the **why** is non-obvious: a hidden constraint, a subtle invariant, a known hardware quirk, or a workaround for a specific external bug.
 - Never write comments that describe **what** the code does — if the code needs that explanation, rename or restructure it.
 - Do not reference the task, PR, or caller in comments (`// added for issue #123`, `// called by Foo`); that belongs in the commit message.
+- Comments should be relevant for the current state, remove comments that are non relevant planning decisions. The Status Quo is important, not anecdotes.
+- A class comment documents its own contract and invariants, not where its data comes from or who calls it; that context can change without the class itself changing. This matters most for library classes.
 
 ### General Robustness
 - Zero-initialize structs at declaration: `MyStruct s{}`.
