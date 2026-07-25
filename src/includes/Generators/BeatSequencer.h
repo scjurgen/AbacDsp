@@ -162,6 +162,22 @@ class BeatSequencer
         return m_subPositions;
     }
 
+    // Signed distance in samples from the current position to the nearest beat
+    // boundary: negative if that boundary already passed, positive if it is
+    // still ahead. Ties (exactly half a beat) resolve to the boundary behind.
+    // Used to beat-lock an event (e.g. a threshold crossing) within a tolerance
+    // window without moving the clock itself.
+    [[nodiscard]] long samplesToNearestBeat() const noexcept
+    {
+        if (m_samplesPerBeat == 0)
+        {
+            return 0;
+        }
+        const auto pos = static_cast<long>(m_beatSamplePos);
+        const auto spb = static_cast<long>(m_samplesPerBeat);
+        return (pos * 2 <= spb) ? -pos : (spb - pos);
+    }
+
   private:
     void applyBpm(const float bpm)
     {

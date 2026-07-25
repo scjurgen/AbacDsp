@@ -208,4 +208,46 @@ TEST(BeatSequencerTest, BarPhaseProgressesMonotonicallyWithinBar)
     }
 }
 
+TEST(BeatSequencerTest, SamplesToNearestBeatAtBoundaryIsZero)
+{
+    BeatSequencer seq{kSampleRate};
+    seq.setBpm(120.f); // samplesPerBeat = 24000
+    EXPECT_EQ(seq.samplesToNearestBeat(), 0);
+}
+
+TEST(BeatSequencerTest, SamplesToNearestBeatEarlyIsNegativeDistanceToPreviousBoundary)
+{
+    BeatSequencer seq{kSampleRate};
+    seq.setBpm(120.f); // samplesPerBeat = 24000
+    for (int i = 0; i < 1000; ++i)
+    {
+        static_cast<void>(seq.advance());
+    }
+    // 1000 samples into the beat: nearer to the previous boundary (behind us).
+    EXPECT_EQ(seq.samplesToNearestBeat(), -1000);
+}
+
+TEST(BeatSequencerTest, SamplesToNearestBeatLateIsPositiveDistanceToNextBoundary)
+{
+    BeatSequencer seq{kSampleRate};
+    seq.setBpm(120.f); // samplesPerBeat = 24000
+    for (int i = 0; i < 23000; ++i)
+    {
+        static_cast<void>(seq.advance());
+    }
+    // 1000 samples before the next boundary: nearer to it (ahead of us).
+    EXPECT_EQ(seq.samplesToNearestBeat(), 1000);
+}
+
+TEST(BeatSequencerTest, SamplesToNearestBeatTieResolvesToPreviousBoundary)
+{
+    BeatSequencer seq{kSampleRate};
+    seq.setBpm(120.f); // samplesPerBeat = 24000, half = 12000
+    for (int i = 0; i < 12000; ++i)
+    {
+        static_cast<void>(seq.advance());
+    }
+    EXPECT_EQ(seq.samplesToNearestBeat(), -12000);
+}
+
 }
