@@ -410,4 +410,71 @@ TEST(SequencerEngineTest, ResetSilencesVoices)
     EXPECT_EQ(engine.barIndex(), 0u);
 }
 
+TEST(SequencerEngineTest, TriggerManualBypassesPattern)
+{
+    Engine engine(kSampleRate);
+    const auto loop = makeConstLoop(64, 1.f, 1.f);
+    SliceLibrary library(64);
+    library.extractTrack(loop, std::vector<Slice>{{0, 64}});
+    engine.setLibrary(&library);
+    // No pattern set at all: triggerManual must not depend on one.
+
+    engine.triggerManual(0, 0);
+    EXPECT_EQ(engine.activeVoiceCount(), 1u);
+}
+
+TEST(SequencerEngineTest, TriggerManualIgnoredWhenOutOfRange)
+{
+    Engine engine(kSampleRate);
+    const auto loop = makeConstLoop(64, 1.f, 1.f);
+    SliceLibrary library(64);
+    library.extractTrack(loop, std::vector<Slice>{{0, 64}});
+    engine.setLibrary(&library);
+
+    engine.triggerManual(3, 0);
+    EXPECT_EQ(engine.activeVoiceCount(), 0u);
+}
+
+TEST(SequencerEngineTest, TriggerManualWithoutLibraryIsNoOp)
+{
+    Engine engine(kSampleRate);
+    engine.triggerManual(0, 0); // no setLibrary() call at all
+    EXPECT_EQ(engine.activeVoiceCount(), 0u);
+}
+
+TEST(SequencerEngineTest, SampleAccurateStepsPerBeatTriggersOnlyAtExactFrame)
+{
+    Engine engine(kSampleRate);
+    engine.setFadeMs(1.f);
+    BeatSequencer seq(kSampleRate);
+    seq.setBpm(120.f); // samplesPerBeat = 500 at 1000 Hz
+    seq.setBeatsPerBar(4);
+
+    const auto loop = makeConstLoop(64, 1.f, 1.f);
+    SliceLibrary library(64);
+    library.extractTrack(loop, std::vector<Slice>{{0, 64}});
+
+    // stepsPerBeat == samplesPerBeat: one step per sample, exercising the O(1)
+    // trigger check at a granularity the old O(stepsPerBeat) scan couldn't
+    // handle without a per-sample cost proportional to samplesPerBeat itself.
+    SequencePattern pattern(1, 4, seq.samplesPerBeat());
+    SequenceEvent event{};
+    event.stepPosition = 137; // an arbitrary single sample, not beat-aligned
+    pattern.addEvent(event);
+
+    engine.setLibrary(&library);
+    engine.setPattern(&pattern);
+
+    for (size_t i = 0; i < 137; ++i)
+    {
+        const auto gridEvent = seq.advance();
+        static_cast<void>(engine.advanceSample(gridEvent, seq.samplesPerBeat()));
+    }
+    EXPECT_EQ(engine.activeVoiceCount(), 0u) << "must not fire early";
+
+    const auto triggerEvent = seq.advance();
+    static_cast<void>(engine.advanceSample(triggerEvent, seq.samplesPerBeat()));
+    EXPECT_EQ(engine.activeVoiceCount(), 1u) << "must fire on the exact sample";
+}
+
 }

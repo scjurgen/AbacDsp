@@ -78,12 +78,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         // auto generated
         // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
         const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-
         std::vector<juce::Rectangle<int>> areas(3);
         const auto colWidth = area.getWidth() / 7;
-        const auto rowHeight = area.getHeight() / 6;
-        areas[0] = area.removeFromLeft(colWidth * 2).reduced(Constants::Margins::small);
-        areas[1] = area.removeFromTop(rowHeight * 5).reduced(Constants::Margins::small);
+        areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+        areas[1] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
         areas[2] = area.reduced(Constants::Margins::small);
 
         {
@@ -131,26 +129,38 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(swingDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(freezeSwitch)
+                              .withFlex(0)
+                              .withHeight(Constants::Text::labelHeight)
+                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                              .withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(seqTriggerSwitch)
+                              .withFlex(0)
+                              .withHeight(Constants::Text::labelHeight)
+                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                              .withMargin(knobMarginSmall));
             box.performLayout(areas[0].toFloat());
         }
         {
             juce::FlexBox box;
             box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::row;
+            box.flexDirection = juce::FlexBox::Direction::column;
             box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(beatGauge).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(swingDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(seqTrackDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(seqSliceDial).withFlex(1).withMargin(knobMarginSmall));
             box.performLayout(areas[1].toFloat());
         }
         {
             juce::FlexBox box;
             box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::row;
+            box.flexDirection = juce::FlexBox::Direction::column;
             box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+            box.items.add(juce::FlexItem(beatGauge).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(sliceGauge).withFlex(1).withMargin(knobMarginSmall));
             box.performLayout(areas[2].toFloat());
         }
@@ -191,6 +201,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                                   : juce::String::fromUTF8("Play"));
                 overdubSwitch.setButtonText(processorRef.isOverdubbing() ? juce::String::fromUTF8("Overdubbing")
                                                                          : juce::String::fromUTF8("Overdub"));
+                freezeSwitch.setButtonText(
+                    processorRef.isFreezePending()
+                        ? juce::String::fromUTF8("Freezing...")
+                        : (juce::String::fromUTF8("Freeze (") + juce::String(processorRef.getFrozenTrackCount()) +
+                           juce::String::fromUTF8(" trk/") + juce::String(processorRef.getFrozenSliceCount()) +
+                           juce::String::fromUTF8(" sl)")));
+                seqTriggerSwitch.setButtonText(juce::String::fromUTF8("Trigger (") +
+                                               juce::String(processorRef.getActiveSequencerVoices()) +
+                                               juce::String::fromUTF8(" voices)"));
                 if (recordSwitch.getToggleState())
                 {
                     recordSwitch.setToggleState(false, juce::sendNotification);
@@ -206,6 +225,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 if (clearSwitch.getToggleState())
                 {
                     clearSwitch.setToggleState(false, juce::sendNotification);
+                }
+                if (freezeSwitch.getToggleState())
+                {
+                    freezeSwitch.setToggleState(false, juce::sendNotification);
+                }
+                if (seqTriggerSwitch.getToggleState())
+                {
+                    seqTriggerSwitch.setToggleState(false, juce::sendNotification);
                 }
             }
             processorRef.consumeLastLearnedCc();
@@ -289,6 +316,32 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                               { processorRef.setCcRange(CcTarget::recThreshold, lo, hi); },
                                               [this] { processorRef.clearCcAssignment(CcTarget::recThreshold); },
                                               [this] { return processorRef.getCcController(CcTarget::recThreshold); }});
+        addAndMakeVisible(freezeSwitch);
+        freezeSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "freeze", freezeSwitch);
+
+        addAndMakeVisible(seqTrackDial);
+        seqTrackDial.reset(valueTreeState, "seqTrack");
+        seqTrackDial.setLabelText(juce::String::fromUTF8("Seq Track"));
+        seqTrackDial.setCcMappable(true,
+                                   {[this] { processorRef.beginCcLearn(CcTarget::seqTrack); },
+                                    [this] { return processorRef.getCcRange(CcTarget::seqTrack); },
+                                    [this](float lo, float hi) { processorRef.setCcRange(CcTarget::seqTrack, lo, hi); },
+                                    [this] { processorRef.clearCcAssignment(CcTarget::seqTrack); },
+                                    [this] { return processorRef.getCcController(CcTarget::seqTrack); }});
+        addAndMakeVisible(seqSliceDial);
+        seqSliceDial.reset(valueTreeState, "seqSlice");
+        seqSliceDial.setLabelText(juce::String::fromUTF8("Seq Slice"));
+        seqSliceDial.setCcMappable(true,
+                                   {[this] { processorRef.beginCcLearn(CcTarget::seqSlice); },
+                                    [this] { return processorRef.getCcRange(CcTarget::seqSlice); },
+                                    [this](float lo, float hi) { processorRef.setCcRange(CcTarget::seqSlice, lo, hi); },
+                                    [this] { processorRef.clearCcAssignment(CcTarget::seqSlice); },
+                                    [this] { return processorRef.getCcController(CcTarget::seqSlice); }});
+        addAndMakeVisible(seqTriggerSwitch);
+        seqTriggerSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "seqTrigger", seqTriggerSwitch);
+
         addAndMakeVisible(beatGauge);
         beatGauge.setLabelText(juce::String::fromUTF8("Bar"));
         addAndMakeVisible(sliceGauge);
@@ -580,6 +633,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial clickVolumeDial{this};
     CustomRotaryDial loopVolumeDial{this};
     CustomRotaryDial recThresholdDial{this};
+    juce::ToggleButton freezeSwitch{juce::String::fromUTF8("Freeze")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> freezeSwitchAttachment;
+    CustomRotaryDial seqTrackDial{this};
+    CustomRotaryDial seqSliceDial{this};
+    juce::ToggleButton seqTriggerSwitch{juce::String::fromUTF8("Trigger")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> seqTriggerSwitchAttachment;
     CircularLoopDisplay beatGauge{};
     SliceWaveDisplay sliceGauge{};
 

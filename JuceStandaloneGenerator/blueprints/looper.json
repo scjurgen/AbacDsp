@@ -36,6 +36,14 @@
     {"short": "THR",  "type": "dial",   "display": "Rec Threshold", "symbol": "recThreshold", "default": -36,
       "range": [-60, 0, 0.1, 1, false], "precision": 1, "unit": "dB",
       "cc": {"controller": 24}},
+    {"short": "FRZ",  "type": "switch", "display": "Freeze",     "symbol": "freeze",     "default": 0, "cc": {"controller": 71}},
+    {"short": "STRK", "type": "dial",   "display": "Seq Track",  "symbol": "seqTrack",   "default": 0,
+      "range": [0, 15, 1, 1, false], "precision": 0,
+      "cc": {"controller": 72}},
+    {"short": "SSLC", "type": "dial",   "display": "Seq Slice",  "symbol": "seqSlice",   "default": 0,
+      "range": [0, 63, 1, 1, false], "precision": 0,
+      "cc": {"controller": 73}},
+    {"short": "STRIG", "type": "switch", "display": "Trigger",   "symbol": "seqTrigger", "default": 0, "cc": {"controller": 74}},
     {"short": "BEAT", "type": "gauge", "gaugetype": "signal", "display": "Bar", "symbol": "beat",
       "customtype": "CircularLoopDisplay"},
     {"short": "SLICE", "type": "gauge", "gaugetype": "signal", "display": "Loop", "symbol": "slice",
@@ -44,8 +52,8 @@
   "layout": {
     "WINDOW_WIDTH": "1200",
     "WINDOW_HEIGHT": "640",
-    "type": "|=",
-    "composition": "C=(2:5) R=(5:1) A1=(REC, PLAY, ODUB, CLR, TREC, SYNC, MODE, DIV, BPM, SWG, CVOL, LVOL, THR) A2=(BEAT) A3=(SLICE)"
+    "type": "|||",
+    "composition": "C=(1:1:5) A1=(REC, PLAY, ODUB, CLR, TREC, SYNC, MODE, DIV, FRZ, STRIG) A2=(BPM, SWG, CVOL, LVOL, THR, STRK, SSLC) A3=(BEAT, SLICE)"
   },
   "extra_ui_includes": [
     "inc/SliceWaveDisplay.h",
@@ -73,10 +81,14 @@
     "recordSwitch.setButtonText(processorRef.isRecording() ? juce::String::fromUTF8(\"Recording\") : (processorRef.isArmed() ? juce::String::fromUTF8(\"Armed\") : juce::String::fromUTF8(\"Record\")));",
     "playSwitch.setButtonText(processorRef.isPlaying() ? juce::String::fromUTF8(\"Stop\") : juce::String::fromUTF8(\"Play\"));",
     "overdubSwitch.setButtonText(processorRef.isOverdubbing() ? juce::String::fromUTF8(\"Overdubbing\") : juce::String::fromUTF8(\"Overdub\"));",
+    "freezeSwitch.setButtonText(processorRef.isFreezePending() ? juce::String::fromUTF8(\"Freezing...\") : (juce::String::fromUTF8(\"Freeze (\") + juce::String(processorRef.getFrozenTrackCount()) + juce::String::fromUTF8(\" trk/\") + juce::String(processorRef.getFrozenSliceCount()) + juce::String::fromUTF8(\" sl)\")));",
+    "seqTriggerSwitch.setButtonText(juce::String::fromUTF8(\"Trigger (\") + juce::String(processorRef.getActiveSequencerVoices()) + juce::String::fromUTF8(\" voices)\"));",
     "if (recordSwitch.getToggleState()) { recordSwitch.setToggleState(false, juce::sendNotification); }",
     "if (playSwitch.getToggleState()) { playSwitch.setToggleState(false, juce::sendNotification); }",
     "if (overdubSwitch.getToggleState()) { overdubSwitch.setToggleState(false, juce::sendNotification); }",
-    "if (clearSwitch.getToggleState()) { clearSwitch.setToggleState(false, juce::sendNotification); } }"
+    "if (clearSwitch.getToggleState()) { clearSwitch.setToggleState(false, juce::sendNotification); }",
+    "if (freezeSwitch.getToggleState()) { freezeSwitch.setToggleState(false, juce::sendNotification); }",
+    "if (seqTriggerSwitch.getToggleState()) { seqTriggerSwitch.setToggleState(false, juce::sendNotification); } }"
   ],
   "extra_processor_methods": [
     "[[nodiscard]] bool isHostSynced() const noexcept { return pluginRunner && pluginRunner->isHostSynced(); }",
@@ -94,9 +106,13 @@
     "[[nodiscard]] size_t getSpectrogramHeadFrames() const noexcept { return pluginRunner ? pluginRunner->getSpectrogramHeadFrames() : 0u; }",
     "[[nodiscard]] float getBarPhase() const noexcept { return pluginRunner ? pluginRunner->getBarPhase() : 0.f; }",
     "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }",
-    "[[nodiscard]] juce::String getLooperStateLabel() const { return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String(); }"
+    "[[nodiscard]] juce::String getLooperStateLabel() const { return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String(); }",
+    "[[nodiscard]] bool isFreezePending() const noexcept { return pluginRunner && pluginRunner->isFreezePending(); }",
+    "[[nodiscard]] size_t getFrozenTrackCount() const noexcept { return pluginRunner ? pluginRunner->getFrozenTrackCount() : 0u; }",
+    "[[nodiscard]] size_t getFrozenSliceCount() const noexcept { return pluginRunner ? pluginRunner->getFrozenSliceCount() : 0u; }",
+    "[[nodiscard]] size_t getActiveSequencerVoices() const noexcept { return pluginRunner ? pluginRunner->getActiveSequencerVoices() : 0u; }"
   ],
-  "protected_files": [],
+  "protected_files": ["src/unittests/Looper_tests.cpp"],
   "CPP": {
     "CLASS_NAME": "LooperImpl<NumSamplesPerBlock>",
     "INCLUDE_PEDAL": "impl/LooperImpl.h",

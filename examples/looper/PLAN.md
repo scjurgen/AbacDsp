@@ -443,6 +443,57 @@ Input -> [LoopRecorder] --record/overdub--> loop buffer
           Standalone` (`cmake-build-release`) clean-rebuilds with zero warnings outside 3rdparty/JUCE.
           The example's own integration suite (`ClickAlignmentTest`, `BeatLockMatrixTest`,
           `OutputTimingTest`, 47/47) still passes unchanged.
+      - [x] **10g addendum: manual on-demand trigger UI.** Since a full pattern/step-grid editor is
+        still deferred, added a smaller control matching the original "on-demand" idea instead:
+        `SequencerEngine::triggerManual(track, sliceIndex, ...)` fires a slice immediately, bypassing
+        the pattern entirely (reuses the existing voice pool/fade/normalize logic). `LooperImpl` gets
+        `setSeqTrack`/`setSeqSlice`/`setSeqTrigger`; blueprint gets `FRZ` (expose the existing Freeze
+        action to the UI for the first time), `STRK`/`SSLC` (track/slice index dials), `STRIG`
+        (fire), plus dynamic button labels showing frozen track/slice counts and active voice count.
+        Found and fixed a null-`m_library` crash this newly-public entry point exposed (`triggerVoice`
+        previously trusted its only caller to have checked). **Generator bug caught+fixed**:
+        regenerating overwrote the hand-written `Looper_tests.cpp` (47 tests) with a generic stub,
+        since only its `CMakeLists.txt` was in the generator's protected set; recovered via
+        `git checkout`, fixed by adding `src/unittests/Looper_tests.cpp` to the blueprint's own
+        `protected_files`. Verified: 3 new `SequencerEngine` tests, `explore/explore.cpp` end-to-end
+        (freeze then manual-trigger reaches 1 active voice), full `ctest` (20/20 targets) and the
+        example's integration suite (47/47) green, `Looper_Standalone` clean build.
+      - [x] **10g addendum 2: freeze auto-populates an exact reconstruction, replacing the loop.**
+        User clarified the actual goal after the manual-trigger UI: not interactive step-recording,
+        but automatic, sample-accurate reproduction of the original recording from the frozen
+        slices, which then replaces the base loop's own playback entirely. `SequencePattern` is now
+        built with `stepsPerBeat = samplesPerBeat` (one step = one sample) instead of a fixed
+        16th-note grid, so each slice's own `startFrame` is directly a valid, exact step position -
+        no re-quantizing. `populatePatternFromTrack()` adds one event per slice at that position,
+        with `gain = slice.peak` (cancels `SequencerEngine`'s own peak-normalize, so the original
+        relative dynamics between slices survive instead of being flattened to unity). Once
+        `m_pattern` has events, `processBlock` mutes the loop's own `recorderOut` contribution
+        (`loopGain = 0` when `eventCount() > 0`) so the sequencer's reconstruction is the actual
+        playback path; `clearAll()` clears `m_pattern` (not `m_sliceLibrary`, per the locked
+        "library persists independently of Clear" rule) so a fresh recording after Clear reverts to
+        plain loop playback until the next freeze.
+        **Real bug caught+fixed in `SequencerEngine`:** `checkTriggers`' per-sample loop scanned all
+        `stepsPerBeat` candidates - fine at a coarse 4-16 step musical grid, catastrophic
+        (`O(samplesPerBeat)` per sample) once steps became sample-accurate. Replaced with an O(1)
+        direct solve-and-verify (`stepInBeat = beatSamplePos*stepsPerBeat/samplesPerBeat`, checked by
+        reversing the division), unchanged behavior at coarse grids, correct and fast at any
+        resolution. New test drives a `samplesPerBeat`-wide pattern and confirms exact-sample firing.
+        A second freeze also now re-primes the engine (`setPattern()` again after rebuilding
+        `m_pattern`, since reassigning its *contents* doesn't reset the engine's own cached bar
+        index).
+        **Real bug caught+fixed in `LooperImpl`:** every `m_seq.reset()` resync (both this feature's
+        and the already-committed Stop/Play fix) creates an artificial `beatStart` on the very next
+        sample, firing a spurious extra metronome click. Fixed with a one-shot
+        `m_suppressNextClick` flag set alongside every reset, consumed (and cleared) by the next
+        `beatStart` regardless of which resync caused it.
+        Verified via a scripted `explore/explore.cpp` comparison: bucket-peak profile of the raw
+        loop before freezing vs. the sequencer's output over one full loop cycle after freezing are
+        now bit-for-bit identical (`0.60 0.00 ... 0.60 0.00 ...` both times); tracked down an earlier
+        apparent mismatch (reconstructed peaks reading higher than the original) entirely to click
+        bleed (the spurious reset-click, now fixed, plus ordinary decay tails from real beats during
+        recording) rather than any reconstruction inaccuracy - confirmed by silencing the click and
+        re-running, which produced the exact match. Full `ctest` (20/20 targets) and the example's
+        integration suite (47/47) still green, `Looper_Standalone` clean rebuild, zero new warnings.
 
 ## Parameters (all CC-mappable)
 

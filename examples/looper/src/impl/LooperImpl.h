@@ -51,9 +51,10 @@ class LooperImpl final : public EffectBase
   public:
     static constexpr size_t kBeatsPerBar = 4;
     static constexpr size_t kWaveformPoints = 512;
-    // Phase 10g: the on-demand sequencer's step grid (16ths) and the slice
-    // library's total pool size (shared across every frozen track).
-    static constexpr size_t kSequencerStepsPerBeat = 4;
+    // Onset-detection snap grid (16ths) used when slicing a frozen loop; the
+    // pattern itself is sample-accurate (see rebuildPatternForCurrentLoop()),
+    // not on this grid. Also the slice library's total pool size.
+    static constexpr size_t kOnsetSnapStepsPerBeat = 4;
     static constexpr float kSliceLibrarySeconds = 120.f;
 
     explicit LooperImpl(const float sampleRate)
@@ -63,7 +64,7 @@ class LooperImpl final : public EffectBase
         , m_click(sampleRate)
         , m_sliceLibrary(static_cast<size_t>(sampleRate * kSliceLibrarySeconds))
         , m_sequencer(sampleRate)
-        , m_pattern(1, kBeatsPerBar, kSequencerStepsPerBeat)
+        , m_pattern(1, kBeatsPerBar, m_seq.samplesPerBeat())
     {
         m_seq.setBeatsPerBar(kBeatsPerBar);
         m_seq.setBpm(m_appliedBpm);
@@ -177,13 +178,29 @@ class LooperImpl final : public EffectBase
             m_clearPulse.store(true, std::memory_order_relaxed);
         }
     }
-    // Manual "freeze": slices the current loop into a new SliceLibrary track
-    // (Phase 10g). Not consumed by a sequencer pattern UI yet; see PLAN.md.
+    // Manual "freeze": slices the current loop into a new SliceLibrary track.
     void setFreeze(const bool value) noexcept
     {
         if (value)
         {
             m_freezePulse.store(true, std::memory_order_relaxed);
+        }
+    }
+    // Selects which frozen (track, slice) setSeqTrigger fires; clamped at trigger time.
+    void setSeqTrack(const float value) noexcept
+    {
+        m_seqTrack.store(value, std::memory_order_relaxed);
+    }
+    void setSeqSlice(const float value) noexcept
+    {
+        m_seqSlice.store(value, std::memory_order_relaxed);
+    }
+    // On-demand playback of the selected frozen slice, bypassing the pattern.
+    void setSeqTrigger(const bool value) noexcept
+    {
+        if (value)
+        {
+            m_seqTriggerPulse.store(true, std::memory_order_relaxed);
         }
     }
 
@@ -411,7 +428,8 @@ class LooperImpl final : public EffectBase
         renderClickAndSequencer(click, seqOut);
 
         // Dry input, loop, and sequencer (silent until m_pattern has events) all sum here.
-        const float loopGain = m_loopGain;
+        // Once frozen, the sequencer replaces the loop's own playback.
+        const float loopGain = (m_pattern.eventCount() > 0) ? 0.f : m_loopGain;
         for (size_t i = 0; i < BlockSize; ++i)
         {
             const float loopL = recorderOut(i, 0) * loopGain;
@@ -490,6 +508,14 @@ class LooperImpl final : public EffectBase
         const bool playReq = m_playPulse.exchange(false, std::memory_order_relaxed);
         const bool overdubReq = m_overdubPulse.exchange(false, std::memory_order_relaxed);
         const bool freezeReq = m_freezePulse.exchange(false, std::memory_order_relaxed);
+        const bool seqTriggerReq = m_seqTriggerPulse.exchange(false, std::memory_order_relaxed);
+
+        // Manual playback of an already-frozen slice doesn't touch the
+        // recorder's own transport state, so it's exempt from the guard below.
+        if (seqTriggerReq)
+        {
+            triggerFrozenSlice();
+        }
 
         // A beat-locked stop or a freeze analysis is waiting on its own async
         // completion; drop pulses rather than race a conflicting action against it.
@@ -526,6 +552,7 @@ class LooperImpl final : public EffectBase
         m_pendingStop = false;
         m_beatLockedTake = false;
         m_recorder.clear();
+        m_pattern.clear(); // library persists (locked design); active playback pattern doesn't
     }
 
     void finishRecording()
@@ -566,6 +593,7 @@ class LooperImpl final : public EffectBase
             // stop() rewound the loop to frame 0; resync the free-running clock
             // to match (the other exception to "never reset it", besides host sync).
             m_seq.reset();
+            m_suppressNextClick = true; // the reset creates an artificial beatStart, not a real one
             m_recorder.play();
         }
     }
@@ -589,6 +617,24 @@ class LooperImpl final : public EffectBase
         {
             m_recorder.beginOverdub();
         }
+    }
+
+    // Clamps the dial-selected (track, slice) into range and fires it now.
+    void triggerFrozenSlice()
+    {
+        const size_t trackCount = m_sliceLibrary.trackCount();
+        if (trackCount == 0)
+        {
+            return;
+        }
+        const auto track = std::min(trackCount - 1, static_cast<size_t>(m_seqTrack.load(std::memory_order_relaxed)));
+        const size_t sliceCount = m_sliceLibrary.sliceCountInTrack(track);
+        if (sliceCount == 0)
+        {
+            return;
+        }
+        const auto slice = std::min(sliceCount - 1, static_cast<size_t>(m_seqSlice.load(std::memory_order_relaxed)));
+        m_sequencer.triggerManual(track, slice);
     }
 
     // Refused while the loop isn't stable (recording/overdubbing) or empty;
@@ -621,7 +667,7 @@ class LooperImpl final : public EffectBase
         AbacDsp::Slicer::downmixToMono(loop, loopLen, m_freezeMono);
         const size_t stepFrames = (m_freezeSamplesPerBeat == 0)
                                       ? loopLen
-                                      : std::max<size_t>(1, m_freezeSamplesPerBeat / kSequencerStepsPerBeat);
+                                      : std::max<size_t>(1, m_freezeSamplesPerBeat / kOnsetSnapStepsPerBeat);
         const auto grid = AbacDsp::Slicer::gridBoundaries(loopLen, stepFrames);
         m_freezeResultSlices = AbacDsp::Slicer::adaptiveTransientSlices(
             m_freezeMono, loopLen, AbacDsp::Slicer::AdaptiveParams{}, AbacDsp::Slicer::TransientParams{}, grid);
@@ -639,19 +685,46 @@ class LooperImpl final : public EffectBase
         m_freezePending = false;
         if (!m_freezeResultSlices.empty())
         {
-            m_sliceLibrary.extractTrack(m_recorder.loopView(), m_freezeResultSlices);
+            const size_t track = m_sliceLibrary.extractTrack(m_recorder.loopView(), m_freezeResultSlices);
             rebuildPatternForCurrentLoop();
+            populatePatternFromTrack(track);
+            // Re-prime the engine's own bar index for the new pattern, and
+            // realign the clock to the pattern's origin (frame 0 = downbeat) -
+            // the third deliberate exception to "never reset it", with host
+            // sync and Stop/Play-resume.
+            m_sequencer.setPattern(&m_pattern);
+            m_seq.reset();
+            m_suppressNextClick = true;
         }
     }
 
-    // Pattern length always matches the loop; no events to preserve yet (no UI writes them).
+    // Sample-accurate steps (stepsPerBeat = samplesPerBeat), so every slice's
+    // own startFrame is directly a valid step position: no re-quantizing.
     void rebuildPatternForCurrentLoop()
     {
         const size_t spb = m_seq.samplesPerBeat();
         const size_t loopLen = m_recorder.loopLengthFrames();
         const size_t framesPerBar = spb * kBeatsPerBar;
         const size_t bars = (framesPerBar == 0) ? 1 : std::max<size_t>(1, loopLen / framesPerBar);
-        m_pattern = AbacDsp::SequencePattern(bars, kBeatsPerBar, kSequencerStepsPerBeat);
+        m_pattern = AbacDsp::SequencePattern(bars, kBeatsPerBar, std::max<size_t>(1, spb));
+    }
+
+    // Reconstructs the track's slices at their own original positions, gain
+    // set to each slice's peak (cancels the engine's own peak-normalize) so
+    // this reproduces the original recording exactly, not a normalized mix.
+    void populatePatternFromTrack(const size_t track)
+    {
+        const size_t count = m_sliceLibrary.sliceCountInTrack(track);
+        for (size_t i = 0; i < count; ++i)
+        {
+            const auto& info = m_sliceLibrary.sliceInfo(track, i);
+            AbacDsp::SequenceEvent event{};
+            event.stepPosition = info.startFrame;
+            event.track = track;
+            event.sliceIndex = i;
+            event.gain = info.peak;
+            m_pattern.addEvent(event);
+        }
     }
 
     // Threshold-armed record start (Phase 8b): recording starts immediately,
@@ -781,7 +854,11 @@ class LooperImpl final : public EffectBase
             m_barPos[i] = event.beatIndexInBar * samplesPerBeat + event.beatSamplePos;
             if (active)
             {
-                if (event.beatStart)
+                if (event.beatStart && m_suppressNextClick)
+                {
+                    m_suppressNextClick = false; // an m_seq.reset() resync, not a real downbeat
+                }
+                else if (event.beatStart)
                 {
                     m_click.trigger(event.beatIndexInBar == 0 ? AbacDsp::ClickAccent::Downbeat
                                                               : AbacDsp::ClickAccent::Beat);
@@ -861,6 +938,7 @@ class LooperImpl final : public EffectBase
     int m_appliedDivision{1};
     float m_appliedFadeMs{-1.f};
     bool m_hostSync{false};
+    bool m_suppressNextClick{false}; // set alongside every m_seq.reset() resync
     uint64_t m_lastSyncedUpdateCount{0};
 
     // Phase 8b: beat-locked recording state.
@@ -891,4 +969,9 @@ class LooperImpl final : public EffectBase
     std::mutex m_freezeWaitMutex;                     // guards only the worker's own condvar wait
     std::condition_variable_any m_freezeCv;
     std::jthread m_freezeThread;
+
+    // On-demand manual trigger of a frozen slice (bypasses the pattern).
+    std::atomic<float> m_seqTrack{0.f};
+    std::atomic<float> m_seqSlice{0.f};
+    std::atomic<bool> m_seqTriggerPulse{false};
 };

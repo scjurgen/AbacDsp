@@ -102,6 +102,19 @@ class SequencerEngine
         return m_barIndex;
     }
 
+    // Triggers a slice immediately, bypassing the pattern/beat-grid entirely.
+    void triggerManual(const size_t track, const size_t sliceIndex, const float gain = 1.f,
+                       const float pitchRatio = 1.f, const bool reverse = false) noexcept
+    {
+        SequenceEvent event{};
+        event.track = track;
+        event.sliceIndex = sliceIndex;
+        event.gain = gain;
+        event.pitchRatio = pitchRatio;
+        event.reverse = reverse;
+        triggerVoice(event);
+    }
+
     // Advances the shared beat clock by one sample: triggers any pattern
     // events landing on this sample's step boundary, renders every active
     // voice, and returns the mixed stereo output for this one sample.
@@ -138,18 +151,17 @@ class SequencerEngine
         std::array<Effect, kChannels> effects{};
     };
 
+    // O(1) regardless of stepsPerBeat (which can be as fine as one sample):
+    // solve for the candidate step directly instead of scanning every step.
     void checkTriggers(const BeatSequencer::GridEvent& event, const size_t samplesPerBeat) noexcept
     {
         if (m_pattern != nullptr && m_library != nullptr && samplesPerBeat > 0)
         {
-            const auto stepsPerBeat = m_pattern->stepsPerBeat();
-            for (size_t step = 0; step < stepsPerBeat; ++step)
+            const size_t stepsPerBeat = m_pattern->stepsPerBeat();
+            const size_t stepInBeat = event.beatSamplePos * stepsPerBeat / samplesPerBeat;
+            if (stepInBeat * samplesPerBeat / stepsPerBeat == event.beatSamplePos)
             {
-                if (event.beatSamplePos == step * samplesPerBeat / stepsPerBeat)
-                {
-                    triggerStep(event.beatIndexInBar, step);
-                    break;
-                }
+                triggerStep(event.beatIndexInBar, stepInBeat);
             }
         }
         if (event.barWrapped)
@@ -179,7 +191,7 @@ class SequencerEngine
 
     void triggerVoice(const SequenceEvent& sequenceEvent) noexcept
     {
-        if (sequenceEvent.track >= m_library->trackCount() ||
+        if (m_library == nullptr || sequenceEvent.track >= m_library->trackCount() ||
             sequenceEvent.sliceIndex >= m_library->sliceCountInTrack(sequenceEvent.track))
         {
             return;
