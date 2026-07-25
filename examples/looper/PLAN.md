@@ -131,18 +131,165 @@ Input -> [LoopRecorder] --record/overdub--> loop buffer
         `LooperImpl` -- kept for the future on-demand sequencer.
       - Verified: `dev-explore.sh --example looper` end-to-end, JUCE `Looper_Standalone` builds
         warning-clean.
-- [ ] **8a** Beat-quantized loop length + configurable boundary fade. `LoopRecorder::setSamplesPerBar`
+- [x] **8a** Beat-quantized loop length + configurable boundary fade. `LoopRecorder::setSamplesPerBar`
       -> `setSamplesPerBeat` / `quantizeToBar` -> `quantizeToBeat` (loop length becomes a whole-beat
       multiple, not a whole-bar multiple). New `setFadeFrames(size_t)`; `finalizeLoop()` applies a
       linear fade-in over the first N frames and fade-out over the last N (click-free wrap seam,
-      clamped for short loops). `LooperImpl` gets a fade-ms setter plumbed through.
-- [ ] **8b** Pre/post-roll ring buffer + beat-relative snap on record start/stop. A continuous
-      always-on ring buffer (`fadeFrames / 2`) in `LooperImpl`. Threshold-armed record start/stop snap
-      to the nearest running beat boundary within an eighth-note tolerance: early hits splice the
-      pre-roll onto the loop tail (pickup wraps forward); late hits pad the start with silence up to
-      the boundary. New `BeatSequencer::samplesToNearestBeat()`-style query; new `LoopRecorder`
-      `beginRecord(silentPrefixFrames)` / `stopRecord(tailSplice)` overloads. Both boundaries use the
-      8a fade for click-free splices/pads, not just the loop-wrap seam.
+      clamped for short loops). `LooperImpl` gets a `setFadeMs()` setter (atomic, default 5 ms,
+      applied like the other parameters) plumbed to `m_recorder.setFadeFrames()`; not yet wired to a
+      blueprint dial. Tests: 3 new `LoopRecorderTest` cases (ramp shape, zero-fade no-op, short-loop
+      clamp). Verified: full `ctest` suite green, `dev-explore.sh --example looper`, JUCE
+      `Looper_Standalone` builds warning-clean.
+- [x] **8b** Pre/post-roll capture folded across the loop seam, beat-locked. Replaces the earlier
+      "detect early/late, branch between splice and silence-pad" idea: capture is unconditional and
+      continuous (real audio always, never synthesized silence -- if the musician was quiet there,
+      the captured audio for that stretch is quiet too), and the fold is the same operation on both
+      sides of the seam.
+
+      **Notation:**
+      - `fs` = sample rate, `spb` = samples per beat (`BeatSequencer::samplesPerBeat()`, the clock
+        never resets), `L` = finalized `loopLengthFrames` (whole-beat multiple, from 8a).
+      - `x[n]` = the continuously-captured raw input, indexed by absolute beat-clock sample position
+        (captured independent of recorder state, not just while `Recording`).
+      - `s` = the beat-clock sample position of the tick nearest record-start (loop frame 0). Because
+        `L` is a whole-beat multiple counted from `s`, the tick nearest record-stop is exactly
+        `e = s + L`.
+      - `R = round(spb / 8)`: the fixed pre-/post-roll capture window, one eighth note, captured
+        unconditionally on every start and every stop.
+      - `F = min(fadeFrames, R)`: the 8a boundary-fade window (ms -> frames via `setFadeMs`),
+        clamped so the taper never exceeds the roll window.
+
+      **Base take** (unchanged): `y[k] = x[s + k]` for `k = 0 .. L-1`.
+
+      **Pre-roll fold onto the tail** (`i = 0` is the far edge, 1/8 beat before `s`; `i = R-1` is
+      adjacent to the beat):
+      ```
+      for i in 0 .. R-1:
+          g = min((i + 1) / F, 1)
+          y[L - R + i] += x[s - R + i] * g
+      ```
+      **Post-roll fold onto the front** (`i = 0` is adjacent to the beat, right after `e`; `i = R-1`
+      is the far edge, 1/8 beat after `e`):
+      ```
+      for i in 0 .. R-1:
+          g = min((R - i) / F, 1)
+          y[i] += x[e + i] * g
+      ```
+      Net effect: the fade sits at the *outer* edge of each roll window (`F` samples, ramping in for
+      the pre-roll / out for the post-roll); the rest of the window plays at 0 dB right up to the
+      beat, so a pickup or trailing note hits full strength at the impact point instead of being
+      faded near it. Both folds are a sum, not a replace, but in the base-take case the destination
+      is otherwise silence so in practice it's just placement.
+
+      **Supersedes 8a's `applyBoundaryFades()` at the wrap seam**: that plain amplitude taper down to
+      ~0 at both physical edges is exactly wrong once real pre-/post-roll content belongs there at
+      full volume. `applyBoundaryFades()` stays only as the fallback when there's no beat reference
+      to fold around (`samplesPerBeat() == 0`, i.e. unquantized free recording).
+
+      **Implementation:** `LooperImpl` needs a continuously-written capture spanning at least
+      `[s - R, s)` before a start and `[e, e + R)` after a stop -- a small always-on buffer, sized
+      for `R` (not the earlier "half the fade window" sizing, which was only ever right for the taper
+      length, not the roll window itself). `LoopRecorder` gains the actual fold-and-sum step, run once
+      at `stopRecord()` after `applyBoundaryFades()`'s replacement logic. Scope: base take only
+      (`beginRecord`/`stopRecord`); `beginOverdub`/`endOverdub` don't redefine loop boundaries so
+      aren't touched.
+
+      **Done, uncommitted.** `BeatSequencer::samplesToNearestBeat()` (+4 tests). `LoopRecorder::
+      stopRecordBeatLocked(loopLength, preRoll, lateGap, rollFrames)` (+3 tests): shifts captured
+      content up by `lateGap` (backfilling from the second half of `preRoll` when the take started a
+      touch late), stashes the post-roll before the shift can clobber it, then applies the pre-/
+      post-roll folds above. `LooperImpl` gains an always-on capture ring (1s, generous), a free-
+      running `m_absPos` (never reset), a pre-roll snapshot taken at record-start, and a
+      pending-start/pending-stop wait pair (`beginBeatAwareRecord`/`commitPendingStart`,
+      `requestStop`/`commitPendingStop`) so real audio is what gets folded, never synthesized
+      silence. Threshold-armed start only (button-press-immediate record stays unquantized, as
+      scoped); stop applies to any beat-locked take's stop regardless of how it started. Outside the
+      1/8-beat tolerance on either end, falls back to the plain 8a finalize. Bug caught during
+      smoke-testing and fixed: `commitPendingStart` must clamp `commitAbs` to `max(absPos, tickAbs)`
+      -- block granularity means the commit can land on the block *containing* the tick, not exactly
+      on it, and using a `commitAbs` before the tick underflows the unsigned `lateGap` subtraction.
+      Verified via a `dev-explore.sh --example looper` scenario (pickup blip before an armed
+      threshold crossing, trailing blip after a stop): resulting loop's peak waveform showed the
+      pickup on the tail and the trailing note on the front, silence in between, matching the design
+      exactly. Full `ctest` suite green (20/20), JUCE `Looper_Standalone` warning-clean.
+
+      **Post-review fix:** the beat clock (`BeatSequencer`/`m_seq`) is the single source of truth for
+      timing, full stop -- nothing in `LooperImpl` may ever reset or reposition it (host sync excepted:
+      `syncToPpq` keeps it aligned to the host transport, which is the source of truth in that mode).
+      Removed every `m_seq.reset()` call: the out-of-tolerance record-start fallback, the plain
+      immediate record-button start, play-start, and the post-finalize re-align originally added at
+      beat-locked stop. Previously, missing the eighth-note tolerance (easy to do -- it's a tight
+      window) silently fell back to a path that reset the clock, which read as "the beat position
+      shifts when threshold is reached." Now every transport action locks onto wherever the clock
+      already is instead of moving it. Re-verified: full `ctest` green, `dev-explore.sh --example
+      looper` scenario unchanged (it never depended on the resets).
+
+      **Post-review redesign:** the pending-start wait was itself wrong -- "we start recording when
+      the threshold is reached" means capture must never be delayed, but the early-crossing case
+      (tick still ahead) waited up to an eighth note before calling `beginRecord()`. Recording now
+      always starts immediately at the trigger; the correction for an early crossing happens by
+      *relocating* the redundant pre-tick frames onto the tail afterward, not by delaying capture.
+      This take's own frame 0 (`trig`) can now land either side of the tick `s`; `finalizeBeatLocked`
+      takes a signed `startOffset = s - trig` instead of a non-negative `lateGap`:
+      - `startOffset > 0` (early: tick still ahead when capture started): loop frame `k` = capture
+        frame `k+startOffset` (shift down, forward iteration). The redundant frames
+        `[0, startOffset)` this take already captured are stashed (`m_frontScratch`, a new
+        preallocated buffer alongside `m_postRollScratch`) before the shift overwrites them, then
+        folded onto the tail alongside whatever the ring-buffer `preRoll` snapshot covers for the
+        rest of the fixed roll window.
+      - `startOffset < 0` (late, unchanged from before): backfill from `preRoll`, shift up.
+
+      `preRoll` itself is no longer a fixed `2*rollFrames` snapshot taken after a wait -- it's
+      `[s-rollFrames, trig)` (length `rollFrames-startOffset`, 0 to `2*rollFrames`), snapshotted
+      *immediately* at record-start (the ring buffer's history is bounded and won't still hold it
+      later). `LooperImpl` drops `m_pendingStart`/`commitPendingStart`/`commitBeatLockedStartAt`
+      entirely; `beginBeatAwareRecord()` is now a single straight-line function. The stop side is
+      unchanged (post-roll genuinely requires waiting for real audio that hasn't happened yet, so
+      `m_pendingStop` stays). New `LoopRecorderTest` case for the early-relocate path (+1, 4 total for
+      `stopRecordBeatLocked`). Re-verified: full `ctest` green, JUCE build warning-clean,
+      `dev-explore.sh` scenario shows recording starting immediately on the trigger block instead of
+      after the ~1/8-beat wait, same correct fold result (headPeak/tailPeak both 0.8, midPeak 0.0).
+
+      **Integration test, wired into `ctest`:** `examples/looper/src/unittests/Looper_tests.cpp`
+      (a pre-existing, never-wired-up file -- see below) now has a 3x3 `BeatLockMatrixTest` covering
+      start timing x stop timing (each before/on/after the tick), driving `LooperImpl::processBlock`
+      directly with a precisely-positioned "doublet" (-1.0, +1.0) as the threshold-crossing signal and
+      scanning the raw finalized loop for it. Asserts two things per case: `loopLength` is always the
+      same exact beat-multiple regardless of stop-request timing (the invariant that stop timing,
+      within tolerance, must never affect what's captured), and the doublet lands at the frame its
+      start category predicts (`loopLength-N` early, `0` on-time, `N` late). All 9 pass. New
+      `LooperImpl` accessors for this: `rawLoopSample()`, `rawLoopLengthFrames()` (thin pass-throughs
+      to `LoopRecorder`, not used by the UI).
+
+      **Output-stream timing test added** (`OutputTimingTest`, still isolated -- `LooperImpl` only,
+      no JUCE/host layer): real 48 kHz, 60 BPM (1 beat = 1 second exactly), records 1/2/3/4 beats with
+      the signal before/on/after the start tick, then captures the actual *output stream* (not the
+      stored buffer) over 4 full loop repeats with silent input, scanning for the doublet on every
+      repeat. Asserts the first occurrence lands at the predicted frame (per the same before/on/after
+      formula as `BeatLockMatrixTest`) AND that every subsequent repeat is exactly one loop length
+      later than the last -- zero drift across repeats. All 12 cases (4 beat-counts x 3 start timings)
+      pass. Together with `BeatLockMatrixTest`, 21 cases total confirm the algorithm is correct in
+      isolation, including the produced audio stream over multiple cycles, not just internal state.
+
+      Build wiring fixed along the way: `examples/looper/src/unittests/CMakeLists.txt` already existed
+      (hardcoded into the generator's `protected_files` set -- meant to be hand-maintained, never
+      auto-regenerated) but its parent `examples/looper/CMakeLists.txt` never got the matching
+      `add_subdirectory(src/unittests)` block, and the unittests CMakeLists still had stale
+      standalone-mode include paths (`3rdparty/AbacDsp/src/includes`) instead of this repo's actual
+      localexample layout (`../../src/includes`). Fixed both; the new `PluginTests` target builds via
+      `BUILD_FULL_PROJECT=ON` (`cmake-build-release`) and is discovered by `ctest` via
+      `gtest_discover_tests` (note: after changing test names, delete the stale
+      `PluginTests[1]_tests.cmake`/`_include.cmake` and reconfigure -- `gtest_discover_tests`'s cache
+      can otherwise keep a stale display name even though the actual `--gtest_filter` is correct).
+      Not reachable from `dev-test.sh` (that path is `BUILD_FULL_PROJECT=OFF`); run via
+      `ctest --test-dir cmake-build-release -R BeatLockMatrixTest`.
+
+      Target renamed `PluginTests` -> `LooperPluginTests`: the generator's `unittests/CMakeLists.txt`
+      template hardcodes the target name literally as `PluginTests` for *every* example (confirmed:
+      identical in all of them), which is a landmine the moment two examples' unittests both get wired
+      up. Not the compile failure itself (both `cmake-build-release` and the user's own
+      `cmake-build-debug` built and ran it fine once reconfigured), but clearly the source of "can't
+      find/compile the test" confusion, so fixed regardless.
 - [ ] **9** Future, each standalone (remaining original TODO bullets, renumbered):
       - [ ] free recording (no BPM), extract the actual BPM when recording stops
         (`Analysis/TempoEstimator.h`)

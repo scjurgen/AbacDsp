@@ -215,6 +215,7 @@ constexpr float kRealBpm = 60.f;
 constexpr size_t kRealSamplesPerBeat = 48000; // kRealSampleRate*60/kRealBpm
 constexpr size_t kRealRoll = kRealSamplesPerBeat / 8;
 constexpr size_t kRealStartOffset = 800; // 50*16, < kRealRoll, block-aligned
+constexpr size_t kRealStopOffset = 1600; // 100*16, < kRealRoll, block-aligned
 
 // Runs `frames` samples of silence, appending the left-channel output to `out`.
 void captureOutput(Looper& looper, const size_t frames, std::vector<float>& out)
@@ -229,6 +230,20 @@ void captureOutput(Looper& looper, const size_t frames, std::vector<float>& out)
         {
             out.push_back(buf(i, 0));
         }
+    }
+}
+
+// Runs blocks (discarding output) until the take finalizes. The commit block
+// itself still outputs silence (the recorder was in Recording state for its
+// own whole processing); capturing starts on the next block so the first
+// captured sample is genuinely the first Playing-state one, with zero slop.
+void runUntilPlaying(Looper& looper)
+{
+    Buffer in{};
+    Buffer out{};
+    while (!looper.isPlaying())
+    {
+        looper.processBlock(in, out);
     }
 }
 
@@ -253,21 +268,23 @@ std::vector<size_t> findAllDoublets(const std::vector<float>& stream)
 }
 
 // Named (not inline-lambda), same reason as beatLockTestName above.
-std::string outputTimingTestName(const ::testing::TestParamInfo<std::tuple<size_t, Timing>>& info)
+std::string outputTimingTestName(const ::testing::TestParamInfo<std::tuple<size_t, Timing, Timing>>& info)
 {
     const size_t beats = std::get<0>(info.param);
     const Timing startTiming = std::get<1>(info.param);
-    return std::string("Beats") + std::to_string(beats) + "_Start" + timingName(startTiming);
+    const Timing stopTiming = std::get<2>(info.param);
+    return std::string("Beats") + std::to_string(beats) + "_Start" + timingName(startTiming) + "_Stop" +
+           timingName(stopTiming);
 }
 }
 
-class OutputTimingTest : public ::testing::TestWithParam<std::tuple<size_t, Timing>>
+class OutputTimingTest : public ::testing::TestWithParam<std::tuple<size_t, Timing, Timing>>
 {
 };
 
 TEST_P(OutputTimingTest, SignalReappearsExactlyOneLoopLengthApartEveryRepeat)
 {
-    const auto [beats, startTiming] = GetParam();
+    const auto [beats, startTiming, stopTiming] = GetParam();
     const size_t expectedLoopLength = kRealSamplesPerBeat * beats;
 
     Looper looper(kRealSampleRate);
@@ -290,17 +307,25 @@ TEST_P(OutputTimingTest, SignalReappearsExactlyOneLoopLengthApartEveryRepeat)
     runDoubletBlock(looper); // the "signal": crosses threshold, recording starts immediately
     ASSERT_TRUE(looper.isRecording());
 
+    // Stop-request timing (before/on/after the tick, within tolerance) never
+    // changes the outcome -- it still beat-locks to the same tick, per
+    // BeatLockMatrixTest's invariant -- so this is pure robustness coverage.
     const size_t eTarget = sTarget + expectedLoopLength;
-    const size_t pos = trigTarget + kBlock;
-    ASSERT_GT(eTarget, pos) << "not enough beats for the offset to fit";
-    runSilence(looper, eTarget - pos); // silence for the rest of the take, stop exactly on the tick
+    const long stopShift = (stopTiming == Timing::Before)  ? -static_cast<long>(kRealStopOffset)
+                           : (stopTiming == Timing::After) ? static_cast<long>(kRealStopOffset)
+                                                           : 0;
+    const auto stopRequestTarget = static_cast<size_t>(static_cast<long>(eTarget) + stopShift);
 
-    looper.setRecord(true); // request stop, on-time
+    const size_t pos = trigTarget + kBlock;
+    ASSERT_GT(stopRequestTarget, pos) << "not enough beats for the offset to fit";
+    runSilence(looper, stopRequestTarget - pos);
+
+    looper.setRecord(true); // request stop
     runSilence(looper, kBlock);
-    const size_t nowAbs = eTarget + kBlock;
-    const size_t finalizeAbs = eTarget + kRealRoll + kBlock;
-    ASSERT_GT(finalizeAbs, nowAbs);
-    runSilence(looper, finalizeAbs - nowAbs);
+
+    // Zero-slop wait: capture starts exactly on the first Playing-state block,
+    // whatever block that turns out to be for this stop-timing sub-case.
+    runUntilPlaying(looper);
     ASSERT_TRUE(looper.isPlaying());
     ASSERT_EQ(looper.rawLoopLengthFrames(), expectedLoopLength) << "beats=" << beats;
 
@@ -311,18 +336,28 @@ TEST_P(OutputTimingTest, SignalReappearsExactlyOneLoopLengthApartEveryRepeat)
 
     const std::vector<size_t> hits = findAllDoublets(stream);
     ASSERT_EQ(hits.size(), 4u) << "expected exactly one doublet per loop repeat, beats=" << beats
-                               << " start=" << timingName(startTiming);
+                               << " start=" << timingName(startTiming) << " stop=" << timingName(stopTiming);
 
-    size_t expectedFirst = 0;
+    // The doublet's position within the loop buffer: purely a function of
+    // start timing (see BeatLockMatrixTest), unaffected by the catch-up below.
+    size_t loopFrame = 0;
     if (startTiming == Timing::Before)
     {
-        expectedFirst = expectedLoopLength - kRealStartOffset;
+        loopFrame = expectedLoopLength - kRealStartOffset;
     }
     else if (startTiming == Timing::After)
     {
-        expectedFirst = kRealStartOffset;
+        loopFrame = kRealStartOffset;
     }
-    EXPECT_EQ(hits[0], expectedFirst) << "beats=" << beats << " start=" << timingName(startTiming);
+
+    // Playback resumes catchUp frames into the loop, not at frame 0 (see
+    // LoopRecorder::finalizeBeatLocked): the commit only fires one block after
+    // the tick+roll target. Fixed here regardless of beats/timing, since both
+    // the tick and rollFrames are exact multiples of the block size.
+    constexpr size_t catchUp = (kRealRoll + kBlock) % kRealSamplesPerBeat;
+    const size_t expectedFirst = (loopFrame + expectedLoopLength - catchUp) % expectedLoopLength;
+    EXPECT_EQ(hits[0], expectedFirst) << "beats=" << beats << " start=" << timingName(startTiming)
+                                      << " stop=" << timingName(stopTiming);
 
     // The real point of this test: every repeat lands exactly one loop length
     // later than the previous one -- in seconds, exactly `beats` seconds later
@@ -330,12 +365,14 @@ TEST_P(OutputTimingTest, SignalReappearsExactlyOneLoopLengthApartEveryRepeat)
     for (size_t k = 1; k < hits.size(); ++k)
     {
         EXPECT_EQ(hits[k] - hits[k - 1], expectedLoopLength)
-            << "repeat " << k << " drifted, beats=" << beats << " start=" << timingName(startTiming);
+            << "repeat " << k << " drifted, beats=" << beats << " start=" << timingName(startTiming)
+            << " stop=" << timingName(stopTiming);
     }
 }
 
-INSTANTIATE_TEST_SUITE_P(BeatsXStart, OutputTimingTest,
+INSTANTIATE_TEST_SUITE_P(BeatsXStartXStop, OutputTimingTest,
                          ::testing::Combine(::testing::Values(1u, 2u, 3u, 4u),
+                                            ::testing::Values(Timing::Before, Timing::On, Timing::After),
                                             ::testing::Values(Timing::Before, Timing::On, Timing::After)),
                          outputTimingTestName);
 

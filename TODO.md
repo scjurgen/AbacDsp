@@ -1,5 +1,11 @@
 # TODO
 
+## looper UX
+
+- save loops as presets
+- refactor switches and visualisations (red recording mode )
+
+
 ## Looper with Sample Sequencer
 
 The current idea to slice in any case is not a good concept.
