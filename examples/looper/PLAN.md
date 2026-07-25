@@ -358,21 +358,45 @@ Input -> [LoopRecorder] --record/overdub--> loop buffer
         layered (simultaneous) events at the same step. Pure data + edit operations, independently
         testable without audio. 13 tests in `test/Sampler/SequencePattern_test.cpp`. Verified:
         `SamplerTests` and full suite (20/20 targets) green, no warnings.
-      - [ ] **10c** `Sampler/SequencerEngine.h`: polyphonic voice pool (same shape as `SlicePlayer`'s:
+      - [x] **10c** `Sampler/SequencerEngine.h`: polyphonic voice pool (same shape as `SlicePlayer`'s:
         fixed array, oldest-voice steal), driven by the same per-sample `GridEvent` stream
         `LooperImpl` already computes from `m_seq` (not a separate clock, so it can never drift from
         the loop or the click). Each voice reads its slice via fractional position (hermite
-        interpolation) with the read increment set by `pitchRatio`, direction negative when
-        `reverse`; reuses `SlicePlayer`'s edge-fade approach for click-free starts/stops/steals.
-      - [ ] **10d/10e (deferred, placeholders only)** Real `Dynamics/Compressor.h` and a distortion/
-        waveshaper header are NOT built in this phase; the user has existing library code for these
-        to drop in later. Stand in with a trivial per-voice `PassthroughEffect` (identity, no-op)
-        satisfying whatever effect concept/interface `SequencerEngine` defines, so the per-voice
-        insert slot exists and is exercised by tests now, without committing to a real DSP
-        implementation or folder layout ahead of time.
-      - [ ] **10f** Wire the per-voice insert slot (placeholder effects for now, swappable for real
-        ones later) into `SequencerEngine`; apply `SequenceEvent.gain` and `SliceLibrary`'s stored
-        normalize metadata at trigger time.
+        interpolation, `hermite43x`) with the read increment set by `pitchRatio`, direction negative
+        when `reverse`; reuses `SlicePlayer`'s edge-fade approach for click-free starts/stops/steals.
+        Single per-sample entry point `advanceSample(GridEvent, samplesPerBeat) -> {L, R}`: computes
+        step boundaries from the pattern's `stepsPerBeat` against the live `samplesPerBeat` (same
+        technique `BeatSequencer` uses for its own subdivision positions), tracks a `barIndex` modulo
+        the pattern's `lengthBars` advanced on `GridEvent::barWrapped`, and scans `pattern.events()`
+        directly (not the allocating `eventIndicesAtStep()` helper, which is fine for tests/tools but
+        not the audio thread) to stay allocation-free. Scope intentionally narrow, matching this
+        bullet as written: no `SequenceEvent.gain`, `randomizeSlice`, `timingOffsetFrames` or
+        `humanizeAmountFrames` yet (`gain` and a per-voice effect slot are explicitly 10f's job per
+        the plan below; the others aren't mentioned by 10c and are left for a later refinement pass).
+        9 tests in `test/Sampler/SequencerEngine_test.cpp` (silence without pattern/library, exact
+        step-boundary triggering, plateau content, reverse playback, pitch-shortened duration,
+        out-of-range track/slice ignored, voice-steal cap, multi-bar pattern only firing on its own
+        bar, reset). Verified: `SamplerTests` (84/84) and full suite (20/20 targets) green, no
+        warnings.
+      - [x] **10d/10e/10f (folded into one pass)** `SequencerEngine` is now a class template on an
+        `Effect` type constrained by a `VoiceEffect` concept (`process(float) -> float`,
+        `reset() -> void`), defaulted to a new `PassthroughEffect` (identity, no-op) so existing
+        callers don't need to name the template argument. Each `Voice` owns one `Effect` instance
+        *per channel* (not one shared across L/R) so a future stateful effect (e.g. a compressor)
+        never leaks state between channels; `reset()` is called on every (re)trigger, including
+        steals. At trigger time, voice level is `SequenceEvent::gain` scaled by
+        `1/SliceInfo::peak` (the slice's stored peak normalizes it to unity before the event's own
+        gain applies; guarded against a near-zero peak). Real `Dynamics/Compressor.h` and a
+        distortion/waveshaper are still NOT built here - the user has existing library code to drop
+        in later via the template parameter; `randomizeSlice`/`timingOffsetFrames`/
+        `humanizeAmountFrames` remain unconsumed as noted in 10c. 3 new tests added to
+        `test/Sampler/SequencerEngine_test.cpp` (peak-normalize scales to unity, event gain scales
+        relative to normalized level, a test-only `DoublingEffect` proves the per-channel insert
+        slot is actually invoked, not just accepted as an unused template parameter); 2 existing
+        tests (`PlateauMatchesSliceContent`, `ReverseReadsSliceBackwards`) updated to compensate
+        the newly-automatic peak-normalize via an explicit `gain` so they can still assert raw
+        slice content. Verified: `SamplerTests` (87/87) and full suite (20/20 targets) green, no
+        warnings.
       - [ ] **10g** Integrate into `LooperImpl`: the manual freeze action, hooking the engine's output
         into `processBlock` alongside the existing loop playback, and minimal accessors for a later
         UI (pattern/active-voice state) without building that UI now.
