@@ -4,18 +4,25 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <mutex>
 #include <span>
+#include <thread>
 #include <vector>
 
+#include "Analysis/Slicer.h"
 #include "Analysis/Spectrogram.h"
 #include "Audio/AudioBuffer.h"
 #include "EffectBase.h"
 #include "Generators/BeatSequencer.h"
 #include "Generators/ClickGenerator.h"
 #include "Sampler/LoopRecorder.h"
+#include "Sampler/SequencePattern.h"
+#include "Sampler/SequencerEngine.h"
+#include "Sampler/SliceLibrary.h"
 
 // Traditional-style slicing looper: captures audio, quantizes the loop to whole
 // bars, and plays it back locked to a metronome click. The four transport
@@ -44,12 +51,19 @@ class LooperImpl final : public EffectBase
   public:
     static constexpr size_t kBeatsPerBar = 4;
     static constexpr size_t kWaveformPoints = 512;
+    // Phase 10g: the on-demand sequencer's step grid (16ths) and the slice
+    // library's total pool size (shared across every frozen track).
+    static constexpr size_t kSequencerStepsPerBeat = 4;
+    static constexpr float kSliceLibrarySeconds = 120.f;
 
     explicit LooperImpl(const float sampleRate)
         : EffectBase(sampleRate)
         , m_recorder(sampleRate)
         , m_seq(sampleRate)
         , m_click(sampleRate)
+        , m_sliceLibrary(static_cast<size_t>(sampleRate * kSliceLibrarySeconds))
+        , m_sequencer(sampleRate)
+        , m_pattern(1, kBeatsPerBar, kSequencerStepsPerBeat)
     {
         m_seq.setBeatsPerBar(kBeatsPerBar);
         m_seq.setBpm(m_appliedBpm);
@@ -67,6 +81,28 @@ class LooperImpl final : public EffectBase
         m_ringCapacityFrames = std::max<size_t>(BlockSize, static_cast<size_t>(sampleRate));
         m_captureRing.assign(m_ringCapacityFrames * 2, 0.f);
         m_startPreRoll.assign(m_ringCapacityFrames * 2, 0.f); // only 2*rollFrames actually used
+
+        m_sequencer.setLibrary(&m_sliceLibrary);
+        m_sequencer.setPattern(&m_pattern);
+
+        // Started last, once every member it touches exists.
+        m_freezeThread = std::jthread(
+            [this](const std::stop_token& stopToken)
+            {
+                uint64_t lastHandled = 0;
+                while (!stopToken.stop_requested())
+                {
+                    std::unique_lock lock(m_freezeWaitMutex);
+                    m_freezeCv.wait(lock, stopToken, [this, lastHandled]
+                                    { return m_freezeRequestGen.load(std::memory_order_acquire) != lastHandled; });
+                    if (stopToken.stop_requested())
+                    {
+                        return;
+                    }
+                    lastHandled = m_freezeRequestGen.load(std::memory_order_acquire);
+                    runFreezeAnalysis(lastHandled);
+                }
+            });
     }
 
     // Parameter setters (message thread): store into atomics, apply on the audio thread.
@@ -139,6 +175,15 @@ class LooperImpl final : public EffectBase
         if (value)
         {
             m_clearPulse.store(true, std::memory_order_relaxed);
+        }
+    }
+    // Manual "freeze": slices the current loop into a new SliceLibrary track
+    // (Phase 10g). Not consumed by a sequencer pattern UI yet; see PLAN.md.
+    void setFreeze(const bool value) noexcept
+    {
+        if (value)
+        {
+            m_freezePulse.store(true, std::memory_order_relaxed);
         }
     }
 
@@ -252,11 +297,28 @@ class LooperImpl final : public EffectBase
         return (len == 0) ? 0.f : static_cast<float>(m_recorder.playPositionFrames()) / static_cast<float>(len);
     }
 
-    // No slice table while this looper is plain; kept as a stable no-op for the
-    // display widgets until the on-demand slice sequencer is designed.
+    // About the live loop's own display, not the frozen tracks below; no-op for now.
     [[nodiscard]] std::vector<float> getSliceBoundaries() const
     {
         return {};
+    }
+
+    // Phase 10g minimal accessors, for a future sequencer UI (no editing yet).
+    [[nodiscard]] bool isFreezePending() const noexcept
+    {
+        return m_freezePending;
+    }
+    [[nodiscard]] size_t getFrozenTrackCount() const noexcept
+    {
+        return m_sliceLibrary.trackCount();
+    }
+    [[nodiscard]] size_t getFrozenSliceCount() const noexcept
+    {
+        return m_sliceLibrary.sliceCount();
+    }
+    [[nodiscard]] size_t getActiveSequencerVoices() const noexcept
+    {
+        return m_sequencer.activeVoiceCount();
     }
 
     // Exact per-sample loop content and length (mirror LoopRecorder's own
@@ -340,21 +402,22 @@ class LooperImpl final : public EffectBase
         {
             commitPendingStop();
         }
+        checkFreezeCompletion();
 
         m_visualWindowSize = std::min(getSamplesPerBar(), m_visualWave.size());
 
         std::array<float, BlockSize> click{};
-        renderClick(click);
+        AbacDsp::AudioBuffer<2, BlockSize> seqOut{};
+        renderClickAndSequencer(click, seqOut);
 
-        // Dry input is always monitored; the loop (record/play/overdub, traditional
-        // single-buffer looper) plays at its own volume on top.
+        // Dry input, loop, and sequencer (silent until m_pattern has events) all sum here.
         const float loopGain = m_loopGain;
         for (size_t i = 0; i < BlockSize; ++i)
         {
             const float loopL = recorderOut(i, 0) * loopGain;
             const float loopR = recorderOut(i, 1) * loopGain;
-            out(i, 0) = in(i, 0) + loopL + click[i];
-            out(i, 1) = in(i, 1) + loopR + click[i];
+            out(i, 0) = in(i, 0) + loopL + click[i] + seqOut(i, 0);
+            out(i, 1) = in(i, 1) + loopR + click[i] + seqOut(i, 1);
 
             // Feed the bar display with the dry input only (no loop, no click).
             // A noise gate keeps the ring flat on quiet sections: the signed
@@ -426,11 +489,11 @@ class LooperImpl final : public EffectBase
         const bool recordReq = m_recordPulse.exchange(false, std::memory_order_relaxed);
         const bool playReq = m_playPulse.exchange(false, std::memory_order_relaxed);
         const bool overdubReq = m_overdubPulse.exchange(false, std::memory_order_relaxed);
+        const bool freezeReq = m_freezePulse.exchange(false, std::memory_order_relaxed);
 
-        // A beat-locked stop is waiting on its post-roll (at most ~1/8 beat
-        // away); drop pulses rather than race the fold with a conflicting
-        // action.
-        if (m_pendingStop)
+        // A beat-locked stop or a freeze analysis is waiting on its own async
+        // completion; drop pulses rather than race a conflicting action against it.
+        if (m_pendingStop || m_freezePending)
         {
             return;
         }
@@ -450,6 +513,10 @@ class LooperImpl final : public EffectBase
         if (overdubReq)
         {
             toggleOverdub();
+        }
+        if (freezeReq)
+        {
+            requestFreeze();
         }
     }
 
@@ -496,6 +563,9 @@ class LooperImpl final : public EffectBase
         }
         else if (m_recorder.hasLoop())
         {
+            // stop() rewound the loop to frame 0; resync the free-running clock
+            // to match (the other exception to "never reset it", besides host sync).
+            m_seq.reset();
             m_recorder.play();
         }
     }
@@ -519,6 +589,69 @@ class LooperImpl final : public EffectBase
         {
             m_recorder.beginOverdub();
         }
+    }
+
+    // Refused while the loop isn't stable (recording/overdubbing) or empty;
+    // just snapshots and bumps the request generation, the worker does the rest.
+    void requestFreeze()
+    {
+        if (m_freezePending || isRecording() || isOverdubbing() || m_recorder.loopLengthFrames() == 0)
+        {
+            return;
+        }
+        m_freezeSamplesPerBeat = m_seq.samplesPerBeat();
+        m_freezePendingGen = m_freezeRequestGen.load(std::memory_order_relaxed) + 1;
+        m_freezePending = true;
+        m_freezeRequestGen.store(m_freezePendingGen, std::memory_order_release);
+        m_freezeCv.notify_one();
+    }
+
+    // Runs on m_freezeThread only: Slicer::adaptiveTransientSlices allocates and
+    // runs an STFT, never acceptable on the audio thread.
+    void runFreezeAnalysis(const uint64_t gen)
+    {
+        const auto loop = m_recorder.loopView();
+        const size_t loopLen = m_recorder.loopLengthFrames();
+        if (loopLen == 0)
+        {
+            m_freezeResultSlices.clear();
+            m_freezeDoneGen.store(gen, std::memory_order_release);
+            return;
+        }
+        AbacDsp::Slicer::downmixToMono(loop, loopLen, m_freezeMono);
+        const size_t stepFrames = (m_freezeSamplesPerBeat == 0)
+                                      ? loopLen
+                                      : std::max<size_t>(1, m_freezeSamplesPerBeat / kSequencerStepsPerBeat);
+        const auto grid = AbacDsp::Slicer::gridBoundaries(loopLen, stepFrames);
+        m_freezeResultSlices = AbacDsp::Slicer::adaptiveTransientSlices(
+            m_freezeMono, loopLen, AbacDsp::Slicer::AdaptiveParams{}, AbacDsp::Slicer::TransientParams{}, grid);
+        m_freezeDoneGen.store(gen, std::memory_order_release);
+    }
+
+    // Once the worker's done-generation catches up, extracts here on the audio
+    // thread (allocation-free, see SliceLibrary.h).
+    void checkFreezeCompletion()
+    {
+        if (!m_freezePending || m_freezeDoneGen.load(std::memory_order_acquire) != m_freezePendingGen)
+        {
+            return;
+        }
+        m_freezePending = false;
+        if (!m_freezeResultSlices.empty())
+        {
+            m_sliceLibrary.extractTrack(m_recorder.loopView(), m_freezeResultSlices);
+            rebuildPatternForCurrentLoop();
+        }
+    }
+
+    // Pattern length always matches the loop; no events to preserve yet (no UI writes them).
+    void rebuildPatternForCurrentLoop()
+    {
+        const size_t spb = m_seq.samplesPerBeat();
+        const size_t loopLen = m_recorder.loopLengthFrames();
+        const size_t framesPerBar = spb * kBeatsPerBar;
+        const size_t bars = (framesPerBar == 0) ? 1 : std::max<size_t>(1, loopLen / framesPerBar);
+        m_pattern = AbacDsp::SequencePattern(bars, kBeatsPerBar, kSequencerStepsPerBeat);
     }
 
     // Threshold-armed record start (Phase 8b): recording starts immediately,
@@ -637,13 +770,15 @@ class LooperImpl final : public EffectBase
         return peak;
     }
 
-    void renderClick(std::array<float, BlockSize>& click)
+    // Click and sequencer share one m_seq.advance() call per sample (it mutates position).
+    void renderClickAndSequencer(std::array<float, BlockSize>& click, AbacDsp::AudioBuffer<2, BlockSize>& seqOut)
     {
         const bool active = isRecording() || isPlaying() || m_armed;
+        const size_t samplesPerBeat = m_seq.samplesPerBeat();
         for (size_t i = 0; i < BlockSize; ++i)
         {
             const auto event = m_seq.advance();
-            m_barPos[i] = event.beatIndexInBar * m_seq.samplesPerBeat() + event.beatSamplePos;
+            m_barPos[i] = event.beatIndexInBar * samplesPerBeat + event.beatSamplePos;
             if (active)
             {
                 if (event.beatStart)
@@ -657,6 +792,10 @@ class LooperImpl final : public EffectBase
                 }
             }
             click[i] = active ? m_click.step0() : 0.f;
+
+            const auto seqSample = m_sequencer.advanceSample(event, samplesPerBeat);
+            seqOut(i, 0) = seqSample[0];
+            seqOut(i, 1) = seqSample[1];
         }
     }
 
@@ -684,6 +823,9 @@ class LooperImpl final : public EffectBase
     AbacDsp::BeatSequencer m_seq;
     AbacDsp::ClickGenerator m_click;
     AbacDsp::SimpleSpectrogram m_recordSpectrogram;
+    AbacDsp::SliceLibrary m_sliceLibrary;
+    AbacDsp::SequencerEngine<> m_sequencer;
+    AbacDsp::SequencePattern m_pattern;
 
     std::vector<float> m_visualWave;
     std::vector<float> m_preparedWave;
@@ -736,4 +878,17 @@ class LooperImpl final : public EffectBase
     bool m_pendingStop{false};
     uint64_t m_pendingStopFinalizeAbs{0};
     size_t m_pendingStopLoopLength{0};
+
+    // Phase 10g manual freeze; only the two generation counters are cross-thread.
+    std::atomic<bool> m_freezePulse{false};
+    bool m_freezePending{false};
+    uint64_t m_freezePendingGen{0};
+    size_t m_freezeSamplesPerBeat{0};
+    std::atomic<uint64_t> m_freezeRequestGen{0};
+    std::atomic<uint64_t> m_freezeDoneGen{0};
+    std::vector<float> m_freezeMono;                  // worker-owned scratch
+    std::vector<AbacDsp::Slice> m_freezeResultSlices; // worker writes, audio thread reads once done
+    std::mutex m_freezeWaitMutex;                     // guards only the worker's own condvar wait
+    std::condition_variable_any m_freezeCv;
+    std::jthread m_freezeThread;
 };

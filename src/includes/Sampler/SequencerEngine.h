@@ -4,8 +4,6 @@
 #include <array>
 #include <cmath>
 #include <concepts>
-#include <cstddef>
-#include <cstdint>
 
 #include "Generators/BeatSequencer.h"
 #include "Numbers/Interpolation.h"
@@ -144,7 +142,7 @@ class SequencerEngine
     {
         if (m_pattern != nullptr && m_library != nullptr && samplesPerBeat > 0)
         {
-            const size_t stepsPerBeat = m_pattern->stepsPerBeat();
+            const auto stepsPerBeat = m_pattern->stepsPerBeat();
             for (size_t step = 0; step < stepsPerBeat; ++step)
             {
                 if (event.beatSamplePos == step * samplesPerBeat / stepsPerBeat)
@@ -163,7 +161,7 @@ class SequencerEngine
     void advanceBar() noexcept
     {
         const size_t lengthBars = (m_pattern != nullptr) ? m_pattern->lengthBars() : 0;
-        m_barIndex = (lengthBars > 0) ? (m_barIndex + 1) % lengthBars : 0;
+        m_barIndex = lengthBars > 0 ? (m_barIndex + 1) % lengthBars : 0;
     }
 
     void triggerStep(const size_t beatIndexInBar, const size_t stepInBeat) noexcept
@@ -191,8 +189,8 @@ class SequencerEngine
         {
             return;
         }
-        const float pitchRatio = sequenceEvent.pitchRatio > 0.f ? sequenceEvent.pitchRatio : 1.f;
-        const float normalizeFactor = info.peak > 1e-6f ? 1.f / info.peak : 1.f;
+        const auto pitchRatio = sequenceEvent.pitchRatio > 0.f ? sequenceEvent.pitchRatio : 1.f;
+        const auto normalizeFactor = info.peak > 1e-6f ? 1.f / info.peak : 1.f;
         Voice& voice = allocateVoice();
         voice.active = true;
         voice.reverse = sequenceEvent.reverse;
@@ -235,7 +233,7 @@ class SequencerEngine
 
     void renderVoice(Voice& voice, std::array<float, kChannels>& out) noexcept
     {
-        const float gain = edgeGain(voice) * voice.gain;
+        const auto gain = edgeGain(voice) * voice.gain;
         for (size_t channel = 0; channel < kChannels; ++channel)
         {
             const float sample = readInterpolated(voice, channel) * gain;
@@ -251,7 +249,7 @@ class SequencerEngine
     [[nodiscard]] float readInterpolated(const Voice& voice, const size_t channel) const noexcept
     {
         const auto base = static_cast<long>(std::floor(voice.readPos));
-        const float frac = static_cast<float>(voice.readPos - static_cast<double>(base));
+        const auto frac = static_cast<float>(voice.readPos - static_cast<double>(base));
         const auto lastIndex = static_cast<long>(voice.lengthFrames) - 1;
         const auto clampedFrame = [lastIndex](const long idx) noexcept
         { return static_cast<size_t>(std::clamp(idx, 0L, lastIndex)); };
@@ -266,9 +264,9 @@ class SequencerEngine
 
     [[nodiscard]] static float edgeGain(const Voice& voice) noexcept
     {
-        const float fade = static_cast<float>(voice.effectiveFade);
-        const float fadeIn = static_cast<float>(voice.pos + 1) / fade;
-        const float fadeOut = static_cast<float>(voice.playLen - voice.pos) / fade;
+        const auto fade = static_cast<float>(voice.effectiveFade);
+        const auto fadeIn = static_cast<float>(voice.pos + 1) / fade;
+        const auto fadeOut = static_cast<float>(voice.playLen - voice.pos) / fade;
         return std::clamp(std::min(fadeIn, fadeOut), 0.f, 1.f);
     }
 

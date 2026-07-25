@@ -397,9 +397,52 @@ Input -> [LoopRecorder] --record/overdub--> loop buffer
         the newly-automatic peak-normalize via an explicit `gain` so they can still assert raw
         slice content. Verified: `SamplerTests` (87/87) and full suite (20/20 targets) green, no
         warnings.
-      - [ ] **10g** Integrate into `LooperImpl`: the manual freeze action, hooking the engine's output
-        into `processBlock` alongside the existing loop playback, and minimal accessors for a later
-        UI (pattern/active-voice state) without building that UI now.
+      - [x] **10g** Integrated into `LooperImpl`. New members: `m_sliceLibrary` (120 s pool),
+        `m_sequencer` (`SequencerEngine<>`, pointed at the library and at `m_pattern`), `m_pattern`
+        (placeholder 1-bar `SequencePattern` until the first freeze; no events yet, no UI to add
+        them - see below). A new momentary `setFreeze(bool)` pulse (same pattern as
+        Record/Play/Overdub/Clear) triggers the freeze.
+        - **Threading (locked via AskUserQuestion):** `Slicer::adaptiveTransientSlices` allocates and
+          runs an STFT, so it must not run on the audio thread. `requestFreeze()` (audio thread)
+          only snapshots `samplesPerBeat` and bumps an atomic request generation; a `std::jthread`
+          (`m_freezeThread`, started at the end of the constructor once every other member exists,
+          waiting on `m_freezeCv` via the C++20 `condition_variable_any::wait(lock, stop_token,
+          predicate)` overload so `jthread`'s auto-stop-and-join wakes it immediately) does the real
+          analysis in `runFreezeAnalysis()` (`Slicer::downmixToMono` + `Slicer::gridBoundaries`
+          (16th-note grid, `kSequencerStepsPerBeat`) + `Slicer::adaptiveTransientSlices` snapped to
+          that grid, matching the top-level locked "grid + transient" slicing decision) and
+          publishes via a matching atomic done-generation (release/acquire, no lock the audio thread
+          ever waits on). `checkFreezeCompletion()` (audio thread, called every block) notices the
+          generations match and only then calls `SliceLibrary::extractTrack()` itself, directly on
+          the audio thread - safe and allocation-free because (a) the loop content hasn't changed
+          since the worker read it (freeze is refused while recording/overdubbing, and
+          `handleTransportPulses()` blocks every other transport action while `m_freezePending` is
+          set, mirroring the existing `m_pendingStop` pattern) and (b) `SliceLibrary`'s own vectors
+          are now fully pre-reserved (see the `m_trackStart.reserve()` fix below).
+        - **RT-safety fix found along the way:** `SliceLibrary`'s class comment already documented
+          "allocation-free after construction," but its constructor never reserved `m_trackStart`
+          (a vector growing one entry per track). Fixed by reserving it to `maxSlices` (a track can
+          never have more slices than the whole library), since this phase is the first thing that
+          actually calls `extractTrack()` from real audio-thread-adjacent code.
+        - `renderClick()` renamed to `renderClickAndSequencer()`: both the click and
+          `m_sequencer.advanceSample()` need the exact same per-sample `BeatSequencer::advance()`
+          call (it mutates the clock's position), so they share one per-sample loop rather than
+          calling `advance()` twice.
+        - New minimal accessors (no editing, per the phase's own scope): `isFreezePending()`,
+          `getFrozenTrackCount()`, `getFrozenSliceCount()`, `getActiveSequencerVoices()`.
+        - `rebuildPatternForCurrentLoop()` reconstructs `m_pattern` to the current loop's bar count
+          after a successful freeze (locked design: pattern length always matches the loop). Known
+          gap, acceptable for now: since nothing writes events into `m_pattern` yet, this has none to
+          preserve; once a pattern-editing UI exists, a loop-length change will need to migrate/clip
+          existing events instead of discarding them.
+        - Verified: `explore/explore.cpp` extended with a scripted freeze scenario (record a short
+          loop with two transient blips, freeze, poll after a real `sleep_for` since the worker needs
+          actual wall-clock time) via `dev-explore.sh --example looper` - reaches
+          `frozen tracks=1 slices=2 freezePending=0`, and the pre-existing beat-lock scenario in the
+          same file is bit-for-bit unchanged. Full `ctest` suite (20/20 targets) green. `Looper_
+          Standalone` (`cmake-build-release`) clean-rebuilds with zero warnings outside 3rdparty/JUCE.
+          The example's own integration suite (`ClickAlignmentTest`, `BeatLockMatrixTest`,
+          `OutputTimingTest`, 47/47) still passes unchanged.
 
 ## Parameters (all CC-mappable)
 

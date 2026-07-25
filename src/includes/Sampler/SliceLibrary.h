@@ -41,6 +41,7 @@ class SliceLibrary
         , m_pool(maxFrames * kChannels, 0.f)
     {
         m_slices.reserve(maxSlices);
+        m_trackStart.reserve(maxSlices); // a track can't outnumber the library's own slices
     }
 
     // Drops every track. Explicit action only: the library outlives the base
@@ -172,5 +173,4 @@ class SliceLibrary
     std::vector<size_t> m_trackStart; // m_trackStart[t] = index into m_slices where track t begins
     size_t m_usedFrames{0};
 };
-
 }
