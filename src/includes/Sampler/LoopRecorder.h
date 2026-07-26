@@ -160,6 +160,28 @@ class LoopRecorder
         m_playPos = 0;
     }
 
+    // Replaces the loop with externally supplied audio, bypassing record/finalize.
+    void loadLoop(const std::span<const float> left, const std::span<const float> right,
+                  const size_t samplesPerBeat) noexcept
+    {
+        const size_t frames = std::min({left.size(), right.size(), m_maxFrames});
+        if (frames == 0)
+        {
+            clear();
+            return;
+        }
+        for (size_t frame = 0; frame < frames; ++frame)
+        {
+            m_buffer[frame * kChannels] = left[frame];
+            m_buffer[frame * kChannels + 1] = right[frame];
+        }
+        m_samplesPerBeat = samplesPerBeat;
+        m_recordedFrames = frames;
+        m_loopLengthFrames = frames;
+        m_playPos = 0;
+        m_state = LooperState::Playing;
+    }
+
     void processBlock(const AudioBuffer<kChannels, BlockSize>& in, AudioBuffer<kChannels, BlockSize>& out) noexcept
     {
         switch (m_state)

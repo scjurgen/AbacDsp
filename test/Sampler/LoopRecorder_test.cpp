@@ -585,4 +585,42 @@ TEST(LoopRecorderTest, NoAllocationDuringProcessing)
     EXPECT_EQ(rec.maxFrames(), capacityBefore);
 }
 
+TEST(LoopRecorderTest, LoadLoopEntersPlayingWithGivenContent)
+{
+    Recorder rec{48000.f};
+    std::vector<float> left(32);
+    std::vector<float> right(32);
+    for (size_t f = 0; f < 32; ++f)
+    {
+        left[f] = 1.f + static_cast<float>(f);
+        right[f] = -(1.f + static_cast<float>(f));
+    }
+    rec.loadLoop(left, right, 100);
+    EXPECT_EQ(rec.state(), LooperState::Playing);
+    EXPECT_EQ(rec.loopLengthFrames(), 32u);
+    for (size_t f = 0; f < 32; ++f)
+    {
+        EXPECT_FLOAT_EQ(rec.sample(f, 0), left[f]);
+        EXPECT_FLOAT_EQ(rec.sample(f, 1), right[f]);
+    }
+}
+
+TEST(LoopRecorderTest, LoadLoopTruncatesAtMaxFrames)
+{
+    Recorder rec{48000.f, 0.001f}; // maxFrames() == 48
+    ASSERT_EQ(rec.maxFrames(), 48u);
+    const std::vector<float> left(128, 1.f);
+    const std::vector<float> right(128, -1.f);
+    rec.loadLoop(left, right, 0);
+    EXPECT_EQ(rec.loopLengthFrames(), 48u);
+}
+
+TEST(LoopRecorderTest, LoadLoopWithEmptySpansClears)
+{
+    Recorder rec{48000.f};
+    rec.loadLoop({}, {}, 0);
+    EXPECT_EQ(rec.state(), LooperState::Empty);
+    EXPECT_FALSE(rec.hasLoop());
+}
+
 }

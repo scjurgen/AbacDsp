@@ -968,6 +968,8 @@ def createPackageFromJsonDict(m: dict):
         m["CPP"]["GAUGES"].append("MIDICC")
     if m.get("patches", False):
         m["CPP"]["GAUGES"].append("PRESETBROWSER")
+    if m.get("loops", False):
+        m["CPP"]["GAUGES"].append("LOOPBROWSER")
     if m.get("host_transport", False):
         m["CPP"]["GAUGES"].append("HOSTTRANSPORT")
 

@@ -87,6 +87,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         pluginRunner = std::make_unique<LooperImpl<NumSamplesPerBlock>>(RateNormalizer::kInternalSampleRate);
         pluginRunner->setExportDirectory(getExportDirectory());
+        pluginRunner->setLoopsDirectory(getLoopsDirectory());
 
         fixedRunner = std::make_unique<RateNormalizer>(static_cast<float>(sampleRate),
                                                        [this](const AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& input,
@@ -779,6 +780,14 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner && pluginRunner->isSaveWavePending();
     }
+    [[nodiscard]] bool isLoopSavePending() const noexcept
+    {
+        return pluginRunner && pluginRunner->isLoopSavePending();
+    }
+    [[nodiscard]] bool isLoopLoadPending() const noexcept
+    {
+        return pluginRunner && pluginRunner->isLoopLoadPending();
+    }
     [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
     {
         static const std::vector<size_t> empty{};
@@ -805,6 +814,66 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     [[nodiscard]] juce::String consumeLastSavedWaveFilename() const
     {
         return pluginRunner ? juce::String(pluginRunner->consumeLastSavedFilename()) : juce::String();
+    }
+    static std::string getLoopsDirectory()
+    {
+        auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
+#if JUCE_MAC
+        base = base.getChildFile("Application Support");
+#endif
+        const auto dir = base.getChildFile("AbacDsp").getChildFile("Looper").getChildFile("loops");
+        dir.createDirectory();
+        return dir.getFullPathName().toStdString();
+    }
+    [[nodiscard]] std::vector<juce::String> listLoopNames() const
+    {
+        std::vector<juce::String> result;
+        if (pluginRunner)
+        {
+            for (const auto& n : pluginRunner->listLoopNames())
+            {
+                result.push_back(juce::String(n));
+            }
+        }
+        return result;
+    }
+    void saveLoopAs(const juce::String& name)
+    {
+        if (pluginRunner)
+        {
+            pluginRunner->requestSaveLoopAs(name.toStdString());
+        }
+    }
+    void requestLoadLoop(const juce::String& name)
+    {
+        if (pluginRunner)
+        {
+            pluginRunner->requestLoadLoop(name.toStdString());
+        }
+    }
+    bool deleteLoopNamed(const juce::String& name)
+    {
+        return pluginRunner && pluginRunner->deleteLoopNamed(name.toStdString());
+    }
+    bool renameLoop(const juce::String& oldName, const juce::String& newName)
+    {
+        return pluginRunner && pluginRunner->renameLoopNamed(oldName.toStdString(), newName.toStdString());
+    }
+    [[nodiscard]] juce::String consumeLastSavedLoopName() const
+    {
+        return pluginRunner ? juce::String(pluginRunner->consumeLastSavedLoopName()) : juce::String();
+    }
+    [[nodiscard]] LooperImpl<NumSamplesPerBlock>::LoopLoadOutcome consumeLoopLoadOutcome() const
+    {
+        return pluginRunner ? pluginRunner->consumeLoopLoadOutcome()
+                            : LooperImpl<NumSamplesPerBlock>::LoopLoadOutcome{};
+    }
+    void resolveLoopLoadBpm(const float bpm)
+    {
+        if (pluginRunner)
+        {
+            pluginRunner->resolveLoopLoadBpm(bpm);
+        }
     }
 
 

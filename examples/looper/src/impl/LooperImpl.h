@@ -9,10 +9,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <ctime>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
+#include <nlohmann/json.hpp>
+#include <optional>
 #include <span>
 #include <sstream>
 #include <string>
@@ -29,10 +33,18 @@
 #include "EffectBase.h"
 #include "Generators/BeatSequencer.h"
 #include "Generators/ClickGenerator.h"
+#include "Sampler/LoopFile.h"
 #include "Sampler/LoopRecorder.h"
 #include "Sampler/SequencePattern.h"
 #include "Sampler/SequencerEngine.h"
 #include "Sampler/SliceLibrary.h"
+
+// ADL hooks so LoopFile<nlohmann::json> can (de)serialize AbacDsp::LoopMetadata;
+// kept here (not in core) since the core library must stay JSON-library-free.
+namespace AbacDsp
+{
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(LoopMetadata, version, bpm)
+}
 
 // Traditional-style slicing looper: captures audio, quantizes the loop to whole
 // bars, and plays it back locked to a metronome click. The four transport
@@ -132,6 +144,42 @@ class LooperImpl final : public EffectBase
                     }
                     lastHandled = m_saveRequestGen.load(std::memory_order_acquire);
                     runSaveWave(lastHandled);
+                }
+            });
+
+        m_loopSaveThread = std::jthread(
+            [this](const std::stop_token& stopToken)
+            {
+                uint64_t lastHandled = 0;
+                while (!stopToken.stop_requested())
+                {
+                    std::unique_lock lock(m_loopSaveWaitMutex);
+                    m_loopSaveCv.wait(lock, stopToken, [this, lastHandled]
+                                      { return m_loopSaveRequestGen.load(std::memory_order_acquire) != lastHandled; });
+                    if (stopToken.stop_requested())
+                    {
+                        return;
+                    }
+                    lastHandled = m_loopSaveRequestGen.load(std::memory_order_acquire);
+                    runSaveLoopAs(lastHandled);
+                }
+            });
+
+        m_loopLoadThread = std::jthread(
+            [this](const std::stop_token& stopToken)
+            {
+                uint64_t lastHandled = 0;
+                while (!stopToken.stop_requested())
+                {
+                    std::unique_lock lock(m_loopLoadWaitMutex);
+                    m_loopLoadCv.wait(lock, stopToken, [this, lastHandled]
+                                      { return m_loopLoadRequestGen.load(std::memory_order_acquire) != lastHandled; });
+                    if (stopToken.stop_requested())
+                    {
+                        return;
+                    }
+                    lastHandled = m_loopLoadRequestGen.load(std::memory_order_acquire);
+                    runLoadLoop(lastHandled);
                 }
             });
     }
@@ -236,6 +284,134 @@ class LooperImpl final : public EffectBase
         {
             m_saveWavePulse.store(true, std::memory_order_relaxed);
         }
+    }
+
+    // Directory named loop saves/loads live in; set once during setup, like setExportDirectory().
+    void setLoopsDirectory(std::string dir)
+    {
+        m_loopsDirectory = std::move(dir);
+    }
+
+    [[nodiscard]] std::vector<std::string> listLoopNames() const
+    {
+        std::vector<std::string> names;
+        if (m_loopsDirectory.empty() || !std::filesystem::exists(m_loopsDirectory))
+        {
+            return names;
+        }
+        for (const auto& entry : std::filesystem::directory_iterator(m_loopsDirectory))
+        {
+            if (entry.path().extension() == ".wav")
+            {
+                names.push_back(entry.path().stem().string());
+            }
+        }
+        std::sort(names.begin(), names.end());
+        return names;
+    }
+
+    bool deleteLoopNamed(const std::string& name)
+    {
+        if (sanitizeLoopName(name).empty())
+        {
+            return false;
+        }
+        std::error_code ec;
+        const bool removedWav = std::filesystem::remove(loopWavPath(name), ec);
+        std::filesystem::remove(loopJsonPath(name), ec);
+        return removedWav;
+    }
+
+    bool renameLoopNamed(const std::string& oldName, const std::string& newName)
+    {
+        if (sanitizeLoopName(oldName).empty() || sanitizeLoopName(newName).empty() || oldName == newName)
+        {
+            return false;
+        }
+        std::error_code ec;
+        std::filesystem::rename(loopWavPath(oldName), loopWavPath(newName), ec);
+        if (ec)
+        {
+            return false;
+        }
+        std::filesystem::rename(loopJsonPath(oldName), loopJsonPath(newName), ec);
+        return true; // sidecar rename failing isn't fatal; the wav already moved
+    }
+
+    // Named save: mirrors requestSaveWave()'s guard/threading shape, but targets
+    // <loopsDirectory>/<name>.wav + .json instead of a timestamped debug dump.
+    void requestSaveLoopAs(const std::string& name)
+    {
+        if (m_loopSavePending || isRecording() || isOverdubbing() || m_recorder.loopLengthFrames() == 0 ||
+            m_loopsDirectory.empty() || sanitizeLoopName(name).empty())
+        {
+            return;
+        }
+        m_loopSaveName = name;
+        m_loopSaveRequestedGen = m_loopSaveRequestGen.load(std::memory_order_relaxed) + 1;
+        m_loopSavePending = true;
+        m_loopSaveRequestGen.store(m_loopSaveRequestedGen, std::memory_order_release);
+        m_loopSaveCv.notify_one();
+    }
+
+    [[nodiscard]] bool isLoopSavePending() const noexcept
+    {
+        return m_loopSavePending;
+    }
+
+    [[nodiscard]] std::string consumeLastSavedLoopName()
+    {
+        std::lock_guard<std::mutex> lock(m_lastSavedLoopMutex);
+        return std::exchange(m_lastSavedLoopName, std::string{});
+    }
+
+    // Reported back to the UI once a load has decoded and compared metadata.
+    struct LoopLoadOutcome
+    {
+        bool attempted{false};
+        bool success{false};
+        bool hasConflict{false};
+        float wavBpm{0.f};
+        float jsonBpm{0.f};
+    };
+
+    // Reads <loopsDirectory>/<name>.wav + .json on a background worker (see
+    // runLoadLoop()); the audio thread installs the result once resolved.
+    void requestLoadLoop(const std::string& name)
+    {
+        if (m_loopLoadPending || m_loopsDirectory.empty() || sanitizeLoopName(name).empty())
+        {
+            return;
+        }
+        m_loopLoadName = name;
+        m_loopLoadRequestedGen = m_loopLoadRequestGen.load(std::memory_order_relaxed) + 1;
+        m_loopLoadPending = true;
+        m_loopLoadRequestGen.store(m_loopLoadRequestedGen, std::memory_order_release);
+        m_loopLoadCv.notify_one();
+    }
+
+    [[nodiscard]] bool isLoopLoadPending() const noexcept
+    {
+        return m_loopLoadPending;
+    }
+
+    [[nodiscard]] LoopLoadOutcome consumeLoopLoadOutcome()
+    {
+        std::lock_guard<std::mutex> lock(m_loopLoadOutcomeMutex);
+        return std::exchange(m_loopLoadOutcome, LoopLoadOutcome{});
+    }
+
+    // Picks which BPM becomes the installed loop's tempo after a conflict was
+    // reported; a no-op if no load is currently awaiting resolution.
+    void resolveLoopLoadBpm(const float bpm)
+    {
+        if (!m_loopLoadPending || !m_loopLoadNeedsResolve.load(std::memory_order_acquire))
+        {
+            return;
+        }
+        m_loopLoadNeedsResolve.store(false, std::memory_order_relaxed);
+        m_loopLoadResolvedBpm = bpm;
+        m_loopLoadConfirmedGen.store(m_loopLoadRequestedGen, std::memory_order_release);
     }
     // Toggles playing the pattern currently in the sequencer (the frozen
     // material), mimicking the looper's own Play/Stop. While on, this mutes
@@ -567,6 +743,8 @@ class LooperImpl final : public EffectBase
         }
         checkFreezeCompletion();
         checkSaveCompletion();
+        checkLoopSaveCompletion();
+        checkLoopLoadCompletion();
 
         m_visualWindowSize = std::min(getSamplesPerBar(), m_visualWave.size());
 
@@ -671,7 +849,7 @@ class LooperImpl final : public EffectBase
 
         // A beat-locked stop, a freeze, or a WAV export is waiting on its own
         // async completion; drop pulses rather than race a conflicting action.
-        if (m_pendingStop || m_freezePending || m_savePending)
+        if (m_pendingStop || m_freezePending || m_savePending || m_loopSavePending || m_loopLoadPending)
         {
             return;
         }
@@ -951,6 +1129,165 @@ class LooperImpl final : public EffectBase
             return;
         }
         m_savePending = false;
+    }
+
+    // Named patches sanitize with juce::String; this is JUCE-free (Impl stays
+    // library-agnostic), so filesystem-unsafe characters are stripped by hand.
+    [[nodiscard]] static std::string sanitizeLoopName(const std::string& name)
+    {
+        std::string result;
+        for (const char c : name)
+        {
+            if (std::string_view("/\\:*?\"<>|").find(c) == std::string_view::npos)
+            {
+                result += c;
+            }
+        }
+        const auto first = result.find_first_not_of(" \t");
+        if (first == std::string::npos)
+        {
+            return {};
+        }
+        const auto last = result.find_last_not_of(" \t");
+        return result.substr(first, last - first + 1);
+    }
+
+    [[nodiscard]] std::filesystem::path loopWavPath(const std::string& name) const
+    {
+        return std::filesystem::path(m_loopsDirectory) / (sanitizeLoopName(name) + ".wav");
+    }
+
+    [[nodiscard]] std::filesystem::path loopJsonPath(const std::string& name) const
+    {
+        return std::filesystem::path(m_loopsDirectory) / (sanitizeLoopName(name) + ".json");
+    }
+
+    // Worker thread only: grabs the current loop, writes <name>.wav with the
+    // metadata embedded in its iXML chunk, and <name>.json alongside it.
+    void runSaveLoopAs(const uint64_t gen)
+    {
+        const size_t loopLen = m_recorder.loopLengthFrames();
+        if (loopLen > 0)
+        {
+            std::vector<float> left(loopLen);
+            std::vector<float> right(loopLen);
+            for (size_t f = 0; f < loopLen; ++f)
+            {
+                left[f] = m_recorder.sample(f, 0);
+                right[f] = m_recorder.sample(f, 1);
+            }
+            const AbacDsp::LoopMetadata meta{1, m_appliedBpm};
+            AbacDsp::LoopFile<nlohmann::json>::saveStereoWav(loopWavPath(m_loopSaveName).string(), left, right,
+                                                             sampleRate(), meta);
+            std::ofstream jsonOut(loopJsonPath(m_loopSaveName));
+            if (jsonOut)
+            {
+                const nlohmann::json j = meta;
+                jsonOut << j.dump(2);
+            }
+            std::lock_guard<std::mutex> lock(m_lastSavedLoopMutex);
+            m_lastSavedLoopName = m_loopSaveName;
+        }
+        m_loopSaveDoneGen.store(gen, std::memory_order_release);
+    }
+
+    // Audio thread, polled every block like checkSaveCompletion().
+    void checkLoopSaveCompletion()
+    {
+        if (!m_loopSavePending || m_loopSaveDoneGen.load(std::memory_order_acquire) != m_loopSaveRequestedGen)
+        {
+            return;
+        }
+        m_loopSavePending = false;
+    }
+
+    // Worker thread only: decodes <name>.wav + .json and compares their BPM
+    // belief (iXML-embedded vs sidecar) rather than picking one silently.
+    void runLoadLoop(const uint64_t gen)
+    {
+        LoopLoadOutcome outcome;
+        outcome.attempted = true;
+        const auto loaded = AbacDsp::LoopFile<nlohmann::json>::loadStereoWav(loopWavPath(m_loopLoadName).string());
+        if (!loaded.left.empty())
+        {
+            std::optional<AbacDsp::LoopMetadata> sidecarMeta;
+            std::ifstream jsonIn(loopJsonPath(m_loopLoadName));
+            if (jsonIn)
+            {
+                try
+                {
+                    nlohmann::json j;
+                    jsonIn >> j;
+                    sidecarMeta = j.get<AbacDsp::LoopMetadata>();
+                }
+                catch (const std::exception& e)
+                {
+                    std::cerr << "LooperImpl: failed to parse " << loopJsonPath(m_loopLoadName) << ": " << e.what()
+                              << std::endl;
+                }
+            }
+
+            m_loopLoadLeft = loaded.left;
+            m_loopLoadRight = loaded.right;
+            outcome.success = true;
+
+            float resolvedBpm = 120.f;
+            bool needsResolve = false;
+            if (sidecarMeta && loaded.embeddedMetadata)
+            {
+                if (std::abs(sidecarMeta->bpm - loaded.embeddedMetadata->bpm) > 0.01f)
+                {
+                    outcome.hasConflict = true;
+                    outcome.wavBpm = loaded.embeddedMetadata->bpm;
+                    outcome.jsonBpm = sidecarMeta->bpm;
+                    needsResolve = true;
+                }
+                else
+                {
+                    resolvedBpm = sidecarMeta->bpm;
+                }
+            }
+            else if (sidecarMeta)
+            {
+                resolvedBpm = sidecarMeta->bpm;
+            }
+            else if (loaded.embeddedMetadata)
+            {
+                resolvedBpm = loaded.embeddedMetadata->bpm;
+            }
+            m_loopLoadResolvedBpm = resolvedBpm;
+            m_loopLoadNeedsResolve.store(needsResolve, std::memory_order_release);
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(m_loopLoadOutcomeMutex);
+            m_loopLoadOutcome = outcome;
+        }
+        m_loopLoadDoneGen.store(gen, std::memory_order_release);
+        if (outcome.success && !outcome.hasConflict)
+        {
+            m_loopLoadConfirmedGen.store(gen, std::memory_order_release);
+        }
+    }
+
+    // Audio thread, polled every block; installs once confirmed (immediately
+    // when there was no BPM conflict, or once resolveLoopLoadBpm() was called).
+    // No resampling: a loop saved at a different sample rate plays back
+    // pitched/timed wrong. Not handled in phase 1.
+    void checkLoopLoadCompletion()
+    {
+        if (!m_loopLoadPending || m_loopLoadConfirmedGen.load(std::memory_order_acquire) != m_loopLoadRequestedGen)
+        {
+            return;
+        }
+        m_loopLoadPending = false;
+        const size_t samplesPerBeat = (m_loopLoadResolvedBpm > 0.f)
+                                          ? static_cast<size_t>(std::round(sampleRate() * 60.f / m_loopLoadResolvedBpm))
+                                          : 0;
+        m_recorder.loadLoop(m_loopLoadLeft, m_loopLoadRight, samplesPerBeat);
+        m_seq.setBpm(m_loopLoadResolvedBpm);
+        m_appliedBpm = m_loopLoadResolvedBpm;
+        m_bpm.store(m_loopLoadResolvedBpm, std::memory_order_relaxed);
     }
 
     // Sample-accurate steps (stepsPerBeat = samplesPerBeat), so every slice's
@@ -1241,6 +1578,36 @@ class LooperImpl final : public EffectBase
     std::jthread m_saveThread;
     std::mutex m_lastSavedMutex; // guards the hand-off below, UI-poll rate only
     std::string m_lastSavedFilename;
+
+    // Named loop save/load ("Loops" menu); same generation-counter handshake
+    // as "Save Wave" above, plus a load-side conflict-resolution handoff.
+    std::string m_loopsDirectory; // set once via setLoopsDirectory(), before any save/load
+    std::string m_loopSaveName;
+    bool m_loopSavePending{false};
+    uint64_t m_loopSaveRequestedGen{0};
+    std::atomic<uint64_t> m_loopSaveRequestGen{0};
+    std::atomic<uint64_t> m_loopSaveDoneGen{0};
+    std::mutex m_loopSaveWaitMutex;
+    std::condition_variable_any m_loopSaveCv;
+    std::jthread m_loopSaveThread;
+    std::mutex m_lastSavedLoopMutex;
+    std::string m_lastSavedLoopName;
+
+    std::string m_loopLoadName;
+    bool m_loopLoadPending{false};
+    uint64_t m_loopLoadRequestedGen{0};
+    std::atomic<uint64_t> m_loopLoadRequestGen{0};
+    std::atomic<uint64_t> m_loopLoadDoneGen{0};      // worker finished decode + conflict check
+    std::atomic<uint64_t> m_loopLoadConfirmedGen{0}; // safe for the audio thread to install
+    std::mutex m_loopLoadWaitMutex;
+    std::condition_variable_any m_loopLoadCv;
+    std::jthread m_loopLoadThread;
+    std::vector<float> m_loopLoadLeft; // worker-owned scratch, audio thread reads once confirmed
+    std::vector<float> m_loopLoadRight;
+    float m_loopLoadResolvedBpm{120.f};
+    std::atomic<bool> m_loopLoadNeedsResolve{false};
+    std::mutex m_loopLoadOutcomeMutex;
+    LoopLoadOutcome m_loopLoadOutcome;
 
     // Play/stop toggle for the pattern currently in m_pattern.
     std::atomic<bool> m_seqPlayPulse{false};

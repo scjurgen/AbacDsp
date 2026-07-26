@@ -6,6 +6,7 @@
     "and plays the slices back locked to a BPM/swing grid with a metronome click.\n"
   ],
   "patches": true,
+  "loops": true,
   "host_transport": true,
   "ports-control": [
     {"short": "REC",  "type": "switch", "display": "Record",   "symbol": "record",   "default": 0, "momentary": true, "cc": {"controller": 64}},
@@ -83,7 +84,9 @@
     "recordSwitch.setButtonText(processorRef.isRecording() ? juce::String::fromUTF8(\"Recording\") : (processorRef.isArmed() ? juce::String::fromUTF8(\"Armed\") : juce::String::fromUTF8(\"Record\")));",
     "freezeSwitch.setButtonText(processorRef.isFreezePending() ? juce::String::fromUTF8(\"Freezing...\") : (juce::String::fromUTF8(\"Freeze (\") + juce::String(processorRef.getFrozenTrackCount()) + juce::String::fromUTF8(\" trk/\") + juce::String(processorRef.getFrozenSliceCount()) + juce::String::fromUTF8(\" sl)\")));",
     "saveWaveSwitch.setButtonText(processorRef.isSaveWavePending() ? juce::String::fromUTF8(\"Saving...\") : juce::String::fromUTF8(\"Save Wave\"));",
-    "if (const auto saved = processorRef.consumeLastSavedWaveFilename(); saved.isNotEmpty()) { m_statusBar.showMessage(juce::String::fromUTF8(\"Saved: \") + juce::File(saved).getFileName()); }"
+    "if (const auto saved = processorRef.consumeLastSavedWaveFilename(); saved.isNotEmpty()) { m_statusBar.showMessage(juce::String::fromUTF8(\"Saved: \") + juce::File(saved).getFileName()); }",
+    "if (const auto saved = processorRef.consumeLastSavedLoopName(); saved.isNotEmpty()) { m_statusBar.showMessage(juce::String::fromUTF8(\"Saved '\") + saved + \"'\"); }",
+    "handleLoopLoadOutcome();"
   ],
   "processor_forwards": [
     {"name": "isHostSynced", "type": "bool"},
@@ -107,17 +110,29 @@
     {"name": "getSequencerSliceThumbnails", "type": "std::vector<AbacDsp::SequencerSliceThumbnail>"},
     {"name": "getSequencerSliceBoundaries", "type": "std::vector<float>"},
     {"name": "getSequencerPlayheadNormalized", "type": "float"},
-    {"name": "isSaveWavePending", "type": "bool"}
+    {"name": "isSaveWavePending", "type": "bool"},
+    {"name": "isLoopSavePending", "type": "bool"},
+    {"name": "isLoopLoadPending", "type": "bool"}
   ],
   "extra_processor_methods": [
     "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }",
     "[[nodiscard]] juce::String getLooperStateLabel() const { return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String(); }",
     "[[nodiscard]] juce::String getSequencerLabel() const { return pluginRunner ? juce::String(pluginRunner->getSequencerStateLabel()) : juce::String(); }",
     "static std::string getExportDirectory() {\n        auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);\n#if JUCE_MAC\n        base = base.getChildFile(\"Application Support\");\n#endif\n        const auto dir = base.getChildFile(\"AbacDsp\").getChildFile(\"Looper\").getChildFile(\"exports\");\n        dir.createDirectory();\n        return dir.getFullPathName().toStdString();\n    }",
-    "[[nodiscard]] juce::String consumeLastSavedWaveFilename() const { return pluginRunner ? juce::String(pluginRunner->consumeLastSavedFilename()) : juce::String(); }"
+    "[[nodiscard]] juce::String consumeLastSavedWaveFilename() const { return pluginRunner ? juce::String(pluginRunner->consumeLastSavedFilename()) : juce::String(); }",
+    "static std::string getLoopsDirectory() {\n        auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);\n#if JUCE_MAC\n        base = base.getChildFile(\"Application Support\");\n#endif\n        const auto dir = base.getChildFile(\"AbacDsp\").getChildFile(\"Looper\").getChildFile(\"loops\");\n        dir.createDirectory();\n        return dir.getFullPathName().toStdString();\n    }",
+    "[[nodiscard]] std::vector<juce::String> listLoopNames() const { std::vector<juce::String> result; if (pluginRunner) { for (const auto& n : pluginRunner->listLoopNames()) { result.push_back(juce::String(n)); } } return result; }",
+    "void saveLoopAs(const juce::String& name) { if (pluginRunner) { pluginRunner->requestSaveLoopAs(name.toStdString()); } }",
+    "void requestLoadLoop(const juce::String& name) { if (pluginRunner) { pluginRunner->requestLoadLoop(name.toStdString()); } }",
+    "bool deleteLoopNamed(const juce::String& name) { return pluginRunner && pluginRunner->deleteLoopNamed(name.toStdString()); }",
+    "bool renameLoop(const juce::String& oldName, const juce::String& newName) { return pluginRunner && pluginRunner->renameLoopNamed(oldName.toStdString(), newName.toStdString()); }",
+    "[[nodiscard]] juce::String consumeLastSavedLoopName() const { return pluginRunner ? juce::String(pluginRunner->consumeLastSavedLoopName()) : juce::String(); }",
+    "[[nodiscard]] LooperImpl<NumSamplesPerBlock>::LoopLoadOutcome consumeLoopLoadOutcome() const { return pluginRunner ? pluginRunner->consumeLoopLoadOutcome() : LooperImpl<NumSamplesPerBlock>::LoopLoadOutcome{}; }",
+    "void resolveLoopLoadBpm(const float bpm) { if (pluginRunner) { pluginRunner->resolveLoopLoadBpm(bpm); } }"
   ],
   "extra_prepare_calls": [
-    "pluginRunner->setExportDirectory(getExportDirectory());"
+    "pluginRunner->setExportDirectory(getExportDirectory());",
+    "pluginRunner->setLoopsDirectory(getLoopsDirectory());"
   ],
   "protected_files": ["src/unittests/Looper_tests.cpp"],
   "CPP": {

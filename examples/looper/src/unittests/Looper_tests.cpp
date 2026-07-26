@@ -1,9 +1,13 @@
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "AudioFile/SaveWav.h"
@@ -679,4 +683,203 @@ TEST(ClickAlignmentTest, RecordScenarioTimingAnalysis)
         const float energy = clickWindowEnergy(output, pos, kClickWindow, kImpulseAmplitude);
         EXPECT_GT(energy, kMinClickEnergy) << "no click energy found at beat " << k;
     }
+}
+
+// Named loop save/load ("Loops" menu): round-trips through an actual WAV +
+// JSON pair on disk, and checks that a BPM disagreement between the WAV's
+// embedded metadata and the sidecar JSON is reported rather than silently
+// resolved (see LooperImpl::requestLoadLoop()/consumeLoopLoadOutcome()).
+namespace
+{
+constexpr float kLoopFileSampleRate = 48000.f;
+constexpr float kLoopFileBpm = 120.f;
+
+class TempLoopsDir
+{
+  public:
+    TempLoopsDir()
+        : m_path(std::filesystem::temp_directory_path() / "abacdsp_looper_loopfile_test")
+    {
+        std::filesystem::create_directories(m_path);
+    }
+
+    ~TempLoopsDir()
+    {
+        std::error_code ec;
+        std::filesystem::remove_all(m_path, ec);
+    }
+
+    [[nodiscard]] std::string path() const
+    {
+        return m_path.string();
+    }
+
+  private:
+    std::filesystem::path m_path;
+};
+
+// Immediate (non-threshold-armed) record/stop: simplest path to a known,
+// fade-free loop, since the beat-lock corner cases are covered elsewhere.
+void recordKnownLoop(Looper& looper)
+{
+    looper.setBpm(kLoopFileBpm);
+    looper.setThreshRec(false);
+    looper.setFadeMs(0.f);
+    Buffer in{};
+    Buffer out{};
+    looper.setRecord(true);
+    looper.processBlock(in, out); // begins recording
+
+    for (int b = 0; b < 4; ++b)
+    {
+        for (size_t i = 0; i < kBlock; ++i)
+        {
+            const float v = 0.01f * static_cast<float>(b * static_cast<int>(kBlock) + static_cast<int>(i) + 1);
+            in(i, 0) = v;
+            in(i, 1) = -v;
+        }
+        looper.processBlock(in, out);
+    }
+
+    looper.setRecord(true);
+    looper.processBlock(in, out); // requests stop; finalizes immediately (not beat-locked)
+
+    Buffer silence{};
+    for (int i = 0; i < 4; ++i)
+    {
+        looper.processBlock(silence, out);
+    }
+}
+
+void pump(Looper& looper, const int blocks)
+{
+    Buffer in{};
+    Buffer out{};
+    for (int i = 0; i < blocks; ++i)
+    {
+        looper.processBlock(in, out);
+    }
+}
+
+// Polls the background worker (file I/O isn't RT-safe, see runLoadLoop()) for
+// its decode outcome, pumping the audio thread so completion is observed.
+Looper::LoopLoadOutcome waitForLoopLoadOutcome(Looper& looper)
+{
+    for (int i = 0; i < 2000; ++i)
+    {
+        pump(looper, 1);
+        if (auto outcome = looper.consumeLoopLoadOutcome(); outcome.attempted)
+        {
+            return outcome;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return {};
+}
+
+void waitUntilLoopSaveDone(Looper& looper)
+{
+    for (int i = 0; i < 2000 && looper.isLoopSavePending(); ++i)
+    {
+        pump(looper, 1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+}
+
+void waitUntilLoopLoadInstalled(Looper& looper)
+{
+    for (int i = 0; i < 2000 && looper.isLoopLoadPending(); ++i)
+    {
+        pump(looper, 1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+}
+
+void expectSameLoopContent(Looper& a, Looper& b, const size_t length)
+{
+    for (size_t f = 0; f < length; ++f)
+    {
+        EXPECT_NEAR(a.rawLoopSample(f, 0), b.rawLoopSample(f, 0), 1e-3f) << "frame " << f;
+        EXPECT_NEAR(a.rawLoopSample(f, 1), b.rawLoopSample(f, 1), 1e-3f) << "frame " << f;
+    }
+}
+}
+
+TEST(LooperLoopFile, SaveThenLoadRoundTripsAudioAndBpm)
+{
+    const TempLoopsDir dir;
+
+    Looper writer(kLoopFileSampleRate);
+    writer.setLoopsDirectory(dir.path());
+    recordKnownLoop(writer);
+    ASSERT_TRUE(writer.isPlaying());
+    const size_t originalLength = writer.rawLoopLengthFrames();
+    ASSERT_GT(originalLength, 0u);
+
+    writer.requestSaveLoopAs("myloop");
+    waitUntilLoopSaveDone(writer);
+    EXPECT_EQ(writer.consumeLastSavedLoopName(), "myloop");
+
+    Looper reader(kLoopFileSampleRate);
+    reader.setLoopsDirectory(dir.path());
+    reader.requestLoadLoop("myloop");
+    const auto outcome = waitForLoopLoadOutcome(reader);
+    EXPECT_TRUE(outcome.attempted);
+    EXPECT_TRUE(outcome.success);
+    EXPECT_FALSE(outcome.hasConflict);
+    waitUntilLoopLoadInstalled(reader);
+
+    ASSERT_TRUE(reader.isPlaying());
+    ASSERT_EQ(reader.rawLoopLengthFrames(), originalLength);
+    expectSameLoopContent(writer, reader, originalLength);
+
+    const auto expectedSamplesPerBeat = static_cast<size_t>(kLoopFileSampleRate * 60.f / kLoopFileBpm);
+    EXPECT_EQ(reader.getSamplesPerBar(), expectedSamplesPerBeat * reader.getBarBeats());
+}
+
+TEST(LooperLoopFile, LoadReportsConflictInsteadOfPickingSilently)
+{
+    const TempLoopsDir dir;
+    constexpr float kJsonBpm = 140.f;
+
+    Looper writer(kLoopFileSampleRate);
+    writer.setLoopsDirectory(dir.path());
+    recordKnownLoop(writer);
+    const size_t originalLength = writer.rawLoopLengthFrames();
+
+    writer.requestSaveLoopAs("conflicted");
+    waitUntilLoopSaveDone(writer);
+
+    // Hand-edit the sidecar JSON so it disagrees with the WAV's embedded BPM.
+    const auto jsonPath = std::filesystem::path(dir.path()) / "conflicted.json";
+    {
+        std::ofstream out(jsonPath);
+        out << "{\"version\":1,\"bpm\":" << kJsonBpm << "}";
+    }
+
+    Looper reader(kLoopFileSampleRate);
+    reader.setLoopsDirectory(dir.path());
+    reader.requestLoadLoop("conflicted");
+    const auto outcome = waitForLoopLoadOutcome(reader);
+
+    ASSERT_TRUE(outcome.attempted);
+    ASSERT_TRUE(outcome.success);
+    ASSERT_TRUE(outcome.hasConflict);
+    EXPECT_NEAR(outcome.wavBpm, kLoopFileBpm, 1e-3f);
+    EXPECT_NEAR(outcome.jsonBpm, kJsonBpm, 1e-3f);
+
+    // Not installed yet: still pending resolution.
+    pump(reader, 4);
+    EXPECT_TRUE(reader.isLoopLoadPending());
+    EXPECT_FALSE(reader.isPlaying());
+
+    reader.resolveLoopLoadBpm(kJsonBpm);
+    waitUntilLoopLoadInstalled(reader);
+
+    ASSERT_TRUE(reader.isPlaying());
+    ASSERT_EQ(reader.rawLoopLengthFrames(), originalLength);
+    expectSameLoopContent(writer, reader, originalLength);
+
+    const auto expectedSamplesPerBeat = static_cast<size_t>(kLoopFileSampleRate * 60.f / kJsonBpm);
+    EXPECT_EQ(reader.getSamplesPerBar(), expectedSamplesPerBeat * reader.getBarBeats());
 }
