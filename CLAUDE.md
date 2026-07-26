@@ -1,6 +1,9 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Some of these rules get constantly broken by Claude: comment discipline overall, and going ahead
+without being explicitly asked. When the user asks a question, Claude should answer the question,
+but NEVER go ahead implicitly; instead, wait for instructions.
 
 ## Project Overview
 
