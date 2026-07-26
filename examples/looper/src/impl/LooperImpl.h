@@ -21,6 +21,8 @@
 #include <utility>
 #include <vector>
 
+#include "AudioFile/SaveWav.h"
+
 #include "Analysis/FftMisc.h"
 #include "Analysis/Slicer.h"
 #include "Analysis/Spectrogram.h"
@@ -39,6 +41,36 @@
 namespace AbacDsp
 {
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(LoopMetadata, version, bpm, bars, beats)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(SequenceEvent, stepPosition, track, sliceIndex, gain, pitchRatio,
+                                                reverse, randomizeSlice, timingOffsetFrames, humanizeAmountFrames)
+}
+
+// SequencePattern has no default constructor, so it needs nlohmann's
+// adl_serializer specialization hook instead of free to_json/from_json.
+namespace nlohmann
+{
+template <>
+struct adl_serializer<AbacDsp::SequencePattern>
+{
+    static void to_json(json& j, const AbacDsp::SequencePattern& p)
+    {
+        j = json{{"lengthBars", p.lengthBars()},
+                 {"beatsPerBar", p.beatsPerBar()},
+                 {"stepsPerBeat", p.stepsPerBeat()},
+                 {"events", p.events()}};
+    }
+
+    static AbacDsp::SequencePattern from_json(const json& j)
+    {
+        AbacDsp::SequencePattern pattern(j.at("lengthBars").get<size_t>(), j.at("beatsPerBar").get<size_t>(),
+                                         j.at("stepsPerBeat").get<size_t>());
+        for (const auto& eventJson : j.at("events"))
+        {
+            pattern.addEvent(eventJson.get<AbacDsp::SequenceEvent>());
+        }
+        return pattern;
+    }
+};
 }
 
 // Traditional-style slicing looper: captures audio, quantizes the loop to whole
@@ -1097,8 +1129,33 @@ class LooperImpl final : public EffectBase
         return std::filesystem::path(m_loopsDirectory) / (sanitizeLoopName(name) + ".json");
     }
 
-    // Worker thread only: grabs the current loop, writes <name>.wav with the
-    // metadata embedded in its iXML chunk, and <name>.json alongside it.
+    [[nodiscard]] std::filesystem::path loopTrackWavPath(const std::string& name, const size_t track) const
+    {
+        return std::filesystem::path(m_loopsDirectory) /
+               (sanitizeLoopName(name) + "_track" + std::to_string(track) + ".wav");
+    }
+
+    // Worker thread only: replays a track's slices via the public per-slice
+    // accessor, in order, rather than reaching into the pool directly.
+    void extractTrackAudioAndLengths(const size_t track, std::vector<float>& left, std::vector<float>& right,
+                                     std::vector<size_t>& sliceLengths) const
+    {
+        const size_t count = m_sliceLibrary.sliceCountInTrack(track);
+        sliceLengths.reserve(count);
+        for (size_t i = 0; i < count; ++i)
+        {
+            const auto& info = m_sliceLibrary.sliceInfo(track, i);
+            sliceLengths.push_back(info.lengthFrames);
+            for (size_t f = 0; f < info.lengthFrames; ++f)
+            {
+                left.push_back(m_sliceLibrary.sample(track, i, f, 0));
+                right.push_back(m_sliceLibrary.sample(track, i, f, 1));
+            }
+        }
+    }
+
+    // Worker thread only: writes <name>.wav (+ iXML metadata) and <name>.json;
+    // if any tracks are frozen, also <name>_track<N>.wav per track.
     void runSaveLoopAs(const uint64_t gen)
     {
         const size_t loopLen = m_recorder.loopLengthFrames();
@@ -1117,10 +1174,28 @@ class LooperImpl final : public EffectBase
             const AbacDsp::LoopMetadata meta{1, m_appliedBpm, bars, beats};
             AbacDsp::LoopFile<nlohmann::json>::saveStereoWav(loopWavPath(m_loopSaveName).string(), left, right,
                                                              sampleRate(), meta);
+
+            nlohmann::json j = meta;
+            if (m_sliceLibrary.trackCount() > 0)
+            {
+                j["pattern"] = m_pattern;
+                auto tracksJson = nlohmann::json::array();
+                for (size_t t = 0; t < m_sliceLibrary.trackCount(); ++t)
+                {
+                    std::vector<float> trackLeft;
+                    std::vector<float> trackRight;
+                    std::vector<size_t> sliceLengths;
+                    extractTrackAudioAndLengths(t, trackLeft, trackRight, sliceLengths);
+                    const auto trackPath = loopTrackWavPath(m_loopSaveName, t).string();
+                    AudioUtility::SaveWav::saveStereoAs(trackPath, trackLeft, trackRight, sampleRate());
+                    tracksJson.push_back({{"file", std::filesystem::path(trackPath).filename().string()},
+                                          {"sliceLengths", sliceLengths}});
+                }
+                j["tracks"] = tracksJson;
+            }
             std::ofstream jsonOut(loopJsonPath(m_loopSaveName));
             if (jsonOut)
             {
-                const nlohmann::json j = meta;
                 jsonOut << j.dump(2);
             }
             std::lock_guard<std::mutex> lock(m_lastSavedLoopMutex);
@@ -1139,12 +1214,47 @@ class LooperImpl final : public EffectBase
         m_loopSavePending = false;
     }
 
+    // Worker thread only. Builds into locals first (throws on malformed data,
+    // caught by runLoadLoop()) so a partial failure leaves no scratch state.
+    void loadSequencerData(const nlohmann::json& j)
+    {
+        auto pattern = j.at("pattern").get<AbacDsp::SequencePattern>();
+        std::vector<LoopLoadTrackData> tracks;
+        for (const auto& trackJson : j.at("tracks"))
+        {
+            const auto trackPath = std::filesystem::path(m_loopsDirectory) / trackJson.at("file").get<std::string>();
+            const auto trackLoaded = AbacDsp::LoopFile<nlohmann::json>::loadStereoWav(trackPath.string());
+            const auto sliceLengths = trackJson.at("sliceLengths").get<std::vector<size_t>>();
+
+            LoopLoadTrackData data;
+            data.interleaved.resize(trackLoaded.left.size() * 2);
+            for (size_t f = 0; f < trackLoaded.left.size(); ++f)
+            {
+                data.interleaved[f * 2] = trackLoaded.left[f];
+                data.interleaved[f * 2 + 1] = trackLoaded.right[f];
+            }
+            size_t offset = 0;
+            for (const auto len : sliceLengths)
+            {
+                data.slices.push_back({offset, len});
+                offset += len;
+            }
+            tracks.push_back(std::move(data));
+        }
+        m_loopLoadPattern = std::move(pattern);
+        m_loopLoadTracks = std::move(tracks);
+        m_loopLoadHasSequencerData = true;
+    }
+
     // Worker thread only: decodes <name>.wav + .json and compares their BPM
     // belief (iXML-embedded vs sidecar) rather than picking one silently.
     void runLoadLoop(const uint64_t gen)
     {
         LoopLoadOutcome outcome;
         outcome.attempted = true;
+        m_loopLoadHasSequencerData = false;
+        m_loopLoadTracks.clear();
+        m_loopLoadPattern.reset();
         const auto loaded = AbacDsp::LoopFile<nlohmann::json>::loadStereoWav(loopWavPath(m_loopLoadName).string());
         if (!loaded.left.empty())
         {
@@ -1157,6 +1267,10 @@ class LooperImpl final : public EffectBase
                     nlohmann::json j;
                     jsonIn >> j;
                     sidecarMeta = j.get<AbacDsp::LoopMetadata>();
+                    if (j.contains("pattern") && j.contains("tracks"))
+                    {
+                        loadSequencerData(j);
+                    }
                 }
                 catch (const std::exception& e)
                 {
@@ -1223,6 +1337,16 @@ class LooperImpl final : public EffectBase
         m_seq.setBpm(m_loopLoadResolvedBpm);
         m_appliedBpm = m_loopLoadResolvedBpm;
         m_bpm.store(m_loopLoadResolvedBpm, std::memory_order_relaxed);
+        if (m_loopLoadHasSequencerData)
+        {
+            m_sliceLibrary.clear();
+            for (const auto& track : m_loopLoadTracks)
+            {
+                m_sliceLibrary.extractTrack(track.interleaved, track.slices);
+            }
+            m_pattern = *m_loopLoadPattern;
+            m_sequencer.setPattern(&m_pattern);
+        }
     }
 
     // Sample-accurate steps (stepsPerBeat = samplesPerBeat), so every slice's
@@ -1530,6 +1654,17 @@ class LooperImpl final : public EffectBase
     std::atomic<bool> m_loopLoadNeedsResolve{false};
     std::mutex m_loopLoadOutcomeMutex;
     LoopLoadOutcome m_loopLoadOutcome;
+
+    // One frozen track's audio (interleaved) plus its slices, already laid
+    // out contiguously so extractTrack() reconstructs it with no re-slicing.
+    struct LoopLoadTrackData
+    {
+        std::vector<float> interleaved;
+        std::vector<AbacDsp::Slice> slices;
+    };
+    std::vector<LoopLoadTrackData> m_loopLoadTracks; // worker-owned scratch, same handoff as left/right above
+    std::optional<AbacDsp::SequencePattern> m_loopLoadPattern;
+    bool m_loopLoadHasSequencerData{false};
 
     // Play/stop toggle for the pattern currently in m_pattern.
     std::atomic<bool> m_seqPlayPulse{false};

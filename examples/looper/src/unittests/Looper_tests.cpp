@@ -842,6 +842,48 @@ TEST(LooperLoopFile, LoadReportsConflictInsteadOfPickingSilently)
     EXPECT_EQ(reader.getSamplesPerBar(), expectedSamplesPerBeat * reader.getBarBeats());
 }
 
+TEST(LooperLoopFile, SaveThenLoadRoundTripsFrozenTracksAndPattern)
+{
+    const TempLoopsDir dir;
+
+    Looper writer(kLoopFileSampleRate);
+    writer.setLoopsDirectory(dir.path());
+    recordKnownLoop(writer);
+    ASSERT_TRUE(writer.isPlaying());
+
+    writer.setFreeze(true);
+    for (int guard = 0; guard < 2000 && (guard == 0 || writer.isFreezePending()); ++guard)
+    {
+        pump(writer, 1);
+    }
+    ASSERT_FALSE(writer.isFreezePending());
+    ASSERT_GT(writer.getFrozenTrackCount(), 0u);
+
+    const size_t originalTrackCount = writer.getFrozenTrackCount();
+    const size_t originalSliceCount = writer.getFrozenSliceCount();
+    const auto originalBoundaries = writer.getSequencerSliceBoundaries();
+    ASSERT_FALSE(originalBoundaries.empty());
+
+    writer.requestSaveLoopAs("frozenloop");
+    waitUntilLoopSaveDone(writer);
+
+    Looper reader(kLoopFileSampleRate);
+    reader.setLoopsDirectory(dir.path());
+    reader.requestLoadLoop("frozenloop");
+    const auto outcome = waitForLoopLoadOutcome(reader);
+    ASSERT_TRUE(outcome.success);
+    waitUntilLoopLoadInstalled(reader);
+
+    EXPECT_EQ(reader.getFrozenTrackCount(), originalTrackCount);
+    EXPECT_EQ(reader.getFrozenSliceCount(), originalSliceCount);
+    const auto reloadedBoundaries = reader.getSequencerSliceBoundaries();
+    ASSERT_EQ(reloadedBoundaries.size(), originalBoundaries.size());
+    for (size_t i = 0; i < originalBoundaries.size(); ++i)
+    {
+        EXPECT_NEAR(reloadedBoundaries[i], originalBoundaries[i], 1e-4f);
+    }
+}
+
 // Reuses kSampleRate/kBpm/kSamplesPerBar (5120 Hz, 120 BPM, 10240
 // samples/bar) and the Looper/Buffer aliases from BeatLockMatrixTest above.
 TEST(RecordingModes, CountInPlaysClickThenStartsRecordingAfterNBars)
