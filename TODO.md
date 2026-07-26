@@ -2,6 +2,8 @@
 
 ## looper UX
 
+- pressing stop and play ofsset the beat with the looper. The metronome should resync with the loop
+- setRecord is not correct it should be toggleRecordMode
 - save loops as presets
 - refactor switches and visualisations (red recording mode )
 

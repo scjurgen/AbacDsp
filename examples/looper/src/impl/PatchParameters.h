@@ -26,9 +26,8 @@ struct PatchParameters
         loopVolume   , // dial
         recThreshold , // dial
         freeze       , // switch
-        seqTrack     , // dial
-        seqSlice     , // dial
-        seqTrigger    // switch
+        seqPlay      , // switch
+        clearSeq      // switch
     };
 bool record{false};
 bool play{false};
@@ -44,9 +43,8 @@ float clickVolume{-12.0f};
 float loopVolume{0.0f};
 float recThreshold{-36.0f};
 bool freeze{false};
-float seqTrack{0.0f};
-float seqSlice{0.0f};
-bool seqTrigger{false};
+bool seqPlay{false};
+bool clearSeq{false};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
@@ -64,9 +62,8 @@ bool seqTrigger{false};
 "loopVolume",
 "recThreshold",
 "freeze",
-"seqTrack",
-"seqSlice",
-"seqTrigger"
+"seqPlay",
+"clearSeq"
     });
 //        "onOff", "patch", "input", "modulationDepth", "mix", "density", "threshold", "knee"});
 
@@ -99,9 +96,8 @@ bool seqTrigger{false};
         else if constexpr (ParamId == Id::loopVolume) return loopVolume;
         else if constexpr (ParamId == Id::recThreshold) return recThreshold;
         else if constexpr (ParamId == Id::freeze) return freeze;
-        else if constexpr (ParamId == Id::seqTrack) return seqTrack;
-        else if constexpr (ParamId == Id::seqSlice) return seqSlice;
-        else if constexpr (ParamId == Id::seqTrigger) return seqTrigger;
+        else if constexpr (ParamId == Id::seqPlay) return seqPlay;
+        else if constexpr (ParamId == Id::clearSeq) return clearSeq;
 
     }
 
@@ -142,11 +138,9 @@ break;
 break;
  case Id::freeze: if (!isEqual(get<Id::freeze>(), value)) {get<Id::freeze>() = static_cast<bool>(value) ;m_modified = true;}
 break;
- case Id::seqTrack: if (!isEqual(get<Id::seqTrack>(), value)) {get<Id::seqTrack>() = value;m_modified = true;}
+ case Id::seqPlay: if (!isEqual(get<Id::seqPlay>(), value)) {get<Id::seqPlay>() = static_cast<bool>(value) ;m_modified = true;}
 break;
- case Id::seqSlice: if (!isEqual(get<Id::seqSlice>(), value)) {get<Id::seqSlice>() = value;m_modified = true;}
-break;
- case Id::seqTrigger: if (!isEqual(get<Id::seqTrigger>(), value)) {get<Id::seqTrigger>() = static_cast<bool>(value) ;m_modified = true;}
+ case Id::clearSeq: if (!isEqual(get<Id::clearSeq>(), value)) {get<Id::clearSeq>() = static_cast<bool>(value) ;m_modified = true;}
 break;
 
             default:
@@ -200,7 +194,6 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         loopVolume   , // dial
         recThreshold , // dial
         freeze       , // switch
-        seqTrack     , // dial
-        seqSlice     , // dial
-        seqTrigger    // switch
+        seqPlay      , // switch
+        clearSeq      // switch
 )

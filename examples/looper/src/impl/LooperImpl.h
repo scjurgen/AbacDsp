@@ -186,21 +186,25 @@ class LooperImpl final : public EffectBase
             m_freezePulse.store(true, std::memory_order_relaxed);
         }
     }
-    // Selects which frozen (track, slice) setSeqTrigger fires; clamped at trigger time.
-    void setSeqTrack(const float value) noexcept
-    {
-        m_seqTrack.store(value, std::memory_order_relaxed);
-    }
-    void setSeqSlice(const float value) noexcept
-    {
-        m_seqSlice.store(value, std::memory_order_relaxed);
-    }
-    // On-demand playback of the selected frozen slice, bypassing the pattern.
-    void setSeqTrigger(const bool value) noexcept
+    // Toggles playing the pattern currently in the sequencer (the frozen
+    // material), mimicking the looper's own Play/Stop. While on, this mutes
+    // the base loop, matching the looper's earlier auto-mute-on-freeze
+    // behavior, but now under explicit user control.
+    void setSeqPlay(const bool value) noexcept
     {
         if (value)
         {
-            m_seqTriggerPulse.store(true, std::memory_order_relaxed);
+            m_seqPlayPulse.store(true, std::memory_order_relaxed);
+        }
+    }
+    // Clears the sequencer's own audio: drops every frozen track/slice from
+    // the library and the current pattern, stops playback. Independent of
+    // setClear(), which only clears the looper's own recording.
+    void setClearSeq(const bool value) noexcept
+    {
+        if (value)
+        {
+            m_clearSeqPulse.store(true, std::memory_order_relaxed);
         }
     }
 
@@ -333,9 +337,9 @@ class LooperImpl final : public EffectBase
     {
         return m_sliceLibrary.sliceCount();
     }
-    [[nodiscard]] size_t getActiveSequencerVoices() const noexcept
+    [[nodiscard]] bool isSequencerPlaying() const noexcept
     {
-        return m_sequencer.activeVoiceCount();
+        return m_sequencerPlaying;
     }
 
     // Exact per-sample loop content and length (mirror LoopRecorder's own
@@ -427,9 +431,9 @@ class LooperImpl final : public EffectBase
         AbacDsp::AudioBuffer<2, BlockSize> seqOut{};
         renderClickAndSequencer(click, seqOut);
 
-        // Dry input, loop, and sequencer (silent until m_pattern has events) all sum here.
-        // Once frozen, the sequencer replaces the loop's own playback.
-        const float loopGain = (m_pattern.eventCount() > 0) ? 0.f : m_loopGain;
+        // Dry input, loop, and sequencer all sum here. Toggling Seq Play mutes
+        // the loop and lets the sequencer replace its playback instead.
+        const float loopGain = m_sequencerPlaying ? 0.f : m_loopGain;
         for (size_t i = 0; i < BlockSize; ++i)
         {
             const float loopL = recorderOut(i, 0) * loopGain;
@@ -508,13 +512,19 @@ class LooperImpl final : public EffectBase
         const bool playReq = m_playPulse.exchange(false, std::memory_order_relaxed);
         const bool overdubReq = m_overdubPulse.exchange(false, std::memory_order_relaxed);
         const bool freezeReq = m_freezePulse.exchange(false, std::memory_order_relaxed);
-        const bool seqTriggerReq = m_seqTriggerPulse.exchange(false, std::memory_order_relaxed);
+        const bool seqPlayReq = m_seqPlayPulse.exchange(false, std::memory_order_relaxed);
+        const bool clearSeqReq = m_clearSeqPulse.exchange(false, std::memory_order_relaxed);
 
-        // Manual playback of an already-frozen slice doesn't touch the
-        // recorder's own transport state, so it's exempt from the guard below.
-        if (seqTriggerReq)
+        // The sequencer play/stop toggle and its own Clear only touch
+        // sequencer-side state, never the recorder's own transport state, so
+        // both are exempt from the guard below.
+        if (seqPlayReq)
         {
-            triggerFrozenSlice();
+            toggleSequencerPlayback();
+        }
+        if (clearSeqReq)
+        {
+            clearSequencer();
         }
 
         // A beat-locked stop or a freeze analysis is waiting on its own async
@@ -546,13 +556,26 @@ class LooperImpl final : public EffectBase
         }
     }
 
+    // Clears only the looper's own recording; the frozen slice library, the
+    // sequencer's pattern, and its play/stop state are untouched (they
+    // persist independently of the base looper's Clear/re-record).
     void clearAll()
     {
         m_armed = false;
         m_pendingStop = false;
         m_beatLockedTake = false;
         m_recorder.clear();
-        m_pattern.clear(); // library persists (locked design); active playback pattern doesn't
+    }
+
+    // Clears only the sequencer's own audio: every frozen track/slice in the
+    // library and the current pattern, and stops playback. Independent of
+    // clearAll(), which only clears the looper's own recording.
+    void clearSequencer()
+    {
+        m_sliceLibrary.clear();
+        m_pattern.clear();
+        m_sequencerPlaying = false;
+        m_sequencer.setEnabled(false);
     }
 
     void finishRecording()
@@ -619,22 +642,12 @@ class LooperImpl final : public EffectBase
         }
     }
 
-    // Clamps the dial-selected (track, slice) into range and fires it now.
-    void triggerFrozenSlice()
+    // Starts/stops playback of whatever is currently in m_pattern (populated
+    // by the last freeze). processBlock mutes the base loop while this is on.
+    void toggleSequencerPlayback()
     {
-        const size_t trackCount = m_sliceLibrary.trackCount();
-        if (trackCount == 0)
-        {
-            return;
-        }
-        const auto track = std::min(trackCount - 1, static_cast<size_t>(m_seqTrack.load(std::memory_order_relaxed)));
-        const size_t sliceCount = m_sliceLibrary.sliceCountInTrack(track);
-        if (sliceCount == 0)
-        {
-            return;
-        }
-        const auto slice = std::min(sliceCount - 1, static_cast<size_t>(m_seqSlice.load(std::memory_order_relaxed)));
-        m_sequencer.triggerManual(track, slice);
+        m_sequencerPlaying = !m_sequencerPlaying;
+        m_sequencer.setEnabled(m_sequencerPlaying);
     }
 
     // Refused while the loop isn't stable (recording/overdubbing) or empty;
@@ -970,8 +983,9 @@ class LooperImpl final : public EffectBase
     std::condition_variable_any m_freezeCv;
     std::jthread m_freezeThread;
 
-    // On-demand manual trigger of a frozen slice (bypasses the pattern).
-    std::atomic<float> m_seqTrack{0.f};
-    std::atomic<float> m_seqSlice{0.f};
-    std::atomic<bool> m_seqTriggerPulse{false};
+    // Play/stop toggle for the pattern currently in m_pattern.
+    std::atomic<bool> m_seqPlayPulse{false};
+    bool m_sequencerPlaying{false};
+    // Clears the frozen slice library + pattern, independent of setClear().
+    std::atomic<bool> m_clearSeqPulse{false};
 };

@@ -10,6 +10,7 @@
 #include "inc/GuiConstants.h"
 #include "inc/CpuMeter.h"
 #include "inc/CustomRotaryDial.h"
+#include "inc/MomentaryToggleButton.h"
 #include "inc/GenericMeter.h"
 #include "inc/StatusBar.h"
 #include "inc/SpectrogramDisplay.h"

@@ -55,6 +55,7 @@ cppSourceFilesFixed = [
     "inc/GuiConstants.h",
     "inc/CpuMeter.h",
     "inc/CustomRotaryDial.h",
+    "inc/MomentaryToggleButton.h",
     "inc/GenericMeter.h",
     "inc/StatusBar.h",
     "inc/SpectrogramDisplay.h",
@@ -149,6 +150,34 @@ def gauge_present(m:dict) -> list:
                     res.append("SHOWWAVEFORM")
     return res
 
+def createMomentaryFlashTicks(m: dict) -> str:
+    res = ""
+    for item in m["ports-control"]:
+        if item["type"] == "switch" and item.get("momentary", False):
+            res += f"""{item['symbol']}Switch.tickFlash();\n"""
+    return res
+
+def createGaugeBindings(m: dict) -> str:
+    res = ""
+    for item in m["ports-control"]:
+        if item["type"] == "gauge":
+            for binding in item.get("bindings", []):
+                expr = f"""processorRef.{binding["from"]}()"""
+                if "cast" in binding:
+                    expr = f"""static_cast<{binding["cast"]}>({expr})"""
+                res += f"""{item["symbol"]}Gauge.{binding["call"]}({expr});\n"""
+    return res
+
+def createSwitchLabelSwaps(m: dict) -> str:
+    res = ""
+    for item in m["ports-control"]:
+        if item["type"] == "switch" and "state_label" in item:
+            state_label = item["state_label"]
+            res += (f"""{item["symbol"]}Switch.setButtonText(processorRef.{state_label["query"]}() """
+                     f"""? juce::String::fromUTF8("{state_label["on"]}") """
+                     f""": juce::String::fromUTF8("{state_label["off"]}"));\n""")
+    return res
+
 def createGaugeCallbacks(m:dict) -> str:
     res = ""
     for item in m["ports-control"]:
@@ -162,6 +191,9 @@ def createGaugeCallbacks(m:dict) -> str:
                     res += f"""{item["symbol"]}Gauge.update(processorRef.getSpectrogram());\n"""
                 case "signal":
                     res += f"""{item["symbol"]}Gauge.update(processorRef.getWaveDataToShow());\n"""
+    res += createGaugeBindings(m)
+    res += createMomentaryFlashTicks(m)
+    res += createSwitchLabelSwaps(m)
     extra = m.get("extra_timer_callbacks", [])
     if extra:
         res += "\n" + "\n".join(extra) + "\n"
@@ -338,7 +370,8 @@ def createWidgetsDecl(m: dict) -> str:
                 res += f"CustomRotaryDial {varname}{{this}};\n"
             case "switch":
                 varname = f"{symbol}Switch"
-                res += f"""juce::ToggleButton {varname}{{juce::String::fromUTF8("{item['display']}")}};\n"""
+                switchType = "MomentaryToggleButton" if item.get("momentary", False) else "juce::ToggleButton"
+                res += f"""{switchType} {varname}{{juce::String::fromUTF8("{item['display']}")}};\n"""
                 res += f"std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> {varname}Attachment;\n"
             case "drop":
                 varname = f"{symbol}Drop"
@@ -435,11 +468,47 @@ def createExtraPrivateMethods(m: dict) -> str:
             res += f"""    resized();\n  }}\n\n"""
     return res
 
+
+# Types safe to default without construction/allocation, hence eligible for noexcept.
+noexceptForwardTypes = {"bool", "int", "float", "double", "size_t", "uint32_t", "int64_t"}
+
+def defaultForwardValue(cpp_type: str, override) -> str:
+    if override is not None:
+        return str(override)
+    match cpp_type:
+        case "bool":
+            return "false"
+        case "float" | "double":
+            return "0.f" if cpp_type == "float" else "0.0"
+        case "size_t" | "uint32_t":
+            return "0u"
+        case "int" | "int64_t":
+            return "0"
+        case _:
+            return f"{cpp_type}{{}}"
+
+def createProcessorForwards(m: dict) -> str:
+    res = ""
+    for item in m.get("processor_forwards", []):
+        name = item["name"]
+        call = item.get("call", name)
+        cpp_type = item["type"]
+        default = defaultForwardValue(cpp_type, item.get("default"))
+        is_noexcept = item["noexcept"] if "noexcept" in item else cpp_type in noexceptForwardTypes
+        noexcept_kw = " noexcept" if is_noexcept else ""
+        if cpp_type == "bool" and "default" not in item:
+            body = f"pluginRunner && pluginRunner->{call}()"
+        else:
+            body = f"pluginRunner ? pluginRunner->{call}() : {default}"
+        res += f"[[nodiscard]] {cpp_type} {name}() const{noexcept_kw} {{ return {body}; }}\n"
+    return res
+
 def createExtraProcessorMethods(m: dict) -> str:
+    res = createProcessorForwards(m)
     methods = m.get("extra_processor_methods", [])
-    if not methods:
-        return ""
-    return "\n".join(methods) + "\n"
+    if methods:
+        res += "\n".join(methods) + "\n"
+    return res
 
 
 def addParameterListeners(m:dict):

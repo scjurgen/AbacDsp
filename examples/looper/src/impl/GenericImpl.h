@@ -74,17 +74,13 @@ class GenericImpl final : public EffectBase
     {
         m_freeze = value;
     }
-    void setSeqTrack(const float value)
+    void setSeqPlay(const bool value)
     {
-        m_seqTrack = value;
+        m_seqPlay = value;
     }
-    void setSeqSlice(const float value)
+    void setClearSeq(const bool value)
     {
-        m_seqSlice = value;
-    }
-    void setSeqTrigger(const bool value)
-    {
-        m_seqTrigger = value;
+        m_clearSeq = value;
     }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
@@ -127,9 +123,8 @@ class GenericImpl final : public EffectBase
     float m_loopVolume{};
     float m_recThreshold{};
     bool m_freeze{};
-    float m_seqTrack{};
-    float m_seqSlice{};
-    bool m_seqTrigger{};
+    bool m_seqPlay{};
+    bool m_clearSeq{};
 
 
     std::vector<float> m_visualWavedata;

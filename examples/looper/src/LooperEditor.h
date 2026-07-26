@@ -134,7 +134,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(seqTriggerSwitch)
+            box.items.add(juce::FlexItem(seqPlaySwitch)
+                              .withFlex(0)
+                              .withHeight(Constants::Text::labelHeight)
+                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                              .withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(clearSeqSwitch)
                               .withFlex(0)
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
@@ -151,8 +156,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(seqTrackDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(seqSliceDial).withFlex(1).withMargin(knobMarginSmall));
             box.performLayout(areas[1].toFloat());
         }
         {
@@ -160,7 +163,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.flexWrap = juce::FlexBox::Wrap::noWrap;
             box.flexDirection = juce::FlexBox::Direction::column;
             box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(beatGauge).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(beatGauge).withFlex(5).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(sliceGauge).withFlex(1).withMargin(knobMarginSmall));
             box.performLayout(areas[2].toFloat());
         }
@@ -173,68 +176,47 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         {
             beatGauge.update(processorRef.getWaveDataToShow());
             sliceGauge.update(processorRef.getWaveDataToShow());
+            beatGauge.setSampleRate(static_cast<float>(processorRef.getSampleRate()));
+            beatGauge.setSamplesPerBar(processorRef.getSamplesPerBar());
+            beatGauge.setBarBeats(processorRef.getBarBeats());
+            beatGauge.setBarPhase(processorRef.getBarPhase());
+            beatGauge.setSubdivisionPositions(processorRef.getSubdivisionPositions());
+            beatGauge.setLoopWaveform(processorRef.getLoopWaveform());
+            beatGauge.setSliceBoundaries(processorRef.getSliceBoundaries());
+            beatGauge.setPlayheadNormalized(processorRef.getPlayheadNormalized());
+            beatGauge.setOuterRingBars(processorRef.getOuterRingBars());
+            beatGauge.setStateLabel(processorRef.getLooperStateLabel());
+            beatGauge.setSpectrogram(processorRef.getSpectrogramData());
+            beatGauge.setRecordHeadFrames(processorRef.getSpectrogramHeadFrames());
+            sliceGauge.setSampleRate(static_cast<float>(processorRef.getSampleRate()));
+            sliceGauge.setLoopWaveform(processorRef.getLoopWaveform());
+            sliceGauge.setSliceBoundaries(processorRef.getSliceBoundaries());
+            sliceGauge.setPlayheadNormalized(processorRef.getPlayheadNormalized());
+            sliceGauge.setStateLabel(processorRef.getLooperStateLabel());
+            recordSwitch.tickFlash();
+            playSwitch.tickFlash();
+            overdubSwitch.tickFlash();
+            clearSwitch.tickFlash();
+            freezeSwitch.tickFlash();
+            seqPlaySwitch.tickFlash();
+            clearSeqSwitch.tickFlash();
+            playSwitch.setButtonText(processorRef.isPlaying() ? juce::String::fromUTF8("Stop")
+                                                              : juce::String::fromUTF8("Play"));
+            overdubSwitch.setButtonText(processorRef.isOverdubbing() ? juce::String::fromUTF8("Overdubbing")
+                                                                     : juce::String::fromUTF8("Overdub"));
+            seqPlaySwitch.setButtonText(processorRef.isSequencerPlaying() ? juce::String::fromUTF8("Seq Stop")
+                                                                          : juce::String::fromUTF8("Seq Play"));
 
-            {
-                const float sr = static_cast<float>(processorRef.getSampleRate());
-                sliceGauge.setSampleRate(sr);
-                sliceGauge.setLoopWaveform(processorRef.getLoopWaveform());
-                sliceGauge.setSliceBoundaries(processorRef.getSliceBoundaries());
-                sliceGauge.setPlayheadNormalized(processorRef.getPlayheadNormalized());
-                sliceGauge.setStateLabel(processorRef.getLooperStateLabel());
-                beatGauge.setSampleRate(sr);
-                beatGauge.setSamplesPerBar(processorRef.getSamplesPerBar());
-                beatGauge.setBarBeats(processorRef.getBarBeats());
-                beatGauge.setBarPhase(processorRef.getBarPhase());
-                beatGauge.setSubdivisionPositions(processorRef.getSubdivisionPositions());
-                beatGauge.setLoopWaveform(processorRef.getLoopWaveform());
-                beatGauge.setSliceBoundaries(processorRef.getSliceBoundaries());
-                beatGauge.setPlayheadNormalized(processorRef.getPlayheadNormalized());
-                beatGauge.setOuterRingBars(processorRef.getOuterRingBars());
-                beatGauge.setStateLabel(processorRef.getLooperStateLabel());
-                beatGauge.setSpectrogram(processorRef.getSpectrogramData());
-                beatGauge.setRecordHeadFrames(processorRef.getSpectrogramHeadFrames());
-                recordSwitch.setButtonText(processorRef.isRecording()
-                                               ? juce::String::fromUTF8("Recording")
-                                               : (processorRef.isArmed() ? juce::String::fromUTF8("Armed")
-                                                                         : juce::String::fromUTF8("Record")));
-                playSwitch.setButtonText(processorRef.isPlaying() ? juce::String::fromUTF8("Stop")
-                                                                  : juce::String::fromUTF8("Play"));
-                overdubSwitch.setButtonText(processorRef.isOverdubbing() ? juce::String::fromUTF8("Overdubbing")
-                                                                         : juce::String::fromUTF8("Overdub"));
-                freezeSwitch.setButtonText(
-                    processorRef.isFreezePending()
-                        ? juce::String::fromUTF8("Freezing...")
-                        : (juce::String::fromUTF8("Freeze (") + juce::String(processorRef.getFrozenTrackCount()) +
-                           juce::String::fromUTF8(" trk/") + juce::String(processorRef.getFrozenSliceCount()) +
-                           juce::String::fromUTF8(" sl)")));
-                seqTriggerSwitch.setButtonText(juce::String::fromUTF8("Trigger (") +
-                                               juce::String(processorRef.getActiveSequencerVoices()) +
-                                               juce::String::fromUTF8(" voices)"));
-                if (recordSwitch.getToggleState())
-                {
-                    recordSwitch.setToggleState(false, juce::sendNotification);
-                }
-                if (playSwitch.getToggleState())
-                {
-                    playSwitch.setToggleState(false, juce::sendNotification);
-                }
-                if (overdubSwitch.getToggleState())
-                {
-                    overdubSwitch.setToggleState(false, juce::sendNotification);
-                }
-                if (clearSwitch.getToggleState())
-                {
-                    clearSwitch.setToggleState(false, juce::sendNotification);
-                }
-                if (freezeSwitch.getToggleState())
-                {
-                    freezeSwitch.setToggleState(false, juce::sendNotification);
-                }
-                if (seqTriggerSwitch.getToggleState())
-                {
-                    seqTriggerSwitch.setToggleState(false, juce::sendNotification);
-                }
-            }
+            recordSwitch.setButtonText(
+                processorRef.isRecording()
+                    ? juce::String::fromUTF8("Recording")
+                    : (processorRef.isArmed() ? juce::String::fromUTF8("Armed") : juce::String::fromUTF8("Record")));
+            freezeSwitch.setButtonText(
+                processorRef.isFreezePending()
+                    ? juce::String::fromUTF8("Freezing...")
+                    : (juce::String::fromUTF8("Freeze (") + juce::String(processorRef.getFrozenTrackCount()) +
+                       juce::String::fromUTF8(" trk/") + juce::String(processorRef.getFrozenSliceCount()) +
+                       juce::String::fromUTF8(" sl)")));
             processorRef.consumeLastLearnedCc();
         }
     }
@@ -320,27 +302,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         freezeSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "freeze", freezeSwitch);
 
-        addAndMakeVisible(seqTrackDial);
-        seqTrackDial.reset(valueTreeState, "seqTrack");
-        seqTrackDial.setLabelText(juce::String::fromUTF8("Seq Track"));
-        seqTrackDial.setCcMappable(true,
-                                   {[this] { processorRef.beginCcLearn(CcTarget::seqTrack); },
-                                    [this] { return processorRef.getCcRange(CcTarget::seqTrack); },
-                                    [this](float lo, float hi) { processorRef.setCcRange(CcTarget::seqTrack, lo, hi); },
-                                    [this] { processorRef.clearCcAssignment(CcTarget::seqTrack); },
-                                    [this] { return processorRef.getCcController(CcTarget::seqTrack); }});
-        addAndMakeVisible(seqSliceDial);
-        seqSliceDial.reset(valueTreeState, "seqSlice");
-        seqSliceDial.setLabelText(juce::String::fromUTF8("Seq Slice"));
-        seqSliceDial.setCcMappable(true,
-                                   {[this] { processorRef.beginCcLearn(CcTarget::seqSlice); },
-                                    [this] { return processorRef.getCcRange(CcTarget::seqSlice); },
-                                    [this](float lo, float hi) { processorRef.setCcRange(CcTarget::seqSlice, lo, hi); },
-                                    [this] { processorRef.clearCcAssignment(CcTarget::seqSlice); },
-                                    [this] { return processorRef.getCcController(CcTarget::seqSlice); }});
-        addAndMakeVisible(seqTriggerSwitch);
-        seqTriggerSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
-            valueTreeState, "seqTrigger", seqTriggerSwitch);
+        addAndMakeVisible(seqPlaySwitch);
+        seqPlaySwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "seqPlay", seqPlaySwitch);
+
+        addAndMakeVisible(clearSeqSwitch);
+        clearSeqSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "clearSeq", clearSeqSwitch);
 
         addAndMakeVisible(beatGauge);
         beatGauge.setLabelText(juce::String::fromUTF8("Bar"));
@@ -612,13 +580,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AlertWindow> m_patchNameDialog;
     std::vector<juce::String> m_patchMenuNames;
 
-    juce::ToggleButton recordSwitch{juce::String::fromUTF8("Record")};
+    MomentaryToggleButton recordSwitch{juce::String::fromUTF8("Record")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> recordSwitchAttachment;
-    juce::ToggleButton playSwitch{juce::String::fromUTF8("Play")};
+    MomentaryToggleButton playSwitch{juce::String::fromUTF8("Play")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> playSwitchAttachment;
-    juce::ToggleButton overdubSwitch{juce::String::fromUTF8("Overdub")};
+    MomentaryToggleButton overdubSwitch{juce::String::fromUTF8("Overdub")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> overdubSwitchAttachment;
-    juce::ToggleButton clearSwitch{juce::String::fromUTF8("Clear")};
+    MomentaryToggleButton clearSwitch{juce::String::fromUTF8("Clear")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> clearSwitchAttachment;
     juce::ToggleButton threshRecSwitch{juce::String::fromUTF8("Thresh Rec")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> threshRecSwitchAttachment;
@@ -633,12 +601,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial clickVolumeDial{this};
     CustomRotaryDial loopVolumeDial{this};
     CustomRotaryDial recThresholdDial{this};
-    juce::ToggleButton freezeSwitch{juce::String::fromUTF8("Freeze")};
+    MomentaryToggleButton freezeSwitch{juce::String::fromUTF8("Freeze")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> freezeSwitchAttachment;
-    CustomRotaryDial seqTrackDial{this};
-    CustomRotaryDial seqSliceDial{this};
-    juce::ToggleButton seqTriggerSwitch{juce::String::fromUTF8("Trigger")};
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> seqTriggerSwitchAttachment;
+    MomentaryToggleButton seqPlaySwitch{juce::String::fromUTF8("Seq Play")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> seqPlaySwitchAttachment;
+    MomentaryToggleButton clearSeqSwitch{juce::String::fromUTF8("Clear Seq")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> clearSeqSwitchAttachment;
     CircularLoopDisplay beatGauge{};
     SliceWaveDisplay sliceGauge{};
 

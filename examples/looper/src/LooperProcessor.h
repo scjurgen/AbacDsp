@@ -48,11 +48,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("loopVolume", this);
         m_parameters.addParameterListener("recThreshold", this);
         m_parameters.addParameterListener("freeze", this);
-        m_parameters.addParameterListener("seqTrack", this);
-        m_parameters.addParameterListener("seqSlice", this);
-        m_parameters.addParameterListener("seqTrigger", this);
+        m_parameters.addParameterListener("seqPlay", this);
+        m_parameters.addParameterListener("clearSeq", this);
 
-        for (size_t i = 0; i < 14; ++i)
+        for (size_t i = 0; i < 13; ++i)
         {
             m_ccActive[i].controller.store(kDefaultCcMappings[i].controller, std::memory_order_relaxed);
             m_ccActive[i].valueLow.store(kDefaultCcMappings[i].valueLow, std::memory_order_relaxed);
@@ -76,9 +75,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("loopVolume", this);
         m_parameters.removeParameterListener("recThreshold", this);
         m_parameters.removeParameterListener("freeze", this);
-        m_parameters.removeParameterListener("seqTrack", this);
-        m_parameters.removeParameterListener("seqSlice", this);
-        m_parameters.removeParameterListener("seqTrigger", this);
+        m_parameters.removeParameterListener("seqPlay", this);
+        m_parameters.removeParameterListener("clearSeq", this);
     }
 
     void prepareToPlay(const double sampleRate, const int samplesPerBlock) override
@@ -99,7 +97,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
         for (const auto& entry : CcSettings::load())
         {
-            for (size_t i = 0; i < 14; ++i)
+            for (size_t i = 0; i < 13; ++i)
             {
                 if (kCcTargetParamIds[i] != entry.paramId)
                 {
@@ -302,15 +300,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " dB"; })));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("freeze", 1), "Freeze", 0));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("seqTrack", 1), "Seq Track", juce::NormalisableRange<float>(0, 15, 1, 1, false), 0,
-            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " "; })));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("seqSlice", 1), "Seq Slice", juce::NormalisableRange<float>(0, 63, 1, 1, false), 0,
-            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " "; })));
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("seqTrigger", 1), "Trigger", 0));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("seqPlay", 1), "Seq Play", 0));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("clearSeq", 1), "Clear Seq", 0));
 
         return {params.begin(), params.end()};
     }
@@ -409,23 +400,17 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                  p.pluginRunner->setFreeze(static_cast<bool>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::freeze, v);
              }},
-            {"seqTrack",
+            {"seqPlay",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setSeqTrack(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::seqTrack, v);
+                 p.pluginRunner->setSeqPlay(static_cast<bool>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::seqPlay, v);
              }},
-            {"seqSlice",
+            {"clearSeq",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setSeqSlice(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::seqSlice, v);
-             }},
-            {"seqTrigger",
-             [](AudioPluginAudioProcessor& p, const float v)
-             {
-                 p.pluginRunner->setSeqTrigger(static_cast<bool>(v));
-                 p.m_fileIo.updateParameter(PatchParameters::Id::seqTrigger, v);
+                 p.pluginRunner->setClearSeq(static_cast<bool>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::clearSeq, v);
              }},
 
         };
@@ -540,22 +525,16 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             float normalized = range.convertTo0to1(params.freeze);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("seqTrack"))
+        if (auto* p = m_parameters.getParameter("seqPlay"))
         {
-            const auto& range = m_parameters.getParameterRange("seqTrack");
-            float normalized = range.convertTo0to1(params.seqTrack);
+            const auto& range = m_parameters.getParameterRange("seqPlay");
+            float normalized = range.convertTo0to1(params.seqPlay);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("seqSlice"))
+        if (auto* p = m_parameters.getParameter("clearSeq"))
         {
-            const auto& range = m_parameters.getParameterRange("seqSlice");
-            float normalized = range.convertTo0to1(params.seqSlice);
-            p->setValueNotifyingHost(normalized);
-        }
-        if (auto* p = m_parameters.getParameter("seqTrigger"))
-        {
-            const auto& range = m_parameters.getParameterRange("seqTrigger");
-            float normalized = range.convertTo0to1(params.seqTrigger);
+            const auto& range = m_parameters.getParameterRange("clearSeq");
+            float normalized = range.convertTo0to1(params.clearSeq);
             p->setValueNotifyingHost(normalized);
         }
     }
@@ -731,15 +710,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner ? pluginRunner->getBarPhase() : 0.f;
     }
-    [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
-    {
-        static const std::vector<size_t> empty{};
-        return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty;
-    }
-    [[nodiscard]] juce::String getLooperStateLabel() const
-    {
-        return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String();
-    }
     [[nodiscard]] bool isFreezePending() const noexcept
     {
         return pluginRunner && pluginRunner->isFreezePending();
@@ -752,9 +722,18 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner ? pluginRunner->getFrozenSliceCount() : 0u;
     }
-    [[nodiscard]] size_t getActiveSequencerVoices() const noexcept
+    [[nodiscard]] bool isSequencerPlaying() const noexcept
     {
-        return pluginRunner ? pluginRunner->getActiveSequencerVoices() : 0u;
+        return pluginRunner && pluginRunner->isSequencerPlaying();
+    }
+    [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
+    {
+        static const std::vector<size_t> empty{};
+        return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty;
+    }
+    [[nodiscard]] juce::String getLooperStateLabel() const
+    {
+        return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String();
     }
 
 
@@ -828,7 +807,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         std::atomic<float> valueLow{0.f};
         std::atomic<float> valueHigh{0.f};
     };
-    std::array<CcSlot, 14> m_ccActive{};
+    std::array<CcSlot, 13> m_ccActive{};
     std::atomic<int> m_learnTargetIndex{-1};
     std::atomic<int> m_lastLearnedIndex{-1};
 
@@ -841,8 +820,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     void saveCcSettings() const
     {
         std::vector<CcMappingOverride> overrides;
-        overrides.reserve(14);
-        for (size_t i = 0; i < 14; ++i)
+        overrides.reserve(13);
+        for (size_t i = 0; i < 13; ++i)
         {
             overrides.push_back({std::string(kCcTargetParamIds[i]),
                                  m_ccActive[i].controller.load(std::memory_order_relaxed),
@@ -862,7 +841,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_lastLearnedIndex.store(learnIndex, std::memory_order_relaxed);
             return;
         }
-        for (size_t i = 0; i < 14; ++i)
+        for (size_t i = 0; i < 13; ++i)
         {
             if (m_ccActive[i].controller.load(std::memory_order_relaxed) != controller)
             {

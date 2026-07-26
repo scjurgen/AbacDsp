@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <concepts>
+#include <iostream>
 
 #include "Generators/BeatSequencer.h"
 #include "Numbers/Interpolation.h"
@@ -49,6 +50,9 @@ struct PassthroughEffect
 // default; swap in a real one via the template parameter once
 // Dynamics/Compressor.h etc. exist). Not thread-safe; library/pattern
 // pointers are borrowed and must outlive the engine.
+// NOTE: triggerVoice() logs every trigger via std::cout for diagnostics.
+// This is NOT realtime-safe (std::cout can block) -- accepted deliberately
+// for now, revisit if it causes audio-thread dropouts.
 template <VoiceEffect Effect = PassthroughEffect>
 class SequencerEngine
 {
@@ -76,6 +80,23 @@ class SequencerEngine
     void setFadeMs(const float ms) noexcept
     {
         m_fadeFrames = std::max<size_t>(1, static_cast<size_t>(ms / 1000.f * m_sampleRate));
+    }
+
+    // Gates pattern-driven triggering only (bar tracking keeps running, so
+    // re-enabling later stays in sync with the shared clock); voices already
+    // playing when disabled are silenced immediately via reset().
+    void setEnabled(const bool enabled) noexcept
+    {
+        if (m_enabled && !enabled)
+        {
+            reset();
+        }
+        m_enabled = enabled;
+    }
+
+    [[nodiscard]] bool isEnabled() const noexcept
+    {
+        return m_enabled;
     }
 
     void reset() noexcept
@@ -122,6 +143,7 @@ class SequencerEngine
                                                              const size_t samplesPerBeat) noexcept
     {
         checkTriggers(event, samplesPerBeat);
+        ++m_sampleCounter;
         std::array<float, kChannels> out{0.f, 0.f};
         for (Voice& voice : m_voices)
         {
@@ -155,7 +177,7 @@ class SequencerEngine
     // solve for the candidate step directly instead of scanning every step.
     void checkTriggers(const BeatSequencer::GridEvent& event, const size_t samplesPerBeat) noexcept
     {
-        if (m_pattern != nullptr && m_library != nullptr && samplesPerBeat > 0)
+        if (m_enabled && m_pattern != nullptr && m_library != nullptr && samplesPerBeat > 0)
         {
             const size_t stepsPerBeat = m_pattern->stepsPerBeat();
             const size_t stepInBeat = event.beatSamplePos * stepsPerBeat / samplesPerBeat;
@@ -201,6 +223,9 @@ class SequencerEngine
         {
             return;
         }
+        std::cout << (static_cast<double>(m_sampleCounter) / static_cast<double>(m_sampleRate)) << " slice "
+                  << sequenceEvent.sliceIndex << " track " << sequenceEvent.track << '\n';
+
         const auto pitchRatio = sequenceEvent.pitchRatio > 0.f ? sequenceEvent.pitchRatio : 1.f;
         const auto normalizeFactor = info.peak > 1e-6f ? 1.f / info.peak : 1.f;
         Voice& voice = allocateVoice();
@@ -287,6 +312,8 @@ class SequencerEngine
     const SliceLibrary* m_library{nullptr};
     const SequencePattern* m_pattern{nullptr};
     size_t m_barIndex{0};
+    bool m_enabled{true};
+    uint64_t m_sampleCounter{0}; // for the trigger-log timestamp only
     std::array<Voice, kMaxVoices> m_voices{};
     uint64_t m_triggerCounter{1};
 };

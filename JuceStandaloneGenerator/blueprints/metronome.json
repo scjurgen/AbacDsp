@@ -31,8 +31,20 @@
      "visible_when": "processorRef.presetHasSwing(presetDrop.getSelectedItemIndex())",
      "depends_on": "preset",
      "cc": {"controller": 24}},
-    {"short": "SIG",  "type": "gauge",  "gaugetype": "signal",       "display": "Beat",       "symbol": "signal",     "customtype": "CircularBeatDisplay"},
-    {"short": "IRIS", "type": "gauge",  "gaugetype": "iris",         "display": "Spectrum Iris", "symbol": "iris", "customtype": "CircularSpectrogramDisplay"}
+    {"short": "SIG",  "type": "gauge",  "gaugetype": "signal",       "display": "Beat",       "symbol": "signal",     "customtype": "CircularBeatDisplay",
+      "bindings": [
+        {"call": "setSampleRate", "from": "getSampleRate", "cast": "float"},
+        {"call": "setBeatIndex", "from": "getWaveDataBeatIndex"},
+        {"call": "setSubdivisionPositions", "from": "getSubdivisionPositions"}
+      ]},
+    {"short": "IRIS", "type": "gauge",  "gaugetype": "iris",         "display": "Spectrum Iris", "symbol": "iris", "customtype": "CircularSpectrogramDisplay",
+      "bindings": [
+        {"call": "setSampleRate", "from": "getSampleRate", "cast": "float"},
+        {"call": "setBarBeats", "from": "getBarBeats"},
+        {"call": "setBarPhase", "from": "getBarPhase"},
+        {"call": "setSubdivisionPositions", "from": "getSubdivisionPositions"},
+        {"call": "update", "from": "getInputSpectrogram"}
+      ]}
   ],
   "layout": {
     "WINDOW_WIDTH": "960",
@@ -51,26 +63,20 @@
     "bpmDial.setEnabled(!processorRef.isHostSynced());",
     "if (processorRef.isHostSynced()) { bpmDial.setValue(bpm); }",
     "onOffSwitch.setEnabled(!processorRef.isHostSynced());",
-    "signalGauge.setSampleRate(sr);",
     "signalGauge.setSamplesPerBeat(spb);",
-    "signalGauge.setBeatIndex(processorRef.getWaveDataBeatIndex());",
-    "signalGauge.setSubdivisionPositions(processorRef.getSubdivisionPositions());",
-    "irisGauge.setSampleRate(sr);",
-    "irisGauge.setSamplesPerBeat(spb);",
-    "irisGauge.setBarBeats(processorRef.getBarBeats());",
-    "irisGauge.setBarPhase(processorRef.getBarPhase());",
-    "irisGauge.setSubdivisionPositions(processorRef.getSubdivisionPositions());",
-    "irisGauge.update(processorRef.getInputSpectrogram()); }"
+    "irisGauge.setSamplesPerBeat(spb); }"
+  ],
+  "processor_forwards": [
+    {"name": "getCurrentClickBpm", "call": "currentClickBpm", "type": "float", "default": "120.f"},
+    {"name": "isHostSynced", "type": "bool"},
+    {"name": "getWaveDataBeatIndex", "call": "getBeatIndex", "type": "size_t"},
+    {"name": "getBarBeats", "type": "int", "default": 4},
+    {"name": "getBarPhase", "type": "float"},
+    {"name": "getInputSpectrogram", "call": "getSpectrogramData", "type": "AbacDsp::SpectrumImageSet"}
   ],
   "extra_processor_methods": [
     "[[nodiscard]] bool presetHasSwing(int idx) const noexcept { return pluginRunner && pluginRunner->isPresetSwing(idx); }",
-    "[[nodiscard]] float getCurrentClickBpm() const noexcept { return pluginRunner ? pluginRunner->currentClickBpm() : 120.f; }",
-    "[[nodiscard]] bool isHostSynced() const noexcept { return pluginRunner && pluginRunner->isHostSynced(); }",
-    "[[nodiscard]] size_t getWaveDataBeatIndex() const noexcept { return pluginRunner ? pluginRunner->getBeatIndex() : 0u; }",
-    "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }",
-    "[[nodiscard]] int getBarBeats() const noexcept { return pluginRunner ? pluginRunner->getBarBeats() : 4; }",
-    "[[nodiscard]] float getBarPhase() const noexcept { return pluginRunner ? pluginRunner->getBarPhase() : 0.f; }",
-    "[[nodiscard]] AbacDsp::SpectrumImageSet getInputSpectrogram() const { return pluginRunner ? pluginRunner->getSpectrogramData() : AbacDsp::SpectrumImageSet{}; }"
+    "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }"
   ],
   "protected_files": [],
   "host_transport": true,

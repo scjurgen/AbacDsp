@@ -135,6 +135,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         if (processorRef.hasRunner())
         {
             signalGauge.update(processorRef.getWaveDataToShow());
+            signalGauge.setSampleRate(static_cast<float>(processorRef.getSampleRate()));
+            signalGauge.setBeatIndex(processorRef.getWaveDataBeatIndex());
+            signalGauge.setSubdivisionPositions(processorRef.getSubdivisionPositions());
+            irisGauge.setSampleRate(static_cast<float>(processorRef.getSampleRate()));
+            irisGauge.setBarBeats(processorRef.getBarBeats());
+            irisGauge.setBarPhase(processorRef.getBarPhase());
+            irisGauge.setSubdivisionPositions(processorRef.getSubdivisionPositions());
+            irisGauge.update(processorRef.getInputSpectrogram());
 
             {
                 const float sr = static_cast<float>(processorRef.getSampleRate());
@@ -146,16 +154,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                     bpmDial.setValue(bpm);
                 }
                 onOffSwitch.setEnabled(!processorRef.isHostSynced());
-                signalGauge.setSampleRate(sr);
                 signalGauge.setSamplesPerBeat(spb);
-                signalGauge.setBeatIndex(processorRef.getWaveDataBeatIndex());
-                signalGauge.setSubdivisionPositions(processorRef.getSubdivisionPositions());
-                irisGauge.setSampleRate(sr);
                 irisGauge.setSamplesPerBeat(spb);
-                irisGauge.setBarBeats(processorRef.getBarBeats());
-                irisGauge.setBarPhase(processorRef.getBarPhase());
-                irisGauge.setSubdivisionPositions(processorRef.getSubdivisionPositions());
-                irisGauge.update(processorRef.getInputSpectrogram());
             }
             processorRef.consumeLastLearnedCc();
         }

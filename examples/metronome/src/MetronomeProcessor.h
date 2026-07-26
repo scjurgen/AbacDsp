@@ -555,10 +555,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner->visualizeWaveData();
     }
-    [[nodiscard]] bool presetHasSwing(int idx) const noexcept
-    {
-        return pluginRunner && pluginRunner->isPresetSwing(idx);
-    }
     [[nodiscard]] float getCurrentClickBpm() const noexcept
     {
         return pluginRunner ? pluginRunner->currentClickBpm() : 120.f;
@@ -571,11 +567,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner ? pluginRunner->getBeatIndex() : 0u;
     }
-    [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
-    {
-        static const std::vector<size_t> empty{};
-        return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty;
-    }
     [[nodiscard]] int getBarBeats() const noexcept
     {
         return pluginRunner ? pluginRunner->getBarBeats() : 4;
@@ -587,6 +578,15 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     [[nodiscard]] AbacDsp::SpectrumImageSet getInputSpectrogram() const
     {
         return pluginRunner ? pluginRunner->getSpectrogramData() : AbacDsp::SpectrumImageSet{};
+    }
+    [[nodiscard]] bool presetHasSwing(int idx) const noexcept
+    {
+        return pluginRunner && pluginRunner->isPresetSwing(idx);
+    }
+    [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
+    {
+        static const std::vector<size_t> empty{};
+        return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty;
     }
 
 
