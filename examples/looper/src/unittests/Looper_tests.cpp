@@ -841,3 +841,116 @@ TEST(LooperLoopFile, LoadReportsConflictInsteadOfPickingSilently)
     const auto expectedSamplesPerBeat = static_cast<size_t>(kLoopFileSampleRate * 60.f / kJsonBpm);
     EXPECT_EQ(reader.getSamplesPerBar(), expectedSamplesPerBeat * reader.getBarBeats());
 }
+
+// Reuses kSampleRate/kBpm/kSamplesPerBar (5120 Hz, 120 BPM, 10240
+// samples/bar) and the Looper/Buffer aliases from BeatLockMatrixTest above.
+TEST(RecordingModes, CountInPlaysClickThenStartsRecordingAfterNBars)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setCountInBars(2);
+
+    Buffer in{};
+    Buffer out{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        in(i, 0) = 1.f; // fed throughout; must never be captured during count-in
+        in(i, 1) = 1.f;
+    }
+
+    looper.setRecord(true);
+    looper.processBlock(in, out); // consumes the pulse; begins count-in
+    ASSERT_TRUE(looper.isCountingIn());
+    EXPECT_FALSE(looper.isRecording());
+
+    // Recording only ever starts in the same call that ends count-in, so an
+    // exact match below also proves it didn't start early.
+    constexpr size_t kExpectedCountInFrames = 2 * kSamplesPerBar;
+    size_t elapsed = kBlock;
+    while (looper.isCountingIn())
+    {
+        looper.processBlock(in, out);
+        elapsed += kBlock;
+        ASSERT_LE(elapsed, kExpectedCountInFrames + kBlock) << "count-in ran longer than expected";
+    }
+    EXPECT_EQ(elapsed, kExpectedCountInFrames + kBlock)
+        << "count-in should complete on the block that crosses exactly 2 bars";
+    EXPECT_TRUE(looper.isRecording());
+}
+
+TEST(RecordingModes, CountInCanBeCancelledByPressingRecordAgain)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setCountInBars(2);
+
+    Buffer in{};
+    Buffer out{};
+    looper.setRecord(true);
+    looper.processBlock(in, out);
+    ASSERT_TRUE(looper.isCountingIn());
+
+    looper.setRecord(true);
+    looper.processBlock(in, out);
+    EXPECT_FALSE(looper.isCountingIn());
+    EXPECT_FALSE(looper.isRecording());
+}
+
+TEST(RecordingModes, PresetBarsAutoStopsAfterExactlyNBars)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setRecordBars(2);
+
+    Buffer in{};
+    Buffer out{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        in(i, 0) = 0.3f;
+        in(i, 1) = -0.3f;
+    }
+
+    looper.setRecord(true);
+    looper.processBlock(in, out); // immediate button start (bar-locked, no thresh/count-in)
+    ASSERT_TRUE(looper.isRecording());
+
+    constexpr size_t kExpectedLength = 2 * kSamplesPerBar;
+    size_t elapsed = kBlock;
+    while (looper.isRecording())
+    {
+        looper.processBlock(in, out);
+        elapsed += kBlock;
+        ASSERT_LE(elapsed, kExpectedLength + 4 * kBlock) << "recording never auto-stopped";
+    }
+    EXPECT_TRUE(looper.isPlaying());
+    EXPECT_EQ(looper.rawLoopLengthFrames(), kExpectedLength);
+}
+
+TEST(RecordingModes, PlayStopsActiveRecording)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+
+    Buffer in{};
+    Buffer out{};
+    looper.setRecord(true);
+    looper.processBlock(in, out); // begins recording
+    ASSERT_TRUE(looper.isRecording());
+    for (int i = 0; i < 10; ++i)
+    {
+        looper.processBlock(in, out);
+    }
+    ASSERT_TRUE(looper.isRecording());
+
+    looper.setPlay(true);
+    for (int guard = 0; guard < 2000 && looper.isRecording(); ++guard)
+    {
+        looper.processBlock(in, out);
+    }
+    EXPECT_FALSE(looper.isRecording());
+    EXPECT_TRUE(looper.isPlaying());
+}

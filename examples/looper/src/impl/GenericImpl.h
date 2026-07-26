@@ -46,9 +46,13 @@ class GenericImpl final : public EffectBase
     {
         m_freeRecord = value;
     }
-    void setSliceMode(const size_t value)
+    void setCountInBars(const size_t value)
     {
-        m_sliceMode = value;
+        m_countInBars = value;
+    }
+    void setRecordBars(const size_t value)
+    {
+        m_recordBars = value;
     }
     void setSliceDivision(const size_t value)
     {
@@ -57,10 +61,6 @@ class GenericImpl final : public EffectBase
     void setBpm(const float value)
     {
         m_bpm = value;
-    }
-    void setSwing(const float value)
-    {
-        m_swing = value;
     }
     void setClickVolume(const float value)
     {
@@ -89,10 +89,6 @@ class GenericImpl final : public EffectBase
     void setClearSeq(const bool value)
     {
         m_clearSeq = value;
-    }
-    void setSaveWave(const bool value)
-    {
-        m_saveWave = value;
     }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
@@ -128,10 +124,10 @@ class GenericImpl final : public EffectBase
     bool m_threshRec{};
     bool m_hostSync{};
     bool m_freeRecord{};
-    size_t m_sliceMode{};
+    size_t m_countInBars{};
+    size_t m_recordBars{};
     size_t m_sliceDivision{};
     float m_bpm{};
-    float m_swing{};
     float m_clickVolume{};
     float m_clickRecordVolume{};
     float m_loopVolume{};
@@ -139,7 +135,6 @@ class GenericImpl final : public EffectBase
     bool m_freeze{};
     bool m_seqPlay{};
     bool m_clearSeq{};
-    bool m_saveWave{};
 
 
     std::vector<float> m_visualWavedata;

@@ -8,23 +8,18 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
-#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <functional>
-#include <iomanip>
 #include <iostream>
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <span>
-#include <sstream>
 #include <string>
 #include <thread>
 #include <utility>
 #include <vector>
-
-#include "AudioFile/SaveWav.h"
 
 #include "Analysis/FftMisc.h"
 #include "Analysis/Slicer.h"
@@ -115,24 +110,6 @@ class LooperImpl final : public EffectBase
                 }
             });
 
-        m_saveThread = std::jthread(
-            [this](const std::stop_token& stopToken)
-            {
-                uint64_t lastHandled = 0;
-                while (!stopToken.stop_requested())
-                {
-                    std::unique_lock lock(m_saveWaitMutex);
-                    m_saveCv.wait(lock, stopToken, [this, lastHandled]
-                                  { return m_saveRequestGen.load(std::memory_order_acquire) != lastHandled; });
-                    if (stopToken.stop_requested())
-                    {
-                        return;
-                    }
-                    lastHandled = m_saveRequestGen.load(std::memory_order_acquire);
-                    runSaveWave(lastHandled);
-                }
-            });
-
         m_loopSaveThread = std::jthread(
             [this](const std::stop_token& stopToken)
             {
@@ -175,10 +152,7 @@ class LooperImpl final : public EffectBase
     {
         m_bpm.store(value, std::memory_order_relaxed);
     }
-    void setSwing(const float value) noexcept
-    {
-        m_swing.store(value, std::memory_order_relaxed);
-    }
+
     void setClickVolume(const float value) noexcept
     {
         m_clickVol.store(value, std::memory_order_relaxed);
@@ -206,16 +180,23 @@ class LooperImpl final : public EffectBase
     {
         m_freeRecordReq.store(value, std::memory_order_relaxed);
     }
+    // 0 = manual stop (today's behavior); N = auto-stop after exactly N bars.
+    // Only applies to bar-locked takes (ignored while Free Record is active).
+    void setRecordBars(const int value) noexcept
+    {
+        m_recordBarsReq.store(value, std::memory_order_relaxed);
+    }
+    // 0 = off (record starts immediately); N = play N bars of metronome
+    // first, then auto-start a bar-locked take with no threshold needed.
+    void setCountInBars(const int value) noexcept
+    {
+        m_countInBarsReq.store(value, std::memory_order_relaxed);
+    }
     // Loop boundary click-free fade (record-stop wrap seam, and the
     // bar-locked relocate/fold edges), milliseconds.
     void setFadeMs(const float value) noexcept
     {
         m_fadeMs.store(value, std::memory_order_relaxed);
-    }
-    // Not consumed yet: reserved for the future on-demand slice sequencer.
-    void setSliceMode(const int value) noexcept
-    {
-        m_sliceMode.store(value, std::memory_order_relaxed);
     }
     void setSliceDivision(const int value) noexcept
     {
@@ -261,23 +242,7 @@ class LooperImpl final : public EffectBase
             m_freezePulse.store(true, std::memory_order_relaxed);
         }
     }
-    // Directory the "Save Wave" export writes into; set once during setup,
-    // well before the button that would race it can be pressed.
-    void setExportDirectory(std::string dir)
-    {
-        m_exportDirectory = std::move(dir);
-    }
-    // Exports the current loop to a timestamped WAV file, on a background
-    // worker (see runSaveWave()): file I/O is not RT-safe.
-    void setSaveWave(const bool value) noexcept
-    {
-        if (value)
-        {
-            m_saveWavePulse.store(true, std::memory_order_relaxed);
-        }
-    }
-
-    // Directory named loop saves/loads live in; set once during setup, like setExportDirectory().
+    // Directory named loop saves/loads live in; set once during setup.
     void setLoopsDirectory(std::string dir)
     {
         m_loopsDirectory = std::move(dir);
@@ -329,8 +294,8 @@ class LooperImpl final : public EffectBase
         return true; // sidecar rename failing isn't fatal; the wav already moved
     }
 
-    // Named save: mirrors requestSaveWave()'s guard/threading shape, but targets
-    // <loopsDirectory>/<name>.wav + .json instead of a timestamped debug dump.
+    // Guarded like requestFreeze(); writes <loopsDirectory>/<name>.wav + .json
+    // on a background worker (see runSaveLoopAs()): file I/O is not RT-safe.
     void requestSaveLoopAs(const std::string& name)
     {
         if (m_loopSavePending || isRecording() || isOverdubbing() || m_recorder.loopLengthFrames() == 0 ||
@@ -448,11 +413,19 @@ class LooperImpl final : public EffectBase
     {
         return m_armed;
     }
+    [[nodiscard]] bool isCountingIn() const noexcept
+    {
+        return m_countingIn;
+    }
     [[nodiscard]] const char* getStateLabel() const noexcept
     {
         if (m_armed)
         {
             return "Armed";
+        }
+        if (m_countingIn)
+        {
+            return "Counting in";
         }
         switch (m_recorder.state())
         {
@@ -559,18 +532,6 @@ class LooperImpl final : public EffectBase
     {
         return m_sequencerPlaying;
     }
-    [[nodiscard]] bool isSaveWavePending() const noexcept
-    {
-        return m_savePending;
-    }
-    // Path just written, cleared on read (call once per UI poll); empty if
-    // there's nothing new. Only impl state shared between the UI and worker.
-    [[nodiscard]] std::string consumeLastSavedFilename()
-    {
-        std::lock_guard<std::mutex> lock(m_lastSavedMutex);
-        return std::exchange(m_lastSavedFilename, std::string{});
-    }
-
     // totalSteps() is frame-accurate (stepsPerBeat == samplesPerBeat at freeze
     // time), so it doubles directly as each thumbnail's placement denominator.
     [[nodiscard]] std::vector<AbacDsp::SequencerSliceThumbnail> getSequencerSliceThumbnails() const
@@ -687,6 +648,14 @@ class LooperImpl final : public EffectBase
 
         handleTransportPulses();
 
+        // Virtual Record press once the preset bar count is reached; must run
+        // before m_seq advances so samplesToNearestBar() stays consistent.
+        if (m_autoStopArmed && isRecording() && !m_pendingStop && m_absPos + BlockSize > m_autoStopTickAbs)
+        {
+            m_autoStopArmed = false;
+            requestStop();
+        }
+
         // Feed the record spectrogram with the dry input while capturing; it freezes
         // (stops advancing) once recording stops, so the last image persists.
         if (isRecording())
@@ -704,6 +673,11 @@ class LooperImpl final : public EffectBase
         if (m_armed && blockPeak(in) >= m_recThresholdLinear)
         {
             m_armed = false;
+            startRecording();
+        }
+        if (m_countingIn && m_absPos + BlockSize > m_countInEndTickAbs)
+        {
+            m_countingIn = false;
             startRecording();
         }
 
@@ -731,7 +705,6 @@ class LooperImpl final : public EffectBase
             commitPendingStop();
         }
         checkFreezeCompletion();
-        checkSaveCompletion();
         checkLoopSaveCompletion();
         checkLoopLoadCompletion();
 
@@ -773,12 +746,6 @@ class LooperImpl final : public EffectBase
                 m_appliedBpm = bpm;
             }
         }
-        const float swing = m_swing.load(std::memory_order_relaxed);
-        if (std::not_equal_to<float>{}(swing, m_appliedSwing))
-        {
-            m_seq.setSwingRatio(swingPercentToRatio(swing));
-            m_appliedSwing = swing;
-        }
         const int division = m_sliceDivision.load(std::memory_order_relaxed);
         if (division != m_appliedDivision)
         {
@@ -792,6 +759,8 @@ class LooperImpl final : public EffectBase
         m_recThresholdLinear = std::pow(10.f, m_recThreshold.load(std::memory_order_relaxed) / 20.f);
         m_hostSync = m_hostSyncReq.load(std::memory_order_relaxed);
         m_freeRecord = m_freeRecordReq.load(std::memory_order_relaxed);
+        m_recordBars = m_recordBarsReq.load(std::memory_order_relaxed);
+        m_countInBars = m_countInBarsReq.load(std::memory_order_relaxed);
         const float fadeMs = m_fadeMs.load(std::memory_order_relaxed);
         if (std::not_equal_to<float>{}(fadeMs, m_appliedFadeMs))
         {
@@ -823,7 +792,6 @@ class LooperImpl final : public EffectBase
         const bool freezeReq = m_freezePulse.exchange(false, std::memory_order_relaxed);
         const bool seqPlayReq = m_seqPlayPulse.exchange(false, std::memory_order_relaxed);
         const bool clearSeqReq = m_clearSeqPulse.exchange(false, std::memory_order_relaxed);
-        const bool saveWaveReq = m_saveWavePulse.exchange(false, std::memory_order_relaxed);
 
         // The sequencer play/stop toggle and its own Clear only touch
         // sequencer-side state, never the recorder's own transport state, so
@@ -837,9 +805,9 @@ class LooperImpl final : public EffectBase
             clearSequencer();
         }
 
-        // A beat-locked stop, a freeze, or a WAV export is waiting on its own
+        // A bar-locked stop, a freeze, or a loop save/load is waiting on its own
         // async completion; drop pulses rather than race a conflicting action.
-        if (m_pendingStop || m_freezePending || m_savePending || m_loopSavePending || m_loopLoadPending)
+        if (m_pendingStop || m_freezePending || m_loopSavePending || m_loopLoadPending)
         {
             return;
         }
@@ -864,10 +832,6 @@ class LooperImpl final : public EffectBase
         {
             requestFreeze();
         }
-        if (saveWaveReq)
-        {
-            requestSaveWave();
-        }
     }
 
     // Clears only the looper's own recording; the frozen slice library, the
@@ -876,6 +840,8 @@ class LooperImpl final : public EffectBase
     void clearAll()
     {
         m_armed = false;
+        m_countingIn = false;
+        m_autoStopArmed = false;
         m_pendingStop = false;
         m_barLockedTake = false;
         m_recorder.clear();
@@ -904,9 +870,17 @@ class LooperImpl final : public EffectBase
         {
             requestStop();
         }
+        else if (m_countingIn)
+        {
+            m_countingIn = false; // pressing Record again while counting in cancels it
+        }
         else if (m_armed)
         {
             m_armed = false; // pressing Record again while armed disarms
+        }
+        else if (m_countInBars > 0)
+        {
+            beginCountIn();
         }
         else if (m_threshRecReq.load(std::memory_order_relaxed))
         {
@@ -916,6 +890,24 @@ class LooperImpl final : public EffectBase
         {
             startRecording();
         }
+    }
+
+    // Takes priority over threshold-arming: count-in always auto-starts once
+    // m_countInBars bar ticks elapse, no input crossing needed.
+    void beginCountIn()
+    {
+        m_countingIn = true;
+        const size_t spb = m_seq.samplesPerBeat();
+        const size_t samplesPerBar = spb * kBeatsPerBar;
+        long off = (spb > 0) ? m_seq.samplesToNearestBar() : 0;
+        if (off <= 0)
+        {
+            // Nearest tick is behind us, or we're sitting right on one: either
+            // way, a full bar of count-in must still elapse before the next one.
+            off += static_cast<long>(samplesPerBar);
+        }
+        m_countInEndTickAbs =
+            m_absPos + static_cast<uint64_t>(off) + static_cast<uint64_t>(m_countInBars - 1) * samplesPerBar;
     }
 
     // Remembers which path this take used, independent of later toggling.
@@ -934,7 +926,11 @@ class LooperImpl final : public EffectBase
 
     void togglePlay()
     {
-        if (isPlaying())
+        if (isRecording())
+        {
+            requestStop(); // Play also ends an active recording, same as pressing Record again
+        }
+        else if (isPlaying())
         {
             m_recorder.stop();
         }
@@ -1070,70 +1066,6 @@ class LooperImpl final : public EffectBase
         }
     }
 
-    // Refused while a save is already pending, the loop isn't stable, or empty;
-    // mirrors requestFreeze()'s shape. The worker does the actual file I/O.
-    void requestSaveWave()
-    {
-        if (m_savePending || isRecording() || isOverdubbing() || m_recorder.loopLengthFrames() == 0)
-        {
-            return;
-        }
-        m_saveRequestedGen = m_saveRequestGen.load(std::memory_order_relaxed) + 1;
-        m_savePending = true;
-        m_saveRequestGen.store(m_saveRequestedGen, std::memory_order_release);
-        m_saveCv.notify_one();
-    }
-
-    // Runs on m_saveThread only (blocking file I/O); safe to read m_recorder
-    // since m_savePending blocks every recorder-state-changing pulse meanwhile.
-    void runSaveWave(const uint64_t gen)
-    {
-        const size_t loopLen = m_recorder.loopLengthFrames();
-        if (loopLen > 0 && !m_exportDirectory.empty())
-        {
-            std::vector<float> left(loopLen);
-            std::vector<float> right(loopLen);
-            for (size_t f = 0; f < loopLen; ++f)
-            {
-                left[f] = m_recorder.sample(f, 0);
-                right[f] = m_recorder.sample(f, 1);
-            }
-            const std::string filename = m_exportDirectory + "/" + timestampedWaveFilename();
-            AudioUtility::SaveWav::saveStereoAs(filename, left, right, sampleRate());
-            std::cout << "LooperImpl: saved loop to " << filename << std::endl;
-            {
-                std::lock_guard<std::mutex> lock(m_lastSavedMutex);
-                m_lastSavedFilename = filename;
-            }
-        }
-        m_saveDoneGen.store(gen, std::memory_order_release);
-    }
-
-    [[nodiscard]] static std::string timestampedWaveFilename()
-    {
-        const auto now = std::chrono::system_clock::now();
-        const auto t = std::chrono::system_clock::to_time_t(now);
-        std::tm tmBuf{};
-#if defined(_WIN32)
-        localtime_s(&tmBuf, &t);
-#else
-        localtime_r(&t, &tmBuf);
-#endif
-        std::ostringstream oss;
-        oss << "loop_" << std::put_time(&tmBuf, "%Y%m%d_%H%M%S") << ".wav";
-        return oss.str();
-    }
-
-    // Audio thread, polled every block like checkFreezeCompletion().
-    void checkSaveCompletion()
-    {
-        if (!m_savePending || m_saveDoneGen.load(std::memory_order_acquire) != m_saveRequestedGen)
-        {
-            return;
-        }
-        m_savePending = false;
-    }
-
     // Named patches sanitize with juce::String; this is JUCE-free (Impl stays
     // library-agnostic), so filesystem-unsafe characters are stripped by hand.
     [[nodiscard]] static std::string sanitizeLoopName(const std::string& name)
@@ -1197,7 +1129,7 @@ class LooperImpl final : public EffectBase
         m_loopSaveDoneGen.store(gen, std::memory_order_release);
     }
 
-    // Audio thread, polled every block like checkSaveCompletion().
+    // Audio thread, polled every block like checkFreezeCompletion().
     void checkLoopSaveCompletion()
     {
         if (!m_loopSavePending || m_loopSaveDoneGen.load(std::memory_order_acquire) != m_loopSaveRequestedGen)
@@ -1332,6 +1264,14 @@ class LooperImpl final : public EffectBase
         m_tickAbs = m_absPos + static_cast<uint64_t>(off);
         snapshotStartPreRoll(m_tickAbs, m_absPos);
         m_recorder.beginRecord();
+
+        const size_t recordBars = recordBarsIndexToCount(m_recordBars);
+        m_autoStopArmed = recordBars > 0;
+        if (m_autoStopArmed)
+        {
+            const size_t samplesPerBar = spb * kBeatsPerBar;
+            m_autoStopTickAbs = m_tickAbs + static_cast<uint64_t>(recordBars) * samplesPerBar;
+        }
     }
 
     // A bar-locked take locks to the nearest tick; see the pendingStop check
@@ -1411,7 +1351,7 @@ class LooperImpl final : public EffectBase
     // Click and sequencer share one m_seq.advance() call per sample (it mutates position).
     void renderClickAndSequencer(std::array<float, BlockSize>& click, AbacDsp::AudioBuffer<2, BlockSize>& seqOut)
     {
-        const bool active = isRecording() || isPlaying() || m_armed;
+        const bool active = isRecording() || isPlaying() || m_armed || m_countingIn;
         const size_t samplesPerBeat = m_seq.samplesPerBeat();
         for (size_t i = 0; i < BlockSize; ++i)
         {
@@ -1441,11 +1381,6 @@ class LooperImpl final : public EffectBase
         }
     }
 
-    [[nodiscard]] static float swingPercentToRatio(const float percent) noexcept
-    {
-        return std::clamp(1.f + (percent - 50.f) / 50.f, 0.5f, 2.5f);
-    }
-
     [[nodiscard]] static AbacDsp::SubdivType divisionToSubdiv(const int division) noexcept
     {
         switch (division)
@@ -1458,6 +1393,26 @@ class LooperImpl final : public EffectBase
                 return AbacDsp::SubdivType::Sixteenth;
             default:
                 return AbacDsp::SubdivType::Sixteenth; // 1/32 approximated
+        }
+    }
+
+    // recordBars dropdown index -> bar count ("Manual", 1, 2, 4, 8, 16).
+    [[nodiscard]] static size_t recordBarsIndexToCount(const int index) noexcept
+    {
+        switch (index)
+        {
+            case 1:
+                return 1;
+            case 2:
+                return 2;
+            case 3:
+                return 4;
+            case 4:
+                return 8;
+            case 5:
+                return 16;
+            default:
+                return 0; // Manual
         }
     }
 
@@ -1476,7 +1431,6 @@ class LooperImpl final : public EffectBase
     size_t m_visualWindowSize{0};
 
     std::atomic<float> m_bpm{120.f};
-    std::atomic<float> m_swing{50.f};
     std::atomic<float> m_clickVol{-12.f};
     std::atomic<float> m_clickRecordVol{-60.f};
     std::atomic<float> m_loopVol{0.f};
@@ -1484,6 +1438,14 @@ class LooperImpl final : public EffectBase
     std::atomic<bool> m_threshRecReq{false};
     std::atomic<bool> m_freeRecordReq{false};
     bool m_freeRecord{false};
+    std::atomic<int> m_recordBarsReq{0};
+    int m_recordBars{0};
+    bool m_autoStopArmed{false}; // preset-bars auto-stop; set in beginBarLockedRecord()
+    uint64_t m_autoStopTickAbs{0};
+    std::atomic<int> m_countInBarsReq{0};
+    int m_countInBars{0};
+    bool m_countingIn{false};
+    uint64_t m_countInEndTickAbs{0};
     std::atomic<float> m_fadeMs{5.f};
     float m_loopGain{1.f};
     float m_clickRecordGain{0.f};
@@ -1504,7 +1466,6 @@ class LooperImpl final : public EffectBase
     std::atomic<bool> m_clearPulse{false};
 
     float m_appliedBpm{120.f};
-    float m_appliedSwing{50.f};
     int m_appliedDivision{1};
     float m_appliedFadeMs{-1.f};
     bool m_hostSync{false};
@@ -1540,21 +1501,8 @@ class LooperImpl final : public EffectBase
     std::condition_variable_any m_freezeCv;
     std::jthread m_freezeThread;
 
-    // "Save Wave" export; same generation-counter handshake as freeze, above.
-    std::string m_exportDirectory; // set once via setExportDirectory(), before any save
-    std::atomic<bool> m_saveWavePulse{false};
-    bool m_savePending{false};
-    uint64_t m_saveRequestedGen{0};
-    std::atomic<uint64_t> m_saveRequestGen{0};
-    std::atomic<uint64_t> m_saveDoneGen{0};
-    std::mutex m_saveWaitMutex;
-    std::condition_variable_any m_saveCv;
-    std::jthread m_saveThread;
-    std::mutex m_lastSavedMutex; // guards the hand-off below, UI-poll rate only
-    std::string m_lastSavedFilename;
-
     // Named loop save/load ("Loops" menu); same generation-counter handshake
-    // as "Save Wave" above, plus a load-side conflict-resolution handoff.
+    // as freeze, above, plus a load-side conflict-resolution handoff.
     std::string m_loopsDirectory; // set once via setLoopsDirectory(), before any save/load
     std::string m_loopSaveName;
     bool m_loopSavePending{false};

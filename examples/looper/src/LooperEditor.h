@@ -119,7 +119,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(sliceModeDrop)
+            box.items.add(juce::FlexItem(countInBarsDrop)
+                              .withFlex(0)
+                              .withHeight(Constants::Text::labelHeight)
+                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                              .withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(recordBarsDrop)
                               .withFlex(0)
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
@@ -144,11 +149,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(saveWaveSwitch)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
             box.performLayout(areas[0].toFloat());
         }
         {
@@ -157,7 +157,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.flexDirection = juce::FlexBox::Direction::column;
             box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
             box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(swingDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(clickRecordVolumeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
@@ -206,7 +205,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             freezeSwitch.tickFlash();
             seqPlaySwitch.tickFlash();
             clearSeqSwitch.tickFlash();
-            saveWaveSwitch.tickFlash();
             playSwitch.setButtonText(processorRef.isPlaying() ? juce::String::fromUTF8("Stop")
                                                               : juce::String::fromUTF8("Play"));
             overdubSwitch.setButtonText(processorRef.isOverdubbing() ? juce::String::fromUTF8("Overdubbing")
@@ -224,12 +222,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                     : (juce::String::fromUTF8("Freeze (") + juce::String(processorRef.getFrozenTrackCount()) +
                        juce::String::fromUTF8(" trk/") + juce::String(processorRef.getFrozenSliceCount()) +
                        juce::String::fromUTF8(" sl)")));
-            saveWaveSwitch.setButtonText(processorRef.isSaveWavePending() ? juce::String::fromUTF8("Saving...")
-                                                                          : juce::String::fromUTF8("Save Wave"));
-            if (const auto saved = processorRef.consumeLastSavedWaveFilename(); saved.isNotEmpty())
-            {
-                m_statusBar.showMessage(juce::String::fromUTF8("Saved: ") + juce::File(saved).getFileName());
-            }
             if (const auto saved = processorRef.consumeLastSavedLoopName(); saved.isNotEmpty())
             {
                 m_statusBar.showMessage(juce::String::fromUTF8("Saved '") + saved + "'");
@@ -269,10 +261,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         freeRecordSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "freeRecord", freeRecordSwitch);
 
-        addAndMakeVisible(sliceModeDrop);
-        sliceModeDrop.addItemList(valueTreeState.getParameter("sliceMode")->getAllValueStrings(), 1);
-        sliceModeDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-            valueTreeState, "sliceMode", sliceModeDrop);
+        addAndMakeVisible(countInBarsDrop);
+        countInBarsDrop.addItemList(valueTreeState.getParameter("countInBars")->getAllValueStrings(), 1);
+        countInBarsDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "countInBars", countInBarsDrop);
+        addAndMakeVisible(recordBarsDrop);
+        recordBarsDrop.addItemList(valueTreeState.getParameter("recordBars")->getAllValueStrings(), 1);
+        recordBarsDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "recordBars", recordBarsDrop);
         addAndMakeVisible(sliceDivisionDrop);
         sliceDivisionDrop.addItemList(valueTreeState.getParameter("sliceDivision")->getAllValueStrings(), 1);
         sliceDivisionDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
@@ -285,14 +281,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                      [this](float lo, float hi) { processorRef.setCcRange(CcTarget::bpm, lo, hi); },
                                      [this] { processorRef.clearCcAssignment(CcTarget::bpm); },
                                      [this] { return processorRef.getCcController(CcTarget::bpm); }});
-        addAndMakeVisible(swingDial);
-        swingDial.reset(valueTreeState, "swing");
-        swingDial.setLabelText(juce::String::fromUTF8("Swing"));
-        swingDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::swing); },
-                                       [this] { return processorRef.getCcRange(CcTarget::swing); },
-                                       [this](float lo, float hi) { processorRef.setCcRange(CcTarget::swing, lo, hi); },
-                                       [this] { processorRef.clearCcAssignment(CcTarget::swing); },
-                                       [this] { return processorRef.getCcController(CcTarget::swing); }});
         addAndMakeVisible(clickVolumeDial);
         clickVolumeDial.reset(valueTreeState, "clickVolume");
         clickVolumeDial.setLabelText(juce::String::fromUTF8("Click Volume"));
@@ -340,10 +328,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(clearSeqSwitch);
         clearSeqSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "clearSeq", clearSeqSwitch);
-
-        addAndMakeVisible(saveWaveSwitch);
-        saveWaveSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
-            valueTreeState, "saveWave", saveWaveSwitch);
 
         addAndMakeVisible(beatGauge);
         beatGauge.setLabelText(juce::String::fromUTF8("Bar"));
@@ -808,12 +792,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> hostSyncSwitchAttachment;
     juce::ToggleButton freeRecordSwitch{juce::String::fromUTF8("Free Record")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> freeRecordSwitchAttachment;
-    juce::ComboBox sliceModeDrop{};
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> sliceModeDropAttachment;
+    juce::ComboBox countInBarsDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> countInBarsDropAttachment;
+    juce::ComboBox recordBarsDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> recordBarsDropAttachment;
     juce::ComboBox sliceDivisionDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> sliceDivisionDropAttachment;
     CustomRotaryDial bpmDial{this};
-    CustomRotaryDial swingDial{this};
     CustomRotaryDial clickVolumeDial{this};
     CustomRotaryDial clickRecordVolumeDial{this};
     CustomRotaryDial loopVolumeDial{this};
@@ -824,8 +809,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> seqPlaySwitchAttachment;
     MomentaryToggleButton clearSeqSwitch{juce::String::fromUTF8("Clear Seq")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> clearSeqSwitchAttachment;
-    MomentaryToggleButton saveWaveSwitch{juce::String::fromUTF8("Save Wave")};
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> saveWaveSwitchAttachment;
     CircularLoopDisplay beatGauge{};
     SliceWaveDisplay sliceGauge{};
 
