@@ -1,8 +1,5 @@
 {
   "name": "klangprisma",
-  "displayname": "Klang Prisma",
-  "color": "Analyser",
-  "shortdescription" : "Spektrum analyser",
   "description": [
     "✨ Spektrum analyser\n"
   ],
@@ -10,7 +7,6 @@
   "midi-out": false,
   "audio-in": true,
   "audio-out": true,
-  "transport": false,
   "patches": true,
   "parameters":
   [

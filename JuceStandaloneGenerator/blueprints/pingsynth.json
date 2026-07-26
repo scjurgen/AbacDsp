@@ -1,21 +1,10 @@
 {
   "name": "pingsynth",
-  "displayname": "Ping Synth",
-  "status": "beta",
   "plugintype": "InstrumentPlugin",
   "lookAndFeel": "LookAndFeel.h",
-  "color": "#eeeeee",
   "boxy": "boxy",
   "plugintype-see-also": "http://lv2plug.in/ns/lv2core#InstrumentPlugin",
-  "micro": 127,
-  "minor": 1,
-  "major": 0,
-  "shortdescription": "Just an explorer for ping synth",
   "description": ["✨ Just an explorer for ping synth."],
-  "midi-ports-in": [],
-  "midi-ports-out": [],
-  "audio-ports-in": [{ "name": "in", "symbol":  "in"}],
-  "audio-ports-out": [{ "name": "left", "symbol":  "left"},{ "name": "right", "symbol":  "right"}],
   "patches": true,
   "ports-control":
   [

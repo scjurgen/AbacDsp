@@ -1,15 +1,8 @@
 {
   "name": "maxdiffuser",
-  "displayname": "Max Diffuser",
-  "status": "beta",
   "plugintype": "ReverbPlugin",
-  "color": "#77ccee",
   "boxy": "boxy",
   "plugintype-see-also": "http://lv2plug.in/ns/lv2core#ReverbPlugin",
-  "micro": 127,
-  "minor": 1,
-  "major": 0,
-  "shortdescription": "Diffuser delay chain (up to 50 modulated allpass delays in series)",
   "description": ["Diffuser delay chain: up to 50 modulated allpass delays in series with pre-delay, pitching, bulge size distribution and damping."],
   "patches": true,
   "ports-control":

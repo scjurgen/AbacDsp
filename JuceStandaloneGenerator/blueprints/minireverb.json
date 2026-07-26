@@ -1,14 +1,8 @@
 {
   "name": "minireverb",
-  "displayname": "Mini Reverb",
-  "status": "beta",
   "plugintype": "ReverbPlugin",
-  "color": "#ee77cc",
   "boxy": "boxy",
   "plugintype-see-also": "http://lv2plug.in/ns/lv2core#ReverbPlugin",
-  "micro": 127,
-  "minor": 1,
-  "major": 0,
   "description": ["✨ Just a small Reverb. "],
   "patches": true,
   "ports-control":

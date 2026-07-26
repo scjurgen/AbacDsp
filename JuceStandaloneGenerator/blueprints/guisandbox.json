@@ -1,12 +1,6 @@
 {
   "name": "guisandbox",
-  "displayname": "guisandbox",
-  "color": "Chorus",
-  "micro": 40,
-  "minor": 1,
-  "major": 0,
   "plugintype" : "Sandbox",
-  "shortdescription" : "Whatever this will become",
   "description": [
     "✨ Whatever this will become\n"
   ],
@@ -16,11 +10,6 @@
     "INCLUDE_PEDAL": "impl/GuiSandBox.h",
     "PROCMODE": "Stereo-Stereo"
   },
-  "midi-ports-in": [{"name":  "MidiIn", "symbol": "midiIn"}],
-  "midi-ports-out": [{"name":  "MidiOut", "symbol": "midiOut"}],
-  "audio-ports-in": [{ "name": "In L", "symbol":  "in[0]"}, { "name": "In R", "symbol":  "in[1]"}],
-  "audio-ports-out": [{ "name": "Out L", "symbol":  "out[0]"}, { "name": "Out R", "symbol":  "out[1]"}],
-  "transport": [{"name": "transport", "symbol":  "transport"}],
   "patches": true,
   "ports-control":
   [

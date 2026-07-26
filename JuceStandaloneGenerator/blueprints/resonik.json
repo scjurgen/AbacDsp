@@ -1,15 +1,8 @@
 {
   "name": "resonik",
-  "displayname": "Resonik",
-  "status": "beta",
   "plugintype": "FilterPlugin",
-  "color": "#ffaa33",
   "boxy": "boxy",
   "plugintype-see-also": "http://lv2plug.in/ns/lv2core#FilterPlugin",
-  "micro": 1,
-  "minor": 0,
-  "major": 0,
-  "shortdescription": "Parallel bank of resonant filter chains (BiquadResoBP -> SvfResoBP)",
   "description": ["A bank of up to 100 parallel resonator chains, each a BiquadResoBP feeding an SvfResoBP, spread across a frequency range with distributed decay, gain and delay to turn audio into ringing, decaying tones."],
   "patches": true,
   "ports-control":

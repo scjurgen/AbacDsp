@@ -655,32 +655,6 @@ def setRunner(keyUpper: str, symbol: str, transform: str):
     }}\n"""
 
 
-def getVersion(module: str):
-    try:
-        with open(f"versions.json") as f:
-            v = f.read()
-            versions = json.loads(v)
-            if module in versions:
-                micro = versions[module]["micro"]
-                micro += 1
-                versions[module]["micro"] = micro
-            else:
-                versions[module] = dict()
-                versions[module]["major"] = 0
-                versions[module]["minor"] = 0
-                versions[module]["micro"] = 0
-
-    except:
-        versions = {module: {}}
-        versions[module]["major"] = 0
-        versions[module]["minor"] = 0
-        versions[module]["micro"] = 0
-    jsonStr = json.dumps(versions, indent=4, separators=(", ", ": "), sort_keys=True)
-    with open(f"versions.json", "w") as f:
-        f.write(jsonStr)
-    return versions[module]
-
-
 def loadConfig(module: str):
     jsonFile = f"blueprints/{module}.json"
     configString = open(jsonFile).read()

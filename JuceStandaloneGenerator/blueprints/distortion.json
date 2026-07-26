@@ -1,16 +1,8 @@
 {
   "name": "distortion",
-  "displayname": "Distortion",
-  "status": "beta",
   "plugintype": "Distortion",
   "lookAndFeel": "inc/LookAndFeel.h",
-  "color": "Distortion",
-  "micro": 40,
-  "minor": 1,
-  "major": 0,
-  "shortdescription" : "Distortion",
   "description": ["✨ Distortion\n"],
-  "transport": [{"name": "transport", "symbol":  "transport"}],
   "patches": true,
   "ports-control":
   [

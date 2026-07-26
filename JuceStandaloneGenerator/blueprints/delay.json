@@ -1,8 +1,6 @@
 {
   "name": "delay",
   "plugintype": "Delay",
-  "color": "Analyser",
-  "shortdescription" : "Delay + Spektrum analyser",
   "description": [
     "✨ Delay + Spektrum analyser\n"
   ],

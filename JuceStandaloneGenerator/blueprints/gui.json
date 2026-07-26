@@ -1,35 +1,11 @@
 {
   "name": "guinew",
-  "displayname": "guinew",
-  "status": "beta",
   "plugintype": "ChorusPlugin",
-  "color": "Chorus",
   "boxy": "boxy",
   "plugintype-see-also": "http://lv2plug.in/ns/lv2core#ChorusPlugin",
-  "micro": 40,
-  "minor": 1,
-  "major": 0,
-  "shortdescription" : "Whatever this will become",
   "description": [
     "✨ Whatever this will become\n"
   ],
-  "midi-ports-in":
-  [
-  ],
-  "midi-ports-out":
-  [
-  ],
-  "audio-ports-in":
-  [
-    { "name": "In L", "symbol":  "in[0]"},
-    { "name": "In R", "symbol":  "in[1]"}
-  ],
-  "audio-ports-out":
-  [
-    { "name": "Out L", "symbol":  "out[0]"},
-    { "name": "Out R", "symbol":  "out[1]"}
-  ],
-  "transport": [{"name": "transport", "symbol":  "transport"}],
   "patches": true,
   "ports-control":
   [

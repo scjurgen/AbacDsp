@@ -1,9 +1,6 @@
 {
   "name": "metronome",
-  "displayname": "Metronome",
   "plugintype": "Metronome",
-  "color": "Chorus",
-  "shortdescription": "Metronome with damped sine tick",
   "description": [
     "✨ Metronome with settable BPM, start/stop and damped sine tick\n"
   ],

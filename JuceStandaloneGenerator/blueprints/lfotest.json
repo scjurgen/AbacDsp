@@ -1,21 +1,10 @@
 {
   "name": "lfotest",
-  "displayname": "lfotest",
-  "status": "beta",
   "plugintype": "InstrumentPlugin",
   "lookAndFeel": "LookAndFeelOT.h",
-  "color": "#eeeeee",
   "boxy": "boxy",
   "plugintype-see-also": "http://lv2plug.in/ns/lv2core#InstrumentPlugin",
-  "micro": 127,
-  "minor": 1,
-  "major": 0,
-  "shortdescription": "Just an explorer",
   "description": ["✨ Just an explorer. "],
-  "midi-ports-in": [],
-  "midi-ports-out": [],
-  "audio-ports-in": [{ "name": "in", "symbol":  "in"}],
-  "audio-ports-out": [{ "name": "left", "symbol":  "left"},{ "name": "right", "symbol":  "right"}],
   "patches": true,
   "ports-control":
   [

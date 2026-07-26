@@ -15,29 +15,52 @@ python3 generate-juce-standalone.py <name>
 | Field | Required | Description |
 |---|---|---|
 | `name` | yes | Module name — used as directory name and C++ identifier prefix |
-| `displayname` | no | Human-readable name shown in the UI title bar (defaults to `name`) |
 | `plugintype` | yes | JUCE plugin type string (e.g. `"Gain"`, `"ReverbPlugin"`, `"InstrumentPlugin"`) |
-| `color` | no | Theme colour — named preset (`"Chorus"`, `"Analyser"`) or hex `"#rrggbb"` |
-| `shortdescription` | no | One-line description |
 | `description` | yes | Array of strings joined with `\n` for the about text |
-| `status` | no | Freeform tag, e.g. `"beta"` |
-| `major` / `minor` / `micro` | no | Semantic version numbers (auto-incremented by generator if omitted) |
+| `patches` | no | `true` enables the named-patch browser (save/load/rename dialogs, `Settings > Patches` menu) |
+| `host_transport` | no | `true` enables host-transport sync support (`HOSTTRANSPORT` template section) |
 | `protected_files` | no | Array of relative paths the generator must not overwrite (e.g. already-customised files) |
 | `extra_ui_includes` | no | Array of `#include` paths injected into the Editor header |
 | `extra_timer_callbacks` | no | Array of C++ statement strings appended to the 60 Hz UI timer callback |
 | `extra_processor_methods` | no | Array of C++ method definition strings injected into the Processor class |
+| `processor_forwards` | no | Array of declarative pass-through Processor accessors — see [`processor_forwards`](#processor_forwards) below |
 
-### Optional port meta-sections
+Note: `displayname`, `shortdescription`, `status`, `major`/`minor`/`micro`, `color`, and the
+`midi-ports-in`/`midi-ports-out`/`audio-ports-in`/`audio-ports-out`/`transport` meta-sections were
+removed from the schema (checked against the generator: none of them were read anywhere). Version
+is currently always `"0.0.0"`; theming is handled entirely by the runtime theme system
+(`AppSettings::loadTheme()`), not a per-blueprint colour field.
 
-These are informational / used by some templates; usually omitted for basic plugins.
+---
+
+## `processor_forwards`
+
+Declarative alternative to `extra_processor_methods` for simple pass-through accessors: the
+generated method returns `pluginRunner-><call>()` (or a fallback when there is no runner yet),
+without hand-writing the null-check boilerplate.
 
 ```json
-"midi-ports-in":  [{"name": "MidiIn",  "symbol": "midiIn"}],
-"midi-ports-out": [{"name": "MidiOut", "symbol": "midiOut"}],
-"audio-ports-in": [{"name": "In L", "symbol": "in[0]"}, {"name": "In R", "symbol": "in[1]"}],
-"audio-ports-out":[{"name": "Out L","symbol": "out[0]"},{"name": "Out R","symbol": "out[1]"}],
-"transport":      [{"name": "transport", "symbol": "transport"}]
+"processor_forwards": [
+  {"name": "isRecording", "type": "bool"},
+  {"name": "getBarBeats", "type": "int", "default": 4},
+  {"name": "getCurrentClickBpm", "call": "currentClickBpm", "type": "float", "default": "120.f"},
+  {"name": "getProcessingBinLevels", "type": "std::array<float, 51>", "noexcept": true}
+]
 ```
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | yes | Generated method name |
+| `type` | yes | Return type |
+| `call` | no | Underlying `pluginRunner` method name, if different from `name` (defaults to `name`) |
+| `default` | no | Fallback value when `pluginRunner` is null (defaults to `false` for `bool`, `0`/`0.f`/`0u` for numeric types, `<type>{}` otherwise) |
+| `noexcept` | no | Force `noexcept` on or off; defaults to `true` for `bool`/`int`/`float`/`double`/`size_t`/`uint32_t`/`int64_t`, `false` otherwise |
+
+For `bool` with no explicit `default`, the body is `pluginRunner && pluginRunner-><call>()` (the
+common "false when not running" idiom) instead of a ternary.
+
+Anything that doesn't fit this shape — a method taking parameters, or one returning a reference
+with a static-local fallback — stays a hand-written entry in `extra_processor_methods`.
 
 ---
 
@@ -71,6 +94,8 @@ Rotary knob mapped to an `AudioParameterFloat`.
 
 When `unit` is `dB` / `db` / `DB`, `GenericImpl` auto-converts the value with `pow(10, v/20)`.
 
+`count` also works on `switch` items, with the same `{}` placeholder expansion.
+
 ### type: `drop`
 
 Combo-box mapped to an `AudioParameterChoice`. The setter receives a `size_t` index.
@@ -91,6 +116,8 @@ Combo-box mapped to an `AudioParameterChoice`. The setter receives a `size_t` in
 Add `"patch": true` to mark a drop as a **patch selector**: changing it triggers a
 save-before-switching dialog and updates `m_patchIndex`.
 
+Add `"signed": false` to cast the setter's parameter to `size_t` instead of the default `int`.
+
 ### type: `switch`
 
 Toggle button mapped to an `AudioParameterBool`. The setter receives a `bool`.
@@ -98,6 +125,11 @@ Toggle button mapped to an `AudioParameterBool`. The setter receives a `bool`.
 ```json
 {"short": "ONF", "type": "switch", "display": "Power", "symbol": "onOff", "default": 0}
 ```
+
+| Field | Description |
+|---|---|
+| `momentary` | Widget is a `MomentaryToggleButton` instead of `juce::ToggleButton`: holds its visual on-state for a minimum time regardless of trigger source (click, preset load, host automation), instead of flashing for a single timer tick. Use for pulse/trigger-style controls (record, clear, freeze, ...). The generator auto-emits a `tickFlash()` call in the timer callback. |
+| `state_label` | `{"query": "<ProcessorMethod>", "on": "<text>", "off": "<text>"}` — auto-emits `<symbol>Switch.setButtonText(processorRef.<query>() ? "<on>" : "<off>");` each timer tick. Only fits a plain binary label swap; anything more complex (a three-way state, an interpolated count) still goes in `extra_timer_callbacks`. |
 
 ### type: `gauge`
 
@@ -116,8 +148,28 @@ Read-only display widget — no JUCE parameter is created.
 | `cpuload` | `CpuGauge` | `processorRef.getCpuLoad()` |
 | `spectrogram` | `SpectrogramDisplay` | `processorRef.getSpectrogram()` |
 | `signal` | `WaveformGauge` | `processorRef.getWaveDataToShow()` |
+| `iris` | *(none)* | `customtype` required — used only to tag theme-callback dispatch (`setGradientPreset`) |
+| `processingbins` | *(none)* | `customtype` required — used only to tag theme-callback dispatch (`updateColors`) |
 
 Add `"customtype": "MyWidgetClass"` to substitute a hand-written widget class for the default.
+Required for `iris` and `processingbins`, which have no built-in default widget.
+
+Add `"bindings"` to wire additional per-frame setter calls without hand-writing them in
+`extra_timer_callbacks`:
+
+```json
+{"short": "SLICE", "type": "gauge", "gaugetype": "signal", "display": "Loop", "symbol": "slice",
+  "customtype": "SliceWaveDisplay",
+  "bindings": [
+    {"call": "setSampleRate", "from": "getSampleRate", "cast": "float"},
+    {"call": "setLoopWaveform", "from": "getLoopWaveform"}
+  ]}
+```
+
+Each entry emits `<symbol>Gauge.<call>(processorRef.<from>());`, optionally wrapped in
+`static_cast<cast>(...)`. Only fits a zero-argument Processor getter feeding directly into one
+setter call; anything needing a locally-computed value (e.g. derived from two getters) stays in
+`extra_timer_callbacks`.
 
 ### type: `label`
 
@@ -126,6 +178,31 @@ Static text divider — renders as a `juce::Label`, no parameter.
 ```json
 {"short": "DIV", "type": "label", "display": "--- Section ---", "symbol": "div1"}
 ```
+
+---
+
+## MIDI CC mapping
+
+Add `"cc"` to a `dial` or `switch` item to make it MIDI-learnable and CC-automatable:
+
+```json
+{"short": "GAIN", "type": "dial", "display": "Gain", "symbol": "gain", "default": 0,
+ "range": [-60, 60, 0.1, 1, false], "precision": 1, "unit": "dB",
+ "cc": {"controller": 20, "valueLow": -20, "valueHigh": 10}}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `controller` | yes | MIDI CC number (0-127) the control listens on |
+| `valueLow` | no | Parameter value at CC 0 (defaults to the dial's `rangeStart`, or `0` for a switch) |
+| `valueHigh` | no | Parameter value at CC 127 (defaults to the dial's `rangeEnd`, or `1` for a switch) |
+
+The dial gets a right-click menu (MIDI Learn, Set CC Range, Clear CC Assignment) via
+`CustomRotaryDial::setCcMappable`. Switches map like sustain/damper pedals: the CC's 0..127 value
+is scaled across the parameter's 0..1 range, so a bool flips at the 63/64 split automatically — no
+extra widget wiring is generated for them. `NUM_CC_TARGETS` and the `CcTarget` enum (used by
+`extra_ui_includes`/hand-written code to reference a specific mapped control) are generated from
+every `dial`/`switch` item that has a `"cc"` field.
 
 ---
 
@@ -228,6 +305,9 @@ Example: `A1=(LVL*500, CPU*200, BPM)` — LVL gets 500 px, CPU gets 200 px, BPM 
 | `src/impl/PatchParameters.h` | yes | never |
 | `src/impl/GenericImpl.h` | yes | never (reference stub only) |
 | `src/impl/FileIo.h` | yes | never |
+| `src/impl/CcMapping.h` | yes | never |
+| `src/impl/CcSettings.h` | yes | never |
+| `src/UiElements.h` | yes | never |
 | `src/impl/<Name>Impl.h` | **no** | your DSP implementation |
 | `CMakeLists.txt` | first run only | safe to extend |
 | `src/unittests/CMakeLists.txt` | first run only | safe to extend |

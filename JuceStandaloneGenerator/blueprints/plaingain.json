@@ -1,8 +1,6 @@
 {
   "name": "plaingain",
   "plugintype": "Gain",
-  "color": "Analyser",
-  "shortdescription" : "Just a plain gain with latency",
   "description": [
     "✨ Just a plain gain with latency\n"
   ],

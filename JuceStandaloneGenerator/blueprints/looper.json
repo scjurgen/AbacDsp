@@ -1,9 +1,6 @@
 {
   "name": "looper",
-  "displayname": "Looper",
   "plugintype": "Looper",
-  "color": "Analyser",
-  "shortdescription": "Slicing looper with bar-quantized capture and beat-locked slice playback",
   "description": [
     "Records audio, quantizes the loop to whole bars, slices it (grid or transient),\n",
     "and plays the slices back locked to a BPM/swing grid with a metronome click.\n"

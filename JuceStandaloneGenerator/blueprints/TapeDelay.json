@@ -1,16 +1,8 @@
 {
   "name": "tapedelay",
-  "displayname": "Tapedelay",
-  "status": "beta",
   "plugintype": "Delay",
   "lookAndFeel": "inc/LookAndFeel.h",
-  "color": "Delay",
-  "micro": 1,
-  "minor": 0,
-  "major": 0,
-  "shortdescription" : "Tape delay",
   "description": ["✨ Tape delay\n"],
-  "transport": [{"name": "transport", "symbol":  "transport"}],
   "patches": true,
   "ports-control":
   [

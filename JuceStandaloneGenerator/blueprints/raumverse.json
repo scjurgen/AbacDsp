@@ -1,20 +1,9 @@
 {
   "name": "raumverse",
-  "displayname": "raumverse",
-  "status": "beta",
   "plugintype": "ReverbPlugin",
-  "color": "#ee77cc",
   "boxy": "boxy",
   "plugintype-see-also": "http://lv2plug.in/ns/lv2core#ReverbPlugin",
-  "micro": 127,
-  "minor": 1,
-  "major": 0,
-  "shortdescription": "Just an FDN explorer",
   "description": ["✨ Just an FDN explorer. "],
-  "midi-ports-in": [],
-  "midi-ports-out": [],
-  "audio-ports-in": [{ "name": "in", "symbol":  "in"}],
-  "audio-ports-out": [{ "name": "left", "symbol":  "left"},{ "name": "right", "symbol":  "right"}],
   "patches": true,
   "ports-control":
   [
