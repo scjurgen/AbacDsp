@@ -178,6 +178,19 @@ class BeatSequencer
         return (pos * 2 <= spb) ? -pos : (spb - pos);
     }
 
+    // Same convention as samplesToNearestBeat(), against the bar grid instead.
+    [[nodiscard]] long samplesToNearestBar() const noexcept
+    {
+        if (m_samplesPerBeat == 0 || m_beatsPerBar == 0)
+        {
+            return 0;
+        }
+        const auto pos = static_cast<long>(m_beatIndexInBar) * static_cast<long>(m_samplesPerBeat) +
+                         static_cast<long>(m_beatSamplePos);
+        const auto spBar = static_cast<long>(m_beatsPerBar) * static_cast<long>(m_samplesPerBeat);
+        return (pos * 2 <= spBar) ? -pos : (spBar - pos);
+    }
+
   private:
     void applyBpm(const float bpm)
     {

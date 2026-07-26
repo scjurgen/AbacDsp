@@ -18,6 +18,7 @@ struct PatchParameters
         clear            , // switch
         threshRec        , // switch
         hostSync         , // switch
+        freeRecord       , // switch
         sliceMode        , // drop
         sliceDivision    , // drop
         bpm              , // dial
@@ -37,6 +38,7 @@ bool overdub{false};
 bool clear{false};
 bool threshRec{false};
 bool hostSync{false};
+bool freeRecord{false};
 size_t sliceMode{0};
 size_t sliceDivision{1};
 float bpm{120.0f};
@@ -58,6 +60,7 @@ bool saveWave{false};
 "clear",
 "threshRec",
 "hostSync",
+"freeRecord",
 "sliceMode",
 "sliceDivision",
 "bpm",
@@ -94,6 +97,7 @@ bool saveWave{false};
         else if constexpr (ParamId == Id::clear) return clear;
         else if constexpr (ParamId == Id::threshRec) return threshRec;
         else if constexpr (ParamId == Id::hostSync) return hostSync;
+        else if constexpr (ParamId == Id::freeRecord) return freeRecord;
         else if constexpr (ParamId == Id::sliceMode) return sliceMode;
         else if constexpr (ParamId == Id::sliceDivision) return sliceDivision;
         else if constexpr (ParamId == Id::bpm) return bpm;
@@ -129,6 +133,8 @@ break;
  case Id::threshRec: if (!isEqual(get<Id::threshRec>(), value)) {get<Id::threshRec>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::hostSync: if (!isEqual(get<Id::hostSync>(), value)) {get<Id::hostSync>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::freeRecord: if (!isEqual(get<Id::freeRecord>(), value)) {get<Id::freeRecord>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::sliceMode: if (!isEqual(get<Id::sliceMode>(), value)) {get<Id::sliceMode>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
@@ -198,6 +204,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         clear            , // switch
         threshRec        , // switch
         hostSync         , // switch
+        freeRecord       , // switch
         sliceMode        , // drop
         sliceDivision    , // drop
         bpm              , // dial

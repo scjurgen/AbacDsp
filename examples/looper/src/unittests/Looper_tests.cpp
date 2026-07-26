@@ -14,34 +14,23 @@
 
 #include "impl/LooperImpl.h"
 
-// 3x3 matrix test for the Phase 8b beat-lock: start timing (before/on/after
-// the tick) x stop timing (before/on/after the tick). Each case injects a
-// single "doublet" (-1.0 then +1.0) as the threshold-crossing signal at a
-// precisely controlled offset from the start tick, and verifies:
-//   1. loopLength always comes out as the same exact beat-multiple, and
-//   2. the doublet lands at the expected loop frame for its start category,
-// regardless of which stop-timing sub-case ran (stop timing, within
-// tolerance, must not affect what's captured -- that's the invariant this
-// test exists to check). See examples/looper/PLAN.md Phase 8b.
+// 3x3 matrix: start timing x stop timing (before/on/after the bar tick).
+// Verifies loopLength and the doublet's loop-frame position stay fixed.
 namespace
 {
 constexpr size_t kBlock = 16;
-// Chosen so every derived quantity (including kRoll = spb/8) is itself a
-// multiple of kBlock -- keeps every silence run in this test exactly
-// block-aligned, not just the doublet placements.
+// Chosen so every derived quantity is itself a multiple of kBlock.
 constexpr float kSampleRate = 5120.f;
 constexpr float kBpm = 120.f;
-constexpr size_t kSamplesPerBeat = 2560;      // kSampleRate*60/kBpm
-constexpr size_t kRoll = kSamplesPerBeat / 8; // 320
-constexpr size_t kBeatsPerTake = 2;
-constexpr size_t kExpectedLoopLength = kSamplesPerBeat * kBeatsPerTake; // 5120
+constexpr size_t kSamplesPerBeat = 2560;                          // kSampleRate*60/kBpm
+constexpr size_t kBeatsPerBar = 4;                                // matches LooperImpl::kBeatsPerBar
+constexpr size_t kSamplesPerBar = kSamplesPerBeat * kBeatsPerBar; // 10240
+constexpr size_t kBarsPerTake = 1;
+constexpr size_t kExpectedLoopLength = kSamplesPerBar * kBarsPerTake; // 10240
 
-// Block-aligned offsets (multiples of kBlock) so "trig" (block-start
-// granularity) exactly matches the doublet's true position -- keeps this
-// test isolated from the separate, already-accepted block-granularity
-// limitation.
-constexpr size_t kStartOffset = 144; // 9*16, < kRoll
-constexpr size_t kStopOffset = 96;   // 6*16, < kRoll
+// Block-aligned, comfortably inside half a bar (5120), on one side of the tick.
+constexpr size_t kStartOffset = 144; // 9*16
+constexpr size_t kStopOffset = 96;   // 6*16
 
 using Looper = LooperImpl<kBlock>;
 using Buffer = AbacDsp::AudioBuffer<2, kBlock>;
@@ -140,12 +129,13 @@ TEST_P(BeatLockMatrixTest, DoubletLandsAtExpectedFrame)
     looper.setBpm(kBpm);
     looper.setThreshRec(true);
     looper.setRecThreshold(-24.f);
-    looper.setFadeMs(1.f);
+    // No fade: an early start's doublet can sit right at the tail fold's edge.
+    looper.setFadeMs(0.f);
 
     looper.setRecord(true); // arm
     runSilence(looper, kBlock);
 
-    constexpr size_t sTarget = kSamplesPerBeat;
+    constexpr size_t sTarget = kSamplesPerBar; // a bar tick, one bar in
     const long startShift = (startTiming == Timing::Before)  ? -static_cast<long>(kStartOffset)
                             : (startTiming == Timing::After) ? static_cast<long>(kStartOffset)
                                                              : 0;
@@ -158,7 +148,7 @@ TEST_P(BeatLockMatrixTest, DoubletLandsAtExpectedFrame)
     runDoubletBlock(looper);
     ASSERT_TRUE(looper.isRecording()) << "recording must start immediately on threshold crossing";
 
-    constexpr size_t eTarget = sTarget + kExpectedLoopLength;
+    constexpr size_t eTarget = sTarget + kExpectedLoopLength; // the next bar tick, one bar later
     const long stopShift = (stopTiming == Timing::Before)  ? -static_cast<long>(kStopOffset)
                            : (stopTiming == Timing::After) ? static_cast<long>(kStopOffset)
                                                            : 0;
@@ -171,16 +161,15 @@ TEST_P(BeatLockMatrixTest, DoubletLandsAtExpectedFrame)
     looper.setRecord(true); // request stop
     runSilence(looper, kBlock);
 
-    const size_t nowAbs = stopRequestTarget + kBlock;
-    constexpr size_t finalizeAbs = eTarget + kRoll + kBlock;
-    ASSERT_GT(finalizeAbs, nowAbs);
-    runSilence(looper, finalizeAbs - nowAbs);
+    // Poll until finalized: no fixed margin to precompute, bar-lock always locks.
+    for (int guard = 0; guard < 1000 && !looper.isPlaying(); ++guard)
+    {
+        runSilence(looper, kBlock);
+    }
+    ASSERT_TRUE(looper.isPlaying()) << "bar-locked take should have finalized by now";
 
-    ASSERT_TRUE(looper.isPlaying()) << "beat-locked take should have finalized by now";
-
-    // Invariant under test: loop length depends only on the beat grid
-    // (kBeatsPerTake beats from sTarget to eTarget), never on stop-request
-    // timing within tolerance.
+    // Invariant under test: loop length depends only on the bar grid (one
+    // bar from sTarget to eTarget), never on stop-request timing.
     EXPECT_EQ(looper.rawLoopLengthFrames(), kExpectedLoopLength)
         << "start=" << timingName(startTiming) << " stop=" << timingName(stopTiming);
 
@@ -217,9 +206,9 @@ namespace
 constexpr float kRealSampleRate = 48000.f;
 constexpr float kRealBpm = 60.f;
 constexpr size_t kRealSamplesPerBeat = 48000; // kRealSampleRate*60/kRealBpm
-constexpr size_t kRealRoll = kRealSamplesPerBeat / 8;
-constexpr size_t kRealStartOffset = 800; // 50*16, < kRealRoll, block-aligned
-constexpr size_t kRealStopOffset = 1600; // 100*16, < kRealRoll, block-aligned
+constexpr size_t kRealSamplesPerBar = kRealSamplesPerBeat * kBeatsPerBar;
+constexpr size_t kRealStartOffset = 800; // 50*16, comfortably inside half a bar, block-aligned
+constexpr size_t kRealStopOffset = 1600; // 100*16, comfortably inside half a bar, block-aligned
 
 // Runs `frames` samples of silence, appending the left-channel output to `out`.
 void captureOutput(Looper& looper, const size_t frames, std::vector<float>& out)
@@ -274,10 +263,10 @@ std::vector<size_t> findAllDoublets(const std::vector<float>& stream)
 // Named (not inline-lambda), same reason as beatLockTestName above.
 std::string outputTimingTestName(const ::testing::TestParamInfo<std::tuple<size_t, Timing, Timing>>& info)
 {
-    const size_t beats = std::get<0>(info.param);
+    const size_t bars = std::get<0>(info.param);
     const Timing startTiming = std::get<1>(info.param);
     const Timing stopTiming = std::get<2>(info.param);
-    return std::string("Beats") + std::to_string(beats) + "_Start" + timingName(startTiming) + "_Stop" +
+    return std::string("Bars") + std::to_string(bars) + "_Start" + timingName(startTiming) + "_Stop" +
            timingName(stopTiming);
 }
 }
@@ -288,19 +277,20 @@ class OutputTimingTest : public ::testing::TestWithParam<std::tuple<size_t, Timi
 
 TEST_P(OutputTimingTest, SignalReappearsExactlyOneLoopLengthApartEveryRepeat)
 {
-    const auto [beats, startTiming, stopTiming] = GetParam();
-    const size_t expectedLoopLength = kRealSamplesPerBeat * beats;
+    const auto [bars, startTiming, stopTiming] = GetParam();
+    const size_t expectedLoopLength = kRealSamplesPerBar * bars;
 
     Looper looper(kRealSampleRate);
     looper.setBpm(kRealBpm);
     looper.setThreshRec(true);
     looper.setRecThreshold(-24.f);
-    looper.setFadeMs(1.f);
+    // No fade: an early start's doublet can sit right at the tail fold's edge.
+    looper.setFadeMs(0.f);
 
     looper.setRecord(true); // arm
     runSilence(looper, kBlock);
 
-    constexpr size_t sTarget = kRealSamplesPerBeat;
+    constexpr size_t sTarget = kRealSamplesPerBar; // a bar tick, one bar in
     const long startShift = (startTiming == Timing::Before)  ? -static_cast<long>(kRealStartOffset)
                             : (startTiming == Timing::After) ? static_cast<long>(kRealStartOffset)
                                                              : 0;
@@ -311,9 +301,7 @@ TEST_P(OutputTimingTest, SignalReappearsExactlyOneLoopLengthApartEveryRepeat)
     runDoubletBlock(looper); // the "signal": crosses threshold, recording starts immediately
     ASSERT_TRUE(looper.isRecording());
 
-    // Stop-request timing (before/on/after the tick, within tolerance) never
-    // changes the outcome -- it still beat-locks to the same tick, per
-    // BeatLockMatrixTest's invariant -- so this is pure robustness coverage.
+    // Stop-request timing never changes what gets captured (BeatLockMatrixTest).
     const size_t eTarget = sTarget + expectedLoopLength;
     const long stopShift = (stopTiming == Timing::Before)  ? -static_cast<long>(kRealStopOffset)
                            : (stopTiming == Timing::After) ? static_cast<long>(kRealStopOffset)
@@ -321,7 +309,7 @@ TEST_P(OutputTimingTest, SignalReappearsExactlyOneLoopLengthApartEveryRepeat)
     const auto stopRequestTarget = static_cast<size_t>(static_cast<long>(eTarget) + stopShift);
 
     const size_t pos = trigTarget + kBlock;
-    ASSERT_GT(stopRequestTarget, pos) << "not enough beats for the offset to fit";
+    ASSERT_GT(stopRequestTarget, pos) << "not enough bars for the offset to fit";
     runSilence(looper, stopRequestTarget - pos);
 
     looper.setRecord(true); // request stop
@@ -331,7 +319,7 @@ TEST_P(OutputTimingTest, SignalReappearsExactlyOneLoopLengthApartEveryRepeat)
     // whatever block that turns out to be for this stop-timing sub-case.
     runUntilPlaying(looper);
     ASSERT_TRUE(looper.isPlaying());
-    ASSERT_EQ(looper.rawLoopLengthFrames(), expectedLoopLength) << "beats=" << beats;
+    ASSERT_EQ(looper.rawLoopLengthFrames(), expectedLoopLength) << "bars=" << bars;
 
     // Capture four full loop repeats of pure silence at the input: whatever
     // comes out is entirely the looper's own played-back signal.
@@ -339,7 +327,7 @@ TEST_P(OutputTimingTest, SignalReappearsExactlyOneLoopLengthApartEveryRepeat)
     captureOutput(looper, expectedLoopLength * 4, stream);
 
     const std::vector<size_t> hits = findAllDoublets(stream);
-    ASSERT_EQ(hits.size(), 4u) << "expected exactly one doublet per loop repeat, beats=" << beats
+    ASSERT_EQ(hits.size(), 4u) << "expected exactly one doublet per loop repeat, bars=" << bars
                                << " start=" << timingName(startTiming) << " stop=" << timingName(stopTiming);
 
     // The doublet's position within the loop buffer: purely a function of
@@ -354,27 +342,24 @@ TEST_P(OutputTimingTest, SignalReappearsExactlyOneLoopLengthApartEveryRepeat)
         loopFrame = kRealStartOffset;
     }
 
-    // Playback resumes catchUp frames into the loop, not at frame 0 (see
-    // LoopRecorder::finalizeBeatLocked): the commit only fires one block after
-    // the tick+roll target. Fixed here regardless of beats/timing, since both
-    // the tick and rollFrames are exact multiples of the block size.
-    constexpr size_t catchUp = (kRealRoll + kBlock) % kRealSamplesPerBeat;
+    // On-time/early commits one block past the tick; a late request commits
+    // immediately, already kRealStopOffset past it.
+    const size_t catchUp = (stopTiming == Timing::After) ? (kRealStopOffset + kBlock) : kBlock;
     const size_t expectedFirst = (loopFrame + expectedLoopLength - catchUp) % expectedLoopLength;
-    EXPECT_EQ(hits[0], expectedFirst) << "beats=" << beats << " start=" << timingName(startTiming)
+    EXPECT_EQ(hits[0], expectedFirst) << "bars=" << bars << " start=" << timingName(startTiming)
                                       << " stop=" << timingName(stopTiming);
 
     // The real point of this test: every repeat lands exactly one loop length
-    // later than the previous one -- in seconds, exactly `beats` seconds later
-    // (60 BPM == 1 beat/second) -- with zero drift across repeats.
+    // later than the previous one -- with zero drift across repeats.
     for (size_t k = 1; k < hits.size(); ++k)
     {
         EXPECT_EQ(hits[k] - hits[k - 1], expectedLoopLength)
-            << "repeat " << k << " drifted, beats=" << beats << " start=" << timingName(startTiming)
+            << "repeat " << k << " drifted, bars=" << bars << " start=" << timingName(startTiming)
             << " stop=" << timingName(stopTiming);
     }
 }
 
-INSTANTIATE_TEST_SUITE_P(BeatsXStartXStop, OutputTimingTest,
+INSTANTIATE_TEST_SUITE_P(BarsXStartXStop, OutputTimingTest,
                          ::testing::Combine(::testing::Values(1u, 2u, 3u, 4u),
                                             ::testing::Values(Timing::Before, Timing::On, Timing::After),
                                             ::testing::Values(Timing::Before, Timing::On, Timing::After)),
@@ -402,53 +387,6 @@ INSTANTIATE_TEST_SUITE_P(BeatsXStartXStop, OutputTimingTest,
 // on every loop repeat.
 namespace
 {
-constexpr float kClickTestBpm = 60.f;
-constexpr size_t kClickTestSpb = 48000; // kRealSampleRate*60/kClickTestBpm
-constexpr size_t kClickTestEighth = kClickTestSpb / 8;
-// The pickup pulse sits safely *inside* the roll window (a sixteenth before
-// the beat, not exactly a full eighth): landing exactly at the tolerance
-// edge (== roll) puts it at the roll window's outermost sample, which is
-// where the boundary fade is strongest by design (fades in approaching the
-// beat) -- that's correct behavior, but it makes the pulse itself nearly
-// silent and a poor thing to pattern-match on for this test.
-constexpr size_t kClickTestPickupOffset = 2880; // 180*16, comfortably inside the roll window
-
-// Runs `frames` samples of silence, recording both channels' input and the
-// left-channel output in lockstep (for the out-in click isolation).
-void stepSilenceRecordBoth(Looper& looper, const size_t frames, std::vector<float>& inLog, std::vector<float>& outLog)
-{
-    ASSERT_EQ(frames % kBlock, 0u);
-    Buffer in{};
-    Buffer out{};
-    for (size_t done = 0; done < frames; done += kBlock)
-    {
-        looper.processBlock(in, out);
-        for (size_t i = 0; i < kBlock; ++i)
-        {
-            inLog.push_back(in(i, 0));
-            outLog.push_back(out(i, 0));
-        }
-    }
-}
-
-
-// One doublet block (the "signal"), same in/out logging.
-void stepDoubletRecordBoth(Looper& looper, std::vector<float>& inLog, std::vector<float>& outLog)
-{
-    Buffer in{};
-    Buffer out{};
-    in(0, 0) = -1.f;
-    in(0, 1) = -1.f;
-    in(1, 0) = 1.f;
-    in(1, 1) = 1.f;
-    looper.processBlock(in, out);
-    for (size_t i = 0; i < kBlock; ++i)
-    {
-        inLog.push_back(in(i, 0));
-        outLog.push_back(out(i, 0));
-    }
-}
-
 // Rising-edge onset detector: the first sample of each contiguous region
 // where |signal| exceeds `threshold`, skipping ahead past each hit's decay
 // tail so a single click's ringing isn't counted twice.
@@ -597,7 +535,7 @@ TEST(ClickAlignmentTest, RecordScenario)
     wrp.Reset("/tmp/run.wav");
     wrp.startRecording();
 
-    const size_t emptyRun{wrp.BeatWidth()};
+    const size_t emptyRun{wrp.BeatWidth() * 4}; // a bar tick, so the trigger lands exactly on it
     const size_t recordRun{wrp.BeatWidth() * 4};
     for (size_t i = 0; i < emptyRun; ++i)
     {
@@ -627,7 +565,7 @@ TEST(ClickAlignmentTest, RecordScenarioTimingAnalysis)
     LooperWrapper wrp(looper);
     wrp.startRecording();
 
-    const size_t emptyRun{wrp.BeatWidth()};
+    const size_t emptyRun{wrp.BeatWidth() * 4}; // a bar tick, so the trigger lands exactly on it
     const size_t recordRun{wrp.BeatWidth() * 4};
     for (size_t i = 0; i < emptyRun; ++i)
     {
@@ -651,24 +589,32 @@ TEST(ClickAlignmentTest, RecordScenarioTimingAnalysis)
 
     ASSERT_TRUE(looper.isPlaying());
     const size_t loopLength = looper.rawLoopLengthFrames();
-    ASSERT_GT(loopLength, 0u);
+    ASSERT_EQ(loopLength, recordRun);
 
     // m_recordedRight is the wet output stream (see LooperWrapper::feed).
     const std::vector<float>& output = wrp.m_recordedRight;
 
     const std::vector<size_t> impulses = findOnsets(output, 0.3f, wrp.BeatWidth() / 2);
 
-    // Impulse 1 sits near loop-frame 0: playback resumes already partway
-    // through the loop (the catch-up offset), so it only reaches frame 0
-    // again -- and impulse 1 reappears -- a full loop length after the stop
-    // tick, not a full loop length after its first (dry, direct) occurrence.
-    // Impulse 2 sits mid-loop (loop-frame ~6004), well clear of the catch-up
-    // region, so it reappears on every one of the 4 playback repeats.
-    const std::vector<size_t> expected = {12000, 18004, 66004, 108000, 114004, 156000, 162004, 204000, 210004};
-    ASSERT_EQ(impulses.size(), expected.size()) << "expected 4 occurrences of impulse 1 + 5 of impulse 2";
-    for (size_t k = 0; k < impulses.size(); ++k)
+    // The looper always passes dry input through, so onsets 0 and 1 are the
+    // direct (during-recording) hits, not playback repeats.
+    ASSERT_GE(impulses.size(), 2u);
+    EXPECT_EQ(impulses[0], emptyRun);
+    EXPECT_EQ(impulses[1], emptyRun + 6004);
+
+    // From here on, every other onset is exactly loopLength apart.
+    const std::vector<size_t> playback(impulses.begin() + 2, impulses.end());
+    ASSERT_GE(playback.size(), 4u) << "not enough playback onsets to verify repeat spacing";
+    for (size_t k = 0; k + 2 < playback.size(); ++k)
     {
-        EXPECT_EQ(impulses[k], expected[k]) << "impulse onset #" << k << " is at the wrong position";
+        EXPECT_EQ(playback[k + 2] - playback[k], loopLength)
+            << "onset #" << k << " and #" << (k + 2) << " should be exactly one loop apart";
+    }
+    for (size_t k = 0; k + 1 < playback.size(); ++k)
+    {
+        const size_t gap = playback[k + 1] - playback[k];
+        EXPECT_TRUE(gap == 6004 || gap == loopLength - 6004)
+            << "onset #" << k << " -> #" << (k + 1) << " gap " << gap << " doesn't match either impulse separation";
     }
 
     // Predictive: click k is expected exactly at k*BeatWidth

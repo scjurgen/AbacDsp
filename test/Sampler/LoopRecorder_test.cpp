@@ -64,20 +64,11 @@ void feedConstant(Recorder& rec, const size_t frames, const float value)
     }
 }
 
-// A preRoll snapshot for stopRecordBeatLocked: 2*rollFrames frames, interleaved
-// stereo, first half (the tail-fold source) at `firstHalf`, second half (the
-// late-gap backfill source) at `secondHalf`.
-std::vector<float> makePreRoll(const size_t rollFrames, const float firstHalf, const float secondHalf)
+// A flat-valued preRoll snapshot for stopRecordBarLocked's late-start gap
+// backfill: exactly `frames` interleaved stereo frames, all `value`.
+std::vector<float> makeFlatPreRoll(const size_t frames, const float value)
 {
-    std::vector<float> preRoll(4 * rollFrames, 0.f);
-    for (size_t i = 0; i < rollFrames; ++i)
-    {
-        preRoll[i * 2] = firstHalf;
-        preRoll[i * 2 + 1] = firstHalf;
-        preRoll[(rollFrames + i) * 2] = secondHalf;
-        preRoll[(rollFrames + i) * 2 + 1] = secondHalf;
-    }
-    return preRoll;
+    return std::vector<float>(frames * 2, value);
 }
 }
 
@@ -99,11 +90,10 @@ TEST(LoopRecorderTest, PlayFromEmptyDoesNothing)
 TEST(LoopRecorderTest, RecordThenStopEntersPlaying)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0); // no quantization
     rec.beginRecord();
     EXPECT_EQ(rec.state(), LooperState::Recording);
     feed(rec, 64);
-    rec.stopRecord();
+    rec.stopRecordFree();
     EXPECT_EQ(rec.state(), LooperState::Playing);
     EXPECT_EQ(rec.recordedFrames(), 64u);
     EXPECT_EQ(rec.loopLengthFrames(), 64u);
@@ -112,10 +102,9 @@ TEST(LoopRecorderTest, RecordThenStopEntersPlaying)
 TEST(LoopRecorderTest, CapturedContentMatchesInput)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
     rec.beginRecord();
     feed(rec, 32, 1.f);
-    rec.stopRecord();
+    rec.stopRecordFree();
     for (size_t f = 0; f < 32; ++f)
     {
         EXPECT_FLOAT_EQ(rec.sample(f, 0), 1.f + static_cast<float>(f));
@@ -126,10 +115,9 @@ TEST(LoopRecorderTest, CapturedContentMatchesInput)
 TEST(LoopRecorderTest, PlaybackLoopsRecordedContent)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
     rec.beginRecord();
     feed(rec, kBlock, 1.f); // exactly one block, values 1..16
-    rec.stopRecord();
+    rec.stopRecordFree();
     ASSERT_EQ(rec.loopLengthFrames(), kBlock);
 
     const Buffer first = runOne(rec);
@@ -148,7 +136,6 @@ TEST(LoopRecorderTest, PlaybackLoopsRecordedContent)
 TEST(LoopRecorderTest, OutputSilentWhileRecording)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
     rec.beginRecord();
     Buffer in{};
     Buffer out{};
@@ -165,47 +152,27 @@ TEST(LoopRecorderTest, OutputSilentWhileRecording)
     }
 }
 
-TEST(LoopRecorderTest, BeatQuantizationRoundsToNearestBeat)
+TEST(LoopRecorderTest, FreeRecordStopUsesRawRecordedLength)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(100);
-
     rec.beginRecord();
-    feed(rec, 240); // 2.4 beats -> rounds down to 2 beats = 200
-    rec.stopRecord();
-    EXPECT_EQ(rec.loopLengthFrames(), 200u);
-
-    rec.clear();
-    rec.setSamplesPerBeat(100);
-    rec.beginRecord();
-    feed(rec, 260); // 2.6 beats -> rounds up to 3 beats = 300
-    rec.stopRecord();
-    EXPECT_EQ(rec.loopLengthFrames(), 300u);
-}
-
-TEST(LoopRecorderTest, QuantizedTailIsSilent)
-{
-    Recorder rec{48000.f};
-    rec.setSamplesPerBeat(100);
-    rec.beginRecord();
-    feed(rec, 260, 1.f); // rounds up to 300; frames 260..299 must be silent
-    rec.stopRecord();
-    ASSERT_EQ(rec.loopLengthFrames(), 300u);
-    for (size_t f = 260; f < 300; ++f)
+    feed(rec, 3 * kBlock, 1.f); // 48 frames, not any particular beat/bar multiple
+    rec.stopRecordFree();
+    EXPECT_EQ(rec.state(), LooperState::Playing);
+    EXPECT_EQ(rec.loopLengthFrames(), 3 * kBlock);
+    for (size_t f = 0; f < 3 * kBlock; ++f)
     {
-        EXPECT_FLOAT_EQ(rec.sample(f, 0), 0.f) << "frame " << f;
-        EXPECT_FLOAT_EQ(rec.sample(f, 1), 0.f) << "frame " << f;
+        EXPECT_FLOAT_EQ(rec.sample(f, 0), 1.f + static_cast<float>(f));
     }
 }
 
 TEST(LoopRecorderTest, BoundaryFadeRampsHeadAndTail)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
     rec.setFadeFrames(4);
     rec.beginRecord();
     feedConstant(rec, 64, 2.f);
-    rec.stopRecord();
+    rec.stopRecordFree();
     ASSERT_EQ(rec.loopLengthFrames(), 64u);
 
     // Fade-in: gain (k+1)/4 for k in [0,4), reaching exactly 1 at frame 3.
@@ -227,11 +194,10 @@ TEST(LoopRecorderTest, BoundaryFadeRampsHeadAndTail)
 TEST(LoopRecorderTest, NoFadeWhenFadeFramesIsZero)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
     rec.setFadeFrames(0);
     rec.beginRecord();
     feedConstant(rec, 32, 3.f);
-    rec.stopRecord();
+    rec.stopRecordFree();
     for (size_t f = 0; f < 32; ++f)
     {
         EXPECT_FLOAT_EQ(rec.sample(f, 0), 3.f) << "frame " << f;
@@ -241,11 +207,10 @@ TEST(LoopRecorderTest, NoFadeWhenFadeFramesIsZero)
 TEST(LoopRecorderTest, BoundaryFadeClampsToHalfLoopLengthForShortLoops)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
     rec.setFadeFrames(100); // far longer than the loop
     rec.beginRecord();
     feedConstant(rec, kBlock, 2.f); // exactly one block, loopLengthFrames == kBlock (16)
-    rec.stopRecord();
+    rec.stopRecordFree();
     ASSERT_EQ(rec.loopLengthFrames(), kBlock);
 
     // Clamped fade = loopLength/2 = 8, same ramp shape as the unclamped case above.
@@ -257,129 +222,149 @@ TEST(LoopRecorderTest, BoundaryFadeClampsToHalfLoopLengthForShortLoops)
     }
 }
 
-TEST(LoopRecorderTest, BeatLockedFinalizeFoldsPreRollAndPostRollOnTime)
+TEST(LoopRecorderTest, BarLockedFinalizeOnTimeStartAndStopIsPlainCut)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
+    rec.beginRecord();
+    feedConstant(rec, 64, 5.f);
+    ASSERT_EQ(rec.recordedFrames(), 64u);
+
+    rec.stopRecordBarLocked(64, {}, 0, 0);
+    EXPECT_EQ(rec.state(), LooperState::Playing);
+    ASSERT_EQ(rec.loopLengthFrames(), 64u);
+    EXPECT_FLOAT_EQ(rec.sample(0, 0), 5.f);
+    EXPECT_FLOAT_EQ(rec.sample(63, 0), 5.f);
+}
+
+TEST(LoopRecorderTest, BarLockedFinalizeFoldsOvershootOntoFront)
+{
+    Recorder rec{48000.f};
     rec.setFadeFrames(4);
     rec.beginRecord();
     feedConstant(rec, 64, 5.f); // main take
-    feedConstant(rec, 16, 9.f); // post-roll capture (only the last 8 frames used)
+    feedConstant(rec, 16, 9.f); // stop-side overshoot (a late press past the tick)
     ASSERT_EQ(rec.recordedFrames(), 80u);
 
-    const std::vector<float> preRoll = makePreRoll(8, 3.f, 7.f);
-    rec.stopRecordBeatLocked(64, preRoll, 0, 8, 0);
+    rec.stopRecordBarLocked(64, {}, 0, 0);
     ASSERT_EQ(rec.loopLengthFrames(), 64u);
 
-    // Front: main take (5.0) + post-roll (9.0) fading out from full to 1/4.
+    // Front: main take (5.0) + overshoot (9.0), full strength near the seam,
+    // fading out toward the far end of the 16-frame overshoot (fade=4).
     EXPECT_FLOAT_EQ(rec.sample(0, 0), 5.f + 9.f * 1.f);
-    EXPECT_FLOAT_EQ(rec.sample(7, 0), 5.f + 9.f * 0.25f);
-    // Middle: untouched main take.
+    EXPECT_FLOAT_EQ(rec.sample(12, 0), 5.f + 9.f * 1.f);
+    EXPECT_FLOAT_EQ(rec.sample(13, 0), 5.f + 9.f * 0.75f);
+    EXPECT_FLOAT_EQ(rec.sample(15, 0), 5.f + 9.f * 0.25f);
+    // Middle and tail: untouched main take (no early start, so no tail fold).
     EXPECT_FLOAT_EQ(rec.sample(32, 0), 5.f);
-    // Tail: main take (5.0) + pre-roll (3.0) fading in from 1/4 to full.
-    EXPECT_FLOAT_EQ(rec.sample(56, 0), 5.f + 3.f * 0.25f);
-    EXPECT_FLOAT_EQ(rec.sample(63, 0), 5.f + 3.f * 1.f);
+    EXPECT_FLOAT_EQ(rec.sample(63, 0), 5.f);
 }
 
-TEST(LoopRecorderTest, BeatLockedFinalizeBackfillsLateGapFromPreRoll)
+TEST(LoopRecorderTest, BarLockedFinalizeBackfillsLateStartGapFromPreRoll)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
-    rec.setFadeFrames(4);
     rec.beginRecord();
-    // Same raw capture as the on-time case (content is constant, so shifting
-    // it up by the 3-frame late gap doesn't change any of these values) --
-    // feedConstant rounds up to a full block, so a genuinely 61-frame capture
-    // can't be fed directly without the block padding changing recordedFrames.
-    feedConstant(rec, 64, 5.f); // main take
-    feedConstant(rec, 16, 9.f); // post-roll capture
-    ASSERT_EQ(rec.recordedFrames(), 80u);
+    // feedConstant rounds up to a full block; the relocate below only reads
+    // capture frames [0,61), so the last 3 padding zeros are never read.
+    feedConstant(rec, 61, 5.f);
+    ASSERT_EQ(rec.recordedFrames(), 64u);
 
-    const std::vector<float> preRoll = makePreRoll(8, 3.f, 7.f);
-    rec.stopRecordBeatLocked(64, preRoll, -3, 8, 0);
+    const std::vector<float> preRoll = makeFlatPreRoll(3, 7.f);
+    rec.stopRecordBarLocked(64, preRoll, -3, 0);
     ASSERT_EQ(rec.loopLengthFrames(), 64u);
 
-    // [0,3): backfilled from preRoll's second half (7.0) + post-roll fold.
-    EXPECT_FLOAT_EQ(rec.sample(0, 0), 7.f + 9.f * 1.f);
-    EXPECT_FLOAT_EQ(rec.sample(2, 0), 7.f + 9.f * 1.f);
-    // [3,8): shifted-up main take (5.0) + post-roll fold still active (i<8).
-    EXPECT_FLOAT_EQ(rec.sample(3, 0), 5.f + 9.f * 1.f);
-    EXPECT_FLOAT_EQ(rec.sample(7, 0), 5.f + 9.f * 0.25f);
-    // Middle: shifted-up main take, untouched by either fold.
-    EXPECT_FLOAT_EQ(rec.sample(32, 0), 5.f);
-    // Tail: shifted-up main take + pre-roll fold, same as the on-time case.
-    EXPECT_FLOAT_EQ(rec.sample(63, 0), 5.f + 3.f * 1.f);
+    // [0,3): backfilled directly from preRoll -- placement, not a fold.
+    EXPECT_FLOAT_EQ(rec.sample(0, 0), 7.f);
+    EXPECT_FLOAT_EQ(rec.sample(2, 0), 7.f);
+    // [3,64): shifted-up main take, untouched (no overshoot in this take).
+    EXPECT_FLOAT_EQ(rec.sample(3, 0), 5.f);
+    EXPECT_FLOAT_EQ(rec.sample(63, 0), 5.f);
 }
 
-TEST(LoopRecorderTest, BeatLockedFinalizeRelocatesEarlyStartToTail)
+TEST(LoopRecorderTest, BarLockedFinalizeFoldsEarlyStartPickupOntoTail)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
     rec.setFadeFrames(4);
     rec.beginRecord();
-
-    // Recording starts immediately (no waiting for the tick): construct the
-    // capture directly, not via feedConstant (which always pads to a full
-    // block) -- samples [0,3) are real pre-tick content this take captured
-    // itself (6.0), [3,67) the aligned main take (5.0, 64 frames), [67,96)
-    // generous post-roll capture (9.0, only the last 8 frames get used).
-    for (size_t done = 0; done < 96; done += kBlock)
+    // [0,3): pre-tick pickup. [3,80): aligned main take, which also covers
+    // the stop-side overshoot an early start's relocate requires.
+    for (size_t done = 0; done < 80; done += kBlock)
     {
         Buffer in{};
         Buffer out{};
         for (size_t i = 0; i < kBlock; ++i)
         {
             const size_t f = done + i;
-            const float v = (f < 3) ? 6.f : (f < 67) ? 5.f : 9.f;
+            const float v = (f < 3) ? 6.f : 5.f;
             in(i, 0) = v;
             in(i, 1) = v;
         }
         rec.processBlock(in, out);
     }
-    ASSERT_EQ(rec.recordedFrames(), 96u);
+    ASSERT_EQ(rec.recordedFrames(), 80u);
 
-    // preRoll covers only [s-8, trig): 5 frames from before this take's own
-    // capture began (a ring-buffer snapshot in real use); distinct value
-    // (4.0) so it's easy to tell apart from the 3 frames captured directly.
-    const std::vector<float> preRoll(5 * 2, 4.f);
-    rec.stopRecordBeatLocked(64, preRoll, 3, 8, 0);
+    rec.stopRecordBarLocked(64, {}, 3, 0);
     ASSERT_EQ(rec.loopLengthFrames(), 64u);
 
-    // Main take: shifted down by 3, so loop frames [0,64) all read the
-    // aligned 5.0 content before any fold is applied.
+    // Middle: shifted-down main take, untouched by either fold.
     EXPECT_FLOAT_EQ(rec.sample(32, 0), 5.f);
 
-    // Tail fold: preRoll (4.0) for i<5, then the captured early frames (6.0)
-    // for i=5,6,7, both summed onto the shifted-down main take (5.0).
-    EXPECT_FLOAT_EQ(rec.sample(56, 0), 5.f + 4.f * 0.25f); // i=0
-    EXPECT_FLOAT_EQ(rec.sample(59, 0), 5.f + 4.f * 1.f);   // i=3
-    EXPECT_FLOAT_EQ(rec.sample(60, 0), 5.f + 4.f * 1.f);   // i=4 (last preRoll frame)
-    EXPECT_FLOAT_EQ(rec.sample(61, 0), 5.f + 6.f * 1.f);   // i=5 (first captured-early frame)
-    EXPECT_FLOAT_EQ(rec.sample(63, 0), 5.f + 6.f * 1.f);   // i=7
+    // Tail fold: the 3 pre-tick frames (6.0), fading in from 1/4 to full.
+    EXPECT_FLOAT_EQ(rec.sample(61, 0), 5.f + 6.f * 0.25f);
+    EXPECT_FLOAT_EQ(rec.sample(62, 0), 5.f + 6.f * 0.5f);
+    EXPECT_FLOAT_EQ(rec.sample(63, 0), 5.f + 6.f * 0.75f);
 
-    // Front fold: post-roll (9.0) fading out, same shape as the on-time case.
-    EXPECT_FLOAT_EQ(rec.sample(0, 0), 5.f + 9.f * 1.f);
-    EXPECT_FLOAT_EQ(rec.sample(7, 0), 5.f + 9.f * 0.25f);
+    // Front fold: the 16-frame overshoot (5.0, from the main take's own
+    // tail), full strength until the last 3 frames, then fading out.
+    EXPECT_FLOAT_EQ(rec.sample(0, 0), 5.f + 5.f * 1.f);
+    EXPECT_FLOAT_EQ(rec.sample(12, 0), 5.f + 5.f * 1.f);
+    EXPECT_FLOAT_EQ(rec.sample(13, 0), 5.f + 5.f * 0.75f);
+    EXPECT_FLOAT_EQ(rec.sample(14, 0), 5.f + 5.f * 0.5f);
+    EXPECT_FLOAT_EQ(rec.sample(15, 0), 5.f + 5.f * 0.25f);
+    EXPECT_FLOAT_EQ(rec.sample(16, 0), 5.f); // beyond the fold window
 }
 
-TEST(LoopRecorderTest, BeatLockedFinalizeClampsRollToHalfLoopLength)
+TEST(LoopRecorderTest, BarLockedFinalizeCombinesLateStartAndOvershoot)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
+    rec.setFadeFrames(4);
+    rec.beginRecord();
+    feedConstant(rec, 64, 5.f); // main take (relocate only reads the first 62)
+    feedConstant(rec, 16, 9.f); // stop-side overshoot
+    ASSERT_EQ(rec.recordedFrames(), 80u);
+
+    const std::vector<float> preRoll = makeFlatPreRoll(2, 7.f);
+    rec.stopRecordBarLocked(64, preRoll, -2, 0);
+    ASSERT_EQ(rec.loopLengthFrames(), 64u);
+
+    // [0,2): late-start backfill (7.0) + front fold (9.0, full strength).
+    EXPECT_FLOAT_EQ(rec.sample(0, 0), 7.f + 9.f * 1.f);
+    EXPECT_FLOAT_EQ(rec.sample(1, 0), 7.f + 9.f * 1.f);
+    // [2,13): shifted-up main take (5.0) + front fold still at full strength.
+    EXPECT_FLOAT_EQ(rec.sample(2, 0), 5.f + 9.f * 1.f);
+    EXPECT_FLOAT_EQ(rec.sample(12, 0), 5.f + 9.f * 1.f);
+    // Front fold's own taper, at the far end of the 16-frame overshoot.
+    EXPECT_FLOAT_EQ(rec.sample(13, 0), 5.f + 9.f * 0.75f);
+    EXPECT_FLOAT_EQ(rec.sample(14, 0), 5.f + 9.f * 0.5f);
+    EXPECT_FLOAT_EQ(rec.sample(15, 0), 5.f + 9.f * 0.25f);
+    // Beyond the fold window: shifted-up main take, untouched.
+    EXPECT_FLOAT_EQ(rec.sample(16, 0), 5.f);
+    EXPECT_FLOAT_EQ(rec.sample(32, 0), 5.f);
+    EXPECT_FLOAT_EQ(rec.sample(63, 0), 5.f);
+}
+
+TEST(LoopRecorderTest, BarLockedFinalizeClampsShiftToHalfLoopLength)
+{
+    Recorder rec{48000.f};
     rec.setFadeFrames(2);
     rec.beginRecord();
     feedConstant(rec, kBlock, 5.f); // 16-frame main take
-    feedConstant(rec, kBlock, 9.f); // generous post-roll capture
+    feedConstant(rec, kBlock, 9.f); // generous overshoot capture
     ASSERT_EQ(rec.recordedFrames(), 32u);
 
-    // rollFrames=8 requested, but loopLength/2=8 too -- exercises the clamp
-    // path without actually clamping (roll==8 either way); loopLength=16 is
-    // the smallest exact multiple of kBlock that keeps the test deterministic.
-    const std::vector<float> preRoll = makePreRoll(8, 3.f, 7.f);
-    rec.stopRecordBeatLocked(16, preRoll, 0, 8, 0);
+    // startOffset=20 requested but loopLength/2=8 -- exercises the clamp
+    // path without a crash or non-finite output.
+    rec.stopRecordBarLocked(16, {}, 20, 0);
     ASSERT_EQ(rec.loopLengthFrames(), 16u);
-    // No untouched middle frame exists (roll windows meet at the centre); just
-    // confirm every frame stayed finite and the take didn't corrupt state.
     for (size_t f = 0; f < 16; ++f)
     {
         EXPECT_TRUE(std::isfinite(rec.sample(f, 0))) << "frame " << f;
@@ -387,66 +372,41 @@ TEST(LoopRecorderTest, BeatLockedFinalizeClampsRollToHalfLoopLength)
     EXPECT_EQ(rec.state(), LooperState::Playing);
 }
 
-TEST(LoopRecorderTest, BeatLockedFinalizeResumesPlaybackFromCatchUpOffset)
+TEST(LoopRecorderTest, BarLockedFinalizeResumesPlaybackFromCatchUpOffset)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
     rec.setFadeFrames(4);
     rec.beginRecord();
-    feedConstant(rec, 64, 5.f); // main take
-    feedConstant(rec, 16, 9.f); // post-roll capture
+    feedConstant(rec, 64, 5.f);
+    feedConstant(rec, 16, 9.f);
     ASSERT_EQ(rec.recordedFrames(), 80u);
 
-    // Commit is arriving late (post-roll wait plus block-boundary slop): the
-    // caller reports 10 frames of real time already elapsed past the stop
-    // tick, so playback must resume already 10 frames into the loop.
-    const std::vector<float> preRoll = makePreRoll(8, 3.f, 7.f);
-    rec.stopRecordBeatLocked(64, preRoll, 0, 8, 10);
+    // Commit is arriving late (block-boundary slop): the caller reports 10
+    // frames of real time already elapsed past the stop tick, so playback
+    // must resume already 10 frames into the loop.
+    rec.stopRecordBarLocked(64, {}, 0, 10);
     ASSERT_EQ(rec.loopLengthFrames(), 64u);
     EXPECT_EQ(rec.playPositionFrames(), 10u);
 }
 
-TEST(LoopRecorderTest, BeatLockedFinalizeWrapsCatchUpOffsetToLoopLength)
+TEST(LoopRecorderTest, BarLockedFinalizeWrapsCatchUpOffsetToLoopLength)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
     rec.setFadeFrames(4);
     rec.beginRecord();
     feedConstant(rec, 64, 5.f);
     feedConstant(rec, 16, 9.f);
 
-    const std::vector<float> preRoll = makePreRoll(8, 3.f, 7.f);
-    rec.stopRecordBeatLocked(64, preRoll, 0, 8, 64 + 10); // one full loop plus 10
+    rec.stopRecordBarLocked(64, {}, 0, 64 + 10); // one full loop plus 10
     ASSERT_EQ(rec.loopLengthFrames(), 64u);
     EXPECT_EQ(rec.playPositionFrames(), 10u);
-}
-
-TEST(LoopRecorderTest, ShorterReRecordDoesNotLeakStaleTail)
-{
-    Recorder rec{48000.f};
-    rec.setSamplesPerBeat(100);
-    rec.beginRecord();
-    feed(rec, 300, 5.f); // fills frames 0..299 with nonzero
-    rec.stopRecord();
-
-    rec.clear();
-    rec.setSamplesPerBeat(100);
-    rec.beginRecord();
-    feed(rec, 60, 2.f); // 0.6 beat -> 1 beat = 100; frames 60..99 must be zeroed
-    rec.stopRecord();
-    ASSERT_EQ(rec.loopLengthFrames(), 100u);
-    for (size_t f = 60; f < 100; ++f)
-    {
-        EXPECT_FLOAT_EQ(rec.sample(f, 0), 0.f) << "stale frame " << f;
-    }
 }
 
 TEST(LoopRecorderTest, EmptyRecordStaysEmpty)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(100);
     rec.beginRecord();
-    rec.stopRecord(); // nothing recorded
+    rec.stopRecordFree(); // nothing recorded
     EXPECT_EQ(rec.state(), LooperState::Empty);
     EXPECT_FALSE(rec.hasLoop());
 }
@@ -454,10 +414,9 @@ TEST(LoopRecorderTest, EmptyRecordStaysEmpty)
 TEST(LoopRecorderTest, OverdubSumsIntoExistingLoop)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
     rec.beginRecord();
     feed(rec, kBlock, 1.f);
-    rec.stopRecord();
+    rec.stopRecordFree();
 
     rec.beginOverdub();
     EXPECT_EQ(rec.state(), LooperState::Overdubbing);
@@ -478,11 +437,10 @@ TEST(LoopRecorderTest, OverdubSumsIntoExistingLoop)
 TEST(LoopRecorderTest, OverdubDecayFadesExisting)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
     rec.setOverdubDecay(0.5f);
     rec.beginRecord();
     feed(rec, kBlock, 4.f); // values 4..19
-    rec.stopRecord();
+    rec.stopRecordFree();
 
     rec.beginOverdub();
     runOne(rec, 0.f); // input 0: existing *= 0.5
@@ -495,10 +453,9 @@ TEST(LoopRecorderTest, OverdubDecayFadesExisting)
 TEST(LoopRecorderTest, ClearResetsToEmpty)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
     rec.beginRecord();
     feed(rec, 64);
-    rec.stopRecord();
+    rec.stopRecordFree();
     ASSERT_TRUE(rec.hasLoop());
 
     rec.clear();
@@ -511,10 +468,9 @@ TEST(LoopRecorderTest, ClearResetsToEmpty)
 TEST(LoopRecorderTest, StopRewindsPlayhead)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
     rec.beginRecord();
     feed(rec, 64);
-    rec.stopRecord();
+    rec.stopRecordFree();
     runOne(rec); // advance playhead by one block
     EXPECT_GT(rec.playPositionFrames(), 0u);
 
@@ -526,10 +482,9 @@ TEST(LoopRecorderTest, StopRewindsPlayhead)
 TEST(LoopRecorderTest, PauseKeepsPlayhead)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
     rec.beginRecord();
     feed(rec, 64);
-    rec.stopRecord();
+    rec.stopRecordFree();
     runOne(rec);
     const size_t pos = rec.playPositionFrames();
     ASSERT_GT(pos, 0u);
@@ -542,10 +497,9 @@ TEST(LoopRecorderTest, PauseKeepsPlayhead)
 TEST(LoopRecorderTest, StoppedOutputsSilence)
 {
     Recorder rec{48000.f};
-    rec.setSamplesPerBeat(0);
     rec.beginRecord();
     feed(rec, 64, 1.f);
-    rec.stopRecord();
+    rec.stopRecordFree();
     rec.stop();
     const Buffer out = runOne(rec);
     for (size_t i = 0; i < kBlock; ++i)
@@ -559,7 +513,6 @@ TEST(LoopRecorderTest, AutoStopsWhenBufferFull)
     // 0.001 s at 48k -> 48 frames of capacity.
     Recorder rec{48000.f, 0.001f};
     ASSERT_EQ(rec.maxFrames(), 48u);
-    rec.setSamplesPerBeat(0);
     rec.beginRecord();
     feed(rec, 128); // more than capacity
     EXPECT_NE(rec.state(), LooperState::Recording);
@@ -571,10 +524,9 @@ TEST(LoopRecorderTest, NoAllocationDuringProcessing)
 {
     Recorder rec{48000.f};
     const size_t capacityBefore = rec.maxFrames();
-    rec.setSamplesPerBeat(240);
     rec.beginRecord();
     feed(rec, 2000);
-    rec.stopRecord();
+    rec.stopRecordFree();
     rec.beginOverdub();
     feed(rec, 2000);
     rec.endOverdub();
@@ -595,7 +547,7 @@ TEST(LoopRecorderTest, LoadLoopEntersPlayingWithGivenContent)
         left[f] = 1.f + static_cast<float>(f);
         right[f] = -(1.f + static_cast<float>(f));
     }
-    rec.loadLoop(left, right, 100);
+    rec.loadLoop(left, right);
     EXPECT_EQ(rec.state(), LooperState::Playing);
     EXPECT_EQ(rec.loopLengthFrames(), 32u);
     for (size_t f = 0; f < 32; ++f)
@@ -611,14 +563,14 @@ TEST(LoopRecorderTest, LoadLoopTruncatesAtMaxFrames)
     ASSERT_EQ(rec.maxFrames(), 48u);
     const std::vector<float> left(128, 1.f);
     const std::vector<float> right(128, -1.f);
-    rec.loadLoop(left, right, 0);
+    rec.loadLoop(left, right);
     EXPECT_EQ(rec.loopLengthFrames(), 48u);
 }
 
 TEST(LoopRecorderTest, LoadLoopWithEmptySpansClears)
 {
     Recorder rec{48000.f};
-    rec.loadLoop({}, {}, 0);
+    rec.loadLoop({}, {});
     EXPECT_EQ(rec.state(), LooperState::Empty);
     EXPECT_FALSE(rec.hasLoop());
 }

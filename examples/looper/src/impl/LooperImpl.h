@@ -53,20 +53,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(LoopMetadata, version, bpm)
 // performed here; it will be reintroduced as an on-demand sample sequencer layer
 // on top of this plain looper.
 //
-// Phase 8b (see PLAN.md): threshold-armed record start/stop beat-lock to the
-// nearest beat tick, within an eighth-note tolerance. The beat clock
-// (BeatSequencer) is the single source of truth for timing: nothing in this
-// class ever resets or repositions it (host sync excepted -- syncToPpq keeps
-// it aligned to the host transport, which is the source of truth in that
-// mode); every transport action locks onto wherever the clock already is
-// instead. Recording always starts the instant the trigger fires -- nothing
-// ever waits for the tick -- a pickup played early is relocated onto the loop
-// tail afterward instead of delaying capture; a small always-on capture ring
-// covers the case where the tick had already passed (real audio the buffer
-// itself couldn't reach). A short real wait past a stop lets it reach forward
-// (a trailing note played late) since that audio genuinely hasn't happened
-// yet. Outside the tolerance, record start/stop still happen immediately,
-// unquantized, but still without moving the clock.
+// Per-take mode (setFreeRecord): bar-locked snaps start/stop to the nearest
+// bar tick; Free Record captures exactly where triggered, unquantized.
 template <size_t BlockSize>
 class LooperImpl final : public EffectBase
 {
@@ -100,12 +88,10 @@ class LooperImpl final : public EffectBase
         // Cover the whole recordable span (~60 s) so a long loop's ring is fully
         // painted, not just its tail. hop = fftLength * windowForwardRatio (1024/3).
         m_recordSpectrogram.setSlices(static_cast<size_t>(60.f * sampleRate / (1024.f / 3.f)) + 64);
-        // Phase 8b: continuous capture ring, sized generously (1s) to comfortably
-        // cover the pre-roll/late-gap window even at the slowest supported tempo
-        // (50 BPM -> an eighth note is ~150 ms).
-        m_ringCapacityFrames = std::max<size_t>(BlockSize, static_cast<size_t>(sampleRate));
+        // Covers half a bar of late-start backfill at the slowest supported tempo.
+        m_ringCapacityFrames = std::max<size_t>(BlockSize, static_cast<size_t>(sampleRate * 8.f));
         m_captureRing.assign(m_ringCapacityFrames * 2, 0.f);
-        m_startPreRoll.assign(m_ringCapacityFrames * 2, 0.f); // only 2*rollFrames actually used
+        m_startPreRoll.assign(m_ringCapacityFrames * 2, 0.f); // only the actual gap length is used
 
         m_sequencer.setLibrary(&m_sliceLibrary);
         m_sequencer.setPattern(&m_pattern);
@@ -215,8 +201,13 @@ class LooperImpl final : public EffectBase
     {
         m_recThreshold.store(value, std::memory_order_relaxed);
     }
-    // Loop boundary click-free fade (record-stop wrap seam, and the Phase 8b
-    // pre-/post-roll fold edges), milliseconds.
+    // Decided per-take at record-start; toggling mid-take doesn't retroactively change it.
+    void setFreeRecord(const bool value) noexcept
+    {
+        m_freeRecordReq.store(value, std::memory_order_relaxed);
+    }
+    // Loop boundary click-free fade (record-stop wrap seam, and the
+    // bar-locked relocate/fold edges), milliseconds.
     void setFadeMs(const float value) noexcept
     {
         m_fadeMs.store(value, std::memory_order_relaxed);
@@ -708,14 +699,12 @@ class LooperImpl final : public EffectBase
             m_recordSpectrogram.processBlock(std::span<const float>{inMono});
         }
 
-        m_recorder.setSamplesPerBeat(m_seq.samplesPerBeat());
-
         // Threshold recording: while armed, wait for the input to cross the level
         // before capture actually begins (this block is then recorded too).
         if (m_armed && blockPeak(in) >= m_recThresholdLinear)
         {
             m_armed = false;
-            beginBeatAwareRecord();
+            startRecording();
         }
 
         // Click/sequencer are rendered before the recorder runs so the optional
@@ -735,9 +724,9 @@ class LooperImpl final : public EffectBase
         AbacDsp::AudioBuffer<2, BlockSize> recorderOut{};
         m_recorder.processBlock(recIn, recorderOut);
 
-        // Commit a pending beat-locked stop only after this block's own
-        // capture, so the post-roll captured during this block is included.
-        if (m_pendingStop && m_pendingStopFinalizeAbs < m_absPos + BlockSize)
+        // Absolute-time check, not recordedFrames() >= loopLength: an early
+        // start's relocate needs loopLength+startOffset frames, not loopLength.
+        if (m_pendingStop && m_absPos + BlockSize > m_pendingStopTickAbs)
         {
             commitPendingStop();
         }
@@ -802,6 +791,7 @@ class LooperImpl final : public EffectBase
         m_loopGain = std::pow(10.f, m_loopVol.load(std::memory_order_relaxed) / 20.f);
         m_recThresholdLinear = std::pow(10.f, m_recThreshold.load(std::memory_order_relaxed) / 20.f);
         m_hostSync = m_hostSyncReq.load(std::memory_order_relaxed);
+        m_freeRecord = m_freeRecordReq.load(std::memory_order_relaxed);
         const float fadeMs = m_fadeMs.load(std::memory_order_relaxed);
         if (std::not_equal_to<float>{}(fadeMs, m_appliedFadeMs))
         {
@@ -887,7 +877,7 @@ class LooperImpl final : public EffectBase
     {
         m_armed = false;
         m_pendingStop = false;
-        m_beatLockedTake = false;
+        m_barLockedTake = false;
         m_recorder.clear();
     }
 
@@ -904,9 +894,8 @@ class LooperImpl final : public EffectBase
 
     void finishRecording()
     {
-        m_recorder.setSamplesPerBeat(m_seq.samplesPerBeat());
-        m_recorder.stopRecord();
-        m_beatLockedTake = false;
+        m_recorder.stopRecordFree();
+        m_barLockedTake = false;
     }
 
     void toggleRecord()
@@ -922,6 +911,20 @@ class LooperImpl final : public EffectBase
         else if (m_threshRecReq.load(std::memory_order_relaxed))
         {
             m_armed = true; // wait for the input to cross the threshold
+        }
+        else
+        {
+            startRecording();
+        }
+    }
+
+    // Remembers which path this take used, independent of later toggling.
+    void startRecording()
+    {
+        m_barLockedTake = !m_freeRecord;
+        if (m_barLockedTake)
+        {
+            beginBarLockedRecord();
         }
         else
         {
@@ -1281,10 +1284,7 @@ class LooperImpl final : public EffectBase
             return;
         }
         m_loopLoadPending = false;
-        const size_t samplesPerBeat = (m_loopLoadResolvedBpm > 0.f)
-                                          ? static_cast<size_t>(std::round(sampleRate() * 60.f / m_loopLoadResolvedBpm))
-                                          : 0;
-        m_recorder.loadLoop(m_loopLoadLeft, m_loopLoadRight, samplesPerBeat);
+        m_recorder.loadLoop(m_loopLoadLeft, m_loopLoadRight);
         m_seq.setBpm(m_loopLoadResolvedBpm);
         m_appliedBpm = m_loopLoadResolvedBpm;
         m_bpm.store(m_loopLoadResolvedBpm, std::memory_order_relaxed);
@@ -1319,80 +1319,53 @@ class LooperImpl final : public EffectBase
         }
     }
 
-    // Threshold-armed record start (Phase 8b): recording starts immediately,
-    // right here, regardless of timing -- nothing ever waits for a tick. If
-    // the crossing lands within an eighth note of a beat tick, this take is
-    // beat-locked: the tick is stored (and, if the ring buffer has anything
-    // useful for the tail fold, snapshotted) so the eventual stop-time finalize
-    // can relocate/backfill around it. Outside the tolerance, this is just an
-    // immediate, unquantized start -- but the beat clock is the single source
-    // of truth throughout: nothing here ever moves it, in or out of tolerance.
-    void beginBeatAwareRecord()
+    // Recording starts immediately; the nearest bar tick is stored for the
+    // stop-time finalize to relocate/backfill around (no tolerance cutoff).
+    void beginBarLockedRecord()
     {
         const size_t spb = m_seq.samplesPerBeat();
-        const size_t roll = spb / 8;
-        const long off = (spb > 0) ? m_seq.samplesToNearestBeat() : 0;
-        const bool canLock =
-            spb > 0 && roll > 0 && 2 * roll <= m_ringCapacityFrames && static_cast<size_t>(std::abs(off)) <= roll;
-        m_beatLockedTake = canLock;
-        if (canLock)
-        {
-            m_rollFrames = roll;
-            m_startOffset = off;
-            m_tickAbs = m_absPos + static_cast<uint64_t>(off);
-            snapshotStartPreRoll(m_tickAbs, m_absPos, roll);
-        }
+        const long off = (spb > 0) ? m_seq.samplesToNearestBar() : 0;
+        m_startOffset = off;
+        m_tickAbs = m_absPos + static_cast<uint64_t>(off);
+        snapshotStartPreRoll(m_tickAbs, m_absPos);
         m_recorder.beginRecord();
     }
 
-    // Record stop: mirrors beginBeatAwareRecord. A non-beat-locked take (or a
-    // stop that doesn't land near any tick) falls back to the plain 8a
-    // finalize immediately; a beat-locked take waits for the real post-roll to
-    // happen before folding it in.
+    // A bar-locked take locks to the nearest tick; see the pendingStop check
+    // in processBlock() for how an ahead-of-us tick gets waited for.
     void requestStop()
     {
-        if (!m_beatLockedTake)
+        if (!m_barLockedTake)
         {
             finishRecording();
             return;
         }
-        const size_t spb = m_seq.samplesPerBeat();
-        const long off = (spb > 0) ? m_seq.samplesToNearestBeat() : 0;
-        const bool canLock = spb > 0 && static_cast<size_t>(std::abs(off)) <= m_rollFrames;
-        if (!canLock)
-        {
-            m_beatLockedTake = false;
-            finishRecording();
-            return;
-        }
+        const long off = m_seq.samplesToNearestBar();
         const uint64_t stopTickAbs = m_absPos + static_cast<uint64_t>(off);
         if (stopTickAbs <= m_tickAbs)
         {
             // Degenerate near-instant take: nothing sensible to fold.
-            m_beatLockedTake = false;
+            m_barLockedTake = false;
             finishRecording();
             return;
         }
         m_pendingStop = true;
         m_pendingStopLoopLength = static_cast<size_t>(stopTickAbs - m_tickAbs);
-        m_pendingStopFinalizeAbs = stopTickAbs + m_rollFrames;
+        m_pendingStopTickAbs = stopTickAbs;
     }
 
     void commitPendingStop()
     {
         m_pendingStop = false;
         const std::span<const float> preRoll{m_startPreRoll.data(), m_preRollLen * 2};
-        // How far real time has already moved past the stop tick by the time this
-        // actually commits (post-roll wait plus block-boundary slop); playback
-        // must resume from this offset, not frame 0, to stay phase-locked to the beat.
-        const uint64_t stopTickAbs = m_pendingStopFinalizeAbs - static_cast<uint64_t>(m_rollFrames);
-        const auto catchUpFrames = static_cast<size_t>(m_absPos + BlockSize - stopTickAbs);
-        m_recorder.stopRecordBeatLocked(m_pendingStopLoopLength, preRoll, m_startOffset, m_rollFrames, catchUpFrames);
-        m_beatLockedTake = false;
+        // Block-boundary slop past the tick; playback resumes from here, not frame 0.
+        const auto catchUpFrames = static_cast<size_t>(m_absPos + BlockSize - m_pendingStopTickAbs);
+        m_recorder.stopRecordBarLocked(m_pendingStopLoopLength, preRoll, m_startOffset, catchUpFrames);
+        m_barLockedTake = false;
     }
 
     // Writes this block's raw input into the always-on capture ring
-    // (independent of recorder state), so a beat-locked start can reach back
+    // (independent of recorder state), so a bar-locked start can reach back
     // to audio that arrived before its own trigger.
     void updateCaptureRing(const AbacDsp::AudioBuffer<2, BlockSize>& in) noexcept
     {
@@ -1404,22 +1377,19 @@ class LooperImpl final : public EffectBase
         }
     }
 
-    // Snapshots [tickAbs-rollFrames, trigAbs) from the capture ring into
-    // m_startPreRoll (see PLAN.md Phase 8b), taken immediately at record-start
-    // since the ring buffer's history is bounded and won't still hold this by
-    // the time the take finalizes. Length is rollFrames-startOffset: the part
-    // of the fixed roll window this take's own capture (starting at trigAbs)
-    // cannot reach itself -- zero if the tick was already rollFrames behind
-    // trigAbs (an early start right at the tolerance edge), up to 2*rollFrames
-    // if the tick was still rollFrames ahead (a late start at the edge).
-    void snapshotStartPreRoll(const uint64_t tickAbs, const uint64_t trigAbs, const size_t rollFrames) noexcept
+    // Snapshots the late-start gap [tickAbs, trigAbs); empty if not late.
+    void snapshotStartPreRoll(const uint64_t tickAbs, const uint64_t trigAbs) noexcept
     {
-        const uint64_t fromAbs = (tickAbs >= rollFrames) ? tickAbs - rollFrames : 0;
-        const uint64_t toAbs = std::max(fromAbs, trigAbs);
-        m_preRollLen = std::min(m_startPreRoll.size() / 2, static_cast<size_t>(toAbs - fromAbs));
+        if (trigAbs <= tickAbs)
+        {
+            m_preRollLen = 0;
+            return;
+        }
+        const uint64_t gap = trigAbs - tickAbs;
+        m_preRollLen = std::min(m_startPreRoll.size() / 2, static_cast<size_t>(gap));
         for (size_t f = 0; f < m_preRollLen; ++f)
         {
-            const auto ringPos = static_cast<size_t>((fromAbs + f) % m_ringCapacityFrames);
+            const auto ringPos = static_cast<size_t>((tickAbs + f) % m_ringCapacityFrames);
             m_startPreRoll[f * 2] = m_captureRing[ringPos * 2];
             m_startPreRoll[f * 2 + 1] = m_captureRing[ringPos * 2 + 1];
         }
@@ -1509,6 +1479,8 @@ class LooperImpl final : public EffectBase
     std::atomic<float> m_loopVol{0.f};
     std::atomic<float> m_recThreshold{-36.f};
     std::atomic<bool> m_threshRecReq{false};
+    std::atomic<bool> m_freeRecordReq{false};
+    bool m_freeRecord{false};
     std::atomic<float> m_fadeMs{5.f};
     float m_loopGain{1.f};
     float m_clickRecordGain{0.f};
@@ -1536,20 +1508,19 @@ class LooperImpl final : public EffectBase
     bool m_suppressNextClick{false}; // set alongside every m_seq.reset() resync
     uint64_t m_lastSyncedUpdateCount{0};
 
-    // Phase 8b: beat-locked recording state.
+    // Bar-locked recording state.
     std::vector<float> m_captureRing; // always-on raw input capture, interleaved stereo
     size_t m_ringCapacityFrames{0};
     uint64_t m_absPos{0}; // free-running sample position, never reset
 
-    std::vector<float> m_startPreRoll; // snapshot taken immediately when a beat-locked take starts
-    size_t m_preRollLen{0};            // valid length within m_startPreRoll (rollFrames - startOffset)
-    bool m_beatLockedTake{false};
-    size_t m_rollFrames{0}; // fixed for the take's whole lifetime (start's spb/8)
-    long m_startOffset{0};  // signed: tick - trigger (see beginBeatAwareRecord)
-    uint64_t m_tickAbs{0};  // this take's start tick (s)
+    std::vector<float> m_startPreRoll; // snapshot taken immediately when a bar-locked take starts
+    size_t m_preRollLen{0};            // valid length within m_startPreRoll (the late-start gap)
+    bool m_barLockedTake{false};
+    long m_startOffset{0}; // signed: tick - trigger (see beginBarLockedRecord)
+    uint64_t m_tickAbs{0}; // this take's start tick (s)
 
     bool m_pendingStop{false};
-    uint64_t m_pendingStopFinalizeAbs{0};
+    uint64_t m_pendingStopTickAbs{0};
     size_t m_pendingStopLoopLength{0};
 
     // Phase 10g manual freeze; only the two generation counters are cross-thread.

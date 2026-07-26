@@ -265,6 +265,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         hostSyncSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "hostSync", hostSyncSwitch);
 
+        addAndMakeVisible(freeRecordSwitch);
+        freeRecordSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "freeRecord", freeRecordSwitch);
+
         addAndMakeVisible(sliceModeDrop);
         sliceModeDrop.addItemList(valueTreeState.getParameter("sliceMode")->getAllValueStrings(), 1);
         sliceModeDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
@@ -802,6 +806,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> threshRecSwitchAttachment;
     juce::ToggleButton hostSyncSwitch{juce::String::fromUTF8("Host Sync")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> hostSyncSwitchAttachment;
+    juce::ToggleButton freeRecordSwitch{juce::String::fromUTF8("Free Record")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> freeRecordSwitchAttachment;
     juce::ComboBox sliceModeDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> sliceModeDropAttachment;
     juce::ComboBox sliceDivisionDrop{};

@@ -42,6 +42,10 @@ class GenericImpl final : public EffectBase
     {
         m_hostSync = value;
     }
+    void setFreeRecord(const bool value)
+    {
+        m_freeRecord = value;
+    }
     void setSliceMode(const size_t value)
     {
         m_sliceMode = value;
@@ -123,6 +127,7 @@ class GenericImpl final : public EffectBase
     bool m_clear{};
     bool m_threshRec{};
     bool m_hostSync{};
+    bool m_freeRecord{};
     size_t m_sliceMode{};
     size_t m_sliceDivision{};
     float m_bpm{};

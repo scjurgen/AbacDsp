@@ -40,6 +40,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("clear", this);
         m_parameters.addParameterListener("threshRec", this);
         m_parameters.addParameterListener("hostSync", this);
+        m_parameters.addParameterListener("freeRecord", this);
         m_parameters.addParameterListener("sliceMode", this);
         m_parameters.addParameterListener("sliceDivision", this);
         m_parameters.addParameterListener("bpm", this);
@@ -53,7 +54,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("clearSeq", this);
         m_parameters.addParameterListener("saveWave", this);
 
-        for (size_t i = 0; i < 15; ++i)
+        for (size_t i = 0; i < 16; ++i)
         {
             m_ccActive[i].controller.store(kDefaultCcMappings[i].controller, std::memory_order_relaxed);
             m_ccActive[i].valueLow.store(kDefaultCcMappings[i].valueLow, std::memory_order_relaxed);
@@ -69,6 +70,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("clear", this);
         m_parameters.removeParameterListener("threshRec", this);
         m_parameters.removeParameterListener("hostSync", this);
+        m_parameters.removeParameterListener("freeRecord", this);
         m_parameters.removeParameterListener("sliceMode", this);
         m_parameters.removeParameterListener("sliceDivision", this);
         m_parameters.removeParameterListener("bpm", this);
@@ -104,7 +106,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
         for (const auto& entry : CcSettings::load())
         {
-            for (size_t i = 0; i < 15; ++i)
+            for (size_t i = 0; i < 16; ++i)
             {
                 if (kCcTargetParamIds[i] != entry.paramId)
                 {
@@ -279,6 +281,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         params.push_back(
             std::make_unique<juce::AudioParameterBool>(juce::ParameterID("threshRec", 1), "Thresh Rec", 0));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("hostSync", 1), "Host Sync", 0));
+        params.push_back(
+            std::make_unique<juce::AudioParameterBool>(juce::ParameterID("freeRecord", 1), "Free Record", 0));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("sliceMode", 1), "Slice Mode",
                                                                       juce::StringArray{"Grid", "Transient"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
@@ -364,6 +368,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setHostSync(static_cast<bool>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::hostSync, v);
+             }},
+            {"freeRecord",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFreeRecord(static_cast<bool>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::freeRecord, v);
              }},
             {"sliceMode",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -500,6 +510,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("hostSync");
             float normalized = range.convertTo0to1(params.hostSync);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("freeRecord"))
+        {
+            const auto& range = m_parameters.getParameterRange("freeRecord");
+            float normalized = range.convertTo0to1(params.freeRecord);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("sliceMode"))
@@ -947,7 +963,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         std::atomic<float> valueLow{0.f};
         std::atomic<float> valueHigh{0.f};
     };
-    std::array<CcSlot, 15> m_ccActive{};
+    std::array<CcSlot, 16> m_ccActive{};
     std::atomic<int> m_learnTargetIndex{-1};
     std::atomic<int> m_lastLearnedIndex{-1};
 
@@ -960,8 +976,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     void saveCcSettings() const
     {
         std::vector<CcMappingOverride> overrides;
-        overrides.reserve(15);
-        for (size_t i = 0; i < 15; ++i)
+        overrides.reserve(16);
+        for (size_t i = 0; i < 16; ++i)
         {
             overrides.push_back({std::string(kCcTargetParamIds[i]),
                                  m_ccActive[i].controller.load(std::memory_order_relaxed),
@@ -981,7 +997,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_lastLearnedIndex.store(learnIndex, std::memory_order_relaxed);
             return;
         }
-        for (size_t i = 0; i < 15; ++i)
+        for (size_t i = 0; i < 16; ++i)
         {
             if (m_ccActive[i].controller.load(std::memory_order_relaxed) != controller)
             {

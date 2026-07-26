@@ -17,6 +17,7 @@
     {"short": "CLR",  "type": "switch", "display": "Clear",     "symbol": "clear",    "default": 0, "momentary": true, "cc": {"controller": 69}},
     {"short": "TREC", "type": "switch", "display": "Thresh Rec", "symbol": "threshRec", "default": 0, "cc": {"controller": 70}},
     {"short": "SYNC", "type": "switch", "display": "Host Sync", "symbol": "hostSync", "default": 0},
+    {"short": "FREE", "type": "switch", "display": "Free Record", "symbol": "freeRecord", "default": 0, "cc": {"controller": 72}},
     {"short": "MODE", "type": "drop",   "display": "Slice Mode", "symbol": "sliceMode", "default": 0,
       "listitems": ["Grid", "Transient"]},
     {"short": "DIV",  "type": "drop",   "display": "Division",   "symbol": "sliceDivision", "default": 1,
