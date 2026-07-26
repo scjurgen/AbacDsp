@@ -55,14 +55,14 @@
         {"call": "setSpectrogram", "from": "getSpectrogramData"},
         {"call": "setRecordHeadFrames", "from": "getSpectrogramHeadFrames"}
       ]},
-    {"short": "SLICE", "type": "gauge", "gaugetype": "signal", "display": "Loop", "symbol": "slice",
+    {"short": "SLICE", "type": "gauge", "gaugetype": "signal", "display": "Sequencer", "symbol": "slice",
       "customtype": "SliceWaveDisplay",
       "bindings": [
         {"call": "setSampleRate", "from": "getSampleRate", "cast": "float"},
-        {"call": "setLoopWaveform", "from": "getLoopWaveform"},
-        {"call": "setSliceBoundaries", "from": "getSliceBoundaries"},
-        {"call": "setPlayheadNormalized", "from": "getPlayheadNormalized"},
-        {"call": "setStateLabel", "from": "getLooperStateLabel"}
+        {"call": "setSliceThumbnails", "from": "getSequencerSliceThumbnails"},
+        {"call": "setSliceBoundaries", "from": "getSequencerSliceBoundaries"},
+        {"call": "setPlayheadNormalized", "from": "getSequencerPlayheadNormalized"},
+        {"call": "setStateLabel", "from": "getSequencerLabel"}
       ]}
   ],
   "layout": {
@@ -97,11 +97,15 @@
     {"name": "isFreezePending", "type": "bool"},
     {"name": "getFrozenTrackCount", "type": "size_t"},
     {"name": "getFrozenSliceCount", "type": "size_t"},
-    {"name": "isSequencerPlaying", "type": "bool"}
+    {"name": "isSequencerPlaying", "type": "bool"},
+    {"name": "getSequencerSliceThumbnails", "type": "std::vector<AbacDsp::SequencerSliceThumbnail>"},
+    {"name": "getSequencerSliceBoundaries", "type": "std::vector<float>"},
+    {"name": "getSequencerPlayheadNormalized", "type": "float"}
   ],
   "extra_processor_methods": [
     "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }",
-    "[[nodiscard]] juce::String getLooperStateLabel() const { return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String(); }"
+    "[[nodiscard]] juce::String getLooperStateLabel() const { return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String(); }",
+    "[[nodiscard]] juce::String getSequencerLabel() const { return pluginRunner ? juce::String(pluginRunner->getSequencerStateLabel()) : juce::String(); }"
   ],
   "protected_files": ["src/unittests/Looper_tests.cpp"],
   "CPP": {

@@ -39,6 +39,9 @@ import sys
 from parseboxstructure import parse_box_structure, construct_boxes
 from file_sync import FileSync
 
+# Every path below (blueprints/, templates/, ../examples) is relative to this
+# script's own directory, not the caller's cwd.
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 stand_alone = False
 templateFiles = "templates"

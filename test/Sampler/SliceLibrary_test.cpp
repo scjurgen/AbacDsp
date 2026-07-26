@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <gtest/gtest.h>
 #include <vector>
 
@@ -206,6 +207,58 @@ TEST(SliceLibraryTest, EarlierTracksSurviveWhenALaterOneOverflows)
     // Track A content untouched by track B's overflow.
     EXPECT_FLOAT_EQ(library.sample(0, 0, 0, 0), 0.f);
     EXPECT_FLOAT_EQ(library.sample(0, 1, 0, 0), 20.f);
+}
+
+TEST(SliceLibraryTest, ThumbnailIsZeroWhenNoneSupplied)
+{
+    const auto loop = makeRampLoop(40);
+    SliceLibrary library(40);
+    library.extractTrack(loop, Slicer::gridSlices(40, 2));
+
+    const auto thumb = library.thumbnail(0, 0);
+    ASSERT_EQ(thumb.size(), SliceLibrary::kThumbFloats);
+    EXPECT_TRUE(std::ranges::all_of(thumb, [](const float v) { return v == 0.f; }));
+}
+
+TEST(SliceLibraryTest, ThumbnailOutOfRangeTrackIsEmpty)
+{
+    const auto loop = makeRampLoop(40);
+    SliceLibrary library(40);
+    library.extractTrack(loop, Slicer::gridSlices(40, 2));
+
+    EXPECT_TRUE(library.thumbnail(5, 0).empty());
+}
+
+TEST(SliceLibraryTest, ThumbnailsAreCopiedInCandidateOrder)
+{
+    const auto loop = makeRampLoop(40);
+    const auto slices = Slicer::gridSlices(40, 2);
+    std::vector<float> thumbnails(2 * SliceLibrary::kThumbFloats);
+    thumbnails[0] = 1.f;
+    thumbnails[SliceLibrary::kThumbFloats] = 2.f;
+
+    SliceLibrary library(40);
+    library.extractTrack(loop, slices, thumbnails);
+
+    EXPECT_FLOAT_EQ(library.thumbnail(0, 0)[0], 1.f);
+    EXPECT_FLOAT_EQ(library.thumbnail(0, 1)[0], 2.f);
+}
+
+TEST(SliceLibraryTest, SkippedCandidateThumbnailStaysWithItsOwnCandidateIndex)
+{
+    const auto loop = makeRampLoop(30);
+    const std::vector<Slice> slices{{10, 5}, {40, 5}, {20, 5}}; // candidate 1 starts past the loop
+    std::vector<float> thumbnails(3 * SliceLibrary::kThumbFloats);
+    thumbnails[0 * SliceLibrary::kThumbFloats] = 10.f;
+    thumbnails[1 * SliceLibrary::kThumbFloats] = 20.f;
+    thumbnails[2 * SliceLibrary::kThumbFloats] = 30.f;
+
+    SliceLibrary library(30);
+    library.extractTrack(loop, slices, thumbnails);
+
+    ASSERT_EQ(library.sliceCountInTrack(0), 2u);
+    EXPECT_FLOAT_EQ(library.thumbnail(0, 0)[0], 10.f); // candidate 0 survived
+    EXPECT_FLOAT_EQ(library.thumbnail(0, 1)[0], 30.f); // candidate 1 skipped, candidate 2 survived
 }
 
 TEST(SliceLibraryTest, PeakAndRmsComputedPerSlice)

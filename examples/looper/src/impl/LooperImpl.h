@@ -13,6 +13,7 @@
 #include <thread>
 #include <vector>
 
+#include "Analysis/FftMisc.h"
 #include "Analysis/Slicer.h"
 #include "Analysis/Spectrogram.h"
 #include "Audio/AudioBuffer.h"
@@ -56,6 +57,7 @@ class LooperImpl final : public EffectBase
     // not on this grid. Also the slice library's total pool size.
     static constexpr size_t kOnsetSnapStepsPerBeat = 4;
     static constexpr float kSliceLibrarySeconds = 120.f;
+    static constexpr size_t kThumbFftLength = 2 * AbacDsp::SliceLibrary::kThumbHeight;
 
     explicit LooperImpl(const float sampleRate)
         : EffectBase(sampleRate)
@@ -65,6 +67,7 @@ class LooperImpl final : public EffectBase
         , m_sliceLibrary(static_cast<size_t>(sampleRate * kSliceLibrarySeconds))
         , m_sequencer(sampleRate)
         , m_pattern(1, kBeatsPerBar, m_seq.samplesPerBeat())
+        , m_freezeFft(kThumbFftLength)
     {
         m_seq.setBeatsPerBar(kBeatsPerBar);
         m_seq.setBpm(m_appliedBpm);
@@ -340,6 +343,72 @@ class LooperImpl final : public EffectBase
     [[nodiscard]] bool isSequencerPlaying() const noexcept
     {
         return m_sequencerPlaying;
+    }
+
+    // totalSteps() is frame-accurate (stepsPerBeat == samplesPerBeat at freeze
+    // time), so it doubles directly as each thumbnail's placement denominator.
+    [[nodiscard]] std::vector<AbacDsp::SequencerSliceThumbnail> getSequencerSliceThumbnails() const
+    {
+        const size_t totalSteps = m_pattern.totalSteps();
+        std::vector<AbacDsp::SequencerSliceThumbnail> thumbnails;
+        if (totalSteps == 0)
+        {
+            return thumbnails;
+        }
+        thumbnails.reserve(m_pattern.eventCount());
+        for (const auto& event : m_pattern.events())
+        {
+            if (event.track >= m_sliceLibrary.trackCount() ||
+                event.sliceIndex >= m_sliceLibrary.sliceCountInTrack(event.track))
+            {
+                continue;
+            }
+            const auto& info = m_sliceLibrary.sliceInfo(event.track, event.sliceIndex);
+            const auto image = m_sliceLibrary.thumbnail(event.track, event.sliceIndex);
+            thumbnails.push_back({static_cast<float>(event.stepPosition) / static_cast<float>(totalSteps),
+                                  static_cast<float>(info.lengthFrames) / static_cast<float>(totalSteps),
+                                  AbacDsp::SliceLibrary::kThumbWidth, AbacDsp::SliceLibrary::kThumbHeight, image.data(),
+                                  sampleRate()});
+        }
+        return thumbnails;
+    }
+
+    [[nodiscard]] std::vector<float> getSequencerSliceBoundaries() const
+    {
+        const size_t totalSteps = m_pattern.totalSteps();
+        if (totalSteps == 0)
+        {
+            return {};
+        }
+        std::vector<float> boundaries;
+        boundaries.reserve(m_pattern.eventCount());
+        for (const auto& event : m_pattern.events())
+        {
+            boundaries.push_back(static_cast<float>(event.stepPosition) / static_cast<float>(totalSteps));
+        }
+        return boundaries;
+    }
+
+    // Tracks the shared BeatSequencer clock regardless of isSequencerPlaying(),
+    // so the marker previews trigger timing even before Seq Play is pressed.
+    [[nodiscard]] float getSequencerPlayheadNormalized() const noexcept
+    {
+        const size_t lengthBars = m_pattern.lengthBars();
+        if (lengthBars == 0)
+        {
+            return 0.f;
+        }
+        const float pos = static_cast<float>(m_sequencer.barIndex()) + m_seq.barPhase();
+        return std::clamp(pos / static_cast<float>(lengthBars), 0.f, 1.f);
+    }
+
+    [[nodiscard]] const char* getSequencerStateLabel() const noexcept
+    {
+        if (!m_sequencerPlaying)
+        {
+            return m_pattern.eventCount() == 0 ? "Seq Empty" : "Seq Stopped";
+        }
+        return "Seq Playing";
     }
 
     // Exact per-sample loop content and length (mirror LoopRecorder's own
@@ -674,6 +743,7 @@ class LooperImpl final : public EffectBase
         if (loopLen == 0)
         {
             m_freezeResultSlices.clear();
+            m_freezeResultThumbnails.clear();
             m_freezeDoneGen.store(gen, std::memory_order_release);
             return;
         }
@@ -684,7 +754,37 @@ class LooperImpl final : public EffectBase
         const auto grid = AbacDsp::Slicer::gridBoundaries(loopLen, stepFrames);
         m_freezeResultSlices = AbacDsp::Slicer::adaptiveTransientSlices(
             m_freezeMono, loopLen, AbacDsp::Slicer::AdaptiveParams{}, AbacDsp::Slicer::TransientParams{}, grid);
+        m_freezeResultThumbnails.assign(m_freezeResultSlices.size() * AbacDsp::SliceLibrary::kThumbFloats, 0.f);
+        for (size_t i = 0; i < m_freezeResultSlices.size(); ++i)
+        {
+            computeSliceThumbnail(m_freezeResultSlices[i],
+                                  std::span<float>{m_freezeResultThumbnails}.subspan(
+                                      i * AbacDsp::SliceLibrary::kThumbFloats, AbacDsp::SliceLibrary::kThumbFloats));
+        }
         m_freezeDoneGen.store(gen, std::memory_order_release);
+    }
+
+    // Reads only within the slice's own bounds, so it never bleeds into a
+    // neighbouring one. Worker thread only, same as runFreezeAnalysis().
+    void computeSliceThumbnail(const AbacDsp::Slice& slice, std::span<float> dst)
+    {
+        constexpr size_t kThumbWidth = AbacDsp::SliceLibrary::kThumbWidth;
+        constexpr size_t kThumbHeight = AbacDsp::SliceLibrary::kThumbHeight;
+        const size_t sliceEnd = slice.startFrame + slice.lengthFrames;
+        const size_t hop = std::max<size_t>(1, slice.lengthFrames / kThumbWidth);
+        std::array<float, kThumbFftLength> frame{};
+        std::vector<float> magnitudes(kThumbHeight, 0.f);
+        for (size_t t = 0; t < kThumbWidth; ++t)
+        {
+            frame.fill(0.f);
+            const size_t start = slice.startFrame + t * hop;
+            for (size_t i = 0; i < kThumbFftLength && start + i < sliceEnd && start + i < m_freezeMono.size(); ++i)
+            {
+                frame[i] = m_freezeMono[start + i];
+            }
+            m_freezeFft.compute(std::vector<float>{frame.begin(), frame.end()}, magnitudes);
+            std::copy_n(magnitudes.data(), kThumbHeight, dst.data() + t * kThumbHeight);
+        }
     }
 
     // Once the worker's done-generation catches up, extracts here on the audio
@@ -698,7 +798,8 @@ class LooperImpl final : public EffectBase
         m_freezePending = false;
         if (!m_freezeResultSlices.empty())
         {
-            const size_t track = m_sliceLibrary.extractTrack(m_recorder.loopView(), m_freezeResultSlices);
+            const size_t track =
+                m_sliceLibrary.extractTrack(m_recorder.loopView(), m_freezeResultSlices, m_freezeResultThumbnails);
             rebuildPatternForCurrentLoop();
             populatePatternFromTrack(track);
             // Re-prime the engine's own bar index for the new pattern, and
@@ -916,6 +1017,7 @@ class LooperImpl final : public EffectBase
     AbacDsp::SliceLibrary m_sliceLibrary;
     AbacDsp::SequencerEngine<> m_sequencer;
     AbacDsp::SequencePattern m_pattern;
+    AbacDsp::HannWindowMagnitudesFft m_freezeFft; // worker-owned, see runFreezeAnalysis()
 
     std::vector<float> m_visualWave;
     std::vector<float> m_preparedWave;
@@ -979,6 +1081,7 @@ class LooperImpl final : public EffectBase
     std::atomic<uint64_t> m_freezeDoneGen{0};
     std::vector<float> m_freezeMono;                  // worker-owned scratch
     std::vector<AbacDsp::Slice> m_freezeResultSlices; // worker writes, audio thread reads once done
+    std::vector<float> m_freezeResultThumbnails;      // one kThumbFloats block per candidate, same order
     std::mutex m_freezeWaitMutex;                     // guards only the worker's own condvar wait
     std::condition_variable_any m_freezeCv;
     std::jthread m_freezeThread;

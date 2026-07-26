@@ -726,6 +726,19 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner && pluginRunner->isSequencerPlaying();
     }
+    [[nodiscard]] std::vector<AbacDsp::SequencerSliceThumbnail> getSequencerSliceThumbnails() const
+    {
+        return pluginRunner ? pluginRunner->getSequencerSliceThumbnails()
+                            : std::vector<AbacDsp::SequencerSliceThumbnail>{};
+    }
+    [[nodiscard]] std::vector<float> getSequencerSliceBoundaries() const
+    {
+        return pluginRunner ? pluginRunner->getSequencerSliceBoundaries() : std::vector<float>{};
+    }
+    [[nodiscard]] float getSequencerPlayheadNormalized() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getSequencerPlayheadNormalized() : 0.f;
+    }
     [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
     {
         static const std::vector<size_t> empty{};
@@ -734,6 +747,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     [[nodiscard]] juce::String getLooperStateLabel() const
     {
         return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String();
+    }
+    [[nodiscard]] juce::String getSequencerLabel() const
+    {
+        return pluginRunner ? juce::String(pluginRunner->getSequencerStateLabel()) : juce::String();
     }
 
 

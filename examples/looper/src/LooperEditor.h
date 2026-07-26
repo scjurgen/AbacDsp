@@ -189,10 +189,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             beatGauge.setSpectrogram(processorRef.getSpectrogramData());
             beatGauge.setRecordHeadFrames(processorRef.getSpectrogramHeadFrames());
             sliceGauge.setSampleRate(static_cast<float>(processorRef.getSampleRate()));
-            sliceGauge.setLoopWaveform(processorRef.getLoopWaveform());
-            sliceGauge.setSliceBoundaries(processorRef.getSliceBoundaries());
-            sliceGauge.setPlayheadNormalized(processorRef.getPlayheadNormalized());
-            sliceGauge.setStateLabel(processorRef.getLooperStateLabel());
+            sliceGauge.setSliceThumbnails(processorRef.getSequencerSliceThumbnails());
+            sliceGauge.setSliceBoundaries(processorRef.getSequencerSliceBoundaries());
+            sliceGauge.setPlayheadNormalized(processorRef.getSequencerPlayheadNormalized());
+            sliceGauge.setStateLabel(processorRef.getSequencerLabel());
             recordSwitch.tickFlash();
             playSwitch.tickFlash();
             overdubSwitch.tickFlash();
@@ -313,7 +313,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(beatGauge);
         beatGauge.setLabelText(juce::String::fromUTF8("Bar"));
         addAndMakeVisible(sliceGauge);
-        sliceGauge.setLabelText(juce::String::fromUTF8("Loop"));
+        sliceGauge.setLabelText(juce::String::fromUTF8("Sequencer"));
     }
 
     void parentHierarchyChanged() override

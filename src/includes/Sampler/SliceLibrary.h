@@ -11,6 +11,18 @@
 namespace AbacDsp
 {
 
+// One slice's thumbnail (see SliceLibrary::thumbnail()) placed on a normalized
+// 0..1 timeline, e.g. a sequencer pattern. Not a ring buffer, unlike SpectrumImageSet.
+struct SequencerSliceThumbnail
+{
+    float normalizedStart{0.f};
+    float normalizedWidth{0.f};
+    size_t width{0};
+    size_t height{0};
+    const float* data{nullptr};
+    float sampleRate{48000.f};
+};
+
 // Stores and owns interleaved stereo audio slices in an internal pool.
 // Slices are grouped into tracks; new tracks are appended and never overwrite
 // existing data until clear() is called.
@@ -26,6 +38,9 @@ class SliceLibrary
 {
   public:
     static constexpr size_t kChannels = 2;
+    static constexpr size_t kThumbWidth = 24;  // time frames
+    static constexpr size_t kThumbHeight = 32; // frequency bins
+    static constexpr size_t kThumbFloats = kThumbWidth * kThumbHeight;
 
     struct SliceInfo
     {
@@ -39,6 +54,7 @@ class SliceLibrary
     explicit SliceLibrary(const size_t maxFrames, const size_t maxSlices = 256)
         : m_maxFrames(maxFrames)
         , m_pool(maxFrames * kChannels, 0.f)
+        , m_thumbnailPool(maxSlices * kThumbFloats, 0.f)
     {
         m_slices.reserve(maxSlices);
         m_trackStart.reserve(maxSlices); // a track can't outnumber the library's own slices
@@ -57,14 +73,19 @@ class SliceLibrary
     // appended after any existing tracks. Slices are clamped to the loop end; a
     // slice that would overflow the pool stops extraction for this track (the
     // rest of that track's slices are dropped, earlier tracks are untouched).
-    // Returns the new track index.
-    size_t extractTrack(std::span<const float> interleavedLoop, std::span<const Slice> slices)
+    // `thumbnails`, if given, holds one kThumbFloats-float block per candidate in
+    // `slices` (same order); blocks for slices this call skips or truncates on
+    // are simply not copied, so the caller never has to mirror this method's own
+    // skip logic. Returns the new track index.
+    size_t extractTrack(std::span<const float> interleavedLoop, std::span<const Slice> slices,
+                        std::span<const float> thumbnails = {})
     {
         const size_t track = m_trackStart.size();
         m_trackStart.push_back(m_slices.size());
         const size_t loopFrames = interleavedLoop.size() / kChannels;
-        for (const Slice& s : slices)
+        for (size_t i = 0; i < slices.size(); ++i)
         {
+            const Slice& s = slices[i];
             if (s.startFrame >= loopFrames)
             {
                 continue;
@@ -82,6 +103,7 @@ class SliceLibrary
             std::copy_n(src, len * kChannels, m_pool.data() + m_usedFrames * kChannels);
             m_slices.push_back({track, m_usedFrames, len, peakOf(src, len), rmsOf(src, len)});
             m_usedFrames += len;
+            copyThumbnail(i, thumbnails);
         }
         return track;
     }
@@ -141,7 +163,40 @@ class SliceLibrary
         return m_pool[(s.startFrame + frame) * kChannels + channel];
     }
 
+    // Flat kThumbWidth x kThumbHeight magnitude block for this slice, or an empty
+    // span if none was supplied to extractTrack() or the slice index is stale.
+    [[nodiscard]] std::span<const float> thumbnail(const size_t track, const size_t indexInTrack) const noexcept
+    {
+        if (track >= m_trackStart.size())
+        {
+            return {};
+        }
+        const size_t offset = (m_trackStart[track] + indexInTrack) * kThumbFloats;
+        if (offset + kThumbFloats > m_thumbnailPool.size())
+        {
+            return {};
+        }
+        return std::span<const float>{&m_thumbnailPool[offset], kThumbFloats};
+    }
+
   private:
+    // candidateIndex indexes `thumbnails` (pre-skip candidates); destination is
+    // the slice just appended to m_slices. No-ops if either span is short.
+    void copyThumbnail(const size_t candidateIndex, std::span<const float> thumbnails) noexcept
+    {
+        const size_t srcOffset = candidateIndex * kThumbFloats;
+        if (srcOffset + kThumbFloats > thumbnails.size())
+        {
+            return;
+        }
+        const size_t dstOffset = (m_slices.size() - 1) * kThumbFloats;
+        if (dstOffset + kThumbFloats > m_thumbnailPool.size())
+        {
+            return;
+        }
+        std::copy_n(thumbnails.data() + srcOffset, kThumbFloats, m_thumbnailPool.data() + dstOffset);
+    }
+
     [[nodiscard]] static float peakOf(const float* interleaved, const size_t frames) noexcept
     {
         float peak = 0.f;
@@ -169,6 +224,7 @@ class SliceLibrary
 
     size_t m_maxFrames;
     std::vector<float> m_pool;
+    std::vector<float> m_thumbnailPool; // one kThumbFloats-float block per slice, indexed like m_slices
     std::vector<SliceInfo> m_slices;
     std::vector<size_t> m_trackStart; // m_trackStart[t] = index into m_slices where track t begins
     size_t m_usedFrames{0};

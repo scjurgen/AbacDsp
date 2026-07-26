@@ -1,27 +1,34 @@
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <vector>
 
+#include "AppSettings.h"
 #include "GuiConstants.h"
+#include "Sampler/SliceLibrary.h"
 
-// Loop overview for a slicing looper: a magnitude waveform of the recorded loop
-// with vertical markers at slice boundaries and a moving playhead, plus a state
-// label. Data is pushed from the processor each UI tick (normalised 0..1 for
-// boundaries and playhead; the waveform is a peak-per-column array).
+// Sequencer pattern overview: each slice's own time-frequency thumbnail,
+// placed at its step position and stretched to its real duration, plus
+// boundary markers and a playhead, all synced to the shared beat clock.
+// Not the recorded loop audio; see CircularLoopDisplay.
 class SliceWaveDisplay : public juce::Component
 {
   public:
-    SliceWaveDisplay() = default;
+    SliceWaveDisplay()
+    {
+        GuiConstants::buildLut(AppSettings::loadTheme(), m_lut);
+    }
 
     void setSampleRate(float sampleRate) noexcept
     {
         m_sampleRate = sampleRate;
     }
 
-    void setLoopWaveform(const std::vector<float>& peaks)
+    void setSliceThumbnails(const std::vector<AbacDsp::SequencerSliceThumbnail>& thumbnails)
     {
-        m_peaks = peaks;
+        m_thumbnails = thumbnails;
     }
 
     // Satisfies the default "signal" gauge callback; real data arrives via the
@@ -56,6 +63,7 @@ class SliceWaveDisplay : public juce::Component
 
     void updateColors()
     {
+        GuiConstants::buildLut(AppSettings::loadTheme(), m_lut);
         repaint();
     }
 
@@ -71,14 +79,8 @@ class SliceWaveDisplay : public juce::Component
         auto area = getLocalBounds().toFloat().reduced(kPad);
         const auto labelStrip = area.removeFromTop(kLabelH);
         const auto waveArea = area;
-        const float cy = waveArea.getCentreY();
-        const float halfH = waveArea.getHeight() * 0.5f;
 
-        // Centre line
-        g.setColour(juce::Colour(c.cols[4]).withAlpha(0.25f));
-        g.drawHorizontalLine(static_cast<int>(cy), waveArea.getX(), waveArea.getRight());
-
-        drawWaveform(g, waveArea, cy, halfH, c);
+        drawSliceThumbnails(g, waveArea);
         drawSliceBoundaries(g, waveArea, c);
         drawPlayhead(g, waveArea, c);
 
@@ -96,20 +98,74 @@ class SliceWaveDisplay : public juce::Component
     }
 
   private:
-    void drawWaveform(juce::Graphics& g, juce::Rectangle<float> waveArea, float cy, float halfH,
-                      const GuiConstants::Colors& c) const
+    void drawSliceThumbnails(juce::Graphics& g, juce::Rectangle<float> waveArea)
     {
-        if (m_peaks.size() < 2)
+        const int w = std::max(1, static_cast<int>(waveArea.getWidth()));
+        const int h = std::max(1, static_cast<int>(waveArea.getHeight()));
+        if (m_thumbImage.getWidth() != w || m_thumbImage.getHeight() != h)
+        {
+            m_thumbImage = juce::Image(juce::Image::ARGB, w, h, true);
+        }
+        m_thumbImage.clear(m_thumbImage.getBounds(), juce::Colour(0u));
+        {
+            juce::Image::BitmapData bd(m_thumbImage, juce::Image::BitmapData::writeOnly);
+            for (const auto& thumb : m_thumbnails)
+            {
+                paintThumbnail(bd, w, h, thumb);
+            }
+        }
+        g.drawImage(m_thumbImage, waveArea, juce::RectanglePlacement::stretchToFit);
+    }
+
+    // Log-frequency row mapping matches CircularLoopDisplay's own spectrogram;
+    // each pixel is a bilinear lookup across the thumbnail's time/frequency grid.
+    void paintThumbnail(juce::Image::BitmapData& bd, const int w, const int h,
+                        const AbacDsp::SequencerSliceThumbnail& thumb) const
+    {
+        if (thumb.data == nullptr || thumb.width == 0 || thumb.height == 0 || thumb.sampleRate <= 0.f)
         {
             return;
         }
-        g.setColour(juce::Colour(c.cols[8]));
-        const float n = static_cast<float>(m_peaks.size());
-        for (size_t i = 0; i < m_peaks.size(); ++i)
+        const int x0 = juce::jlimit(0, w, static_cast<int>(thumb.normalizedStart * static_cast<float>(w)));
+        const int x1 = juce::jlimit(
+            0, w, static_cast<int>((thumb.normalizedStart + thumb.normalizedWidth) * static_cast<float>(w)));
+        if (x1 <= x0)
         {
-            const float x = waveArea.getX() + waveArea.getWidth() * static_cast<float>(i) / n;
-            const float h = juce::jlimit(0.f, 1.f, m_peaks[i]) * halfH;
-            g.drawVerticalLine(static_cast<int>(x), cy - h, cy + h);
+            return;
+        }
+        const float logMin = std::log2(20.f);
+        const float logMax = std::log2(thumb.sampleRate / 2.f);
+        const float binHz = (thumb.sampleRate / 2.f) / static_cast<float>(thumb.height);
+        const int maxBin = static_cast<int>(thumb.height) - 1;
+        const int maxFrame = static_cast<int>(thumb.width) - 1;
+
+        for (int y = 0; y < h; ++y)
+        {
+            const float normR = 1.f - static_cast<float>(y) / static_cast<float>(std::max(1, h - 1));
+            const float fbin = std::exp2(logMin + normR * (logMax - logMin)) / binHz;
+            const int bin0 = juce::jlimit(0, maxBin, static_cast<int>(fbin));
+            const int bin1 = std::min(bin0 + 1, maxBin);
+            const float bt = fbin - static_cast<float>(bin0);
+
+            for (int x = x0; x < x1; ++x)
+            {
+                const float tf =
+                    static_cast<float>(x - x0) / static_cast<float>(x1 - x0) * static_cast<float>(maxFrame);
+                const int t0 = juce::jlimit(0, maxFrame, static_cast<int>(tf));
+                const int t1 = std::min(t0 + 1, maxFrame);
+                const float tt = tf - static_cast<float>(t0);
+
+                const auto sample = [&](const int t, const int bin)
+                { return thumb.data[static_cast<size_t>(t) * thumb.height + static_cast<size_t>(bin)]; };
+                const float v0 = sample(t0, bin0) + bt * (sample(t0, bin1) - sample(t0, bin0));
+                const float v1 = sample(t1, bin0) + bt * (sample(t1, bin1) - sample(t1, bin0));
+                const float value = std::pow(std::max(v0 + tt * (v1 - v0), 0.f), 0.15f);
+
+                const int lutIdx =
+                    juce::jlimit(0, GuiConstants::kLutSize - 1,
+                                 static_cast<int>(value * static_cast<float>(GuiConstants::kLutSize - 1)));
+                bd.setPixelColour(x, y, juce::Colour(m_lut[static_cast<size_t>(lutIdx)]));
+            }
         }
     }
 
@@ -130,10 +186,12 @@ class SliceWaveDisplay : public juce::Component
         g.drawVerticalLine(static_cast<int>(x), waveArea.getY(), waveArea.getBottom());
     }
 
-    std::vector<float> m_peaks;
+    std::vector<AbacDsp::SequencerSliceThumbnail> m_thumbnails;
     std::vector<float> m_boundaries;
     float m_playhead{0.f};
     [[maybe_unused]] float m_sampleRate{48000.f};
     juce::String m_stateLabel;
     juce::String m_title;
+    juce::Image m_thumbImage;
+    juce::PixelARGB m_lut[GuiConstants::kLutSize]{};
 };
