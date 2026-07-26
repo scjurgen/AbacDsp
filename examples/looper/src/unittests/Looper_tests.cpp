@@ -5,6 +5,7 @@
 #include <fstream>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
 #include <thread>
@@ -765,6 +766,17 @@ TEST(LooperLoopFile, SaveThenLoadRoundTripsAudioAndBpm)
     writer.requestSaveLoopAs("myloop");
     waitUntilLoopSaveDone(writer);
     EXPECT_EQ(writer.consumeLastSavedLoopName(), "myloop");
+
+    // The sidecar JSON should spell out bars/beats, not just bpm, so a human
+    // reading the file doesn't have to compute them from bpm + file length.
+    std::ifstream jsonIn(std::filesystem::path(dir.path()) / "myloop.json");
+    ASSERT_TRUE(jsonIn);
+    nlohmann::json savedJson;
+    jsonIn >> savedJson;
+    const float expectedBeats = static_cast<float>(originalLength) / (kLoopFileSampleRate * 60.f / kLoopFileBpm);
+    const float expectedBars = expectedBeats / static_cast<float>(Looper::kBeatsPerBar);
+    EXPECT_NEAR(savedJson.at("beats").get<float>(), expectedBeats, 1e-2f);
+    EXPECT_NEAR(savedJson.at("bars").get<float>(), expectedBars, 1e-2f);
 
     Looper reader(kLoopFileSampleRate);
     reader.setLoopsDirectory(dir.path());

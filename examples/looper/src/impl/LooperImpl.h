@@ -43,7 +43,7 @@
 // kept here (not in core) since the core library must stay JSON-library-free.
 namespace AbacDsp
 {
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(LoopMetadata, version, bpm)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(LoopMetadata, version, bpm, bars, beats)
 }
 
 // Traditional-style slicing looper: captures audio, quantizes the loop to whole
@@ -1179,7 +1179,10 @@ class LooperImpl final : public EffectBase
                 left[f] = m_recorder.sample(f, 0);
                 right[f] = m_recorder.sample(f, 1);
             }
-            const AbacDsp::LoopMetadata meta{1, m_appliedBpm};
+            const float samplesPerBeat = sampleRate() * 60.f / m_appliedBpm;
+            const float beats = (samplesPerBeat > 0.f) ? static_cast<float>(loopLen) / samplesPerBeat : 0.f;
+            const float bars = beats / static_cast<float>(kBeatsPerBar);
+            const AbacDsp::LoopMetadata meta{1, m_appliedBpm, bars, beats};
             AbacDsp::LoopFile<nlohmann::json>::saveStereoWav(loopWavPath(m_loopSaveName).string(), left, right,
                                                              sampleRate(), meta);
             std::ofstream jsonOut(loopJsonPath(m_loopSaveName));

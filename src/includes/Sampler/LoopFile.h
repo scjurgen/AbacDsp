@@ -15,10 +15,14 @@ namespace AbacDsp
 
 // Belief data about a saved loop the audio itself can't tell us (unlike
 // sample rate/length/channels, which are read straight back off the WAV).
+// bars/beats are informational only (derived from bpm + length at save time,
+// so a human reading the file doesn't have to do that math themselves).
 struct LoopMetadata
 {
     int version{1};
     float bpm{120.f};
+    float bars{0.f};
+    float beats{0.f};
 };
 
 // Shape nlohmann::json satisfies; keeps this header free of a JSON dependency.
