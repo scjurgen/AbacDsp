@@ -62,6 +62,10 @@ class GenericImpl final : public EffectBase
     {
         m_clickVolume = std::pow(10.f, value / 20.f);
     }
+    void setClickRecordVolume(const float value)
+    {
+        m_clickRecordVolume = std::pow(10.f, value / 20.f);
+    }
     void setLoopVolume(const float value)
     {
         m_loopVolume = std::pow(10.f, value / 20.f);
@@ -81,6 +85,10 @@ class GenericImpl final : public EffectBase
     void setClearSeq(const bool value)
     {
         m_clearSeq = value;
+    }
+    void setSaveWave(const bool value)
+    {
+        m_saveWave = value;
     }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
@@ -120,11 +128,13 @@ class GenericImpl final : public EffectBase
     float m_bpm{};
     float m_swing{};
     float m_clickVolume{};
+    float m_clickRecordVolume{};
     float m_loopVolume{};
     float m_recThreshold{};
     bool m_freeze{};
     bool m_seqPlay{};
     bool m_clearSeq{};
+    bool m_saveWave{};
 
 
     std::vector<float> m_visualWavedata;

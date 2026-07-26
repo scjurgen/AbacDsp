@@ -12,22 +12,24 @@ struct PatchParameters
 {
     enum class Id : int
     {
-        record       , // switch
-        play         , // switch
-        overdub      , // switch
-        clear        , // switch
-        threshRec    , // switch
-        hostSync     , // switch
-        sliceMode    , // drop
-        sliceDivision, // drop
-        bpm          , // dial
-        swing        , // dial
-        clickVolume  , // dial
-        loopVolume   , // dial
-        recThreshold , // dial
-        freeze       , // switch
-        seqPlay      , // switch
-        clearSeq      // switch
+        record           , // switch
+        play             , // switch
+        overdub          , // switch
+        clear            , // switch
+        threshRec        , // switch
+        hostSync         , // switch
+        sliceMode        , // drop
+        sliceDivision    , // drop
+        bpm              , // dial
+        swing            , // dial
+        clickVolume      , // dial
+        clickRecordVolume, // dial
+        loopVolume       , // dial
+        recThreshold     , // dial
+        freeze           , // switch
+        seqPlay          , // switch
+        clearSeq         , // switch
+        saveWave          // switch
     };
 bool record{false};
 bool play{false};
@@ -40,11 +42,13 @@ size_t sliceDivision{1};
 float bpm{120.0f};
 float swing{50.0f};
 float clickVolume{-12.0f};
+float clickRecordVolume{-60.0f};
 float loopVolume{0.0f};
 float recThreshold{-36.0f};
 bool freeze{false};
 bool seqPlay{false};
 bool clearSeq{false};
+bool saveWave{false};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
@@ -59,11 +63,13 @@ bool clearSeq{false};
 "bpm",
 "swing",
 "clickVolume",
+"clickRecordVolume",
 "loopVolume",
 "recThreshold",
 "freeze",
 "seqPlay",
-"clearSeq"
+"clearSeq",
+"saveWave"
     });
 //        "onOff", "patch", "input", "modulationDepth", "mix", "density", "threshold", "knee"});
 
@@ -93,11 +99,13 @@ bool clearSeq{false};
         else if constexpr (ParamId == Id::bpm) return bpm;
         else if constexpr (ParamId == Id::swing) return swing;
         else if constexpr (ParamId == Id::clickVolume) return clickVolume;
+        else if constexpr (ParamId == Id::clickRecordVolume) return clickRecordVolume;
         else if constexpr (ParamId == Id::loopVolume) return loopVolume;
         else if constexpr (ParamId == Id::recThreshold) return recThreshold;
         else if constexpr (ParamId == Id::freeze) return freeze;
         else if constexpr (ParamId == Id::seqPlay) return seqPlay;
         else if constexpr (ParamId == Id::clearSeq) return clearSeq;
+        else if constexpr (ParamId == Id::saveWave) return saveWave;
 
     }
 
@@ -132,6 +140,8 @@ break;
 break;
  case Id::clickVolume: if (!isEqual(get<Id::clickVolume>(), value)) {get<Id::clickVolume>() = value;m_modified = true;}
 break;
+ case Id::clickRecordVolume: if (!isEqual(get<Id::clickRecordVolume>(), value)) {get<Id::clickRecordVolume>() = value;m_modified = true;}
+break;
  case Id::loopVolume: if (!isEqual(get<Id::loopVolume>(), value)) {get<Id::loopVolume>() = value;m_modified = true;}
 break;
  case Id::recThreshold: if (!isEqual(get<Id::recThreshold>(), value)) {get<Id::recThreshold>() = value;m_modified = true;}
@@ -141,6 +151,8 @@ break;
  case Id::seqPlay: if (!isEqual(get<Id::seqPlay>(), value)) {get<Id::seqPlay>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::clearSeq: if (!isEqual(get<Id::clearSeq>(), value)) {get<Id::clearSeq>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::saveWave: if (!isEqual(get<Id::saveWave>(), value)) {get<Id::saveWave>() = static_cast<bool>(value) ;m_modified = true;}
 break;
 
             default:
@@ -180,20 +192,22 @@ private:
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     PatchParameters,
-        record       , // switch
-        play         , // switch
-        overdub      , // switch
-        clear        , // switch
-        threshRec    , // switch
-        hostSync     , // switch
-        sliceMode    , // drop
-        sliceDivision, // drop
-        bpm          , // dial
-        swing        , // dial
-        clickVolume  , // dial
-        loopVolume   , // dial
-        recThreshold , // dial
-        freeze       , // switch
-        seqPlay      , // switch
-        clearSeq      // switch
+        record           , // switch
+        play             , // switch
+        overdub          , // switch
+        clear            , // switch
+        threshRec        , // switch
+        hostSync         , // switch
+        sliceMode        , // drop
+        sliceDivision    , // drop
+        bpm              , // dial
+        swing            , // dial
+        clickVolume      , // dial
+        clickRecordVolume, // dial
+        loopVolume       , // dial
+        recThreshold     , // dial
+        freeze           , // switch
+        seqPlay          , // switch
+        clearSeq         , // switch
+        saveWave          // switch
 )

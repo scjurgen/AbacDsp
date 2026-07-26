@@ -120,6 +120,7 @@ cppJuceFileVars = [
     "APPLY_THEME_CALLBACKS",
     "EXTRA_PRIVATE_METHODS",
     "EXTRA_PROCESSOR_METHODS",
+    "EXTRA_PREPARE_CALLS",
     "ParamStructMembers",
     "ParamIdList",
     "ParamIdStringList",
@@ -513,6 +514,12 @@ def createExtraProcessorMethods(m: dict) -> str:
         res += "\n".join(methods) + "\n"
     return res
 
+# Runs once in prepareToPlay(), right after pluginRunner is constructed. Empty
+# by default, so blueprints that don't set it get byte-identical output.
+def createExtraPrepareCalls(m: dict) -> str:
+    calls = m.get("extra_prepare_calls", [])
+    return "\n".join(calls) + ("\n" if calls else "")
+
 
 def addParameterListeners(m:dict):
     res = ""
@@ -884,6 +891,7 @@ def createPackageFromJsonDict(m: dict):
     m["CPP"]["RESIZED_AREA"] = construct_boxes(m)
     m["CPP"]["EXTRA_PRIVATE_METHODS"] = createExtraPrivateMethods(m)
     m["CPP"]["EXTRA_PROCESSOR_METHODS"] = createExtraProcessorMethods(m)
+    m["CPP"]["EXTRA_PREPARE_CALLS"] = createExtraPrepareCalls(m)
 
     for idx in range(len(m["ports-control"])):
         item = fillDefaults(m["ports-control"][idx])

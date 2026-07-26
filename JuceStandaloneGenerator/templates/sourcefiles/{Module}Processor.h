@@ -62,6 +62,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     void prepareToPlay(const double sampleRate, const int samplesPerBlock) override
     {
         pluginRunner = std::make_unique</*CLASS_NAME*/>(RateNormalizer::kInternalSampleRate);
+        /*EXTRA_PREPARE_CALLS*/
         fixedRunner = std::make_unique<RateNormalizer>(static_cast<float>(sampleRate),
                                                        [this](const AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& input,
                                                               AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& output)

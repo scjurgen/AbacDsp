@@ -29,6 +29,9 @@
     {"short": "CVOL", "type": "dial",   "display": "Click Volume", "symbol": "clickVolume", "default": -12,
       "range": [-60, 0, 0.1, 1, false], "precision": 1, "unit": "dB",
       "cc": {"controller": 22}},
+    {"short": "CTRK", "type": "dial",   "display": "Click->Track", "symbol": "clickRecordVolume", "default": -60,
+      "range": [-60, 0, 0.1, 1, false], "precision": 1, "unit": "dB",
+      "cc": {"controller": 25}},
     {"short": "LVOL", "type": "dial",   "display": "Loop Volume",  "symbol": "loopVolume", "default": 0,
       "range": [-60, 12, 0.1, 1, false], "precision": 1, "unit": "dB",
       "cc": {"controller": 23}},
@@ -39,6 +42,7 @@
     {"short": "SEQP", "type": "switch", "display": "Seq Play",  "symbol": "seqPlay",   "default": 0, "momentary": true, "cc": {"controller": 75},
       "state_label": {"query": "isSequencerPlaying", "on": "Seq Stop", "off": "Seq Play"}},
     {"short": "CLRS", "type": "switch", "display": "Clear Seq", "symbol": "clearSeq",  "default": 0, "momentary": true, "cc": {"controller": 76}},
+    {"short": "SAVW", "type": "switch", "display": "Save Wave", "symbol": "saveWave",  "default": 0, "momentary": true, "cc": {"controller": 77}},
     {"short": "BEAT", "type": "gauge", "gaugetype": "signal", "display": "Bar", "symbol": "beat",
       "customtype": "CircularLoopDisplay",
       "bindings": [
@@ -69,7 +73,7 @@
     "WINDOW_WIDTH": "1200",
     "WINDOW_HEIGHT": "640",
     "type": "|||",
-    "composition": "C=(1:1:5) A1=(REC, PLAY, ODUB, CLR, TREC, SYNC, MODE, DIV, FRZ, SEQP, CLRS) A2=(BPM, SWG, CVOL, LVOL, THR) A3=(BEAT%5, SLICE%1)"
+    "composition": "C=(1:1:5) A1=(REC, PLAY, ODUB, CLR, TREC, SYNC, MODE, DIV, FRZ, SEQP, CLRS, SAVW) A2=(BPM, SWG, CVOL, CTRK, LVOL, THR) A3=(BEAT%5, SLICE%1)"
   },
   "extra_ui_includes": [
     "inc/SliceWaveDisplay.h",
@@ -77,7 +81,9 @@
   ],
   "extra_timer_callbacks": [
     "recordSwitch.setButtonText(processorRef.isRecording() ? juce::String::fromUTF8(\"Recording\") : (processorRef.isArmed() ? juce::String::fromUTF8(\"Armed\") : juce::String::fromUTF8(\"Record\")));",
-    "freezeSwitch.setButtonText(processorRef.isFreezePending() ? juce::String::fromUTF8(\"Freezing...\") : (juce::String::fromUTF8(\"Freeze (\") + juce::String(processorRef.getFrozenTrackCount()) + juce::String::fromUTF8(\" trk/\") + juce::String(processorRef.getFrozenSliceCount()) + juce::String::fromUTF8(\" sl)\")));"
+    "freezeSwitch.setButtonText(processorRef.isFreezePending() ? juce::String::fromUTF8(\"Freezing...\") : (juce::String::fromUTF8(\"Freeze (\") + juce::String(processorRef.getFrozenTrackCount()) + juce::String::fromUTF8(\" trk/\") + juce::String(processorRef.getFrozenSliceCount()) + juce::String::fromUTF8(\" sl)\")));",
+    "saveWaveSwitch.setButtonText(processorRef.isSaveWavePending() ? juce::String::fromUTF8(\"Saving...\") : juce::String::fromUTF8(\"Save Wave\"));",
+    "if (const auto saved = processorRef.consumeLastSavedWaveFilename(); saved.isNotEmpty()) { m_statusBar.showMessage(juce::String::fromUTF8(\"Saved: \") + juce::File(saved).getFileName()); }"
   ],
   "processor_forwards": [
     {"name": "isHostSynced", "type": "bool"},
@@ -100,12 +106,18 @@
     {"name": "isSequencerPlaying", "type": "bool"},
     {"name": "getSequencerSliceThumbnails", "type": "std::vector<AbacDsp::SequencerSliceThumbnail>"},
     {"name": "getSequencerSliceBoundaries", "type": "std::vector<float>"},
-    {"name": "getSequencerPlayheadNormalized", "type": "float"}
+    {"name": "getSequencerPlayheadNormalized", "type": "float"},
+    {"name": "isSaveWavePending", "type": "bool"}
   ],
   "extra_processor_methods": [
     "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }",
     "[[nodiscard]] juce::String getLooperStateLabel() const { return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String(); }",
-    "[[nodiscard]] juce::String getSequencerLabel() const { return pluginRunner ? juce::String(pluginRunner->getSequencerStateLabel()) : juce::String(); }"
+    "[[nodiscard]] juce::String getSequencerLabel() const { return pluginRunner ? juce::String(pluginRunner->getSequencerStateLabel()) : juce::String(); }",
+    "static std::string getExportDirectory() {\n        auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);\n#if JUCE_MAC\n        base = base.getChildFile(\"Application Support\");\n#endif\n        const auto dir = base.getChildFile(\"AbacDsp\").getChildFile(\"Looper\").getChildFile(\"exports\");\n        dir.createDirectory();\n        return dir.getFullPathName().toStdString();\n    }",
+    "[[nodiscard]] juce::String consumeLastSavedWaveFilename() const { return pluginRunner ? juce::String(pluginRunner->consumeLastSavedFilename()) : juce::String(); }"
+  ],
+  "extra_prepare_calls": [
+    "pluginRunner->setExportDirectory(getExportDirectory());"
   ],
   "protected_files": ["src/unittests/Looper_tests.cpp"],
   "CPP": {

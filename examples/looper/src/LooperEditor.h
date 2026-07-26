@@ -144,6 +144,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(saveWaveSwitch)
+                              .withFlex(0)
+                              .withHeight(Constants::Text::labelHeight)
+                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                              .withMargin(knobMarginSmall));
             box.performLayout(areas[0].toFloat());
         }
         {
@@ -154,6 +159,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(swingDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(clickRecordVolumeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
             box.performLayout(areas[1].toFloat());
@@ -200,6 +206,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             freezeSwitch.tickFlash();
             seqPlaySwitch.tickFlash();
             clearSeqSwitch.tickFlash();
+            saveWaveSwitch.tickFlash();
             playSwitch.setButtonText(processorRef.isPlaying() ? juce::String::fromUTF8("Stop")
                                                               : juce::String::fromUTF8("Play"));
             overdubSwitch.setButtonText(processorRef.isOverdubbing() ? juce::String::fromUTF8("Overdubbing")
@@ -217,6 +224,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                     : (juce::String::fromUTF8("Freeze (") + juce::String(processorRef.getFrozenTrackCount()) +
                        juce::String::fromUTF8(" trk/") + juce::String(processorRef.getFrozenSliceCount()) +
                        juce::String::fromUTF8(" sl)")));
+            saveWaveSwitch.setButtonText(processorRef.isSaveWavePending() ? juce::String::fromUTF8("Saving...")
+                                                                          : juce::String::fromUTF8("Save Wave"));
+            if (const auto saved = processorRef.consumeLastSavedWaveFilename(); saved.isNotEmpty())
+            {
+                m_statusBar.showMessage(juce::String::fromUTF8("Saved: ") + juce::File(saved).getFileName());
+            }
             processorRef.consumeLastLearnedCc();
         }
     }
@@ -280,6 +293,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                              { processorRef.setCcRange(CcTarget::clickVolume, lo, hi); },
                                              [this] { processorRef.clearCcAssignment(CcTarget::clickVolume); },
                                              [this] { return processorRef.getCcController(CcTarget::clickVolume); }});
+        addAndMakeVisible(clickRecordVolumeDial);
+        clickRecordVolumeDial.reset(valueTreeState, "clickRecordVolume");
+        clickRecordVolumeDial.setLabelText(juce::String::fromUTF8("Click->Track"));
+        clickRecordVolumeDial.setCcMappable(
+            true, {[this] { processorRef.beginCcLearn(CcTarget::clickRecordVolume); },
+                   [this] { return processorRef.getCcRange(CcTarget::clickRecordVolume); },
+                   [this](float lo, float hi) { processorRef.setCcRange(CcTarget::clickRecordVolume, lo, hi); },
+                   [this] { processorRef.clearCcAssignment(CcTarget::clickRecordVolume); },
+                   [this] { return processorRef.getCcController(CcTarget::clickRecordVolume); }});
         addAndMakeVisible(loopVolumeDial);
         loopVolumeDial.reset(valueTreeState, "loopVolume");
         loopVolumeDial.setLabelText(juce::String::fromUTF8("Loop Volume"));
@@ -309,6 +331,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(clearSeqSwitch);
         clearSeqSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "clearSeq", clearSeqSwitch);
+
+        addAndMakeVisible(saveWaveSwitch);
+        saveWaveSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "saveWave", saveWaveSwitch);
 
         addAndMakeVisible(beatGauge);
         beatGauge.setLabelText(juce::String::fromUTF8("Bar"));
@@ -599,6 +625,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial bpmDial{this};
     CustomRotaryDial swingDial{this};
     CustomRotaryDial clickVolumeDial{this};
+    CustomRotaryDial clickRecordVolumeDial{this};
     CustomRotaryDial loopVolumeDial{this};
     CustomRotaryDial recThresholdDial{this};
     MomentaryToggleButton freezeSwitch{juce::String::fromUTF8("Freeze")};
@@ -607,6 +634,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> seqPlaySwitchAttachment;
     MomentaryToggleButton clearSeqSwitch{juce::String::fromUTF8("Clear Seq")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> clearSeqSwitchAttachment;
+    MomentaryToggleButton saveWaveSwitch{juce::String::fromUTF8("Save Wave")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> saveWaveSwitchAttachment;
     CircularLoopDisplay beatGauge{};
     SliceWaveDisplay sliceGauge{};
 

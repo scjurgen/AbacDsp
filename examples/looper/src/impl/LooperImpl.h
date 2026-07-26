@@ -3,15 +3,24 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <ctime>
 #include <functional>
+#include <iomanip>
+#include <iostream>
 #include <mutex>
 #include <span>
+#include <sstream>
+#include <string>
 #include <thread>
+#include <utility>
 #include <vector>
+
+#include "AudioFile/SaveWav.h"
 
 #include "Analysis/FftMisc.h"
 #include "Analysis/Slicer.h"
@@ -107,6 +116,24 @@ class LooperImpl final : public EffectBase
                     runFreezeAnalysis(lastHandled);
                 }
             });
+
+        m_saveThread = std::jthread(
+            [this](const std::stop_token& stopToken)
+            {
+                uint64_t lastHandled = 0;
+                while (!stopToken.stop_requested())
+                {
+                    std::unique_lock lock(m_saveWaitMutex);
+                    m_saveCv.wait(lock, stopToken, [this, lastHandled]
+                                  { return m_saveRequestGen.load(std::memory_order_acquire) != lastHandled; });
+                    if (stopToken.stop_requested())
+                    {
+                        return;
+                    }
+                    lastHandled = m_saveRequestGen.load(std::memory_order_acquire);
+                    runSaveWave(lastHandled);
+                }
+            });
     }
 
     // Parameter setters (message thread): store into atomics, apply on the audio thread.
@@ -121,6 +148,12 @@ class LooperImpl final : public EffectBase
     void setClickVolume(const float value) noexcept
     {
         m_clickVol.store(value, std::memory_order_relaxed);
+    }
+    // Volume at which the click gets mixed into what actually gets recorded
+    // (not just monitored). -60 dB means nothing is added to the track.
+    void setClickRecordVolume(const float value) noexcept
+    {
+        m_clickRecordVol.store(value, std::memory_order_relaxed);
     }
     void setLoopVolume(const float value) noexcept
     {
@@ -187,6 +220,21 @@ class LooperImpl final : public EffectBase
         if (value)
         {
             m_freezePulse.store(true, std::memory_order_relaxed);
+        }
+    }
+    // Directory the "Save Wave" export writes into; set once during setup,
+    // well before the button that would race it can be pressed.
+    void setExportDirectory(std::string dir)
+    {
+        m_exportDirectory = std::move(dir);
+    }
+    // Exports the current loop to a timestamped WAV file, on a background
+    // worker (see runSaveWave()): file I/O is not RT-safe.
+    void setSaveWave(const bool value) noexcept
+    {
+        if (value)
+        {
+            m_saveWavePulse.store(true, std::memory_order_relaxed);
         }
     }
     // Toggles playing the pattern currently in the sequencer (the frozen
@@ -344,6 +392,17 @@ class LooperImpl final : public EffectBase
     {
         return m_sequencerPlaying;
     }
+    [[nodiscard]] bool isSaveWavePending() const noexcept
+    {
+        return m_savePending;
+    }
+    // Path just written, cleared on read (call once per UI poll); empty if
+    // there's nothing new. Only impl state shared between the UI and worker.
+    [[nodiscard]] std::string consumeLastSavedFilename()
+    {
+        std::lock_guard<std::mutex> lock(m_lastSavedMutex);
+        return std::exchange(m_lastSavedFilename, std::string{});
+    }
 
     // totalSteps() is frame-accurate (stepsPerBeat == samplesPerBeat at freeze
     // time), so it doubles directly as each thumbnail's placement denominator.
@@ -483,8 +542,22 @@ class LooperImpl final : public EffectBase
             beginBeatAwareRecord();
         }
 
+        // Click/sequencer are rendered before the recorder runs so the optional
+        // click-to-track gain (below) can be mixed into what actually gets captured.
+        std::array<float, BlockSize> click{};
+        AbacDsp::AudioBuffer<2, BlockSize> seqOut{};
+        renderClickAndSequencer(click, seqOut);
+
+        AbacDsp::AudioBuffer<2, BlockSize> recIn{};
+        for (size_t i = 0; i < BlockSize; ++i)
+        {
+            const float printedClick = click[i] * m_clickRecordGain;
+            recIn(i, 0) = in(i, 0) + printedClick;
+            recIn(i, 1) = in(i, 1) + printedClick;
+        }
+
         AbacDsp::AudioBuffer<2, BlockSize> recorderOut{};
-        m_recorder.processBlock(in, recorderOut);
+        m_recorder.processBlock(recIn, recorderOut);
 
         // Commit a pending beat-locked stop only after this block's own
         // capture, so the post-roll captured during this block is included.
@@ -493,12 +566,9 @@ class LooperImpl final : public EffectBase
             commitPendingStop();
         }
         checkFreezeCompletion();
+        checkSaveCompletion();
 
         m_visualWindowSize = std::min(getSamplesPerBar(), m_visualWave.size());
-
-        std::array<float, BlockSize> click{};
-        AbacDsp::AudioBuffer<2, BlockSize> seqOut{};
-        renderClickAndSequencer(click, seqOut);
 
         // Dry input, loop, and sequencer all sum here. Toggling Seq Play mutes
         // the loop and lets the sequencer replace its playback instead.
@@ -549,6 +619,8 @@ class LooperImpl final : public EffectBase
             m_appliedDivision = division;
         }
         m_click.setVolumeDb(m_clickVol.load(std::memory_order_relaxed));
+        const float clickRecordVol = m_clickRecordVol.load(std::memory_order_relaxed);
+        m_clickRecordGain = (clickRecordVol <= -60.f) ? 0.f : std::pow(10.f, clickRecordVol / 20.f);
         m_loopGain = std::pow(10.f, m_loopVol.load(std::memory_order_relaxed) / 20.f);
         m_recThresholdLinear = std::pow(10.f, m_recThreshold.load(std::memory_order_relaxed) / 20.f);
         m_hostSync = m_hostSyncReq.load(std::memory_order_relaxed);
@@ -583,6 +655,7 @@ class LooperImpl final : public EffectBase
         const bool freezeReq = m_freezePulse.exchange(false, std::memory_order_relaxed);
         const bool seqPlayReq = m_seqPlayPulse.exchange(false, std::memory_order_relaxed);
         const bool clearSeqReq = m_clearSeqPulse.exchange(false, std::memory_order_relaxed);
+        const bool saveWaveReq = m_saveWavePulse.exchange(false, std::memory_order_relaxed);
 
         // The sequencer play/stop toggle and its own Clear only touch
         // sequencer-side state, never the recorder's own transport state, so
@@ -596,9 +669,9 @@ class LooperImpl final : public EffectBase
             clearSequencer();
         }
 
-        // A beat-locked stop or a freeze analysis is waiting on its own async
-        // completion; drop pulses rather than race a conflicting action against it.
-        if (m_pendingStop || m_freezePending)
+        // A beat-locked stop, a freeze, or a WAV export is waiting on its own
+        // async completion; drop pulses rather than race a conflicting action.
+        if (m_pendingStop || m_freezePending || m_savePending)
         {
             return;
         }
@@ -622,6 +695,10 @@ class LooperImpl final : public EffectBase
         if (freezeReq)
         {
             requestFreeze();
+        }
+        if (saveWaveReq)
+        {
+            requestSaveWave();
         }
     }
 
@@ -810,6 +887,70 @@ class LooperImpl final : public EffectBase
             m_seq.reset();
             m_suppressNextClick = true;
         }
+    }
+
+    // Refused while a save is already pending, the loop isn't stable, or empty;
+    // mirrors requestFreeze()'s shape. The worker does the actual file I/O.
+    void requestSaveWave()
+    {
+        if (m_savePending || isRecording() || isOverdubbing() || m_recorder.loopLengthFrames() == 0)
+        {
+            return;
+        }
+        m_saveRequestedGen = m_saveRequestGen.load(std::memory_order_relaxed) + 1;
+        m_savePending = true;
+        m_saveRequestGen.store(m_saveRequestedGen, std::memory_order_release);
+        m_saveCv.notify_one();
+    }
+
+    // Runs on m_saveThread only (blocking file I/O); safe to read m_recorder
+    // since m_savePending blocks every recorder-state-changing pulse meanwhile.
+    void runSaveWave(const uint64_t gen)
+    {
+        const size_t loopLen = m_recorder.loopLengthFrames();
+        if (loopLen > 0 && !m_exportDirectory.empty())
+        {
+            std::vector<float> left(loopLen);
+            std::vector<float> right(loopLen);
+            for (size_t f = 0; f < loopLen; ++f)
+            {
+                left[f] = m_recorder.sample(f, 0);
+                right[f] = m_recorder.sample(f, 1);
+            }
+            const std::string filename = m_exportDirectory + "/" + timestampedWaveFilename();
+            AudioUtility::SaveWav::saveStereoAs(filename, left, right, sampleRate());
+            std::cout << "LooperImpl: saved loop to " << filename << std::endl;
+            {
+                std::lock_guard<std::mutex> lock(m_lastSavedMutex);
+                m_lastSavedFilename = filename;
+            }
+        }
+        m_saveDoneGen.store(gen, std::memory_order_release);
+    }
+
+    [[nodiscard]] static std::string timestampedWaveFilename()
+    {
+        const auto now = std::chrono::system_clock::now();
+        const auto t = std::chrono::system_clock::to_time_t(now);
+        std::tm tmBuf{};
+#if defined(_WIN32)
+        localtime_s(&tmBuf, &t);
+#else
+        localtime_r(&t, &tmBuf);
+#endif
+        std::ostringstream oss;
+        oss << "loop_" << std::put_time(&tmBuf, "%Y%m%d_%H%M%S") << ".wav";
+        return oss.str();
+    }
+
+    // Audio thread, polled every block like checkFreezeCompletion().
+    void checkSaveCompletion()
+    {
+        if (!m_savePending || m_saveDoneGen.load(std::memory_order_acquire) != m_saveRequestedGen)
+        {
+            return;
+        }
+        m_savePending = false;
     }
 
     // Sample-accurate steps (stepsPerBeat = samplesPerBeat), so every slice's
@@ -1027,11 +1168,13 @@ class LooperImpl final : public EffectBase
     std::atomic<float> m_bpm{120.f};
     std::atomic<float> m_swing{50.f};
     std::atomic<float> m_clickVol{-12.f};
+    std::atomic<float> m_clickRecordVol{-60.f};
     std::atomic<float> m_loopVol{0.f};
     std::atomic<float> m_recThreshold{-36.f};
     std::atomic<bool> m_threshRecReq{false};
     std::atomic<float> m_fadeMs{5.f};
     float m_loopGain{1.f};
+    float m_clickRecordGain{0.f};
     float m_recThresholdLinear{0.0158f};
     bool m_armed{false};
 
@@ -1085,6 +1228,19 @@ class LooperImpl final : public EffectBase
     std::mutex m_freezeWaitMutex;                     // guards only the worker's own condvar wait
     std::condition_variable_any m_freezeCv;
     std::jthread m_freezeThread;
+
+    // "Save Wave" export; same generation-counter handshake as freeze, above.
+    std::string m_exportDirectory; // set once via setExportDirectory(), before any save
+    std::atomic<bool> m_saveWavePulse{false};
+    bool m_savePending{false};
+    uint64_t m_saveRequestedGen{0};
+    std::atomic<uint64_t> m_saveRequestGen{0};
+    std::atomic<uint64_t> m_saveDoneGen{0};
+    std::mutex m_saveWaitMutex;
+    std::condition_variable_any m_saveCv;
+    std::jthread m_saveThread;
+    std::mutex m_lastSavedMutex; // guards the hand-off below, UI-poll rate only
+    std::string m_lastSavedFilename;
 
     // Play/stop toggle for the pattern currently in m_pattern.
     std::atomic<bool> m_seqPlayPulse{false};

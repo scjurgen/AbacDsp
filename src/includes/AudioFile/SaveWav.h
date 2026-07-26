@@ -11,26 +11,28 @@ namespace AudioUtility
 class SaveWav
 {
   public:
-    [[nodiscard]] static AudioFile<float> MonoToAudioFile(const std::span<const float>& data, const float sampleRate = 48000.f)
+    [[nodiscard]] static AudioFile<float> MonoToAudioFile(const std::span<const float>& data,
+                                                          const float sampleRate = 48000.f)
     {
         AudioFile<float> af;
         af.setNumChannels(1);
         af.setNumSamplesPerChannel(static_cast<int>(data.size()));
         af.samples[0].assign(data.begin(), data.end());
-        af.setSampleRate(static_cast<int>(sampleRate));
+        af.setSampleRate(static_cast<uint32_t>(sampleRate));
         af.setBitDepth(24);
         return af;
     }
 
     [[nodiscard]] static AudioFile<float> StereoToAudioFile(const std::span<const float>& leftData,
-                                              const std::span<const float>& rightData, const float sampleRate = 48000.f)
+                                                            const std::span<const float>& rightData,
+                                                            const float sampleRate = 48000.f)
     {
         AudioFile<float> af;
         af.setNumChannels(2);
         af.setNumSamplesPerChannel(static_cast<int>(leftData.size()));
         af.samples[0].assign(leftData.begin(), leftData.end());
         af.samples[1].assign(rightData.begin(), rightData.end());
-        af.setSampleRate(static_cast<int>(sampleRate));
+        af.setSampleRate(static_cast<uint32_t>(sampleRate));
         af.setBitDepth(24);
         return af;
     }
