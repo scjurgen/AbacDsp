@@ -20,8 +20,11 @@
     {"short": "FREE", "type": "switch", "display": "Free Record", "symbol": "freeRecord", "default": 0, "cc": {"controller": 72}},
     {"short": "CIN",  "type": "drop",   "display": "Count-In",   "symbol": "countInBars", "default": 0,
       "listitems": ["Off", "1 Bar", "2 Bars"]},
-    {"short": "RBAR", "type": "drop",   "display": "Record Bars", "symbol": "recordBars", "default": 0,
-      "listitems": ["Manual", "1", "2", "4", "8", "12","16"]},
+    {"short": "TSIG", "type": "drop",   "display": "Time Sig",   "symbol": "timeSignature", "default": 2,
+      "listitems": ["2/4", "3/4", "4/4", "5/4", "6/4", "7/4", "5/8", "6/8", "7/8", "9/8", "11/8", "13/8", "15/8"]},
+    {"short": "ASTP", "type": "switch", "display": "Auto Stop", "symbol": "autoStop", "default": 0},
+    {"short": "RBAR", "type": "dial",   "display": "Record Bars", "symbol": "recordBars", "default": 4,
+      "range": [1, 32, 1, 1, false], "precision": 0, "unit": "bars"},
     {"short": "DIV",  "type": "drop",   "display": "Division",   "symbol": "sliceDivision", "default": 1,
       "listitems": ["1/4", "1/8", "1/16", "1/32"]},
     {"short": "BPM",  "type": "dial",   "display": "BPM",         "symbol": "bpm",        "default": 120,
@@ -74,7 +77,7 @@
     "WINDOW_WIDTH": "1200",
     "WINDOW_HEIGHT": "640",
     "type": "|||",
-    "composition": "C=(1:1:5) A1=(REC, PLAY, ODUB, CLR, TREC, SYNC, CIN, RBAR, DIV, FRZ, SEQP, CLRS) A2=(BPM, CVOL, CTRK, LVOL, THR) A3=(BEAT%5, SLICE%1)"
+    "composition": "C=(1:1:5) A1=(REC, PLAY, ODUB, CLR, TREC, SYNC, ASTP, CIN, TSIG, DIV, FRZ, SEQP, CLRS) A2=(BPM, CVOL, CTRK, LVOL, THR, RBAR) A3=(BEAT%5, SLICE%1)"
   },
   "extra_ui_includes": [
     "inc/SliceWaveDisplay.h",

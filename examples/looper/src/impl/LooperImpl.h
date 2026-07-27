@@ -31,6 +31,7 @@
 #include "EffectBase.h"
 #include "Generators/BeatSequencer.h"
 #include "Generators/ClickGenerator.h"
+#include "Generators/MeterTimeline.h"
 #include "Sampler/LoopFile.h"
 #include "Sampler/LoopRecorder.h"
 #include "Sampler/SequencePattern.h"
@@ -87,7 +88,6 @@ template <size_t BlockSize>
 class LooperImpl final : public EffectBase
 {
   public:
-    static constexpr size_t kBeatsPerBar = 4;
     static constexpr size_t kWaveformPoints = 512;
     // Onset-detection snap grid (16ths) used when slicing a frozen loop; the
     // pattern itself is sample-accurate (see rebuildPatternForCurrentLoop()),
@@ -96,6 +96,32 @@ class LooperImpl final : public EffectBase
     static constexpr float kSliceLibrarySeconds = 120.f;
     static constexpr size_t kThumbFftLength = 2 * AbacDsp::SliceLibrary::kThumbHeight;
 
+    // Standard meters selectable via the Time Sig control, index-matched to its
+    // dropdown. eighthUnit means the beat is an eighth note, not a quarter note:
+    // the metronome's per-beat tempo doubles the entered BPM to keep an eighth
+    // note at half a quarter note's duration.
+    struct TimeSignatureSpec
+    {
+        size_t beatsPerBar;
+        bool eighthUnit;
+    };
+    static constexpr auto kTimeSignatures = std::to_array<TimeSignatureSpec>({
+        {2, false},
+        {3, false},
+        {4, false},
+        {5, false},
+        {6, false},
+        {7, false},
+        {5, true},
+        {6, true},
+        {7, true},
+        {9, true},
+        {11, true},
+        {13, true},
+        {15, true},
+    });
+    static constexpr int kDefaultTimeSignature = 2; // index of 4/4
+
     explicit LooperImpl(const float sampleRate)
         : EffectBase(sampleRate)
         , m_recorder(sampleRate)
@@ -103,10 +129,9 @@ class LooperImpl final : public EffectBase
         , m_click(sampleRate)
         , m_sliceLibrary(static_cast<size_t>(sampleRate * kSliceLibrarySeconds))
         , m_sequencer(sampleRate)
-        , m_pattern(1, kBeatsPerBar, m_seq.samplesPerBeat())
+        , m_pattern(1, m_seq.beatsPerBar(), m_seq.samplesPerBeat())
         , m_freezeFft(kThumbFftLength)
     {
-        m_seq.setBeatsPerBar(kBeatsPerBar);
         m_seq.setBpm(m_appliedBpm);
         m_click.setVolumeDb(m_clickVol.load(std::memory_order_relaxed));
         // One bar (4 beats) at the lowest tempo (50 BPM) is ~4.8 s; size generously.
@@ -213,11 +238,24 @@ class LooperImpl final : public EffectBase
     {
         m_freeRecordReq.store(value, std::memory_order_relaxed);
     }
-    // 0 = manual stop (today's behavior); N = auto-stop after exactly N bars.
-    // Only applies to bar-locked takes (ignored while Free Record is active).
-    void setRecordBars(const int value) noexcept
+    // Auto Stop off: manual stop (today's behavior, ignoring this value). On:
+    // auto-stop after exactly this many bars. Only applies to bar-locked takes
+    // (ignored while Free Record is active).
+    void setRecordBars(const float value) noexcept
     {
-        m_recordBarsReq.store(value, std::memory_order_relaxed);
+        m_recordBarsReq.store(static_cast<int>(value), std::memory_order_relaxed);
+    }
+    void setAutoStop(const bool value) noexcept
+    {
+        m_autoStopEnabledReq.store(value, std::memory_order_relaxed);
+    }
+    // Index into kTimeSignatures. Applies immediately while stopped/armed/counting
+    // in; queues to apply at the next bar boundary while recording; ignored while
+    // just playing back or overdubbing (the loop replays its own recorded meter
+    // timeline instead, see applyMeterAtBarBoundary()).
+    void setTimeSignature(const int value) noexcept
+    {
+        m_timeSignatureReq.store(value, std::memory_order_relaxed);
     }
     // 0 = off (record starts immediately); N = play N bars of metronome
     // first, then auto-start a bar-locked take with no threshold needed.
@@ -497,8 +535,8 @@ class LooperImpl final : public EffectBase
     }
 
     // Angular span of the outer loop ring, in whole bars. Empty shows one bar so
-    // the clock still reads. While recording a preset bar count (Record Bars != Manual),
-    // the ring is already sized to that fixed target; a Manual take has no known
+    // the clock still reads. While recording with Auto Stop on, the ring is already
+    // sized to the fixed Record Bars target; with Auto Stop off there's no known
     // length yet, so the ring extends one bar ahead of the playhead instead, growing
     // as the take does.
     [[nodiscard]] int getOuterRingBars() const noexcept
@@ -510,7 +548,7 @@ class LooperImpl final : public EffectBase
         }
         if (isRecording())
         {
-            const size_t fixedBars = recordBarsIndexToCount(m_recordBars);
+            const size_t fixedBars = m_autoStopEnabled ? static_cast<size_t>(m_recordBars) : 0;
             if (fixedBars > 0)
             {
                 return static_cast<int>(fixedBars);
@@ -709,9 +747,10 @@ class LooperImpl final : public EffectBase
 
         handleTransportPulses();
 
-        // Virtual Record press once the preset bar count is reached; must run
-        // before m_seq advances so samplesToNearestBar() stays consistent.
-        if (m_autoStopArmed && isRecording() && !m_pendingStop && m_absPos + BlockSize > m_autoStopTickAbs)
+        // Virtual Record press once the preset bar count is reached (checked as of
+        // the previous block's last completed bar); must run before m_seq advances
+        // so requestStop()'s samplesToNearestBar() stays consistent.
+        if (m_autoStopArmed && isRecording() && !m_pendingStop && m_takeBarIndex >= m_autoStopBarTarget)
         {
             m_autoStopArmed = false;
             requestStop();
@@ -803,10 +842,10 @@ class LooperImpl final : public EffectBase
             const float bpm = m_bpm.load(std::memory_order_relaxed);
             if (std::not_equal_to<float>{}(bpm, m_appliedBpm))
             {
-                m_seq.setBpm(bpm);
-                m_appliedBpm = bpm;
+                applyTimeSignatureAwareBpm(bpm);
             }
         }
+        applyTimeSignatureRequest();
         const int division = m_sliceDivision.load(std::memory_order_relaxed);
         if (division != m_appliedDivision)
         {
@@ -821,6 +860,7 @@ class LooperImpl final : public EffectBase
         m_hostSync = m_hostSyncReq.load(std::memory_order_relaxed);
         m_freeRecord = m_freeRecordReq.load(std::memory_order_relaxed);
         m_recordBars = m_recordBarsReq.load(std::memory_order_relaxed);
+        m_autoStopEnabled = m_autoStopEnabledReq.load(std::memory_order_relaxed);
         m_countInBars = m_countInBarsReq.load(std::memory_order_relaxed);
         const float fadeMs = m_fadeMs.load(std::memory_order_relaxed);
         if (std::not_equal_to<float>{}(fadeMs, m_appliedFadeMs))
@@ -839,9 +879,91 @@ class LooperImpl final : public EffectBase
         }
         m_lastSyncedUpdateCount = transport.updateCount;
         const float bpm = std::clamp(static_cast<float>(transport.bpm), 20.f, 999.f);
-        m_seq.setBpm(bpm);
-        m_appliedBpm = bpm;
+        applyTimeSignatureAwareBpm(bpm);
         m_seq.syncToPpq(transport.ppqPosition);
+    }
+
+    // bpm is always the quarter-note tempo (standard convention, matching host
+    // transport bpm too); an eighth-note meter doubles what actually reaches the
+    // clock so an eighth note stays half a quarter note's duration.
+    void applyTimeSignatureAwareBpm(const float bpm) noexcept
+    {
+        m_appliedBpm = bpm;
+        m_seq.setBpm(m_eighthNoteUnit ? bpm * 2.f : bpm);
+    }
+
+    void installTimeSignature(const int index) noexcept
+    {
+        m_appliedTimeSignature = index;
+        const auto& sig = kTimeSignatures[static_cast<size_t>(index)];
+        m_seq.setBeatsPerBar(sig.beatsPerBar);
+        m_eighthNoteUnit = sig.eighthUnit;
+        applyTimeSignatureAwareBpm(m_appliedBpm);
+    }
+
+    // Stopped/Empty/Armed/CountingIn: nothing is playing yet, apply right away.
+    // Recording: queue it; applyMeterAtBarBoundary() applies it at the next bar
+    // so an in-progress bar is never disturbed. Playing/Overdubbing: the request
+    // is left pending and simply not looked at again until recording resumes -
+    // the loop's own recorded meter timeline drives the clock instead.
+    void applyTimeSignatureRequest()
+    {
+        const int req = std::clamp(m_timeSignatureReq.load(std::memory_order_relaxed), 0,
+                                   static_cast<int>(kTimeSignatures.size()) - 1);
+        if (isRecording())
+        {
+            m_pendingTimeSignature = req;
+        }
+        else if (!isPlaying() && !isOverdubbing())
+        {
+            if (req != m_appliedTimeSignature)
+            {
+                installTimeSignature(req);
+            }
+            m_pendingTimeSignature = req;
+        }
+    }
+
+    // Runs once per bar boundary (renderClickAndSequencer, event.barWrapped).
+    // Recording: applies any pending time-signature change and logs it into the
+    // take's own meter timeline. Playing/Overdubbing: replays the take's recorded
+    // timeline instead of the live control, wrapping every m_finalizedBarCount bars.
+    void applyMeterAtBarBoundary()
+    {
+        if (isPlaying() || isOverdubbing())
+        {
+            if (m_finalizedBarCount > 0)
+            {
+                const size_t nextBar = m_seq.barIndex() % m_finalizedBarCount;
+                const auto& seg = m_meterTimeline.segmentForBar(nextBar);
+                if (seg.beatsPerBar != m_seq.beatsPerBar() || seg.eighthUnit != m_eighthNoteUnit)
+                {
+                    m_seq.setBeatsPerBar(seg.beatsPerBar);
+                    m_eighthNoteUnit = seg.eighthUnit;
+                    applyTimeSignatureAwareBpm(m_appliedBpm);
+                }
+            }
+        }
+        else if (isRecording())
+        {
+            ++m_takeBarIndex;
+            if (m_pendingTimeSignature != m_appliedTimeSignature)
+            {
+                installTimeSignature(m_pendingTimeSignature);
+                const auto& sig = kTimeSignatures[static_cast<size_t>(m_appliedTimeSignature)];
+                m_meterTimeline.addSegment(m_takeBarIndex, sig.beatsPerBar, sig.eighthUnit);
+            }
+        }
+    }
+
+    // Derives the take's final bar count from its known frame length by walking
+    // its recorded meter timeline (robust regardless of bar-lock stop/catch-up
+    // slop), then builds the frame map used to size the loop's outer ring.
+    void finalizeMeterTimeline(const size_t loopLengthFrames)
+    {
+        const float samplesPerQuarterBeat = sampleRate() * 60.f / m_appliedBpm;
+        m_finalizedBarCount = m_meterTimeline.barCountForFrames(loopLengthFrames, samplesPerQuarterBeat);
+        m_meterTimeline.buildFrameMap(m_finalizedBarCount, samplesPerQuarterBeat);
     }
 
     void handleTransportPulses()
@@ -921,8 +1043,21 @@ class LooperImpl final : public EffectBase
 
     void finishRecording()
     {
+        const bool wasBarLocked = m_barLockedTake;
         m_recorder.stopRecordFree();
         m_barLockedTake = false;
+        if (wasBarLocked)
+        {
+            // A bar-locked take can also end up here (degenerate near-instant
+            // stop in requestStop(), or punching straight into overdub): finalize
+            // whatever meter timeline it accumulated instead of just discarding it.
+            finalizeMeterTimeline(m_recorder.loopLengthFrames());
+        }
+        else
+        {
+            m_meterTimeline.clear();
+            m_finalizedBarCount = 0;
+        }
     }
 
     void toggleRecord()
@@ -976,7 +1111,7 @@ class LooperImpl final : public EffectBase
         m_countingIn = true;
         m_countInBarsOffset = m_countInBars;
         const size_t spb = m_seq.samplesPerBeat();
-        const size_t samplesPerBar = spb * kBeatsPerBar;
+        const size_t samplesPerBar = spb * m_seq.beatsPerBar();
         long off = (spb > 0) ? m_seq.samplesToNearestBar() : 0;
         if (off <= 0)
         {
@@ -998,6 +1133,9 @@ class LooperImpl final : public EffectBase
         }
         else
         {
+            // Free Record is unquantized: no bar grid to hang a meter timeline on.
+            m_meterTimeline.clear();
+            m_finalizedBarCount = 0;
             m_recorder.beginRecord();
         }
     }
@@ -1015,8 +1153,24 @@ class LooperImpl final : public EffectBase
         else if (m_recorder.hasLoop())
         {
             // stop() rewound the loop to frame 0; resync the timekeeper to match.
-            resetTimekeeper(true);
+            resyncTimekeeperToLoopStart();
             m_recorder.play();
+        }
+    }
+
+    // Resyncs the timekeeper to bar 1 beat 1 of the loop's own recorded meter
+    // timeline (force-installing bar 0's meter regardless of whatever m_seq was
+    // left at). Used both when Play explicitly (re)starts a stopped loop and
+    // when a bar-locked recording auto-transitions straight into playback.
+    void resyncTimekeeperToLoopStart()
+    {
+        resetTimekeeper(true);
+        if (!m_meterTimeline.empty())
+        {
+            const auto& seg0 = m_meterTimeline.segmentForBar(0);
+            m_seq.setBeatsPerBar(seg0.beatsPerBar);
+            m_eighthNoteUnit = seg0.eighthUnit;
+            applyTimeSignatureAwareBpm(m_appliedBpm);
         }
     }
 
@@ -1209,9 +1363,12 @@ class LooperImpl final : public EffectBase
                 left[f] = m_recorder.sample(f, 0);
                 right[f] = m_recorder.sample(f, 1);
             }
+            // Descriptive metadata only (the pattern's own serialized beatsPerBar is
+            // authoritative on load); approximate using the loop's current meter,
+            // which may not be exact for a take whose meter changed mid-recording.
             const float samplesPerBeat = sampleRate() * 60.f / m_appliedBpm;
             const float beats = (samplesPerBeat > 0.f) ? static_cast<float>(loopLen) / samplesPerBeat : 0.f;
-            const float bars = beats / static_cast<float>(kBeatsPerBar);
+            const float bars = beats / static_cast<float>(m_seq.beatsPerBar());
             const AbacDsp::LoopMetadata meta{1, m_appliedBpm, bars, beats};
             AbacDsp::LoopFile<nlohmann::json>::saveStereoWav(loopWavPath(m_loopSaveName).string(), left, right,
                                                              sampleRate(), meta);
@@ -1391,14 +1548,17 @@ class LooperImpl final : public EffectBase
     }
 
     // Sample-accurate steps (stepsPerBeat = samplesPerBeat), so every slice's
-    // own startFrame is directly a valid step position: no re-quantizing.
+    // own startFrame is directly a valid step position: no re-quantizing. Uses
+    // the loop's currently-applied meter as a single grid for the whole pattern
+    // (the freeze/sequencer feature doesn't follow a mixed-meter timeline).
     void rebuildPatternForCurrentLoop()
     {
         const size_t spb = m_seq.samplesPerBeat();
+        const size_t beatsPerBar = m_seq.beatsPerBar();
         const size_t loopLen = m_recorder.loopLengthFrames();
-        const size_t framesPerBar = spb * kBeatsPerBar;
+        const size_t framesPerBar = spb * beatsPerBar;
         const size_t bars = (framesPerBar == 0) ? 1 : std::max<size_t>(1, loopLen / framesPerBar);
-        m_pattern = AbacDsp::SequencePattern(bars, kBeatsPerBar, std::max<size_t>(1, spb));
+        m_pattern = AbacDsp::SequencePattern(bars, beatsPerBar, std::max<size_t>(1, spb));
     }
 
     // Reconstructs the track's slices at their own original positions, gain
@@ -1423,6 +1583,15 @@ class LooperImpl final : public EffectBase
     // stop-time finalize to relocate/backfill around (no tolerance cutoff).
     void beginBarLockedRecord()
     {
+        // Force-install the live control's current meter: guarantees the take
+        // starts from exactly what the performer dialed in, regardless of
+        // whatever meter m_seq was left at by a previous take/playback cycle.
+        installTimeSignature(m_pendingTimeSignature);
+        m_takeBarIndex = 0;
+        m_meterTimeline.clear();
+        const auto& sig0 = kTimeSignatures[static_cast<size_t>(m_appliedTimeSignature)];
+        m_meterTimeline.addSegment(0, sig0.beatsPerBar, sig0.eighthUnit);
+
         const size_t spb = m_seq.samplesPerBeat();
         const long off = (spb > 0) ? m_seq.samplesToNearestBar() : 0;
         m_startOffset = off;
@@ -1430,13 +1599,12 @@ class LooperImpl final : public EffectBase
         snapshotStartPreRoll(m_tickAbs, m_absPos);
         m_recorder.beginRecord();
 
-        const size_t recordBars = recordBarsIndexToCount(m_recordBars);
+        // A live bar-wrap count (m_takeBarIndex), not a precomputed sample tick:
+        // a precomputed tick would assume a constant bar length for the whole
+        // target, which a mid-take meter change can invalidate.
+        const size_t recordBars = m_autoStopEnabled ? static_cast<size_t>(m_recordBars) : 0;
         m_autoStopArmed = recordBars > 0;
-        if (m_autoStopArmed)
-        {
-            const size_t samplesPerBar = spb * kBeatsPerBar;
-            m_autoStopTickAbs = m_tickAbs + static_cast<uint64_t>(recordBars) * samplesPerBar;
-        }
+        m_autoStopBarTarget = recordBars;
     }
 
     // A bar-locked take locks to the nearest tick; see the pendingStop check
@@ -1470,6 +1638,10 @@ class LooperImpl final : public EffectBase
         const auto catchUpFrames = static_cast<size_t>(m_absPos + BlockSize - m_pendingStopTickAbs);
         m_recorder.stopRecordBarLocked(m_pendingStopLoopLength, preRoll, m_startOffset, catchUpFrames);
         m_barLockedTake = false;
+        finalizeMeterTimeline(m_pendingStopLoopLength);
+        // stopRecordBarLocked() auto-transitions straight into playback (no
+        // separate Play press): resync here too, not just in togglePlay().
+        resyncTimekeeperToLoopStart();
     }
 
     // Writes this block's raw input into the always-on capture ring
@@ -1522,7 +1694,6 @@ class LooperImpl final : public EffectBase
     {
         const bool active = isRecording() || isPlaying() || m_armed || m_countingIn;
         const bool transportRunning = active || m_sequencerPlaying;
-        const size_t samplesPerBeat = m_seq.samplesPerBeat();
         for (size_t i = 0; i < BlockSize; ++i)
         {
             if (!transportRunning)
@@ -1530,6 +1701,13 @@ class LooperImpl final : public EffectBase
                 continue;
             }
             const auto event = m_seq.advance();
+            if (event.barWrapped)
+            {
+                // May change beatsPerBar/bpm for the bar about to start: read
+                // samplesPerBeat fresh below rather than caching it per block.
+                applyMeterAtBarBoundary();
+            }
+            const size_t samplesPerBeat = m_seq.samplesPerBeat();
             m_barPos[i] = event.beatIndexInBar * samplesPerBeat + event.beatSamplePos;
             if (active)
             {
@@ -1570,28 +1748,6 @@ class LooperImpl final : public EffectBase
         }
     }
 
-
-    [[nodiscard]] static size_t recordBarsIndexToCount(const int index) noexcept
-    {
-        switch (index)
-        {
-            case 1:
-                return 1;
-            case 2:
-                return 2;
-            case 3:
-                return 4;
-            case 4:
-                return 8;
-            case 5:
-                return 12;
-            case 6:
-                return 16;
-            default:
-                return 0; // Manual
-        }
-    }
-
     AbacDsp::LoopRecorder<BlockSize> m_recorder;
     AbacDsp::BeatSequencer m_seq;
     AbacDsp::ClickGenerator m_click;
@@ -1614,10 +1770,12 @@ class LooperImpl final : public EffectBase
     std::atomic<bool> m_threshRecReq{false};
     std::atomic<bool> m_freeRecordReq{false};
     bool m_freeRecord{false};
-    std::atomic<int> m_recordBarsReq{0};
-    int m_recordBars{0};
+    std::atomic<int> m_recordBarsReq{4};
+    int m_recordBars{4};
+    std::atomic<bool> m_autoStopEnabledReq{false};
+    bool m_autoStopEnabled{false};
     bool m_autoStopArmed{false}; // preset-bars auto-stop; set in beginBarLockedRecord()
-    uint64_t m_autoStopTickAbs{0};
+    size_t m_autoStopBarTarget{0};
     std::atomic<int> m_countInBarsReq{0};
     int m_countInBars{0};
     bool m_countingIn{false};
@@ -1625,6 +1783,14 @@ class LooperImpl final : public EffectBase
     // bar.beat display offset: count-in bars are numbered ..., -1, 0 leading into
     // bar 1 (the real start of the take). Zero for takes with no count-in.
     int m_countInBarsOffset{0};
+
+    std::atomic<int> m_timeSignatureReq{kDefaultTimeSignature};
+    int m_pendingTimeSignature{kDefaultTimeSignature};
+    int m_appliedTimeSignature{kDefaultTimeSignature};
+    bool m_eighthNoteUnit{false};
+    AbacDsp::MeterTimeline m_meterTimeline;
+    size_t m_takeBarIndex{0};      // bars elapsed since this take's own start (beginBarLockedRecord)
+    size_t m_finalizedBarCount{0}; // total bars in the current loop, for playback timeline wraparound
     std::atomic<float> m_fadeMs{5.f};
     float m_loopGain{1.f};
     float m_clickRecordGain{0.f};

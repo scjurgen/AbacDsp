@@ -50,7 +50,15 @@ class GenericImpl final : public EffectBase
     {
         m_countInBars = value;
     }
-    void setRecordBars(const size_t value)
+    void setTimeSignature(const size_t value)
+    {
+        m_timeSignature = value;
+    }
+    void setAutoStop(const bool value)
+    {
+        m_autoStop = value;
+    }
+    void setRecordBars(const float value)
     {
         m_recordBars = value;
     }
@@ -125,7 +133,9 @@ class GenericImpl final : public EffectBase
     bool m_hostSync{};
     bool m_freeRecord{};
     size_t m_countInBars{};
-    size_t m_recordBars{};
+    size_t m_timeSignature{};
+    bool m_autoStop{};
+    float m_recordBars{};
     size_t m_sliceDivision{};
     float m_bpm{};
     float m_clickVolume{};

@@ -42,6 +42,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("hostSync", this);
         m_parameters.addParameterListener("freeRecord", this);
         m_parameters.addParameterListener("countInBars", this);
+        m_parameters.addParameterListener("timeSignature", this);
+        m_parameters.addParameterListener("autoStop", this);
         m_parameters.addParameterListener("recordBars", this);
         m_parameters.addParameterListener("sliceDivision", this);
         m_parameters.addParameterListener("bpm", this);
@@ -71,6 +73,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("hostSync", this);
         m_parameters.removeParameterListener("freeRecord", this);
         m_parameters.removeParameterListener("countInBars", this);
+        m_parameters.removeParameterListener("timeSignature", this);
+        m_parameters.removeParameterListener("autoStop", this);
         m_parameters.removeParameterListener("recordBars", this);
         m_parameters.removeParameterListener("sliceDivision", this);
         m_parameters.removeParameterListener("bpm", this);
@@ -283,8 +287,15 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("countInBars", 1), "Count-In",
                                                                       juce::StringArray{"Off", "1 Bar", "2 Bars"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
-            juce::ParameterID("recordBars", 1), "Record Bars",
-            juce::StringArray{"Manual", "1", "2", "4", "8", "12", "16"}, 0));
+            juce::ParameterID("timeSignature", 1), "Time Sig",
+            juce::StringArray{"2/4", "3/4", "4/4", "5/4", "6/4", "7/4", "5/8", "6/8", "7/8", "9/8", "11/8", "13/8",
+                              "15/8"},
+            2));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("autoStop", 1), "Auto Stop", 0));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("recordBars", 1), "Record Bars", juce::NormalisableRange<float>(1, 32, 1, 1, false), 4,
+            juce::AudioParameterFloatAttributes{}.withLabel("bars").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " bars"; })));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID("sliceDivision", 1), "Division", juce::StringArray{"1/4", "1/8", "1/16", "1/32"}, 1));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -376,10 +387,22 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                  p.pluginRunner->setCountInBars(static_cast<int>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::countInBars, v);
              }},
+            {"timeSignature",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setTimeSignature(static_cast<int>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::timeSignature, v);
+             }},
+            {"autoStop",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setAutoStop(static_cast<bool>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::autoStop, v);
+             }},
             {"recordBars",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setRecordBars(static_cast<int>(v));
+                 p.pluginRunner->setRecordBars(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::recordBars, v);
              }},
             {"sliceDivision",
@@ -511,6 +534,18 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("countInBars");
             float normalized = range.convertTo0to1(params.countInBars);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("timeSignature"))
+        {
+            const auto& range = m_parameters.getParameterRange("timeSignature");
+            float normalized = range.convertTo0to1(params.timeSignature);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("autoStop"))
+        {
+            const auto& range = m_parameters.getParameterRange("autoStop");
+            float normalized = range.convertTo0to1(params.autoStop);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("recordBars"))

@@ -20,7 +20,9 @@ struct PatchParameters
         hostSync         , // switch
         freeRecord       , // switch
         countInBars      , // drop
-        recordBars       , // drop
+        timeSignature    , // drop
+        autoStop         , // switch
+        recordBars       , // dial
         sliceDivision    , // drop
         bpm              , // dial
         clickVolume      , // dial
@@ -39,7 +41,9 @@ bool threshRec{false};
 bool hostSync{false};
 bool freeRecord{false};
 size_t countInBars{0};
-size_t recordBars{0};
+size_t timeSignature{2};
+bool autoStop{false};
+float recordBars{4.0f};
 size_t sliceDivision{1};
 float bpm{120.0f};
 float clickVolume{-12.0f};
@@ -60,6 +64,8 @@ bool clearSeq{false};
 "hostSync",
 "freeRecord",
 "countInBars",
+"timeSignature",
+"autoStop",
 "recordBars",
 "sliceDivision",
 "bpm",
@@ -96,6 +102,8 @@ bool clearSeq{false};
         else if constexpr (ParamId == Id::hostSync) return hostSync;
         else if constexpr (ParamId == Id::freeRecord) return freeRecord;
         else if constexpr (ParamId == Id::countInBars) return countInBars;
+        else if constexpr (ParamId == Id::timeSignature) return timeSignature;
+        else if constexpr (ParamId == Id::autoStop) return autoStop;
         else if constexpr (ParamId == Id::recordBars) return recordBars;
         else if constexpr (ParamId == Id::sliceDivision) return sliceDivision;
         else if constexpr (ParamId == Id::bpm) return bpm;
@@ -134,7 +142,11 @@ break;
 break;
  case Id::countInBars: if (!isEqual(get<Id::countInBars>(), value)) {get<Id::countInBars>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
- case Id::recordBars: if (!isEqual(get<Id::recordBars>(), value)) {get<Id::recordBars>() = static_cast<size_t>(value) ;m_modified = true;}
+ case Id::timeSignature: if (!isEqual(get<Id::timeSignature>(), value)) {get<Id::timeSignature>() = static_cast<size_t>(value) ;m_modified = true;}
+break;
+ case Id::autoStop: if (!isEqual(get<Id::autoStop>(), value)) {get<Id::autoStop>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::recordBars: if (!isEqual(get<Id::recordBars>(), value)) {get<Id::recordBars>() = value;m_modified = true;}
 break;
  case Id::sliceDivision: if (!isEqual(get<Id::sliceDivision>(), value)) {get<Id::sliceDivision>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
@@ -200,7 +212,9 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         hostSync         , // switch
         freeRecord       , // switch
         countInBars      , // drop
-        recordBars       , // drop
+        timeSignature    , // drop
+        autoStop         , // switch
+        recordBars       , // dial
         sliceDivision    , // drop
         bpm              , // dial
         clickVolume      , // dial

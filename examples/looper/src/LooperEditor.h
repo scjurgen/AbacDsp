@@ -119,12 +119,17 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(autoStopSwitch)
+                              .withFlex(0)
+                              .withHeight(Constants::Text::labelHeight)
+                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                              .withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(countInBarsDrop)
                               .withFlex(0)
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(recordBarsDrop)
+            box.items.add(juce::FlexItem(timeSignatureDrop)
                               .withFlex(0)
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
@@ -161,6 +166,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.items.add(juce::FlexItem(clickRecordVolumeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(recordBarsDial).withFlex(1).withMargin(knobMarginSmall));
             box.performLayout(areas[1].toFloat());
         }
         {
@@ -266,10 +272,17 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         countInBarsDrop.addItemList(valueTreeState.getParameter("countInBars")->getAllValueStrings(), 1);
         countInBarsDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "countInBars", countInBarsDrop);
-        addAndMakeVisible(recordBarsDrop);
-        recordBarsDrop.addItemList(valueTreeState.getParameter("recordBars")->getAllValueStrings(), 1);
-        recordBarsDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-            valueTreeState, "recordBars", recordBarsDrop);
+        addAndMakeVisible(timeSignatureDrop);
+        timeSignatureDrop.addItemList(valueTreeState.getParameter("timeSignature")->getAllValueStrings(), 1);
+        timeSignatureDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "timeSignature", timeSignatureDrop);
+        addAndMakeVisible(autoStopSwitch);
+        autoStopSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "autoStop", autoStopSwitch);
+
+        addAndMakeVisible(recordBarsDial);
+        recordBarsDial.reset(valueTreeState, "recordBars");
+        recordBarsDial.setLabelText(juce::String::fromUTF8("Record Bars"));
         addAndMakeVisible(sliceDivisionDrop);
         sliceDivisionDrop.addItemList(valueTreeState.getParameter("sliceDivision")->getAllValueStrings(), 1);
         sliceDivisionDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
@@ -795,8 +808,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> freeRecordSwitchAttachment;
     juce::ComboBox countInBarsDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> countInBarsDropAttachment;
-    juce::ComboBox recordBarsDrop{};
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> recordBarsDropAttachment;
+    juce::ComboBox timeSignatureDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> timeSignatureDropAttachment;
+    juce::ToggleButton autoStopSwitch{juce::String::fromUTF8("Auto Stop")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> autoStopSwitchAttachment;
+    CustomRotaryDial recordBarsDial{this};
     juce::ComboBox sliceDivisionDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> sliceDivisionDropAttachment;
     CustomRotaryDial bpmDial{this};

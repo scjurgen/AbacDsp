@@ -774,7 +774,7 @@ TEST(LooperLoopFile, SaveThenLoadRoundTripsAudioAndBpm)
     nlohmann::json savedJson;
     jsonIn >> savedJson;
     const float expectedBeats = static_cast<float>(originalLength) / (kLoopFileSampleRate * 60.f / kLoopFileBpm);
-    const float expectedBars = expectedBeats / static_cast<float>(Looper::kBeatsPerBar);
+    const float expectedBars = expectedBeats / static_cast<float>(kBeatsPerBar);
     EXPECT_NEAR(savedJson.at("beats").get<float>(), expectedBeats, 1e-2f);
     EXPECT_NEAR(savedJson.at("bars").get<float>(), expectedBars, 1e-2f);
 
@@ -945,6 +945,7 @@ TEST(RecordingModes, PresetBarsAutoStopsAfterExactlyNBars)
     Looper looper(kSampleRate);
     looper.setBpm(kBpm);
     looper.setThreshRec(false);
+    looper.setAutoStop(true);
     looper.setRecordBars(2);
 
     Buffer in{};
@@ -969,6 +970,123 @@ TEST(RecordingModes, PresetBarsAutoStopsAfterExactlyNBars)
     }
     EXPECT_TRUE(looper.isPlaying());
     EXPECT_EQ(looper.rawLoopLengthFrames(), kExpectedLength);
+}
+
+TEST(TimeSignatureChange, ChangeDuringRecordingAppliesOnlyAtNextBarBoundary)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setTimeSignature(2); // 4/4
+
+    Buffer in{};
+    Buffer out{};
+    looper.setRecord(true);
+    looper.processBlock(in, out);
+    ASSERT_TRUE(looper.isRecording());
+    ASSERT_EQ(looper.getBarBeats(), 4);
+
+    looper.setTimeSignature(0); // request 2/4; must not disturb the bar in progress
+    constexpr size_t kBlocksPerBar = kSamplesPerBar / kBlock;
+    // One call already consumed above; kBlocksPerBar-1 more stay within bar 1.
+    for (size_t call = 1; call < kBlocksPerBar - 1; ++call)
+    {
+        looper.processBlock(in, out);
+        ASSERT_EQ(looper.getBarBeats(), 4) << "meter changed before the bar boundary, at call " << call;
+    }
+    looper.processBlock(in, out); // this call crosses into bar 2
+    EXPECT_EQ(looper.getBarBeats(), 2);
+}
+
+TEST(TimeSignatureChange, IgnoredWhilePlayingBack)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setTimeSignature(2); // 4/4
+
+    Buffer in{};
+    Buffer out{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        in(i, 0) = 0.3f;
+        in(i, 1) = -0.3f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(in, out);
+    ASSERT_TRUE(looper.isRecording());
+    looper.setRecord(true); // stop: bar-locked take auto-transitions into playback
+    while (looper.isRecording())
+    {
+        looper.processBlock(in, out);
+    }
+    ASSERT_TRUE(looper.isPlaying());
+    ASSERT_EQ(looper.getBarBeats(), 4);
+
+    looper.setTimeSignature(0); // 2/4: must have no effect while just playing back
+    for (size_t call = 0; call < kBlock; ++call)
+    {
+        looper.processBlock(in, out);
+        ASSERT_EQ(looper.getBarBeats(), 4) << "live control affected playback meter, at call " << call;
+    }
+}
+
+TEST(TimeSignatureChange, PlaybackReplaysRecordedMeterTimelineAcrossLoopRepeats)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setAutoStop(true);
+    looper.setRecordBars(2);
+    looper.setTimeSignature(2); // 4/4
+
+    Buffer in{};
+    Buffer out{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        in(i, 0) = 0.3f;
+        in(i, 1) = -0.3f;
+    }
+
+    looper.setRecord(true);
+    looper.processBlock(in, out);
+    ASSERT_TRUE(looper.isRecording());
+    ASSERT_EQ(looper.getBarBeats(), 4);
+
+    looper.setTimeSignature(1); // 3/4, queued to apply at bar 2
+    constexpr size_t kBlocksPerBar4_4 = kSamplesPerBar / kBlock;
+    // One call already consumed above; kBlocksPerBar4_4-1 more stay within bar 1.
+    for (size_t call = 1; call < kBlocksPerBar4_4 - 1; ++call)
+    {
+        looper.processBlock(in, out);
+    }
+    looper.processBlock(in, out); // crosses into bar 2
+    ASSERT_EQ(looper.getBarBeats(), 3);
+
+    constexpr size_t kSamplesPerBar3_4 = kSamplesPerBeat * 3;
+    constexpr size_t kBlocksPerBar3_4 = kSamplesPerBar3_4 / kBlock;
+    size_t safety = 0;
+    while (looper.isRecording())
+    {
+        looper.processBlock(in, out);
+        ASSERT_LE(++safety, kBlocksPerBar3_4 + 10) << "recording never auto-stopped";
+    }
+    ASSERT_TRUE(looper.isPlaying());
+
+    // Playback restarts at bar 0's own recorded meter, not wherever the take ended.
+    EXPECT_EQ(looper.getBarBeats(), 4);
+
+    for (size_t call = 0; call < kBlocksPerBar4_4; ++call)
+    {
+        looper.processBlock(in, out);
+    }
+    EXPECT_EQ(looper.getBarBeats(), 3) << "bar 2 of playback should replay the recorded meter change";
+
+    for (size_t call = 0; call < kBlocksPerBar3_4; ++call)
+    {
+        looper.processBlock(in, out);
+    }
+    EXPECT_EQ(looper.getBarBeats(), 4) << "loop repeat should wrap back to bar 0's meter";
 }
 
 TEST(RecordingModes, PlayStopsActiveRecording)
