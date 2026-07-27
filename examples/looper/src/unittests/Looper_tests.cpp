@@ -884,6 +884,87 @@ TEST(LooperLoopFile, SaveThenLoadRoundTripsFrozenTracksAndPattern)
     }
 }
 
+// Reuses kSampleRate/kBpm/kSamplesPerBeat (5120 Hz, 120 BPM) from
+// BeatLockMatrixTest above, so a mid-take meter change lands on clean block
+// boundaries; mirrors TimeSignatureChange.PlaybackReplaysRecordedMeterTimeline-
+// AcrossLoopRepeats but round-trips the take through a .mid sidecar save/load
+// instead of checking the in-memory instance's own playback.
+TEST(LooperLoopFile, SaveThenLoadRoundTripsMeterTimeline)
+{
+    const TempLoopsDir dir;
+
+    Looper writer(kSampleRate);
+    writer.setLoopsDirectory(dir.path());
+    writer.setBpm(kBpm);
+    writer.setThreshRec(false);
+    writer.setAutoStop(true);
+    writer.setRecordBars(2);
+    writer.setTimeSignature(2); // 4/4
+
+    Buffer in{};
+    Buffer out{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        in(i, 0) = 0.3f;
+        in(i, 1) = -0.3f;
+    }
+
+    writer.setRecord(true);
+    writer.processBlock(in, out);
+    ASSERT_TRUE(writer.isRecording());
+    ASSERT_EQ(writer.getBarBeats(), 4);
+
+    writer.setTimeSignature(1); // 3/4, queued to apply at bar 2
+    constexpr size_t kBlocksPerBar4_4 = kSamplesPerBar / kBlock;
+    // One call already consumed above; kBlocksPerBar4_4-1 more stay within bar 1.
+    for (size_t call = 1; call < kBlocksPerBar4_4 - 1; ++call)
+    {
+        writer.processBlock(in, out);
+    }
+    writer.processBlock(in, out); // crosses into bar 2
+    ASSERT_EQ(writer.getBarBeats(), 3);
+
+    constexpr size_t kSamplesPerBar3_4 = kSamplesPerBeat * 3;
+    constexpr size_t kBlocksPerBar3_4 = kSamplesPerBar3_4 / kBlock;
+    size_t safety = 0;
+    while (writer.isRecording())
+    {
+        writer.processBlock(in, out);
+        ASSERT_LE(++safety, kBlocksPerBar3_4 + 10) << "recording never auto-stopped";
+    }
+    ASSERT_TRUE(writer.isPlaying());
+    const size_t originalLength = writer.rawLoopLengthFrames();
+
+    writer.requestSaveLoopAs("meterloop");
+    waitUntilLoopSaveDone(writer);
+
+    Looper reader(kSampleRate);
+    reader.setLoopsDirectory(dir.path());
+    reader.requestLoadLoop("meterloop");
+    const auto outcome = waitForLoopLoadOutcome(reader);
+    ASSERT_TRUE(outcome.success);
+    waitUntilLoopLoadInstalled(reader);
+
+    ASSERT_TRUE(reader.isPlaying());
+    ASSERT_EQ(reader.rawLoopLengthFrames(), originalLength);
+
+    // Playback restarts at bar 0's own recorded meter, reconstructed from the
+    // .mid sidecar rather than the writer's own live in-memory timeline.
+    EXPECT_EQ(reader.getBarBeats(), 4);
+
+    for (size_t call = 0; call < kBlocksPerBar4_4; ++call)
+    {
+        reader.processBlock(in, out);
+    }
+    EXPECT_EQ(reader.getBarBeats(), 3) << "bar 2 of playback should replay the recorded meter change";
+
+    for (size_t call = 0; call < kBlocksPerBar3_4; ++call)
+    {
+        reader.processBlock(in, out);
+    }
+    EXPECT_EQ(reader.getBarBeats(), 4) << "loop repeat should wrap back to bar 0's meter";
+}
+
 // Reuses kSampleRate/kBpm/kSamplesPerBar (5120 Hz, 120 BPM, 10240
 // samples/bar) and the Looper/Buffer aliases from BeatLockMatrixTest above.
 TEST(RecordingModes, CountInPlaysClickThenStartsRecordingAfterNBars)

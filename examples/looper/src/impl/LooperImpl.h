@@ -34,6 +34,7 @@
 #include "Generators/MeterTimeline.h"
 #include "Sampler/LoopFile.h"
 #include "Sampler/LoopRecorder.h"
+#include "Sampler/MidiFile.h"
 #include "Sampler/SequencePattern.h"
 #include "Sampler/SequencerEngine.h"
 #include "Sampler/SliceLibrary.h"
@@ -1091,9 +1092,8 @@ class LooperImpl final : public EffectBase
         }
     }
 
-    // Every fresh take starts the timekeeper at bar 1 beat 1: there is no more
-    // free-running master clock, so Play/Record are the only places it moves
-    // from stopped to running. suppressFirstClick distinguishes a pure phase
+    // Every fresh take starts at  bar 1 beat 1
+    // suppressFirstClick distinguishes a pure phase
     // resync (Play-resume, freeze completion: the next beatStart is an artifact
     // of the jump, not a real beat) from a fresh Record start, where beat 1 is
     // a real downbeat the performer needs to hear.
@@ -1324,6 +1324,21 @@ class LooperImpl final : public EffectBase
         return std::filesystem::path(m_loopsDirectory) / (sanitizeLoopName(name) + ".json");
     }
 
+    [[nodiscard]] std::filesystem::path loopMidPath(const std::string& name) const
+    {
+        return std::filesystem::path(m_loopsDirectory) / (sanitizeLoopName(name) + ".mid");
+    }
+
+    // MIDI ticks spanned by one bar of the given meter (denominator convention:
+    // eighthUnit halves the quarter-note tick length, matching MidiFile's own
+    // numerator/denominatorPower time-signature event fields).
+    [[nodiscard]] static constexpr uint32_t midiTicksPerBar(const size_t beatsPerBar, const bool eighthUnit) noexcept
+    {
+        const uint32_t ticksPerBeat =
+            eighthUnit ? AbacDsp::MidiFile::kTicksPerQuarterNote / 2 : AbacDsp::MidiFile::kTicksPerQuarterNote;
+        return ticksPerBeat * static_cast<uint32_t>(beatsPerBar);
+    }
+
     [[nodiscard]] std::filesystem::path loopTrackWavPath(const std::string& name, const size_t track) const
     {
         return std::filesystem::path(m_loopsDirectory) /
@@ -1372,6 +1387,31 @@ class LooperImpl final : public EffectBase
             const AbacDsp::LoopMetadata meta{1, m_appliedBpm, bars, beats};
             AbacDsp::LoopFile<nlohmann::json>::saveStereoWav(loopWavPath(m_loopSaveName).string(), left, right,
                                                              sampleRate(), meta);
+
+            // Standard MIDI File sidecar carrying the take's own tempo + meter
+            // timeline; written unconditionally (a constant-meter take just gets
+            // a single time-signature event) so loading only ever needs one path.
+            AbacDsp::MidiFile midi;
+            midi.setTempoBpm(m_appliedBpm);
+            const std::vector<AbacDsp::MeterSegment> segmentsToWrite =
+                m_meterTimeline.empty() ? std::vector<AbacDsp::MeterSegment>{{0, m_seq.beatsPerBar(), m_eighthNoteUnit}}
+                                        : m_meterTimeline.segments();
+            uint32_t midiTick = 0;
+            for (size_t i = 0; i < segmentsToWrite.size(); ++i)
+            {
+                const auto& seg = segmentsToWrite[i];
+                if (i > 0)
+                {
+                    const auto& prevSeg = segmentsToWrite[i - 1];
+                    midiTick += static_cast<uint32_t>(seg.startBar - prevSeg.startBar) *
+                                midiTicksPerBar(prevSeg.beatsPerBar, prevSeg.eighthUnit);
+                }
+                midi.addTimeSignature(midiTick, static_cast<uint8_t>(seg.beatsPerBar), seg.eighthUnit ? 3 : 2);
+            }
+            if (!midi.writeToFile(loopMidPath(m_loopSaveName).string()))
+            {
+                std::cerr << "LooperImpl: failed to write " << loopMidPath(m_loopSaveName) << std::endl;
+            }
 
             nlohmann::json j = meta;
             if (m_sliceLibrary.trackCount() > 0)
@@ -1453,6 +1493,7 @@ class LooperImpl final : public EffectBase
         m_loopLoadHasSequencerData = false;
         m_loopLoadTracks.clear();
         m_loopLoadPattern.reset();
+        m_loopLoadMeterTimeline.clear();
         const auto loaded = AbacDsp::LoopFile<nlohmann::json>::loadStereoWav(loopWavPath(m_loopLoadName).string());
         if (!loaded.left.empty())
         {
@@ -1474,6 +1515,27 @@ class LooperImpl final : public EffectBase
                 {
                     std::cerr << "LooperImpl: failed to parse " << loopJsonPath(m_loopLoadName) << ": " << e.what()
                               << std::endl;
+                }
+            }
+
+            AbacDsp::MidiFile midi;
+            if (midi.readFromFile(loopMidPath(m_loopLoadName).string()))
+            {
+                size_t bar = 0;
+                uint32_t prevTick = 0;
+                const auto& events = midi.timeSignatures();
+                for (size_t i = 0; i < events.size(); ++i)
+                {
+                    const auto& ev = events[i];
+                    if (i > 0)
+                    {
+                        const auto& prevEv = events[i - 1];
+                        const uint32_t ticksPerBarPrev =
+                            midiTicksPerBar(prevEv.numerator, prevEv.denominatorPower == 3);
+                        bar += (ticksPerBarPrev > 0) ? (ev.tick - prevTick) / ticksPerBarPrev : 0;
+                    }
+                    m_loopLoadMeterTimeline.addSegment(bar, ev.numerator, ev.denominatorPower == 3);
+                    prevTick = ev.tick;
                 }
             }
 
@@ -1535,6 +1597,11 @@ class LooperImpl final : public EffectBase
         m_seq.setBpm(m_loopLoadResolvedBpm);
         m_appliedBpm = m_loopLoadResolvedBpm;
         m_bpm.store(m_loopLoadResolvedBpm, std::memory_order_relaxed);
+        if (!m_loopLoadMeterTimeline.empty())
+        {
+            m_meterTimeline = std::move(m_loopLoadMeterTimeline);
+            finalizeMeterTimeline(m_recorder.loopLengthFrames());
+        }
         if (m_loopLoadHasSequencerData)
         {
             m_sliceLibrary.clear();
@@ -1886,6 +1953,7 @@ class LooperImpl final : public EffectBase
     std::vector<LoopLoadTrackData> m_loopLoadTracks; // worker-owned scratch, same handoff as left/right above
     std::optional<AbacDsp::SequencePattern> m_loopLoadPattern;
     bool m_loopLoadHasSequencerData{false};
+    AbacDsp::MeterTimeline m_loopLoadMeterTimeline; // worker-owned scratch, reconstructed from the .mid sidecar
 
     // Play/stop toggle for the pattern currently in m_pattern.
     std::atomic<bool> m_seqPlayPulse{false};
