@@ -560,6 +560,30 @@ class LooperImpl final : public EffectBase
         return (len > 0) ? static_cast<int>(std::max<size_t>(1, len / spb)) : 1;
     }
 
+    // One frame-length entry per bar of the outer ring (see getOuterRingBars()),
+    // honoring the take's own meter timeline so a mixed-meter loop's bars are
+    // sized proportionally, not uniformly. Falls back to a constant getSamplesPerBar()
+    // per entry when there is no timeline (free-record takes clear it), matching
+    // today's uniform-bar behavior exactly in that case.
+    [[nodiscard]] std::vector<float> getBarFrameLengths() const
+    {
+        const size_t n = static_cast<size_t>(std::max(0, getOuterRingBars()));
+        std::vector<float> lengths(n);
+        if (m_meterTimeline.empty())
+        {
+            std::fill(lengths.begin(), lengths.end(), static_cast<float>(getSamplesPerBar()));
+            return lengths;
+        }
+        const float samplesPerQuarterBeat = (m_appliedBpm > 0.f) ? sampleRate() * 60.f / m_appliedBpm : 0.f;
+        for (size_t bar = 0; bar < n; ++bar)
+        {
+            const auto& seg = m_meterTimeline.segmentForBar(bar);
+            const float samplesPerBeat = seg.eighthUnit ? samplesPerQuarterBeat * 0.5f : samplesPerQuarterBeat;
+            lengths[bar] = samplesPerBeat * static_cast<float>(seg.beatsPerBar);
+        }
+        return lengths;
+    }
+
     // "bar.beat" position, 1-based, generic over beatsPerBar (no fixed 4/4 assumption).
     // A count-in runs up to bar 1 from a negative/zero number (e.g. a 2-bar count-in
     // is -1, 0, then 1 is the real start of the take). Once recording, the bar count

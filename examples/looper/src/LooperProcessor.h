@@ -769,6 +769,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner ? pluginRunner->getOuterRingBars() : 1;
     }
+    [[nodiscard]] std::vector<float> getBarFrameLengths() const
+    {
+        return pluginRunner ? pluginRunner->getBarFrameLengths() : std::vector<float>{};
+    }
     [[nodiscard]] AbacDsp::SpectrumImageSet getSpectrogramData() const
     {
         return pluginRunner ? pluginRunner->getSpectrogramData() : AbacDsp::SpectrumImageSet{};

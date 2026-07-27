@@ -76,6 +76,13 @@ class CircularLoopDisplay : public juce::Component
     {
         m_outerRingBars = std::max(1, bars);
     }
+    // One frame-length entry per bar (see LooperImpl::getBarFrameLengths()), so
+    // a mixed-meter take's bars get proportionally-sized angular spans instead
+    // of a uniform 1/N split.
+    void setBarFrameLengths(const std::vector<float>& lengths)
+    {
+        m_barFrameLengths = lengths;
+    }
     void setStateLabel(const juce::String& label)
     {
         m_stateLabel = label;
@@ -192,6 +199,18 @@ class CircularLoopDisplay : public juce::Component
         }
     }
 
+    // Sum of setBarFrameLengths()'s per-bar entries, valid only when that vector
+    // matches the current bar count (e.g. before the first poll tick it won't).
+    [[nodiscard]] float totalBarFrames() const noexcept
+    {
+        float total = 0.f;
+        for (const float len : m_barFrameLengths)
+        {
+            total += len;
+        }
+        return total;
+    }
+
     // Repaint the whole iris each tick (no persistent state), so the growing ring
     // rescales seamlessly: every annulus pixel maps back to the spectrogram slice
     // whose record-time falls at that angle. Pixels ahead of the head or older than
@@ -200,7 +219,10 @@ class CircularLoopDisplay : public juce::Component
     {
         m_iris.clear(m_iris.getBounds(), juce::Colour(0u));
         const AbacDsp::SpectrumImageSet& s = m_spectro;
-        const float ringFrames = static_cast<float>(m_samplesPerBar * static_cast<size_t>(m_outerRingBars));
+        const bool haveLengths = m_barFrameLengths.size() == static_cast<size_t>(m_outerRingBars);
+        const float ringFrames = (haveLengths && totalBarFrames() > 0.f)
+                                     ? totalBarFrames()
+                                     : static_cast<float>(m_samplesPerBar * static_cast<size_t>(m_outerRingBars));
         const size_t fftHalf = s.height;
         if (s.data == nullptr || s.width < 2 || fftHalf == 0 || s.sampleRate <= 0.f || ringFrames <= 0.f)
         {
@@ -290,9 +312,19 @@ class CircularLoopDisplay : public juce::Component
 
     void drawBarSpokes(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
     {
+        const bool haveLengths = m_barFrameLengths.size() == static_cast<size_t>(m_outerRingBars);
+        const float total = haveLengths ? totalBarFrames() : 0.f;
+        float cumulative = 0.f;
         for (int bar = 0; bar < m_outerRingBars; ++bar)
         {
-            const float angle = kBeatAngle + static_cast<float>(bar) / static_cast<float>(m_outerRingBars) * k2Pi;
+            const float frac = (haveLengths && total > 0.f)
+                                   ? cumulative / total
+                                   : static_cast<float>(bar) / static_cast<float>(m_outerRingBars);
+            if (haveLengths)
+            {
+                cumulative += m_barFrameLengths[static_cast<size_t>(bar)];
+            }
+            const float angle = kBeatAngle + frac * k2Pi;
             const bool first = (bar == 0);
             g.setColour(juce::Colour(c.cols[first ? 9 : 4]).withAlpha(first ? 0.90f : 0.45f));
             g.drawLine(
@@ -425,6 +457,7 @@ class CircularLoopDisplay : public juce::Component
     float m_barPhase{0.f};
     float m_playhead{0.f};
     int m_outerRingBars{1};
+    std::vector<float> m_barFrameLengths;
     juce::String m_stateLabel;
     juce::String m_label;
     juce::String m_barBeatLabel;
