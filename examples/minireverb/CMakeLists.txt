@@ -80,7 +80,14 @@ list(FILTER SourceFiles EXCLUDE REGEX ".*GenericImpl\\.h$")
 # Include directories for AbacDsp library (from main project)
 target_include_directories("${PROJECT_NAME}" PUBLIC ../../src/includes)
 
-target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
+# Add pffft from submodule (needed by the phase-vocoder pitch shifter)
+set(PFFFT_DIR "${PROJECT_SOURCE_DIR}/../../3rdparty/pffft")
+target_include_directories("${PROJECT_NAME}" PRIVATE ${PFFFT_DIR})
+
+target_sources(
+    "${PROJECT_NAME}"
+    PRIVATE ${SourceFiles} ${PFFFT_DIR}/pffft.c ${PFFFT_DIR}/pffft_common.c
+)
 
 # Fix source_group to use correct root path for this project
 source_group(
