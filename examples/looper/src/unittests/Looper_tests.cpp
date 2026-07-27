@@ -1002,6 +1002,148 @@ TEST(RecordingModes, CountInPlaysClickThenStartsRecordingAfterNBars)
     EXPECT_TRUE(looper.isRecording());
 }
 
+TEST(RecordingModes, PresetBarsAutoStopWorksAfterCountIn)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setCountInBars(2);
+    looper.setAutoStop(true);
+    looper.setRecordBars(2);
+
+    Buffer in{};
+    Buffer out{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        in(i, 0) = 0.3f;
+        in(i, 1) = -0.3f;
+    }
+
+    looper.setRecord(true);
+    looper.processBlock(in, out); // begins count-in
+    ASSERT_TRUE(looper.isCountingIn());
+
+    while (looper.isCountingIn())
+    {
+        looper.processBlock(in, out);
+    }
+    ASSERT_TRUE(looper.isRecording());
+
+    constexpr size_t kExpectedLength = 2 * kSamplesPerBar;
+    size_t elapsed = 0;
+    while (looper.isRecording())
+    {
+        looper.processBlock(in, out);
+        elapsed += kBlock;
+        ASSERT_LE(elapsed, kExpectedLength + 4 * kBlock) << "recording never auto-stopped";
+    }
+    EXPECT_TRUE(looper.isPlaying());
+    EXPECT_EQ(looper.rawLoopLengthFrames(), kExpectedLength);
+}
+
+TEST(RecordingModes, PresetBarsAutoStopCapturesCorrectContentThroughoutIncludingLastBar)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setAutoStop(true);
+    looper.setRecordBars(2);
+    looper.setFadeMs(0.f);
+
+    looper.setRecord(true);
+
+    constexpr size_t kExpectedLength = 2 * kSamplesPerBar;
+    Buffer out{};
+    size_t frame = 0;
+    for (;;)
+    {
+        Buffer in{};
+        for (size_t i = 0; i < kBlock; ++i)
+        {
+            const float v = 0.001f * static_cast<float>(frame + i + 1);
+            in(i, 0) = v;
+            in(i, 1) = -v;
+        }
+        looper.processBlock(in, out);
+        frame += kBlock;
+        if (!looper.isRecording())
+        {
+            break;
+        }
+        ASSERT_LE(frame, kExpectedLength + 4 * kBlock) << "recording never auto-stopped";
+    }
+    ASSERT_TRUE(looper.isPlaying());
+    ASSERT_EQ(looper.rawLoopLengthFrames(), kExpectedLength);
+
+    // Every recorded frame should match the ramp value actually fed at that
+    // same real-time position (immediate button-press start means loop frame
+    // 0 is the very first sample fed), including the final bar right up to
+    // the auto-stop boundary.
+    for (size_t f = 0; f < kExpectedLength; ++f)
+    {
+        const float expected = 0.001f * static_cast<float>(f + 1);
+        EXPECT_NEAR(looper.rawLoopSample(f, 0), expected, 1e-4f) << "frame " << f;
+    }
+}
+
+// Sweeps realistic BPM values at a real sample rate/block size (48kHz, 512),
+// exactly reproducing a reported scenario: 2 bars count-in, Auto Stop with
+// Record Bars=4, no threshold. The 5120Hz/kBlock=16 fixture above divides
+// bar length by block size exactly (640 blocks/bar); this checks whether a
+// less convenient real-world block/bar alignment exposes a miscount that the
+// clean fixture masks.
+TEST(RecordingModes, PresetBarsAutoStopAfterCountInStaysExactAcrossRealisticBpms)
+{
+    using RealLooper = LooperImpl<512>;
+    using RealBuffer = AbacDsp::AudioBuffer<2, 512>;
+    constexpr float kRealSampleRate = 48000.f;
+
+    for (const float bpm : {90.f, 100.f, 110.f, 120.f, 128.f, 130.f, 135.f, 140.f, 150.f, 160.f, 174.f})
+    {
+        RealLooper looper(kRealSampleRate);
+        looper.setBpm(bpm);
+        looper.setThreshRec(false);
+        looper.setCountInBars(2);
+        looper.setAutoStop(true);
+        looper.setRecordBars(4);
+
+        RealBuffer in{};
+        RealBuffer out{};
+        for (size_t i = 0; i < 512; ++i)
+        {
+            in(i, 0) = 0.3f;
+            in(i, 1) = -0.3f;
+        }
+
+        looper.setRecord(true);
+        looper.processBlock(in, out); // begins count-in
+        ASSERT_TRUE(looper.isCountingIn()) << "bpm=" << bpm;
+
+        int guard = 0;
+        while (looper.isCountingIn())
+        {
+            looper.processBlock(in, out);
+            ASSERT_LE(++guard, 10000) << "count-in never finished, bpm=" << bpm;
+        }
+        ASSERT_TRUE(looper.isRecording()) << "bpm=" << bpm;
+
+        guard = 0;
+        while (looper.isRecording())
+        {
+            looper.processBlock(in, out);
+            ASSERT_LE(++guard, 10000) << "recording never auto-stopped, bpm=" << bpm;
+        }
+        ASSERT_TRUE(looper.isPlaying()) << "bpm=" << bpm;
+        EXPECT_EQ(looper.getOuterRingBars(), 4) << "bpm=" << bpm << " (ring bar count after finalize)";
+
+        const size_t spb = looper.getSamplesPerBar();
+        const size_t expectedLength = 4 * spb;
+        EXPECT_NEAR(static_cast<double>(looper.rawLoopLengthFrames()), static_cast<double>(expectedLength),
+                    static_cast<double>(spb) * 0.5)
+            << "bpm=" << bpm;
+    }
+}
+
 TEST(RecordingModes, CountInCanBeCancelledByPressingRecordAgain)
 {
     Looper looper(kSampleRate);
@@ -1019,6 +1161,39 @@ TEST(RecordingModes, CountInCanBeCancelledByPressingRecordAgain)
     looper.processBlock(in, out);
     EXPECT_FALSE(looper.isCountingIn());
     EXPECT_FALSE(looper.isRecording());
+}
+
+TEST(RecordingModes, PresetBarsAutoStopWorksWithThresholdArmedStart)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(true);
+    looper.setRecThreshold(-24.f);
+    looper.setAutoStop(true);
+    looper.setRecordBars(2);
+    looper.setFadeMs(0.f);
+
+    looper.setRecord(true); // arm
+    runSilence(looper, kBlock);
+
+    // Trigger the threshold crossing partway into a bar (not block-0-aligned),
+    // mimicking a realistic performer start rather than an exact tick.
+    runSilence(looper, 3 * kBlock);
+    runDoubletBlock(looper);
+    ASSERT_TRUE(looper.isRecording());
+
+    constexpr size_t kExpectedLength = 2 * kSamplesPerBar;
+    Buffer in{};
+    Buffer out{};
+    size_t elapsed = 0;
+    while (looper.isRecording())
+    {
+        looper.processBlock(in, out);
+        elapsed += kBlock;
+        ASSERT_LE(elapsed, kExpectedLength + 4 * kBlock) << "recording never auto-stopped";
+    }
+    EXPECT_TRUE(looper.isPlaying());
+    EXPECT_EQ(looper.rawLoopLengthFrames(), kExpectedLength);
 }
 
 TEST(RecordingModes, PresetBarsAutoStopsAfterExactlyNBars)

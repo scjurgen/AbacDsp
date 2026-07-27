@@ -873,6 +873,7 @@ class LooperImpl final : public EffectBase
         }
 
         m_absPos += BlockSize;
+        m_suppressNextBarIndexIncrement = false;
     }
 
   private:
@@ -987,6 +988,17 @@ class LooperImpl final : public EffectBase
         }
         else if (isRecording())
         {
+            // A bar-locked take started via Count-In begins exactly on a bar
+            // boundary, so the very wrap that ends count-in can fire in the same
+            // block that flips isRecording() true (before that block's own
+            // render pass), crediting a bar that was never actually recorded.
+            // Suppress exactly that one spurious wrap; see beginBarLockedRecord()
+            // and the unconditional clear at the end of processBlock().
+            if (m_suppressNextBarIndexIncrement)
+            {
+                m_suppressNextBarIndexIncrement = false;
+                return;
+            }
             ++m_takeBarIndex;
             if (m_pendingTimeSignature != m_appliedTimeSignature)
             {
@@ -1695,6 +1707,7 @@ class LooperImpl final : public EffectBase
         // whatever meter m_seq was left at by a previous take/playback cycle.
         installTimeSignature(m_pendingTimeSignature);
         m_takeBarIndex = 0;
+        m_suppressNextBarIndexIncrement = true;
         m_meterTimeline.clear();
         const auto& sig0 = kTimeSignatures[static_cast<size_t>(m_appliedTimeSignature)];
         m_meterTimeline.addSegment(0, sig0.beatsPerBar, sig0.eighthUnit);
@@ -1898,6 +1911,10 @@ class LooperImpl final : public EffectBase
     AbacDsp::MeterTimeline m_meterTimeline;
     size_t m_takeBarIndex{0};      // bars elapsed since this take's own start (beginBarLockedRecord)
     size_t m_finalizedBarCount{0}; // total bars in the current loop, for playback timeline wraparound
+    // One-shot: set whenever a bar-locked take starts, consumed by the first bar
+    // wrap applyMeterAtBarBoundary() sees, unconditionally cleared at the end of
+    // processBlock() so it can only ever suppress a wrap in that same block.
+    bool m_suppressNextBarIndexIncrement{false};
     std::atomic<float> m_fadeMs{5.f};
     float m_loopGain{1.f};
     float m_clickRecordGain{0.f};
