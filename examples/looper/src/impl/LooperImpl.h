@@ -556,6 +556,15 @@ class LooperImpl final : public EffectBase
             }
             return static_cast<int>(m_recorder.recordedFrames() / spb) + 1;
         }
+        // Prefer the finalized bar count over a live recompute: a mixed-meter
+        // loop's live beatsPerBar changes bar-to-bar during playback replay
+        // (applyMeterAtBarBoundary), which would otherwise make len/spb drift as
+        // playback crosses each meter change. Free-record takes never populate
+        // m_finalizedBarCount, so they keep the len/spb fallback below unchanged.
+        if (m_finalizedBarCount > 0)
+        {
+            return static_cast<int>(m_finalizedBarCount);
+        }
         const size_t len = m_recorder.loopLengthFrames();
         return (len > 0) ? static_cast<int>(std::max<size_t>(1, len / spb)) : 1;
     }
@@ -594,8 +603,15 @@ class LooperImpl final : public EffectBase
         long bar = static_cast<long>(m_seq.barIndex()) - m_countInBarsOffset;
         if (isPlaying() || isOverdubbing())
         {
-            const size_t spb = getSamplesPerBar();
-            const size_t barsInLoop = (spb > 0) ? m_recorder.loopLengthFrames() / spb : 0;
+            // Prefer the finalized bar count over a live recompute: see the same
+            // reasoning in getOuterRingBars() (a mixed-meter loop's live spb
+            // changes bar-to-bar during playback replay).
+            size_t barsInLoop = m_finalizedBarCount;
+            if (barsInLoop == 0)
+            {
+                const size_t spb = getSamplesPerBar();
+                barsInLoop = (spb > 0) ? m_recorder.loopLengthFrames() / spb : 0;
+            }
             if (barsInLoop > 0)
             {
                 const long n = static_cast<long>(barsInLoop);

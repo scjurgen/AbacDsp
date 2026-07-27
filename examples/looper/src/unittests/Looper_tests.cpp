@@ -1170,6 +1170,71 @@ TEST(TimeSignatureChange, PlaybackReplaysRecordedMeterTimelineAcrossLoopRepeats)
     EXPECT_EQ(looper.getBarBeats(), 4) << "loop repeat should wrap back to bar 0's meter";
 }
 
+TEST(TimeSignatureChange, OuterRingAndBarLabelStableAcrossMeterChangeDuringPlayback)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setAutoStop(true);
+    looper.setRecordBars(2);
+    looper.setTimeSignature(2); // 4/4
+
+    Buffer in{};
+    Buffer out{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        in(i, 0) = 0.3f;
+        in(i, 1) = -0.3f;
+    }
+
+    looper.setRecord(true);
+    looper.processBlock(in, out);
+    ASSERT_TRUE(looper.isRecording());
+
+    looper.setTimeSignature(1); // 3/4, queued to apply at bar 2
+    constexpr size_t kBlocksPerBar4_4 = kSamplesPerBar / kBlock;
+    for (size_t call = 1; call < kBlocksPerBar4_4 - 1; ++call)
+    {
+        looper.processBlock(in, out);
+    }
+    looper.processBlock(in, out); // crosses into bar 2
+
+    constexpr size_t kSamplesPerBar3_4 = kSamplesPerBeat * 3;
+    constexpr size_t kBlocksPerBar3_4 = kSamplesPerBar3_4 / kBlock;
+    size_t safety = 0;
+    while (looper.isRecording())
+    {
+        looper.processBlock(in, out);
+        ASSERT_LE(++safety, kBlocksPerBar3_4 + 10) << "recording never auto-stopped";
+    }
+    ASSERT_TRUE(looper.isPlaying());
+
+    // The take-wide bar count must stay 2 regardless of which bar's meter the
+    // live clock currently shows. Before the fix, getOuterRingBars() recomputed
+    // loopLengthFrames()/getSamplesPerBar() from the LIVE (fluctuating) meter,
+    // which for this exact loop (a 4/4 bar plus a 3/4 bar) read 1 during the
+    // 4/4 bar and 2 during the 3/4 bar -- an unstable count that made the ring
+    // visibly redraw wrong right at the meter change.
+    EXPECT_EQ(looper.getOuterRingBars(), 2) << "bar 1 (4/4) of playback";
+    EXPECT_EQ(looper.getBarFrameLengths().size(), 2u);
+    EXPECT_EQ(looper.getBarBeatLabel(), "1.1");
+
+    for (size_t call = 0; call < kBlocksPerBar4_4; ++call)
+    {
+        looper.processBlock(in, out);
+    }
+    EXPECT_EQ(looper.getOuterRingBars(), 2) << "bar 2 (3/4) of playback";
+    EXPECT_EQ(looper.getBarFrameLengths().size(), 2u);
+    EXPECT_EQ(looper.getBarBeatLabel(), "2.1");
+
+    for (size_t call = 0; call < kBlocksPerBar3_4; ++call)
+    {
+        looper.processBlock(in, out);
+    }
+    EXPECT_EQ(looper.getOuterRingBars(), 2) << "loop repeat, back in bar 1 (4/4)";
+    EXPECT_EQ(looper.getBarBeatLabel(), "1.1") << "loop repeat should wrap the bar label back to 1.1";
+}
+
 TEST(RecordingModes, PlayStopsActiveRecording)
 {
     Looper looper(kSampleRate);
