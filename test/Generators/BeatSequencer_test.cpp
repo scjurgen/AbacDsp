@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <tuple>
 #include <vector>
 
 #include "Generators/BeatSequencer.h"
@@ -92,6 +93,42 @@ TEST(BeatSequencerTest, BarWrapFlagFiresOncePerBar)
         }
     }
     EXPECT_EQ(wraps, 4u);
+}
+
+TEST(BeatSequencerTest, BarIndexIncrementsOnceBarBoundaryIsCrossed)
+{
+    BeatSequencer seq{kSampleRate};
+    seq.setBpm(120.f);
+    seq.setBeatsPerBar(3);
+
+    const size_t samplesPerBar = seq.samplesPerBeat() * 3;
+    EXPECT_EQ(seq.barIndex(), 0u);
+    for (size_t i = 0; i < samplesPerBar; ++i)
+    {
+        std::ignore = seq.advance();
+    }
+    EXPECT_EQ(seq.barIndex(), 1u);
+    for (size_t i = 0; i < samplesPerBar * 2; ++i)
+    {
+        std::ignore = seq.advance();
+    }
+    EXPECT_EQ(seq.barIndex(), 3u);
+}
+
+TEST(BeatSequencerTest, ResetZeroesBarIndex)
+{
+    BeatSequencer seq{kSampleRate};
+    seq.setBpm(120.f);
+    seq.setBeatsPerBar(2);
+
+    const size_t samplesPerBar = seq.samplesPerBeat() * 2;
+    for (size_t i = 0; i < samplesPerBar * 3; ++i)
+    {
+        std::ignore = seq.advance();
+    }
+    ASSERT_GT(seq.barIndex(), 0u);
+    seq.reset();
+    EXPECT_EQ(seq.barIndex(), 0u);
 }
 
 TEST(BeatSequencerTest, EighthSubdivisionAtBeatMidpoint)

@@ -282,9 +282,9 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             std::make_unique<juce::AudioParameterBool>(juce::ParameterID("freeRecord", 1), "Free Record", 0));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("countInBars", 1), "Count-In",
                                                                       juce::StringArray{"Off", "1 Bar", "2 Bars"}, 0));
-        params.push_back(
-            std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("recordBars", 1), "Record Bars",
-                                                         juce::StringArray{"Manual", "1", "2", "4", "8", "16"}, 0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("recordBars", 1), "Record Bars",
+            juce::StringArray{"Manual", "1", "2", "4", "8", "12", "16"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID("sliceDivision", 1), "Division", juce::StringArray{"1/4", "1/8", "1/16", "1/32"}, 1));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -791,6 +791,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     [[nodiscard]] juce::String getLooperStateLabel() const
     {
         return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String();
+    }
+    [[nodiscard]] juce::String getBarBeatLabel() const
+    {
+        return pluginRunner ? juce::String(pluginRunner->getBarBeatLabel()) : juce::String();
     }
     [[nodiscard]] juce::String getSequencerLabel() const
     {

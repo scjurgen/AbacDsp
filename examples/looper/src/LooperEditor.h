@@ -191,6 +191,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             beatGauge.setPlayheadNormalized(processorRef.getPlayheadNormalized());
             beatGauge.setOuterRingBars(processorRef.getOuterRingBars());
             beatGauge.setStateLabel(processorRef.getLooperStateLabel());
+            beatGauge.setBarBeatLabel(processorRef.getBarBeatLabel());
             beatGauge.setSpectrogram(processorRef.getSpectrogramData());
             beatGauge.setRecordHeadFrames(processorRef.getSpectrogramHeadFrames());
             sliceGauge.setSampleRate(static_cast<float>(processorRef.getSampleRate()));

@@ -21,7 +21,7 @@
     {"short": "CIN",  "type": "drop",   "display": "Count-In",   "symbol": "countInBars", "default": 0,
       "listitems": ["Off", "1 Bar", "2 Bars"]},
     {"short": "RBAR", "type": "drop",   "display": "Record Bars", "symbol": "recordBars", "default": 0,
-      "listitems": ["Manual", "1", "2", "4", "8", "16"]},
+      "listitems": ["Manual", "1", "2", "4", "8", "12","16"]},
     {"short": "DIV",  "type": "drop",   "display": "Division",   "symbol": "sliceDivision", "default": 1,
       "listitems": ["1/4", "1/8", "1/16", "1/32"]},
     {"short": "BPM",  "type": "dial",   "display": "BPM",         "symbol": "bpm",        "default": 120,
@@ -56,6 +56,7 @@
         {"call": "setPlayheadNormalized", "from": "getPlayheadNormalized"},
         {"call": "setOuterRingBars", "from": "getOuterRingBars"},
         {"call": "setStateLabel", "from": "getLooperStateLabel"},
+        {"call": "setBarBeatLabel", "from": "getBarBeatLabel"},
         {"call": "setSpectrogram", "from": "getSpectrogramData"},
         {"call": "setRecordHeadFrames", "from": "getSpectrogramHeadFrames"}
       ]},
@@ -113,6 +114,7 @@
   "extra_processor_methods": [
     "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }",
     "[[nodiscard]] juce::String getLooperStateLabel() const { return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String(); }",
+    "[[nodiscard]] juce::String getBarBeatLabel() const { return pluginRunner ? juce::String(pluginRunner->getBarBeatLabel()) : juce::String(); }",
     "[[nodiscard]] juce::String getSequencerLabel() const { return pluginRunner ? juce::String(pluginRunner->getSequencerStateLabel()) : juce::String(); }",
     "static std::string getLoopsDirectory() {\n        auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);\n#if JUCE_MAC\n        base = base.getChildFile(\"Application Support\");\n#endif\n        const auto dir = base.getChildFile(\"AbacDsp\").getChildFile(\"Looper\").getChildFile(\"loops\");\n        dir.createDirectory();\n        return dir.getFullPathName().toStdString();\n    }",
     "[[nodiscard]] std::vector<juce::String> listLoopNames() const { std::vector<juce::String> result; if (pluginRunner) { for (const auto& n : pluginRunner->listLoopNames()) { result.push_back(juce::String(n)); } } return result; }",

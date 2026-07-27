@@ -80,6 +80,12 @@ class CircularLoopDisplay : public juce::Component
     {
         m_stateLabel = label;
     }
+    // "bar.beat" position (e.g. "2.3"), generic over whatever beatsPerBar the
+    // processor is currently using.
+    void setBarBeatLabel(const juce::String& label)
+    {
+        m_barBeatLabel = label;
+    }
 
     // --- Outer ring spectrogram (live while recording) ---
     void setSpectrogram(const AbacDsp::SpectrumImageSet& spectro) noexcept
@@ -131,7 +137,7 @@ class CircularLoopDisplay : public juce::Component
 
   private:
     static constexpr float kPad = 8.f;
-    static constexpr float kTitleH = 16.f;
+    static constexpr float kTitleH = 26.f;
     static constexpr float kHalfPi = std::numbers::pi_v<float> / 2.f;
     static constexpr float k2Pi = std::numbers::pi_v<float> * 2.f;
     static constexpr float kBeatAngle = -kHalfPi; // downbeat at 12 o'clock
@@ -382,7 +388,7 @@ class CircularLoopDisplay : public juce::Component
     void drawLabels(juce::Graphics& g, const GuiConstants::Colors& c) const
     {
         const auto titleBounds = getLocalBounds().toFloat().reduced(kPad).removeFromTop(kTitleH);
-        g.setFont(juce::Font(juce::FontOptions(12.f)));
+        g.setFont(juce::Font(juce::FontOptions(21.f)));
         if (m_stateLabel.isNotEmpty())
         {
             g.setColour(juce::Colour(c.cols[7]).withAlpha(0.85f));
@@ -392,6 +398,11 @@ class CircularLoopDisplay : public juce::Component
         {
             g.setColour(juce::Colour(c.cols[7]).withAlpha(0.55f));
             g.drawText(m_label, titleBounds, juce::Justification::centredRight);
+        }
+        if (m_barBeatLabel.isNotEmpty())
+        {
+            g.setColour(juce::Colour(c.cols[9]).withAlpha(0.85f));
+            g.drawText(m_barBeatLabel, titleBounds, juce::Justification::centred);
         }
     }
 
@@ -416,6 +427,7 @@ class CircularLoopDisplay : public juce::Component
     int m_outerRingBars{1};
     juce::String m_stateLabel;
     juce::String m_label;
+    juce::String m_barBeatLabel;
 
     AbacDsp::SpectrumImageSet m_spectro{};
     size_t m_recordHeadFrames{0};

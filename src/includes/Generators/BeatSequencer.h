@@ -70,6 +70,7 @@ class BeatSequencer
     {
         m_beatSamplePos = 0;
         m_beatIndexInBar = 0;
+        m_barIndex = 0;
     }
 
     void resetBarPosition() noexcept
@@ -98,6 +99,7 @@ class BeatSequencer
             {
                 m_beatIndexInBar = 0;
                 event.barWrapped = true;
+                ++m_barIndex;
             }
         }
         return event;
@@ -140,6 +142,13 @@ class BeatSequencer
     [[nodiscard]] size_t beatIndexInBar() const noexcept
     {
         return m_beatIndexInBar;
+    }
+
+    // Absolute bar count since the last reset() (never wraps). Together with
+    // beatIndexInBar(), gives a generic bar.beat position for any beatsPerBar.
+    [[nodiscard]] size_t barIndex() const noexcept
+    {
+        return m_barIndex;
     }
 
     [[nodiscard]] size_t beatsPerBar() const noexcept
@@ -246,6 +255,7 @@ class BeatSequencer
     size_t m_samplesPerBeat{0};
     size_t m_beatSamplePos{0};
     size_t m_beatIndexInBar{0};
+    size_t m_barIndex{0};
 
     std::vector<size_t> m_subPositions;
 };

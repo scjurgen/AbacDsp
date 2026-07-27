@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -496,8 +497,10 @@ class LooperImpl final : public EffectBase
     }
 
     // Angular span of the outer loop ring, in whole bars. Empty shows one bar so
-    // the clock still reads; while recording the ring extends one bar ahead of the
-    // playhead so the bar in progress is already drawn full.
+    // the clock still reads. While recording a preset bar count (Record Bars != Manual),
+    // the ring is already sized to that fixed target; a Manual take has no known
+    // length yet, so the ring extends one bar ahead of the playhead instead, growing
+    // as the take does.
     [[nodiscard]] int getOuterRingBars() const noexcept
     {
         const size_t spb = getSamplesPerBar();
@@ -507,10 +510,36 @@ class LooperImpl final : public EffectBase
         }
         if (isRecording())
         {
+            const size_t fixedBars = recordBarsIndexToCount(m_recordBars);
+            if (fixedBars > 0)
+            {
+                return static_cast<int>(fixedBars);
+            }
             return static_cast<int>(m_recorder.recordedFrames() / spb) + 1;
         }
         const size_t len = m_recorder.loopLengthFrames();
         return (len > 0) ? static_cast<int>(std::max<size_t>(1, len / spb)) : 1;
+    }
+
+    // "bar.beat" position, 1-based, generic over beatsPerBar (no fixed 4/4 assumption).
+    // A count-in runs up to bar 1 from a negative/zero number (e.g. a 2-bar count-in
+    // is -1, 0, then 1 is the real start of the take). Once recording, the bar count
+    // just runs up; once a fixed-length loop is playing back, it wraps to 1 every
+    // time the loop repeats.
+    [[nodiscard]] std::string getBarBeatLabel() const
+    {
+        long bar = static_cast<long>(m_seq.barIndex()) - m_countInBarsOffset;
+        if (isPlaying() || isOverdubbing())
+        {
+            const size_t spb = getSamplesPerBar();
+            const size_t barsInLoop = (spb > 0) ? m_recorder.loopLengthFrames() / spb : 0;
+            if (barsInLoop > 0)
+            {
+                const long n = static_cast<long>(barsInLoop);
+                bar = ((bar % n) + n) % n;
+            }
+        }
+        return std::format("{}.{}", bar + 1, m_seq.beatIndexInBar() + 1);
     }
 
     [[nodiscard]] float getBarPhase() const noexcept
@@ -912,16 +941,32 @@ class LooperImpl final : public EffectBase
         }
         else if (m_countInBars > 0)
         {
+            resetTimekeeper(false); // count-in needs its beat 1 click to actually count something
             beginCountIn();
         }
         else if (m_threshRecReq.load(std::memory_order_relaxed))
         {
-            m_armed = true; // wait for the input to cross the threshold
+            resetTimekeeper(false); // the performer needs an audible downbeat while waiting to play in
+            m_armed = true;         // wait for the input to cross the threshold
         }
         else
         {
+            resetTimekeeper(false); // beat 1 of a fresh take is a real downbeat, not a resync artifact
             startRecording();
         }
+    }
+
+    // Every fresh take starts the timekeeper at bar 1 beat 1: there is no more
+    // free-running master clock, so Play/Record are the only places it moves
+    // from stopped to running. suppressFirstClick distinguishes a pure phase
+    // resync (Play-resume, freeze completion: the next beatStart is an artifact
+    // of the jump, not a real beat) from a fresh Record start, where beat 1 is
+    // a real downbeat the performer needs to hear.
+    void resetTimekeeper(const bool suppressFirstClick) noexcept
+    {
+        m_seq.reset();
+        m_suppressNextClick = suppressFirstClick;
+        m_countInBarsOffset = 0;
     }
 
     // Takes priority over threshold-arming: count-in always auto-starts once
@@ -929,6 +974,7 @@ class LooperImpl final : public EffectBase
     void beginCountIn()
     {
         m_countingIn = true;
+        m_countInBarsOffset = m_countInBars;
         const size_t spb = m_seq.samplesPerBeat();
         const size_t samplesPerBar = spb * kBeatsPerBar;
         long off = (spb > 0) ? m_seq.samplesToNearestBar() : 0;
@@ -968,10 +1014,8 @@ class LooperImpl final : public EffectBase
         }
         else if (m_recorder.hasLoop())
         {
-            // stop() rewound the loop to frame 0; resync the free-running clock
-            // to match (the other exception to "never reset it", besides host sync).
-            m_seq.reset();
-            m_suppressNextClick = true; // the reset creates an artificial beatStart, not a real one
+            // stop() rewound the loop to frame 0; resync the timekeeper to match.
+            resetTimekeeper(true);
             m_recorder.play();
         }
     }
@@ -1089,12 +1133,9 @@ class LooperImpl final : public EffectBase
             rebuildPatternForCurrentLoop();
             populatePatternFromTrack(track);
             // Re-prime the engine's own bar index for the new pattern, and
-            // realign the clock to the pattern's origin (frame 0 = downbeat) -
-            // the third deliberate exception to "never reset it", with host
-            // sync and Stop/Play-resume.
+            // realign the timekeeper to the pattern's origin (frame 0 = downbeat).
             m_sequencer.setPattern(&m_pattern);
-            m_seq.reset();
-            m_suppressNextClick = true;
+            resetTimekeeper(true);
         }
     }
 
@@ -1472,13 +1513,22 @@ class LooperImpl final : public EffectBase
         return peak;
     }
 
+    // No more free-running master clock: m_seq only advances while the transport is
+    // actually doing something (recording, playing back, armed, or counting in), or
+    // while the independent sequencer is soloing a frozen pattern. Fully stopped/
+    // waiting holds the clock (and the bar display feed) frozen at its last position.
     // Click and sequencer share one m_seq.advance() call per sample (it mutates position).
     void renderClickAndSequencer(std::array<float, BlockSize>& click, AbacDsp::AudioBuffer<2, BlockSize>& seqOut)
     {
         const bool active = isRecording() || isPlaying() || m_armed || m_countingIn;
+        const bool transportRunning = active || m_sequencerPlaying;
         const size_t samplesPerBeat = m_seq.samplesPerBeat();
         for (size_t i = 0; i < BlockSize; ++i)
         {
+            if (!transportRunning)
+            {
+                continue;
+            }
             const auto event = m_seq.advance();
             m_barPos[i] = event.beatIndexInBar * samplesPerBeat + event.beatSamplePos;
             if (active)
@@ -1520,7 +1570,7 @@ class LooperImpl final : public EffectBase
         }
     }
 
-    // recordBars dropdown index -> bar count ("Manual", 1, 2, 4, 8, 16).
+
     [[nodiscard]] static size_t recordBarsIndexToCount(const int index) noexcept
     {
         switch (index)
@@ -1534,6 +1584,8 @@ class LooperImpl final : public EffectBase
             case 4:
                 return 8;
             case 5:
+                return 12;
+            case 6:
                 return 16;
             default:
                 return 0; // Manual
@@ -1570,6 +1622,9 @@ class LooperImpl final : public EffectBase
     int m_countInBars{0};
     bool m_countingIn{false};
     uint64_t m_countInEndTickAbs{0};
+    // bar.beat display offset: count-in bars are numbered ..., -1, 0 leading into
+    // bar 1 (the real start of the take). Zero for takes with no count-in.
+    int m_countInBarsOffset{0};
     std::atomic<float> m_fadeMs{5.f};
     float m_loopGain{1.f};
     float m_clickRecordGain{0.f};
