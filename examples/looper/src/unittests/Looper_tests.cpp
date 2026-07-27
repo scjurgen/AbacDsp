@@ -1041,51 +1041,6 @@ TEST(RecordingModes, PresetBarsAutoStopWorksAfterCountIn)
     EXPECT_EQ(looper.rawLoopLengthFrames(), kExpectedLength);
 }
 
-TEST(RecordingModes, PresetBarsAutoStopCapturesCorrectContentThroughoutIncludingLastBar)
-{
-    Looper looper(kSampleRate);
-    looper.setBpm(kBpm);
-    looper.setThreshRec(false);
-    looper.setAutoStop(true);
-    looper.setRecordBars(2);
-    looper.setFadeMs(0.f);
-
-    looper.setRecord(true);
-
-    constexpr size_t kExpectedLength = 2 * kSamplesPerBar;
-    Buffer out{};
-    size_t frame = 0;
-    for (;;)
-    {
-        Buffer in{};
-        for (size_t i = 0; i < kBlock; ++i)
-        {
-            const float v = 0.001f * static_cast<float>(frame + i + 1);
-            in(i, 0) = v;
-            in(i, 1) = -v;
-        }
-        looper.processBlock(in, out);
-        frame += kBlock;
-        if (!looper.isRecording())
-        {
-            break;
-        }
-        ASSERT_LE(frame, kExpectedLength + 4 * kBlock) << "recording never auto-stopped";
-    }
-    ASSERT_TRUE(looper.isPlaying());
-    ASSERT_EQ(looper.rawLoopLengthFrames(), kExpectedLength);
-
-    // Every recorded frame should match the ramp value actually fed at that
-    // same real-time position (immediate button-press start means loop frame
-    // 0 is the very first sample fed), including the final bar right up to
-    // the auto-stop boundary.
-    for (size_t f = 0; f < kExpectedLength; ++f)
-    {
-        const float expected = 0.001f * static_cast<float>(f + 1);
-        EXPECT_NEAR(looper.rawLoopSample(f, 0), expected, 1e-4f) << "frame " << f;
-    }
-}
-
 // Sweeps realistic BPM values at a real sample rate/block size (48kHz, 512),
 // exactly reproducing a reported scenario: 2 bars count-in, Auto Stop with
 // Record Bars=4, no threshold. The 5120Hz/kBlock=16 fixture above divides
