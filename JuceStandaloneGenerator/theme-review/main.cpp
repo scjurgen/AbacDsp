@@ -16,6 +16,7 @@
 #include "GuiConstants.h"
 #include "themes/Themes.h"
 
+#include "CircularBarDisplay.h"
 #include "CpuMeter.h"
 #include "CustomRotaryDial.h"
 #include "GenericMeter.h"
@@ -170,6 +171,14 @@ class ThemePanel : public juce::Component
         m_signal.setLabelText("Signal");
         m_signal.update(makeFakeWaveform());
 
+        addAndMakeVisible(m_circularBar);
+        m_circularBar.setLabelText("Beat");
+        m_circularBar.setSamplesPerBar(4 * 12000);
+        m_circularBar.setBarBeats(4);
+        m_circularBar.setBarPhase(0.4f);
+        m_circularBar.setSubdivisionPositions({3000, 6000, 9000});
+        m_circularBar.update(makeFakeWaveform());
+
         addAndMakeVisible(m_spectrogramGradientBar);
 
         addAndMakeVisible(m_statusBar);
@@ -199,6 +208,7 @@ class ThemePanel : public juce::Component
 
         m_cpu.setBounds(top.removeFromLeft(70));
         m_levels.setBounds(top.removeFromLeft(110));
+        m_circularBar.setBounds(top.removeFromLeft(120).reduced(4, 0));
         m_signal.setBounds(top.reduced(4, 0));
 
         auto bottom = area.reduced(0, 4);
@@ -221,6 +231,7 @@ class ThemePanel : public juce::Component
     SpectrogramDisplay m_spectrogram;
     SpectrogramGradientBar m_spectrogramGradientBar;
     WaveformGauge m_signal;
+    CircularBarDisplay m_circularBar;
     StatusBar m_statusBar;
     RoleSwatchStrip m_swatches;
     std::vector<float> m_spectrumData;

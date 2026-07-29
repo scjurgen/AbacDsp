@@ -91,6 +91,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         pluginRunner = std::make_unique<LooperImpl<NumSamplesPerBlock>>(RateNormalizer::kInternalSampleRate);
         pluginRunner->setLoopsDirectory(getLoopsDirectory());
+        if (m_pendingExtraState.getSize() > 0)
+        {
+            pluginRunner->restoreExtraState(
+                {static_cast<const std::byte*>(m_pendingExtraState.getData()), m_pendingExtraState.getSize()});
+            m_pendingExtraState.reset();
+        }
 
         fixedRunner = std::make_unique<RateNormalizer>(static_cast<float>(sampleRate),
                                                        [this](const AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& input,
@@ -247,6 +253,17 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         std::unique_ptr<juce::XmlElement> xml(state.createXml());
         if (xml != nullptr)
         {
+            if (pluginRunner)
+            {
+                const auto extraStateBlob = pluginRunner->captureExtraState();
+                if (!extraStateBlob.empty())
+                {
+                    xml->createNewChildElement("ExtraState")
+                        ->addTextElement(
+                            juce::MemoryBlock(extraStateBlob.data(), extraStateBlob.size()).toBase64Encoding());
+                }
+            }
+
             copyXmlToBinary(*xml, destData);
         }
     }
@@ -266,6 +283,26 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                 // between (observed via auval's parameter-retention test).
                 juce::ValueTree newState = juce::ValueTree::fromXml(*xmlState);
                 juce::MessageManager::callAsync([this, newState] { m_parameters.replaceState(newState); });
+                if (auto* extraStateXml = xmlState->getChildByName("ExtraState"))
+                {
+                    juce::MemoryBlock decodedExtraState;
+                    if (decodedExtraState.fromBase64Encoding(extraStateXml->getAllSubText()) &&
+                        decodedExtraState.getSize() > 0)
+                    {
+                        m_pendingExtraState = decodedExtraState;
+                        juce::MessageManager::callAsync(
+                            [this]
+                            {
+                                if (pluginRunner)
+                                {
+                                    pluginRunner->restoreExtraState(
+                                        {static_cast<const std::byte*>(m_pendingExtraState.getData()),
+                                         m_pendingExtraState.getSize()});
+                                    m_pendingExtraState.reset();
+                                }
+                            });
+                    }
+                }
             }
         }
     }
@@ -964,6 +1001,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 
     std::unique_ptr<RateNormalizer> fixedRunner;
     std::unique_ptr<LooperImpl<NumSamplesPerBlock>> pluginRunner;
+    juce::MemoryBlock m_pendingExtraState;
+
     juce::AudioProcessorValueTreeState m_parameters;
     struct CcSlot
     {

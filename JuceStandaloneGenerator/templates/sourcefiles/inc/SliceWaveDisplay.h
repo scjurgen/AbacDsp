@@ -5,7 +5,6 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <vector>
 
-#include "AppSettings.h"
 #include "GuiConstants.h"
 #include "Sampler/SliceLibrary.h"
 
@@ -18,7 +17,7 @@ class SliceWaveDisplay : public juce::Component
   public:
     SliceWaveDisplay()
     {
-        GuiConstants::buildLut(AppSettings::loadTheme(), m_lut);
+        rebuildLut();
     }
 
     void setSampleRate(float sampleRate) noexcept
@@ -63,7 +62,7 @@ class SliceWaveDisplay : public juce::Component
 
     void updateColors()
     {
-        GuiConstants::buildLut(AppSettings::loadTheme(), m_lut);
+        rebuildLut();
         repaint();
     }
 
@@ -71,7 +70,7 @@ class SliceWaveDisplay : public juce::Component
     {
         const auto& c = GuiConstants::instance().colors;
 
-        g.setColour(juce::Colour(c.cols[0]));
+        g.setColour(juce::Colour(c.backgroundDark));
         g.fillRoundedRectangle(getLocalBounds().toFloat(), 3.f);
 
         constexpr float kPad = 6.f;
@@ -87,17 +86,25 @@ class SliceWaveDisplay : public juce::Component
         g.setFont(juce::Font(juce::FontOptions(12.f)));
         if (m_stateLabel.isNotEmpty())
         {
-            g.setColour(juce::Colour(c.cols[7]).withAlpha(0.85f));
+            g.setColour(juce::Colour(c.labelColour).withAlpha(0.85f));
             g.drawText(m_stateLabel, labelStrip, juce::Justification::centredLeft);
         }
         if (m_title.isNotEmpty())
         {
-            g.setColour(juce::Colour(c.cols[7]).withAlpha(0.55f));
+            g.setColour(juce::Colour(c.labelColour).withAlpha(0.55f));
             g.drawText(m_title, labelStrip, juce::Justification::centredRight);
         }
     }
 
   private:
+    // Reuses the already-live gradient from GuiConstants (rebuilt whenever the theme
+    // changes) instead of independently re-deriving it, so this never drifts out of sync
+    // with what SpectrogramDisplay itself is showing for the same theme.
+    void rebuildLut()
+    {
+        GuiConstants::instance().getSpectrogramGradient().createLookupTable(m_lut, GuiConstants::kLutSize);
+    }
+
     void drawSliceThumbnails(juce::Graphics& g, juce::Rectangle<float> waveArea)
     {
         const int w = std::max(1, static_cast<int>(waveArea.getWidth()));
@@ -171,7 +178,7 @@ class SliceWaveDisplay : public juce::Component
 
     void drawSliceBoundaries(juce::Graphics& g, juce::Rectangle<float> waveArea, const GuiConstants::Colors& c) const
     {
-        g.setColour(juce::Colour(c.cols[6]).withAlpha(0.6f));
+        g.setColour(juce::Colour(c.labelColour).withAlpha(0.4f));
         for (const float b : m_boundaries)
         {
             const float x = waveArea.getX() + waveArea.getWidth() * juce::jlimit(0.f, 1.f, b);
@@ -182,7 +189,7 @@ class SliceWaveDisplay : public juce::Component
     void drawPlayhead(juce::Graphics& g, juce::Rectangle<float> waveArea, const GuiConstants::Colors& c) const
     {
         const float x = waveArea.getX() + waveArea.getWidth() * juce::jlimit(0.f, 1.f, m_playhead);
-        g.setColour(juce::Colour(c.cols[9]).withAlpha(0.9f));
+        g.setColour(juce::Colour(c.statusOutline).withAlpha(0.9f));
         g.drawVerticalLine(static_cast<int>(x), waveArea.getY(), waveArea.getBottom());
     }
 

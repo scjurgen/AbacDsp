@@ -220,6 +220,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         std::unique_ptr<juce::XmlElement> xml(state.createXml());
         if (xml != nullptr)
         {
+            /*EXTRA_GET_STATE_CALLS*/
             copyXmlToBinary(*xml, destData);
         }
     }
@@ -239,6 +240,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                 // between (observed via auval's parameter-retention test).
                 juce::ValueTree newState = juce::ValueTree::fromXml(*xmlState);
                 juce::MessageManager::callAsync([this, newState] { m_parameters.replaceState(newState); });
+                /*EXTRA_SET_STATE_CALLS*/
             }
         }
     }
@@ -587,6 +589,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 
     std::unique_ptr<RateNormalizer> fixedRunner;
     std::unique_ptr</*CLASS_NAME*/> pluginRunner;
+    /*EXTRA_PROCESSOR_MEMBERS*/
     juce::AudioProcessorValueTreeState m_parameters;
     /*START_MIDICC*/
     struct CcSlot

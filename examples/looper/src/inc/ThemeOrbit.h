@@ -221,7 +221,7 @@ class Theme
             result += std::format(", {} {:.3f}%", stops[i], t);
         }
 
-        result += ")";
+        result += ')';
         return result;
     }
 

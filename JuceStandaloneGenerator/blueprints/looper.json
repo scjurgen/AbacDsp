@@ -132,7 +132,17 @@
     "void resolveLoopLoadBpm(const float bpm) { if (pluginRunner) { pluginRunner->resolveLoopLoadBpm(bpm); } }"
   ],
   "extra_prepare_calls": [
-    "pluginRunner->setLoopsDirectory(getLoopsDirectory());"
+    "pluginRunner->setLoopsDirectory(getLoopsDirectory());",
+    "if (m_pendingExtraState.getSize() > 0) { pluginRunner->restoreExtraState({ static_cast<const std::byte*>(m_pendingExtraState.getData()), m_pendingExtraState.getSize() }); m_pendingExtraState.reset(); }"
+  ],
+  "extra_processor_members": [
+    "juce::MemoryBlock m_pendingExtraState;"
+  ],
+  "extra_get_state_calls": [
+    "if (pluginRunner) { const auto extraStateBlob = pluginRunner->captureExtraState(); if (!extraStateBlob.empty()) { xml->createNewChildElement(\"ExtraState\")->addTextElement(juce::MemoryBlock(extraStateBlob.data(), extraStateBlob.size()).toBase64Encoding()); } }"
+  ],
+  "extra_set_state_calls": [
+    "if (auto* extraStateXml = xmlState->getChildByName(\"ExtraState\")) { juce::MemoryBlock decodedExtraState; if (decodedExtraState.fromBase64Encoding(extraStateXml->getAllSubText()) && decodedExtraState.getSize() > 0) { m_pendingExtraState = decodedExtraState; juce::MessageManager::callAsync([this] { if (pluginRunner) { pluginRunner->restoreExtraState({ static_cast<const std::byte*>(m_pendingExtraState.getData()), m_pendingExtraState.getSize() }); m_pendingExtraState.reset(); } }); } }"
   ],
   "protected_files": ["src/unittests/Looper_tests.cpp"],
   "CPP": {

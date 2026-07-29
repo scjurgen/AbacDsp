@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "Analysis/Spectrogram.h"
-#include "AppSettings.h"
 #include "GuiConstants.h"
 
 // Merged looper "clock": an inner disc showing the current bar in detail and an
@@ -22,7 +21,7 @@ class CircularLoopDisplay : public juce::Component
   public:
     CircularLoopDisplay()
     {
-        GuiConstants::buildLut(AppSettings::loadTheme(), m_lut);
+        rebuildLut();
         m_iris = juce::Image(juce::Image::ARGB, kIrisSize, kIrisSize, true);
         buildAnnulus();
     }
@@ -114,7 +113,7 @@ class CircularLoopDisplay : public juce::Component
 
     void updateColors()
     {
-        GuiConstants::buildLut(AppSettings::loadTheme(), m_lut);
+        rebuildLut();
         repaint();
     }
 
@@ -122,7 +121,7 @@ class CircularLoopDisplay : public juce::Component
     {
         const auto& c = GuiConstants::instance().colors;
 
-        g.setColour(juce::Colour(c.cols[0]));
+        g.setColour(juce::Colour(c.backgroundDark));
         g.fillRoundedRectangle(getLocalBounds().toFloat(), 3.f);
 
         if (m_samplesPerBar == 0 || m_barBeats <= 0)
@@ -143,6 +142,14 @@ class CircularLoopDisplay : public juce::Component
     }
 
   private:
+    // Reuses the already-live gradient from GuiConstants (rebuilt whenever the theme
+    // changes) instead of independently re-deriving it via a disk read, so this never
+    // drifts out of sync with what SpectrogramDisplay itself is showing.
+    void rebuildLut()
+    {
+        GuiConstants::instance().getSpectrogramGradient().createLookupTable(m_lut, GuiConstants::kLutSize);
+    }
+
     static constexpr float kPad = 8.f;
     static constexpr float kTitleH = 26.f;
     static constexpr float kHalfPi = std::numbers::pi_v<float> / 2.f;
@@ -269,7 +276,8 @@ class CircularLoopDisplay : public juce::Component
             value = std::pow(std::max(value, 0.f), 0.15f);
             const int lutIdx =
                 juce::jlimit(0, GuiConstants::kLutSize - 1, static_cast<int>(value * (GuiConstants::kLutSize - 1)));
-            bd.setPixelColour(p.px, p.py, juce::Colour(m_lut[static_cast<size_t>(lutIdx)]));
+            const juce::Colour base = juce::Colour(m_lut[static_cast<size_t>(lutIdx)]);
+            bd.setPixelColour(p.px, p.py, base.withAlpha(juce::jlimit(0.f, 1.f, value)));
         }
     }
 
@@ -283,7 +291,7 @@ class CircularLoopDisplay : public juce::Component
 
     void drawOuterRing(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
     {
-        g.setColour(juce::Colour(c.cols[4]).withAlpha(0.20f));
+        g.setColour(juce::Colour(c.labelColour).withAlpha(0.12f));
         g.drawEllipse(geo.cx - geo.ringInnerR, geo.cy - geo.ringInnerR, 2.f * geo.ringInnerR, 2.f * geo.ringInnerR,
                       1.f);
         g.drawEllipse(geo.cx - geo.ringOuterR, geo.cy - geo.ringOuterR, 2.f * geo.ringOuterR, 2.f * geo.ringOuterR,
@@ -293,6 +301,7 @@ class CircularLoopDisplay : public juce::Component
         drawBarSpokes(g, geo, c);
     }
 
+    // Actual data trace - statusOutline, matching WaveformShow's existing convention.
     void drawLoopWaveformBand(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
     {
         if (m_loopPeaks.size() < 2)
@@ -301,7 +310,7 @@ class CircularLoopDisplay : public juce::Component
         }
         const float band = geo.ringOuterR - geo.ringInnerR;
         const float n = static_cast<float>(m_loopPeaks.size());
-        g.setColour(juce::Colour(c.cols[8]));
+        g.setColour(juce::Colour(c.statusOutline));
         for (size_t i = 0; i < m_loopPeaks.size(); ++i)
         {
             const float angle = kBeatAngle + static_cast<float>(i) / n * k2Pi;
@@ -310,6 +319,8 @@ class CircularLoopDisplay : public juce::Component
         }
     }
 
+    // Many spokes stack up visually - kept faint (except the first-bar marker) so they
+    // don't read as a dark ring, matching the density lesson from CircularBarDisplay.
     void drawBarSpokes(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
     {
         const bool haveLengths = m_barFrameLengths.size() == static_cast<size_t>(m_outerRingBars);
@@ -326,7 +337,7 @@ class CircularLoopDisplay : public juce::Component
             }
             const float angle = kBeatAngle + frac * k2Pi;
             const bool first = (bar == 0);
-            g.setColour(juce::Colour(c.cols[first ? 9 : 4]).withAlpha(first ? 0.90f : 0.45f));
+            g.setColour(juce::Colour(c.labelColour).withAlpha(first ? 0.85f : 0.20f));
             g.drawLine(
                 juce::Line<float>(polar(geo, angle, geo.ringInnerR * 0.98f), polar(geo, angle, geo.ringOuterR * 1.02f)),
                 first ? 2.5f : 1.2f);
@@ -338,12 +349,12 @@ class CircularLoopDisplay : public juce::Component
         const size_t barBeats = static_cast<size_t>(m_barBeats);
         const size_t spb = m_samplesPerBar / barBeats;
 
-        g.setColour(juce::Colour(c.cols[4]).withAlpha(0.18f));
+        g.setColour(juce::Colour(c.labelColour).withAlpha(0.10f));
         g.drawEllipse(geo.cx - geo.baseR, geo.cy - geo.baseR, 2.f * geo.baseR, 2.f * geo.baseR, 0.5f);
 
         if (spb > 0 && !m_subdivisionPositions.empty())
         {
-            g.setColour(juce::Colour(c.cols[6]).withAlpha(0.50f));
+            g.setColour(juce::Colour(c.labelColour).withAlpha(0.25f));
             for (size_t b = 0; b < barBeats; ++b)
             {
                 for (const size_t offset : m_subdivisionPositions)
@@ -361,7 +372,7 @@ class CircularLoopDisplay : public juce::Component
         {
             const float angle = kBeatAngle + static_cast<float>(k) / static_cast<float>(barBeats) * k2Pi;
             const bool downbeat = (k == 0);
-            g.setColour(juce::Colour(c.cols[downbeat ? 9 : 4]).withAlpha(downbeat ? 0.90f : 0.55f));
+            g.setColour(juce::Colour(c.labelColour).withAlpha(downbeat ? 0.85f : 0.25f));
             g.drawLine(juce::Line<float>(polar(geo, angle, geo.innerR * 0.5f),
                                          polar(geo, angle, geo.outerR * (downbeat ? 1.2f : 1.1f))),
                        downbeat ? 2.5f : 1.5f);
@@ -370,6 +381,7 @@ class CircularLoopDisplay : public juce::Component
         drawBarWaveform(g, geo, c);
     }
 
+    // Actual data trace - statusOutline, matching WaveformShow's existing convention.
     void drawBarWaveform(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
     {
         if (m_data.size() < 2)
@@ -391,29 +403,30 @@ class CircularLoopDisplay : public juce::Component
                 wave.lineTo(pt);
             }
         }
-        g.setColour(juce::Colour(c.cols[8]).withAlpha(0.85f));
+        g.setColour(juce::Colour(c.statusOutline).withAlpha(0.85f));
         g.strokePath(wave, juce::PathStrokeType(1.5f));
     }
 
     void drawHands(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
     {
         // Slow hand: loop playhead, drawn only across the outer ring so it never
-        // reaches the centre (that space belongs to the fast bar hand).
+        // reaches the centre (that space belongs to the fast bar hand). labelColour,
+        // not statusOutline, so it stays distinct from the data traces it sweeps over.
         const float loopAngle = kBeatAngle + juce::jlimit(0.f, 1.f, m_playhead) * k2Pi;
-        g.setColour(juce::Colour(c.cols[9]).withAlpha(0.85f));
+        g.setColour(juce::Colour(c.labelColour).withAlpha(0.85f));
         g.drawLine(juce::Line<float>(polar(geo, loopAngle, geo.ringInnerR), polar(geo, loopAngle, geo.ringOuterR)),
                    2.5f);
 
         // Short fast hand: bar phase, within the inner disc.
         const float barAngle = kBeatAngle + std::clamp(m_barPhase, 0.f, 1.f) * k2Pi;
-        g.setColour(juce::Colour(c.cols[7]).withAlpha(0.90f));
+        g.setColour(juce::Colour(c.labelColour).withAlpha(0.90f));
         g.drawLine(juce::Line<float>(polar(geo, barAngle, 0.f), polar(geo, barAngle, geo.outerR)), 2.0f);
     }
 
     void drawHub(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
     {
         constexpr float kHubR = 4.f;
-        g.setColour(juce::Colour(c.cols[9]).withAlpha(0.85f));
+        g.setColour(juce::Colour(c.labelColour).withAlpha(0.85f));
         g.fillEllipse(geo.cx - kHubR, geo.cy - kHubR, 2.f * kHubR, 2.f * kHubR);
     }
 
@@ -423,17 +436,17 @@ class CircularLoopDisplay : public juce::Component
         g.setFont(juce::Font(juce::FontOptions(21.f)));
         if (m_stateLabel.isNotEmpty())
         {
-            g.setColour(juce::Colour(c.cols[7]).withAlpha(0.85f));
+            g.setColour(juce::Colour(c.labelColour).withAlpha(0.85f));
             g.drawText(m_stateLabel, titleBounds, juce::Justification::centredLeft);
         }
         if (m_label.isNotEmpty())
         {
-            g.setColour(juce::Colour(c.cols[7]).withAlpha(0.55f));
+            g.setColour(juce::Colour(c.labelColour).withAlpha(0.55f));
             g.drawText(m_label, titleBounds, juce::Justification::centredRight);
         }
         if (m_barBeatLabel.isNotEmpty())
         {
-            g.setColour(juce::Colour(c.cols[9]).withAlpha(0.85f));
+            g.setColour(juce::Colour(c.labelColour).withAlpha(0.85f));
             g.drawText(m_barBeatLabel, titleBounds, juce::Justification::centred);
         }
     }

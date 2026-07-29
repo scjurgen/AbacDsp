@@ -121,7 +121,10 @@ cppJuceFileVars = [
     "APPLY_THEME_CALLBACKS",
     "EXTRA_PRIVATE_METHODS",
     "EXTRA_PROCESSOR_METHODS",
+    "EXTRA_PROCESSOR_MEMBERS",
     "EXTRA_PREPARE_CALLS",
+    "EXTRA_GET_STATE_CALLS",
+    "EXTRA_SET_STATE_CALLS",
     "ParamStructMembers",
     "ParamIdList",
     "ParamIdStringList",
@@ -521,6 +524,22 @@ def createExtraPrepareCalls(m: dict) -> str:
     calls = m.get("extra_prepare_calls", [])
     return "\n".join(calls) + ("\n" if calls else "")
 
+# Extra private member declarations, right after the pluginRunner unique_ptr.
+def createExtraProcessorMembers(m: dict) -> str:
+    members = m.get("extra_processor_members", [])
+    return "\n".join(members) + ("\n" if members else "")
+
+# Runs in getStateInformation(), after the parameter XML is built but before
+# it's serialized to destData.
+def createExtraGetStateCalls(m: dict) -> str:
+    calls = m.get("extra_get_state_calls", [])
+    return "\n".join(calls) + ("\n" if calls else "")
+
+# Runs in setStateInformation(), inside the parsed-parameter-XML branch.
+def createExtraSetStateCalls(m: dict) -> str:
+    calls = m.get("extra_set_state_calls", [])
+    return "\n".join(calls) + ("\n" if calls else "")
+
 
 def addParameterListeners(m:dict):
     res = ""
@@ -893,6 +912,9 @@ def createPackageFromJsonDict(m: dict):
     m["CPP"]["EXTRA_PRIVATE_METHODS"] = createExtraPrivateMethods(m)
     m["CPP"]["EXTRA_PROCESSOR_METHODS"] = createExtraProcessorMethods(m)
     m["CPP"]["EXTRA_PREPARE_CALLS"] = createExtraPrepareCalls(m)
+    m["CPP"]["EXTRA_PROCESSOR_MEMBERS"] = createExtraProcessorMembers(m)
+    m["CPP"]["EXTRA_GET_STATE_CALLS"] = createExtraGetStateCalls(m)
+    m["CPP"]["EXTRA_SET_STATE_CALLS"] = createExtraSetStateCalls(m)
 
     for idx in range(len(m["ports-control"])):
         item = fillDefaults(m["ports-control"][idx])

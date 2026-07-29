@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -441,6 +442,106 @@ class LooperImpl final : public EffectBase
         m_loopLoadResolvedBpm = bpm;
         m_loopLoadConfirmedGen.store(m_loopLoadRequestedGen, std::memory_order_release);
     }
+
+    // Host/session state (e.g. a DAW's getStateInformation/setStateInformation, or the
+    // standalone app's own properties-file round-trip): the loop's audio and tempo/meter,
+    // packed into a self-contained blob so the caller doesn't touch the loops directory.
+    // Frozen tracks/sequencer pattern are not included (out of scope for now).
+    [[nodiscard]] std::vector<std::byte> captureExtraState() const
+    {
+        const size_t loopLen = m_recorder.loopLengthFrames();
+        if (isRecording() || isOverdubbing() || loopLen == 0)
+        {
+            return {};
+        }
+
+        const std::vector<AbacDsp::MeterSegment> segments =
+            m_meterTimeline.empty() ? std::vector<AbacDsp::MeterSegment>{{0, m_seq.beatsPerBar(), m_eighthNoteUnit}}
+                                    : m_meterTimeline.segments();
+
+        ExtraStateHeader header{};
+        header.magic = kExtraStateMagic;
+        header.version = kExtraStateVersion;
+        header.sampleRate = sampleRate();
+        header.bpm = m_appliedBpm;
+        header.segmentCount = static_cast<uint32_t>(segments.size());
+        header.loopLengthFrames = static_cast<uint64_t>(loopLen);
+
+        std::vector<std::byte> blob(sizeof(ExtraStateHeader) + segments.size() * sizeof(SerializedMeterSegment) +
+                                    loopLen * 2 * sizeof(float));
+        size_t offset = 0;
+        appendPod(blob, offset, header);
+        for (const auto& seg : segments)
+        {
+            appendPod(blob, offset,
+                      SerializedMeterSegment{static_cast<uint64_t>(seg.startBar),
+                                             static_cast<uint64_t>(seg.beatsPerBar), seg.eighthUnit});
+        }
+        for (size_t f = 0; f < loopLen; ++f)
+        {
+            appendPod(blob, offset, m_recorder.sample(f, 0));
+            appendPod(blob, offset, m_recorder.sample(f, 1));
+        }
+        return blob;
+    }
+
+    // Message thread only: feeds a blob from captureExtraState() into the same
+    // gen-counter handshake runLoadLoop() uses on success, so the existing
+    // checkLoopLoadCompletion() poll installs it on the audio thread. A no-op on any
+    // parse failure or malformed/foreign data, and while a named load is already pending.
+    void restoreExtraState(std::span<const std::byte> blob)
+    {
+        if (m_loopLoadPending)
+        {
+            return;
+        }
+
+        size_t offset = 0;
+        ExtraStateHeader header{};
+        if (!readPod(blob, offset, header) || header.magic != kExtraStateMagic ||
+            header.version != kExtraStateVersion || header.loopLengthFrames == 0)
+        {
+            return;
+        }
+
+        AbacDsp::MeterTimeline timeline;
+        for (uint32_t i = 0; i < header.segmentCount; ++i)
+        {
+            SerializedMeterSegment seg{};
+            if (!readPod(blob, offset, seg))
+            {
+                return;
+            }
+            timeline.addSegment(static_cast<size_t>(seg.startBar), static_cast<size_t>(seg.beatsPerBar),
+                                seg.eighthUnit);
+        }
+
+        std::vector<float> left(header.loopLengthFrames);
+        std::vector<float> right(header.loopLengthFrames);
+        for (uint64_t f = 0; f < header.loopLengthFrames; ++f)
+        {
+            if (!readPod(blob, offset, left[f]) || !readPod(blob, offset, right[f]))
+            {
+                return;
+            }
+        }
+
+        m_loopLoadLeft = std::move(left);
+        m_loopLoadRight = std::move(right);
+        m_loopLoadResolvedBpm = header.bpm;
+        m_loopLoadMeterTimeline = std::move(timeline);
+        m_loopLoadHasSequencerData = false;
+        m_loopLoadTracks.clear();
+        m_loopLoadPattern.reset();
+
+        m_loopLoadRequestedGen = m_loopLoadRequestGen.load(std::memory_order_relaxed) + 1;
+        m_loopLoadPending = true;
+        m_loopLoadNeedsResolve.store(false, std::memory_order_relaxed);
+        m_loopLoadRequestGen.store(m_loopLoadRequestedGen, std::memory_order_release);
+        m_loopLoadDoneGen.store(m_loopLoadRequestedGen, std::memory_order_release);
+        m_loopLoadConfirmedGen.store(m_loopLoadRequestedGen, std::memory_order_release);
+    }
+
     // Toggles playing the pattern currently in the sequencer (the frozen
     // material), mimicking the looper's own Play/Stop. While on, this mutes
     // the base loop, matching the looper's earlier auto-mute-on-freeze
@@ -1343,6 +1444,50 @@ class LooperImpl final : public EffectBase
             m_sequencer.setPattern(&m_pattern);
             resetTimekeeper(true);
         }
+    }
+
+    // captureExtraState()/restoreExtraState() binary layout: header, then
+    // segmentCount SerializedMeterSegment entries, then loopLengthFrames
+    // interleaved (left, right) float32 sample pairs. Native layout only
+    // (no cross-machine/endian portability needed: it round-trips within a
+    // single host's own saved session).
+    static constexpr uint32_t kExtraStateMagic = 0x4C504541; // "AELP"
+    static constexpr uint32_t kExtraStateVersion = 1;
+
+    struct ExtraStateHeader
+    {
+        uint32_t magic{};
+        uint32_t version{};
+        float sampleRate{};
+        float bpm{};
+        uint32_t segmentCount{};
+        uint64_t loopLengthFrames{};
+    };
+
+    struct SerializedMeterSegment
+    {
+        uint64_t startBar{};
+        uint64_t beatsPerBar{};
+        bool eighthUnit{};
+    };
+
+    template <typename T>
+    static void appendPod(std::vector<std::byte>& blob, size_t& offset, const T& value)
+    {
+        std::memcpy(blob.data() + offset, &value, sizeof(T));
+        offset += sizeof(T);
+    }
+
+    template <typename T>
+    [[nodiscard]] static bool readPod(std::span<const std::byte> blob, size_t& offset, T& value)
+    {
+        if (offset + sizeof(T) > blob.size())
+        {
+            return false;
+        }
+        std::memcpy(&value, blob.data() + offset, sizeof(T));
+        offset += sizeof(T);
+        return true;
     }
 
     // Named patches sanitize with juce::String; this is JUCE-free (Impl stays
