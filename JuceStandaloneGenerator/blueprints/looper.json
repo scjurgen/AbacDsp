@@ -28,7 +28,7 @@
     {"short": "DIV",  "type": "drop",   "display": "Division",   "symbol": "sliceDivision", "default": 1,
       "listitems": ["1/4", "1/8", "1/16", "1/32"]},
     {"short": "BPM",  "type": "dial",   "display": "BPM",         "symbol": "bpm",        "default": 120,
-      "range": [50, 250, 0.1, 1, false], "precision": 1, "unit": "BPM",
+      "range": [50, 250, 0.5, 1, false], "precision": 1, "unit": "BPM",
       "cc": {"controller": 20, "valueLow": 60, "valueHigh": 180}},
     {"short": "CVOL", "type": "dial",   "display": "Click Volume", "symbol": "clickVolume", "default": -12,
       "range": [-60, 0, 0.1, 1, false], "precision": 1, "unit": "dB",

@@ -299,7 +299,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID("sliceDivision", 1), "Division", juce::StringArray{"1/4", "1/8", "1/16", "1/32"}, 1));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("bpm", 1), "BPM", juce::NormalisableRange<float>(50, 250, 0.1, 1, false), 120,
+            juce::ParameterID("bpm", 1), "BPM", juce::NormalisableRange<float>(50, 250, 0.5, 1, false), 120,
             juce::AudioParameterFloatAttributes{}.withLabel("BPM").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " BPM"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(

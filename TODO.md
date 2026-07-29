@@ -1,53 +1,29 @@
 # TODO
 
-## looper UX
-
-- pressing stop and play ofsset the beat with the looper. The metronome should resync with the loop
-- setRecord is not correct it should be toggleRecordMode
-- save loops as presets
-- refactor switches and visualisations (red recording mode )
-
-
-## Looper with Sample Sequencer
-
-The current idea to slice in any case is not a good concept.
-We need to make the slicing on demand. For this purpose we need a 2 tiered engine:
-first layer the plain looper in the traditional way.
-On top of this a sequencer playing engine that will be fed with sample slices when demanded.
-The sequencer will receive slices (reference to samples that it will copy lasy from the looper buffer) and the timing 
-information relative to the beat of the looper buffer.
-
-First step: clean up the current looper to accommodate the new architecture. Keep the UI as is for now (but remove the transient visualisation)
-Second step: enhance the looper itself with following concepts:
-  - we are recording based on a beat. If the threshold kicks in before the start of a new beat (i.e less than a 1/8 note early) we 
-    copy the data to a temporary buffer, this part will be copied to the end of the final recorded loop.
-    if we actually play with delay (i.e. max 1/8th note after the beat) we pad the looper buffer with empty samples. 
-  - The same logic is applied when we press stop of the recording. Apply fade out, fade in for avoiding clicks, the fade 
-   size should have a setter.
-  - we record always first everything in a ringbuffer so we can copy data from it (pre and post recording) which should be half of the fade window (linear fade should do it). 
-  - the looper time should always be a multiple of the beat, e.g. with 120BPM we start recording and stopping recording after 48050 smples the 
-    time should be 48000 samples (48kHz sample rate)
-
-Third step would be designing the slicing and sample sequencer which I will design after the first two steps.
-
-
-
 ## Looper
 
-New looper mode:
-I would like to add a sequencer specific recording mode. Detect onsets (simple threshold) and store them in the audio buffer. Every time
-there is a new 
+## Host sync 
+- host sync must be disabled if we are not in a host.
 
-Next steps:
+## refactor LooperImpl.h
 
-- visualise looper recording as Spectrogram, this should proof useful also for the next slizing step so we do some extraction
-- slice material after recording (in parallel to recording in another process).
-- play out the extracted samples when looping instead of the recording buffer.
-- Have also a free recording instead BPM based and extract the actual BPM when recording stopped
-- pitch shift slices (saves new sample, needs good memory handling, we are realtime)
-- shuffle slices
-- reverse play, the beginning lands on the beat (so the playout position is before the beat with the length of the sample)
+- remove comments regarding past decision, only the important current aspects are relevant
+- split looperImpl.h, it is becoming a god class, many concepts can live outside (use template includes where possible)
+- parts that can be reused in other projects should end in the dsp src code (check for music based abstractions, sequencer, wavefile, midifile, sequencer file handling)
 
+## bug
+loading a loop while play is on the metronome needs to be aligned. Probably we want another behaviour in the future which would be to schedule
+the loaded loop and play it when the current loop is ending (with a fade in/out operation). For now we just stop the looper, load the file, and wait for a new play signal.
+
+## bug
+loading a loop will not show the spectrogram which must be regenerated.
+
+
+## UI
+- visualise current bar with an overlay
+
+- naming: setRecord is not correct it should be toggleRecordMode
+- refactor switches and visualisations (red recording mode)
 
 ## Code quality
 ### Sanitizier

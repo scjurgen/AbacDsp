@@ -11,19 +11,9 @@ question, Claude should answer the question, but NEVER go ahead implicitly; inst
 
 ## Build Commands
 
-```bash
-# Tests only (default, no JUCE needed)
-mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-cmake --build . --target run_unit_tests
-
-# Full project with JUCE examples
-cmake -DBUILD_FULL_PROJECT=ON -DCMAKE_BUILD_TYPE=Release ..
-cmake --build .
-
-# Run tests via Docker with Valgrind (auto-detects ARM64/x86_64)
-./docker-unit-tests/run-on-mac.sh
-```
+development scripts are available in ./dev-scripts. 
+The cover following topics:
+ - 
 
 Key CMake options: `BUILD_FULL_PROJECT` (OFF), `PACKAGE_TESTS` (ON), `PERFORMANCE_TESTS` (OFF), `EXPLORE_STUFF` (OFF).
 
