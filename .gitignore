@@ -23,6 +23,7 @@ tmp
 *.lv2
 __pycache__
 explore
+JuceStandaloneGenerator/theme-review/output
 
 # Prerequisites
 *.d

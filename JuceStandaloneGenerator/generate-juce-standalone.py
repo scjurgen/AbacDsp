@@ -56,6 +56,7 @@ cppLookAndFeel = "inc/LookAndFeel.h"
 
 cppSourceFilesFixed = [
     "inc/GuiConstants.h",
+    "inc/ThemeOrbit.h",
     "inc/CpuMeter.h",
     "inc/CustomRotaryDial.h",
     "inc/MomentaryToggleButton.h",
