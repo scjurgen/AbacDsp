@@ -43,10 +43,19 @@ inline constexpr auto kLegacyThemes = std::to_array<ThemeDefinition>({
     return kLegacyThemes[static_cast<size_t>(theme)];
 }
 
-// A selection packs a hue step (0..kHueCount-1, 30 degrees apart) and a light/dark
-// mode into one index, so it still persists as a single int (AppSettings).
+// A selection packs a hue step (0..kHueCount-1, 30 degrees apart), a light/dark mode, and
+// a base colour family (ui::ThemeFamily) into one index, so it still persists as a single
+// int (AppSettings): hueIdx + mode*kHueCount + family*kSlotsPerFamily.
 inline constexpr int kHueCount = 12;
 inline constexpr int kHueStepDeg = 360 / kHueCount;
+inline constexpr int kSlotsPerFamily = kHueCount * 2;
+
+// The 12 hue steps land exactly on the standard 12-part hue wheel (Bichromatic's Primary
+// has no hue correction applied to its hue itself, only to lightness/chroma), so these
+// names are precise, not approximate.
+inline constexpr std::array<const char*, kHueCount> kHueNames{
+    "Magenta", "Rose", "Red", "Orange", "Yellow", "Chartreuse", "Green", "Mint", "Cyan", "Azure", "Blue", "Violet",
+};
 
 enum class Theme : int
 {
@@ -59,7 +68,12 @@ enum class Theme : int
 
 [[nodiscard]] constexpr bool isDark(const Theme theme)
 {
-    return static_cast<int>(theme) >= kHueCount;
+    return (static_cast<int>(theme) % kSlotsPerFamily) >= kHueCount;
+}
+
+[[nodiscard]] constexpr ui::ThemeFamily family(const Theme theme)
+{
+    return static_cast<ui::ThemeFamily>(static_cast<int>(theme) / kSlotsPerFamily);
 }
 
 [[nodiscard]] constexpr double hueDegrees(const Theme theme)
@@ -67,19 +81,25 @@ enum class Theme : int
     return static_cast<double>(hueIndex(theme) * kHueStepDeg);
 }
 
-[[nodiscard]] constexpr Theme makeTheme(const int hueIdx, const bool dark)
+[[nodiscard]] constexpr Theme makeTheme(const int hueIdx, const bool dark,
+                                        const ui::ThemeFamily fam = ui::ThemeFamily::Bichromatic)
 {
-    return static_cast<Theme>(hueIdx + (dark ? kHueCount : 0));
+    return static_cast<Theme>(hueIdx + (dark ? kHueCount : 0) + static_cast<int>(fam) * kSlotsPerFamily);
 }
 
 [[nodiscard]] constexpr Theme withHue(const Theme theme, const int hueIdx)
 {
-    return makeTheme(hueIdx, isDark(theme));
+    return makeTheme(hueIdx, isDark(theme), family(theme));
 }
 
 [[nodiscard]] constexpr Theme withMode(const Theme theme, const bool dark)
 {
-    return makeTheme(hueIndex(theme), dark);
+    return makeTheme(hueIndex(theme), dark, family(theme));
+}
+
+[[nodiscard]] constexpr Theme withFamily(const Theme theme, const ui::ThemeFamily fam)
+{
+    return makeTheme(hueIndex(theme), isDark(theme), fam);
 }
 
 [[nodiscard]] inline uint32_t toArgb(const ui::Rgb& color)
@@ -292,6 +312,7 @@ struct Hsl
 [[nodiscard]] inline ThemeDefinition definition(const Theme theme)
 {
     ui::Theme orbit;
+    orbit.setFamily(family(theme));
     orbit.setMode(isDark(theme) ? ui::ThemeMode::Dark : ui::ThemeMode::Light);
     orbit.setRelativeHueDegrees(hueDegrees(theme));
 

@@ -398,7 +398,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             juce::PopupMenu themeMenu;
             for (int i = 0; i < Themes::kHueCount; ++i)
             {
-                themeMenu.addItem(i + 1, "Hue " + juce::String(i * Themes::kHueStepDeg));
+                themeMenu.addItem(i + 1, Themes::kHueNames[static_cast<size_t>(i)]);
             }
             menu.addSubMenu("Theme", themeMenu);
 
@@ -406,6 +406,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             modeMenu.addItem(kThemeModeLightId, "Light");
             modeMenu.addItem(kThemeModeDarkId, "Dark");
             menu.addSubMenu("Mode", modeMenu);
+
+            juce::PopupMenu baseMenu;
+            baseMenu.addItem(kThemeBaseBichromaticId, "Bichromatic");
+            baseMenu.addItem(kThemeBaseTrichromaticId, "Trichromatic");
+            menu.addSubMenu("Base", baseMenu);
             menu.addSubMenu("Patches", buildPatchesMenu());
             menu.addSubMenu("Loops", buildLoopsMenu());
         }
@@ -422,6 +427,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         if (menuItemID == kThemeModeLightId || menuItemID == kThemeModeDarkId)
         {
             applyTheme(Themes::withMode(m_currentTheme, menuItemID == kThemeModeDarkId));
+            return;
+        }
+        if (menuItemID == kThemeBaseBichromaticId || menuItemID == kThemeBaseTrichromaticId)
+        {
+            const auto family =
+                menuItemID == kThemeBaseTrichromaticId ? ui::ThemeFamily::Trichromatic : ui::ThemeFamily::Bichromatic;
+            applyTheme(Themes::withFamily(m_currentTheme, family));
             return;
         }
         handlePatchMenuSelection(menuItemID);
@@ -792,6 +804,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};
     static constexpr int kThemeModeLightId = 9000;
     static constexpr int kThemeModeDarkId = 9001;
+    static constexpr int kThemeBaseBichromaticId = 9002;
+    static constexpr int kThemeBaseTrichromaticId = 9003;
     static constexpr int kPatchSaveId = 1000;
     static constexpr int kPatchSaveAsId = 1001;
     static constexpr int kPatchLoadIdBase = 2000;

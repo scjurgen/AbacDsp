@@ -30,8 +30,8 @@ namespace
 
 constexpr int kPanelWidth = 900;
 constexpr int kPanelHeight = 360;
-constexpr int kThumbWidth = 1200;
-constexpr int kThumbHeight = 480;
+constexpr int kThumbWidth = 450;
+constexpr int kThumbHeight = 180;
 
 struct RoleSwatch
 {
@@ -268,44 +268,56 @@ class ThemeReviewApplication : public juce::JUCEApplication
 
         constexpr int kColumns = 2;
         constexpr int kRows = Themes::kHueCount;
-        juce::Image contactSheet(juce::Image::PixelFormat::ARGB, kThumbWidth * kColumns, kThumbHeight * kRows, true);
-        juce::Graphics contactSheetGraphics(contactSheet);
 
-        for (int hueStep = 0; hueStep < Themes::kHueCount; ++hueStep)
+        const auto families = {
+            std::pair{ui::ThemeFamily::Bichromatic, juce::String("bichromatic")},
+            std::pair{ui::ThemeFamily::Trichromatic, juce::String("trichromatic")},
+        };
+
+        for (const auto& [fam, famName] : families)
         {
-            for (const bool dark : {false, true})
+            juce::Image contactSheet(juce::Image::PixelFormat::ARGB, kThumbWidth * kColumns, kThumbHeight * kRows,
+                                     true);
+            juce::Graphics contactSheetGraphics(contactSheet);
+
+            for (int hueStep = 0; hueStep < Themes::kHueCount; ++hueStep)
             {
-                const auto theme = Themes::makeTheme(hueStep, dark);
-                GuiConstants::setPreset(theme);
+                for (const bool dark : {false, true})
+                {
+                    const auto theme = Themes::makeTheme(hueStep, dark, fam);
+                    GuiConstants::setPreset(theme);
 
-                auto lookAndFeel = std::make_unique<GuiLookAndFeel>();
-                juce::LookAndFeel::setDefaultLookAndFeel(lookAndFeel.get());
+                    auto lookAndFeel = std::make_unique<GuiLookAndFeel>();
+                    juce::LookAndFeel::setDefaultLookAndFeel(lookAndFeel.get());
 
-                ThemePanel panel(theme);
-                panel.setLookAndFeel(lookAndFeel.get());
-                panel.setSize(kPanelWidth, kPanelHeight);
-                panel.resized();
+                    ThemePanel panel(theme);
+                    panel.setLookAndFeel(lookAndFeel.get());
+                    panel.setSize(kPanelWidth, kPanelHeight);
+                    panel.resized();
 
-                const auto snapshot = panel.createComponentSnapshot(panel.getLocalBounds());
+                    const auto snapshot = panel.createComponentSnapshot(panel.getLocalBounds());
 
-                const juce::String modeLabel = dark ? "dark" : "light";
-                const juce::String fileName =
-                    "hue" + juce::String(hueStep * Themes::kHueStepDeg).paddedLeft('0', 3) + "_" + modeLabel + ".png";
-                writePng(snapshot, outputDir.getChildFile(fileName));
+                    const juce::String modeLabel = dark ? "dark" : "light";
+                    const juce::String fileName = famName + "_hue" +
+                                                  juce::String(hueStep * Themes::kHueStepDeg).paddedLeft('0', 3) + "_" +
+                                                  modeLabel + ".png";
+                    writePng(snapshot, outputDir.getChildFile(fileName));
 
-                const int column = dark ? 1 : 0;
-                const int row = hueStep;
-                contactSheetGraphics.drawImage(
-                    snapshot, juce::Rectangle<float>(
-                                  static_cast<float>(column * kThumbWidth), static_cast<float>(row * kThumbHeight),
-                                  static_cast<float>(kThumbWidth), static_cast<float>(kThumbHeight)));
+                    const int column = dark ? 1 : 0;
+                    const int row = hueStep;
+                    contactSheetGraphics.drawImage(
+                        snapshot, juce::Rectangle<float>(
+                                      static_cast<float>(column * kThumbWidth), static_cast<float>(row * kThumbHeight),
+                                      static_cast<float>(kThumbWidth), static_cast<float>(kThumbHeight)));
 
-                panel.setLookAndFeel(nullptr);
-                juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
+                    panel.setLookAndFeel(nullptr);
+                    juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
+                }
             }
+
+            writePng(contactSheet, outputDir.getChildFile("contact-sheet-" + famName + ".png"));
         }
 
-        writePng(contactSheet, outputDir.getChildFile("contact-sheet.png"));
         juce::Logger::writeToLog("Theme review output written to " + outputDir.getFullPathName());
     }
 };

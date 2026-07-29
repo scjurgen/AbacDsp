@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include "../ThemeOrbit.h"
 #include "ThemeClassic.h"
@@ -42,10 +43,19 @@ inline constexpr auto kLegacyThemes = std::to_array<ThemeDefinition>({
     return kLegacyThemes[static_cast<size_t>(theme)];
 }
 
-// A selection packs a hue step (0..kHueCount-1, 30 degrees apart) and a light/dark
-// mode into one index, so it still persists as a single int (AppSettings).
+// A selection packs a hue step (0..kHueCount-1, 30 degrees apart), a light/dark mode, and
+// a base colour family (ui::ThemeFamily) into one index, so it still persists as a single
+// int (AppSettings): hueIdx + mode*kHueCount + family*kSlotsPerFamily.
 inline constexpr int kHueCount = 12;
 inline constexpr int kHueStepDeg = 360 / kHueCount;
+inline constexpr int kSlotsPerFamily = kHueCount * 2;
+
+// The 12 hue steps land exactly on the standard 12-part hue wheel (Bichromatic's Primary
+// has no hue correction applied to its hue itself, only to lightness/chroma), so these
+// names are precise, not approximate.
+inline constexpr std::array<const char*, kHueCount> kHueNames{
+    "Magenta", "Rose", "Red", "Orange", "Yellow", "Chartreuse", "Green", "Mint", "Cyan", "Azure", "Blue", "Violet",
+};
 
 enum class Theme : int
 {
@@ -58,7 +68,12 @@ enum class Theme : int
 
 [[nodiscard]] constexpr bool isDark(const Theme theme)
 {
-    return static_cast<int>(theme) >= kHueCount;
+    return (static_cast<int>(theme) % kSlotsPerFamily) >= kHueCount;
+}
+
+[[nodiscard]] constexpr ui::ThemeFamily family(const Theme theme)
+{
+    return static_cast<ui::ThemeFamily>(static_cast<int>(theme) / kSlotsPerFamily);
 }
 
 [[nodiscard]] constexpr double hueDegrees(const Theme theme)
@@ -66,19 +81,25 @@ enum class Theme : int
     return static_cast<double>(hueIndex(theme) * kHueStepDeg);
 }
 
-[[nodiscard]] constexpr Theme makeTheme(const int hueIdx, const bool dark)
+[[nodiscard]] constexpr Theme makeTheme(const int hueIdx, const bool dark,
+                                        const ui::ThemeFamily fam = ui::ThemeFamily::Bichromatic)
 {
-    return static_cast<Theme>(hueIdx + (dark ? kHueCount : 0));
+    return static_cast<Theme>(hueIdx + (dark ? kHueCount : 0) + static_cast<int>(fam) * kSlotsPerFamily);
 }
 
 [[nodiscard]] constexpr Theme withHue(const Theme theme, const int hueIdx)
 {
-    return makeTheme(hueIdx, isDark(theme));
+    return makeTheme(hueIdx, isDark(theme), family(theme));
 }
 
 [[nodiscard]] constexpr Theme withMode(const Theme theme, const bool dark)
 {
-    return makeTheme(hueIndex(theme), dark);
+    return makeTheme(hueIndex(theme), dark, family(theme));
+}
+
+[[nodiscard]] constexpr Theme withFamily(const Theme theme, const ui::ThemeFamily fam)
+{
+    return makeTheme(hueIndex(theme), isDark(theme), fam);
 }
 
 [[nodiscard]] inline uint32_t toArgb(const ui::Rgb& color)
@@ -110,6 +131,111 @@ enum class Theme : int
         return static_cast<uint32_t>(std::lround(std::clamp(va + (vb - va) * t, 0.0, 255.0)));
     };
     return 0xFF000000u | (mixChannel(16) << 16) | (mixChannel(8) << 8) | mixChannel(0);
+}
+
+struct Hsl
+{
+    double h{};
+    double s{};
+    double l{};
+};
+
+[[nodiscard]] inline Hsl toHsl(const uint32_t argb)
+{
+    const double r = static_cast<double>((argb >> 16) & 0xFFu) / 255.0;
+    const double g = static_cast<double>((argb >> 8) & 0xFFu) / 255.0;
+    const double b = static_cast<double>(argb & 0xFFu) / 255.0;
+
+    const std::array<double, 3> channels{r, g, b};
+    const auto maxIt = std::max_element(channels.begin(), channels.end());
+    const auto minIt = std::min_element(channels.begin(), channels.end());
+    const double maxC = *maxIt;
+    const double minC = *minIt;
+    const double l = (maxC + minC) / 2.0;
+    const double d = maxC - minC;
+
+    if (d <= std::numeric_limits<double>::epsilon())
+    {
+        return {.h = 0.0, .s = 0.0, .l = l};
+    }
+
+    const double s = l > 0.5 ? d / (2.0 - maxC - minC) : d / (maxC + minC);
+    const auto maxIdx = std::distance(channels.begin(), maxIt);
+
+    double h{};
+    if (maxIdx == 0)
+    {
+        h = (g - b) / d + (g < b ? 6.0 : 0.0);
+    }
+    else if (maxIdx == 1)
+    {
+        h = (b - r) / d + 2.0;
+    }
+    else
+    {
+        h = (r - g) / d + 4.0;
+    }
+
+    return {.h = h / 6.0, .s = s, .l = l};
+}
+
+[[nodiscard]] inline double hueToRgbChannel(const double p, const double q, double t)
+{
+    if (t < 0.0)
+    {
+        t += 1.0;
+    }
+    if (t > 1.0)
+    {
+        t -= 1.0;
+    }
+    if (t < 1.0 / 6.0)
+    {
+        return p + (q - p) * 6.0 * t;
+    }
+    if (t < 0.5)
+    {
+        return q;
+    }
+    if (t < 2.0 / 3.0)
+    {
+        return p + (q - p) * (2.0 / 3.0 - t) * 6.0;
+    }
+    return p;
+}
+
+[[nodiscard]] inline uint32_t fromHsl(const Hsl& hsl)
+{
+    const auto toByte = [](const double v) -> uint32_t
+    { return static_cast<uint32_t>(std::lround(std::clamp(v, 0.0, 1.0) * 255.0)); };
+
+    if (hsl.s <= std::numeric_limits<double>::epsilon())
+    {
+        const uint32_t v = toByte(hsl.l);
+        return 0xFF000000u | (v << 16) | (v << 8) | v;
+    }
+
+    const double q = hsl.l < 0.5 ? hsl.l * (1.0 + hsl.s) : hsl.l + hsl.s - hsl.l * hsl.s;
+    const double p = 2.0 * hsl.l - q;
+
+    const uint32_t r = toByte(hueToRgbChannel(p, q, hsl.h + 1.0 / 3.0));
+    const uint32_t g = toByte(hueToRgbChannel(p, q, hsl.h));
+    const uint32_t b = toByte(hueToRgbChannel(p, q, hsl.h - 1.0 / 3.0));
+
+    return 0xFF000000u | (r << 16) | (g << 8) | b;
+}
+
+// Sets lightness to a fixed target (not just a floor - a source hue already lighter than
+// the target would otherwise be untouched) and scales saturation, in HSL space - unlike a
+// plain RGB tint toward white/grey (which lightens and desaturates together), this keeps
+// the colour's hue identity so it reads as a pastel, not a wash of grey.
+[[nodiscard]] inline uint32_t pastelize(const uint32_t argb, const double targetLightness,
+                                        const double saturationFactor)
+{
+    Hsl hsl = toHsl(argb);
+    hsl.l = targetLightness;
+    hsl.s = std::clamp(hsl.s * saturationFactor, 0.0, 1.0);
+    return fromHsl(hsl);
 }
 
 [[nodiscard]] inline double relativeLuminance(const uint32_t argb)
@@ -186,6 +312,7 @@ enum class Theme : int
 [[nodiscard]] inline ThemeDefinition definition(const Theme theme)
 {
     ui::Theme orbit;
+    orbit.setFamily(family(theme));
     orbit.setMode(isDark(theme) ? ui::ThemeMode::Dark : ui::ThemeMode::Light);
     orbit.setRelativeHueDegrees(hueDegrees(theme));
 
@@ -196,17 +323,24 @@ enum class Theme : int
     def.backgroundDark = toArgb(orbit.rgb(ui::ThemeRole::Background2));
     def.backgroundMid = toArgb(orbit.rgb(ui::ThemeRole::Background1));
     def.backgroundLight = toArgb(orbit.rgb(ui::ThemeRole::Background0));
-    // scaleLightness (multiplicative) barely moves an already near-black backgroundDark in
-    // dark mode; extrapolating the full background->backgroundDark trend further gives a
-    // real absolute step regardless of how dark/light that trend already is.
-    def.gradientDark = mixColors(def.background, def.backgroundDark, 1.6);
+    // Near WCAG's dark end the contrast-ratio formula's +0.05 term compresses hard: even
+    // pure black only reaches ~1.08 against an already near-black backgroundDark, so Dark
+    // mode has to move lighter (toward the page) to gain real contrast. Light mode instead
+    // pastelizes Hover (raised lightness, preserved saturation) rather than plain-graying
+    // it - targeted relative to backgroundDark's own lightness (which drifts a little per
+    // hue) rather than a fixed constant, so contrast against it stays consistent everywhere.
+    const double backgroundDarkLightness = toHsl(def.backgroundDark).l;
+    def.gradientDark = isDark(theme) ? mixColors(def.backgroundDark, def.background, 0.85)
+                                     : pastelize(toArgb(orbit.rgb(ui::ThemeRole::Hover)),
+                                                 std::clamp(backgroundDarkLightness - 0.38, 0.0, 1.0), 0.85);
     def.labelColour = toArgb(orbit.rgb(ui::ThemeRole::Text));
     def.statusOutline = pickAccessibleGradientStop(orbit, def.background);
     def.knobGradientStart = scaleLightness(toArgb(orbit.rgb(ui::ThemeRole::Primary)), 1.35);
-    // Sole source of the knob disk fill (drawRotarySlider); muted toward the page
-    // background in light mode so statusOutline's value ring reads as more important.
+    // Sole source of the knob disk fill (drawRotarySlider); pastelized (not just muted
+    // toward grey) in light mode so statusOutline's value ring still reads as more
+    // important, without the disk itself looking like a flat grey blob.
     def.knobGradientCenter = isDark(theme) ? toArgb(orbit.rgb(ui::ThemeRole::Hover))
-                                           : mixColors(toArgb(orbit.rgb(ui::ThemeRole::Hover)), def.background, 0.75);
+                                           : pastelize(toArgb(orbit.rgb(ui::ThemeRole::Hover)), 0.80, 0.85);
     def.knobGradientEnd = scaleLightness(toArgb(orbit.rgb(ui::ThemeRole::Primary)), 0.65);
     def.cpuZones = zonesFromOrbit(orbit);
     def.levelZones = def.cpuZones;

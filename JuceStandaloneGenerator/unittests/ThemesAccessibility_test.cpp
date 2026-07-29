@@ -75,6 +75,8 @@ TEST_P(ThemesAccessibilityTest, MeterZonesAreLuminanceOrdered)
     EXPECT_LT(warnL, dangerL);
 }
 
-INSTANTIATE_TEST_SUITE_P(AllHuesAndModes, ThemesAccessibilityTest, ::testing::Range(0, 2 * kHueCount));
+// Covers all three ui::ThemeFamily slots (Monochromatic falls back to Bichromatic's tables
+// until implemented, so it's redundant with the Bichromatic range but harmless to include).
+INSTANTIATE_TEST_SUITE_P(AllHuesModesAndFamilies, ThemesAccessibilityTest, ::testing::Range(0, 3 * kSlotsPerFamily));
 
 } // namespace Themes::Test

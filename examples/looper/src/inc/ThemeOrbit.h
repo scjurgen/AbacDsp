@@ -52,6 +52,15 @@ enum class ThemeMode : std::uint32_t
     Dark
 };
 
+// Monochromatic is reserved for a future single-hue (tints/shades only) family and not yet
+// implemented - makeDefaultColors()/makeDefaultSpectrogram() fall back to Bichromatic for it.
+enum class ThemeFamily : std::uint32_t
+{
+    Monochromatic = 0,
+    Bichromatic,
+    Trichromatic
+};
+
 enum class ThemeRole : std::uint32_t
 {
     Primary = 0,
@@ -92,9 +101,9 @@ class Theme
 {
   public:
     Theme()
-        : m_colors{makeDefaultColors()}
+        : m_colors{makeDefaultColors(m_family)}
         , m_currentRgbSrgb(static_cast<std::size_t>(ThemeRole::Count))
-        , m_spectrogramBaseOklch(makeDefaultSpectrogram())
+        , m_spectrogramBaseOklch(makeDefaultSpectrogram(m_family))
         , m_spectrogramCurrentRgbSrgb(m_spectrogramBaseOklch.size())
     {
         rebuild();
@@ -109,6 +118,20 @@ class Theme
     [[nodiscard]] ThemeMode mode() const noexcept
     {
         return m_mode;
+    }
+
+    void setFamily(const ThemeFamily family) noexcept
+    {
+        m_family = family;
+        m_colors = makeDefaultColors(m_family);
+        m_spectrogramBaseOklch = makeDefaultSpectrogram(m_family);
+        m_spectrogramCurrentRgbSrgb.resize(m_spectrogramBaseOklch.size());
+        rebuild();
+    }
+
+    [[nodiscard]] ThemeFamily family() const noexcept
+    {
+        return m_family;
     }
 
     void setRelativeHueDegrees(const double hueDeg) noexcept
@@ -220,6 +243,7 @@ class Theme
     static constexpr double kRadToDeg = 180.0 / kPi;
 
     ThemeMode m_mode{ThemeMode::Light};
+    ThemeFamily m_family{ThemeFamily::Bichromatic};
     double m_relativeHueDeg{};
     std::vector<ThemeColor> m_colors;
     std::vector<Rgb> m_currentRgbSrgb;
@@ -348,7 +372,7 @@ class Theme
 
         if (role == ThemeRole::Background2)
         {
-            return 0.12;
+            return 0.14;
         }
 
         return 0.0;
@@ -719,7 +743,12 @@ class Theme
                 .hueBiasDeg = hueBiasDeg};
     }
 
-    [[nodiscard]] static std::vector<ThemeColor> makeDefaultColors() noexcept
+    // Bichromatic's own hue (rgb(45,20,45), OKLCH ~327 degrees) versus Trichromatic's seed
+    // (rgb(45,20,20), OKLCH ~21 degrees): the palette-wide shift that carries Primary from
+    // one to the other exactly.
+    static constexpr double kTrichromaticHueShiftDeg = 53.6;
+
+    [[nodiscard]] static std::vector<ThemeColor> makeBichromaticColors() noexcept
     {
         std::vector<ThemeColor> colors;
         colors.reserve(static_cast<std::size_t>(ThemeRole::Count));
@@ -753,7 +782,33 @@ class Theme
         return colors;
     }
 
-    [[nodiscard]] static std::vector<Oklch> makeDefaultSpectrogram() noexcept
+    // Trichromatic reuses Bichromatic's whole palette (so every existing role relationship -
+    // contrast, accent identities - carries over untouched), uniformly rotated so Primary's
+    // hue lands exactly on rgb(45,20,20)'s own hue.
+    [[nodiscard]] static std::vector<ThemeColor> makeTrichromaticColors() noexcept
+    {
+        std::vector<ThemeColor> colors = makeBichromaticColors();
+
+        for (ThemeColor& color : colors)
+        {
+            color.baseOklch.hDeg = wrapHue(color.baseOklch.hDeg + kTrichromaticHueShiftDeg);
+            color.baseRgbSrgb = oklchToSrgbGamutMapped(color.baseOklch);
+        }
+
+        return colors;
+    }
+
+    [[nodiscard]] static std::vector<ThemeColor> makeDefaultColors(const ThemeFamily family) noexcept
+    {
+        if (family == ThemeFamily::Trichromatic)
+        {
+            return makeTrichromaticColors();
+        }
+
+        return makeBichromaticColors();
+    }
+
+    [[nodiscard]] static std::vector<Oklch> makeBichromaticSpectrogram() noexcept
     {
         constexpr std::array<Rgb, 14> stops{rgb8(0x14, 0x0C, 0x16), rgb8(0x1B, 0x10, 0x20), rgb8(0x25, 0x15, 0x2B),
                                             rgb8(0x2D, 0x14, 0x2D), rgb8(0x3A, 0x1A, 0x39), rgb8(0x4A, 0x23, 0x45),
@@ -770,6 +825,38 @@ class Theme
         }
 
         return result;
+    }
+
+    // Hand-authored (not derived by rotating Bichromatic's gradient): same lightness/chroma
+    // progression, hue swept from near Trichromatic's own dark identity up to a light
+    // blue-green top, independent of the palette-wide hue shift above.
+    [[nodiscard]] static std::vector<Oklch> makeTrichromaticSpectrogram() noexcept
+    {
+        constexpr std::array<Rgb, 14> stops{rgb8(0x17, 0x0B, 0x12), rgb8(0x22, 0x0E, 0x14), rgb8(0x2F, 0x12, 0x15),
+                                            rgb8(0x36, 0x13, 0x0D), rgb8(0x43, 0x1B, 0x05), rgb8(0x4E, 0x29, 0x00),
+                                            rgb8(0x59, 0x3B, 0x00), rgb8(0x62, 0x52, 0x1A), rgb8(0x6B, 0x6B, 0x3D),
+                                            rgb8(0x78, 0x86, 0x5E), rgb8(0x80, 0xA5, 0x76), rgb8(0x7A, 0xC9, 0x95),
+                                            rgb8(0x61, 0xEF, 0xC4), rgb8(0xB1, 0xFF, 0xF4)};
+
+        std::vector<Oklch> result;
+        result.reserve(stops.size());
+
+        for (const Rgb& stop : stops)
+        {
+            result.push_back(srgbToOklch(stop));
+        }
+
+        return result;
+    }
+
+    [[nodiscard]] static std::vector<Oklch> makeDefaultSpectrogram(const ThemeFamily family) noexcept
+    {
+        if (family == ThemeFamily::Trichromatic)
+        {
+            return makeTrichromaticSpectrogram();
+        }
+
+        return makeBichromaticSpectrogram();
     }
 };
 
