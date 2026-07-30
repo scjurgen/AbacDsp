@@ -329,10 +329,8 @@ class SpectrogramBase
         }
     }
 
-    // Only safe once the caller guarantees no further processBlock() calls will
-    // arrive until this returns (e.g. the sole producer is about to rebuild its
-    // image from scratch). Spins until the FFT worker has drained every
-    // already-enqueued frame, then clears the sliding window.
+    // Only safe with no concurrent processBlock() caller. Spins until the FFT
+    // worker drains every enqueued frame, then clears the sliding window.
     void resetWindow() noexcept
     {
         while (m_queueHead.load(std::memory_order_relaxed) != m_queueTail.load(std::memory_order_acquire))

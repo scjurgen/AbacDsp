@@ -953,9 +953,8 @@ class LooperImpl final : public EffectBase
                 }
                 m_spectrogramDecimatePhase = (m_spectrogramDecimatePhase + 1) % kSpectrogramDecimation;
             }
-            // Non-blocking: if a background regen (from a load that raced a fresh
-            // record start) currently holds the feed, just skip this block rather
-            // than stall the audio thread.
+            // Non-blocking: skip this block if the regen thread holds the feed
+            // lock, rather than stall the audio thread.
             bool expected = false;
             if (m_spectrogramFeedLock.compare_exchange_strong(expected, true, std::memory_order_acquire))
             {
@@ -1869,11 +1868,8 @@ class LooperImpl final : public EffectBase
     }
 
     // Runs on m_spectrogramRegenThread only: rebuilds m_recordSpectrogram's image
-    // from the just-loaded loop, mirroring the live path's downmix + decimation
-    // exactly (see kSpectrogramDecimation) so a loaded loop's spectrogram matches
-    // one that was actually recorded. Paces itself against the shared FFT queue
-    // instead of feeding the whole loop at once, and bails out early if a newer
-    // load supersedes it mid-run.
+    // from the just-loaded loop, mirroring the live downmix + decimation. Paces
+    // against the shared FFT queue and bails out if superseded mid-run.
     void runSpectrogramRegen(const uint64_t gen)
     {
         const auto startTime = std::chrono::steady_clock::now();
@@ -2303,19 +2299,15 @@ class LooperImpl final : public EffectBase
     std::mutex m_loopLoadOutcomeMutex;
     LoopLoadOutcome m_loopLoadOutcome;
 
-    // Rebuilds m_recordSpectrogram's image from a just-loaded loop, since it's
-    // otherwise only ever fed live while isRecording(). Request/done gens let
-    // getSpectrogramHeadFrames() report 0 (blank ring) until regen catches up,
-    // and let a stale run notice it's been superseded and bail out early.
+    // Request/done gens: let getSpectrogramHeadFrames() report 0 until regen
+    // catches up, and let a stale run notice it's superseded and bail out.
     std::atomic<uint64_t> m_spectrogramRegenRequestGen{0};
     std::atomic<uint64_t> m_spectrogramRegenDoneGen{0};
     std::mutex m_spectrogramRegenWaitMutex;
     std::condition_variable_any m_spectrogramRegenCv;
     std::jthread m_spectrogramRegenThread;
-    // Mutual exclusion between the live audio-thread feed and this worker's feed
-    // into m_recordSpectrogram: SpectrogramBase's window buffer isn't safe for
-    // two concurrent producers. Audio thread never blocks on this (skips its
-    // feed for that block if contended); the worker spins to acquire it.
+    // Guards m_recordSpectrogram against concurrent producers: audio thread
+    // skips its feed if contended, the regen worker spins to acquire it.
     std::atomic<bool> m_spectrogramFeedLock{false};
 
     // One frozen track's audio (interleaved) plus its slices, already laid
