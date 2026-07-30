@@ -235,7 +235,11 @@ class CircularLoopDisplay : public juce::Component
         {
             return;
         }
-        const float hop = static_cast<float>(s.fftLength) * s.windowForwardRatio;
+        // s.sampleRate is the (possibly decimated) rate the spectrogram FFT ran at;
+        // m_recordHeadFrames is always in full-rate frames, so hop must be rescaled
+        // back to that domain to stay in step with the write head.
+        const float decimation = m_sampleRate / s.sampleRate;
+        const float hop = static_cast<float>(s.fftLength) * s.windowForwardRatio * decimation;
         const float headF = static_cast<float>(m_recordHeadFrames);
         if (hop <= 0.f || headF <= 0.f)
         {

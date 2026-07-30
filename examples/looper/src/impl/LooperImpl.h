@@ -96,6 +96,9 @@ class LooperImpl final : public EffectBase
     // not on this grid. Also the slice library's total pool size.
     static constexpr size_t kOnsetSnapStepsPerBeat = 4;
     static constexpr float kSliceLibrarySeconds = 120.f;
+    // Primitive (no anti-alias filter) decimation feeding the record spectrogram,
+    // trading some aliasing for a display cut around 6 kHz and 4x fewer FFT frames.
+    static constexpr size_t kSpectrogramDecimation = 4;
     static constexpr size_t kThumbFftLength = 2 * AbacDsp::SliceLibrary::kThumbHeight;
 
     // Standard meters selectable via the Time Sig control, index-matched to its
@@ -139,10 +142,13 @@ class LooperImpl final : public EffectBase
         // One bar (4 beats) at the lowest tempo (50 BPM) is ~4.8 s; size generously.
         m_visualWave.assign(static_cast<size_t>(sampleRate * 5.f) + 16, 0.f);
         m_preparedWave.reserve(m_visualWave.size());
-        m_recordSpectrogram.setSampleRate(sampleRate);
+        // Sample rate is that of the decimated feed (see kSpectrogramDecimation),
+        // so the display's Nyquist axis reflects what's actually analyzed.
+        const float spectrogramSampleRate = sampleRate / static_cast<float>(kSpectrogramDecimation);
+        m_recordSpectrogram.setSampleRate(spectrogramSampleRate);
         // Cover the whole recordable span (~60 s) so a long loop's ring is fully
         // painted, not just its tail. hop = fftLength * windowForwardRatio (1024/3).
-        m_recordSpectrogram.setSlices(static_cast<size_t>(60.f * sampleRate / (1024.f / 3.f)) + 64);
+        m_recordSpectrogram.setSlices(static_cast<size_t>(60.f * spectrogramSampleRate / (1024.f / 3.f)) + 64);
         // Covers half a bar of late-start backfill at the slowest supported tempo.
         m_ringCapacityFrames = std::max<size_t>(BlockSize, static_cast<size_t>(sampleRate * 8.f));
         m_captureRing.assign(m_ringCapacityFrames * 2, 0.f);
@@ -902,12 +908,17 @@ class LooperImpl final : public EffectBase
         // (stops advancing) once recording stops, so the last image persists.
         if (isRecording())
         {
-            std::array<float, BlockSize> inMono{};
+            std::array<float, BlockSize> inMonoDecimated{};
+            size_t decimatedCount = 0;
             for (size_t i = 0; i < BlockSize; ++i)
             {
-                inMono[i] = 0.5f * (in(i, 0) + in(i, 1));
+                if (m_spectrogramDecimatePhase == 0)
+                {
+                    inMonoDecimated[decimatedCount++] = 0.5f * (in(i, 0) + in(i, 1));
+                }
+                m_spectrogramDecimatePhase = (m_spectrogramDecimatePhase + 1) % kSpectrogramDecimation;
             }
-            m_recordSpectrogram.processBlock(std::span<const float>{inMono});
+            m_recordSpectrogram.processBlock(std::span<const float>{inMonoDecimated.data(), decimatedCount});
         }
 
         // Threshold recording: while armed, wait for the input to cross the level
@@ -2017,6 +2028,7 @@ class LooperImpl final : public EffectBase
     AbacDsp::BeatSequencer m_seq;
     AbacDsp::ClickGenerator m_click;
     AbacDsp::SimpleSpectrogram m_recordSpectrogram;
+    size_t m_spectrogramDecimatePhase{0};
     AbacDsp::SliceLibrary m_sliceLibrary;
     AbacDsp::SequencerEngine<> m_sequencer;
     AbacDsp::SequencePattern m_pattern;
