@@ -137,7 +137,7 @@ class CircularLoopDisplay : public juce::Component
         drawOuterRing(g, geo, c);
         drawInnerDisc(g, geo, c);
         drawHands(g, geo, c);
-        drawHub(g, geo, c);
+        drawCenterLabels(g, geo, c);
         drawLabels(g, c);
     }
 
@@ -149,12 +149,14 @@ class CircularLoopDisplay : public juce::Component
     {
         GuiConstants::instance().getSpectrogramGradient().createLookupTable(m_lut, GuiConstants::kLutSize);
     }
-
+    static constexpr float innerRingFactor{.6f};
+    static constexpr float outerRingFactor{.98f};
     static constexpr float kPad = 8.f;
     static constexpr float kTitleH = 26.f;
     static constexpr float kHalfPi = std::numbers::pi_v<float> / 2.f;
     static constexpr float k2Pi = std::numbers::pi_v<float> * 2.f;
     static constexpr float kBeatAngle = -kHalfPi; // downbeat at 12 o'clock
+    static constexpr float kSpectrogramEdgeMaskWidth = 7.f;
 
     struct Geometry
     {
@@ -162,18 +164,20 @@ class CircularLoopDisplay : public juce::Component
             : cx(b.getCentreX())
             , cy(b.getCentreY())
             , maxR(std::min(b.getWidth(), b.getHeight()) * 0.5f - 4.f)
-            , ringOuterR(maxR * 0.98f)
-            , ringInnerR(maxR * 0.70f)
-            , baseR(maxR * 0.42f)
-            , amplScale(maxR * 0.10f)
+            , ringOuterR(maxR * outerRingFactor)
+            , ringInnerR(maxR * innerRingFactor)
+            , baseR(maxR * 0.28f)
+            , amplScale(maxR * 0.06f)
             , innerR(baseR - amplScale)
             , outerR(baseR + amplScale)
+            , volOuterR(ringInnerR)
+            , volInnerR(ringInnerR - maxR * 0.24f)
         {
         }
-        float cx, cy, maxR, ringOuterR, ringInnerR, baseR, amplScale, innerR, outerR;
+        float cx, cy, maxR, ringOuterR, ringInnerR, baseR, amplScale, innerR, outerR, volOuterR, volInnerR;
     };
 
-    [[nodiscard]] juce::Point<float> polar(const Geometry& geo, float angle, float r) const noexcept
+    static juce::Point<float> polar(const Geometry& geo, const float angle, const float r) noexcept
     {
         return {geo.cx + r * std::cos(angle), geo.cy + r * std::sin(angle)};
     }
@@ -185,8 +189,8 @@ class CircularLoopDisplay : public juce::Component
     void buildAnnulus()
     {
         constexpr float kHalf = static_cast<float>(kIrisSize) / 2.f;
-        constexpr float innerR = kHalf * 0.70f;
-        constexpr float outerR = kHalf * 0.98f;
+        constexpr float innerR = kHalf * innerRingFactor;
+        constexpr float outerR = kHalf * outerRingFactor;
         m_annulus.clear();
         for (int py = 0; py < kIrisSize; ++py)
         {
@@ -201,7 +205,8 @@ class CircularLoopDisplay : public juce::Component
                 }
                 float phase = std::atan2(dy, dx) - kBeatAngle;
                 phase -= k2Pi * std::floor(phase / k2Pi);
-                m_annulus.push_back({px, py, phase / k2Pi, (r - innerR) / (outerR - innerR)});
+                m_annulus.push_back(
+                    {.px = px, .py = py, .angleNorm = phase / k2Pi, .normR = (r - innerR) / (outerR - innerR)});
             }
         }
     }
@@ -295,6 +300,14 @@ class CircularLoopDisplay : public juce::Component
 
     void drawOuterRing(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
     {
+        // Masks the jagged raster edge renderSpectrogram() leaves at the annulus
+        // boundaries (m_iris is a fixed 256x256 image, stretched up to the ring).
+        g.setColour(juce::Colour(c.backgroundDark));
+        g.drawEllipse(geo.cx - geo.ringInnerR, geo.cy - geo.ringInnerR, 2.f * geo.ringInnerR, 2.f * geo.ringInnerR,
+                      kSpectrogramEdgeMaskWidth);
+        g.drawEllipse(geo.cx - geo.ringOuterR, geo.cy - geo.ringOuterR, 2.f * geo.ringOuterR, 2.f * geo.ringOuterR,
+                      kSpectrogramEdgeMaskWidth);
+
         g.setColour(juce::Colour(c.labelColour).withAlpha(0.12f));
         g.drawEllipse(geo.cx - geo.ringInnerR, geo.cy - geo.ringInnerR, 2.f * geo.ringInnerR, 2.f * geo.ringInnerR,
                       1.f);
@@ -305,31 +318,55 @@ class CircularLoopDisplay : public juce::Component
         drawBarSpokes(g, geo, c);
     }
 
-    // Actual data trace - statusOutline, matching WaveformShow's existing convention.
+    // Actual data trace - statusOutline, matching WaveformShow's existing convention. A
+    // separate band just inside the spectrogram ring (volOuterR..volInnerR), not overlapping
+    // it: anchored at volOuterR, dipping inward toward volInnerR as loudness grows.
     void drawLoopWaveformBand(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
     {
         if (m_loopPeaks.size() < 2)
         {
             return;
         }
-        const float band = geo.ringOuterR - geo.ringInnerR;
-        const float n = static_cast<float>(m_loopPeaks.size());
-        g.setColour(juce::Colour(c.statusOutline));
-        for (size_t i = 0; i < m_loopPeaks.size(); ++i)
+        const float band = geo.volOuterR - geo.volInnerR;
+        const size_t count = m_loopPeaks.size();
+        const float n = static_cast<float>(count);
+        juce::Path wave;
+        // Outer boundary: the constant volOuterR circle, forward.
+        for (size_t i = 0; i < count; ++i)
         {
             const float angle = kBeatAngle + static_cast<float>(i) / n * k2Pi;
-            const float r = geo.ringInnerR + juce::jlimit(0.f, 1.f, m_loopPeaks[i]) * band;
-            g.drawLine(juce::Line<float>(polar(geo, angle, geo.ringInnerR), polar(geo, angle, r)), 1.0f);
+            const auto pt = polar(geo, angle, geo.volOuterR);
+            if (i == 0)
+            {
+                wave.startNewSubPath(pt);
+            }
+            else
+            {
+                wave.lineTo(pt);
+            }
         }
+        // Inner boundary: the trace, walked in reverse so the two boundaries form
+        // a non-self-intersecting ring polygon.
+        for (size_t k = 0; k < count; ++k)
+        {
+            const size_t i = count - 1 - k;
+            const float angle = kBeatAngle + static_cast<float>(i) / n * k2Pi;
+            const float r = geo.volOuterR - juce::jlimit(0.f, 1.f, m_loopPeaks[i]) * band;
+            wave.lineTo(polar(geo, angle, r));
+        }
+        wave.closeSubPath();
+        g.setColour(juce::Colour(c.statusOutline).withAlpha(0.35f));
+        g.fillPath(wave);
     }
 
-    // Many spokes stack up visually - kept faint (except the first-bar marker) so they
-    // don't read as a dark ring, matching the density lesson from CircularBarDisplay.
+    // Many spokes stack up visually - kept faint so they don't read as a dark
+    // ring, matching the density lesson from CircularBarDisplay.
     void drawBarSpokes(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
     {
         const bool haveLengths = m_barFrameLengths.size() == static_cast<size_t>(m_outerRingBars);
         const float total = haveLengths ? totalBarFrames() : 0.f;
         float cumulative = 0.f;
+        g.setColour(juce::Colour(c.labelColour).withAlpha(0.20f));
         for (int bar = 0; bar < m_outerRingBars; ++bar)
         {
             const float frac = (haveLengths && total > 0.f)
@@ -340,11 +377,9 @@ class CircularLoopDisplay : public juce::Component
                 cumulative += m_barFrameLengths[static_cast<size_t>(bar)];
             }
             const float angle = kBeatAngle + frac * k2Pi;
-            const bool first = (bar == 0);
-            g.setColour(juce::Colour(c.labelColour).withAlpha(first ? 0.85f : 0.20f));
             g.drawLine(
                 juce::Line<float>(polar(geo, angle, geo.ringInnerR * 0.98f), polar(geo, angle, geo.ringOuterR * 1.02f)),
-                first ? 2.5f : 1.2f);
+                1.2f);
         }
     }
 
@@ -372,14 +407,12 @@ class CircularLoopDisplay : public juce::Component
             }
         }
 
+        g.setColour(juce::Colour(c.labelColour).withAlpha(0.25f));
         for (size_t k = 0; k < barBeats; ++k)
         {
             const float angle = kBeatAngle + static_cast<float>(k) / static_cast<float>(barBeats) * k2Pi;
-            const bool downbeat = (k == 0);
-            g.setColour(juce::Colour(c.labelColour).withAlpha(downbeat ? 0.85f : 0.25f));
-            g.drawLine(juce::Line<float>(polar(geo, angle, geo.innerR * 0.5f),
-                                         polar(geo, angle, geo.outerR * (downbeat ? 1.2f : 1.1f))),
-                       downbeat ? 2.5f : 1.5f);
+            g.drawLine(juce::Line<float>(polar(geo, angle, geo.innerR * 0.5f), polar(geo, angle, geo.outerR * 1.1f)),
+                       1.5f);
         }
 
         drawBarWaveform(g, geo, c);
@@ -421,37 +454,43 @@ class CircularLoopDisplay : public juce::Component
         g.drawLine(juce::Line<float>(polar(geo, loopAngle, geo.ringInnerR), polar(geo, loopAngle, geo.ringOuterR)),
                    2.5f);
 
-        // Short fast hand: bar phase, within the inner disc.
+        // Short fast hand: bar phase, confined to the disc's band, not the hub
+        // (freed for the centre text, see drawCenterLabels()).
         const float barAngle = kBeatAngle + std::clamp(m_barPhase, 0.f, 1.f) * k2Pi;
         g.setColour(juce::Colour(c.labelColour).withAlpha(0.90f));
-        g.drawLine(juce::Line<float>(polar(geo, barAngle, 0.f), polar(geo, barAngle, geo.outerR)), 2.0f);
+        g.drawLine(juce::Line<float>(polar(geo, barAngle, geo.innerR), polar(geo, barAngle, geo.outerR)), 2.0f);
     }
 
-    void drawHub(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
+    // Bar.beat above, status below, both centred on the hub - the space the fast
+    // hand used to sweep through before it moved out to the inner disc's band.
+    void drawCenterLabels(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
     {
-        constexpr float kHubR = 4.f;
-        g.setColour(juce::Colour(c.labelColour).withAlpha(0.85f));
-        g.fillEllipse(geo.cx - kHubR, geo.cy - kHubR, 2.f * kHubR, 2.f * kHubR);
+        const float lineHeight = geo.innerR * 0.35f;
+        const juce::Rectangle<float> topLine(geo.cx - geo.innerR, geo.cy - lineHeight, 2.f * geo.innerR, lineHeight);
+        const juce::Rectangle<float> bottomLine(geo.cx - geo.innerR, geo.cy, 2.f * geo.innerR, lineHeight);
+
+        if (m_barBeatLabel.isNotEmpty())
+        {
+            g.setFont(juce::Font(juce::FontOptions(21.f)));
+            g.setColour(juce::Colour(c.labelColour).withAlpha(0.85f));
+            g.drawText(m_barBeatLabel, topLine, juce::Justification::centred);
+        }
+        if (m_stateLabel.isNotEmpty())
+        {
+            g.setFont(juce::Font(juce::FontOptions(14.f)));
+            g.setColour(juce::Colour(c.labelColour).withAlpha(0.70f));
+            g.drawText(m_stateLabel, bottomLine, juce::Justification::centred);
+        }
     }
 
     void drawLabels(juce::Graphics& g, const GuiConstants::Colors& c) const
     {
         const auto titleBounds = getLocalBounds().toFloat().reduced(kPad).removeFromTop(kTitleH);
         g.setFont(juce::Font(juce::FontOptions(21.f)));
-        if (m_stateLabel.isNotEmpty())
-        {
-            g.setColour(juce::Colour(c.labelColour).withAlpha(0.85f));
-            g.drawText(m_stateLabel, titleBounds, juce::Justification::centredLeft);
-        }
         if (m_label.isNotEmpty())
         {
             g.setColour(juce::Colour(c.labelColour).withAlpha(0.55f));
             g.drawText(m_label, titleBounds, juce::Justification::centredRight);
-        }
-        if (m_barBeatLabel.isNotEmpty())
-        {
-            g.setColour(juce::Colour(c.labelColour).withAlpha(0.85f));
-            g.drawText(m_barBeatLabel, titleBounds, juce::Justification::centred);
         }
     }
 
