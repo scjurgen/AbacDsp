@@ -88,7 +88,8 @@
     "recordSwitch.setButtonText(processorRef.isRecording() ? juce::String::fromUTF8(\"Recording\") : (processorRef.isArmed() ? juce::String::fromUTF8(\"Armed\") : juce::String::fromUTF8(\"Record\")));",
     "freezeSwitch.setButtonText(processorRef.isFreezePending() ? juce::String::fromUTF8(\"Freezing...\") : (juce::String::fromUTF8(\"Freeze (\") + juce::String(processorRef.getFrozenTrackCount()) + juce::String::fromUTF8(\" trk/\") + juce::String(processorRef.getFrozenSliceCount()) + juce::String::fromUTF8(\" sl)\")));",
     "if (const auto saved = processorRef.consumeLastSavedLoopName(); saved.isNotEmpty()) { m_statusBar.showMessage(juce::String::fromUTF8(\"Saved '\") + saved + \"'\"); }",
-    "handleLoopLoadOutcome();"
+    "handleLoopLoadOutcome();",
+    "beatGauge.setRemainingRecordLabel(processorRef.getRemainingRecordLabel());"
   ],
   "processor_forwards": [
     {"name": "isHostSynced", "type": "bool"},
@@ -121,6 +122,7 @@
     "[[nodiscard]] juce::String getLooperStateLabel() const { return pluginRunner ? juce::String(pluginRunner->getStateLabel()) : juce::String(); }",
     "[[nodiscard]] juce::String getBarBeatLabel() const { return pluginRunner ? juce::String(pluginRunner->getBarBeatLabel()) : juce::String(); }",
     "[[nodiscard]] juce::String getSequencerLabel() const { return pluginRunner ? juce::String(pluginRunner->getSequencerStateLabel()) : juce::String(); }",
+    "[[nodiscard]] juce::String getRemainingRecordLabel() const { return pluginRunner ? juce::String(pluginRunner->getRemainingRecordLabel()) : juce::String(); }",
     "static std::string getLoopsDirectory() {\n        auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);\n#if JUCE_MAC\n        base = base.getChildFile(\"Application Support\");\n#endif\n        const auto dir = base.getChildFile(\"AbacDsp\").getChildFile(\"Looper\").getChildFile(\"loops\");\n        dir.createDirectory();\n        return dir.getFullPathName().toStdString();\n    }",
     "[[nodiscard]] std::vector<juce::String> listLoopNames() const { std::vector<juce::String> result; if (pluginRunner) { for (const auto& n : pluginRunner->listLoopNames()) { result.push_back(juce::String(n)); } } return result; }",
     "void saveLoopAs(const juce::String& name) { if (pluginRunner) { pluginRunner->requestSaveLoopAs(name.toStdString()); } }",

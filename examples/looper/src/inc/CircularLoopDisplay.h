@@ -93,8 +93,12 @@ class CircularLoopDisplay : public juce::Component
     {
         m_barBeatLabel = label;
     }
+    // mm:ss left in the capture buffer; empty once a loop is finalized.
+    void setRemainingRecordLabel(const juce::String& label)
+    {
+        m_remainingRecordLabel = label;
+    }
 
-    // --- Outer ring spectrogram (live while recording) ---
     void setSpectrogram(const AbacDsp::SpectrumImageSet& spectro) noexcept
     {
         m_spectro = spectro;
@@ -457,13 +461,17 @@ class CircularLoopDisplay : public juce::Component
         g.drawLine(juce::Line<float>(polar(geo, barAngle, geo.innerR), polar(geo, barAngle, geo.outerR)), 2.0f);
     }
 
-    // Bar.beat above, status below, both centred on the hub - the space the fast
-    // hand used to sweep through before it moved out to the inner disc's band.
+    // Bar.beat, status, and remaining record time, stacked and centred on the hub -
+    // the space the fast hand used to sweep through before it moved to the disc's band.
     void drawCenterLabels(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
     {
-        const float lineHeight = geo.innerR * 0.35f;
-        const juce::Rectangle<float> topLine(geo.cx - geo.innerR, geo.cy - lineHeight, 2.f * geo.innerR, lineHeight);
-        const juce::Rectangle<float> bottomLine(geo.cx - geo.innerR, geo.cy, 2.f * geo.innerR, lineHeight);
+        const float lineHeight = geo.innerR * 0.23f;
+        const juce::Rectangle<float> topLine(geo.cx - geo.innerR, geo.cy - 1.5f * lineHeight, 2.f * geo.innerR,
+                                             lineHeight);
+        const juce::Rectangle<float> midLine(geo.cx - geo.innerR, geo.cy - 0.5f * lineHeight, 2.f * geo.innerR,
+                                             lineHeight);
+        const juce::Rectangle<float> bottomLine(geo.cx - geo.innerR, geo.cy + 0.5f * lineHeight, 2.f * geo.innerR,
+                                                lineHeight);
 
         if (m_barBeatLabel.isNotEmpty())
         {
@@ -475,7 +483,13 @@ class CircularLoopDisplay : public juce::Component
         {
             g.setFont(juce::Font(juce::FontOptions(14.f)));
             g.setColour(juce::Colour(c.labelColour).withAlpha(0.70f));
-            g.drawText(m_stateLabel, bottomLine, juce::Justification::centred);
+            g.drawText(m_stateLabel, midLine, juce::Justification::centred);
+        }
+        if (m_remainingRecordLabel.isNotEmpty())
+        {
+            g.setFont(juce::Font(juce::FontOptions(13.f)));
+            g.setColour(juce::Colour(c.labelColour).withAlpha(0.55f));
+            g.drawText(m_remainingRecordLabel, bottomLine, juce::Justification::centred);
         }
     }
 
@@ -513,6 +527,7 @@ class CircularLoopDisplay : public juce::Component
     juce::String m_stateLabel;
     juce::String m_label;
     juce::String m_barBeatLabel;
+    juce::String m_remainingRecordLabel;
 
     AbacDsp::SpectrumImageSet m_spectro{};
     size_t m_recordHeadFrames{0};

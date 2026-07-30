@@ -150,10 +150,11 @@ class LooperImpl final : public EffectBase
         const float spectrogramSampleRate = sampleRate / static_cast<float>(kSpectrogramDecimation);
         m_recordSpectrogram.setSampleRate(spectrogramSampleRate);
         m_recordSpectrogram.setWindowForward(kSpectrogramWindowForward);
-        // Cover the whole recordable span (~60 s) so a long loop's ring is fully
-        // painted, not just its tail. hop = fftLength * windowForwardRatio.
-        m_recordSpectrogram.setSlices(
-            static_cast<size_t>(60.f * spectrogramSampleRate / (1024.f * kSpectrogramWindowForward)) + 64);
+        // Cover the whole recordable span so a long loop's ring is fully painted,
+        // not just its tail. hop = fftLength * windowForwardRatio.
+        const auto decimatedMaxFrames = static_cast<float>(m_recorder.maxFrames()) / kSpectrogramDecimation;
+        m_recordSpectrogram.setSlices(static_cast<size_t>(decimatedMaxFrames / (1024.f * kSpectrogramWindowForward)) +
+                                      64);
         // Covers half a bar of late-start backfill at the slowest supported tempo.
         m_ringCapacityFrames = std::max<size_t>(BlockSize, static_cast<size_t>(sampleRate * 8.f));
         m_captureRing.assign(m_ringCapacityFrames * 2, 0.f);
@@ -750,6 +751,21 @@ class LooperImpl final : public EffectBase
             }
         }
         return std::format("{}.{}", bar + 1, m_seq.beatIndexInBar() + 1);
+    }
+
+    // Recording headroom left in the capture buffer, mm:ss, so a performer always
+    // knows how much runway remains before a free take gets cut off mid-bar. Once a
+    // loop is finalized the buffer isn't being consumed anymore, so this is moot.
+    [[nodiscard]] std::string getRemainingRecordLabel() const
+    {
+        if (m_recorder.hasLoop())
+        {
+            return {};
+        }
+        const size_t remainingFrames =
+            m_recorder.maxFrames() - std::min(m_recorder.maxFrames(), m_recorder.recordedFrames());
+        const auto remainingSeconds = static_cast<int>(static_cast<float>(remainingFrames) / sampleRate());
+        return std::format("{}:{:02d}", remainingSeconds / 60, remainingSeconds % 60);
     }
 
     [[nodiscard]] float getBarPhase() const noexcept

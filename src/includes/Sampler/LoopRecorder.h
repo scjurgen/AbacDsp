@@ -27,7 +27,7 @@ class LoopRecorder
   public:
     static constexpr size_t kChannels = 2;
 
-    explicit LoopRecorder(const float sampleRate, const float maxSeconds = 60.f)
+    explicit LoopRecorder(const float sampleRate, const float maxSeconds = 180.f)
         : m_maxFrames(std::max<size_t>(1, static_cast<size_t>(sampleRate * maxSeconds)))
     {
         m_buffer.assign(m_maxFrames * kChannels, 0.f);

@@ -234,6 +234,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 m_statusBar.showMessage(juce::String::fromUTF8("Saved '") + saved + "'");
             }
             handleLoopLoadOutcome();
+            beatGauge.setRemainingRecordLabel(processorRef.getRemainingRecordLabel());
             processorRef.consumeLastLearnedCc();
         }
     }

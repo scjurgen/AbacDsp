@@ -876,6 +876,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner ? juce::String(pluginRunner->getSequencerStateLabel()) : juce::String();
     }
+    [[nodiscard]] juce::String getRemainingRecordLabel() const
+    {
+        return pluginRunner ? juce::String(pluginRunner->getRemainingRecordLabel()) : juce::String();
+    }
     static std::string getLoopsDirectory()
     {
         auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
