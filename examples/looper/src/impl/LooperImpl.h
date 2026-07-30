@@ -365,7 +365,7 @@ class LooperImpl final : public EffectBase
                 names.push_back(entry.path().stem().string());
             }
         }
-        std::sort(names.begin(), names.end());
+        std::ranges::sort(names);
         return names;
     }
 
@@ -707,11 +707,11 @@ class LooperImpl final : public EffectBase
     // today's uniform-bar behavior exactly in that case.
     [[nodiscard]] std::vector<float> getBarFrameLengths() const
     {
-        const size_t n = static_cast<size_t>(std::max(0, getOuterRingBars()));
+        const auto n = static_cast<size_t>(std::max(0, getOuterRingBars()));
         std::vector<float> lengths(n);
         if (m_meterTimeline.empty())
         {
-            std::fill(lengths.begin(), lengths.end(), static_cast<float>(getSamplesPerBar()));
+            std::ranges::fill(lengths, static_cast<float>(getSamplesPerBar()));
             return lengths;
         }
         const float samplesPerQuarterBeat = (m_appliedBpm > 0.f) ? sampleRate() * 60.f / m_appliedBpm : 0.f;
@@ -2069,7 +2069,7 @@ class LooperImpl final : public EffectBase
     {
         for (size_t i = 0; i < BlockSize; ++i)
         {
-            const size_t pos = static_cast<size_t>((m_absPos + i) % m_ringCapacityFrames);
+            const auto pos = static_cast<size_t>((m_absPos + i) % m_ringCapacityFrames);
             m_captureRing[pos * 2] = in(i, 0);
             m_captureRing[pos * 2 + 1] = in(i, 1);
         }
@@ -2159,10 +2159,8 @@ class LooperImpl final : public EffectBase
                 return AbacDsp::SubdivType::None; // 1/4
             case 1:
                 return AbacDsp::SubdivType::Eighth;
-            case 2:
-                return AbacDsp::SubdivType::Sixteenth;
             default:
-                return AbacDsp::SubdivType::Sixteenth; // 1/32 approximated
+                return AbacDsp::SubdivType::Sixteenth; // 2 = 1/16, 3 = 1/32 approximated
         }
     }
 

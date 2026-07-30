@@ -5,6 +5,7 @@
 #include <juce_graphics/juce_graphics.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <numbers>
+#include <numeric>
 #include <vector>
 
 #include "Analysis/Spectrogram.h"
@@ -215,12 +216,7 @@ class CircularLoopDisplay : public juce::Component
     // matches the current bar count (e.g. before the first poll tick it won't).
     [[nodiscard]] float totalBarFrames() const noexcept
     {
-        float total = 0.f;
-        for (const float len : m_barFrameLengths)
-        {
-            total += len;
-        }
-        return total;
+        return std::accumulate(m_barFrameLengths.begin(), m_barFrameLengths.end(), 0.f);
     }
 
     // Repaint the whole iris each tick (no persistent state), so the growing ring
@@ -245,7 +241,7 @@ class CircularLoopDisplay : public juce::Component
         // back to that domain to stay in step with the write head.
         const float decimation = m_sampleRate / s.sampleRate;
         const float hop = static_cast<float>(s.fftLength) * s.windowForwardRatio * decimation;
-        const float headF = static_cast<float>(m_recordHeadFrames);
+        const auto headF = static_cast<float>(m_recordHeadFrames);
         if (hop <= 0.f || headF <= 0.f)
         {
             return;
@@ -269,7 +265,7 @@ class CircularLoopDisplay : public juce::Component
             {
                 continue;
             }
-            const size_t j = static_cast<size_t>(jf);
+            const auto j = static_cast<size_t>(jf);
             if (j >= validSlices)
             {
                 continue;
@@ -282,7 +278,7 @@ class CircularLoopDisplay : public juce::Component
             const float bt = fbin - static_cast<float>(bin0);
             const float* row = &s.data[sliceIdx * fftHalf];
             float value = row[bin0] + bt * (row[bin1] - row[bin0]);
-            value = std::pow(std::max(value, 0.f), 0.15f);
+            value = std::pow(std::max(value, 0.f), 0.1f); // adjusted by taste (the smaller the more prominent)
             const int lutIdx =
                 juce::jlimit(0, GuiConstants::kLutSize - 1, static_cast<int>(value * (GuiConstants::kLutSize - 1)));
             const juce::Colour base = juce::Colour(m_lut[static_cast<size_t>(lutIdx)]);
@@ -329,7 +325,7 @@ class CircularLoopDisplay : public juce::Component
         }
         const float band = geo.volOuterR - geo.volInnerR;
         const size_t count = m_loopPeaks.size();
-        const float n = static_cast<float>(count);
+        const auto n = static_cast<float>(count);
         juce::Path wave;
         // Outer boundary: the constant volOuterR circle, forward.
         for (size_t i = 0; i < count; ++i)
@@ -385,7 +381,7 @@ class CircularLoopDisplay : public juce::Component
 
     void drawInnerDisc(juce::Graphics& g, const Geometry& geo, const GuiConstants::Colors& c) const
     {
-        const size_t barBeats = static_cast<size_t>(m_barBeats);
+        const auto barBeats = static_cast<size_t>(m_barBeats);
         const size_t spb = m_samplesPerBar / barBeats;
 
         g.setColour(juce::Colour(c.labelColour).withAlpha(0.10f));
