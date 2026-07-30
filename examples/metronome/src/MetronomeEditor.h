@@ -9,7 +9,6 @@
 #include "UiElements.h"
 
 
-//==============================================================================
 class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                         juce::Timer,
                                         juce::MenuBarModel,
@@ -277,11 +276,21 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         if (menuIndex == 0)
         {
             juce::PopupMenu themeMenu;
-            for (size_t i = 0; i < Themes::kThemes.size(); ++i)
+            for (int i = 0; i < Themes::kHueCount; ++i)
             {
-                themeMenu.addItem(static_cast<int>(i) + 1, Themes::kThemes[i].name);
+                themeMenu.addItem(i + 1, Themes::kHueNames[static_cast<size_t>(i)]);
             }
             menu.addSubMenu("Theme", themeMenu);
+
+            juce::PopupMenu modeMenu;
+            modeMenu.addItem(kThemeModeLightId, "Light");
+            modeMenu.addItem(kThemeModeDarkId, "Dark");
+            menu.addSubMenu("Mode", modeMenu);
+
+            juce::PopupMenu baseMenu;
+            baseMenu.addItem(kThemeBaseBichromaticId, "Bichromatic");
+            baseMenu.addItem(kThemeBaseTrichromaticId, "Trichromatic");
+            menu.addSubMenu("Base", baseMenu);
             menu.addSubMenu("Patches", buildPatchesMenu());
         }
         return menu;
@@ -289,9 +298,21 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
     void menuItemSelected(int menuItemID, int /*topLevelMenuIndex*/) override
     {
-        if (menuItemID >= 1 && menuItemID <= static_cast<int>(Themes::kThemes.size()))
+        if (menuItemID >= 1 && menuItemID <= Themes::kHueCount)
         {
-            applyTheme(static_cast<GuiConstants::Theme>(menuItemID - 1));
+            applyTheme(Themes::withHue(m_currentTheme, menuItemID - 1));
+            return;
+        }
+        if (menuItemID == kThemeModeLightId || menuItemID == kThemeModeDarkId)
+        {
+            applyTheme(Themes::withMode(m_currentTheme, menuItemID == kThemeModeDarkId));
+            return;
+        }
+        if (menuItemID == kThemeBaseBichromaticId || menuItemID == kThemeBaseTrichromaticId)
+        {
+            const auto family =
+                menuItemID == kThemeBaseTrichromaticId ? ui::ThemeFamily::Trichromatic : ui::ThemeFamily::Bichromatic;
+            applyTheme(Themes::withFamily(m_currentTheme, family));
             return;
         }
         handlePatchMenuSelection(menuItemID);
@@ -299,6 +320,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
     void applyTheme(GuiConstants::Theme preset)
     {
+        m_currentTheme = preset;
         AppSettings::saveTheme(preset);
         GuiConstants::setPreset(preset);
         setLookAndFeel(nullptr);
@@ -477,6 +499,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                           });
     }
 
+
     void updateSwingRatioVisibility()
     {
         swingRatioDial.setVisible(processorRef.presetHasSwing(presetDrop.getSelectedItemIndex()));
@@ -493,6 +516,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     StatusBar m_statusBar;
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
+    GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};
+    static constexpr int kThemeModeLightId = 9000;
+    static constexpr int kThemeModeDarkId = 9001;
+    static constexpr int kThemeBaseBichromaticId = 9002;
+    static constexpr int kThemeBaseTrichromaticId = 9003;
     static constexpr int kPatchSaveId = 1000;
     static constexpr int kPatchSaveAsId = 1001;
     static constexpr int kPatchLoadIdBase = 2000;
@@ -500,6 +528,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     static constexpr int kPatchRenameIdBase = 4000;
     std::unique_ptr<juce::AlertWindow> m_patchNameDialog;
     std::vector<juce::String> m_patchMenuNames;
+
 
     CustomRotaryDial bpmDial{this};
     juce::ComboBox dropBarsDrop{};

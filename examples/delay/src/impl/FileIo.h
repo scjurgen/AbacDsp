@@ -259,7 +259,7 @@ class FileIo
         in >> j;
         m_currentParams = j.get<PatchParameters>();
         std::cout << "FileIo: File " << filename << " loaded" << std::endl;
-        std::cout << j.dump();
+        std::cout << j.dump() << std::endl;
         return true;
     }
 

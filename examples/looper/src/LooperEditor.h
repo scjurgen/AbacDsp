@@ -9,7 +9,6 @@
 #include "UiElements.h"
 
 
-//==============================================================================
 class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                         juce::Timer,
                                         juce::MenuBarModel,

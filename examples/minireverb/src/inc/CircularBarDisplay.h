@@ -62,7 +62,7 @@ class CircularBarDisplay : public juce::Component
     {
         const auto& c = GuiConstants::instance().colors;
 
-        g.setColour(juce::Colour(c.cols[0]));
+        g.setColour(juce::Colour(c.backgroundDark));
         g.fillRoundedRectangle(getLocalBounds().toFloat(), 3.f);
 
         if (m_data.size() < 2 || m_samplesPerBar == 0 || m_barBeats <= 0)
@@ -97,17 +97,19 @@ class CircularBarDisplay : public juce::Component
         const size_t barBeats = static_cast<size_t>(m_barBeats);
         const size_t spb = m_samplesPerBar / barBeats;
 
-        // --- Base rings ---
-        g.setColour(juce::Colour(c.cols[4]).withAlpha(0.20f));
+        // --- Base rings (faint structural reference, not data) ---
+        g.setColour(juce::Colour(c.labelColour).withAlpha(0.12f));
         g.drawEllipse(cx - innerR, cy - innerR, 2.f * innerR, 2.f * innerR, 1.f);
         g.drawEllipse(cx - outerR, cy - outerR, 2.f * outerR, 2.f * outerR, 1.f);
-        g.setColour(juce::Colour(c.cols[4]).withAlpha(0.12f));
+        g.setColour(juce::Colour(c.labelColour).withAlpha(0.07f));
         g.drawEllipse(cx - baseR, cy - baseR, 2.f * baseR, 2.f * baseR, 0.5f);
 
         // --- Subdivision ticks (within each beat) ---
+        // Many thin lines stack up visually - kept faint so they don't read as a dark
+        // disk, leaving the downbeat marker/hand/waveform as the only strong elements.
         if (spb > 0 && !m_subdivisionPositions.empty())
         {
-            g.setColour(juce::Colour(c.cols[6]).withAlpha(0.55f));
+            g.setColour(juce::Colour(c.labelColour).withAlpha(0.25f));
             for (size_t b = 0; b < barBeats; ++b)
             {
                 for (const size_t offset : m_subdivisionPositions)
@@ -119,18 +121,18 @@ class CircularBarDisplay : public juce::Component
             }
         }
 
-        // --- Beat markers (downbeat emphasized) ---
+        // --- Beat markers (downbeat emphasized, others kept faint for the same reason) ---
         for (size_t k = 0; k < barBeats; ++k)
         {
             const float angle = kBeatAngle + static_cast<float>(k) / static_cast<float>(barBeats) * k2Pi;
             const bool downbeat = (k == 0);
-            g.setColour(juce::Colour(c.cols[downbeat ? 9 : 4]).withAlpha(downbeat ? 0.90f : 0.55f));
+            g.setColour(juce::Colour(c.labelColour).withAlpha(downbeat ? 0.85f : 0.25f));
             g.drawLine(
                 juce::Line<float>(polarPt(angle, innerR * 0.5f), polarPt(angle, outerR * (downbeat ? 1.2f : 1.1f))),
                 downbeat ? 2.5f : 1.5f);
         }
 
-        // --- Bar waveform ---
+        // --- Bar waveform (actual data trace - statusOutline, matching WaveformShow's convention) ---
         {
             juce::Path wave;
             for (size_t i = 0; i < n; ++i)
@@ -146,27 +148,27 @@ class CircularBarDisplay : public juce::Component
                     wave.lineTo(pt);
                 }
             }
-            g.setColour(juce::Colour(c.cols[8]));
+            g.setColour(juce::Colour(c.statusOutline));
             g.strokePath(wave, juce::PathStrokeType(1.5f));
         }
 
         // --- Sweeping hand at the current bar phase ---
         {
             const float handAngle = kBeatAngle + std::clamp(m_barPhase, 0.f, 1.f) * k2Pi;
-            g.setColour(juce::Colour(c.cols[7]).withAlpha(0.90f));
+            g.setColour(juce::Colour(c.labelColour).withAlpha(0.90f));
             g.drawLine(juce::Line<float>(polarPt(handAngle, 0.f), polarPt(handAngle, outerR)), 2.0f);
         }
 
         // --- Centre hub ---
         constexpr float kHubR = 4.f;
-        g.setColour(juce::Colour(c.cols[9]).withAlpha(0.85f));
+        g.setColour(juce::Colour(c.labelColour).withAlpha(0.85f));
         g.fillEllipse(cx - kHubR, cy - kHubR, 2.f * kHubR, 2.f * kHubR);
 
         // --- Title ---
         if (m_label.isNotEmpty())
         {
             const auto titleBounds = getLocalBounds().toFloat().reduced(kPad).removeFromTop(kTitleH);
-            g.setColour(juce::Colour(c.cols[7]).withAlpha(0.75f));
+            g.setColour(juce::Colour(c.labelColour).withAlpha(0.75f));
             g.setFont(juce::Font(juce::FontOptions(11.f)));
             g.drawText(m_label, titleBounds.toNearestInt(), juce::Justification::centred);
         }

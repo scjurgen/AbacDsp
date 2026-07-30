@@ -8,6 +8,7 @@
 #include "MinireverbConstants.h"
 
 #include "inc/GuiConstants.h"
+#include "inc/ThemeOrbit.h"
 #include "inc/CpuMeter.h"
 #include "inc/CustomRotaryDial.h"
 #include "inc/MomentaryToggleButton.h"

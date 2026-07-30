@@ -50,11 +50,19 @@ inline constexpr int kHueCount = 12;
 inline constexpr int kHueStepDeg = 360 / kHueCount;
 inline constexpr int kSlotsPerFamily = kHueCount * 2;
 
-// The 12 hue steps land exactly on the standard 12-part hue wheel (Bichromatic's Primary
-// has no hue correction applied to its hue itself, only to lightness/chroma), so these
-// names are precise, not approximate.
 inline constexpr std::array<const char*, kHueCount> kHueNames{
-    "Magenta", "Rose", "Red", "Orange", "Yellow", "Chartreuse", "Green", "Mint", "Cyan", "Azure", "Blue", "Violet",
+    "Red",        //
+    "Orange",     //
+    "Yellow",     //
+    "Chartreuse", //
+    "Green",      //
+    "Mint",       //
+    "Cyan",       //
+    "Azure",      //
+    "Blue",       //
+    "Violet",     //
+    "Magenta",    //
+    "Rose",       //
 };
 
 enum class Theme : int
