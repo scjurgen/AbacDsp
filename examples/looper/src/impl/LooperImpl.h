@@ -9,9 +9,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <filesystem>
-#include <format>
-#include <fstream>
 #include <functional>
 #include <iostream>
 #include <mutex>
@@ -23,10 +20,6 @@
 #include <utility>
 #include <vector>
 
-#include "AudioFile/SaveWav.h"
-
-#include "Analysis/FftMisc.h"
-#include "Analysis/Slicer.h"
 #include "Analysis/Spectrogram.h"
 #include "Audio/AudioBuffer.h"
 #include "EffectBase.h"
@@ -35,7 +28,6 @@
 #include "Generators/MeterTimeline.h"
 #include "Sampler/LoopFile.h"
 #include "Sampler/LoopRecorder.h"
-#include "Sampler/MidiFile.h"
 #include "Sampler/SequencePattern.h"
 #include "Sampler/SequencerEngine.h"
 #include "Sampler/SliceLibrary.h"
@@ -77,6 +69,14 @@ struct adl_serializer<AbacDsp::SequencePattern>
 };
 }
 
+#include "CaptureRing.h"
+#include "FreezeService.h"
+#include "LoopStorageService.h"
+#include "LooperTimingController.h"
+#include "LooperTransportController.h"
+#include "LooperViewModel.h"
+#include "SequencerPatternBuilder.h"
+
 // Traditional-style slicing looper: captures audio, quantizes the loop to whole
 // bars, and plays it back locked to a metronome click. The four transport
 // controls are momentary pulses that toggle the real state; the editor reads the
@@ -90,11 +90,6 @@ template <size_t BlockSize>
 class LooperImpl final : public EffectBase
 {
   public:
-    static constexpr size_t kWaveformPoints = 512;
-    // Onset-detection snap grid (16ths) used when slicing a frozen loop; the
-    // pattern itself is sample-accurate (see rebuildPatternForCurrentLoop()),
-    // not on this grid. Also the slice library's total pool size.
-    static constexpr size_t kOnsetSnapStepsPerBeat = 4;
     static constexpr float kSliceLibrarySeconds = 120.f;
     // Primitive (no anti-alias filter) decimation feeding the record spectrogram,
     // trading some aliasing for a display cut around 6 kHz and 4x fewer FFT frames.
@@ -102,33 +97,6 @@ class LooperImpl final : public EffectBase
     // Hop/fftLength ratio: high overlap for fine time resolution. Regen for the
     // longest loops still finishes in well under 20 ms, so there's ample headroom.
     static constexpr float kSpectrogramWindowForward = 1.f / 12.f;
-    static constexpr size_t kThumbFftLength = 2 * AbacDsp::SliceLibrary::kThumbHeight;
-
-    // Standard meters selectable via the Time Sig control, index-matched to its
-    // dropdown. eighthUnit means the beat is an eighth note, not a quarter note:
-    // the metronome's per-beat tempo doubles the entered BPM to keep an eighth
-    // note at half a quarter note's duration.
-    struct TimeSignatureSpec
-    {
-        size_t beatsPerBar;
-        bool eighthUnit;
-    };
-    static constexpr auto kTimeSignatures = std::to_array<TimeSignatureSpec>({
-        {2, false},
-        {3, false},
-        {4, false},
-        {5, false},
-        {6, false},
-        {7, false},
-        {5, true},
-        {6, true},
-        {7, true},
-        {9, true},
-        {11, true},
-        {13, true},
-        {15, true},
-    });
-    static constexpr int kDefaultTimeSignature = 2; // index of 4/4
 
     explicit LooperImpl(const float sampleRate)
         : EffectBase(sampleRate)
@@ -138,7 +106,76 @@ class LooperImpl final : public EffectBase
         , m_sliceLibrary(static_cast<size_t>(sampleRate * kSliceLibrarySeconds))
         , m_sequencer(sampleRate)
         , m_pattern(1, m_seq.beatsPerBar(), m_seq.samplesPerBeat())
-        , m_freezeFft(kThumbFftLength)
+        , m_patternBuilder(m_seq, m_recorder, m_sliceLibrary, m_pattern)
+        , m_timingController(m_seq, m_meterTimeline, m_appliedBpm, m_eighthNoteUnit, m_appliedTimeSignature,
+                             m_finalizedBarCount, m_countingIn, m_countInBarsOffset, m_countInEndTickAbs,
+                             m_suppressNextClick, sampleRate)
+        , m_captureRing(sampleRate)
+        , m_freezeService(m_recorder)
+        , m_loopStorage(m_recorder, m_seq, m_sliceLibrary, m_pattern, m_meterTimeline, m_appliedBpm, m_eighthNoteUnit,
+                        sampleRate)
+        , m_transportController(typename LooperTransportController<BlockSize>::Deps{
+              .recorder = m_recorder,
+              .seq = m_seq,
+              .timing = m_timingController,
+              .meterTimeline = m_meterTimeline,
+              .captureRing = m_captureRing,
+              .freezeService = m_freezeService,
+              .loopStorage = m_loopStorage,
+              .sliceLibrary = m_sliceLibrary,
+              .pattern = m_pattern,
+              .sequencer = m_sequencer,
+              .armed = m_armed,
+              .countingIn = m_countingIn,
+              .autoStopArmed = m_autoStopArmed,
+              .autoStopBarTarget = m_autoStopBarTarget,
+              .pendingStop = m_pendingStop,
+              .pendingStopTickAbs = m_pendingStopTickAbs,
+              .pendingStopLoopLength = m_pendingStopLoopLength,
+              .barLockedTake = m_barLockedTake,
+              .startOffset = m_startOffset,
+              .tickAbs = m_tickAbs,
+              .takeBarIndex = m_takeBarIndex,
+              .suppressNextBarIndexIncrement = m_suppressNextBarIndexIncrement,
+              .sequencerPlaying = m_sequencerPlaying,
+              .appliedTimeSignature = m_appliedTimeSignature,
+              .pendingTimeSignature = m_pendingTimeSignature,
+              .finalizedBarCount = m_finalizedBarCount,
+              .absPos = m_absPos,
+              .freeRecord = m_freeRecord,
+              .countInBars = m_countInBars,
+              .recordBars = m_recordBars,
+              .autoStopEnabled = m_autoStopEnabled,
+              .clearPulse = m_clearPulse,
+              .recordPulse = m_recordPulse,
+              .playPulse = m_playPulse,
+              .overdubPulse = m_overdubPulse,
+              .freezePulse = m_freezePulse,
+              .seqPlayPulse = m_seqPlayPulse,
+              .clearSeqPulse = m_clearSeqPulse,
+              .threshRecReq = m_threshRecReq,
+          })
+        , m_viewModel(typename LooperViewModel<BlockSize>::Deps{
+              .recorder = m_recorder,
+              .seq = m_seq,
+              .meterTimeline = m_meterTimeline,
+              .appliedBpm = m_appliedBpm,
+              .sliceLibrary = m_sliceLibrary,
+              .pattern = m_pattern,
+              .sequencer = m_sequencer,
+              .recordSpectrogram = m_recordSpectrogram,
+              .visualWave = m_visualWave,
+              .preparedWave = m_preparedWave,
+              .visualWindowSize = m_visualWindowSize,
+              .spectrogramRegenRequestGen = m_spectrogramRegenRequestGen,
+              .spectrogramRegenDoneGen = m_spectrogramRegenDoneGen,
+              .autoStopEnabled = m_autoStopEnabled,
+              .recordBars = m_recordBars,
+              .finalizedBarCount = m_finalizedBarCount,
+              .countInBarsOffset = m_countInBarsOffset,
+              .sequencerPlaying = m_sequencerPlaying,
+              .sampleRate = sampleRate,
+          })
     {
         m_seq.setBpm(m_appliedBpm);
         m_click.setVolumeDb(m_clickVol.load(std::memory_order_relaxed));
@@ -155,68 +192,8 @@ class LooperImpl final : public EffectBase
         const auto decimatedMaxFrames = static_cast<float>(m_recorder.maxFrames()) / kSpectrogramDecimation;
         m_recordSpectrogram.setSlices(static_cast<size_t>(decimatedMaxFrames / (1024.f * kSpectrogramWindowForward)) +
                                       64);
-        // Covers half a bar of late-start backfill at the slowest supported tempo.
-        m_ringCapacityFrames = std::max<size_t>(BlockSize, static_cast<size_t>(sampleRate * 8.f));
-        m_captureRing.assign(m_ringCapacityFrames * 2, 0.f);
-        m_startPreRoll.assign(m_ringCapacityFrames * 2, 0.f); // only the actual gap length is used
-
         m_sequencer.setLibrary(&m_sliceLibrary);
         m_sequencer.setPattern(&m_pattern);
-
-        // Started last, once every member it touches exists.
-        m_freezeThread = std::jthread(
-            [this](const std::stop_token& stopToken)
-            {
-                uint64_t lastHandled = 0;
-                while (!stopToken.stop_requested())
-                {
-                    std::unique_lock lock(m_freezeWaitMutex);
-                    m_freezeCv.wait(lock, stopToken, [this, lastHandled]
-                                    { return m_freezeRequestGen.load(std::memory_order_acquire) != lastHandled; });
-                    if (stopToken.stop_requested())
-                    {
-                        return;
-                    }
-                    lastHandled = m_freezeRequestGen.load(std::memory_order_acquire);
-                    runFreezeAnalysis(lastHandled);
-                }
-            });
-
-        m_loopSaveThread = std::jthread(
-            [this](const std::stop_token& stopToken)
-            {
-                uint64_t lastHandled = 0;
-                while (!stopToken.stop_requested())
-                {
-                    std::unique_lock lock(m_loopSaveWaitMutex);
-                    m_loopSaveCv.wait(lock, stopToken, [this, lastHandled]
-                                      { return m_loopSaveRequestGen.load(std::memory_order_acquire) != lastHandled; });
-                    if (stopToken.stop_requested())
-                    {
-                        return;
-                    }
-                    lastHandled = m_loopSaveRequestGen.load(std::memory_order_acquire);
-                    runSaveLoopAs(lastHandled);
-                }
-            });
-
-        m_loopLoadThread = std::jthread(
-            [this](const std::stop_token& stopToken)
-            {
-                uint64_t lastHandled = 0;
-                while (!stopToken.stop_requested())
-                {
-                    std::unique_lock lock(m_loopLoadWaitMutex);
-                    m_loopLoadCv.wait(lock, stopToken, [this, lastHandled]
-                                      { return m_loopLoadRequestGen.load(std::memory_order_acquire) != lastHandled; });
-                    if (stopToken.stop_requested())
-                    {
-                        return;
-                    }
-                    lastHandled = m_loopLoadRequestGen.load(std::memory_order_acquire);
-                    runLoadLoop(lastHandled);
-                }
-            });
 
         m_spectrogramRegenThread = std::jthread(
             [this](const std::stop_token& stopToken)
@@ -349,129 +326,70 @@ class LooperImpl final : public EffectBase
     // Directory named loop saves/loads live in; set once during setup.
     void setLoopsDirectory(std::string dir)
     {
-        m_loopsDirectory = std::move(dir);
+        m_loopStorage.setLoopsDirectory(std::move(dir));
     }
 
     [[nodiscard]] std::vector<std::string> listLoopNames() const
     {
-        std::vector<std::string> names;
-        if (m_loopsDirectory.empty() || !std::filesystem::exists(m_loopsDirectory))
-        {
-            return names;
-        }
-        for (const auto& entry : std::filesystem::directory_iterator(m_loopsDirectory))
-        {
-            if (entry.path().extension() == ".wav")
-            {
-                names.push_back(entry.path().stem().string());
-            }
-        }
-        std::ranges::sort(names);
-        return names;
+        return m_loopStorage.listLoopNames();
     }
 
     bool deleteLoopNamed(const std::string& name)
     {
-        if (sanitizeLoopName(name).empty())
-        {
-            return false;
-        }
-        std::error_code ec;
-        const bool removedWav = std::filesystem::remove(loopWavPath(name), ec);
-        std::filesystem::remove(loopJsonPath(name), ec);
-        return removedWav;
+        return m_loopStorage.deleteLoopNamed(name);
     }
 
     bool renameLoopNamed(const std::string& oldName, const std::string& newName)
     {
-        if (sanitizeLoopName(oldName).empty() || sanitizeLoopName(newName).empty() || oldName == newName)
-        {
-            return false;
-        }
-        std::error_code ec;
-        std::filesystem::rename(loopWavPath(oldName), loopWavPath(newName), ec);
-        if (ec)
-        {
-            return false;
-        }
-        std::filesystem::rename(loopJsonPath(oldName), loopJsonPath(newName), ec);
-        return true; // sidecar rename failing isn't fatal; the wav already moved
+        return m_loopStorage.renameLoopNamed(oldName, newName);
     }
 
     // Guarded like requestFreeze(); writes <loopsDirectory>/<name>.wav + .json
-    // on a background worker (see runSaveLoopAs()): file I/O is not RT-safe.
+    // on a background worker: file I/O is not RT-safe.
     void requestSaveLoopAs(const std::string& name)
     {
-        if (m_loopSavePending || isRecording() || isOverdubbing() || m_recorder.loopLengthFrames() == 0 ||
-            m_loopsDirectory.empty() || sanitizeLoopName(name).empty())
+        if (isRecording() || isOverdubbing() || m_recorder.loopLengthFrames() == 0)
         {
             return;
         }
-        m_loopSaveName = name;
-        m_loopSaveRequestedGen = m_loopSaveRequestGen.load(std::memory_order_relaxed) + 1;
-        m_loopSavePending = true;
-        m_loopSaveRequestGen.store(m_loopSaveRequestedGen, std::memory_order_release);
-        m_loopSaveCv.notify_one();
+        m_loopStorage.requestSave(name);
     }
 
     [[nodiscard]] bool isLoopSavePending() const noexcept
     {
-        return m_loopSavePending;
+        return m_loopStorage.isSavePending();
     }
 
     [[nodiscard]] std::string consumeLastSavedLoopName()
     {
-        std::lock_guard<std::mutex> lock(m_lastSavedLoopMutex);
-        return std::exchange(m_lastSavedLoopName, std::string{});
+        return m_loopStorage.consumeLastSavedLoopName();
     }
 
     // Reported back to the UI once a load has decoded and compared metadata.
-    struct LoopLoadOutcome
-    {
-        bool attempted{false};
-        bool success{false};
-        bool hasConflict{false};
-        float wavBpm{0.f};
-        float jsonBpm{0.f};
-    };
+    using LoopLoadOutcome = typename LoopStorageService<BlockSize>::LoopLoadOutcome;
 
-    // Reads <loopsDirectory>/<name>.wav + .json on a background worker (see
-    // runLoadLoop()); the audio thread installs the result once resolved.
+    // Reads <loopsDirectory>/<name>.wav + .json on a background worker; the
+    // audio thread installs the result once resolved.
     void requestLoadLoop(const std::string& name)
     {
-        if (m_loopLoadPending || m_loopsDirectory.empty() || sanitizeLoopName(name).empty())
-        {
-            return;
-        }
-        m_loopLoadName = name;
-        m_loopLoadRequestedGen = m_loopLoadRequestGen.load(std::memory_order_relaxed) + 1;
-        m_loopLoadPending = true;
-        m_loopLoadRequestGen.store(m_loopLoadRequestedGen, std::memory_order_release);
-        m_loopLoadCv.notify_one();
+        m_loopStorage.requestLoad(name);
     }
 
     [[nodiscard]] bool isLoopLoadPending() const noexcept
     {
-        return m_loopLoadPending;
+        return m_loopStorage.isLoadPending();
     }
 
     [[nodiscard]] LoopLoadOutcome consumeLoopLoadOutcome()
     {
-        std::lock_guard<std::mutex> lock(m_loopLoadOutcomeMutex);
-        return std::exchange(m_loopLoadOutcome, LoopLoadOutcome{});
+        return m_loopStorage.consumeLoadOutcome();
     }
 
     // Picks which BPM becomes the installed loop's tempo after a conflict was
     // reported; a no-op if no load is currently awaiting resolution.
     void resolveLoopLoadBpm(const float bpm)
     {
-        if (!m_loopLoadPending || !m_loopLoadNeedsResolve.load(std::memory_order_acquire))
-        {
-            return;
-        }
-        m_loopLoadNeedsResolve.store(false, std::memory_order_relaxed);
-        m_loopLoadResolvedBpm = bpm;
-        m_loopLoadConfirmedGen.store(m_loopLoadRequestedGen, std::memory_order_release);
+        m_loopStorage.resolveLoadBpm(bpm);
     }
 
     // Host/session state (e.g. a DAW's getStateInformation/setStateInformation, or the
@@ -522,7 +440,7 @@ class LooperImpl final : public EffectBase
     // parse failure or malformed/foreign data, and while a named load is already pending.
     void restoreExtraState(std::span<const std::byte> blob)
     {
-        if (m_loopLoadPending)
+        if (isLoopLoadPending())
         {
             return;
         }
@@ -557,20 +475,7 @@ class LooperImpl final : public EffectBase
             }
         }
 
-        m_loopLoadLeft = std::move(left);
-        m_loopLoadRight = std::move(right);
-        m_loopLoadResolvedBpm = header.bpm;
-        m_loopLoadMeterTimeline = std::move(timeline);
-        m_loopLoadHasSequencerData = false;
-        m_loopLoadTracks.clear();
-        m_loopLoadPattern.reset();
-
-        m_loopLoadRequestedGen = m_loopLoadRequestGen.load(std::memory_order_relaxed) + 1;
-        m_loopLoadPending = true;
-        m_loopLoadNeedsResolve.store(false, std::memory_order_relaxed);
-        m_loopLoadRequestGen.store(m_loopLoadRequestedGen, std::memory_order_release);
-        m_loopLoadDoneGen.store(m_loopLoadRequestedGen, std::memory_order_release);
-        m_loopLoadConfirmedGen.store(m_loopLoadRequestedGen, std::memory_order_release);
+        m_loopStorage.injectRestoredLoad(std::move(left), std::move(right), header.bpm, std::move(timeline));
     }
 
     // Toggles playing the pattern currently in the sequencer (the frozen
@@ -623,28 +528,7 @@ class LooperImpl final : public EffectBase
     }
     [[nodiscard]] const char* getStateLabel() const noexcept
     {
-        if (m_armed)
-        {
-            return "Armed";
-        }
-        if (m_countingIn)
-        {
-            return "Counting in";
-        }
-        switch (m_recorder.state())
-        {
-            case AbacDsp::LooperState::Empty:
-                return "Empty";
-            case AbacDsp::LooperState::Recording:
-                return "Recording";
-            case AbacDsp::LooperState::Playing:
-                return "Playing";
-            case AbacDsp::LooperState::Overdubbing:
-                return "Overdub";
-            case AbacDsp::LooperState::Stopped:
-                return "Stopped";
-        }
-        return "";
+        return m_viewModel.getStateLabel(m_armed, m_countingIn);
     }
 
     // One bar of the musical signal, downbeat at index 0, for the CircularBarDisplay
@@ -652,148 +536,57 @@ class LooperImpl final : public EffectBase
     // ignores this and uses getLoopWaveform() instead.
     [[nodiscard]] const std::vector<float>& visualizeWaveData()
     {
-        m_preparedWave.assign(m_visualWave.begin(),
-                              std::next(m_visualWave.begin(), static_cast<std::ptrdiff_t>(m_visualWindowSize)));
-        return m_preparedWave;
+        return m_viewModel.visualizeWaveData();
     }
 
     [[nodiscard]] size_t getSamplesPerBar() const noexcept
     {
-        return m_seq.samplesPerBeat() * m_seq.beatsPerBar();
+        return m_viewModel.getSamplesPerBar();
     }
 
     [[nodiscard]] int getBarBeats() const noexcept
     {
-        return static_cast<int>(m_seq.beatsPerBar());
+        return m_viewModel.getBarBeats();
     }
 
-    // Angular span of the outer loop ring, in whole bars. Empty shows one bar so
-    // the clock still reads. While recording with Auto Stop on, the ring is already
-    // sized to the fixed Record Bars target; with Auto Stop off there's no known
-    // length yet, so the ring extends one bar ahead of the playhead instead, growing
-    // as the take does.
+    // Angular span of the outer loop ring, in whole bars; see LooperViewModel for details.
     [[nodiscard]] int getOuterRingBars() const noexcept
     {
-        const size_t spb = getSamplesPerBar();
-        if (spb == 0)
-        {
-            return 1;
-        }
-        if (isRecording())
-        {
-            const size_t fixedBars = m_autoStopEnabled ? static_cast<size_t>(m_recordBars) : 0;
-            if (fixedBars > 0)
-            {
-                return static_cast<int>(fixedBars);
-            }
-            return static_cast<int>(m_recorder.recordedFrames() / spb) + 1;
-        }
-        // Prefer the finalized bar count over a live recompute: a mixed-meter
-        // loop's live beatsPerBar changes bar-to-bar during playback replay
-        // (applyMeterAtBarBoundary), which would otherwise make len/spb drift as
-        // playback crosses each meter change. Free-record takes never populate
-        // m_finalizedBarCount, so they keep the len/spb fallback below unchanged.
-        if (m_finalizedBarCount > 0)
-        {
-            return static_cast<int>(m_finalizedBarCount);
-        }
-        const size_t len = m_recorder.loopLengthFrames();
-        return (len > 0) ? static_cast<int>(std::max<size_t>(1, len / spb)) : 1;
+        return m_viewModel.getOuterRingBars();
     }
 
-    // One frame-length entry per bar of the outer ring (see getOuterRingBars()),
-    // honoring the take's own meter timeline so a mixed-meter loop's bars are
-    // sized proportionally, not uniformly. Falls back to a constant getSamplesPerBar()
-    // per entry when there is no timeline (free-record takes clear it), matching
-    // today's uniform-bar behavior exactly in that case.
+    // One frame-length entry per bar of the outer ring; see LooperViewModel for details.
     [[nodiscard]] std::vector<float> getBarFrameLengths() const
     {
-        const auto n = static_cast<size_t>(std::max(0, getOuterRingBars()));
-        std::vector<float> lengths(n);
-        if (m_meterTimeline.empty())
-        {
-            std::ranges::fill(lengths, static_cast<float>(getSamplesPerBar()));
-            return lengths;
-        }
-        const float samplesPerQuarterBeat = (m_appliedBpm > 0.f) ? sampleRate() * 60.f / m_appliedBpm : 0.f;
-        for (size_t bar = 0; bar < n; ++bar)
-        {
-            const auto& seg = m_meterTimeline.segmentForBar(bar);
-            const float samplesPerBeat = seg.eighthUnit ? samplesPerQuarterBeat * 0.5f : samplesPerQuarterBeat;
-            lengths[bar] = samplesPerBeat * static_cast<float>(seg.beatsPerBar);
-        }
-        return lengths;
+        return m_viewModel.getBarFrameLengths();
     }
 
-    // "bar.beat" position, 1-based, generic over beatsPerBar (no fixed 4/4 assumption).
-    // A count-in runs up to bar 1 from a negative/zero number (e.g. a 2-bar count-in
-    // is -1, 0, then 1 is the real start of the take). Once recording, the bar count
-    // just runs up; once a fixed-length loop is playing back, it wraps to 1 every
-    // time the loop repeats.
+    // "bar.beat" position, 1-based; see LooperViewModel for details.
     [[nodiscard]] std::string getBarBeatLabel() const
     {
-        long bar = static_cast<long>(m_seq.barIndex()) - m_countInBarsOffset;
-        if (isPlaying() || isOverdubbing())
-        {
-            // Prefer the finalized bar count over a live recompute: see the same
-            // reasoning in getOuterRingBars() (a mixed-meter loop's live spb
-            // changes bar-to-bar during playback replay).
-            size_t barsInLoop = m_finalizedBarCount;
-            if (barsInLoop == 0)
-            {
-                const size_t spb = getSamplesPerBar();
-                barsInLoop = (spb > 0) ? m_recorder.loopLengthFrames() / spb : 0;
-            }
-            if (barsInLoop > 0)
-            {
-                const long n = static_cast<long>(barsInLoop);
-                bar = ((bar % n) + n) % n;
-            }
-        }
-        return std::format("{}.{}", bar + 1, m_seq.beatIndexInBar() + 1);
+        return m_viewModel.getBarBeatLabel();
     }
 
-    // Recording headroom left in the capture buffer, mm:ss, so a performer always
-    // knows how much runway remains before a free take gets cut off mid-bar. Once a
-    // loop is finalized the buffer isn't being consumed anymore, so this is moot.
+    // Recording headroom left in the capture buffer, mm:ss; see LooperViewModel for details.
     [[nodiscard]] std::string getRemainingRecordLabel() const
     {
-        if (m_recorder.hasLoop())
-        {
-            return {};
-        }
-        const size_t remainingFrames =
-            m_recorder.maxFrames() - std::min(m_recorder.maxFrames(), m_recorder.recordedFrames());
-        const auto remainingSeconds = static_cast<int>(static_cast<float>(remainingFrames) / sampleRate());
-        return std::format("{}:{:02d}", remainingSeconds / 60, remainingSeconds % 60);
+        return m_viewModel.getRemainingRecordLabel();
     }
 
     [[nodiscard]] float getBarPhase() const noexcept
     {
-        return m_seq.barPhase();
+        return m_viewModel.getBarPhase();
     }
 
     [[nodiscard]] AbacDsp::SpectrumImageSet getSpectrogramData() const
     {
-        return m_recordSpectrogram.getImageSet();
+        return m_viewModel.getSpectrogramData();
     }
 
-    // Frame position of the spectrogram write head within the ring: the live record
-    // position while capturing, the finalized loop length once stopped. Reports 0
-    // (blank ring) while a post-load regen is still catching up, since activeSlice
-    // wouldn't yet correspond to the full loop length CircularLoopDisplay expects.
+    // Frame position of the spectrogram write head; see LooperViewModel for details.
     [[nodiscard]] size_t getSpectrogramHeadFrames() const noexcept
     {
-        if (isRecording())
-        {
-            return m_recorder.recordedFrames();
-        }
-        if (m_spectrogramRegenRequestGen.load(std::memory_order_acquire) !=
-            m_spectrogramRegenDoneGen.load(std::memory_order_acquire))
-        {
-            return 0;
-        }
-        return m_recorder.loopLengthFrames();
+        return m_viewModel.getSpectrogramHeadFrames();
     }
 
     [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
@@ -803,97 +596,52 @@ class LooperImpl final : public EffectBase
 
     [[nodiscard]] float getPlayheadNormalized() const noexcept
     {
-        const size_t len = m_recorder.loopLengthFrames();
-        return (len == 0) ? 0.f : static_cast<float>(m_recorder.playPositionFrames()) / static_cast<float>(len);
+        return m_viewModel.getPlayheadNormalized();
     }
 
     // About the live loop's own display, not the frozen tracks below; no-op for now.
     [[nodiscard]] std::vector<float> getSliceBoundaries() const
     {
-        return {};
+        return m_viewModel.getSliceBoundaries();
     }
 
     // Phase 10g minimal accessors, for a future sequencer UI (no editing yet).
     [[nodiscard]] bool isFreezePending() const noexcept
     {
-        return m_freezePending;
+        return m_freezeService.isPending();
     }
     [[nodiscard]] size_t getFrozenTrackCount() const noexcept
     {
-        return m_sliceLibrary.trackCount();
+        return m_viewModel.getFrozenTrackCount();
     }
     [[nodiscard]] size_t getFrozenSliceCount() const noexcept
     {
-        return m_sliceLibrary.sliceCount();
+        return m_viewModel.getFrozenSliceCount();
     }
     [[nodiscard]] bool isSequencerPlaying() const noexcept
     {
         return m_sequencerPlaying;
     }
-    // totalSteps() is frame-accurate (stepsPerBeat == samplesPerBeat at freeze
-    // time), so it doubles directly as each thumbnail's placement denominator.
     [[nodiscard]] std::vector<AbacDsp::SequencerSliceThumbnail> getSequencerSliceThumbnails() const
     {
-        const size_t totalSteps = m_pattern.totalSteps();
-        std::vector<AbacDsp::SequencerSliceThumbnail> thumbnails;
-        if (totalSteps == 0)
-        {
-            return thumbnails;
-        }
-        thumbnails.reserve(m_pattern.eventCount());
-        for (const auto& event : m_pattern.events())
-        {
-            if (event.track >= m_sliceLibrary.trackCount() ||
-                event.sliceIndex >= m_sliceLibrary.sliceCountInTrack(event.track))
-            {
-                continue;
-            }
-            const auto& info = m_sliceLibrary.sliceInfo(event.track, event.sliceIndex);
-            const auto image = m_sliceLibrary.thumbnail(event.track, event.sliceIndex);
-            thumbnails.push_back({static_cast<float>(event.stepPosition) / static_cast<float>(totalSteps),
-                                  static_cast<float>(info.lengthFrames) / static_cast<float>(totalSteps),
-                                  AbacDsp::SliceLibrary::kThumbWidth, AbacDsp::SliceLibrary::kThumbHeight, image.data(),
-                                  sampleRate()});
-        }
-        return thumbnails;
+        return m_viewModel.getSequencerSliceThumbnails();
     }
 
     [[nodiscard]] std::vector<float> getSequencerSliceBoundaries() const
     {
-        const size_t totalSteps = m_pattern.totalSteps();
-        if (totalSteps == 0)
-        {
-            return {};
-        }
-        std::vector<float> boundaries;
-        boundaries.reserve(m_pattern.eventCount());
-        for (const auto& event : m_pattern.events())
-        {
-            boundaries.push_back(static_cast<float>(event.stepPosition) / static_cast<float>(totalSteps));
-        }
-        return boundaries;
+        return m_viewModel.getSequencerSliceBoundaries();
     }
 
     // Tracks the shared BeatSequencer clock regardless of isSequencerPlaying(),
     // so the marker previews trigger timing even before Seq Play is pressed.
     [[nodiscard]] float getSequencerPlayheadNormalized() const noexcept
     {
-        const size_t lengthBars = m_pattern.lengthBars();
-        if (lengthBars == 0)
-        {
-            return 0.f;
-        }
-        const float pos = static_cast<float>(m_sequencer.barIndex()) + m_seq.barPhase();
-        return std::clamp(pos / static_cast<float>(lengthBars), 0.f, 1.f);
+        return m_viewModel.getSequencerPlayheadNormalized();
     }
 
     [[nodiscard]] const char* getSequencerStateLabel() const noexcept
     {
-        if (!m_sequencerPlaying)
-        {
-            return m_pattern.eventCount() == 0 ? "Seq Empty" : "Seq Stopped";
-        }
-        return "Seq Playing";
+        return m_viewModel.getSequencerStateLabel();
     }
 
     // Exact per-sample loop content and length (mirror LoopRecorder's own
@@ -902,95 +650,24 @@ class LooperImpl final : public EffectBase
     // beat-lock placement.
     [[nodiscard]] float rawLoopSample(const size_t frame, const size_t channel) const noexcept
     {
-        return m_recorder.sample(frame, channel);
+        return m_viewModel.rawLoopSample(frame, channel);
     }
     [[nodiscard]] size_t rawLoopLengthFrames() const noexcept
     {
-        return m_recorder.loopLengthFrames();
+        return m_viewModel.rawLoopLengthFrames();
     }
 
     [[nodiscard]] std::vector<float> getLoopWaveform() const
     {
-        std::vector<float> peaks;
-        const size_t len = m_recorder.loopLengthFrames();
-        if (len == 0)
-        {
-            return peaks;
-        }
-        peaks.assign(kWaveformPoints, 0.f);
-        const size_t step = std::max<size_t>(1, len / kWaveformPoints);
-        for (size_t p = 0; p < kWaveformPoints; ++p)
-        {
-            const size_t begin = p * len / kWaveformPoints;
-            const size_t end = std::min(len, begin + step);
-            float peak = 0.f;
-            for (size_t f = begin; f < end; ++f)
-            {
-                const float mono = 0.5f * (m_recorder.sample(f, 0) + m_recorder.sample(f, 1));
-                peak = std::max(peak, std::abs(mono));
-            }
-            peaks[p] = peak;
-        }
-        return peaks;
+        return m_viewModel.getLoopWaveform();
     }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
         applyParameters();
-        if (m_hostSync)
-        {
-            syncToHostTransport();
-        }
-
-        updateCaptureRing(in);
-
-        handleTransportPulses();
-
-        // Virtual Record press once the preset bar count is reached (checked as of
-        // the previous block's last completed bar); must run before m_seq advances
-        // so requestStop()'s samplesToNearestBar() stays consistent.
-        if (m_autoStopArmed && isRecording() && !m_pendingStop && m_takeBarIndex >= m_autoStopBarTarget)
-        {
-            m_autoStopArmed = false;
-            requestStop();
-        }
-
-        // Feed the record spectrogram with the dry input while capturing; it freezes
-        // (stops advancing) once recording stops, so the last image persists.
-        if (isRecording())
-        {
-            std::array<float, BlockSize> inMonoDecimated{};
-            size_t decimatedCount = 0;
-            for (size_t i = 0; i < BlockSize; ++i)
-            {
-                if (m_spectrogramDecimatePhase == 0)
-                {
-                    inMonoDecimated[decimatedCount++] = 0.5f * (in(i, 0) + in(i, 1));
-                }
-                m_spectrogramDecimatePhase = (m_spectrogramDecimatePhase + 1) % kSpectrogramDecimation;
-            }
-            // Non-blocking: skip this block if the regen thread holds the feed
-            // lock, rather than stall the audio thread.
-            bool expected = false;
-            if (m_spectrogramFeedLock.compare_exchange_strong(expected, true, std::memory_order_acquire))
-            {
-                m_recordSpectrogram.processBlock(std::span<const float>{inMonoDecimated.data(), decimatedCount});
-                m_spectrogramFeedLock.store(false, std::memory_order_release);
-            }
-        }
-
-        // Threshold recording: while armed, wait for the input to cross the level
-        // before capture actually begins (this block is then recorded too).
-        if (m_armed && blockPeak(in) >= m_recThresholdLinear)
-        {
-            m_armed = false;
-            startRecording();
-        }
-        if (m_countingIn && m_absPos + BlockSize > m_countInEndTickAbs)
-        {
-            m_countingIn = false;
-            startRecording();
-        }
+        updateTiming();
+        m_captureRing.update(in, m_absPos);
+        handleTransportActions(in);
 
         // Click/sequencer are rendered before the recorder runs so the optional
         // click-to-track gain (below) can be mixed into what actually gets captured.
@@ -998,49 +675,10 @@ class LooperImpl final : public EffectBase
         AbacDsp::AudioBuffer<2, BlockSize> seqOut{};
         renderClickAndSequencer(click, seqOut);
 
-        AbacDsp::AudioBuffer<2, BlockSize> recIn{};
-        for (size_t i = 0; i < BlockSize; ++i)
-        {
-            const float printedClick = click[i] * m_clickRecordGain;
-            recIn(i, 0) = in(i, 0) + printedClick;
-            recIn(i, 1) = in(i, 1) + printedClick;
-        }
+        const AbacDsp::AudioBuffer<2, BlockSize> recorderOut = processRecorder(in, click);
 
-        AbacDsp::AudioBuffer<2, BlockSize> recorderOut{};
-        m_recorder.processBlock(recIn, recorderOut);
-
-        // Absolute-time check, not recordedFrames() >= loopLength: an early
-        // start's relocate needs loopLength+startOffset frames, not loopLength.
-        if (m_pendingStop && m_absPos + BlockSize > m_pendingStopTickAbs)
-        {
-            commitPendingStop();
-        }
-        checkFreezeCompletion();
-        checkLoopSaveCompletion();
-        checkLoopLoadCompletion();
-
-        m_visualWindowSize = std::min(getSamplesPerBar(), m_visualWave.size());
-
-        // Dry input, loop, and sequencer all sum here. Toggling Seq Play mutes
-        // the loop and lets the sequencer replace its playback instead.
-        const float loopGain = m_sequencerPlaying ? 0.f : m_loopGain;
-        for (size_t i = 0; i < BlockSize; ++i)
-        {
-            const float loopL = recorderOut(i, 0) * loopGain;
-            const float loopR = recorderOut(i, 1) * loopGain;
-            out(i, 0) = in(i, 0) + loopL + click[i] + seqOut(i, 0);
-            out(i, 1) = in(i, 1) + loopR + click[i] + seqOut(i, 1);
-
-            // Feed the bar display with the dry input only (no loop, no click).
-            // A noise gate keeps the ring flat on quiet sections: the signed
-            // sample passes only while the envelope stays above the threshold.
-            const float visSignal = in(i, 0) + in(i, 1);
-            m_visEnv = std::max(std::abs(visSignal), m_visEnv * kVisualGateRelease);
-            if (m_barPos[i] < m_visualWindowSize)
-            {
-                m_visualWave[m_barPos[i]] = (m_visEnv >= kVisualGate) ? visSignal : 0.f;
-            }
-        }
+        commitPendingActions();
+        mixOutputsAndUpdateVisualization(in, click, seqOut, recorderOut, out);
 
         m_absPos += BlockSize;
         m_suppressNextBarIndexIncrement = false;
@@ -1054,7 +692,7 @@ class LooperImpl final : public EffectBase
             const float bpm = m_bpm.load(std::memory_order_relaxed);
             if (std::not_equal_to<float>{}(bpm, m_appliedBpm))
             {
-                applyTimeSignatureAwareBpm(bpm);
+                m_timingController.applyTimeSignatureAwareBpm(bpm);
             }
         }
         applyTimeSignatureRequest();
@@ -1082,35 +720,132 @@ class LooperImpl final : public EffectBase
         }
     }
 
-    void syncToHostTransport()
+    void updateTiming()
     {
-        const auto& transport = hostTransport();
-        if (!transport.isPlaying || transport.updateCount == m_lastSyncedUpdateCount)
+        if (m_hostSync)
+        {
+            m_timingController.syncToHostTransport(hostTransport());
+        }
+    }
+
+    // Bar-locked stop, threshold-arm crossing, and count-in elapsing all funnel
+    // through here; must run before m_seq advances (renderClickAndSequencer)
+    // so their own samplesToNearestBar()/tick math stays consistent this block.
+    void handleTransportActions(const AbacDsp::AudioBuffer<2, BlockSize>& in)
+    {
+        m_transportController.handleTransportPulses();
+
+        // Virtual Record press once the preset bar count is reached (checked as of
+        // the previous block's last completed bar); must run before m_seq advances
+        // so requestStop()'s samplesToNearestBar() stays consistent.
+        if (m_autoStopArmed && isRecording() && !m_pendingStop && m_takeBarIndex >= m_autoStopBarTarget)
+        {
+            m_autoStopArmed = false;
+            m_transportController.requestStop();
+        }
+
+        feedRecordSpectrogram(in);
+
+        // Threshold recording: while armed, wait for the input to cross the level
+        // before capture actually begins (this block is then recorded too).
+        if (m_armed && blockPeak(in) >= m_recThresholdLinear)
+        {
+            m_armed = false;
+            m_transportController.startRecording();
+        }
+        if (m_countingIn && m_absPos + BlockSize > m_countInEndTickAbs)
+        {
+            m_countingIn = false;
+            m_transportController.startRecording();
+        }
+    }
+
+    // Feeds the record spectrogram with the dry input while capturing; it freezes
+    // (stops advancing) once recording stops, so the last image persists.
+    void feedRecordSpectrogram(const AbacDsp::AudioBuffer<2, BlockSize>& in)
+    {
+        if (!isRecording())
         {
             return;
         }
-        m_lastSyncedUpdateCount = transport.updateCount;
-        const float bpm = std::clamp(static_cast<float>(transport.bpm), 20.f, 999.f);
-        applyTimeSignatureAwareBpm(bpm);
-        m_seq.syncToPpq(transport.ppqPosition);
+        std::array<float, BlockSize> inMonoDecimated{};
+        size_t decimatedCount = 0;
+        for (size_t i = 0; i < BlockSize; ++i)
+        {
+            if (m_spectrogramDecimatePhase == 0)
+            {
+                inMonoDecimated[decimatedCount++] = 0.5f * (in(i, 0) + in(i, 1));
+            }
+            m_spectrogramDecimatePhase = (m_spectrogramDecimatePhase + 1) % kSpectrogramDecimation;
+        }
+        // Non-blocking: skip this block if the regen thread holds the feed
+        // lock, rather than stall the audio thread.
+        bool expected = false;
+        if (m_spectrogramFeedLock.compare_exchange_strong(expected, true, std::memory_order_acquire))
+        {
+            m_recordSpectrogram.processBlock(std::span<const float>{inMonoDecimated.data(), decimatedCount});
+            m_spectrogramFeedLock.store(false, std::memory_order_release);
+        }
     }
 
-    // bpm is always the quarter-note tempo (standard convention, matching host
-    // transport bpm too); an eighth-note meter doubles what actually reaches the
-    // clock so an eighth note stays half a quarter note's duration.
-    void applyTimeSignatureAwareBpm(const float bpm) noexcept
+    // Prints the click into what actually gets captured (per m_clickRecordGain),
+    // then advances the recorder itself.
+    [[nodiscard]] AbacDsp::AudioBuffer<2, BlockSize> processRecorder(const AbacDsp::AudioBuffer<2, BlockSize>& in,
+                                                                     const std::array<float, BlockSize>& click)
     {
-        m_appliedBpm = bpm;
-        m_seq.setBpm(m_eighthNoteUnit ? bpm * 2.f : bpm);
+        AbacDsp::AudioBuffer<2, BlockSize> recIn{};
+        for (size_t i = 0; i < BlockSize; ++i)
+        {
+            const float printedClick = click[i] * m_clickRecordGain;
+            recIn(i, 0) = in(i, 0) + printedClick;
+            recIn(i, 1) = in(i, 1) + printedClick;
+        }
+        AbacDsp::AudioBuffer<2, BlockSize> recorderOut{};
+        m_recorder.processBlock(recIn, recorderOut);
+        return recorderOut;
     }
 
-    void installTimeSignature(const int index) noexcept
+    // Absolute-time check, not recordedFrames() >= loopLength: an early
+    // start's relocate needs loopLength+startOffset frames, not loopLength.
+    void commitPendingActions()
     {
-        m_appliedTimeSignature = index;
-        const auto& sig = kTimeSignatures[static_cast<size_t>(index)];
-        m_seq.setBeatsPerBar(sig.beatsPerBar);
-        m_eighthNoteUnit = sig.eighthUnit;
-        applyTimeSignatureAwareBpm(m_appliedBpm);
+        if (m_pendingStop && m_absPos + BlockSize > m_pendingStopTickAbs)
+        {
+            m_transportController.commitPendingStop();
+        }
+        checkFreezeCompletion();
+        m_loopStorage.checkSaveCompletion();
+        checkLoopLoadCompletion();
+    }
+
+    // Dry input, loop, and sequencer all sum here. Toggling Seq Play mutes the
+    // loop and lets the sequencer replace its playback instead. Also updates the
+    // bar display's visualization buffer from the dry input in the same pass.
+    void mixOutputsAndUpdateVisualization(const AbacDsp::AudioBuffer<2, BlockSize>& in,
+                                          const std::array<float, BlockSize>& click,
+                                          const AbacDsp::AudioBuffer<2, BlockSize>& seqOut,
+                                          const AbacDsp::AudioBuffer<2, BlockSize>& recorderOut,
+                                          AbacDsp::AudioBuffer<2, BlockSize>& out)
+    {
+        m_visualWindowSize = std::min(getSamplesPerBar(), m_visualWave.size());
+        const float loopGain = m_sequencerPlaying ? 0.f : m_loopGain;
+        for (size_t i = 0; i < BlockSize; ++i)
+        {
+            const float loopL = recorderOut(i, 0) * loopGain;
+            const float loopR = recorderOut(i, 1) * loopGain;
+            out(i, 0) = in(i, 0) + loopL + click[i] + seqOut(i, 0);
+            out(i, 1) = in(i, 1) + loopR + click[i] + seqOut(i, 1);
+
+            // Feed the bar display with the dry input only (no loop, no click).
+            // A noise gate keeps the ring flat on quiet sections: the signed
+            // sample passes only while the envelope stays above the threshold.
+            const float visSignal = in(i, 0) + in(i, 1);
+            m_visEnv = std::max(std::abs(visSignal), m_visEnv * kVisualGateRelease);
+            if (m_barPos[i] < m_visualWindowSize)
+            {
+                m_visualWave[m_barPos[i]] = (m_visEnv >= kVisualGate) ? visSignal : 0.f;
+            }
+        }
     }
 
     // Stopped/Empty/Armed/CountingIn: nothing is playing yet, apply right away.
@@ -1121,7 +856,7 @@ class LooperImpl final : public EffectBase
     void applyTimeSignatureRequest()
     {
         const int req = std::clamp(m_timeSignatureReq.load(std::memory_order_relaxed), 0,
-                                   static_cast<int>(kTimeSignatures.size()) - 1);
+                                   static_cast<int>(LooperTimingController::kTimeSignatures.size()) - 1);
         if (isRecording())
         {
             m_pendingTimeSignature = req;
@@ -1130,7 +865,7 @@ class LooperImpl final : public EffectBase
         {
             if (req != m_appliedTimeSignature)
             {
-                installTimeSignature(req);
+                m_timingController.installTimeSignature(req);
             }
             m_pendingTimeSignature = req;
         }
@@ -1152,7 +887,7 @@ class LooperImpl final : public EffectBase
                 {
                     m_seq.setBeatsPerBar(seg.beatsPerBar);
                     m_eighthNoteUnit = seg.eighthUnit;
-                    applyTimeSignatureAwareBpm(m_appliedBpm);
+                    m_timingController.applyTimeSignatureAwareBpm(m_appliedBpm);
                 }
             }
         }
@@ -1172,324 +907,10 @@ class LooperImpl final : public EffectBase
             ++m_takeBarIndex;
             if (m_pendingTimeSignature != m_appliedTimeSignature)
             {
-                installTimeSignature(m_pendingTimeSignature);
-                const auto& sig = kTimeSignatures[static_cast<size_t>(m_appliedTimeSignature)];
+                m_timingController.installTimeSignature(m_pendingTimeSignature);
+                const auto& sig = LooperTimingController::kTimeSignatures[static_cast<size_t>(m_appliedTimeSignature)];
                 m_meterTimeline.addSegment(m_takeBarIndex, sig.beatsPerBar, sig.eighthUnit);
             }
-        }
-    }
-
-    // Derives the take's final bar count from its known frame length by walking
-    // its recorded meter timeline (robust regardless of bar-lock stop/catch-up
-    // slop), then builds the frame map used to size the loop's outer ring.
-    void finalizeMeterTimeline(const size_t loopLengthFrames)
-    {
-        const float samplesPerQuarterBeat = sampleRate() * 60.f / m_appliedBpm;
-        m_finalizedBarCount = m_meterTimeline.barCountForFrames(loopLengthFrames, samplesPerQuarterBeat);
-        m_meterTimeline.buildFrameMap(m_finalizedBarCount, samplesPerQuarterBeat);
-    }
-
-    void handleTransportPulses()
-    {
-        const bool clearReq = m_clearPulse.exchange(false, std::memory_order_relaxed);
-        const bool recordReq = m_recordPulse.exchange(false, std::memory_order_relaxed);
-        const bool playReq = m_playPulse.exchange(false, std::memory_order_relaxed);
-        const bool overdubReq = m_overdubPulse.exchange(false, std::memory_order_relaxed);
-        const bool freezeReq = m_freezePulse.exchange(false, std::memory_order_relaxed);
-        const bool seqPlayReq = m_seqPlayPulse.exchange(false, std::memory_order_relaxed);
-        const bool clearSeqReq = m_clearSeqPulse.exchange(false, std::memory_order_relaxed);
-
-        // The sequencer play/stop toggle and its own Clear only touch
-        // sequencer-side state, never the recorder's own transport state, so
-        // both are exempt from the guard below.
-        if (seqPlayReq)
-        {
-            toggleSequencerPlayback();
-        }
-        if (clearSeqReq)
-        {
-            clearSequencer();
-        }
-
-        // A bar-locked stop, a freeze, or a loop save/load is waiting on its own
-        // async completion; drop pulses rather than race a conflicting action.
-        if (m_pendingStop || m_freezePending || m_loopSavePending || m_loopLoadPending)
-        {
-            return;
-        }
-
-        if (clearReq)
-        {
-            clearAll();
-        }
-        if (recordReq)
-        {
-            toggleRecord();
-        }
-        if (playReq)
-        {
-            togglePlay();
-        }
-        if (overdubReq)
-        {
-            toggleOverdub();
-        }
-        if (freezeReq)
-        {
-            requestFreeze();
-        }
-    }
-
-    // Clears only the looper's own recording; the frozen slice library, the
-    // sequencer's pattern, and its play/stop state are untouched (they
-    // persist independently of the base looper's Clear/re-record).
-    void clearAll()
-    {
-        m_armed = false;
-        m_countingIn = false;
-        m_autoStopArmed = false;
-        m_pendingStop = false;
-        m_barLockedTake = false;
-        m_recorder.clear();
-    }
-
-    // Clears only the sequencer's own audio: every frozen track/slice in the
-    // library and the current pattern, and stops playback. Independent of
-    // clearAll(), which only clears the looper's own recording.
-    void clearSequencer()
-    {
-        m_sliceLibrary.clear();
-        m_pattern.clear();
-        m_sequencerPlaying = false;
-        m_sequencer.setEnabled(false);
-    }
-
-    void finishRecording()
-    {
-        const bool wasBarLocked = m_barLockedTake;
-        m_recorder.stopRecordFree();
-        m_barLockedTake = false;
-        if (wasBarLocked)
-        {
-            // A bar-locked take can also end up here (degenerate near-instant
-            // stop in requestStop(), or punching straight into overdub): finalize
-            // whatever meter timeline it accumulated instead of just discarding it.
-            finalizeMeterTimeline(m_recorder.loopLengthFrames());
-        }
-        else
-        {
-            m_meterTimeline.clear();
-            m_finalizedBarCount = 0;
-        }
-    }
-
-    void toggleRecord()
-    {
-        if (isRecording())
-        {
-            requestStop();
-        }
-        else if (m_countingIn)
-        {
-            m_countingIn = false; // pressing Record again while counting in cancels it
-        }
-        else if (m_armed)
-        {
-            m_armed = false; // pressing Record again while armed disarms
-        }
-        else if (m_countInBars > 0)
-        {
-            resetTimekeeper(false); // count-in needs its beat 1 click to actually count something
-            beginCountIn();
-        }
-        else if (m_threshRecReq.load(std::memory_order_relaxed))
-        {
-            resetTimekeeper(false); // the performer needs an audible downbeat while waiting to play in
-            m_armed = true;         // wait for the input to cross the threshold
-        }
-        else
-        {
-            resetTimekeeper(false); // beat 1 of a fresh take is a real downbeat, not a resync artifact
-            startRecording();
-        }
-    }
-
-    // Every fresh take starts at  bar 1 beat 1
-    // suppressFirstClick distinguishes a pure phase
-    // resync (Play-resume, freeze completion: the next beatStart is an artifact
-    // of the jump, not a real beat) from a fresh Record start, where beat 1 is
-    // a real downbeat the performer needs to hear.
-    void resetTimekeeper(const bool suppressFirstClick) noexcept
-    {
-        m_seq.reset();
-        m_suppressNextClick = suppressFirstClick;
-        m_countInBarsOffset = 0;
-    }
-
-    // Takes priority over threshold-arming: count-in always auto-starts once
-    // m_countInBars bar ticks elapse, no input crossing needed.
-    void beginCountIn()
-    {
-        m_countingIn = true;
-        m_countInBarsOffset = m_countInBars;
-        const size_t spb = m_seq.samplesPerBeat();
-        const size_t samplesPerBar = spb * m_seq.beatsPerBar();
-        long off = (spb > 0) ? m_seq.samplesToNearestBar() : 0;
-        if (off <= 0)
-        {
-            // Nearest tick is behind us, or we're sitting right on one: either
-            // way, a full bar of count-in must still elapse before the next one.
-            off += static_cast<long>(samplesPerBar);
-        }
-        m_countInEndTickAbs =
-            m_absPos + static_cast<uint64_t>(off) + static_cast<uint64_t>(m_countInBars - 1) * samplesPerBar;
-    }
-
-    // Remembers which path this take used, independent of later toggling.
-    void startRecording()
-    {
-        m_barLockedTake = !m_freeRecord;
-        if (m_barLockedTake)
-        {
-            beginBarLockedRecord();
-        }
-        else
-        {
-            // Free Record is unquantized: no bar grid to hang a meter timeline on.
-            m_meterTimeline.clear();
-            m_finalizedBarCount = 0;
-            m_recorder.beginRecord();
-        }
-    }
-
-    void togglePlay()
-    {
-        if (isRecording())
-        {
-            requestStop(); // Play also ends an active recording, same as pressing Record again
-        }
-        else if (isPlaying())
-        {
-            m_recorder.stop();
-        }
-        else if (m_recorder.hasLoop())
-        {
-            // stop() rewound the loop to frame 0; resync the timekeeper to match.
-            resyncTimekeeperToLoopStart();
-            m_recorder.play();
-        }
-    }
-
-    // Resyncs the timekeeper to bar 1 beat 1 of the loop's own recorded meter
-    // timeline (force-installing bar 0's meter regardless of whatever m_seq was
-    // left at). Used both when Play explicitly (re)starts a stopped loop and
-    // when a bar-locked recording auto-transitions straight into playback.
-    void resyncTimekeeperToLoopStart()
-    {
-        resetTimekeeper(true);
-        if (!m_meterTimeline.empty())
-        {
-            const auto& seg0 = m_meterTimeline.segmentForBar(0);
-            m_seq.setBeatsPerBar(seg0.beatsPerBar);
-            m_eighthNoteUnit = seg0.eighthUnit;
-            applyTimeSignatureAwareBpm(m_appliedBpm);
-        }
-    }
-
-    void toggleOverdub()
-    {
-        if (isRecording())
-        {
-            // Punch straight from recording into overdub: finalize the base take
-            // (it keeps playing) and start summing input into it immediately.
-            // Not beat-locked (no time to wait for a post-roll anyway -- the
-            // performer is already continuing straight into the overdub).
-            finishRecording();
-            m_recorder.beginOverdub();
-        }
-        else if (isOverdubbing())
-        {
-            m_recorder.endOverdub();
-        }
-        else if (isPlaying())
-        {
-            m_recorder.beginOverdub();
-        }
-    }
-
-    // Starts/stops playback of whatever is currently in m_pattern (populated
-    // by the last freeze). processBlock mutes the base loop while this is on.
-    void toggleSequencerPlayback()
-    {
-        m_sequencerPlaying = !m_sequencerPlaying;
-        m_sequencer.setEnabled(m_sequencerPlaying);
-    }
-
-    // Refused while the loop isn't stable (recording/overdubbing) or empty;
-    // just snapshots and bumps the request generation, the worker does the rest.
-    void requestFreeze()
-    {
-        if (m_freezePending || isRecording() || isOverdubbing() || m_recorder.loopLengthFrames() == 0)
-        {
-            return;
-        }
-        m_freezeSamplesPerBeat = m_seq.samplesPerBeat();
-        m_freezePendingGen = m_freezeRequestGen.load(std::memory_order_relaxed) + 1;
-        m_freezePending = true;
-        m_freezeRequestGen.store(m_freezePendingGen, std::memory_order_release);
-        m_freezeCv.notify_one();
-    }
-
-    // Runs on m_freezeThread only: Slicer::adaptiveTransientSlices allocates and
-    // runs an STFT, never acceptable on the audio thread.
-    void runFreezeAnalysis(const uint64_t gen)
-    {
-        const auto loop = m_recorder.loopView();
-        const size_t loopLen = m_recorder.loopLengthFrames();
-        if (loopLen == 0)
-        {
-            m_freezeResultSlices.clear();
-            m_freezeResultThumbnails.clear();
-            m_freezeDoneGen.store(gen, std::memory_order_release);
-            return;
-        }
-        AbacDsp::Slicer::downmixToMono(loop, loopLen, m_freezeMono);
-        const size_t stepFrames = (m_freezeSamplesPerBeat == 0)
-                                      ? loopLen
-                                      : std::max<size_t>(1, m_freezeSamplesPerBeat / kOnsetSnapStepsPerBeat);
-        const auto grid = AbacDsp::Slicer::gridBoundaries(loopLen, stepFrames);
-        m_freezeResultSlices = AbacDsp::Slicer::adaptiveTransientSlices(
-            m_freezeMono, loopLen, AbacDsp::Slicer::AdaptiveParams{}, AbacDsp::Slicer::TransientParams{}, grid);
-        m_freezeResultThumbnails.assign(m_freezeResultSlices.size() * AbacDsp::SliceLibrary::kThumbFloats, 0.f);
-        for (size_t i = 0; i < m_freezeResultSlices.size(); ++i)
-        {
-            computeSliceThumbnail(m_freezeResultSlices[i],
-                                  std::span<float>{m_freezeResultThumbnails}.subspan(
-                                      i * AbacDsp::SliceLibrary::kThumbFloats, AbacDsp::SliceLibrary::kThumbFloats));
-        }
-        m_freezeDoneGen.store(gen, std::memory_order_release);
-    }
-
-    // Reads only within the slice's own bounds, so it never bleeds into a
-    // neighbouring one. Worker thread only, same as runFreezeAnalysis().
-    void computeSliceThumbnail(const AbacDsp::Slice& slice, std::span<float> dst)
-    {
-        constexpr size_t kThumbWidth = AbacDsp::SliceLibrary::kThumbWidth;
-        constexpr size_t kThumbHeight = AbacDsp::SliceLibrary::kThumbHeight;
-        const size_t sliceEnd = slice.startFrame + slice.lengthFrames;
-        const size_t hop = std::max<size_t>(1, slice.lengthFrames / kThumbWidth);
-        std::array<float, kThumbFftLength> frame{};
-        std::vector<float> magnitudes(kThumbHeight, 0.f);
-        for (size_t t = 0; t < kThumbWidth; ++t)
-        {
-            frame.fill(0.f);
-            const size_t start = slice.startFrame + t * hop;
-            for (size_t i = 0; i < kThumbFftLength && start + i < sliceEnd && start + i < m_freezeMono.size(); ++i)
-            {
-                frame[i] = m_freezeMono[start + i];
-            }
-            m_freezeFft.compute(std::vector<float>{frame.begin(), frame.end()}, magnitudes);
-            std::copy_n(magnitudes.data(), kThumbHeight, dst.data() + t * kThumbHeight);
         }
     }
 
@@ -1497,22 +918,18 @@ class LooperImpl final : public EffectBase
     // thread (allocation-free, see SliceLibrary.h).
     void checkFreezeCompletion()
     {
-        if (!m_freezePending || m_freezeDoneGen.load(std::memory_order_acquire) != m_freezePendingGen)
+        auto result = m_freezeService.pollCompletion();
+        if (!result || result->slices.empty())
         {
             return;
         }
-        m_freezePending = false;
-        if (!m_freezeResultSlices.empty())
-        {
-            const size_t track =
-                m_sliceLibrary.extractTrack(m_recorder.loopView(), m_freezeResultSlices, m_freezeResultThumbnails);
-            rebuildPatternForCurrentLoop();
-            populatePatternFromTrack(track);
-            // Re-prime the engine's own bar index for the new pattern, and
-            // realign the timekeeper to the pattern's origin (frame 0 = downbeat).
-            m_sequencer.setPattern(&m_pattern);
-            resetTimekeeper(true);
-        }
+        const size_t track = m_sliceLibrary.extractTrack(m_recorder.loopView(), result->slices, result->thumbnails);
+        m_patternBuilder.rebuildForCurrentLoop();
+        m_patternBuilder.populateFromTrack(track);
+        // Re-prime the engine's own bar index for the new pattern, and
+        // realign the timekeeper to the pattern's origin (frame 0 = downbeat).
+        m_sequencer.setPattern(&m_pattern);
+        m_timingController.resetTimekeeper(true);
     }
 
     // captureExtraState()/restoreExtraState() binary layout: header, then
@@ -1559,326 +976,37 @@ class LooperImpl final : public EffectBase
         return true;
     }
 
-    // Named patches sanitize with juce::String; this is JUCE-free (Impl stays
-    // library-agnostic), so filesystem-unsafe characters are stripped by hand.
-    [[nodiscard]] static std::string sanitizeLoopName(const std::string& name)
-    {
-        std::string result;
-        for (const char c : name)
-        {
-            if (std::string_view("/\\:*?\"<>|").find(c) == std::string_view::npos)
-            {
-                result += c;
-            }
-        }
-        const auto first = result.find_first_not_of(" \t");
-        if (first == std::string::npos)
-        {
-            return {};
-        }
-        const auto last = result.find_last_not_of(" \t");
-        return result.substr(first, last - first + 1);
-    }
-
-    [[nodiscard]] std::filesystem::path loopWavPath(const std::string& name) const
-    {
-        return std::filesystem::path(m_loopsDirectory) / (sanitizeLoopName(name) + ".wav");
-    }
-
-    [[nodiscard]] std::filesystem::path loopJsonPath(const std::string& name) const
-    {
-        return std::filesystem::path(m_loopsDirectory) / (sanitizeLoopName(name) + ".json");
-    }
-
-    [[nodiscard]] std::filesystem::path loopMidPath(const std::string& name) const
-    {
-        return std::filesystem::path(m_loopsDirectory) / (sanitizeLoopName(name) + ".mid");
-    }
-
-    // MIDI ticks spanned by one bar of the given meter (denominator convention:
-    // eighthUnit halves the quarter-note tick length, matching MidiFile's own
-    // numerator/denominatorPower time-signature event fields).
-    [[nodiscard]] static constexpr uint32_t midiTicksPerBar(const size_t beatsPerBar, const bool eighthUnit) noexcept
-    {
-        const uint32_t ticksPerBeat =
-            eighthUnit ? AbacDsp::MidiFile::kTicksPerQuarterNote / 2 : AbacDsp::MidiFile::kTicksPerQuarterNote;
-        return ticksPerBeat * static_cast<uint32_t>(beatsPerBar);
-    }
-
-    [[nodiscard]] std::filesystem::path loopTrackWavPath(const std::string& name, const size_t track) const
-    {
-        return std::filesystem::path(m_loopsDirectory) /
-               (sanitizeLoopName(name) + "_track" + std::to_string(track) + ".wav");
-    }
-
-    // Worker thread only: replays a track's slices via the public per-slice
-    // accessor, in order, rather than reaching into the pool directly.
-    void extractTrackAudioAndLengths(const size_t track, std::vector<float>& left, std::vector<float>& right,
-                                     std::vector<size_t>& sliceLengths) const
-    {
-        const size_t count = m_sliceLibrary.sliceCountInTrack(track);
-        sliceLengths.reserve(count);
-        for (size_t i = 0; i < count; ++i)
-        {
-            const auto& info = m_sliceLibrary.sliceInfo(track, i);
-            sliceLengths.push_back(info.lengthFrames);
-            for (size_t f = 0; f < info.lengthFrames; ++f)
-            {
-                left.push_back(m_sliceLibrary.sample(track, i, f, 0));
-                right.push_back(m_sliceLibrary.sample(track, i, f, 1));
-            }
-        }
-    }
-
-    // Worker thread only: writes <name>.wav (+ iXML metadata) and <name>.json;
-    // if any tracks are frozen, also <name>_track<N>.wav per track.
-    void runSaveLoopAs(const uint64_t gen)
-    {
-        const size_t loopLen = m_recorder.loopLengthFrames();
-        if (loopLen > 0)
-        {
-            std::vector<float> left(loopLen);
-            std::vector<float> right(loopLen);
-            for (size_t f = 0; f < loopLen; ++f)
-            {
-                left[f] = m_recorder.sample(f, 0);
-                right[f] = m_recorder.sample(f, 1);
-            }
-            // Descriptive metadata only (the pattern's own serialized beatsPerBar is
-            // authoritative on load); approximate using the loop's current meter,
-            // which may not be exact for a take whose meter changed mid-recording.
-            const float samplesPerBeat = sampleRate() * 60.f / m_appliedBpm;
-            const float beats = (samplesPerBeat > 0.f) ? static_cast<float>(loopLen) / samplesPerBeat : 0.f;
-            const float bars = beats / static_cast<float>(m_seq.beatsPerBar());
-            const AbacDsp::LoopMetadata meta{1, m_appliedBpm, bars, beats};
-            AbacDsp::LoopFile<nlohmann::json>::saveStereoWav(loopWavPath(m_loopSaveName).string(), left, right,
-                                                             sampleRate(), meta);
-
-            // Standard MIDI File sidecar carrying the take's own tempo + meter
-            // timeline; written unconditionally (a constant-meter take just gets
-            // a single time-signature event) so loading only ever needs one path.
-            AbacDsp::MidiFile midi;
-            midi.setTempoBpm(m_appliedBpm);
-            const std::vector<AbacDsp::MeterSegment> segmentsToWrite =
-                m_meterTimeline.empty() ? std::vector<AbacDsp::MeterSegment>{{0, m_seq.beatsPerBar(), m_eighthNoteUnit}}
-                                        : m_meterTimeline.segments();
-            uint32_t midiTick = 0;
-            for (size_t i = 0; i < segmentsToWrite.size(); ++i)
-            {
-                const auto& seg = segmentsToWrite[i];
-                if (i > 0)
-                {
-                    const auto& prevSeg = segmentsToWrite[i - 1];
-                    midiTick += static_cast<uint32_t>(seg.startBar - prevSeg.startBar) *
-                                midiTicksPerBar(prevSeg.beatsPerBar, prevSeg.eighthUnit);
-                }
-                midi.addTimeSignature(midiTick, static_cast<uint8_t>(seg.beatsPerBar), seg.eighthUnit ? 3 : 2);
-            }
-            if (!midi.writeToFile(loopMidPath(m_loopSaveName).string()))
-            {
-                std::cerr << "LooperImpl: failed to write " << loopMidPath(m_loopSaveName) << std::endl;
-            }
-
-            nlohmann::json j = meta;
-            if (m_sliceLibrary.trackCount() > 0)
-            {
-                j["pattern"] = m_pattern;
-                auto tracksJson = nlohmann::json::array();
-                for (size_t t = 0; t < m_sliceLibrary.trackCount(); ++t)
-                {
-                    std::vector<float> trackLeft;
-                    std::vector<float> trackRight;
-                    std::vector<size_t> sliceLengths;
-                    extractTrackAudioAndLengths(t, trackLeft, trackRight, sliceLengths);
-                    const auto trackPath = loopTrackWavPath(m_loopSaveName, t).string();
-                    AudioUtility::SaveWav::saveStereoAs(trackPath, trackLeft, trackRight, sampleRate());
-                    tracksJson.push_back({{"file", std::filesystem::path(trackPath).filename().string()},
-                                          {"sliceLengths", sliceLengths}});
-                }
-                j["tracks"] = tracksJson;
-            }
-            std::ofstream jsonOut(loopJsonPath(m_loopSaveName));
-            if (jsonOut)
-            {
-                jsonOut << j.dump(2);
-            }
-            std::lock_guard<std::mutex> lock(m_lastSavedLoopMutex);
-            m_lastSavedLoopName = m_loopSaveName;
-        }
-        m_loopSaveDoneGen.store(gen, std::memory_order_release);
-    }
-
-    // Audio thread, polled every block like checkFreezeCompletion().
-    void checkLoopSaveCompletion()
-    {
-        if (!m_loopSavePending || m_loopSaveDoneGen.load(std::memory_order_acquire) != m_loopSaveRequestedGen)
-        {
-            return;
-        }
-        m_loopSavePending = false;
-    }
-
-    // Worker thread only. Builds into locals first (throws on malformed data,
-    // caught by runLoadLoop()) so a partial failure leaves no scratch state.
-    void loadSequencerData(const nlohmann::json& j)
-    {
-        auto pattern = j.at("pattern").get<AbacDsp::SequencePattern>();
-        std::vector<LoopLoadTrackData> tracks;
-        for (const auto& trackJson : j.at("tracks"))
-        {
-            const auto trackPath = std::filesystem::path(m_loopsDirectory) / trackJson.at("file").get<std::string>();
-            const auto trackLoaded = AbacDsp::LoopFile<nlohmann::json>::loadStereoWav(trackPath.string());
-            const auto sliceLengths = trackJson.at("sliceLengths").get<std::vector<size_t>>();
-
-            LoopLoadTrackData data;
-            data.interleaved.resize(trackLoaded.left.size() * 2);
-            for (size_t f = 0; f < trackLoaded.left.size(); ++f)
-            {
-                data.interleaved[f * 2] = trackLoaded.left[f];
-                data.interleaved[f * 2 + 1] = trackLoaded.right[f];
-            }
-            size_t offset = 0;
-            for (const auto len : sliceLengths)
-            {
-                data.slices.push_back({offset, len});
-                offset += len;
-            }
-            tracks.push_back(std::move(data));
-        }
-        m_loopLoadPattern = std::move(pattern);
-        m_loopLoadTracks = std::move(tracks);
-        m_loopLoadHasSequencerData = true;
-    }
-
-    // Worker thread only: decodes <name>.wav + .json and compares their BPM
-    // belief (iXML-embedded vs sidecar) rather than picking one silently.
-    void runLoadLoop(const uint64_t gen)
-    {
-        LoopLoadOutcome outcome;
-        outcome.attempted = true;
-        m_loopLoadHasSequencerData = false;
-        m_loopLoadTracks.clear();
-        m_loopLoadPattern.reset();
-        m_loopLoadMeterTimeline.clear();
-        const auto loaded = AbacDsp::LoopFile<nlohmann::json>::loadStereoWav(loopWavPath(m_loopLoadName).string());
-        if (!loaded.left.empty())
-        {
-            std::optional<AbacDsp::LoopMetadata> sidecarMeta;
-            std::ifstream jsonIn(loopJsonPath(m_loopLoadName));
-            if (jsonIn)
-            {
-                try
-                {
-                    nlohmann::json j;
-                    jsonIn >> j;
-                    sidecarMeta = j.get<AbacDsp::LoopMetadata>();
-                    if (j.contains("pattern") && j.contains("tracks"))
-                    {
-                        loadSequencerData(j);
-                    }
-                }
-                catch (const std::exception& e)
-                {
-                    std::cerr << "LooperImpl: failed to parse " << loopJsonPath(m_loopLoadName) << ": " << e.what()
-                              << std::endl;
-                }
-            }
-
-            AbacDsp::MidiFile midi;
-            if (midi.readFromFile(loopMidPath(m_loopLoadName).string()))
-            {
-                size_t bar = 0;
-                uint32_t prevTick = 0;
-                const auto& events = midi.timeSignatures();
-                for (size_t i = 0; i < events.size(); ++i)
-                {
-                    const auto& ev = events[i];
-                    if (i > 0)
-                    {
-                        const auto& prevEv = events[i - 1];
-                        const uint32_t ticksPerBarPrev =
-                            midiTicksPerBar(prevEv.numerator, prevEv.denominatorPower == 3);
-                        bar += (ticksPerBarPrev > 0) ? (ev.tick - prevTick) / ticksPerBarPrev : 0;
-                    }
-                    m_loopLoadMeterTimeline.addSegment(bar, ev.numerator, ev.denominatorPower == 3);
-                    prevTick = ev.tick;
-                }
-            }
-
-            m_loopLoadLeft = loaded.left;
-            m_loopLoadRight = loaded.right;
-            outcome.success = true;
-
-            float resolvedBpm = 120.f;
-            bool needsResolve = false;
-            if (sidecarMeta && loaded.embeddedMetadata)
-            {
-                if (std::abs(sidecarMeta->bpm - loaded.embeddedMetadata->bpm) > 0.01f)
-                {
-                    outcome.hasConflict = true;
-                    outcome.wavBpm = loaded.embeddedMetadata->bpm;
-                    outcome.jsonBpm = sidecarMeta->bpm;
-                    needsResolve = true;
-                }
-                else
-                {
-                    resolvedBpm = sidecarMeta->bpm;
-                }
-            }
-            else if (sidecarMeta)
-            {
-                resolvedBpm = sidecarMeta->bpm;
-            }
-            else if (loaded.embeddedMetadata)
-            {
-                resolvedBpm = loaded.embeddedMetadata->bpm;
-            }
-            m_loopLoadResolvedBpm = resolvedBpm;
-            m_loopLoadNeedsResolve.store(needsResolve, std::memory_order_release);
-        }
-
-        {
-            std::lock_guard<std::mutex> lock(m_loopLoadOutcomeMutex);
-            m_loopLoadOutcome = outcome;
-        }
-        m_loopLoadDoneGen.store(gen, std::memory_order_release);
-        if (outcome.success && !outcome.hasConflict)
-        {
-            m_loopLoadConfirmedGen.store(gen, std::memory_order_release);
-        }
-    }
-
     // Audio thread, polled every block; installs once confirmed (immediately
     // when there was no BPM conflict, or once resolveLoopLoadBpm() was called).
     // No resampling: a loop saved at a different sample rate plays back
     // pitched/timed wrong. Not handled in phase 1.
     void checkLoopLoadCompletion()
     {
-        if (!m_loopLoadPending || m_loopLoadConfirmedGen.load(std::memory_order_acquire) != m_loopLoadRequestedGen)
+        auto result = m_loopStorage.pollLoadCompletion();
+        if (!result)
         {
             return;
         }
-        m_loopLoadPending = false;
-        m_recorder.loadLoop(m_loopLoadLeft, m_loopLoadRight);
+        m_recorder.loadLoop(result->left, result->right);
         const uint64_t regenGen = m_spectrogramRegenRequestGen.load(std::memory_order_relaxed) + 1;
         m_spectrogramRegenRequestGen.store(regenGen, std::memory_order_release);
         m_spectrogramRegenCv.notify_one();
-        m_seq.setBpm(m_loopLoadResolvedBpm);
-        m_appliedBpm = m_loopLoadResolvedBpm;
-        m_bpm.store(m_loopLoadResolvedBpm, std::memory_order_relaxed);
-        if (!m_loopLoadMeterTimeline.empty())
+        m_seq.setBpm(result->resolvedBpm);
+        m_appliedBpm = result->resolvedBpm;
+        m_bpm.store(result->resolvedBpm, std::memory_order_relaxed);
+        if (!result->meterTimeline.empty())
         {
-            m_meterTimeline = std::move(m_loopLoadMeterTimeline);
-            finalizeMeterTimeline(m_recorder.loopLengthFrames());
+            m_meterTimeline = std::move(result->meterTimeline);
+            m_timingController.finalizeMeterTimeline(m_recorder.loopLengthFrames());
         }
-        if (m_loopLoadHasSequencerData)
+        if (result->hasSequencerData)
         {
             m_sliceLibrary.clear();
-            for (const auto& track : m_loopLoadTracks)
+            for (const auto& track : result->tracks)
             {
                 m_sliceLibrary.extractTrack(track.interleaved, track.slices);
             }
-            m_pattern = *m_loopLoadPattern;
+            m_pattern = *result->pattern;
             m_sequencer.setPattern(&m_pattern);
         }
     }
@@ -1980,135 +1108,6 @@ class LooperImpl final : public EffectBase
         m_spectrogramFeedLock.store(false, std::memory_order_release);
     }
 
-    // Sample-accurate steps (stepsPerBeat = samplesPerBeat), so every slice's
-    // own startFrame is directly a valid step position: no re-quantizing. Uses
-    // the loop's currently-applied meter as a single grid for the whole pattern
-    // (the freeze/sequencer feature doesn't follow a mixed-meter timeline).
-    void rebuildPatternForCurrentLoop()
-    {
-        const size_t spb = m_seq.samplesPerBeat();
-        const size_t beatsPerBar = m_seq.beatsPerBar();
-        const size_t loopLen = m_recorder.loopLengthFrames();
-        const size_t framesPerBar = spb * beatsPerBar;
-        const size_t bars = (framesPerBar == 0) ? 1 : std::max<size_t>(1, loopLen / framesPerBar);
-        m_pattern = AbacDsp::SequencePattern(bars, beatsPerBar, std::max<size_t>(1, spb));
-    }
-
-    // Reconstructs the track's slices at their own original positions, gain
-    // set to each slice's peak (cancels the engine's own peak-normalize) so
-    // this reproduces the original recording exactly, not a normalized mix.
-    void populatePatternFromTrack(const size_t track)
-    {
-        const size_t count = m_sliceLibrary.sliceCountInTrack(track);
-        for (size_t i = 0; i < count; ++i)
-        {
-            const auto& info = m_sliceLibrary.sliceInfo(track, i);
-            AbacDsp::SequenceEvent event{};
-            event.stepPosition = info.startFrame;
-            event.track = track;
-            event.sliceIndex = i;
-            event.gain = info.peak;
-            m_pattern.addEvent(event);
-        }
-    }
-
-    // Recording starts immediately; the nearest bar tick is stored for the
-    // stop-time finalize to relocate/backfill around (no tolerance cutoff).
-    void beginBarLockedRecord()
-    {
-        // Force-install the live control's current meter: guarantees the take
-        // starts from exactly what the performer dialed in, regardless of
-        // whatever meter m_seq was left at by a previous take/playback cycle.
-        installTimeSignature(m_pendingTimeSignature);
-        m_takeBarIndex = 0;
-        m_suppressNextBarIndexIncrement = true;
-        m_meterTimeline.clear();
-        const auto& sig0 = kTimeSignatures[static_cast<size_t>(m_appliedTimeSignature)];
-        m_meterTimeline.addSegment(0, sig0.beatsPerBar, sig0.eighthUnit);
-
-        const size_t spb = m_seq.samplesPerBeat();
-        const long off = (spb > 0) ? m_seq.samplesToNearestBar() : 0;
-        m_startOffset = off;
-        m_tickAbs = m_absPos + static_cast<uint64_t>(off);
-        snapshotStartPreRoll(m_tickAbs, m_absPos);
-        m_recorder.beginRecord();
-
-        // A live bar-wrap count (m_takeBarIndex), not a precomputed sample tick:
-        // a precomputed tick would assume a constant bar length for the whole
-        // target, which a mid-take meter change can invalidate.
-        const size_t recordBars = m_autoStopEnabled ? static_cast<size_t>(m_recordBars) : 0;
-        m_autoStopArmed = recordBars > 0;
-        m_autoStopBarTarget = recordBars;
-    }
-
-    // A bar-locked take locks to the nearest tick; see the pendingStop check
-    // in processBlock() for how an ahead-of-us tick gets waited for.
-    void requestStop()
-    {
-        if (!m_barLockedTake)
-        {
-            finishRecording();
-            return;
-        }
-        const long off = m_seq.samplesToNearestBar();
-        const uint64_t stopTickAbs = m_absPos + static_cast<uint64_t>(off);
-        if (stopTickAbs <= m_tickAbs)
-        {
-            // Degenerate near-instant take: nothing sensible to fold.
-            m_barLockedTake = false;
-            finishRecording();
-            return;
-        }
-        m_pendingStop = true;
-        m_pendingStopLoopLength = static_cast<size_t>(stopTickAbs - m_tickAbs);
-        m_pendingStopTickAbs = stopTickAbs;
-    }
-
-    void commitPendingStop()
-    {
-        m_pendingStop = false;
-        const std::span<const float> preRoll{m_startPreRoll.data(), m_preRollLen * 2};
-        // Block-boundary slop past the tick; playback resumes from here, not frame 0.
-        const auto catchUpFrames = static_cast<size_t>(m_absPos + BlockSize - m_pendingStopTickAbs);
-        m_recorder.stopRecordBarLocked(m_pendingStopLoopLength, preRoll, m_startOffset, catchUpFrames);
-        m_barLockedTake = false;
-        finalizeMeterTimeline(m_pendingStopLoopLength);
-        // stopRecordBarLocked() auto-transitions straight into playback (no
-        // separate Play press): resync here too, not just in togglePlay().
-        resyncTimekeeperToLoopStart();
-    }
-
-    // Writes this block's raw input into the always-on capture ring
-    // (independent of recorder state), so a bar-locked start can reach back
-    // to audio that arrived before its own trigger.
-    void updateCaptureRing(const AbacDsp::AudioBuffer<2, BlockSize>& in) noexcept
-    {
-        for (size_t i = 0; i < BlockSize; ++i)
-        {
-            const auto pos = static_cast<size_t>((m_absPos + i) % m_ringCapacityFrames);
-            m_captureRing[pos * 2] = in(i, 0);
-            m_captureRing[pos * 2 + 1] = in(i, 1);
-        }
-    }
-
-    // Snapshots the late-start gap [tickAbs, trigAbs); empty if not late.
-    void snapshotStartPreRoll(const uint64_t tickAbs, const uint64_t trigAbs) noexcept
-    {
-        if (trigAbs <= tickAbs)
-        {
-            m_preRollLen = 0;
-            return;
-        }
-        const uint64_t gap = trigAbs - tickAbs;
-        m_preRollLen = std::min(m_startPreRoll.size() / 2, static_cast<size_t>(gap));
-        for (size_t f = 0; f < m_preRollLen; ++f)
-        {
-            const auto ringPos = static_cast<size_t>((tickAbs + f) % m_ringCapacityFrames);
-            m_startPreRoll[f * 2] = m_captureRing[ringPos * 2];
-            m_startPreRoll[f * 2 + 1] = m_captureRing[ringPos * 2 + 1];
-        }
-    }
-
     [[nodiscard]] static float blockPeak(const AbacDsp::AudioBuffer<2, BlockSize>& in) noexcept
     {
         float peak = 0.f;
@@ -2188,7 +1187,7 @@ class LooperImpl final : public EffectBase
     AbacDsp::SliceLibrary m_sliceLibrary;
     AbacDsp::SequencerEngine<> m_sequencer;
     AbacDsp::SequencePattern m_pattern;
-    AbacDsp::HannWindowMagnitudesFft m_freezeFft; // worker-owned, see runFreezeAnalysis()
+    SequencerPatternBuilder<BlockSize> m_patternBuilder;
 
     std::vector<float> m_visualWave;
     std::vector<float> m_preparedWave;
@@ -2217,9 +1216,9 @@ class LooperImpl final : public EffectBase
     // bar 1 (the real start of the take). Zero for takes with no count-in.
     int m_countInBarsOffset{0};
 
-    std::atomic<int> m_timeSignatureReq{kDefaultTimeSignature};
-    int m_pendingTimeSignature{kDefaultTimeSignature};
-    int m_appliedTimeSignature{kDefaultTimeSignature};
+    std::atomic<int> m_timeSignatureReq{LooperTimingController::kDefaultTimeSignature};
+    int m_pendingTimeSignature{LooperTimingController::kDefaultTimeSignature};
+    int m_appliedTimeSignature{LooperTimingController::kDefaultTimeSignature};
     bool m_eighthNoteUnit{false};
     AbacDsp::MeterTimeline m_meterTimeline;
     size_t m_takeBarIndex{0};      // bars elapsed since this take's own start (beginBarLockedRecord)
@@ -2252,15 +1251,12 @@ class LooperImpl final : public EffectBase
     float m_appliedFadeMs{-1.f};
     bool m_hostSync{false};
     bool m_suppressNextClick{false}; // set alongside every m_seq.reset() resync
-    uint64_t m_lastSyncedUpdateCount{0};
+    LooperTimingController m_timingController;
 
     // Bar-locked recording state.
-    std::vector<float> m_captureRing; // always-on raw input capture, interleaved stereo
-    size_t m_ringCapacityFrames{0};
+    CaptureRing<BlockSize> m_captureRing;
     uint64_t m_absPos{0}; // free-running sample position, never reset
 
-    std::vector<float> m_startPreRoll; // snapshot taken immediately when a bar-locked take starts
-    size_t m_preRollLen{0};            // valid length within m_startPreRoll (the late-start gap)
     bool m_barLockedTake{false};
     long m_startOffset{0}; // signed: tick - trigger (see beginBarLockedRecord)
     uint64_t m_tickAbs{0}; // this take's start tick (s)
@@ -2269,49 +1265,13 @@ class LooperImpl final : public EffectBase
     uint64_t m_pendingStopTickAbs{0};
     size_t m_pendingStopLoopLength{0};
 
-    // Phase 10g manual freeze; only the two generation counters are cross-thread.
+    // Phase 10g manual freeze.
     std::atomic<bool> m_freezePulse{false};
-    bool m_freezePending{false};
-    uint64_t m_freezePendingGen{0};
-    size_t m_freezeSamplesPerBeat{0};
-    std::atomic<uint64_t> m_freezeRequestGen{0};
-    std::atomic<uint64_t> m_freezeDoneGen{0};
-    std::vector<float> m_freezeMono;                  // worker-owned scratch
-    std::vector<AbacDsp::Slice> m_freezeResultSlices; // worker writes, audio thread reads once done
-    std::vector<float> m_freezeResultThumbnails;      // one kThumbFloats block per candidate, same order
-    std::mutex m_freezeWaitMutex;                     // guards only the worker's own condvar wait
-    std::condition_variable_any m_freezeCv;
-    std::jthread m_freezeThread;
+    FreezeService<BlockSize> m_freezeService;
 
-    // Named loop save/load ("Loops" menu); same generation-counter handshake
-    // as freeze, above, plus a load-side conflict-resolution handoff.
-    std::string m_loopsDirectory; // set once via setLoopsDirectory(), before any save/load
-    std::string m_loopSaveName;
-    bool m_loopSavePending{false};
-    uint64_t m_loopSaveRequestedGen{0};
-    std::atomic<uint64_t> m_loopSaveRequestGen{0};
-    std::atomic<uint64_t> m_loopSaveDoneGen{0};
-    std::mutex m_loopSaveWaitMutex;
-    std::condition_variable_any m_loopSaveCv;
-    std::jthread m_loopSaveThread;
-    std::mutex m_lastSavedLoopMutex;
-    std::string m_lastSavedLoopName;
-
-    std::string m_loopLoadName;
-    bool m_loopLoadPending{false};
-    uint64_t m_loopLoadRequestedGen{0};
-    std::atomic<uint64_t> m_loopLoadRequestGen{0};
-    std::atomic<uint64_t> m_loopLoadDoneGen{0};      // worker finished decode + conflict check
-    std::atomic<uint64_t> m_loopLoadConfirmedGen{0}; // safe for the audio thread to install
-    std::mutex m_loopLoadWaitMutex;
-    std::condition_variable_any m_loopLoadCv;
-    std::jthread m_loopLoadThread;
-    std::vector<float> m_loopLoadLeft; // worker-owned scratch, audio thread reads once confirmed
-    std::vector<float> m_loopLoadRight;
-    float m_loopLoadResolvedBpm{120.f};
-    std::atomic<bool> m_loopLoadNeedsResolve{false};
-    std::mutex m_loopLoadOutcomeMutex;
-    LoopLoadOutcome m_loopLoadOutcome;
+    // Named loop save/load ("Loops" menu); background WAV+JSON(+MIDI)
+    // encode/decode, generation-counter handshake, and its own worker threads.
+    LoopStorageService<BlockSize> m_loopStorage;
 
     // Request/done gens: let getSpectrogramHeadFrames() report 0 until regen
     // catches up, and let a stale run notice it's superseded and bail out.
@@ -2324,21 +1284,12 @@ class LooperImpl final : public EffectBase
     // skips its feed if contended, the regen worker spins to acquire it.
     std::atomic<bool> m_spectrogramFeedLock{false};
 
-    // One frozen track's audio (interleaved) plus its slices, already laid
-    // out contiguously so extractTrack() reconstructs it with no re-slicing.
-    struct LoopLoadTrackData
-    {
-        std::vector<float> interleaved;
-        std::vector<AbacDsp::Slice> slices;
-    };
-    std::vector<LoopLoadTrackData> m_loopLoadTracks; // worker-owned scratch, same handoff as left/right above
-    std::optional<AbacDsp::SequencePattern> m_loopLoadPattern;
-    bool m_loopLoadHasSequencerData{false};
-    AbacDsp::MeterTimeline m_loopLoadMeterTimeline; // worker-owned scratch, reconstructed from the .mid sidecar
-
     // Play/stop toggle for the pattern currently in m_pattern.
     std::atomic<bool> m_seqPlayPulse{false};
     bool m_sequencerPlaying{false};
     // Clears the frozen slice library + pattern, independent of setClear().
     std::atomic<bool> m_clearSeqPulse{false};
+
+    LooperTransportController<BlockSize> m_transportController;
+    LooperViewModel<BlockSize> m_viewModel;
 };
