@@ -99,6 +99,9 @@ class LooperImpl final : public EffectBase
     // Primitive (no anti-alias filter) decimation feeding the record spectrogram,
     // trading some aliasing for a display cut around 6 kHz and 4x fewer FFT frames.
     static constexpr size_t kSpectrogramDecimation = 4;
+    // Hop/fftLength ratio: high overlap for fine time resolution. Regen for the
+    // longest loops still finishes in well under 20 ms, so there's ample headroom.
+    static constexpr float kSpectrogramWindowForward = 1.f / 12.f;
     static constexpr size_t kThumbFftLength = 2 * AbacDsp::SliceLibrary::kThumbHeight;
 
     // Standard meters selectable via the Time Sig control, index-matched to its
@@ -146,9 +149,11 @@ class LooperImpl final : public EffectBase
         // so the display's Nyquist axis reflects what's actually analyzed.
         const float spectrogramSampleRate = sampleRate / static_cast<float>(kSpectrogramDecimation);
         m_recordSpectrogram.setSampleRate(spectrogramSampleRate);
+        m_recordSpectrogram.setWindowForward(kSpectrogramWindowForward);
         // Cover the whole recordable span (~60 s) so a long loop's ring is fully
-        // painted, not just its tail. hop = fftLength * windowForwardRatio (1024/3).
-        m_recordSpectrogram.setSlices(static_cast<size_t>(60.f * spectrogramSampleRate / (1024.f / 3.f)) + 64);
+        // painted, not just its tail. hop = fftLength * windowForwardRatio.
+        m_recordSpectrogram.setSlices(
+            static_cast<size_t>(60.f * spectrogramSampleRate / (1024.f * kSpectrogramWindowForward)) + 64);
         // Covers half a bar of late-start backfill at the slowest supported tempo.
         m_ringCapacityFrames = std::max<size_t>(BlockSize, static_cast<size_t>(sampleRate * 8.f));
         m_captureRing.assign(m_ringCapacityFrames * 2, 0.f);
@@ -209,6 +214,25 @@ class LooperImpl final : public EffectBase
                     }
                     lastHandled = m_loopLoadRequestGen.load(std::memory_order_acquire);
                     runLoadLoop(lastHandled);
+                }
+            });
+
+        m_spectrogramRegenThread = std::jthread(
+            [this](const std::stop_token& stopToken)
+            {
+                uint64_t lastHandled = 0;
+                while (!stopToken.stop_requested())
+                {
+                    std::unique_lock lock(m_spectrogramRegenWaitMutex);
+                    m_spectrogramRegenCv.wait(
+                        lock, stopToken, [this, lastHandled]
+                        { return m_spectrogramRegenRequestGen.load(std::memory_order_acquire) != lastHandled; });
+                    if (stopToken.stop_requested())
+                    {
+                        return;
+                    }
+                    lastHandled = m_spectrogramRegenRequestGen.load(std::memory_order_acquire);
+                    runSpectrogramRegen(lastHandled);
                 }
             });
     }
@@ -739,10 +763,21 @@ class LooperImpl final : public EffectBase
     }
 
     // Frame position of the spectrogram write head within the ring: the live record
-    // position while capturing, the finalized loop length once stopped.
+    // position while capturing, the finalized loop length once stopped. Reports 0
+    // (blank ring) while a post-load regen is still catching up, since activeSlice
+    // wouldn't yet correspond to the full loop length CircularLoopDisplay expects.
     [[nodiscard]] size_t getSpectrogramHeadFrames() const noexcept
     {
-        return isRecording() ? m_recorder.recordedFrames() : m_recorder.loopLengthFrames();
+        if (isRecording())
+        {
+            return m_recorder.recordedFrames();
+        }
+        if (m_spectrogramRegenRequestGen.load(std::memory_order_acquire) !=
+            m_spectrogramRegenDoneGen.load(std::memory_order_acquire))
+        {
+            return 0;
+        }
+        return m_recorder.loopLengthFrames();
     }
 
     [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
@@ -918,7 +953,15 @@ class LooperImpl final : public EffectBase
                 }
                 m_spectrogramDecimatePhase = (m_spectrogramDecimatePhase + 1) % kSpectrogramDecimation;
             }
-            m_recordSpectrogram.processBlock(std::span<const float>{inMonoDecimated.data(), decimatedCount});
+            // Non-blocking: if a background regen (from a load that raced a fresh
+            // record start) currently holds the feed, just skip this block rather
+            // than stall the audio thread.
+            bool expected = false;
+            if (m_spectrogramFeedLock.compare_exchange_strong(expected, true, std::memory_order_acquire))
+            {
+                m_recordSpectrogram.processBlock(std::span<const float>{inMonoDecimated.data(), decimatedCount});
+                m_spectrogramFeedLock.store(false, std::memory_order_release);
+            }
         }
 
         // Threshold recording: while armed, wait for the input to cross the level
@@ -1802,6 +1845,9 @@ class LooperImpl final : public EffectBase
         }
         m_loopLoadPending = false;
         m_recorder.loadLoop(m_loopLoadLeft, m_loopLoadRight);
+        const uint64_t regenGen = m_spectrogramRegenRequestGen.load(std::memory_order_relaxed) + 1;
+        m_spectrogramRegenRequestGen.store(regenGen, std::memory_order_release);
+        m_spectrogramRegenCv.notify_one();
         m_seq.setBpm(m_loopLoadResolvedBpm);
         m_appliedBpm = m_loopLoadResolvedBpm;
         m_bpm.store(m_loopLoadResolvedBpm, std::memory_order_relaxed);
@@ -1820,6 +1866,106 @@ class LooperImpl final : public EffectBase
             m_pattern = *m_loopLoadPattern;
             m_sequencer.setPattern(&m_pattern);
         }
+    }
+
+    // Runs on m_spectrogramRegenThread only: rebuilds m_recordSpectrogram's image
+    // from the just-loaded loop, mirroring the live path's downmix + decimation
+    // exactly (see kSpectrogramDecimation) so a loaded loop's spectrogram matches
+    // one that was actually recorded. Paces itself against the shared FFT queue
+    // instead of feeding the whole loop at once, and bails out early if a newer
+    // load supersedes it mid-run.
+    void runSpectrogramRegen(const uint64_t gen)
+    {
+        const auto startTime = std::chrono::steady_clock::now();
+        const auto logElapsed = [startTime](const char* outcome)
+        {
+            const auto ms =
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startTime).count();
+            std::cout << "LooperImpl: spectrogram regen " << outcome << " in " << ms << " ms" << std::endl;
+        };
+
+        const size_t frames = m_recorder.loopLengthFrames();
+        if (frames == 0)
+        {
+            m_spectrogramRegenDoneGen.store(gen, std::memory_order_release);
+            logElapsed("skipped (empty loop)");
+            return;
+        }
+        const auto loop = m_recorder.loopView();
+        constexpr size_t kChannels = decltype(m_recorder)::kChannels;
+
+        while (true)
+        {
+            bool expected = false;
+            if (m_spectrogramFeedLock.compare_exchange_weak(expected, true, std::memory_order_acquire))
+            {
+                break;
+            }
+            std::this_thread::yield();
+        }
+        m_recordSpectrogram.reset();
+        m_spectrogramFeedLock.store(false, std::memory_order_release);
+
+        const unsigned hop = m_recordSpectrogram.forwardLength();
+        if (hop == 0)
+        {
+            m_spectrogramRegenDoneGen.store(gen, std::memory_order_release);
+            logElapsed("skipped (zero hop)");
+            return;
+        }
+
+        std::vector<float> chunk(hop);
+        size_t chunkFill = 0;
+        size_t decimatePhase = 0;
+        for (size_t frame = 0; frame < frames; ++frame)
+        {
+            if (gen != m_spectrogramRegenRequestGen.load(std::memory_order_acquire))
+            {
+                logElapsed("aborted (superseded)");
+                return; // leave m_spectrogramRegenDoneGen alone
+            }
+            if (decimatePhase == 0)
+            {
+                chunk[chunkFill++] = 0.5f * (loop[frame * kChannels] + loop[frame * kChannels + 1]);
+                if (chunkFill == hop)
+                {
+                    while (!m_recordSpectrogram.queueHasRoom())
+                    {
+                        std::this_thread::yield();
+                    }
+                    feedSpectrogramRegenChunk(std::span<const float>{chunk});
+                    chunkFill = 0;
+                }
+            }
+            decimatePhase = (decimatePhase + 1) % kSpectrogramDecimation;
+        }
+        if (chunkFill > 0)
+        {
+            while (!m_recordSpectrogram.queueHasRoom())
+            {
+                std::this_thread::yield();
+            }
+            feedSpectrogramRegenChunk(std::span<const float>{chunk.data(), chunkFill});
+        }
+        m_spectrogramRegenDoneGen.store(gen, std::memory_order_release);
+        logElapsed("completed");
+    }
+
+    // Acquires m_spectrogramFeedLock (spinning; this thread isn't realtime) before
+    // feeding, so it never races the live audio-thread producer.
+    void feedSpectrogramRegenChunk(std::span<const float> chunk)
+    {
+        while (true)
+        {
+            bool expected = false;
+            if (m_spectrogramFeedLock.compare_exchange_weak(expected, true, std::memory_order_acquire))
+            {
+                break;
+            }
+            std::this_thread::yield();
+        }
+        m_recordSpectrogram.processBlock(chunk);
+        m_spectrogramFeedLock.store(false, std::memory_order_release);
     }
 
     // Sample-accurate steps (stepsPerBeat = samplesPerBeat), so every slice's
@@ -2156,6 +2302,21 @@ class LooperImpl final : public EffectBase
     std::atomic<bool> m_loopLoadNeedsResolve{false};
     std::mutex m_loopLoadOutcomeMutex;
     LoopLoadOutcome m_loopLoadOutcome;
+
+    // Rebuilds m_recordSpectrogram's image from a just-loaded loop, since it's
+    // otherwise only ever fed live while isRecording(). Request/done gens let
+    // getSpectrogramHeadFrames() report 0 (blank ring) until regen catches up,
+    // and let a stale run notice it's been superseded and bail out early.
+    std::atomic<uint64_t> m_spectrogramRegenRequestGen{0};
+    std::atomic<uint64_t> m_spectrogramRegenDoneGen{0};
+    std::mutex m_spectrogramRegenWaitMutex;
+    std::condition_variable_any m_spectrogramRegenCv;
+    std::jthread m_spectrogramRegenThread;
+    // Mutual exclusion between the live audio-thread feed and this worker's feed
+    // into m_recordSpectrogram: SpectrogramBase's window buffer isn't safe for
+    // two concurrent producers. Audio thread never blocks on this (skips its
+    // feed for that block if contended); the worker spins to acquire it.
+    std::atomic<bool> m_spectrogramFeedLock{false};
 
     // One frozen track's audio (interleaved) plus its slices, already laid
     // out contiguously so extractTrack() reconstructs it with no re-slicing.

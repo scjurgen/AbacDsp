@@ -1,23 +1,22 @@
 # Looper
 
-## Spectrogram regeneration on loop load
+## Spectrogram regeneration on loop load (done)
 
-Bug: loading a saved loop does not show a spectrogram; the display only ever gets fed live
-during an actual recording pass (`m_recordSpectrogram.processBlock()` while `isRecording()`),
-so loaded audio never populates it.
+Bug: loading a saved loop did not show a spectrogram; the display was only ever fed live
+during an actual recording pass. Fixed: `LooperImpl` now runs a dedicated
+`m_spectrogramRegenThread`, triggered from `checkLoopLoadCompletion()` right after
+`m_recorder.loadLoop(...)`. It downmixes and decimates the loaded loop the same way the live
+path does, feeds `SimpleSpectrogram` in `forwardLength()`-paced chunks (checking
+`queueHasRoom()` before each push so nothing silently drops), and calls the new
+`SpectrogramBase::resetWindow()` / `SimpleSpectrogram::reset()` first so no stale image data
+leaks across loads.
 
-
-### background regeneration
-- Dedicated worker thread, started after `checkLoopLoadCompletion()` installs
-  `m_loopLoadLeft/Right`, only when no `.spec` cache was found.
-- Downmix L/R and feed `SpectrogramBase::processBlock()` in paced chunks, not the whole
-  buffer at once: the existing FFT queue is only `QUEUE_SIZE = 4` slots, so an unpaced call
-  would silently drop almost everything. The regen thread must pace itself against the
-  existing FFT worker (check queue occupancy / yield between chunks).
-- Needs a real `reset()` on `SimpleSpectrogram`/`SpectrogramBase`: `setSlices()` only
-  resizes-with-fill, which does not clear existing content when size is unchanged.
-  Regeneration must explicitly zero the buffer and `m_currentSlice` first, or the new image
-  shows garbage mixed with the previous session's data.
+`getSpectrogramHeadFrames()` reports 0 (blank ring) while a regen is still in flight, since
+`CircularLoopDisplay` assumes `activeSlice` is time-synced with the reported head position.
+A `m_spectrogramFeedLock` (non-blocking CAS on the audio thread, spin-acquire on the regen
+thread) guards against the live feed and the regen feed both writing into
+`SimpleSpectrogram`'s window buffer if a new recording starts while a previous load's regen
+is still catching up.
 
 ## CircularLoopDisplay enhancements (future)
 

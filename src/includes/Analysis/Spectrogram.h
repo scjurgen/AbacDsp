@@ -299,6 +299,24 @@ class SpectrogramBase
         processBlock(std::span<const float>{data, numSamples});
     }
 
+    // Number of samples processBlock() must receive to trigger exactly one more
+    // FFT enqueue (once the window is already full). Lets a non-realtime producer
+    // (e.g. background regeneration) pace itself to one enqueue per call.
+    [[nodiscard]] unsigned forwardLength() const noexcept
+    {
+        return m_forwardLength;
+    }
+
+    // Non-blocking peek at whether the next enqueueFFT() would succeed. For
+    // producers that must not silently drop frames (unlike the realtime path,
+    // which drops under backpressure), poll this before calling processBlock().
+    [[nodiscard]] bool queueHasRoom() const noexcept
+    {
+        const size_t head = m_queueHead.load(std::memory_order_relaxed);
+        const size_t tail = m_queueTail.load(std::memory_order_acquire);
+        return (head + 1) % QUEUE_SIZE != tail;
+    }
+
   protected:
     // Every concrete subclass must call this as the first line of its own
     // destructor. Idempotent: safe to also let ~SpectrogramBase() call it.
@@ -309,6 +327,20 @@ class SpectrogramBase
             m_shouldExit.store(true, std::memory_order_release);
             m_workerThread.join();
         }
+    }
+
+    // Only safe once the caller guarantees no further processBlock() calls will
+    // arrive until this returns (e.g. the sole producer is about to rebuild its
+    // image from scratch). Spins until the FFT worker has drained every
+    // already-enqueued frame, then clears the sliding window.
+    void resetWindow() noexcept
+    {
+        while (m_queueHead.load(std::memory_order_relaxed) != m_queueTail.load(std::memory_order_acquire))
+        {
+            std::this_thread::yield();
+        }
+        m_bufferIndex = 0;
+        std::ranges::fill(m_buffer, 0.f);
     }
 
     virtual void onNewFFTData(const std::vector<float>& magnitudes) = 0;
@@ -396,6 +428,15 @@ class SimpleSpectrogram : public SpectrogramBase
         m_slices = cnt;
         m_currentSlice = std::clamp(m_currentSlice, size_t{0}, cnt);
         m_spectrogram.resize(m_fftLength / 2 * m_slices, 0.f);
+    }
+
+    // Rebuilds the image from scratch: only safe when no other producer is
+    // feeding processBlock() concurrently (see resetWindow()'s contract).
+    void reset() noexcept
+    {
+        resetWindow();
+        m_currentSlice = 0;
+        std::ranges::fill(m_spectrogram, 0.f);
     }
 
   protected:
