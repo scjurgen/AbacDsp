@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <iostream>
 
 #include "Audio/AudioBuffer.h"
 #include "BlockProcessors/BlockProcPitch.h"
@@ -91,6 +92,7 @@ class MaxDiffuserImpl final : public EffectBase
             chain.setElements(m_elements);
             chain.setBulge(m_elements, m_bulge);
         }
+        logElementSizes();
     }
 
     void setFeedback(const float valueInPercentage)
@@ -107,18 +109,21 @@ class MaxDiffuserImpl final : public EffectBase
         m_bulge = value;
         m_diffuser[0].setBulge(m_elements, m_bulge);
         m_diffuser[1].setBulge(m_elements, m_bulge);
+        logElementSizes();
     }
 
     void setBottomSize(const float value)
     {
         m_diffuser[0].setBottomSize(value);
         m_diffuser[1].setBottomSize(value * 1.1f);
+        logElementSizes();
     }
 
     void setTopSize(const float value)
     {
         m_diffuser[0].setTopSize(value * 1.1f);
         m_diffuser[1].setTopSize(value);
+        logElementSizes();
     }
 
     void setModulationDepth(const float value)
@@ -252,6 +257,28 @@ class MaxDiffuserImpl final : public EffectBase
     }
 
   private:
+    void logElementSizes() const
+    {
+        std::cout << " size: ";
+        std::array<size_t, 2> absVal{};
+        for (size_t c = 0; c < m_diffuser.size(); ++c)
+        {
+            const auto sizes = m_diffuser[c].getElementSizesInSamples();
+            size_t total = 0;
+            for (size_t i = 0; i < m_elements; ++i)
+            {
+                total += sizes[i];
+            }
+            std::cout << total;
+            absVal[c] = total;
+            if (c == 0)
+            {
+                std::cout << ", ";
+            }
+        }
+        std::cout << " -> " << static_cast<long long>(absVal[0]) - static_cast<long long>(absVal[1]) << "\n";
+    }
+
     size_t m_elements{6};
     float m_bulge{0.46f};
     float m_dry{1.f};

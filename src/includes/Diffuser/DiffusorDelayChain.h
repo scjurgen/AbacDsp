@@ -116,6 +116,18 @@ class DiffuserDelayChain
         return sizes;
     }
 
+    // Active elements' real, prime-rounded delay lengths in samples, as actually used by
+    // processBlock(). Elements beyond the active count are left at 0.
+    [[nodiscard]] std::array<size_t, NumElements> getElementSizesInSamples() const noexcept
+    {
+        std::array<size_t, NumElements> sizes{};
+        for (size_t i = 0; i < m_elementsToUse; ++i)
+        {
+            sizes[i] = m_delay[i].size();
+        }
+        return sizes;
+    }
+
     // Opt-in per-element level tap for visualisation. Null by default (single branch,
     // no cost) until a caller registers a sink.
     void setLevelMeterSink(std::array<std::atomic<float>, NumElements + 1>* sink) noexcept
