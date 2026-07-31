@@ -156,6 +156,7 @@ class LooperImpl final : public EffectBase
               .threshRecReq = m_threshRecReq,
               .undoPulse = m_undoPulse,
               .mixDownPulse = m_mixDownPulse,
+              .requestSpectrogramRegen = [this] { requestSpectrogramRegen(); },
           })
         , m_viewModel(typename LooperViewModel<BlockSize>::Deps{
               .recorder = m_recorder,

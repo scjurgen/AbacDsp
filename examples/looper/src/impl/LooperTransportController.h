@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <span>
 
 #include "CaptureRing.h"
@@ -75,6 +76,8 @@ class LooperTransportController
         std::atomic<bool>& threshRecReq;
         std::atomic<bool>& undoPulse;
         std::atomic<bool>& mixDownPulse;
+
+        std::function<void()> requestSpectrogramRegen;
     };
 
     explicit LooperTransportController(Deps deps)
@@ -112,6 +115,7 @@ class LooperTransportController
         if (mixDownReq)
         {
             m_deps.recorder.mixDownOverdub();
+            m_deps.requestSpectrogramRegen();
         }
 
         // A bar-locked stop, a freeze, or a loop save/load is waiting on its own
