@@ -15,6 +15,7 @@
 #include "Numbers/BulgeControl.h"
 #include "Numbers/Convert.h"
 #include "Numbers/PrimeDispatcher.h"
+#include "SizeSpreadControl.h"
 
 namespace AbacDsp
 {
@@ -68,6 +69,18 @@ class DiffuserDelayChain
     void setBottomSize(const float valueInMeters)
     {
         m_bottomSize = valueInMeters;
+        scaleDiffuser<false>();
+    }
+
+    // Small per-element size offset (+/- alternating by element), for stereo decorrelation
+    // without shifting the channel's total delay length the way scaling bottomSize/topSize
+    // did (that drifted the per-channel sum with bulge skew). Pass invertParity=true on the
+    // second channel so the two get opposite offsets per element. Safe at any spread value:
+    // SizeSpreadControl caps the offset to a fraction of each element's own size.
+    void setSizeSpread(const float spreadInMeters, const bool invertParity = false) noexcept
+    {
+        m_sizeSpreadMeters = spreadInMeters;
+        m_invertSpreadParity = invertParity;
         scaleDiffuser<false>();
     }
 
@@ -395,14 +408,24 @@ class DiffuserDelayChain
         {
             return;
         }
+        std::array<float, NumElements> baseSizes{};
+        std::array<float, NumElements> offsets{};
         std::array<size_t, NumElements> sourceSizes{};
         std::array<size_t, NumElements> primeValues{};
 
         const auto bottomSamples = metersToClampedSamples(m_bottomSize);
         const auto topSamples = metersToClampedSamples(m_topSize);
-        std::transform(m_ratios.begin(), m_ratios.end(), sourceSizes.begin(),
+        std::transform(m_ratios.begin(), m_ratios.end(), baseSizes.begin(),
                        [bottomSamples, topSamples](const float ratio)
-                       { return static_cast<size_t>(bottomSamples + (topSamples - bottomSamples) * ratio); });
+                       { return bottomSamples + (topSamples - bottomSamples) * ratio; });
+
+        const auto spreadSamples = Convert::metersToSamples(m_sizeSpreadMeters, m_sampleRate);
+        SizeSpreadControl::fillAlternatingOffsets(baseSizes, spreadSamples, m_invertSpreadParity, offsets,
+                                                  m_elementsToUse);
+        for (size_t i = 0; i < m_elementsToUse; ++i)
+        {
+            sourceSizes[i] = static_cast<size_t>(baseSizes[i] + offsets[i]);
+        }
         generateUniquePrimeSet<11u>(sourceSizes.data(), primeValues.data(), m_elementsToUse);
         for (size_t i = 0; i < m_elementsToUse; ++i)
         {
@@ -503,6 +526,8 @@ class DiffuserDelayChain
     float m_sampleRate;
     float m_bottomSize{0.5f};
     float m_topSize{5.f};
+    float m_sizeSpreadMeters{0.f};
+    bool m_invertSpreadParity{false};
     float m_feedback{0.0f};
     std::array<float, NumElements> m_ratios{};
     float m_bulge{0.6f};

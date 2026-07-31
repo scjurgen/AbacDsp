@@ -49,6 +49,10 @@ class GenericImpl final : public EffectBase
     {
         m_topSize = value;
     }
+    void setSizeSpread(const float value)
+    {
+        m_sizeSpread = value;
+    }
     void setModulationDepth(const float value)
     {
         m_modulationDepth = value;
@@ -104,6 +108,7 @@ class GenericImpl final : public EffectBase
     float m_bulge{};
     float m_bottomSize{};
     float m_topSize{};
+    float m_sizeSpread{};
     float m_modulationDepth{};
     float m_modulationSpeed{};
     float m_lowPass{};

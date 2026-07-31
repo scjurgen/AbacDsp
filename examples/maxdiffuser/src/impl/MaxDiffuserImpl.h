@@ -115,14 +115,21 @@ class MaxDiffuserImpl final : public EffectBase
     void setBottomSize(const float value)
     {
         m_diffuser[0].setBottomSize(value);
-        m_diffuser[1].setBottomSize(value * 1.1f);
+        m_diffuser[1].setBottomSize(value);
         logElementSizes();
     }
 
     void setTopSize(const float value)
     {
-        m_diffuser[0].setTopSize(value * 1.1f);
+        m_diffuser[0].setTopSize(value);
         m_diffuser[1].setTopSize(value);
+        logElementSizes();
+    }
+
+    void setSizeSpread(const float valueInMeters)
+    {
+        m_diffuser[0].setSizeSpread(valueInMeters, false);
+        m_diffuser[1].setSizeSpread(valueInMeters, true);
         logElementSizes();
     }
 

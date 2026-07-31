@@ -23,6 +23,8 @@
       "cc": {"controller": 26}},
     {"short": "TSZ", "type": "dial", "display": "Top Size", "symbol": "topSize", "default": 7.0, "range": [0.5, 100.0, 0.1, 0.4, false], "precision": 1, "unit": "m",
       "cc": {"controller": 27}},
+    {"short": "SPRD", "type": "dial", "display": "Size Spread", "symbol": "sizeSpread", "default": 0, "range": [0, 5, 0.01, 0.5, false], "precision": 2, "unit": "m",
+      "cc": {"controller": 36}},
     {"short": "MDPT", "type": "dial", "display": "Mod Depth", "symbol": "modulationDepth", "default": 0, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": "",
       "cc": {"controller": 28}},
     {"short": "MDSP", "type": "dial", "display": "Mod Speed", "symbol": "modulationSpeed", "default": 0.5, "range": [0.01, 5, 0.01, 0.5, false], "precision": 2, "unit": "Hz",
@@ -48,7 +50,7 @@
     "WINDOW_WIDTH": "1100",
     "WINDOW_HEIGHT": "950",
     "type": "=6",
-    "composition": "R=(2:2:2:2:2:1) A1=(DRY,WET,PRED,MIX,PTCH,PMOD) A2=(ELM,FDBK,BLG,BSZ,TSZ) A3=(MDPT,MDSP,LPF) A4=(FMIX,FSZ,FDEC) A5=(BINSB) A6=(SIZES)"
+    "composition": "R=(2:2:2:2:2:1) A1=(DRY,WET,PRED,MIX,PTCH,PMOD) A2=(ELM,FDBK,BLG,BSZ,TSZ,SPRD) A3=(MDPT,MDSP,LPF) A4=(FMIX,FSZ,FDEC) A5=(BINSB) A6=(SIZES)"
   },
   "extra_ui_includes": [
     "impl/ShowProcessingBins.h",

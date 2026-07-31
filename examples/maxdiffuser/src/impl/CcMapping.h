@@ -13,6 +13,7 @@ enum class CcTarget : int
     bulge,
     bottomSize,
     topSize,
+    sizeSpread,
     modulationDepth,
     modulationSpeed,
     lowPass,
@@ -36,7 +37,7 @@ struct CcFullRange
     float hi;
 };
 
-inline constexpr std::array<CcMapping, 16> kDefaultCcMappings{{
+inline constexpr std::array<CcMapping, 17> kDefaultCcMappings{{
     {20, -100.0f, 12.0f},
     {21, -100.0f, 12.0f},
     {22, 0.0f, 1000.0f},
@@ -45,6 +46,7 @@ inline constexpr std::array<CcMapping, 16> kDefaultCcMappings{{
     {25, -1.0f, 1.0f},
     {26, 0.5f, 100.0f},
     {27, 0.5f, 100.0f},
+    {36, 0.0f, 5.0f},
     {28, 0.0f, 1.0f},
     {29, 0.01f, 5.0f},
     {30, 20.0f, 20000.0f},
@@ -55,15 +57,15 @@ inline constexpr std::array<CcMapping, 16> kDefaultCcMappings{{
     {35, 1.0f, 100000.0f},
 }};
 
-inline constexpr std::array<std::string_view, 16> kCcTargetParamIds{
-    "dry",        "wet",     "preDelay",        "elements",        "feedback", "bulge",
-    "bottomSize", "topSize", "modulationDepth", "modulationSpeed", "lowPass",  "mix",
-    "pitch",      "fdnMix",  "fdnSize",         "fdnDecay",
+inline constexpr std::array<std::string_view, 17> kCcTargetParamIds{
+    "dry",        "wet",     "preDelay",   "elements",        "feedback",        "bulge",
+    "bottomSize", "topSize", "sizeSpread", "modulationDepth", "modulationSpeed", "lowPass",
+    "mix",        "pitch",   "fdnMix",     "fdnSize",         "fdnDecay",
 };
 
 // The dial's own full range (blueprint "range"), independent of the CC sub-range,
 // used to clamp user-editable CC value ranges.
-inline constexpr std::array<CcFullRange, 16> kCcTargetFullRange{{
+inline constexpr std::array<CcFullRange, 17> kCcTargetFullRange{{
     {-100.0f, 12.0f},
     {-100.0f, 12.0f},
     {0.0f, 1000.0f},
@@ -72,6 +74,7 @@ inline constexpr std::array<CcFullRange, 16> kCcTargetFullRange{{
     {-1.0f, 1.0f},
     {0.5f, 100.0f},
     {0.5f, 100.0f},
+    {0.0f, 5.0f},
     {0.0f, 1.0f},
     {0.01f, 5.0f},
     {20.0f, 20000.0f},

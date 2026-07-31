@@ -20,6 +20,7 @@ struct PatchParameters
         bulge          , // dial
         bottomSize     , // dial
         topSize        , // dial
+        sizeSpread     , // dial
         modulationDepth, // dial
         modulationSpeed, // dial
         lowPass        , // dial
@@ -38,6 +39,7 @@ float feedback{50.0f};
 float bulge{0.46f};
 float bottomSize{0.7f};
 float topSize{7.0f};
+float sizeSpread{0.0f};
 float modulationDepth{0.0f};
 float modulationSpeed{0.5f};
 float lowPass{12000.0f};
@@ -58,6 +60,7 @@ float fdnDecay{2000.0f};
 "bulge",
 "bottomSize",
 "topSize",
+"sizeSpread",
 "modulationDepth",
 "modulationSpeed",
 "lowPass",
@@ -93,6 +96,7 @@ float fdnDecay{2000.0f};
         else if constexpr (ParamId == Id::bulge) return bulge;
         else if constexpr (ParamId == Id::bottomSize) return bottomSize;
         else if constexpr (ParamId == Id::topSize) return topSize;
+        else if constexpr (ParamId == Id::sizeSpread) return sizeSpread;
         else if constexpr (ParamId == Id::modulationDepth) return modulationDepth;
         else if constexpr (ParamId == Id::modulationSpeed) return modulationSpeed;
         else if constexpr (ParamId == Id::lowPass) return lowPass;
@@ -129,6 +133,8 @@ break;
  case Id::bottomSize: if (!isEqual(get<Id::bottomSize>(), value)) {get<Id::bottomSize>() = value;m_modified = true;}
 break;
  case Id::topSize: if (!isEqual(get<Id::topSize>(), value)) {get<Id::topSize>() = value;m_modified = true;}
+break;
+ case Id::sizeSpread: if (!isEqual(get<Id::sizeSpread>(), value)) {get<Id::sizeSpread>() = value;m_modified = true;}
 break;
  case Id::modulationDepth: if (!isEqual(get<Id::modulationDepth>(), value)) {get<Id::modulationDepth>() = value;m_modified = true;}
 break;
@@ -194,6 +200,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         bulge          , // dial
         bottomSize     , // dial
         topSize        , // dial
+        sizeSpread     , // dial
         modulationDepth, // dial
         modulationSpeed, // dial
         lowPass        , // dial

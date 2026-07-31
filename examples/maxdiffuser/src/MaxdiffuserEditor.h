@@ -113,6 +113,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.items.add(juce::FlexItem(bulgeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(bottomSizeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(topSizeDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(sizeSpreadDial).withFlex(1).withMargin(knobMarginSmall));
             box.performLayout(areas[1].toFloat());
         }
         {
@@ -237,6 +238,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                    [this](float lo, float hi) { processorRef.setCcRange(CcTarget::topSize, lo, hi); },
                                    [this] { processorRef.clearCcAssignment(CcTarget::topSize); },
                                    [this] { return processorRef.getCcController(CcTarget::topSize); }});
+        addAndMakeVisible(sizeSpreadDial);
+        sizeSpreadDial.reset(valueTreeState, "sizeSpread");
+        sizeSpreadDial.setLabelText(juce::String::fromUTF8("Size Spread"));
+        sizeSpreadDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::sizeSpread); },
+                                            [this] { return processorRef.getCcRange(CcTarget::sizeSpread); },
+                                            [this](float lo, float hi)
+                                            { processorRef.setCcRange(CcTarget::sizeSpread, lo, hi); },
+                                            [this] { processorRef.clearCcAssignment(CcTarget::sizeSpread); },
+                                            [this] { return processorRef.getCcController(CcTarget::sizeSpread); }});
         addAndMakeVisible(modulationDepthDial);
         modulationDepthDial.reset(valueTreeState, "modulationDepth");
         modulationDepthDial.setLabelText(juce::String::fromUTF8("Mod Depth"));
@@ -618,6 +628,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial bulgeDial{this};
     CustomRotaryDial bottomSizeDial{this};
     CustomRotaryDial topSizeDial{this};
+    CustomRotaryDial sizeSpreadDial{this};
     CustomRotaryDial modulationDepthDial{this};
     CustomRotaryDial modulationSpeedDial{this};
     CustomRotaryDial lowPassDial{this};

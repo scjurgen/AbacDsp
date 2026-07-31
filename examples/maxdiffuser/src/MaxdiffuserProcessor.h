@@ -42,6 +42,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("bulge", this);
         m_parameters.addParameterListener("bottomSize", this);
         m_parameters.addParameterListener("topSize", this);
+        m_parameters.addParameterListener("sizeSpread", this);
         m_parameters.addParameterListener("modulationDepth", this);
         m_parameters.addParameterListener("modulationSpeed", this);
         m_parameters.addParameterListener("lowPass", this);
@@ -52,7 +53,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("fdnSize", this);
         m_parameters.addParameterListener("fdnDecay", this);
 
-        for (size_t i = 0; i < 16; ++i)
+        for (size_t i = 0; i < 17; ++i)
         {
             m_ccActive[i].controller.store(kDefaultCcMappings[i].controller, std::memory_order_relaxed);
             m_ccActive[i].valueLow.store(kDefaultCcMappings[i].valueLow, std::memory_order_relaxed);
@@ -70,6 +71,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("bulge", this);
         m_parameters.removeParameterListener("bottomSize", this);
         m_parameters.removeParameterListener("topSize", this);
+        m_parameters.removeParameterListener("sizeSpread", this);
         m_parameters.removeParameterListener("modulationDepth", this);
         m_parameters.removeParameterListener("modulationSpeed", this);
         m_parameters.removeParameterListener("lowPass", this);
@@ -100,7 +102,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
         for (const auto& entry : CcSettings::load())
         {
-            for (size_t i = 0; i < 16; ++i)
+            for (size_t i = 0; i < 17; ++i)
             {
                 if (kCcTargetParamIds[i] != entry.paramId)
                 {
@@ -303,6 +305,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("m").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " m"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("sizeSpread", 1), "Size Spread", juce::NormalisableRange<float>(0, 5, 0.01, 0.5, false),
+            0,
+            juce::AudioParameterFloatAttributes{}.withLabel("m").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " m"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("modulationDepth", 1), "Mod Depth", juce::NormalisableRange<float>(0, 1, 0.01, 1, false),
             0,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
@@ -401,6 +408,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setTopSize(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::topSize, v);
+             }},
+            {"sizeSpread",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setSizeSpread(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::sizeSpread, v);
              }},
             {"modulationDepth",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -531,6 +544,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("topSize");
             float normalized = range.convertTo0to1(params.topSize);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("sizeSpread"))
+        {
+            const auto& range = m_parameters.getParameterRange("sizeSpread");
+            float normalized = range.convertTo0to1(params.sizeSpread);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("modulationDepth"))
@@ -763,7 +782,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         std::atomic<float> valueLow{0.f};
         std::atomic<float> valueHigh{0.f};
     };
-    std::array<CcSlot, 16> m_ccActive{};
+    std::array<CcSlot, 17> m_ccActive{};
     std::atomic<int> m_learnTargetIndex{-1};
     std::atomic<int> m_lastLearnedIndex{-1};
 
@@ -776,8 +795,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     void saveCcSettings() const
     {
         std::vector<CcMappingOverride> overrides;
-        overrides.reserve(16);
-        for (size_t i = 0; i < 16; ++i)
+        overrides.reserve(17);
+        for (size_t i = 0; i < 17; ++i)
         {
             overrides.push_back({std::string(kCcTargetParamIds[i]),
                                  m_ccActive[i].controller.load(std::memory_order_relaxed),
@@ -797,7 +816,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_lastLearnedIndex.store(learnIndex, std::memory_order_relaxed);
             return;
         }
-        for (size_t i = 0; i < 16; ++i)
+        for (size_t i = 0; i < 17; ++i)
         {
             if (m_ccActive[i].controller.load(std::memory_order_relaxed) != controller)
             {
