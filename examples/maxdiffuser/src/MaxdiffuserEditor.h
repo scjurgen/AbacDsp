@@ -140,6 +140,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.flexDirection = juce::FlexBox::Direction::row;
             box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
             box.items.add(juce::FlexItem(binsGauge).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(binsBandsGauge).withFlex(1).withMargin(knobMarginSmall));
             box.performLayout(areas[4].toFloat());
         }
     }
@@ -151,6 +152,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         {
             binsGauge.update(processorRef.getProcessingBinLevels(),
                              static_cast<size_t>(valueTreeState.getRawParameterValue("elements")->load()));
+            binsBandsGauge.update(processorRef.getProcessingBinBandLevels(),
+                                  static_cast<size_t>(valueTreeState.getRawParameterValue("elements")->load()));
             processorRef.consumeLastLearnedCc();
         }
     }
@@ -302,6 +305,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                     [this] { return processorRef.getCcController(CcTarget::fdnDecay); }});
         addAndMakeVisible(binsGauge);
         binsGauge.setLabelText(juce::String::fromUTF8("Bins"));
+        addAndMakeVisible(binsBandsGauge);
+        binsBandsGauge.setLabelText(juce::String::fromUTF8("Bands"));
     }
 
     void parentHierarchyChanged() override
@@ -403,6 +408,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
         backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
         binsGauge.updateColors();
+        binsBandsGauge.updateColors();
 
         repaint();
     }
@@ -615,6 +621,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial fdnSizeDial{this};
     CustomRotaryDial fdnDecayDial{this};
     ShowProcessingBins<BinsDisplayMode::ShowContinuousLine, LevelUnit::Decibel> binsGauge{};
+    ShowProcessingBinsBands binsBandsGauge{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
 };

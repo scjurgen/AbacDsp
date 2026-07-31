@@ -9,6 +9,7 @@
 
 #include "AllpassDelay.h"
 #include "Audio/Fader.h"
+#include "Filters/Biquad.h"
 #include "Helpers/ConstructArray.h"
 #include "Helpers/SkipSmoothing.h"
 #include "Numbers/BulgeControl.h"
@@ -25,6 +26,7 @@ class DiffuserDelayChain
     explicit DiffuserDelayChain(const float sampleRate, const size_t blkSize)
         : m_sampleRate(sampleRate)
         , m_delay{constructArray<ModulatingAllPassDelay<MaxDelayLength, Style>, NumElements>(sampleRate)}
+        , m_bandScratch(blkSize, 0.f)
         , tmpFadeIn(blkSize, 0.f)
         , tmpFadeOut(blkSize, 0.f)
     {
@@ -108,6 +110,37 @@ class DiffuserDelayChain
     {
         m_levelSink = sink;
     }
+
+    using BandLevelSink = std::array<std::array<std::atomic<float>, 3>, NumElements + 1>;
+
+    // Configures the fixed low/mid/high per-bin filter bank used by the band-level sink below.
+    // lowHz/highHz are the low-pass and high-pass corners; the mid band-pass sits at their
+    // geometric mean with a wide Q so the three bands overlap.
+    void configureBandFilters(const float sampleRate, const float lowHz, const float highHz) noexcept
+    {
+        constexpr float kOuterQ = 0.7071f;
+        constexpr float kMidQ = 0.5f;
+        const auto midHz = std::sqrt(lowHz * highHz);
+        for (auto& f : m_bandLowFilters)
+        {
+            f.computeCoefficients(sampleRate, lowHz, kOuterQ, 0.f);
+        }
+        for (auto& f : m_bandMidFilters)
+        {
+            f.computeCoefficients(sampleRate, midHz, kMidQ, 0.f);
+        }
+        for (auto& f : m_bandHighFilters)
+        {
+            f.computeCoefficients(sampleRate, highHz, kOuterQ, 0.f);
+        }
+    }
+
+    // Opt-in per-element, per-band level tap for visualisation. Null by default (single branch,
+    // no cost) until a caller registers a sink and calls configureBandFilters().
+    void setBandLevelMeterSink(BandLevelSink* sink) noexcept
+    {
+        m_bandLevelSink = sink;
+    }
     [[nodiscard]] float exponentialInterpolateRatio(const float min, const float max, const float ratio) const noexcept
     {
         if (min <= 0)
@@ -171,7 +204,7 @@ class DiffuserDelayChain
     void processBlock(const float* source, float* target, const size_t numSamples)
     {
         std::copy_n(source, numSamples, target);
-        meterBin(0, target, numSamples);
+        meterAll(0, target, numSamples);
         if (m_fadeInReduceElements)
         {
             decreaseNumElements(target, numSamples);
@@ -187,14 +220,14 @@ class DiffuserDelayChain
         {
             for (size_t i = 1; i <= m_elementsToUse; ++i)
             {
-                meterBin(i, target, numSamples);
+                meterAll(i, target, numSamples);
             }
             return;
         }
         for (size_t i = 0; i < m_elementsToUse; ++i)
         {
             m_delay[i].processBlockInplace(target, numSamples);
-            meterBin(i + 1, target, numSamples);
+            meterAll(i + 1, target, numSamples);
         }
     }
 
@@ -215,15 +248,59 @@ class DiffuserDelayChain
         (*m_levelSink)[bin].store(peak, std::memory_order_relaxed);
     }
 
-    void clearInactiveBins() noexcept
+    // Raw per-band peak tap for the stacked-bands visualisation; no-ops when no sink is
+    // registered. Filters run on a copy of buf so the metered stage's own output is untouched.
+    void meterBinBands(const size_t bin, const float* buf, const size_t numSamples) noexcept
     {
-        if (!m_levelSink)
+        if (!m_bandLevelSink)
         {
             return;
         }
-        for (size_t i = m_elementsToUse + 1; i <= NumElements; ++i)
+        const auto peakOfAbs = [](const float* data, const size_t count) noexcept
         {
-            (*m_levelSink)[i].store(0.f, std::memory_order_relaxed);
+            float peak = 0.f;
+            for (size_t i = 0; i < count; ++i)
+            {
+                peak = std::max(peak, std::abs(data[i]));
+            }
+            return peak;
+        };
+
+        m_bandLowFilters[bin].processBlock(buf, m_bandScratch.data(), numSamples);
+        const auto lowPeak = peakOfAbs(m_bandScratch.data(), numSamples);
+        m_bandMidFilters[bin].processBlock(buf, m_bandScratch.data(), numSamples);
+        const auto midPeak = peakOfAbs(m_bandScratch.data(), numSamples);
+        m_bandHighFilters[bin].processBlock(buf, m_bandScratch.data(), numSamples);
+        const auto highPeak = peakOfAbs(m_bandScratch.data(), numSamples);
+
+        (*m_bandLevelSink)[bin][0].store(lowPeak, std::memory_order_relaxed);
+        (*m_bandLevelSink)[bin][1].store(midPeak, std::memory_order_relaxed);
+        (*m_bandLevelSink)[bin][2].store(highPeak, std::memory_order_relaxed);
+    }
+
+    void meterAll(const size_t bin, const float* buf, const size_t numSamples) noexcept
+    {
+        meterBin(bin, buf, numSamples);
+        meterBinBands(bin, buf, numSamples);
+    }
+
+    void clearInactiveBins() noexcept
+    {
+        if (m_levelSink)
+        {
+            for (size_t i = m_elementsToUse + 1; i <= NumElements; ++i)
+            {
+                (*m_levelSink)[i].store(0.f, std::memory_order_relaxed);
+            }
+        }
+        if (m_bandLevelSink)
+        {
+            for (size_t i = m_elementsToUse + 1; i <= NumElements; ++i)
+            {
+                (*m_bandLevelSink)[i][0].store(0.f, std::memory_order_relaxed);
+                (*m_bandLevelSink)[i][1].store(0.f, std::memory_order_relaxed);
+                (*m_bandLevelSink)[i][2].store(0.f, std::memory_order_relaxed);
+            }
         }
     }
 
@@ -364,7 +441,7 @@ class DiffuserDelayChain
         for (size_t i = 0; i < elements; ++i)
         {
             m_delay[i].processBlockInplace(target, numSamples);
-            meterBin(i + 1, target, numSamples);
+            meterAll(i + 1, target, numSamples);
         }
         m_fadeIn.processBlock(target, tmpFadeIn.data(), numSamples);
         m_fadeOut.processBlock(target, tmpFadeOut.data(), numSamples);
@@ -374,11 +451,11 @@ class DiffuserDelayChain
     {
         processFade(target, numSamples, m_elementsToUse);
         m_delay[m_elementsToUse].processBlockInplace(tmpFadeIn.data(), numSamples);
-        meterBin(m_elementsToUse + 1, tmpFadeIn.data(), numSamples);
+        meterAll(m_elementsToUse + 1, tmpFadeIn.data(), numSamples);
         for (size_t i = m_elementsToUse + 1; i < m_newElementsToUse; ++i)
         {
             m_delay[i].processBlockInplace(tmpFadeIn.data(), numSamples);
-            meterBin(i + 1, tmpFadeIn.data(), numSamples);
+            meterAll(i + 1, tmpFadeIn.data(), numSamples);
         }
         checkChangeElementsDone();
         std::copy_n(tmpFadeIn.data(), numSamples, target);
@@ -389,11 +466,11 @@ class DiffuserDelayChain
     {
         processFade(target, numSamples, m_newElementsToUse);
         m_delay[m_newElementsToUse].processBlock(tmpFadeOut.data(), target, numSamples);
-        meterBin(m_newElementsToUse + 1, target, numSamples);
+        meterAll(m_newElementsToUse + 1, target, numSamples);
         for (size_t i = m_newElementsToUse + 1; i < m_elementsToUse; ++i)
         {
             m_delay[i].processBlockInplace(target, numSamples);
-            meterBin(i + 1, target, numSamples);
+            meterAll(i + 1, target, numSamples);
         }
         checkChangeElementsDone();
         std::transform(target, target + numSamples, tmpFadeIn.data(), target, std::plus<>{});
@@ -417,6 +494,12 @@ class DiffuserDelayChain
     size_t m_elementsToUse{NumElements};
 
     std::array<std::atomic<float>, NumElements + 1>* m_levelSink{nullptr};
+
+    std::array<Biquad<BiquadFilterType::LowPass>, NumElements + 1> m_bandLowFilters{};
+    std::array<Biquad<BiquadFilterType::BandPass>, NumElements + 1> m_bandMidFilters{};
+    std::array<Biquad<BiquadFilterType::HighPass>, NumElements + 1> m_bandHighFilters{};
+    BandLevelSink* m_bandLevelSink{nullptr};
+    std::vector<float> m_bandScratch{};
 
     Fader<FadeMode::In, FadeCurve::Sine> m_fadeIn;
     Fader<FadeMode::Out, FadeCurve::Sine> m_fadeOut;

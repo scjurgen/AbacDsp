@@ -25,6 +25,8 @@ class MaxDiffuserImpl final : public EffectBase
     static constexpr float FdnSizeSpread{2.3f};
     static constexpr float FdnInScale{1.f / static_cast<float>(FdnOrder)};
     static constexpr float FdnPresetBulge{-0.4f};
+    static constexpr float BandLowHz{20.f};
+    static constexpr float BandHighHz{300.f};
 
     using Chain = AbacDsp::DiffuserDelayChain<MaxDelaySamples, MaxElements, AbacDsp::AllpassFeedbackStyle::Schroeder>;
     using PreDelay = AbacDsp::NaiveDelay<MaxPreDelaySamples>;
@@ -45,6 +47,8 @@ class MaxDiffuserImpl final : public EffectBase
         // Only the left channel is metered for the bin-level display: both channels share
         // the same size/feedback/bulge and differ only in modulation phase.
         m_diffuser[0].setLevelMeterSink(&m_binLevels);
+        m_diffuser[0].configureBandFilters(sampleRate, BandLowHz, BandHighHz);
+        m_diffuser[0].setBandLevelMeterSink(&m_bandLevels);
         for (auto& delay : m_preDelay)
         {
             delay.setSize(0);
@@ -199,6 +203,18 @@ class MaxDiffuserImpl final : public EffectBase
         return levels;
     }
 
+    [[nodiscard]] std::array<std::array<float, 3>, MaxElements + 1> getProcessingBinBandLevels() const noexcept
+    {
+        std::array<std::array<float, 3>, MaxElements + 1> levels{};
+        for (size_t i = 0; i < levels.size(); ++i)
+        {
+            levels[i][0] = m_bandLevels[i][0].load(std::memory_order_relaxed);
+            levels[i][1] = m_bandLevels[i][1].load(std::memory_order_relaxed);
+            levels[i][2] = m_bandLevels[i][2].load(std::memory_order_relaxed);
+        }
+        return levels;
+    }
+
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
         std::array<std::array<float, BlockSize>, 2> wetData{};
@@ -240,6 +256,7 @@ class MaxDiffuserImpl final : public EffectBase
     float m_modulationSpeed{0.5f};
     std::array<Chain, 2> m_diffuser;
     std::array<std::atomic<float>, MaxElements + 1> m_binLevels{};
+    Chain::BandLevelSink m_bandLevels{};
     std::array<PreDelay, 2> m_preDelay{};
     std::array<Pitcher, 2> m_pitcher;
     Fdn m_fdn;

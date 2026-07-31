@@ -41,7 +41,7 @@ class ShowProcessingBins : public juce::Component
         {
             // Fast attack, slow release: matches how most volume meters ballistically decay.
             env.setAttackInMsecs(200.f);
-            env.setReleaseInMsecs(200.f);
+            env.setReleaseInMsecs(1800.f);
         }
     }
 

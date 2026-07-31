@@ -22,5 +22,6 @@
 #include "inc/AppSettings.h"
 #include "impl/EffectBase.h"
 #include "impl/ShowProcessingBins.h"
+#include "impl/ShowProcessingBinsBands.h"
 
 #include "inc/LookAndFeel.h"
