@@ -26,6 +26,9 @@ struct PatchParameters
         lowPass        , // dial
         mix            , // dial
         pitch          , // dial
+        pitchDelay     , // dial
+        pitch2         , // dial
+        pitch2Delay    , // dial
         pitchMode      , // drop
         fdnMix         , // dial
         fdnSize        , // dial
@@ -45,6 +48,9 @@ float modulationSpeed{0.5f};
 float lowPass{12000.0f};
 float mix{0.0f};
 float pitch{0.0f};
+float pitchDelay{0.0f};
+float pitch2{0.0f};
+float pitch2Delay{0.0f};
 size_t pitchMode{0};
 float fdnMix{-100.0f};
 float fdnSize{30.0f};
@@ -66,6 +72,9 @@ float fdnDecay{2000.0f};
 "lowPass",
 "mix",
 "pitch",
+"pitchDelay",
+"pitch2",
+"pitch2Delay",
 "pitchMode",
 "fdnMix",
 "fdnSize",
@@ -102,6 +111,9 @@ float fdnDecay{2000.0f};
         else if constexpr (ParamId == Id::lowPass) return lowPass;
         else if constexpr (ParamId == Id::mix) return mix;
         else if constexpr (ParamId == Id::pitch) return pitch;
+        else if constexpr (ParamId == Id::pitchDelay) return pitchDelay;
+        else if constexpr (ParamId == Id::pitch2) return pitch2;
+        else if constexpr (ParamId == Id::pitch2Delay) return pitch2Delay;
         else if constexpr (ParamId == Id::pitchMode) return pitchMode;
         else if constexpr (ParamId == Id::fdnMix) return fdnMix;
         else if constexpr (ParamId == Id::fdnSize) return fdnSize;
@@ -145,6 +157,12 @@ break;
  case Id::mix: if (!isEqual(get<Id::mix>(), value)) {get<Id::mix>() = value;m_modified = true;}
 break;
  case Id::pitch: if (!isEqual(get<Id::pitch>(), value)) {get<Id::pitch>() = value;m_modified = true;}
+break;
+ case Id::pitchDelay: if (!isEqual(get<Id::pitchDelay>(), value)) {get<Id::pitchDelay>() = value;m_modified = true;}
+break;
+ case Id::pitch2: if (!isEqual(get<Id::pitch2>(), value)) {get<Id::pitch2>() = value;m_modified = true;}
+break;
+ case Id::pitch2Delay: if (!isEqual(get<Id::pitch2Delay>(), value)) {get<Id::pitch2Delay>() = value;m_modified = true;}
 break;
  case Id::pitchMode: if (!isEqual(get<Id::pitchMode>(), value)) {get<Id::pitchMode>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
@@ -206,6 +224,9 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         lowPass        , // dial
         mix            , // dial
         pitch          , // dial
+        pitchDelay     , // dial
+        pitch2         , // dial
+        pitch2Delay    , // dial
         pitchMode      , // drop
         fdnMix         , // dial
         fdnSize        , // dial

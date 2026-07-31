@@ -48,12 +48,15 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("lowPass", this);
         m_parameters.addParameterListener("mix", this);
         m_parameters.addParameterListener("pitch", this);
+        m_parameters.addParameterListener("pitchDelay", this);
+        m_parameters.addParameterListener("pitch2", this);
+        m_parameters.addParameterListener("pitch2Delay", this);
         m_parameters.addParameterListener("pitchMode", this);
         m_parameters.addParameterListener("fdnMix", this);
         m_parameters.addParameterListener("fdnSize", this);
         m_parameters.addParameterListener("fdnDecay", this);
 
-        for (size_t i = 0; i < 17; ++i)
+        for (size_t i = 0; i < 20; ++i)
         {
             m_ccActive[i].controller.store(kDefaultCcMappings[i].controller, std::memory_order_relaxed);
             m_ccActive[i].valueLow.store(kDefaultCcMappings[i].valueLow, std::memory_order_relaxed);
@@ -77,6 +80,9 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("lowPass", this);
         m_parameters.removeParameterListener("mix", this);
         m_parameters.removeParameterListener("pitch", this);
+        m_parameters.removeParameterListener("pitchDelay", this);
+        m_parameters.removeParameterListener("pitch2", this);
+        m_parameters.removeParameterListener("pitch2Delay", this);
         m_parameters.removeParameterListener("pitchMode", this);
         m_parameters.removeParameterListener("fdnMix", this);
         m_parameters.removeParameterListener("fdnSize", this);
@@ -102,7 +108,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
         for (const auto& entry : CcSettings::load())
         {
-            for (size_t i = 0; i < 17; ++i)
+            for (size_t i = 0; i < 20; ++i)
             {
                 if (kCcTargetParamIds[i] != entry.paramId)
                 {
@@ -305,7 +311,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("m").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " m"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("sizeSpread", 1), "Size Spread", juce::NormalisableRange<float>(0, 5, 0.01, 0.5, false),
+            juce::ParameterID("sizeSpread", 1), "Size Spread", juce::NormalisableRange<float>(0, 10, 0.01, 0.5, false),
             0,
             juce::AudioParameterFloatAttributes{}.withLabel("m").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " m"; })));
@@ -332,6 +338,20 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::ParameterID("pitch", 1), "Pitch", juce::NormalisableRange<float>(-24, 24, 0.01, 1, false), 0,
             juce::AudioParameterFloatAttributes{}.withLabel("st").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " st"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("pitchDelay", 1), "Pitch Delay", juce::NormalisableRange<float>(0, 1000, 1, 0.5, false),
+            0,
+            juce::AudioParameterFloatAttributes{}.withLabel("ms").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " ms"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("pitch2", 1), "Pitch 2", juce::NormalisableRange<float>(-24, 24, 0.01, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("st").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " st"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("pitch2Delay", 1), "Pitch 2 Delay",
+            juce::NormalisableRange<float>(0, 1000, 1, 0.5, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("ms").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " ms"; })));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID("pitchMode", 1), "Pitch Mode", juce::StringArray{"Drift", "Sync", "Vocoder"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -444,6 +464,24 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setPitch(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::pitch, v);
+             }},
+            {"pitchDelay",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setPitchDelay(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::pitchDelay, v);
+             }},
+            {"pitch2",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setPitch2(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::pitch2, v);
+             }},
+            {"pitch2Delay",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setPitch2Delay(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::pitch2Delay, v);
              }},
             {"pitchMode",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -580,6 +618,24 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("pitch");
             float normalized = range.convertTo0to1(params.pitch);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("pitchDelay"))
+        {
+            const auto& range = m_parameters.getParameterRange("pitchDelay");
+            float normalized = range.convertTo0to1(params.pitchDelay);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("pitch2"))
+        {
+            const auto& range = m_parameters.getParameterRange("pitch2");
+            float normalized = range.convertTo0to1(params.pitch2);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("pitch2Delay"))
+        {
+            const auto& range = m_parameters.getParameterRange("pitch2Delay");
+            float normalized = range.convertTo0to1(params.pitch2Delay);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pitchMode"))
@@ -782,7 +838,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         std::atomic<float> valueLow{0.f};
         std::atomic<float> valueHigh{0.f};
     };
-    std::array<CcSlot, 17> m_ccActive{};
+    std::array<CcSlot, 20> m_ccActive{};
     std::atomic<int> m_learnTargetIndex{-1};
     std::atomic<int> m_lastLearnedIndex{-1};
 
@@ -795,8 +851,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     void saveCcSettings() const
     {
         std::vector<CcMappingOverride> overrides;
-        overrides.reserve(17);
-        for (size_t i = 0; i < 17; ++i)
+        overrides.reserve(20);
+        for (size_t i = 0; i < 20; ++i)
         {
             overrides.push_back({std::string(kCcTargetParamIds[i]),
                                  m_ccActive[i].controller.load(std::memory_order_relaxed),
@@ -816,7 +872,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_lastLearnedIndex.store(learnIndex, std::memory_order_relaxed);
             return;
         }
-        for (size_t i = 0; i < 17; ++i)
+        for (size_t i = 0; i < 20; ++i)
         {
             if (m_ccActive[i].controller.load(std::memory_order_relaxed) != controller)
             {

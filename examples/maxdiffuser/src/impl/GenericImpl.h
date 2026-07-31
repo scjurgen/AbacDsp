@@ -73,6 +73,18 @@ class GenericImpl final : public EffectBase
     {
         m_pitch = value;
     }
+    void setPitchDelay(const float value)
+    {
+        m_pitchDelay = value;
+    }
+    void setPitch2(const float value)
+    {
+        m_pitch2 = value;
+    }
+    void setPitch2Delay(const float value)
+    {
+        m_pitch2Delay = value;
+    }
     void setPitchMode(const size_t value)
     {
         m_pitchMode = value;
@@ -114,6 +126,9 @@ class GenericImpl final : public EffectBase
     float m_lowPass{};
     float m_mix{};
     float m_pitch{};
+    float m_pitchDelay{};
+    float m_pitch2{};
+    float m_pitch2Delay{};
     size_t m_pitchMode{};
     float m_fdnMix{};
     float m_fdnSize{};

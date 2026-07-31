@@ -23,7 +23,7 @@
       "cc": {"controller": 26}},
     {"short": "TSZ", "type": "dial", "display": "Top Size", "symbol": "topSize", "default": 7.0, "range": [0.5, 100.0, 0.1, 0.4, false], "precision": 1, "unit": "m",
       "cc": {"controller": 27}},
-    {"short": "SPRD", "type": "dial", "display": "Size Spread", "symbol": "sizeSpread", "default": 0, "range": [0, 5, 0.01, 0.5, false], "precision": 2, "unit": "m",
+    {"short": "SPRD", "type": "dial", "display": "Size Spread", "symbol": "sizeSpread", "default": 0, "range": [0, 10, 0.01, 0.5, false], "precision": 2, "unit": "m",
       "cc": {"controller": 36}},
     {"short": "MDPT", "type": "dial", "display": "Mod Depth", "symbol": "modulationDepth", "default": 0, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": "",
       "cc": {"controller": 28}},
@@ -35,6 +35,12 @@
       "cc": {"controller": 31}},
     {"short": "PTCH", "type": "dial", "display": "Pitch", "symbol": "pitch", "default": 0, "range": [-24, 24, 0.01, 1, false], "precision": 2, "unit": "st",
       "cc": {"controller": 32}},
+    {"short": "PTDL", "type": "dial", "display": "Pitch Delay", "symbol": "pitchDelay", "default": 0, "range": [0, 1000, 1, 0.5, false], "precision": 0, "unit": "ms",
+      "cc": {"controller": 38}},
+    {"short": "PTCH2", "type": "dial", "display": "Pitch 2", "symbol": "pitch2", "default": 0, "range": [-24, 24, 0.01, 1, false], "precision": 2, "unit": "st",
+      "cc": {"controller": 37}},
+    {"short": "PTDL2", "type": "dial", "display": "Pitch 2 Delay", "symbol": "pitch2Delay", "default": 0, "range": [0, 1000, 1, 0.5, false], "precision": 0, "unit": "ms",
+      "cc": {"controller": 39}},
     {"short": "PMOD", "type": "drop", "display": "Pitch Mode", "symbol": "pitchMode", "default": 0,
       "listitems": ["Drift", "Sync", "Vocoder"]},
     {"short": "FMIX", "type": "dial", "display": "FDN Mix", "symbol": "fdnMix", "default": -100, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB",
@@ -50,7 +56,7 @@
     "WINDOW_WIDTH": "1100",
     "WINDOW_HEIGHT": "950",
     "type": "=6",
-    "composition": "R=(2:2:2:2:2:1) A1=(DRY,WET,PRED,MIX,PTCH,PMOD) A2=(ELM,FDBK,BLG,BSZ,TSZ,SPRD) A3=(MDPT,MDSP,LPF) A4=(FMIX,FSZ,FDEC) A5=(BINSB) A6=(SIZES)"
+    "composition": "R=(2:2:2:2:2:1) A1=(DRY,WET,PRED) A2=(MIX,PTCH,PTDL,PTCH2,PTDL2,PMOD) A3=(ELM,FDBK,BLG,BSZ,TSZ,SPRD) A4=(MDPT,MDSP,LPF,FMIX,FSZ,FDEC) A5=(BINSB) A6=(SIZES)"
   },
   "extra_ui_includes": [
     "impl/ShowProcessingBins.h",

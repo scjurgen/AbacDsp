@@ -94,14 +94,24 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.items.add(juce::FlexItem(dryDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(wetDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(preDelayDial).withFlex(1).withMargin(knobMarginSmall));
+            box.performLayout(areas[0].toFloat());
+        }
+        {
+            juce::FlexBox box;
+            box.flexWrap = juce::FlexBox::Wrap::noWrap;
+            box.flexDirection = juce::FlexBox::Direction::row;
+            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
             box.items.add(juce::FlexItem(mixDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(pitchDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(pitchDelayDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(pitch2Dial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(pitch2DelayDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(pitchModeDrop)
                               .withFlex(1)
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::center)
                               .withMargin(knobMarginSmall));
-            box.performLayout(areas[0].toFloat());
+            box.performLayout(areas[1].toFloat());
         }
         {
             juce::FlexBox box;
@@ -114,7 +124,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.items.add(juce::FlexItem(bottomSizeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(topSizeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(sizeSpreadDial).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[1].toFloat());
+            box.performLayout(areas[2].toFloat());
         }
         {
             juce::FlexBox box;
@@ -124,13 +134,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.items.add(juce::FlexItem(modulationDepthDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(modulationSpeedDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(lowPassDial).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[2].toFloat());
-        }
-        {
-            juce::FlexBox box;
-            box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::row;
-            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
             box.items.add(juce::FlexItem(fdnMixDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(fdnSizeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(fdnDecayDial).withFlex(1).withMargin(knobMarginSmall));
@@ -290,6 +293,33 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                        [this](float lo, float hi) { processorRef.setCcRange(CcTarget::pitch, lo, hi); },
                                        [this] { processorRef.clearCcAssignment(CcTarget::pitch); },
                                        [this] { return processorRef.getCcController(CcTarget::pitch); }});
+        addAndMakeVisible(pitchDelayDial);
+        pitchDelayDial.reset(valueTreeState, "pitchDelay");
+        pitchDelayDial.setLabelText(juce::String::fromUTF8("Pitch Delay"));
+        pitchDelayDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::pitchDelay); },
+                                            [this] { return processorRef.getCcRange(CcTarget::pitchDelay); },
+                                            [this](float lo, float hi)
+                                            { processorRef.setCcRange(CcTarget::pitchDelay, lo, hi); },
+                                            [this] { processorRef.clearCcAssignment(CcTarget::pitchDelay); },
+                                            [this] { return processorRef.getCcController(CcTarget::pitchDelay); }});
+        addAndMakeVisible(pitch2Dial);
+        pitch2Dial.reset(valueTreeState, "pitch2");
+        pitch2Dial.setLabelText(juce::String::fromUTF8("Pitch 2"));
+        pitch2Dial.setCcMappable(true,
+                                 {[this] { processorRef.beginCcLearn(CcTarget::pitch2); },
+                                  [this] { return processorRef.getCcRange(CcTarget::pitch2); },
+                                  [this](float lo, float hi) { processorRef.setCcRange(CcTarget::pitch2, lo, hi); },
+                                  [this] { processorRef.clearCcAssignment(CcTarget::pitch2); },
+                                  [this] { return processorRef.getCcController(CcTarget::pitch2); }});
+        addAndMakeVisible(pitch2DelayDial);
+        pitch2DelayDial.reset(valueTreeState, "pitch2Delay");
+        pitch2DelayDial.setLabelText(juce::String::fromUTF8("Pitch 2 Delay"));
+        pitch2DelayDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::pitch2Delay); },
+                                             [this] { return processorRef.getCcRange(CcTarget::pitch2Delay); },
+                                             [this](float lo, float hi)
+                                             { processorRef.setCcRange(CcTarget::pitch2Delay, lo, hi); },
+                                             [this] { processorRef.clearCcAssignment(CcTarget::pitch2Delay); },
+                                             [this] { return processorRef.getCcController(CcTarget::pitch2Delay); }});
         addAndMakeVisible(pitchModeDrop);
         pitchModeDrop.addItemList(valueTreeState.getParameter("pitchMode")->getAllValueStrings(), 1);
         pitchModeDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
@@ -634,6 +664,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial lowPassDial{this};
     CustomRotaryDial mixDial{this};
     CustomRotaryDial pitchDial{this};
+    CustomRotaryDial pitchDelayDial{this};
+    CustomRotaryDial pitch2Dial{this};
+    CustomRotaryDial pitch2DelayDial{this};
     juce::ComboBox pitchModeDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> pitchModeDropAttachment;
     CustomRotaryDial fdnMixDial{this};
