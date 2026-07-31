@@ -800,6 +800,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner && pluginRunner->isRecording();
     }
+    [[nodiscard]] bool isSpectrogramWrapped() const noexcept
+    {
+        return pluginRunner && pluginRunner->isSpectrogramWrapped();
+    }
     [[nodiscard]] bool isPlaying() const noexcept
     {
         return pluginRunner && pluginRunner->isPlaying();

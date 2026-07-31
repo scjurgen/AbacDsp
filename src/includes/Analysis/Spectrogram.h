@@ -307,6 +307,11 @@ class SpectrogramBase
         return m_forwardLength;
     }
 
+    [[nodiscard]] unsigned fftLength() const noexcept
+    {
+        return m_fftLength;
+    }
+
     // Non-blocking peek at whether the next enqueueFFT() would succeed. For
     // producers that must not silently drop frames (unlike the realtime path,
     // which drops under backpressure), poll this before calling processBlock().

@@ -109,6 +109,13 @@ class CircularLoopDisplay : public juce::Component
     {
         m_recordHeadFrames = frames;
     }
+    // True once the regen pass has primed a wrap-seam slice from the loop's tail
+    // (see LooperImpl::primeSpectrogramWindowFromLoopTail), so one extra slice near
+    // angle 0 is real data, not the "next slot" placeholder.
+    void setSpectrogramWrapped(bool wrapped) noexcept
+    {
+        m_spectrogramWrapped = wrapped;
+    }
 
     void setLabelText(const juce::String& label)
     {
@@ -250,7 +257,10 @@ class CircularLoopDisplay : public juce::Component
         {
             return;
         }
-        const size_t validSlices = std::min(s.width - 1, static_cast<size_t>(headF / hop));
+        // Wrapped loops carry one extra primed slice for the seam at angle 0
+        // (see LooperImpl::primeSpectrogramWindowFromLoopTail).
+        const size_t wrapBonus = m_spectrogramWrapped ? 1 : 0;
+        const size_t validSlices = std::min(s.width - 1, static_cast<size_t>(headF / hop) + wrapBonus);
         if (validSlices == 0)
         {
             return;
@@ -531,6 +541,7 @@ class CircularLoopDisplay : public juce::Component
 
     AbacDsp::SpectrumImageSet m_spectro{};
     size_t m_recordHeadFrames{0};
+    bool m_spectrogramWrapped{false};
     juce::Image m_iris;
     juce::PixelARGB m_lut[GuiConstants::kLutSize]{};
     std::vector<AnnulusPixel> m_annulus;

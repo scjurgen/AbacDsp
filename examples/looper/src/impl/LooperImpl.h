@@ -644,6 +644,13 @@ class LooperImpl final : public EffectBase
         return m_viewModel.getSpectrogramHeadFrames();
     }
 
+    // True once the loop is finalized: the regen pass has primed a wrap-seam slice
+    // from the loop's own tail, so the display can safely show one extra slice there.
+    [[nodiscard]] bool isSpectrogramWrapped() const noexcept
+    {
+        return !isRecording();
+    }
+
     [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
     {
         return m_seq.subPositions();
@@ -793,6 +800,7 @@ class LooperImpl final : public EffectBase
     void handleTransportActions(const AbacDsp::AudioBuffer<2, BlockSize>& in)
     {
         m_transportController.handleTransportPulses();
+        checkSpectrogramRegenOnRecordingStop();
 
         // Virtual Record press once the preset bar count is reached (checked as of
         // the previous block's last completed bar); must run before m_seq advances
@@ -819,8 +827,27 @@ class LooperImpl final : public EffectBase
         }
     }
 
-    // Feeds the record spectrogram with the dry input while capturing; it freezes
-    // (stops advancing) once recording stops, so the last image persists.
+    // Live recording just finished: rebuild via the same tail-primed regen a loop
+    // LOAD uses (see runSpectrogramRegen()), so this ring gets a wrap-seam slice too.
+    void checkSpectrogramRegenOnRecordingStop()
+    {
+        const bool recording = isRecording();
+        if (m_spectrogramWasRecording && !recording && m_recorder.loopLengthFrames() > 0)
+        {
+            requestSpectrogramRegen();
+        }
+        m_spectrogramWasRecording = recording;
+    }
+
+    void requestSpectrogramRegen()
+    {
+        const uint64_t regenGen = m_spectrogramRegenRequestGen.load(std::memory_order_relaxed) + 1;
+        m_spectrogramRegenRequestGen.store(regenGen, std::memory_order_release);
+        m_spectrogramRegenCv.notify_one();
+    }
+
+    // Feeds the record spectrogram with the dry input while capturing; the
+    // background regen triggered on stop replaces this image once it completes.
     void feedRecordSpectrogram(const AbacDsp::AudioBuffer<2, BlockSize>& in)
     {
         if (!isRecording())
@@ -1051,9 +1078,7 @@ class LooperImpl final : public EffectBase
         {
             m_recorder.loadOverdub(result->overdubLeft, result->overdubRight);
         }
-        const uint64_t regenGen = m_spectrogramRegenRequestGen.load(std::memory_order_relaxed) + 1;
-        m_spectrogramRegenRequestGen.store(regenGen, std::memory_order_release);
-        m_spectrogramRegenCv.notify_one();
+        requestSpectrogramRegen();
         m_seq.setBpm(result->resolvedBpm);
         m_appliedBpm = result->resolvedBpm;
         m_bpm.store(result->resolvedBpm, std::memory_order_relaxed);
@@ -1117,6 +1142,8 @@ class LooperImpl final : public EffectBase
             return;
         }
 
+        primeSpectrogramWindowFromLoopTail(loop, frames, kChannels);
+
         std::vector<float> chunk(hop);
         size_t chunkFill = 0;
         size_t decimatePhase = 0;
@@ -1152,6 +1179,38 @@ class LooperImpl final : public EffectBase
         }
         m_spectrogramRegenDoneGen.store(gen, std::memory_order_release);
         logElapsed("completed");
+    }
+
+    // A looper's loop is a torus: feeds one full FFT window from the loop's own tail
+    // before frame 0, completing an extra leading slice for the wrap seam.
+    void primeSpectrogramWindowFromLoopTail(std::span<const float> loop, const size_t frames, const size_t kChannels)
+    {
+        const unsigned fftLen = m_recordSpectrogram.fftLength();
+        if (fftLen == 0)
+        {
+            return;
+        }
+        const size_t primeRawFrames = std::min(frames, static_cast<size_t>(fftLen) * kSpectrogramDecimation);
+
+        std::vector<float> primeChunk;
+        primeChunk.reserve(fftLen);
+        size_t phase = 0;
+        for (size_t frame = frames - primeRawFrames; frame < frames; ++frame)
+        {
+            if (phase == 0)
+            {
+                primeChunk.push_back(0.5f * (loop[frame * kChannels] + loop[frame * kChannels + 1]));
+            }
+            phase = (phase + 1) % kSpectrogramDecimation;
+        }
+        if (!primeChunk.empty())
+        {
+            while (!m_recordSpectrogram.queueHasRoom())
+            {
+                std::this_thread::yield();
+            }
+            feedSpectrogramRegenChunk(std::span<const float>{primeChunk});
+        }
     }
 
     // Acquires m_spectrogramFeedLock (spinning; this thread isn't realtime) before
@@ -1247,6 +1306,7 @@ class LooperImpl final : public EffectBase
     AbacDsp::ClickGenerator m_click;
     AbacDsp::SimpleSpectrogram m_recordSpectrogram;
     size_t m_spectrogramDecimatePhase{0};
+    bool m_spectrogramWasRecording{false};
     AbacDsp::SliceLibrary m_sliceLibrary;
     AbacDsp::SequencerEngine<> m_sequencer;
     AbacDsp::SequencePattern m_pattern;

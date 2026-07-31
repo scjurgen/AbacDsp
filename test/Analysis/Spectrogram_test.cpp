@@ -108,6 +108,13 @@ TEST(MelSpectroGram, fullQueueDropsExcessWithoutCrashing)
     EXPECT_NE(spec.getImageSet().data, nullptr);
 }
 
+TEST(SimpleSpectrogram, fftLengthReflectsSetFftLength)
+{
+    SimpleSpectrogram spec;
+    spec.setFftLength(kFft);
+    EXPECT_EQ(spec.fftLength(), kFft);
+}
+
 TEST(SimpleSpectrogram, workerWritesSlicesAndWraps)
 {
     SimpleSpectrogram spec;

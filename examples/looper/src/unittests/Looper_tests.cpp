@@ -1475,3 +1475,90 @@ TEST(RecordingModes, PlayStopsActiveRecording)
     EXPECT_FALSE(looper.isRecording());
     EXPECT_TRUE(looper.isPlaying());
 }
+
+TEST(SpectrogramWrap, IsWrappedOnlyOnceRecordingStops)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+
+    Buffer in{};
+    Buffer out{};
+    EXPECT_TRUE(looper.isSpectrogramWrapped()); // not recording, no loop: vacuously true
+
+    looper.setRecord(true);
+    looper.processBlock(in, out); // begins recording
+    ASSERT_TRUE(looper.isRecording());
+    EXPECT_FALSE(looper.isSpectrogramWrapped());
+
+    for (int i = 0; i < 10; ++i)
+    {
+        looper.processBlock(in, out);
+    }
+    looper.setRecord(true);
+    looper.processBlock(in, out); // stops; finalizes immediately
+    ASSERT_FALSE(looper.isRecording());
+    EXPECT_TRUE(looper.isSpectrogramWrapped());
+}
+
+// Regression for the seam-gap fix: LooperImpl::primeSpectrogramWindowFromLoopTail
+// feeds the loop's own tail into the FFT window before frame 0, so the first
+// completed slice after regen's reset() (slot 0) should carry the tail's energy,
+// not the silence that opened the recording.
+TEST(SpectrogramWrap, SeamSliceReflectsLoopTailNotRecordingStart)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFadeMs(0.f);
+
+    Buffer in{};
+    Buffer out{};
+    looper.setRecord(true);
+    looper.processBlock(in, out); // begins recording
+
+    constexpr int kSilentBlocks = 400;
+    for (int b = 0; b < kSilentBlocks; ++b)
+    {
+        looper.processBlock(in, out);
+    }
+
+    constexpr int kLoudBlocks = 300; // 4800 frames, comfortably over the prime window
+    for (int b = 0; b < kLoudBlocks; ++b)
+    {
+        for (size_t i = 0; i < kBlock; ++i)
+        {
+            const float v = ((i % 2) == 0) ? 0.8f : -0.8f;
+            in(i, 0) = v;
+            in(i, 1) = v;
+        }
+        looper.processBlock(in, out);
+    }
+
+    looper.setRecord(true);
+    looper.processBlock(in, out); // stops; finalizes immediately
+    ASSERT_FALSE(looper.isRecording());
+
+    bool wrapped = false;
+    for (int i = 0; i < 2000 && !wrapped; ++i)
+    {
+        looper.processBlock(in, out);
+        wrapped = looper.isSpectrogramWrapped() && looper.getSpectrogramHeadFrames() > 0;
+        if (!wrapped)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+    ASSERT_TRUE(wrapped) << "spectrogram regen never completed";
+
+    const auto img = looper.getSpectrogramData();
+    ASSERT_NE(img.data, nullptr);
+    ASSERT_GT(img.height, 0u);
+
+    float seamEnergy = 0.f;
+    for (size_t bin = 0; bin < img.height; ++bin)
+    {
+        seamEnergy += img.data[bin]; // slot 0: reset() zeroed currentSlice, first write lands here
+    }
+    EXPECT_GT(seamEnergy, 0.01f) << "seam slice should carry real energy from the loop's loud tail";
+}

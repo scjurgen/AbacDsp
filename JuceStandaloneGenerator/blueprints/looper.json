@@ -14,7 +14,7 @@
     {"short": "REC",  "type": "switch", "display": "Record",   "symbol": "record",   "default": 0, "momentary": true, "cc": {"controller": 64}},
     {"short": "PLAY", "type": "switch", "display": "Play",      "symbol": "play",     "default": 0, "momentary": true, "cc": {"controller": 66},
       "state_label": {"query": "isPlaying", "on": "Stop", "off": "Play"}},
-    {"short": "ODUB", "type": "switch", "display": "Overdub",   "symbol"  : "overdub",  "default": 0, "momentary": true, "cc": {"controller": 65},
+    {"short": "ODUB", "type": "switch", "display": "Overdub",   "symbol": "overdub",  "default": 0, "momentary": true, "cc": {"controller": 65},
       "state_label": {"query": "isOverdubbing", "on": "Overdubbing", "off": "Overdub"}},
     {"short": "UNDO", "type": "switch", "display": "Undo",      "symbol": "undo",     "default": 0, "momentary": true, "cc": {"controller": 67},
       "state_label": {"query": "hasOverdub", "on": "Undo Overdub", "off": "Undo"}},
@@ -67,7 +67,8 @@
         {"call": "setStateLabel", "from": "getLooperStateLabel"},
         {"call": "setBarBeatLabel", "from": "getBarBeatLabel"},
         {"call": "setSpectrogram", "from": "getSpectrogramData"},
-        {"call": "setRecordHeadFrames", "from": "getSpectrogramHeadFrames"}
+        {"call": "setRecordHeadFrames", "from": "getSpectrogramHeadFrames"},
+        {"call": "setSpectrogramWrapped", "from": "isSpectrogramWrapped"}
       ]},
     {"short": "SLICE", "type": "gauge", "gaugetype": "signal", "display": "Sequencer", "symbol": "slice",
       "customtype": "SliceWaveDisplay",
@@ -99,6 +100,7 @@
   "processor_forwards": [
     {"name": "isHostSynced", "type": "bool"},
     {"name": "isRecording", "type": "bool"},
+    {"name": "isSpectrogramWrapped", "type": "bool"},
     {"name": "isPlaying", "type": "bool"},
     {"name": "isOverdubbing", "type": "bool"},
     {"name": "hasOverdub", "type": "bool"},
