@@ -116,6 +116,13 @@ class CircularLoopDisplay : public juce::Component
     {
         m_spectrogramWrapped = wrapped;
     }
+    // Total frames continuously fed into the spectrogram (idle/armed/recording),
+    // independent of the current take's own recordHeadFrames; see LooperImpl::
+    // feedRecordSpectrogram(). Lets a fresh take show real data near angle 0.
+    void setSpectrogramFedFrames(size_t frames) noexcept
+    {
+        m_spectrogramFedFrames = frames;
+    }
 
     void setLabelText(const juce::String& label)
     {
@@ -257,10 +264,12 @@ class CircularLoopDisplay : public juce::Component
         {
             return;
         }
-        // Wrapped loops carry one extra primed slice for the seam at angle 0
-        // (see LooperImpl::primeSpectrogramWindowFromLoopTail).
+        // Wrapped loops get one extra primed seam slice; a fresh take's own headF
+        // starts at 0, but continuous idle/armed feeding already has real data there.
         const size_t wrapBonus = m_spectrogramWrapped ? 1 : 0;
-        const size_t validSlices = std::min(s.width - 1, static_cast<size_t>(headF / hop) + wrapBonus);
+        const size_t headBasedSlices = static_cast<size_t>(headF / hop) + wrapBonus;
+        const size_t fedBasedSlices = static_cast<size_t>(static_cast<float>(m_spectrogramFedFrames) / hop);
+        const size_t validSlices = std::min(s.width - 1, std::max(headBasedSlices, fedBasedSlices));
         if (validSlices == 0)
         {
             return;
@@ -542,6 +551,7 @@ class CircularLoopDisplay : public juce::Component
     AbacDsp::SpectrumImageSet m_spectro{};
     size_t m_recordHeadFrames{0};
     bool m_spectrogramWrapped{false};
+    size_t m_spectrogramFedFrames{0};
     juce::Image m_iris;
     juce::PixelARGB m_lut[GuiConstants::kLutSize]{};
     std::vector<AnnulusPixel> m_annulus;

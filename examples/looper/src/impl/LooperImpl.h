@@ -651,6 +651,13 @@ class LooperImpl final : public EffectBase
         return !isRecording();
     }
 
+    // Total frames continuously fed into the record spectrogram (idle/armed/
+    // counting-in/recording), independent of the current take's own recordedFrames.
+    [[nodiscard]] size_t getSpectrogramFedFrames() const noexcept
+    {
+        return m_spectrogramFedFrames;
+    }
+
     [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
     {
         return m_seq.subPositions();
@@ -846,11 +853,12 @@ class LooperImpl final : public EffectBase
         m_spectrogramRegenCv.notify_one();
     }
 
-    // Feeds the record spectrogram with the dry input while capturing; the
-    // background regen triggered on stop replaces this image once it completes.
+    // Feeds the record spectrogram with the dry input whenever we're not frozen
+    // on a finalized loop's image: while idle/armed/counting-in too, not just
+    // while isRecording(), so a fresh take's window is already warm at frame 0.
     void feedRecordSpectrogram(const AbacDsp::AudioBuffer<2, BlockSize>& in)
     {
-        if (!isRecording())
+        if (!isRecording() && m_recorder.loopLengthFrames() > 0)
         {
             return;
         }
@@ -871,6 +879,7 @@ class LooperImpl final : public EffectBase
         {
             m_recordSpectrogram.processBlock(std::span<const float>{inMonoDecimated.data(), decimatedCount});
             m_spectrogramFeedLock.store(false, std::memory_order_release);
+            m_spectrogramFedFrames += BlockSize;
         }
     }
 
@@ -1132,6 +1141,7 @@ class LooperImpl final : public EffectBase
             std::this_thread::yield();
         }
         m_recordSpectrogram.reset();
+        m_spectrogramFedFrames = 0; // guarded by the same lock as feedRecordSpectrogram()'s writer
         m_spectrogramFeedLock.store(false, std::memory_order_release);
 
         const unsigned hop = m_recordSpectrogram.forwardLength();
@@ -1307,6 +1317,7 @@ class LooperImpl final : public EffectBase
     AbacDsp::SimpleSpectrogram m_recordSpectrogram;
     size_t m_spectrogramDecimatePhase{0};
     bool m_spectrogramWasRecording{false};
+    size_t m_spectrogramFedFrames{0};
     AbacDsp::SliceLibrary m_sliceLibrary;
     AbacDsp::SequencerEngine<> m_sequencer;
     AbacDsp::SequencePattern m_pattern;

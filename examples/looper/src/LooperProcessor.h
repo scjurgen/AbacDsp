@@ -856,6 +856,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner ? pluginRunner->getSpectrogramHeadFrames() : 0u;
     }
+    [[nodiscard]] size_t getSpectrogramFedFrames() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getSpectrogramFedFrames() : 0u;
+    }
     [[nodiscard]] float getBarPhase() const noexcept
     {
         return pluginRunner ? pluginRunner->getBarPhase() : 0.f;

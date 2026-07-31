@@ -68,7 +68,8 @@
         {"call": "setBarBeatLabel", "from": "getBarBeatLabel"},
         {"call": "setSpectrogram", "from": "getSpectrogramData"},
         {"call": "setRecordHeadFrames", "from": "getSpectrogramHeadFrames"},
-        {"call": "setSpectrogramWrapped", "from": "isSpectrogramWrapped"}
+        {"call": "setSpectrogramWrapped", "from": "isSpectrogramWrapped"},
+        {"call": "setSpectrogramFedFrames", "from": "getSpectrogramFedFrames"}
       ]},
     {"short": "SLICE", "type": "gauge", "gaugetype": "signal", "display": "Sequencer", "symbol": "slice",
       "customtype": "SliceWaveDisplay",
@@ -114,6 +115,7 @@
     {"name": "getBarFrameLengths", "type": "std::vector<float>"},
     {"name": "getSpectrogramData", "type": "AbacDsp::SpectrumImageSet"},
     {"name": "getSpectrogramHeadFrames", "type": "size_t"},
+    {"name": "getSpectrogramFedFrames", "type": "size_t"},
     {"name": "getBarPhase", "type": "float"},
     {"name": "isFreezePending", "type": "bool"},
     {"name": "getFrozenTrackCount", "type": "size_t"},
