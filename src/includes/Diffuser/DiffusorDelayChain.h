@@ -104,6 +104,18 @@ class DiffuserDelayChain
         }
     }
 
+    // Active elements' sizes in meters, in the same bulge-shaped distribution scaleDiffuser()
+    // uses to size the actual delay lines. Elements beyond the active count are left at 0.
+    [[nodiscard]] std::array<float, NumElements> getElementSizesInMeters() const noexcept
+    {
+        std::array<float, NumElements> sizes{};
+        for (size_t i = 0; i < m_elementsToUse; ++i)
+        {
+            sizes[i] = m_bottomSize + (m_topSize - m_bottomSize) * m_ratios[i];
+        }
+        return sizes;
+    }
+
     // Opt-in per-element level tap for visualisation. Null by default (single branch,
     // no cost) until a caller registers a sink.
     void setLevelMeterSink(std::array<std::atomic<float>, NumElements + 1>* sink) noexcept

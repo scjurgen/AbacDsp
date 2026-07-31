@@ -77,13 +77,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         // auto generated
         // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
         const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-        std::vector<juce::Rectangle<int>> areas(5);
-        const auto rowHeight = area.getHeight() / 10;
+        std::vector<juce::Rectangle<int>> areas(6);
+        const auto rowHeight = area.getHeight() / 11;
         areas[0] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
         areas[1] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
         areas[2] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
         areas[3] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
-        areas[4] = area.reduced(Constants::Margins::small);
+        areas[4] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
+        areas[5] = area.reduced(Constants::Margins::small);
 
         {
             juce::FlexBox box;
@@ -139,9 +140,16 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.flexWrap = juce::FlexBox::Wrap::noWrap;
             box.flexDirection = juce::FlexBox::Direction::row;
             box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(binsGauge).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(binsBandsGauge).withFlex(1).withMargin(knobMarginSmall));
             box.performLayout(areas[4].toFloat());
+        }
+        {
+            juce::FlexBox box;
+            box.flexWrap = juce::FlexBox::Wrap::noWrap;
+            box.flexDirection = juce::FlexBox::Direction::row;
+            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+            box.items.add(juce::FlexItem(sizesGauge).withFlex(1).withMargin(knobMarginSmall));
+            box.performLayout(areas[5].toFloat());
         }
     }
 #pragma GCC diagnostic pop
@@ -150,10 +158,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         if (processorRef.hasRunner())
         {
-            binsGauge.update(processorRef.getProcessingBinLevels(),
-                             static_cast<size_t>(valueTreeState.getRawParameterValue("elements")->load()));
             binsBandsGauge.update(processorRef.getProcessingBinBandLevels(),
                                   static_cast<size_t>(valueTreeState.getRawParameterValue("elements")->load()));
+            sizesGauge.update(processorRef.getElementSizesInMeters(), processorRef.getProcessingBinBandLevels(),
+                              static_cast<size_t>(valueTreeState.getRawParameterValue("elements")->load()));
             processorRef.consumeLastLearnedCc();
         }
     }
@@ -303,10 +311,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                     [this](float lo, float hi) { processorRef.setCcRange(CcTarget::fdnDecay, lo, hi); },
                                     [this] { processorRef.clearCcAssignment(CcTarget::fdnDecay); },
                                     [this] { return processorRef.getCcController(CcTarget::fdnDecay); }});
-        addAndMakeVisible(binsGauge);
-        binsGauge.setLabelText(juce::String::fromUTF8("Bins"));
         addAndMakeVisible(binsBandsGauge);
         binsBandsGauge.setLabelText(juce::String::fromUTF8("Bands"));
+        addAndMakeVisible(sizesGauge);
+        sizesGauge.setLabelText(juce::String::fromUTF8("Sizes"));
     }
 
     void parentHierarchyChanged() override
@@ -407,8 +415,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         setLookAndFeel(m_laf.get());
         juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
         backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
-        binsGauge.updateColors();
         binsBandsGauge.updateColors();
+        sizesGauge.updateColors();
 
         repaint();
     }
@@ -620,8 +628,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial fdnMixDial{this};
     CustomRotaryDial fdnSizeDial{this};
     CustomRotaryDial fdnDecayDial{this};
-    ShowProcessingBins<BinsDisplayMode::ShowContinuousLine, LevelUnit::Decibel> binsGauge{};
     ShowProcessingBinsBands binsBandsGauge{};
+    ShowDiffuserSizes sizesGauge{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
 };

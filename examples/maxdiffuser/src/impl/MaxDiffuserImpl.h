@@ -215,6 +215,11 @@ class MaxDiffuserImpl final : public EffectBase
         return levels;
     }
 
+    [[nodiscard]] std::array<float, MaxElements> getElementSizesInMeters() const noexcept
+    {
+        return m_diffuser[0].getElementSizesInMeters();
+    }
+
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
         std::array<std::array<float, BlockSize>, 2> wetData{};

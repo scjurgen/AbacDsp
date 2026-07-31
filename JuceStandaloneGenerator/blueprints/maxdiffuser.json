@@ -41,26 +41,28 @@
       "cc": {"controller": 34}},
     {"short": "FDEC", "type": "dial", "display": "FDN Decay", "symbol": "fdnDecay", "default": 2000, "range": [1, 100000, 1, 0.2, false], "precision": 0, "unit": "ms",
       "cc": {"controller": 35}},
-    {"short": "BINS", "type": "gauge", "gaugetype": "processingbins", "display": "Bins", "symbol": "bins", "customtype": "ShowProcessingBins<BinsDisplayMode::ShowContinuousLine, LevelUnit::Decibel>"},
-    {"short": "BINSB", "type": "gauge", "gaugetype": "processingbins", "display": "Bands", "symbol": "binsBands", "customtype": "ShowProcessingBinsBands"}
+    {"short": "BINSB", "type": "gauge", "gaugetype": "processingbins", "display": "Bands", "symbol": "binsBands", "customtype": "ShowProcessingBinsBands"},
+    {"short": "SIZES", "type": "gauge", "gaugetype": "processingbins", "display": "Sizes", "symbol": "sizes", "customtype": "ShowDiffuserSizes"}
   ],
   "layout": {
     "WINDOW_WIDTH": "1100",
-    "WINDOW_HEIGHT": "850",
-    "type": "=5",
-    "composition": "R=(2:2:2:2:2) A1=(DRY,WET,PRED,MIX,PTCH,PMOD) A2=(ELM,FDBK,BLG,BSZ,TSZ) A3=(MDPT,MDSP,LPF) A4=(FMIX,FSZ,FDEC) A5=(BINS,BINSB)"
+    "WINDOW_HEIGHT": "950",
+    "type": "=6",
+    "composition": "R=(2:2:2:2:2:1) A1=(DRY,WET,PRED,MIX,PTCH,PMOD) A2=(ELM,FDBK,BLG,BSZ,TSZ) A3=(MDPT,MDSP,LPF) A4=(FMIX,FSZ,FDEC) A5=(BINSB) A6=(SIZES)"
   },
   "extra_ui_includes": [
     "impl/ShowProcessingBins.h",
-    "impl/ShowProcessingBinsBands.h"
+    "impl/ShowProcessingBinsBands.h",
+    "impl/ShowDiffuserSizes.h"
   ],
   "processor_forwards": [
     {"name": "getProcessingBinLevels", "type": "std::array<float, 51>", "noexcept": true},
-    {"name": "getProcessingBinBandLevels", "type": "std::array<std::array<float, 3>, 51>", "noexcept": true}
+    {"name": "getProcessingBinBandLevels", "type": "std::array<std::array<float, 3>, 51>", "noexcept": true},
+    {"name": "getElementSizesInMeters", "type": "std::array<float, 50>", "noexcept": true}
   ],
   "extra_timer_callbacks": [
-    "binsGauge.update(processorRef.getProcessingBinLevels(), static_cast<size_t>(valueTreeState.getRawParameterValue(\"elements\")->load()));",
-    "binsBandsGauge.update(processorRef.getProcessingBinBandLevels(), static_cast<size_t>(valueTreeState.getRawParameterValue(\"elements\")->load()));"
+    "binsBandsGauge.update(processorRef.getProcessingBinBandLevels(), static_cast<size_t>(valueTreeState.getRawParameterValue(\"elements\")->load()));",
+    "sizesGauge.update(processorRef.getElementSizesInMeters(), processorRef.getProcessingBinBandLevels(), static_cast<size_t>(valueTreeState.getRawParameterValue(\"elements\")->load()));"
   ],
   "CPP":
   {

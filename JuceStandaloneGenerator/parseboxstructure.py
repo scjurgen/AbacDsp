@@ -288,6 +288,21 @@ def construct_boxes(m: dict):
             result += saveAreaRow(areas, 3)
             result += saveAreaRow(areas, 4)
             result += saveAreaRow(areas, 5)
+        case '=6':
+            result += f"""std::vector<juce::Rectangle<int>> areas(6);
+                   const auto rowHeight = area.getHeight() / {virtual_rows};
+                                   areas[0] = area.removeFromTop(rowHeight*{rows[0]}).reduced(Constants::Margins::small);
+                                   areas[1] = area.removeFromTop(rowHeight*{rows[1]}).reduced(Constants::Margins::small);
+                                   areas[2] = area.removeFromTop(rowHeight*{rows[2]}).reduced(Constants::Margins::small);
+                                   areas[3] = area.removeFromTop(rowHeight*{rows[3]}).reduced(Constants::Margins::small);
+                                   areas[4] = area.removeFromTop(rowHeight*{rows[4]}).reduced(Constants::Margins::small);
+                                   areas[5] = area.reduced(Constants::Margins::small);\n\n"""
+            result += saveAreaRow(areas, 1)
+            result += saveAreaRow(areas, 2)
+            result += saveAreaRow(areas, 3)
+            result += saveAreaRow(areas, 4)
+            result += saveAreaRow(areas, 5)
+            result += saveAreaRow(areas, 6)
         case '+':
             result += f"""
                         std::vector<juce::Rectangle<int>> areas(4);

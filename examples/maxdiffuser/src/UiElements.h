@@ -23,5 +23,6 @@
 #include "impl/EffectBase.h"
 #include "impl/ShowProcessingBins.h"
 #include "impl/ShowProcessingBinsBands.h"
+#include "impl/ShowDiffuserSizes.h"
 
 #include "inc/LookAndFeel.h"

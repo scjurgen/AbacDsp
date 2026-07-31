@@ -686,6 +686,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner ? pluginRunner->getProcessingBinBandLevels() : std::array<std::array<float, 3>, 51>{};
     }
+    [[nodiscard]] std::array<float, 50> getElementSizesInMeters() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getElementSizesInMeters() : std::array<float, 50>{};
+    }
 
 
     [[nodiscard]] bool hasRunner() const
