@@ -9,11 +9,16 @@
   "loops": true,
   "host_transport": true,
   "ports-control": [
+    {"short": "DIV-O", "type": "label", "display": "—— Overdub ——", "symbol": "divo"},
+    {"short": "DIV-S", "type": "label", "display": "—— Sequencer ——", "symbol": "divs"},
     {"short": "REC",  "type": "switch", "display": "Record",   "symbol": "record",   "default": 0, "momentary": true, "cc": {"controller": 64}},
     {"short": "PLAY", "type": "switch", "display": "Play",      "symbol": "play",     "default": 0, "momentary": true, "cc": {"controller": 66},
       "state_label": {"query": "isPlaying", "on": "Stop", "off": "Play"}},
-    {"short": "ODUB", "type": "switch", "display": "Overdub",   "symbol": "overdub",  "default": 0, "momentary": true, "cc": {"controller": 65},
+    {"short": "ODUB", "type": "switch", "display": "Overdub",   "symbol"  : "overdub",  "default": 0, "momentary": true, "cc": {"controller": 65},
       "state_label": {"query": "isOverdubbing", "on": "Overdubbing", "off": "Overdub"}},
+    {"short": "UNDO", "type": "switch", "display": "Undo",      "symbol": "undo",     "default": 0, "momentary": true, "cc": {"controller": 67},
+      "state_label": {"query": "hasOverdub", "on": "Undo Overdub", "off": "Undo"}},
+    {"short": "MIXD", "type": "switch", "display": "Mix Down",  "symbol": "mixDown",  "default": 0, "momentary": true, "cc": {"controller": 68}},
     {"short": "CLR",  "type": "switch", "display": "Clear",     "symbol": "clear",    "default": 0, "momentary": true, "cc": {"controller": 69}},
     {"short": "TREC", "type": "switch", "display": "Thresh Rec", "symbol": "threshRec", "default": 0, "cc": {"controller": 70}},
     {"short": "SYNC", "type": "switch", "display": "Host Sync", "symbol": "hostSync", "default": 0},
@@ -75,10 +80,10 @@
       ]}
   ],
   "layout": {
-    "WINDOW_WIDTH": "1200",
-    "WINDOW_HEIGHT": "640",
-    "type": "|||",
-    "composition": "C=(1:1:5) A1=(REC, PLAY, ODUB, CLR, TREC, SYNC, ASTP, CIN, TSIG, DIV, FRZ, SEQP, CLRS) A2=(BPM, CVOL, CTRK, LVOL, THR, RBAR) A3=(BEAT%5, SLICE%1)"
+    "WINDOW_WIDTH": "1400",
+    "WINDOW_HEIGHT": "800",
+    "type": "|||||",
+    "composition": "C=(1:1:1:1:7) A1=(BPM, CVOL, TSIG, CIN, DIV, SYNC) A2=(REC, ASTP, CTRK, TREC, THR, RBAR) A3=(PLAY, CLR, LVOL) A4=(DIV-O, ODUB,  UNDO, MIXD, DIV-S, FRZ, SEQP, CLRS) A5=(BEAT%5, SLICE%1)"
   },
   "extra_ui_includes": [
     "inc/SliceWaveDisplay.h",
@@ -96,6 +101,7 @@
     {"name": "isRecording", "type": "bool"},
     {"name": "isPlaying", "type": "bool"},
     {"name": "isOverdubbing", "type": "bool"},
+    {"name": "hasOverdub", "type": "bool"},
     {"name": "isArmed", "type": "bool"},
     {"name": "getLoopWaveform", "type": "std::vector<float>"},
     {"name": "getSliceBoundaries", "type": "std::vector<float>"},

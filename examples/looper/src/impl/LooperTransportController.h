@@ -73,6 +73,8 @@ class LooperTransportController
         std::atomic<bool>& seqPlayPulse;
         std::atomic<bool>& clearSeqPulse;
         std::atomic<bool>& threshRecReq;
+        std::atomic<bool>& undoPulse;
+        std::atomic<bool>& mixDownPulse;
     };
 
     explicit LooperTransportController(Deps deps)
@@ -89,10 +91,12 @@ class LooperTransportController
         const bool freezeReq = m_deps.freezePulse.exchange(false, std::memory_order_relaxed);
         const bool seqPlayReq = m_deps.seqPlayPulse.exchange(false, std::memory_order_relaxed);
         const bool clearSeqReq = m_deps.clearSeqPulse.exchange(false, std::memory_order_relaxed);
+        const bool undoReq = m_deps.undoPulse.exchange(false, std::memory_order_relaxed);
+        const bool mixDownReq = m_deps.mixDownPulse.exchange(false, std::memory_order_relaxed);
 
-        // The sequencer play/stop toggle and its own Clear only touch
-        // sequencer-side state, never the recorder's own transport state, so
-        // both are exempt from the guard below.
+        // The sequencer play/stop toggle, its own Clear, and Undo/Mix Down only
+        // touch state independent of the recorder's own transport state, so
+        // all are exempt from the guard below.
         if (seqPlayReq)
         {
             toggleSequencerPlayback();
@@ -100,6 +104,14 @@ class LooperTransportController
         if (clearSeqReq)
         {
             clearSequencer();
+        }
+        if (undoReq)
+        {
+            m_deps.recorder.undoOverdub();
+        }
+        if (mixDownReq)
+        {
+            m_deps.recorder.mixDownOverdub();
         }
 
         // A bar-locked stop, a freeze, or a loop save/load is waiting on its own

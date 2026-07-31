@@ -77,12 +77,43 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         // auto generated
         // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
         const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-        std::vector<juce::Rectangle<int>> areas(3);
-        const auto colWidth = area.getWidth() / 7;
+        std::vector<juce::Rectangle<int>> areas(5);
+        const auto colWidth = area.getWidth() / 11;
         areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
         areas[1] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-        areas[2] = area.reduced(Constants::Margins::small);
+        areas[2] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+        areas[3] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+        areas[4] = area.reduced(Constants::Margins::small);
 
+        {
+            juce::FlexBox box;
+            box.flexWrap = juce::FlexBox::Wrap::noWrap;
+            box.flexDirection = juce::FlexBox::Direction::column;
+            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+            box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(timeSignatureDrop)
+                              .withFlex(0)
+                              .withHeight(Constants::Text::labelHeight)
+                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                              .withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(countInBarsDrop)
+                              .withFlex(0)
+                              .withHeight(Constants::Text::labelHeight)
+                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                              .withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(sliceDivisionDrop)
+                              .withFlex(0)
+                              .withHeight(Constants::Text::labelHeight)
+                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                              .withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(hostSyncSwitch)
+                              .withFlex(0)
+                              .withHeight(Constants::Text::labelHeight)
+                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                              .withMargin(knobMarginSmall));
+            box.performLayout(areas[0].toFloat());
+        }
         {
             juce::FlexBox box;
             box.flexWrap = juce::FlexBox::Wrap::noWrap;
@@ -93,12 +124,27 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(playSwitch)
+            box.items.add(juce::FlexItem(autoStopSwitch)
                               .withFlex(0)
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(overdubSwitch)
+            box.items.add(juce::FlexItem(clickRecordVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(threshRecSwitch)
+                              .withFlex(0)
+                              .withHeight(Constants::Text::labelHeight)
+                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                              .withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(recordBarsDial).withFlex(1).withMargin(knobMarginSmall));
+            box.performLayout(areas[1].toFloat());
+        }
+        {
+            juce::FlexBox box;
+            box.flexWrap = juce::FlexBox::Wrap::noWrap;
+            box.flexDirection = juce::FlexBox::Direction::column;
+            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+            box.items.add(juce::FlexItem(playSwitch)
                               .withFlex(0)
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
@@ -108,32 +154,35 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(threshRecSwitch)
+            box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+            box.performLayout(areas[2].toFloat());
+        }
+        {
+            juce::FlexBox box;
+            box.flexWrap = juce::FlexBox::Wrap::noWrap;
+            box.flexDirection = juce::FlexBox::Direction::column;
+            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+            box.items.add(juce::FlexItem(divoLabel)
                               .withFlex(0)
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(hostSyncSwitch)
+            box.items.add(juce::FlexItem(overdubSwitch)
                               .withFlex(0)
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(autoStopSwitch)
+            box.items.add(juce::FlexItem(undoSwitch)
                               .withFlex(0)
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(countInBarsDrop)
+            box.items.add(juce::FlexItem(mixDownSwitch)
                               .withFlex(0)
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(timeSignatureDrop)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(sliceDivisionDrop)
+            box.items.add(juce::FlexItem(divsLabel)
                               .withFlex(0)
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
@@ -153,20 +202,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                               .withHeight(Constants::Text::labelHeight)
                               .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                               .withMargin(knobMarginSmall));
-            box.performLayout(areas[0].toFloat());
-        }
-        {
-            juce::FlexBox box;
-            box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::column;
-            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(clickRecordVolumeDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(recordBarsDial).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[1].toFloat());
+            box.performLayout(areas[3].toFloat());
         }
         {
             juce::FlexBox box;
@@ -175,7 +211,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
             box.items.add(juce::FlexItem(beatGauge).withFlex(5).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(sliceGauge).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[2].toFloat());
+            box.performLayout(areas[4].toFloat());
         }
     }
 #pragma GCC diagnostic pop
@@ -208,6 +244,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             recordSwitch.tickFlash();
             playSwitch.tickFlash();
             overdubSwitch.tickFlash();
+            undoSwitch.tickFlash();
+            mixDownSwitch.tickFlash();
             clearSwitch.tickFlash();
             freezeSwitch.tickFlash();
             seqPlaySwitch.tickFlash();
@@ -216,6 +254,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                               : juce::String::fromUTF8("Play"));
             overdubSwitch.setButtonText(processorRef.isOverdubbing() ? juce::String::fromUTF8("Overdubbing")
                                                                      : juce::String::fromUTF8("Overdub"));
+            undoSwitch.setButtonText(processorRef.hasOverdub() ? juce::String::fromUTF8("Undo Overdub")
+                                                               : juce::String::fromUTF8("Undo"));
             seqPlaySwitch.setButtonText(processorRef.isSequencerPlaying() ? juce::String::fromUTF8("Seq Stop")
                                                                           : juce::String::fromUTF8("Seq Play"));
 
@@ -241,6 +281,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
     void initWidgets()
     {
+        addAndMakeVisible(divoLabel);
+        divoLabel.setText(juce::String::fromUTF8("—— Overdub ——"), juce::dontSendNotification);
+        addAndMakeVisible(divsLabel);
+        divsLabel.setText(juce::String::fromUTF8("—— Sequencer ——"), juce::dontSendNotification);
         addAndMakeVisible(recordSwitch);
         recordSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "record", recordSwitch);
@@ -252,6 +296,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(overdubSwitch);
         overdubSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "overdub", overdubSwitch);
+
+        addAndMakeVisible(undoSwitch);
+        undoSwitchAttachment =
+            std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(valueTreeState, "undo", undoSwitch);
+
+        addAndMakeVisible(mixDownSwitch);
+        mixDownSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "mixDown", mixDownSwitch);
 
         addAndMakeVisible(clearSwitch);
         clearSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -821,12 +873,18 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AlertWindow> m_loopNameDialog;
     std::vector<juce::String> m_loopMenuNames;
 
+    juce::Label divoLabel{};
+    juce::Label divsLabel{};
     MomentaryToggleButton recordSwitch{juce::String::fromUTF8("Record")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> recordSwitchAttachment;
     MomentaryToggleButton playSwitch{juce::String::fromUTF8("Play")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> playSwitchAttachment;
     MomentaryToggleButton overdubSwitch{juce::String::fromUTF8("Overdub")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> overdubSwitchAttachment;
+    MomentaryToggleButton undoSwitch{juce::String::fromUTF8("Undo")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> undoSwitchAttachment;
+    MomentaryToggleButton mixDownSwitch{juce::String::fromUTF8("Mix Down")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> mixDownSwitchAttachment;
     MomentaryToggleButton clearSwitch{juce::String::fromUTF8("Clear")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> clearSwitchAttachment;
     juce::ToggleButton threshRecSwitch{juce::String::fromUTF8("Thresh Rec")};

@@ -31,6 +31,7 @@ class LoopRecorder
         : m_maxFrames(std::max<size_t>(1, static_cast<size_t>(sampleRate * maxSeconds)))
     {
         m_buffer.assign(m_maxFrames * kChannels, 0.f);
+        m_overdubBuffer.assign(m_maxFrames * kChannels, 0.f);
         // Covers half a bar of relocate/fold at the slowest supported tempo.
         const size_t scratchFrames = std::max<size_t>(1, static_cast<size_t>(sampleRate * 8.f));
         m_postRollScratch.assign(scratchFrames * kChannels, 0.f);
@@ -127,6 +128,7 @@ class LoopRecorder
 
     void clear() noexcept
     {
+        resetOverdub();
         m_state = LooperState::Empty;
         m_recordedFrames = 0;
         m_loopLengthFrames = 0;
@@ -142,6 +144,7 @@ class LoopRecorder
             clear();
             return;
         }
+        resetOverdub();
         for (size_t frame = 0; frame < frames; ++frame)
         {
             m_buffer[frame * kChannels] = left[frame];
@@ -151,6 +154,46 @@ class LoopRecorder
         m_loopLengthFrames = frames;
         m_playPos = 0;
         m_state = LooperState::Playing;
+    }
+
+    void loadOverdub(const std::span<const float> left, const std::span<const float> right) noexcept
+    {
+        const size_t frames = std::min({left.size(), right.size(), m_loopLengthFrames});
+        if (frames == 0)
+        {
+            return;
+        }
+        for (size_t frame = 0; frame < frames; ++frame)
+        {
+            m_overdubBuffer[frame * kChannels] = left[frame];
+            m_overdubBuffer[frame * kChannels + 1] = right[frame];
+        }
+        m_hasOverdub = true;
+    }
+
+    // Ends the take if called mid-overdub, same as endOverdub().
+    void undoOverdub() noexcept
+    {
+        resetOverdub();
+        if (m_state == LooperState::Overdubbing)
+        {
+            m_state = LooperState::Playing;
+        }
+    }
+
+    // Ends the take if called mid-overdub, same as endOverdub().
+    void mixDownOverdub() noexcept
+    {
+        for (size_t frame = 0; frame < m_loopLengthFrames; ++frame)
+        {
+            m_buffer[frame * kChannels] += m_overdubBuffer[frame * kChannels];
+            m_buffer[frame * kChannels + 1] += m_overdubBuffer[frame * kChannels + 1];
+        }
+        resetOverdub();
+        if (m_state == LooperState::Overdubbing)
+        {
+            m_state = LooperState::Playing;
+        }
     }
 
     void processBlock(const AudioBuffer<kChannels, BlockSize>& in, AudioBuffer<kChannels, BlockSize>& out) noexcept
@@ -208,6 +251,16 @@ class LoopRecorder
         return m_buffer[frame * kChannels + channel];
     }
 
+    [[nodiscard]] bool hasOverdub() const noexcept
+    {
+        return m_hasOverdub;
+    }
+
+    [[nodiscard]] float overdubSample(const size_t frame, const size_t channel) const noexcept
+    {
+        return m_overdubBuffer[frame * kChannels + channel];
+    }
+
     // Interleaved view over the finalized loop, for the slicer.
     [[nodiscard]] std::span<const float> loopView() const noexcept
     {
@@ -222,6 +275,7 @@ class LoopRecorder
             clear();
             return;
         }
+        resetOverdub();
         m_loopLengthFrames = std::min(m_recordedFrames, m_maxFrames);
         applyBoundaryFades();
         m_playPos = 0;
@@ -238,6 +292,7 @@ class LoopRecorder
             clear();
             return;
         }
+        resetOverdub();
         m_loopLengthFrames = std::min(loopLength, m_maxFrames);
         zeroTail(); // defensive: caller contract is recordedFrames >= loopLength
 
@@ -347,6 +402,16 @@ class LoopRecorder
         }
     }
 
+    void resetOverdub() noexcept
+    {
+        for (size_t frame = 0; frame < m_loopLengthFrames; ++frame)
+        {
+            m_overdubBuffer[frame * kChannels] = 0.f;
+            m_overdubBuffer[frame * kChannels + 1] = 0.f;
+        }
+        m_hasOverdub = false;
+    }
+
     void recordBlock(const AudioBuffer<kChannels, BlockSize>& in, AudioBuffer<kChannels, BlockSize>& out) noexcept
     {
         for (size_t i = 0; i < BlockSize; ++i)
@@ -369,8 +434,9 @@ class LoopRecorder
     {
         for (size_t i = 0; i < BlockSize; ++i)
         {
-            out(i, 0) = m_buffer[m_playPos * kChannels];
-            out(i, 1) = m_buffer[m_playPos * kChannels + 1];
+            const size_t base = m_playPos * kChannels;
+            out(i, 0) = m_buffer[base] + m_overdubBuffer[base];
+            out(i, 1) = m_buffer[base + 1] + m_overdubBuffer[base + 1];
             advancePlay();
         }
     }
@@ -380,14 +446,13 @@ class LoopRecorder
         for (size_t i = 0; i < BlockSize; ++i)
         {
             const size_t base = m_playPos * kChannels;
-            const float existingL = m_buffer[base];
-            const float existingR = m_buffer[base + 1];
-            out(i, 0) = existingL;
-            out(i, 1) = existingR;
-            m_buffer[base] = existingL * m_overdubDecay + in(i, 0);
-            m_buffer[base + 1] = existingR * m_overdubDecay + in(i, 1);
+            out(i, 0) = m_buffer[base] + m_overdubBuffer[base];
+            out(i, 1) = m_buffer[base + 1] + m_overdubBuffer[base + 1];
+            m_overdubBuffer[base] = m_overdubBuffer[base] * m_overdubDecay + in(i, 0);
+            m_overdubBuffer[base + 1] = m_overdubBuffer[base + 1] * m_overdubDecay + in(i, 1);
             advancePlay();
         }
+        m_hasOverdub = true;
     }
 
     void advancePlay() noexcept
@@ -414,11 +479,13 @@ class LoopRecorder
 
     size_t m_maxFrames;
     std::vector<float> m_buffer;
+    std::vector<float> m_overdubBuffer;
     std::vector<float> m_postRollScratch;
     std::vector<float> m_frontScratch;
 
     size_t m_fadeFrames{0};
     float m_overdubDecay{1.f};
+    bool m_hasOverdub{false};
 
     LooperState m_state{LooperState::Empty};
     size_t m_recordedFrames{0};

@@ -68,6 +68,9 @@ class LoopStorageService
         bool hasSequencerData{false};
         std::vector<LoopLoadTrackData> tracks;
         std::optional<AbacDsp::SequencePattern> pattern;
+        bool hasOverdub{false};
+        std::vector<float> overdubLeft;
+        std::vector<float> overdubRight;
     };
 
     LoopStorageService(const AbacDsp::LoopRecorder<BlockSize>& recorder, const AbacDsp::BeatSequencer& seq,
@@ -252,7 +255,8 @@ class LoopStorageService
     // requestLoad() uses on success, so the same pollLoadCompletion() poll
     // installs it. A no-op while a named load is already pending.
     void injectRestoredLoad(std::vector<float> left, std::vector<float> right, const float resolvedBpm,
-                            AbacDsp::MeterTimeline meterTimeline)
+                            AbacDsp::MeterTimeline meterTimeline, std::vector<float> overdubLeft = {},
+                            std::vector<float> overdubRight = {})
     {
         if (m_loopLoadPending)
         {
@@ -265,6 +269,9 @@ class LoopStorageService
         m_loopLoadHasSequencerData = false;
         m_loopLoadTracks.clear();
         m_loopLoadPattern.reset();
+        m_loopLoadHasOverdub = !overdubLeft.empty() && !overdubRight.empty();
+        m_loopLoadOverdubLeft = std::move(overdubLeft);
+        m_loopLoadOverdubRight = std::move(overdubRight);
 
         m_loopLoadRequestedGen = m_loopLoadRequestGen.load(std::memory_order_relaxed) + 1;
         m_loopLoadPending = true;
@@ -292,6 +299,9 @@ class LoopStorageService
         result.hasSequencerData = m_loopLoadHasSequencerData;
         result.tracks = std::move(m_loopLoadTracks);
         result.pattern = std::move(m_loopLoadPattern);
+        result.hasOverdub = m_loopLoadHasOverdub;
+        result.overdubLeft = std::move(m_loopLoadOverdubLeft);
+        result.overdubRight = std::move(m_loopLoadOverdubRight);
         return result;
     }
 
@@ -336,6 +346,11 @@ class LoopStorageService
     {
         return std::filesystem::path(m_loopsDirectory) /
                (sanitizeLoopName(name) + "_track" + std::to_string(track) + ".wav");
+    }
+
+    [[nodiscard]] std::filesystem::path loopOverdubWavPath(const std::string& name) const
+    {
+        return std::filesystem::path(m_loopsDirectory) / (sanitizeLoopName(name) + "_overdub.wav");
     }
 
     // MIDI ticks spanned by one bar of the given meter (denominator convention:
@@ -434,6 +449,19 @@ class LoopStorageService
                 }
                 j["tracks"] = tracksJson;
             }
+            if (m_recorder.hasOverdub())
+            {
+                std::vector<float> overdubLeft(loopLen);
+                std::vector<float> overdubRight(loopLen);
+                for (size_t f = 0; f < loopLen; ++f)
+                {
+                    overdubLeft[f] = m_recorder.overdubSample(f, 0);
+                    overdubRight[f] = m_recorder.overdubSample(f, 1);
+                }
+                const auto overdubPath = loopOverdubWavPath(m_loopSaveName).string();
+                AudioUtility::SaveWav::saveStereoAs(overdubPath, overdubLeft, overdubRight, m_sampleRate);
+                j["overdub"] = {{"file", std::filesystem::path(overdubPath).filename().string()}};
+            }
             std::ofstream jsonOut(loopJsonPath(m_loopSaveName));
             if (jsonOut)
             {
@@ -487,6 +515,9 @@ class LoopStorageService
         m_loopLoadTracks.clear();
         m_loopLoadPattern.reset();
         m_loopLoadMeterTimeline.clear();
+        m_loopLoadHasOverdub = false;
+        m_loopLoadOverdubLeft.clear();
+        m_loopLoadOverdubRight.clear();
         const auto loaded = AbacDsp::LoopFile<nlohmann::json>::loadStereoWav(loopWavPath(m_loopLoadName).string());
         if (!loaded.left.empty())
         {
@@ -502,6 +533,19 @@ class LoopStorageService
                     if (j.contains("pattern") && j.contains("tracks"))
                     {
                         loadSequencerData(j);
+                    }
+                    if (j.contains("overdub"))
+                    {
+                        const auto overdubFile = j.at("overdub").at("file").get<std::string>();
+                        const auto overdubPath = std::filesystem::path(m_loopsDirectory) / overdubFile;
+                        const auto overdubLoaded =
+                            AbacDsp::LoopFile<nlohmann::json>::loadStereoWav(overdubPath.string());
+                        if (!overdubLoaded.left.empty())
+                        {
+                            m_loopLoadOverdubLeft = overdubLoaded.left;
+                            m_loopLoadOverdubRight = overdubLoaded.right;
+                            m_loopLoadHasOverdub = true;
+                        }
                     }
                 }
                 catch (const std::exception& e)
@@ -615,4 +659,7 @@ class LoopStorageService
     std::optional<AbacDsp::SequencePattern> m_loopLoadPattern;
     bool m_loopLoadHasSequencerData{false};
     AbacDsp::MeterTimeline m_loopLoadMeterTimeline; // worker-owned scratch, reconstructed from the .mid sidecar
+    bool m_loopLoadHasOverdub{false};
+    std::vector<float> m_loopLoadOverdubLeft;
+    std::vector<float> m_loopLoadOverdubRight;
 };

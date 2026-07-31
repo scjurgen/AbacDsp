@@ -154,6 +154,8 @@ class LooperImpl final : public EffectBase
               .seqPlayPulse = m_seqPlayPulse,
               .clearSeqPulse = m_clearSeqPulse,
               .threshRecReq = m_threshRecReq,
+              .undoPulse = m_undoPulse,
+              .mixDownPulse = m_mixDownPulse,
           })
         , m_viewModel(typename LooperViewModel<BlockSize>::Deps{
               .recorder = m_recorder,
@@ -308,6 +310,20 @@ class LooperImpl final : public EffectBase
             m_overdubPulse.store(true, std::memory_order_relaxed);
         }
     }
+    void setUndo(const bool value) noexcept
+    {
+        if (value)
+        {
+            m_undoPulse.store(true, std::memory_order_relaxed);
+        }
+    }
+    void setMixDown(const bool value) noexcept
+    {
+        if (value)
+        {
+            m_mixDownPulse.store(true, std::memory_order_relaxed);
+        }
+    }
     void setClear(const bool value) noexcept
     {
         if (value)
@@ -416,8 +432,10 @@ class LooperImpl final : public EffectBase
         header.segmentCount = static_cast<uint32_t>(segments.size());
         header.loopLengthFrames = static_cast<uint64_t>(loopLen);
 
+        const bool hasOverdub = m_recorder.hasOverdub();
         std::vector<std::byte> blob(sizeof(ExtraStateHeader) + segments.size() * sizeof(SerializedMeterSegment) +
-                                    loopLen * 2 * sizeof(float));
+                                    loopLen * 2 * sizeof(float) + sizeof(uint32_t) +
+                                    (hasOverdub ? loopLen * 2 * sizeof(float) : 0));
         size_t offset = 0;
         appendPod(blob, offset, header);
         for (const auto& seg : segments)
@@ -430,6 +448,15 @@ class LooperImpl final : public EffectBase
         {
             appendPod(blob, offset, m_recorder.sample(f, 0));
             appendPod(blob, offset, m_recorder.sample(f, 1));
+        }
+        appendPod(blob, offset, static_cast<uint32_t>(hasOverdub ? 1 : 0));
+        if (hasOverdub)
+        {
+            for (size_t f = 0; f < loopLen; ++f)
+            {
+                appendPod(blob, offset, m_recorder.overdubSample(f, 0));
+                appendPod(blob, offset, m_recorder.overdubSample(f, 1));
+            }
         }
         return blob;
     }
@@ -448,7 +475,7 @@ class LooperImpl final : public EffectBase
         size_t offset = 0;
         ExtraStateHeader header{};
         if (!readPod(blob, offset, header) || header.magic != kExtraStateMagic ||
-            header.version != kExtraStateVersion || header.loopLengthFrames == 0)
+            (header.version != 1 && header.version != 2) || header.loopLengthFrames == 0)
         {
             return;
         }
@@ -475,7 +502,31 @@ class LooperImpl final : public EffectBase
             }
         }
 
-        m_loopStorage.injectRestoredLoad(std::move(left), std::move(right), header.bpm, std::move(timeline));
+        std::vector<float> overdubLeft;
+        std::vector<float> overdubRight;
+        if (header.version >= 2)
+        {
+            uint32_t hasOverdub{};
+            if (!readPod(blob, offset, hasOverdub))
+            {
+                return;
+            }
+            if (hasOverdub != 0)
+            {
+                overdubLeft.resize(header.loopLengthFrames);
+                overdubRight.resize(header.loopLengthFrames);
+                for (uint64_t f = 0; f < header.loopLengthFrames; ++f)
+                {
+                    if (!readPod(blob, offset, overdubLeft[f]) || !readPod(blob, offset, overdubRight[f]))
+                    {
+                        return;
+                    }
+                }
+            }
+        }
+
+        m_loopStorage.injectRestoredLoad(std::move(left), std::move(right), header.bpm, std::move(timeline),
+                                         std::move(overdubLeft), std::move(overdubRight));
     }
 
     // Toggles playing the pattern currently in the sequencer (the frozen
@@ -517,6 +568,10 @@ class LooperImpl final : public EffectBase
     [[nodiscard]] bool isOverdubbing() const noexcept
     {
         return m_recorder.state() == AbacDsp::LooperState::Overdubbing;
+    }
+    [[nodiscard]] bool hasOverdub() const noexcept
+    {
+        return m_recorder.hasOverdub();
     }
     [[nodiscard]] bool isArmed() const noexcept
     {
@@ -655,6 +710,10 @@ class LooperImpl final : public EffectBase
     [[nodiscard]] size_t rawLoopLengthFrames() const noexcept
     {
         return m_viewModel.rawLoopLengthFrames();
+    }
+    [[nodiscard]] float rawOverdubSample(const size_t frame, const size_t channel) const noexcept
+    {
+        return m_recorder.overdubSample(frame, channel);
     }
 
     [[nodiscard]] std::vector<float> getLoopWaveform() const
@@ -938,7 +997,7 @@ class LooperImpl final : public EffectBase
     // (no cross-machine/endian portability needed: it round-trips within a
     // single host's own saved session).
     static constexpr uint32_t kExtraStateMagic = 0x4C504541; // "AELP"
-    static constexpr uint32_t kExtraStateVersion = 1;
+    static constexpr uint32_t kExtraStateVersion = 2;
 
     struct ExtraStateHeader
     {
@@ -988,6 +1047,10 @@ class LooperImpl final : public EffectBase
             return;
         }
         m_recorder.loadLoop(result->left, result->right);
+        if (result->hasOverdub)
+        {
+            m_recorder.loadOverdub(result->overdubLeft, result->overdubRight);
+        }
         const uint64_t regenGen = m_spectrogramRegenRequestGen.load(std::memory_order_relaxed) + 1;
         m_spectrogramRegenRequestGen.store(regenGen, std::memory_order_release);
         m_spectrogramRegenCv.notify_one();
@@ -1244,6 +1307,8 @@ class LooperImpl final : public EffectBase
     std::atomic<bool> m_recordPulse{false};
     std::atomic<bool> m_playPulse{false};
     std::atomic<bool> m_overdubPulse{false};
+    std::atomic<bool> m_undoPulse{false};
+    std::atomic<bool> m_mixDownPulse{false};
     std::atomic<bool> m_clearPulse{false};
 
     float m_appliedBpm{120.f};

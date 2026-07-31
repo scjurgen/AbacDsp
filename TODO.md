@@ -1,23 +1,12 @@
 # TODO
 
-## Looper
 
 ## Host sync 
 - host sync must be disabled if we are not in a host.
 
-## refactor LooperImpl.h
-
-- remove comments regarding past decision, only the important current aspects are relevant
-- split looperImpl.h, it is becoming a god class, many concepts can live outside (use template includes where possible)
-- parts that can be reused in other projects should end in the dsp src code (check for music based abstractions, sequencer, wavefile, midifile, sequencer file handling)
-
 ## bug
 loading a loop while play is on the metronome needs to be aligned. Probably we want another behaviour in the future which would be to schedule
 the loaded loop and play it when the current loop is ending (with a fade in/out operation). For now we just stop the looper, load the file, and wait for a new play signal.
-
-## bug
-loading a loop will not show the spectrogram which must be regenerated.
-
 
 ## UI
 - visualise current bar with an overlay

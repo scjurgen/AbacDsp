@@ -750,6 +750,37 @@ void expectSameLoopContent(Looper& a, Looper& b, const size_t length)
         EXPECT_NEAR(a.rawLoopSample(f, 1), b.rawLoopSample(f, 1), 1e-3f) << "frame " << f;
     }
 }
+
+void expectSameOverdubContent(Looper& a, Looper& b, const size_t length)
+{
+    for (size_t f = 0; f < length; ++f)
+    {
+        EXPECT_NEAR(a.rawOverdubSample(f, 0), b.rawOverdubSample(f, 0), 1e-3f) << "frame " << f;
+        EXPECT_NEAR(a.rawOverdubSample(f, 1), b.rawOverdubSample(f, 1), 1e-3f) << "frame " << f;
+    }
+}
+
+// Requires the looper to already be Playing. Overdub decay defaults to 1
+// and the layer starts at zero, so one pass leaves the overdub buffer at
+// exactly `value` for every frame -- a known, easily verified constant.
+void addKnownOverdub(Looper& looper, const float value)
+{
+    Buffer silence{};
+    Buffer out{};
+    looper.setOverdub(true);
+    looper.processBlock(silence, out); // begins overdub
+
+    Buffer in{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        in(i, 0) = value;
+        in(i, 1) = -value;
+    }
+    looper.processBlock(in, out);
+
+    looper.setOverdub(true);
+    looper.processBlock(silence, out); // ends overdub
+}
 }
 
 TEST(LooperLoopFile, SaveThenLoadRoundTripsAudioAndBpm)
@@ -963,6 +994,60 @@ TEST(LooperLoopFile, SaveThenLoadRoundTripsMeterTimeline)
         reader.processBlock(in, out);
     }
     EXPECT_EQ(reader.getBarBeats(), 4) << "loop repeat should wrap back to bar 0's meter";
+}
+
+TEST(LooperLoopFile, SaveThenLoadRoundTripsOverdubLayer)
+{
+    const TempLoopsDir dir;
+
+    Looper writer(kLoopFileSampleRate);
+    writer.setLoopsDirectory(dir.path());
+    recordKnownLoop(writer);
+    ASSERT_TRUE(writer.isPlaying());
+    const size_t originalLength = writer.rawLoopLengthFrames();
+
+    addKnownOverdub(writer, 0.2f);
+    ASSERT_TRUE(writer.hasOverdub());
+
+    writer.requestSaveLoopAs("overdubloop");
+    waitUntilLoopSaveDone(writer);
+
+    Looper reader(kLoopFileSampleRate);
+    reader.setLoopsDirectory(dir.path());
+    reader.requestLoadLoop("overdubloop");
+    const auto outcome = waitForLoopLoadOutcome(reader);
+    ASSERT_TRUE(outcome.success);
+    waitUntilLoopLoadInstalled(reader);
+
+    ASSERT_TRUE(reader.isPlaying());
+    ASSERT_EQ(reader.rawLoopLengthFrames(), originalLength);
+    ASSERT_TRUE(reader.hasOverdub());
+    expectSameLoopContent(writer, reader, originalLength);
+    expectSameOverdubContent(writer, reader, originalLength);
+}
+
+TEST(LooperLoopFile, CaptureExtraStateThenRestoreRoundTripsOverdubLayer)
+{
+    Looper writer(kLoopFileSampleRate);
+    recordKnownLoop(writer);
+    ASSERT_TRUE(writer.isPlaying());
+    const size_t originalLength = writer.rawLoopLengthFrames();
+
+    addKnownOverdub(writer, 0.15f);
+    ASSERT_TRUE(writer.hasOverdub());
+
+    const auto blob = writer.captureExtraState();
+    ASSERT_FALSE(blob.empty());
+
+    Looper reader(kLoopFileSampleRate);
+    reader.restoreExtraState(blob);
+    waitUntilLoopLoadInstalled(reader);
+
+    ASSERT_TRUE(reader.isPlaying());
+    ASSERT_EQ(reader.rawLoopLengthFrames(), originalLength);
+    ASSERT_TRUE(reader.hasOverdub());
+    expectSameLoopContent(writer, reader, originalLength);
+    expectSameOverdubContent(writer, reader, originalLength);
 }
 
 // Reuses kSampleRate/kBpm/kSamplesPerBar (5120 Hz, 120 BPM, 10240

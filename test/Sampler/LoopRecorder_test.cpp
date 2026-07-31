@@ -411,7 +411,7 @@ TEST(LoopRecorderTest, EmptyRecordStaysEmpty)
     EXPECT_FALSE(rec.hasLoop());
 }
 
-TEST(LoopRecorderTest, OverdubSumsIntoExistingLoop)
+TEST(LoopRecorderTest, OverdubOutputsMainPlusOverdubWithoutTouchingMain)
 {
     Recorder rec{48000.f};
     rec.beginRecord();
@@ -420,21 +420,40 @@ TEST(LoopRecorderTest, OverdubSumsIntoExistingLoop)
 
     rec.beginOverdub();
     EXPECT_EQ(rec.state(), LooperState::Overdubbing);
-    const Buffer out = runOne(rec, 10.f); // output is the pre-existing content
+    const Buffer out = runOne(rec, 10.f);
     for (size_t i = 0; i < kBlock; ++i)
     {
         EXPECT_FLOAT_EQ(out(i, 0), 1.f + static_cast<float>(i));
     }
     rec.endOverdub();
     EXPECT_EQ(rec.state(), LooperState::Playing);
-    // Existing + 10 is now stored.
+    EXPECT_TRUE(rec.hasOverdub());
     for (size_t f = 0; f < kBlock; ++f)
     {
-        EXPECT_FLOAT_EQ(rec.sample(f, 0), 1.f + static_cast<float>(f) + 10.f);
+        EXPECT_FLOAT_EQ(rec.sample(f, 0), 1.f + static_cast<float>(f));
+        EXPECT_FLOAT_EQ(rec.overdubSample(f, 0), 10.f);
     }
 }
 
-TEST(LoopRecorderTest, OverdubDecayFadesExisting)
+TEST(LoopRecorderTest, PlaybackIncludesPendingOverdubLayer)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+
+    rec.beginOverdub();
+    runOne(rec, 10.f);
+    rec.endOverdub();
+
+    const Buffer out = runOne(rec);
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        EXPECT_FLOAT_EQ(out(i, 0), 1.f + static_cast<float>(i) + 10.f);
+    }
+}
+
+TEST(LoopRecorderTest, OverdubDecayFadesOverdubLayerOnly)
 {
     Recorder rec{48000.f};
     rec.setOverdubDecay(0.5f);
@@ -443,10 +462,148 @@ TEST(LoopRecorderTest, OverdubDecayFadesExisting)
     rec.stopRecordFree();
 
     rec.beginOverdub();
-    runOne(rec, 0.f); // input 0: existing *= 0.5
+    runOne(rec, 2.f);
+    runOne(rec, 2.f); // second pass: overdub = overdub*0.5 + 2 = 3
     for (size_t f = 0; f < kBlock; ++f)
     {
-        EXPECT_FLOAT_EQ(rec.sample(f, 0), (4.f + static_cast<float>(f)) * 0.5f);
+        EXPECT_FLOAT_EQ(rec.sample(f, 0), 4.f + static_cast<float>(f));
+        EXPECT_FLOAT_EQ(rec.overdubSample(f, 0), 3.f);
+    }
+}
+
+TEST(LoopRecorderTest, UndoOverdubDiscardsLayerAndRestoresMain)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+
+    rec.beginOverdub();
+    runOne(rec, 10.f);
+    rec.endOverdub();
+    ASSERT_TRUE(rec.hasOverdub());
+
+    rec.undoOverdub();
+    EXPECT_FALSE(rec.hasOverdub());
+    for (size_t f = 0; f < kBlock; ++f)
+    {
+        EXPECT_FLOAT_EQ(rec.sample(f, 0), 1.f + static_cast<float>(f));
+        EXPECT_FLOAT_EQ(rec.overdubSample(f, 0), 0.f);
+    }
+}
+
+TEST(LoopRecorderTest, UndoOverdubMidTakeEndsTakeAndDiscardsLayer)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+
+    rec.beginOverdub();
+    runOne(rec, 10.f);
+    rec.undoOverdub();
+    EXPECT_EQ(rec.state(), LooperState::Playing);
+    EXPECT_FALSE(rec.hasOverdub());
+}
+
+TEST(LoopRecorderTest, MixDownOverdubMergesLayerIntoMain)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+
+    rec.beginOverdub();
+    runOne(rec, 10.f);
+    rec.endOverdub();
+
+    rec.mixDownOverdub();
+    EXPECT_FALSE(rec.hasOverdub());
+    for (size_t f = 0; f < kBlock; ++f)
+    {
+        EXPECT_FLOAT_EQ(rec.sample(f, 0), 1.f + static_cast<float>(f) + 10.f);
+        EXPECT_FLOAT_EQ(rec.overdubSample(f, 0), 0.f);
+    }
+}
+
+TEST(LoopRecorderTest, MixDownOverdubMidTakeEndsTake)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+
+    rec.beginOverdub();
+    runOne(rec, 10.f);
+    rec.mixDownOverdub();
+    EXPECT_EQ(rec.state(), LooperState::Playing);
+    EXPECT_FALSE(rec.hasOverdub());
+    for (size_t f = 0; f < kBlock; ++f)
+    {
+        EXPECT_FLOAT_EQ(rec.sample(f, 0), 1.f + static_cast<float>(f) + 10.f);
+    }
+}
+
+TEST(LoopRecorderTest, MultipleOverdubPassesAccumulateInLayer)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+
+    rec.beginOverdub();
+    runOne(rec, 3.f);
+    rec.endOverdub();
+
+    rec.beginOverdub();
+    runOne(rec, 4.f);
+    rec.endOverdub();
+
+    for (size_t f = 0; f < kBlock; ++f)
+    {
+        EXPECT_FLOAT_EQ(rec.sample(f, 0), 1.f + static_cast<float>(f));
+        EXPECT_FLOAT_EQ(rec.overdubSample(f, 0), 7.f);
+    }
+}
+
+TEST(LoopRecorderTest, NewTakeAfterUndoStartsWithoutStaleOverdub)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+
+    rec.beginOverdub();
+    runOne(rec, 10.f);
+    rec.endOverdub();
+
+    rec.beginRecord();
+    feed(rec, kBlock, 2.f);
+    rec.stopRecordFree();
+
+    EXPECT_FALSE(rec.hasOverdub());
+    for (size_t f = 0; f < kBlock; ++f)
+    {
+        EXPECT_FLOAT_EQ(rec.overdubSample(f, 0), 0.f);
+    }
+}
+
+TEST(LoopRecorderTest, LoadOverdubInstallsSavedLayer)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+
+    std::vector<float> left(kBlock, 5.f);
+    std::vector<float> right(kBlock, -5.f);
+    rec.loadOverdub(left, right);
+
+    EXPECT_TRUE(rec.hasOverdub());
+    for (size_t f = 0; f < kBlock; ++f)
+    {
+        EXPECT_FLOAT_EQ(rec.overdubSample(f, 0), 5.f);
+        EXPECT_FLOAT_EQ(rec.overdubSample(f, 1), -5.f);
     }
 }
 

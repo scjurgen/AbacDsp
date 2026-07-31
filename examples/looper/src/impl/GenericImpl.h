@@ -30,6 +30,14 @@ class GenericImpl final : public EffectBase
     {
         m_overdub = value;
     }
+    void setUndo(const bool value)
+    {
+        m_undo = value;
+    }
+    void setMixDown(const bool value)
+    {
+        m_mixDown = value;
+    }
     void setClear(const bool value)
     {
         m_clear = value;
@@ -128,6 +136,8 @@ class GenericImpl final : public EffectBase
     bool m_record{};
     bool m_play{};
     bool m_overdub{};
+    bool m_undo{};
+    bool m_mixDown{};
     bool m_clear{};
     bool m_threshRec{};
     bool m_hostSync{};

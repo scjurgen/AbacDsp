@@ -15,6 +15,8 @@ struct PatchParameters
         record           , // switch
         play             , // switch
         overdub          , // switch
+        undo             , // switch
+        mixDown          , // switch
         clear            , // switch
         threshRec        , // switch
         hostSync         , // switch
@@ -36,6 +38,8 @@ struct PatchParameters
 bool record{false};
 bool play{false};
 bool overdub{false};
+bool undo{false};
+bool mixDown{false};
 bool clear{false};
 bool threshRec{false};
 bool hostSync{false};
@@ -59,6 +63,8 @@ bool clearSeq{false};
         "record",
 "play",
 "overdub",
+"undo",
+"mixDown",
 "clear",
 "threshRec",
 "hostSync",
@@ -97,6 +103,8 @@ bool clearSeq{false};
         if constexpr (ParamId == Id::record) return record;
         else if constexpr (ParamId == Id::play) return play;
         else if constexpr (ParamId == Id::overdub) return overdub;
+        else if constexpr (ParamId == Id::undo) return undo;
+        else if constexpr (ParamId == Id::mixDown) return mixDown;
         else if constexpr (ParamId == Id::clear) return clear;
         else if constexpr (ParamId == Id::threshRec) return threshRec;
         else if constexpr (ParamId == Id::hostSync) return hostSync;
@@ -131,6 +139,10 @@ break;
  case Id::play: if (!isEqual(get<Id::play>(), value)) {get<Id::play>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::overdub: if (!isEqual(get<Id::overdub>(), value)) {get<Id::overdub>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::undo: if (!isEqual(get<Id::undo>(), value)) {get<Id::undo>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::mixDown: if (!isEqual(get<Id::mixDown>(), value)) {get<Id::mixDown>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::clear: if (!isEqual(get<Id::clear>(), value)) {get<Id::clear>() = static_cast<bool>(value) ;m_modified = true;}
 break;
@@ -207,6 +219,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         record           , // switch
         play             , // switch
         overdub          , // switch
+        undo             , // switch
+        mixDown          , // switch
         clear            , // switch
         threshRec        , // switch
         hostSync         , // switch
