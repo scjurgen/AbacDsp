@@ -225,6 +225,20 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         repaint();
     }
 
+    // AlertWindow::addTextEditor() copies ComboBox::outlineColourId onto the editor
+    // (transparent in this LookAndFeel), leaving it invisible until it gains focus;
+    // restore a visible outline and hand it keyboard focus so typing works immediately.
+    void focusNameEditor(juce::AlertWindow& dialog)
+    {
+        if (auto* editor = dialog.getTextEditor("name"))
+        {
+            editor->setColour(juce::TextEditor::outlineColourId,
+                              juce::Colour(GuiConstants::instance().colors.statusOutline));
+            editor->selectAll();
+            editor->grabKeyboardFocus();
+        }
+    }
+
     /*START_PRESETBROWSER*/
     juce::PopupMenu buildPatchesMenu()
     {
@@ -334,6 +348,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                    }
                                                }),
                                            false);
+        focusNameEditor(*m_patchNameDialog);
     }
 
     void promptRename(const juce::String& oldName)
@@ -364,6 +379,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                    }
                                                }),
                                            false);
+        focusNameEditor(*m_patchNameDialog);
     }
 
     void confirmAndDeletePatch(const juce::String& name)
@@ -472,6 +488,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                   m_statusBar.showMessage("Saving '" + name + "'...");
                                               }),
                                           false);
+        focusNameEditor(*m_loopNameDialog);
     }
 
     void promptRenameLoop(const juce::String& oldName)
@@ -502,6 +519,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                   }
                                               }),
                                           false);
+        focusNameEditor(*m_loopNameDialog);
     }
 
     void confirmAndDeleteLoop(const juce::String& name)
