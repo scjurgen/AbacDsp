@@ -1,13 +1,13 @@
 import os
 
 
-def list_modules(blueprints_dir: str = "blueprints") -> list:
+def list_modules(blueprints_dir: str = "blueprints") -> list[str]:
     modules = [f[:-5] for f in os.listdir(blueprints_dir) if f.endswith(".json")]
     modules.sort()
     return modules
 
 
-def usage(progname: str, module_list: list):
+def usage(progname: str, module_list: list[str]) -> None:
     progname = os.path.basename(progname)
     print(f"Usage: {progname} --mode (standalone | localexample) [--forceall] [--target-dir <path>] module <module>...")
     print("module name of a module in blueprints ")
@@ -22,15 +22,15 @@ def usage(progname: str, module_list: list):
 
 
 class ParsedArgs:
-    def __init__(self):
-        self.force_all = False
-        self.mode = None
-        self.target_dir_overridden = False
-        self.target_dir_arg = None
-        self.modules_requested = []
+    def __init__(self) -> None:
+        self.force_all: bool = False
+        self.mode: str | None = None
+        self.target_dir_overridden: bool = False
+        self.target_dir_arg: str | None = None
+        self.modules_requested: list[str] = []
 
 
-def parse_args(argv: list, module_list: list):
+def parse_args(argv: list[str], module_list: list[str]) -> ParsedArgs | None:
     """Mirrors generate-juce-standalone.py's original argv-parsing block.
     Returns None if --list was handled (caller should just exit), else a
     ParsedArgs. --help/-h and error paths exit via usage(), as before."""

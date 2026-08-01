@@ -19,44 +19,51 @@ import sys
 from parseboxstructure import parse_box_structure, construct_boxes
 from file_sync import FileSync
 
-from blueprint import loadConfig, fillDefaults, fillRange, fillCc, enrich
-from report import printParameterTable
+from blueprint import Blueprint, load_config, fill_defaults, fill_range, fill_cc, enrich
+from report import print_parameter_table
 from codegen_processor import (
-    createParameterLayout, createParameterChanged, updateParamById, idList,
-    idStringList, paramConstExprList, loadPatches, createPatchChanged,
-    getPatchCount, createPatchIndexAssign, createSettersImplementation,
-    createtructVariablesImplementation, createVariablesImplementation,
-    addParameterListeners, removeParameterListeners, createProcessorForwards,
-    createExtraProcessorMethods, createExtraPrepareCalls,
-    createExtraProcessorMembers, createExtraGetStateCalls,
-    createExtraSetStateCalls, createCcMapping,
+    create_parameter_layout, create_parameter_changed, update_param_by_id, id_list,
+    id_string_list, param_const_expr_list, load_patches, create_patch_changed,
+    get_patch_count, create_patch_index_assign, create_setters_implementation,
+    create_struct_variables_implementation, create_variables_implementation,
+    add_parameter_listeners, remove_parameter_listeners,
+    create_extra_processor_methods, create_extra_prepare_calls,
+    create_extra_processor_members, create_extra_get_state_calls,
+    create_extra_set_state_calls, create_cc_mapping,
 )
 from codegen_widgets import (
-    gauge_present, createGaugeCallbacks, createThemeCallbacks,
-    createWidgetsDecl, createInitWidgets, createExtraPrivateMethods,
+    gauge_present, create_gauge_callbacks, create_theme_callbacks,
+    create_widgets_decl, create_init_widgets, create_extra_private_methods,
 )
 from template_engine import (
-    getTargetName, runClangFormat, createAndSaveModuleSubstitutions,
-    createAndSaveModuleSubstitutionsBraced,
+    get_target_name, run_clang_format, create_and_save_module_substitutions,
+    create_and_save_module_substitutions_braced,
 )
-from cli import list_modules, usage, parse_args
+from cli import list_modules, parse_args
 
 # Every path below (blueprints/, templates/, ../examples) is relative to this
 # script's own directory, not the caller's cwd.
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 stand_alone = False
-templateFiles = "templates"
-sourceFiles = f"{templateFiles}/sourcefiles"
-mainTargetDir = "../examples"
-cppTmpDir = "/tmp/{module}"
-cppTargetDir = "../examples/{module}"
-cppAllElementsInclude = "UiElements.h"
-rootCMakeLists = "../CMakeLists.txt"
+cpp_juce_cmake = "CMakeListsExamples.txt"
+cpp_target_dir = "../examples/{module}"
+main_target_dir = "../examples"
+new_constants = {
+    "MAIN_COLOR": "0xffdddddd",
+    "WINDOW_WIDTH": "1024",
+    "WINDOW_HEIGHT": "600"
+}
 
-cppLookAndFeel = "inc/LookAndFeel.h"
+TEMPLATE_FILES = "templates"
+SOURCE_FILES = f"{TEMPLATE_FILES}/sourcefiles"
+CPP_TMP_DIR = "/tmp/{module}"
+CPP_ALL_ELEMENTS_INCLUDE = "UiElements.h"
+ROOT_CMAKE_LISTS = "../CMakeLists.txt"
 
-cppSourceFilesFixed = [
+CPP_LOOK_AND_FEEL = "inc/LookAndFeel.h"
+
+CPP_SOURCE_FILES_FIXED = [
     "inc/GuiConstants.h",
     "inc/ThemeOrbit.h",
     "inc/CpuMeter.h",
@@ -72,38 +79,29 @@ cppSourceFilesFixed = [
     "inc/AppSettings.h",
     "impl/EffectBase.h",
 ]
-cppSourceFiles3rdParty = [
+CPP_SOURCE_FILES_3RDPARTY = [
     "3rdparty/CMakeLists.txt",
 ]
 
+CPP_JUCE_FILE = "{Module}Processor.h"
+CPP_JUCE_FILE_IMPLEMENT = "{Module}Processor.cpp"
+CPP_JUCE_FILE_EDITOR = "{Module}Editor.h"
+CPP_JUCE_FILE_CONSTANTS = "{Module}Constants.h"
 
-cppJuceCmake = "CMakeListsExamples.txt"
-cppGitignore = "gitignore"
-cppJuceFile = "{Module}Processor.h"
-cppJuceFileImplement = "{Module}Processor.cpp"
-cppJuceFileEditor = "{Module}Editor.h"
-cppJuceFileConstants = "{Module}Constants.h"
+CPP_SOURCE_FILES_IMPL = "impl/GenericImpl.h"
+CPP_SOURCE_FILES_IMPL_FILE_IO = "impl/FileIo.h"
+CPP_PATCH_PARAMETERS = "impl/PatchParameters.h"
+CPP_CC_MAPPING = "impl/CcMapping.h"
+CPP_CC_SETTINGS = "impl/CcSettings.h"
+CPP_SOURCE_FILES_UNIT_TEST = "unittests/{Module}_tests.cpp"
 
-cppSourceFilesImpl = "impl/GenericImpl.h"
-cppSourceFilesImplFileIo  = "impl/FileIo.h"
-cppPatchParameters = "impl/PatchParameters.h"
-cppCcMapping = "impl/CcMapping.h"
-cppCcSettings = "impl/CcSettings.h"
-cppSourceFilesUnitTest = "unittests/{Module}_tests.cpp"
-
-cppConstants = [
+CPP_CONSTANTS = [
     "MAIN_COLOR",
     "WINDOW_WIDTH",
     "WINDOW_HEIGHT"
 ]
 
-newConstants = {
-    "MAIN_COLOR": "0xffdddddd",
-    "WINDOW_WIDTH": "1024",
-    "WINDOW_HEIGHT": "600"
-}
-
-cppJuceFileVars = [
+CPP_JUCE_FILE_VARS = [
     "MODULE",
     "MODULE_UPPER",
     "ADD_PARAMETER_LISTENERS",
@@ -144,280 +142,279 @@ cppJuceFileVars = [
 ]
 
 
-def ensureCMakeSubdirectory(module: str):
-    with open(rootCMakeLists, "r") as f:
+def ensure_cmake_subdirectory(module: str) -> None:
+    with open(ROOT_CMAKE_LISTS, "r") as f:
         lines = f.readlines()
     entry_pattern = re.compile(r'^(\s*)add_subdirectory\(examples/([A-Za-z0-9_]+)\)\s*$')
     entries = [(i, match.group(2)) for i, line in enumerate(lines) if (match := entry_pattern.match(line))]
     if not entries:
-        print(f"WARNING: no add_subdirectory(examples/...) entries found in {rootCMakeLists}, skipping")
+        print(f"WARNING: no add_subdirectory(examples/...) entries found in {ROOT_CMAKE_LISTS}, skipping")
         return
     if module in (mod for _, mod in entries):
         return
     indent = entry_pattern.match(lines[entries[0][0]]).group(1)
     insert_at = next((i for i, mod in entries if module < mod), entries[-1][0] + 1)
     lines.insert(insert_at, f"{indent}add_subdirectory(examples/{module})\n")
-    with open(rootCMakeLists, "w") as f:
+    with open(ROOT_CMAKE_LISTS, "w") as f:
         f.writelines(lines)
-    print(f"Added add_subdirectory(examples/{module}) to {rootCMakeLists}")
+    print(f"Added add_subdirectory(examples/{module}) to {ROOT_CMAKE_LISTS}")
 
 
-def _generateModuleFile(fileField: str, m: dict):
-    cppTargetFile = f"{cppTmpDir}/src/{fileField}"
-    createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{fileField}", m["CPP"], cppJuceFileVars)
-    clangFormatFile = getTargetName(cppTargetFile, m)
-    runClangFormat(clangFormatFile)
+def _generate_module_file(file_field: str, blueprint: Blueprint) -> None:
+    cpp_target_file = f"{CPP_TMP_DIR}/src/{file_field}"
+    create_and_save_module_substitutions(cpp_target_file, f"{SOURCE_FILES}/{file_field}", blueprint["CPP"], CPP_JUCE_FILE_VARS)
+    clang_format_file = get_target_name(cpp_target_file, blueprint)
+    run_clang_format(clang_format_file)
 
 
-def createPackageFromJsonDict(m: dict):
-    targetDir = f"{mainTargetDir}/{m['name']}"
-    enrich(m)
-    print(f"Generating: {targetDir}")
+def create_package_from_json_dict(blueprint: Blueprint) -> None:
+    target_dir = f"{main_target_dir}/{blueprint['name']}"
+    enrich(blueprint)
+    print(f"Generating: {target_dir}")
 
-    m["module"] = m["name"]
-    m["Module"] = m["name"][0].upper() + m["name"][1:]
-    m["description"] = "\n".join(m["description"])
-    m["ports"] = "\n"
-    m["CPP"]["module"] = m["name"]
-    m["CPP"]["name"] = m["name"]
-    m["CPP"]["MODULE"] = m["name"]
-    m["CPP"]["MODULE_UPPER"] = m["Module"]
-    m["CPP"]["ADD_PARAMETERS"] = ""
-    m["CPP"]["ID_PARAMETERS"] = ""
-    m["CPP"]["NEW_RUNNER"] = ""
-    m["CPP"]["JUCE_PARAMS"] = ""
-    m["CPP"]["RUN_MODULE"] = ""
+    blueprint["module"] = blueprint["name"]
+    blueprint["Module"] = blueprint["name"][0].upper() + blueprint["name"][1:]
+    blueprint["description"] = "\n".join(blueprint["description"])
+    blueprint["ports"] = "\n"
+    blueprint["CPP"]["module"] = blueprint["name"]
+    blueprint["CPP"]["name"] = blueprint["name"]
+    blueprint["CPP"]["MODULE"] = blueprint["name"]
+    blueprint["CPP"]["MODULE_UPPER"] = blueprint["Module"]
+    blueprint["CPP"]["ADD_PARAMETERS"] = ""
+    blueprint["CPP"]["ID_PARAMETERS"] = ""
+    blueprint["CPP"]["NEW_RUNNER"] = ""
+    blueprint["CPP"]["JUCE_PARAMS"] = ""
+    blueprint["CPP"]["RUN_MODULE"] = ""
 
-    for idx in range(len(m["ports-control"])):
-        item = fillDefaults(m["ports-control"][idx])
+    for idx in range(len(blueprint["ports-control"])):
+        item = fill_defaults(blueprint["ports-control"][idx])
         if item['type'] in ['dial', 'slider']:
-            item = fillRange(item)
+            item = fill_range(item)
         if item['type'] == 'switch' and 'cc' in item:
             item['rangeStart'] = 0
             item['rangeEnd'] = 1
         if item['type'] in ['dial', 'switch'] and 'cc' in item:
-            item = fillCc(item)
+            item = fill_cc(item)
         item["keyUpper"] = item['symbol'][0].upper() + item['symbol'][1:]
         item["setter"] = "set"+item["keyUpper"]
 
-    printParameterTable(m)
+    print_parameter_table(blueprint)
 
-    m["CPP"]["TIMER_CALLBACKS"] = createGaugeCallbacks(m)
-    m["CPP"]["APPLY_THEME_CALLBACKS"] = createThemeCallbacks(m)
-    m["CPP"]["ADD_PARAMETER_LISTENERS"] = addParameterListeners(m)
-    m["CPP"]["REMOVE_PARAMETER_LISTENERS"] = removeParameterListeners(m)
-    m["CPP"]["CREATE_PARAMETER_LAYOUT"] = createParameterLayout(m)
-    m["CPP"]["PARAMETER_CHANGED"] = createParameterChanged(m)
-    m["CPP"]["SETTERS"] = createSettersImplementation(m)
-    m["CPP"]["SETTERS_PARAMS"] = createVariablesImplementation(m)
+    blueprint["CPP"]["TIMER_CALLBACKS"] = create_gauge_callbacks(blueprint)
+    blueprint["CPP"]["APPLY_THEME_CALLBACKS"] = create_theme_callbacks(blueprint)
+    blueprint["CPP"]["ADD_PARAMETER_LISTENERS"] = add_parameter_listeners(blueprint)
+    blueprint["CPP"]["REMOVE_PARAMETER_LISTENERS"] = remove_parameter_listeners(blueprint)
+    blueprint["CPP"]["CREATE_PARAMETER_LAYOUT"] = create_parameter_layout(blueprint)
+    blueprint["CPP"]["PARAMETER_CHANGED"] = create_parameter_changed(blueprint)
+    blueprint["CPP"]["SETTERS"] = create_setters_implementation(blueprint)
+    blueprint["CPP"]["SETTERS_PARAMS"] = create_variables_implementation(blueprint)
 
-    m["CPP"]["ParamIdList"] = idList(m)
-    m["CPP"]["ParamIdStringList"] = idStringList(m)
-    m["CPP"]["ParamIdConstExprList"]  = paramConstExprList(m)
-    m["CPP"]["UpdateParamById"]= updateParamById(m)
-    m["CPP"]["LoadPatches"] = loadPatches(m)
-    m["CPP"]["PatchChanged"] = createPatchChanged(m)
-    m["CPP"]["PatchIndexAssign"] = createPatchIndexAssign(m)
-    m["CPP"]["PatchCount"] = getPatchCount(m)
-    m["CPP"]["ParamStructMembers"] = createtructVariablesImplementation(m)
-    m["CPP"].update(createCcMapping(m))
+    blueprint["CPP"]["ParamIdList"] = id_list(blueprint)
+    blueprint["CPP"]["ParamIdStringList"] = id_string_list(blueprint)
+    blueprint["CPP"]["ParamIdConstExprList"] = param_const_expr_list(blueprint)
+    blueprint["CPP"]["UpdateParamById"] = update_param_by_id(blueprint)
+    blueprint["CPP"]["LoadPatches"] = load_patches(blueprint)
+    blueprint["CPP"]["PatchChanged"] = create_patch_changed(blueprint)
+    blueprint["CPP"]["PatchIndexAssign"] = create_patch_index_assign(blueprint)
+    blueprint["CPP"]["PatchCount"] = get_patch_count(blueprint)
+    blueprint["CPP"]["ParamStructMembers"] = create_struct_variables_implementation(blueprint)
+    blueprint["CPP"].update(create_cc_mapping(blueprint))
 
-    m["CPP"]["INIT_WIDGETS"] = createInitWidgets(m)
-    m["CPP"]["WIDGETS_DECL"] = createWidgetsDecl(m)
-    m["CPP"]["RESIZED_AREA"] = construct_boxes(m)
-    m["CPP"]["EXTRA_PRIVATE_METHODS"] = createExtraPrivateMethods(m)
-    m["CPP"]["EXTRA_PROCESSOR_METHODS"] = createExtraProcessorMethods(m)
-    m["CPP"]["EXTRA_PREPARE_CALLS"] = createExtraPrepareCalls(m)
-    m["CPP"]["EXTRA_PROCESSOR_MEMBERS"] = createExtraProcessorMembers(m)
-    m["CPP"]["EXTRA_GET_STATE_CALLS"] = createExtraGetStateCalls(m)
-    m["CPP"]["EXTRA_SET_STATE_CALLS"] = createExtraSetStateCalls(m)
+    blueprint["CPP"]["INIT_WIDGETS"] = create_init_widgets(blueprint)
+    blueprint["CPP"]["WIDGETS_DECL"] = create_widgets_decl(blueprint)
+    blueprint["CPP"]["RESIZED_AREA"] = construct_boxes(blueprint)
+    blueprint["CPP"]["EXTRA_PRIVATE_METHODS"] = create_extra_private_methods(blueprint)
+    blueprint["CPP"]["EXTRA_PROCESSOR_METHODS"] = create_extra_processor_methods(blueprint)
+    blueprint["CPP"]["EXTRA_PREPARE_CALLS"] = create_extra_prepare_calls(blueprint)
+    blueprint["CPP"]["EXTRA_PROCESSOR_MEMBERS"] = create_extra_processor_members(blueprint)
+    blueprint["CPP"]["EXTRA_GET_STATE_CALLS"] = create_extra_get_state_calls(blueprint)
+    blueprint["CPP"]["EXTRA_SET_STATE_CALLS"] = create_extra_set_state_calls(blueprint)
 
-    for idx in range(len(m["ports-control"])):
-        item = fillDefaults(m["ports-control"][idx])
-        keyUpper = item['symbol'][0].upper() + item['symbol'][1:]
+    for idx in range(len(blueprint["ports-control"])):
+        item = fill_defaults(blueprint["ports-control"][idx])
 
-        type = item['type']
-        if type == 'drop':
+        port_type = item['type']
+        if port_type == 'drop':
             idx = 0
-            menuList = 'juce::StringArray {'
-            for enumItem in item['listitems']:
-                menuList += f'"{enumItem}",'
+            menu_list = 'juce::StringArray {'
+            for enum_item in item['listitems']:
+                menu_list += f'"{enum_item}",'
                 idx += 1
-            menuList = menuList[:-1] + '}'
+            menu_list = menu_list[:-1] + '}'
             item['minimum'] = 0
             item['maximum'] = idx - 1
-        m["CPP"]["ID_PARAMETERS"] += f'PARAMETER_ID({item["symbol"]})\n'
-        m["CPP"]["JUCE_PARAMS"] += f"    juce::AudioParameter{type}* {item['symbol']}; // {item['display']}\n"
+        blueprint["CPP"]["ID_PARAMETERS"] += f'PARAMETER_ID({item["symbol"]})\n'
+        blueprint["CPP"]["JUCE_PARAMS"] += f"    juce::AudioParameter{port_type}* {item['symbol']}; // {item['display']}\n"
         if item['type'] == 'integer':
-            m["CPP"]["JUCE_PARAMS"] += f"    int prev_{item['symbol']} {{ {item['minimum'] - 1} }};\n\n"
+            blueprint["CPP"]["JUCE_PARAMS"] += f"    int prev_{item['symbol']} {{ {item['minimum'] - 1} }};\n\n"
         elif item['type'] == 'Choice':
             val = item["default"] - 1
             if val < 0:
                 val = val + 2
-            m["CPP"]["JUCE_PARAMS"] += f"    int prev_{item['symbol']} {{ {val} }};\n\n"
+            blueprint["CPP"]["JUCE_PARAMS"] += f"    int prev_{item['symbol']} {{ {val} }};\n\n"
         elif item['type'] == 'bool':
             val = item["default"]
             val = not val
-            m["CPP"]["JUCE_PARAMS"] += f"    bool prev_{item['symbol']}{{ {val} }};\n\n"
+            blueprint["CPP"]["JUCE_PARAMS"] += f"    bool prev_{item['symbol']}{{ {val} }};\n\n"
         else:
-            m["CPP"]["JUCE_PARAMS"] += f"    float prev_{item['symbol']} {{ {item['minimum'] - 1} }};\n\n"
+            blueprint["CPP"]["JUCE_PARAMS"] += f"    float prev_{item['symbol']} {{ {item['minimum'] - 1} }};\n\n"
 
-    if (m["CPP"]["PROCMODE"] == "Stereo-Stereo"):
-        m["CPP"][
+    if (blueprint["CPP"]["PROCMODE"] == "Stereo-Stereo"):
+        blueprint["CPP"][
             "RUN_MODULE"] += """
             std::array<std::array<float, NumSamplesPerBlock>, 2> output;
             pluginRunner->processBlockStereoStereo(buffer.getReadPointer(0) + i, buffer.getReadPointer(1) + i, output[0].data(), output[1].data());
             std::copy_n(output[0].data(), NumSamplesPerBlock, buffer.getWritePointer(0) + i);
             std::copy_n(output[1].data(), NumSamplesPerBlock, buffer.getWritePointer(1) + i);
            """
-    elif (m["CPP"]["PROCMODE"] == "Mono-Stereo"):
-        m["CPP"][
+    elif (blueprint["CPP"]["PROCMODE"] == "Mono-Stereo"):
+        blueprint["CPP"][
             "RUN_MODULE"] += """
             std::array<std::array<float, NumSamplesPerBlock>, 2> output;
             pluginRunner->processBlockMonoStereo(buffer.getReadPointer(0)+i, output[0].data(), output[1].data());
             std::copy_n(output[0].data(), NumSamplesPerBlock, buffer.getWritePointer(0) + i);
             std::copy_n(output[1].data(), NumSamplesPerBlock, buffer.getWritePointer(1) + i);
             """
-    elif (m["CPP"]["PROCMODE"] == "Mono-Mono"):
-        m["CPP"]["RUN_MODULE"] += (
+    elif (blueprint["CPP"]["PROCMODE"] == "Mono-Mono"):
+        blueprint["CPP"]["RUN_MODULE"] += (
             """
             std::array<float, NumSamplesPerBlock> output;
             pluginRunner->processBlockMonoMono(buffer.getReadPointer(0)+i, output.data());
             std::copy_n(output.data(), NumSamplesPerBlock, buffer.getWritePointer(0) + i);
             std::copy_n(output.data(), NumSamplesPerBlock, buffer.getWritePointer(1) + i);
             """)
-    elif (m["CPP"]["PROCMODE"] == "Midi-Stereo"):
-        m["CPP"][
+    elif (blueprint["CPP"]["PROCMODE"] == "Midi-Stereo"):
+        blueprint["CPP"][
             "RUN_MODULE"] += """ pluginRunner->processBlockMidiStereo(buffer.getWritePointer(0)+i, buffer.getWritePointer(1)+i); """
 
-    dir = cppTmpDir.replace("{module}", m["module"])
-    os.makedirs(f"{dir}/3rdparty", mode=0o777, exist_ok=True)
-    os.makedirs(f"{dir}/src", mode=0o777, exist_ok=True)
-    os.makedirs(f"{dir}/src/impl", mode=0o777, exist_ok=True)
-    os.makedirs(f"{dir}/src/inc", mode=0o777, exist_ok=True)
-    os.makedirs(f"{dir}/src/unittests", mode=0o777, exist_ok=True)
+    module_dir = CPP_TMP_DIR.replace("{module}", blueprint["module"])
+    os.makedirs(f"{module_dir}/3rdparty", mode=0o777, exist_ok=True)
+    os.makedirs(f"{module_dir}/src", mode=0o777, exist_ok=True)
+    os.makedirs(f"{module_dir}/src/impl", mode=0o777, exist_ok=True)
+    os.makedirs(f"{module_dir}/src/inc", mode=0o777, exist_ok=True)
+    os.makedirs(f"{module_dir}/src/unittests", mode=0o777, exist_ok=True)
 
-    m["CPP"]["Module"] = m["CPP"]["module"].capitalize()
-    m["CPP"]["GAUGES"] = gauge_present(m)
-    if getPatchCount(m) > 0:
-        m["CPP"]["GAUGES"].append("PATCHSUPPORT")
-    if int(m["CPP"]["NUM_CC_TARGETS"]) > 0:
-        m["CPP"]["GAUGES"].append("MIDICC")
-    if m.get("patches", False):
-        m["CPP"]["GAUGES"].append("PRESETBROWSER")
-    if m.get("loops", False):
-        m["CPP"]["GAUGES"].append("LOOPBROWSER")
-    if m.get("host_transport", False):
-        m["CPP"]["GAUGES"].append("HOSTTRANSPORT")
+    blueprint["CPP"]["Module"] = blueprint["CPP"]["module"].capitalize()
+    blueprint["CPP"]["GAUGES"] = gauge_present(blueprint)
+    if get_patch_count(blueprint) > 0:
+        blueprint["CPP"]["GAUGES"].append("PATCHSUPPORT")
+    if int(blueprint["CPP"]["NUM_CC_TARGETS"]) > 0:
+        blueprint["CPP"]["GAUGES"].append("MIDICC")
+    if blueprint.get("patches", False):
+        blueprint["CPP"]["GAUGES"].append("PRESETBROWSER")
+    if blueprint.get("loops", False):
+        blueprint["CPP"]["GAUGES"].append("LOOPBROWSER")
+    if blueprint.get("host_transport", False):
+        blueprint["CPP"]["GAUGES"].append("HOSTTRANSPORT")
 
-    for fileField in [cppJuceFile, cppJuceFileImplement, cppSourceFilesImpl,
-                       cppSourceFilesImplFileIo, cppPatchParameters, cppCcMapping,
-                       cppCcSettings, cppJuceFileEditor, cppSourceFilesUnitTest]:
-        _generateModuleFile(fileField, m)
+    for file_field in [CPP_JUCE_FILE, CPP_JUCE_FILE_IMPLEMENT, CPP_SOURCE_FILES_IMPL,
+                        CPP_SOURCE_FILES_IMPL_FILE_IO, CPP_PATCH_PARAMETERS, CPP_CC_MAPPING,
+                        CPP_CC_SETTINGS, CPP_JUCE_FILE_EDITOR, CPP_SOURCE_FILES_UNIT_TEST]:
+        _generate_module_file(file_field, blueprint)
 
-    cppTargetFile = f"{cppTmpDir}/src/{cppJuceFileConstants}"
-    newConstants["Module"] = m["CPP"]["Module"]
-    newConstants["module"] = m["CPP"]["module"]
-    newConstants["WINDOW_WIDTH"] = m["layout"]["WINDOW_WIDTH"]
-    newConstants["WINDOW_HEIGHT"] = m["layout"]["WINDOW_HEIGHT"]
+    cpp_target_file = f"{CPP_TMP_DIR}/src/{CPP_JUCE_FILE_CONSTANTS}"
+    new_constants["Module"] = blueprint["CPP"]["Module"]
+    new_constants["module"] = blueprint["CPP"]["module"]
+    new_constants["WINDOW_WIDTH"] = blueprint["layout"]["WINDOW_WIDTH"]
+    new_constants["WINDOW_HEIGHT"] = blueprint["layout"]["WINDOW_HEIGHT"]
 
-    createAndSaveModuleSubstitutions(cppTargetFile, f"{sourceFiles}/{cppJuceFileConstants}", newConstants, cppConstants)
-    clangFormatFile = getTargetName(cppTargetFile, m)
-    runClangFormat(clangFormatFile)
+    create_and_save_module_substitutions(cpp_target_file, f"{SOURCE_FILES}/{CPP_JUCE_FILE_CONSTANTS}", new_constants, CPP_CONSTANTS)
+    clang_format_file = get_target_name(cpp_target_file, blueprint)
+    run_clang_format(clang_format_file)
 
-    digest = hashlib.sha256(m["CPP"]["module"].encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(blueprint["CPP"]["module"].encode("utf-8")).hexdigest()
 
-    m["CPP"]["PluginCode"] = m["plugintype"][0] + digest[1:4].upper()
-    m["CPP"]['IsSynth'] = "FALSE"
-    m["CPP"]['NeedsMidiInput'] = "TRUE" if int(m["CPP"]["NUM_CC_TARGETS"]) > 0 else "FALSE"
-    m["CPP"]['NeedsMidiOutput'] = "FALSE"
-    m["CPP"]['IsMidiEffect'] = "FALSE"
-    m["CPP"]['EditorWantsKeyboardFocus'] = "FALSE"
-    m["CPP"]['VersionString'] = m['VersionString']
+    blueprint["CPP"]["PluginCode"] = blueprint["plugintype"][0] + digest[1:4].upper()
+    blueprint["CPP"]['IsSynth'] = "FALSE"
+    blueprint["CPP"]['NeedsMidiInput'] = "TRUE" if int(blueprint["CPP"]["NUM_CC_TARGETS"]) > 0 else "FALSE"
+    blueprint["CPP"]['NeedsMidiOutput'] = "FALSE"
+    blueprint["CPP"]['IsMidiEffect'] = "FALSE"
+    blueprint["CPP"]['EditorWantsKeyboardFocus'] = "FALSE"
+    blueprint["CPP"]['VersionString'] = blueprint['VersionString']
 
-    cppTargetFile = f"{cppTmpDir}/CMakeLists.txt"
-    createAndSaveModuleSubstitutionsBraced(cppTargetFile, f"{sourceFiles}/{cppJuceCmake}", m["CPP"],
-                                           ['module', 'Module', 'PluginCode',
-                                            'IsSynth',
-                                            'NeedsMidiInput',
-                                            'NeedsMidiOutput',
-                                            'VersionString',
-                                            'IsMidiEffect',
-                                            'EditorWantsKeyboardFocus'])
-    cppTargetFile = f"{cppTmpDir}/src/unittests/CMakeLists.txt"
-    createAndSaveModuleSubstitutionsBraced(cppTargetFile, f"{sourceFiles}/unittests/CMakeLists.txt", m["CPP"],
-                                           ['module', 'Module', 'PluginCode',
-                                            'IsSynth',
-                                            'NeedsMidiInput',
-                                            'NeedsMidiOutput',
-                                            'VersionString',
-                                            'IsMidiEffect',
-                                            'EditorWantsKeyboardFocus'])
-    with open(f"{dir}/VERSION", "w") as f:
-        f.write(m['VersionString'])
-    shutil.copyfile(f"{sourceFiles}/gitignore", f"{dir}/.gitignore")
-    shutil.copyfile(f"{sourceFiles}/logo.png", f"{dir}/logo.png")
+    cpp_target_file = f"{CPP_TMP_DIR}/CMakeLists.txt"
+    create_and_save_module_substitutions_braced(cpp_target_file, f"{SOURCE_FILES}/{cpp_juce_cmake}", blueprint["CPP"],
+                                                 ['module', 'Module', 'PluginCode',
+                                                  'IsSynth',
+                                                  'NeedsMidiInput',
+                                                  'NeedsMidiOutput',
+                                                  'VersionString',
+                                                  'IsMidiEffect',
+                                                  'EditorWantsKeyboardFocus'])
+    cpp_target_file = f"{CPP_TMP_DIR}/src/unittests/CMakeLists.txt"
+    create_and_save_module_substitutions_braced(cpp_target_file, f"{SOURCE_FILES}/unittests/CMakeLists.txt", blueprint["CPP"],
+                                                 ['module', 'Module', 'PluginCode',
+                                                  'IsSynth',
+                                                  'NeedsMidiInput',
+                                                  'NeedsMidiOutput',
+                                                  'VersionString',
+                                                  'IsMidiEffect',
+                                                  'EditorWantsKeyboardFocus'])
+    with open(f"{module_dir}/VERSION", "w") as f:
+        f.write(blueprint['VersionString'])
+    shutil.copyfile(f"{SOURCE_FILES}/gitignore", f"{module_dir}/.gitignore")
+    shutil.copyfile(f"{SOURCE_FILES}/logo.png", f"{module_dir}/logo.png")
     if stand_alone:
-        shutil.copyfile(f"{templateFiles}/init-project.sh", f"{dir}/init-project.sh")
-    for file_name in cppSourceFilesFixed:
-        shutil.copyfile(f"{sourceFiles}/{file_name}", f"{dir}/src/{file_name}")
-    shutil.copytree(f"{sourceFiles}/inc/themes", f"{dir}/src/inc/themes", dirs_exist_ok=True)
+        shutil.copyfile(f"{TEMPLATE_FILES}/init-project.sh", f"{module_dir}/init-project.sh")
+    for file_name in CPP_SOURCE_FILES_FIXED:
+        shutil.copyfile(f"{SOURCE_FILES}/{file_name}", f"{module_dir}/src/{file_name}")
+    shutil.copytree(f"{SOURCE_FILES}/inc/themes", f"{module_dir}/src/inc/themes", dirs_exist_ok=True)
     if stand_alone:
-        for file_name in cppSourceFiles3rdParty:
-            shutil.copyfile(f"{sourceFiles}/{file_name}", f"{dir}/{file_name}")
-    shutil.copyfile(f"{sourceFiles}/{cppLookAndFeel}", f"{dir}/src/{cppLookAndFeel}")
+        for file_name in CPP_SOURCE_FILES_3RDPARTY:
+            shutil.copyfile(f"{SOURCE_FILES}/{file_name}", f"{module_dir}/{file_name}")
+    shutil.copyfile(f"{SOURCE_FILES}/{CPP_LOOK_AND_FEEL}", f"{module_dir}/src/{CPP_LOOK_AND_FEEL}")
 
-    with open(f"{dir}/src/{cppAllElementsInclude}", "w") as f:
+    with open(f"{module_dir}/src/{CPP_ALL_ELEMENTS_INCLUDE}", "w") as f:
         f.write("#pragma once\n\n")
         f.write("/*\n * AUTO GENERATED,\n * NOT A GOOD IDEA TO CHANGE STUFF HERE\n */\n\n")
-        f.write(f"""#include "{m["Module"]}Constants.h"\n\n""")
-        for file_name in cppSourceFilesFixed:
+        f.write(f"""#include "{blueprint["Module"]}Constants.h"\n\n""")
+        for file_name in CPP_SOURCE_FILES_FIXED:
             f.write(f"""#include "{file_name}"\n""")
-        for extra in m.get("extra_ui_includes", []):
+        for extra in blueprint.get("extra_ui_includes", []):
             f.write(f"""#include "{extra}"\n""")
-        f.write(f"""\n#include "{cppLookAndFeel}"\n""")
+        f.write(f"""\n#include "{CPP_LOOK_AND_FEEL}"\n""")
     protected_files = {
         "gitignore",
         "src/unittests/CMakeLists.txt",
         "src/CMakeLists.txt",
         "CMakeLists.txt",
     }
-    for pf in m.get("protected_files", []):
+    for pf in blueprint.get("protected_files", []):
         protected_files.add(pf)
-    targetDir = cppTargetDir.replace("{module}", m["module"])
-    force = m.get("_force_all", False)
-    syncer = FileSync(cppTmpDir.replace("{module}", m["module"]), targetDir, set() if force else protected_files)
+    target_dir = cpp_target_dir.replace("{module}", blueprint["module"])
+    force = blueprint.get("_force_all", False)
+    syncer = FileSync(CPP_TMP_DIR.replace("{module}", blueprint["module"]), target_dir, set() if force else protected_files)
     syncer.sync()
 
     if not stand_alone:
-        ensureCMakeSubdirectory(m["module"])
+        ensure_cmake_subdirectory(blueprint["module"])
 
 
-def main():
-    global stand_alone, cppJuceCmake, cppTargetDir, mainTargetDir
+def main() -> None:
+    global stand_alone, cpp_juce_cmake, cpp_target_dir, main_target_dir
 
-    moduleList = list_modules()
+    module_list = list_modules()
 
-    parsed = parse_args(sys.argv, moduleList)
+    parsed = parse_args(sys.argv, module_list)
     if parsed is None:
         return
 
     if parsed.mode == "standalone":
         stand_alone = True
-        cppJuceCmake = "CMakeListsStandalone.txt"
+        cpp_juce_cmake = "CMakeListsStandalone.txt"
 
     if parsed.target_dir_overridden:
-        cppTargetDir = parsed.target_dir_arg if "{module}" in parsed.target_dir_arg else f"{parsed.target_dir_arg}/{{module}}"
-        mainTargetDir = parsed.target_dir_arg
+        cpp_target_dir = parsed.target_dir_arg if "{module}" in parsed.target_dir_arg else f"{parsed.target_dir_arg}/{{module}}"
+        main_target_dir = parsed.target_dir_arg
 
-    for m in parsed.modules_requested:
-        if m in moduleList:
-            cfg = loadConfig(m)
+    for module in parsed.modules_requested:
+        if module in module_list:
+            cfg = load_config(module)
             if parsed.force_all:
                 cfg["_force_all"] = True
-            createPackageFromJsonDict(cfg)
+            create_package_from_json_dict(cfg)
         else:
-            print(f'module "{m}" not found (use --list to obtain a list)')
+            print(f'module "{module}" not found (use --list to obtain a list)')
 
 
 if __name__ == "__main__":

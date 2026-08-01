@@ -1,10 +1,12 @@
 import os
 import re
 
+from blueprint import Blueprint
 
-def getTargetName(target: str, m: dict):
-    tmp = target.replace("{module}", m["module"])
-    tmp = tmp.replace("{Module}", m["module"][0].upper() + m["module"][1:])
+
+def get_target_name(target: str, blueprint: Blueprint) -> str:
+    tmp = target.replace("{module}", blueprint["module"])
+    tmp = tmp.replace("{Module}", blueprint["module"][0].upper() + blueprint["module"][1:])
     return tmp
 
 # clang-format leaves existing namespace-closing comments untouched even with
@@ -12,9 +14,9 @@ def getTargetName(target: str, m: dict):
 # cppTmpDir stages files under /tmp, outside the repo, so a plain
 # -style=file lookup can never find ../.clang-format and silently falls
 # back to LLVM style; point at it explicitly instead.
-def runClangFormat(target: str):
-    clangFormatConfig = os.path.abspath("../.clang-format")
-    os.system(f"clang-format -i -style=file:{clangFormatConfig} {target}")
+def run_clang_format(target: str) -> None:
+    clang_format_config = os.path.abspath("../.clang-format")
+    os.system(f"clang-format -i -style=file:{clang_format_config} {target}")
     with open(target, "r") as f:
         content = f.read()
     stripped = re.sub(r'^(\})\s*//\s*namespace\b.*$', r'\1', content, flags=re.MULTILINE)
@@ -23,15 +25,15 @@ def runClangFormat(target: str):
             f.write(stripped)
 
 # substitute all variables starting with // in the cpp/h templates
-def moduleSubstitutions(source: str, m: dict, vars: list):
+def module_substitutions(source: str, blueprint: Blueprint, keys: list[str]) -> str:
     try:
         with open(source, "r") as f:
             content = f.read()
-            for v in vars:
-                varReplace = '/*' + v + '*/'
-                result = content.find(varReplace)
+            for key in keys:
+                var_replace = '/*' + key + '*/'
+                result = content.find(var_replace)
                 if result != -1:
-                    content = content.replace(varReplace, str(m[v]))
+                    content = content.replace(var_replace, str(blueprint[key]))
                 else:
                     pass
         return content
@@ -40,37 +42,37 @@ def moduleSubstitutions(source: str, m: dict, vars: list):
         print(os.getcwd())
         exit(2)
 
-def moduleRemoveRemainingSectionFromString(content: str) -> str:
+def module_remove_remaining_section_from_string(content: str) -> str:
     pattern = re.compile(r'/\*START_[A-Z]+\*/.*?/\*END_[A-Z]+\*/\s?', re.DOTALL)
     return pattern.sub('', content)
 
-def moduleRemoveSectionIndicator(content: str, name:str) -> str:
+def module_remove_section_indicator(content: str, name: str) -> str:
     pattern = re.compile(fr'/\*(START|END)_{name}\*/\s?')
     content = pattern.sub('', content)
     return content
 
-def moduleSubstitutionsBraced(source: str, m: dict, vars: list):
+def module_substitutions_braced(source: str, blueprint: Blueprint, keys: list[str]) -> str:
     try:
         with open(source, "r") as f:
             content = f.read()
-            for v in vars:
-                varReplace = '{' + v + '}'
-                if content.find(varReplace) != -1:
-                    content = content.replace(varReplace, str(m[v]))
+            for key in keys:
+                var_replace = '{' + key + '}'
+                if content.find(var_replace) != -1:
+                    content = content.replace(var_replace, str(blueprint[key]))
         return content
     except Exception as e:
         print(f"AN ERROR occurred in braced substitution: {e}")
         print(os.getcwd())
         exit(2)
 
-def createAndSaveModuleSubstitutions(target: str, source: str, m: dict, vars: list):
-    content = moduleSubstitutions(source, m, vars)
-    if "GAUGES" in m:
-        for v in m["GAUGES"]:
-            content = moduleRemoveSectionIndicator(content, v)
-    content = moduleRemoveRemainingSectionFromString(content)
+def create_and_save_module_substitutions(target: str, source: str, blueprint: Blueprint, keys: list[str]) -> None:
+    content = module_substitutions(source, blueprint, keys)
+    if "GAUGES" in blueprint:
+        for gauge in blueprint["GAUGES"]:
+            content = module_remove_section_indicator(content, gauge)
+    content = module_remove_remaining_section_from_string(content)
     try:
-        with open(getTargetName(target, m), "w") as tf:
+        with open(get_target_name(target, blueprint), "w") as tf:
             tf.write(content)
     except Exception as e:
         print(f"AN ERROR while saving f{target} occurred: {e}")
@@ -78,10 +80,10 @@ def createAndSaveModuleSubstitutions(target: str, source: str, m: dict, vars: li
         exit(2)
 
 
-def createAndSaveModuleSubstitutionsBraced(target: str, source: str, m: dict, vars: list):
-    content = moduleSubstitutionsBraced(source, m, vars)
+def create_and_save_module_substitutions_braced(target: str, source: str, blueprint: Blueprint, keys: list[str]) -> None:
+    content = module_substitutions_braced(source, blueprint, keys)
     try:
-        with open(getTargetName(target, m), "w") as tf:
+        with open(get_target_name(target, blueprint), "w") as tf:
             tf.write(content)
     except Exception as e:
         print(f"AN ERROR while saving f{target} occurred: {e}")
