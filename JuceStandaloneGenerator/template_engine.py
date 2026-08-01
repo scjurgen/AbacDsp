@@ -4,6 +4,11 @@ import re
 from blueprint import Blueprint
 
 
+class GeneratorError(Exception):
+    """Raised when a template file cannot be read or written; the CLI entry
+    point catches this once and exits, instead of each function exiting."""
+
+
 def get_target_name(target: str, blueprint: Blueprint) -> str:
     tmp = target.replace("{module}", blueprint["module"])
     tmp = tmp.replace("{Module}", blueprint["module"][0].upper() + blueprint["module"][1:])
@@ -38,9 +43,7 @@ def module_substitutions(source: str, blueprint: Blueprint, keys: list[str]) -> 
                     pass
         return content
     except Exception as e:
-        print(f"AN ERROR occurred: {type(e).__name__} - {str(e)}")
-        print(os.getcwd())
-        exit(2)
+        raise GeneratorError(f"AN ERROR occurred: {type(e).__name__} - {e}\n{os.getcwd()}") from e
 
 def module_remove_remaining_section_from_string(content: str) -> str:
     pattern = re.compile(r'/\*START_[A-Z]+\*/.*?/\*END_[A-Z]+\*/\s?', re.DOTALL)
@@ -61,9 +64,7 @@ def module_substitutions_braced(source: str, blueprint: Blueprint, keys: list[st
                     content = content.replace(var_replace, str(blueprint[key]))
         return content
     except Exception as e:
-        print(f"AN ERROR occurred in braced substitution: {e}")
-        print(os.getcwd())
-        exit(2)
+        raise GeneratorError(f"AN ERROR occurred in braced substitution: {e}\n{os.getcwd()}") from e
 
 def create_and_save_module_substitutions(target: str, source: str, blueprint: Blueprint, keys: list[str]) -> None:
     content = module_substitutions(source, blueprint, keys)
@@ -75,9 +76,7 @@ def create_and_save_module_substitutions(target: str, source: str, blueprint: Bl
         with open(get_target_name(target, blueprint), "w") as tf:
             tf.write(content)
     except Exception as e:
-        print(f"AN ERROR while saving f{target} occurred: {e}")
-        print(os.getcwd())
-        exit(2)
+        raise GeneratorError(f"AN ERROR while saving f{target} occurred: {e}\n{os.getcwd()}") from e
 
 
 def create_and_save_module_substitutions_braced(target: str, source: str, blueprint: Blueprint, keys: list[str]) -> None:
@@ -86,6 +85,4 @@ def create_and_save_module_substitutions_braced(target: str, source: str, bluepr
         with open(get_target_name(target, blueprint), "w") as tf:
             tf.write(content)
     except Exception as e:
-        print(f"AN ERROR while saving f{target} occurred: {e}")
-        print(os.getcwd())
-        exit(2)
+        raise GeneratorError(f"AN ERROR while saving f{target} occurred: {e}\n{os.getcwd()}") from e

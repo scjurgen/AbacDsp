@@ -37,7 +37,7 @@ from codegen_widgets import (
 )
 from template_engine import (
     get_target_name, run_clang_format, create_and_save_module_substitutions,
-    create_and_save_module_substitutions_braced,
+    create_and_save_module_substitutions_braced, GeneratorError,
 )
 from cli import list_modules, parse_args
 
@@ -412,7 +412,11 @@ def main() -> None:
             cfg = load_config(module)
             if parsed.force_all:
                 cfg["_force_all"] = True
-            create_package_from_json_dict(cfg)
+            try:
+                create_package_from_json_dict(cfg)
+            except GeneratorError as e:
+                print(e)
+                sys.exit(2)
         else:
             print(f'module "{module}" not found (use --list to obtain a list)')
 
