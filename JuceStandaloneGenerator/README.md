@@ -24,6 +24,27 @@ GoogleTest target, separate from the DSP library's `test/` tree:
   `ctest -R JuceStandaloneGeneratorTests`) runs it alongside the DSP library tests, no JUCE
   build required.
 
+## Gold-master regression test
+
+`check_gold_master.py` guards the generator's Python code (blueprint.py, report.py,
+codegen_processor.py, codegen_widgets.py, template_engine.py, cli.py,
+generate-juce-standalone.py) against accidental output changes, independent of
+blueprint content changes:
+
+- `./check_gold_master.py --check` (default) generates every blueprint into an
+  isolated scratch dir and diffs the templated output (the generated `src/*.h`,
+  `src/*.cpp`, `src/unittests/*`, and the two `CMakeLists.txt` files per module)
+  against the committed baseline in `gold_master/`. Files that are plain copies
+  from `templates/sourcefiles` (inc/*.h, themes, logo.png, gitignore) are excluded
+  since the generator can't change them.
+- `./check_gold_master.py --record` recaptures the baseline after an intentional
+  output change (e.g. a template edit). Review the diff before committing.
+- Both accept a list of blueprint names to limit the run, e.g.
+  `./check_gold_master.py --check maxdiffuser looper`.
+- `../CMakeLists.txt` is snapshotted and restored around the run, since
+  `--mode localexample` would otherwise add `add_subdirectory(...)` entries for
+  any blueprint not yet wired into it.
+
 ## Theme review tool
 
 `theme-review/` is a standalone JUCE tool for visually auditing the OKLCH hue-rotation theme
