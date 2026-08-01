@@ -63,6 +63,12 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         setColour(juce::PopupMenu::textColourId, label);
         setColour(juce::PopupMenu::highlightedBackgroundColourId, bgMid);
         setColour(juce::PopupMenu::highlightedTextColourId, label);
+        // The JUCE-builtin Audio/MIDI Options dialog (ChannelSelectorListBox,
+        // MidiInputSelectorComponentListBox) reads these directly; left unset they
+        // fall back to LookAndFeel_V4's own dark scheme regardless of our theme.
+        setColour(juce::ListBox::backgroundColourId, bgDark);
+        setColour(juce::ListBox::textColourId, label);
+        setColour(juce::ListBox::outlineColourId, bgMid);
     }
 
     void drawLabel(juce::Graphics& g, juce::Label& label) override
