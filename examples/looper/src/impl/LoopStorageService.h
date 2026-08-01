@@ -156,6 +156,14 @@ class LoopStorageService
         std::error_code ec;
         const bool removedWav = std::filesystem::remove(loopWavPath(name), ec);
         std::filesystem::remove(loopJsonPath(name), ec);
+        if (removedWav)
+        {
+            std::lock_guard<std::mutex> lock(m_currentLoopMutex);
+            if (name == m_currentLoopName)
+            {
+                m_currentLoopName.clear();
+            }
+        }
         return removedWav;
     }
 
@@ -172,7 +180,21 @@ class LoopStorageService
             return false;
         }
         std::filesystem::rename(loopJsonPath(oldName), loopJsonPath(newName), ec);
+        {
+            std::lock_guard<std::mutex> lock(m_currentLoopMutex);
+            if (oldName == m_currentLoopName)
+            {
+                m_currentLoopName = newName;
+            }
+        }
         return true; // sidecar rename failing isn't fatal; the wav already moved
+    }
+
+    // Message thread only (Editor's Loops menu ticks the currently loaded entry).
+    [[nodiscard]] std::string currentLoopName() const
+    {
+        std::lock_guard<std::mutex> lock(m_currentLoopMutex);
+        return m_currentLoopName;
     }
 
     // Guarded by the caller (recording/overdub/empty-loop checks); writes
@@ -470,6 +492,10 @@ class LoopStorageService
             std::lock_guard<std::mutex> lock(m_lastSavedLoopMutex);
             m_lastSavedLoopName = m_loopSaveName;
         }
+        {
+            std::lock_guard<std::mutex> lock(m_currentLoopMutex);
+            m_currentLoopName = m_loopSaveName;
+        }
         m_loopSaveDoneGen.store(gen, std::memory_order_release);
     }
 
@@ -579,6 +605,10 @@ class LoopStorageService
             m_loopLoadLeft = loaded.left;
             m_loopLoadRight = loaded.right;
             outcome.success = true;
+            {
+                std::lock_guard<std::mutex> lock(m_currentLoopMutex);
+                m_currentLoopName = m_loopLoadName;
+            }
 
             float resolvedBpm = 120.f;
             bool needsResolve = false;
@@ -639,6 +669,8 @@ class LoopStorageService
     std::jthread m_loopSaveThread;
     std::mutex m_lastSavedLoopMutex;
     std::string m_lastSavedLoopName;
+    mutable std::mutex m_currentLoopMutex;
+    std::string m_currentLoopName;
 
     std::string m_loopLoadName;
     bool m_loopLoadPending{false};

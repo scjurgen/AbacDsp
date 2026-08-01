@@ -441,33 +441,52 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
     juce::StringArray getMenuBarNames() override
     {
-        return {"Settings"};
+        juce::StringArray names{"Theme"};
+        names.add("Patches");
+        names.add("Loops");
+        return names;
     }
 
-    juce::PopupMenu getMenuForIndex(int menuIndex, const juce::String&) override
+    juce::PopupMenu getMenuForIndex(int /*menuIndex*/, const juce::String& menuName) override
     {
-        juce::PopupMenu menu;
-        if (menuIndex == 0)
+        if (menuName == "Theme")
         {
-            juce::PopupMenu themeMenu;
-            for (int i = 0; i < Themes::kHueCount; ++i)
-            {
-                themeMenu.addItem(i + 1, Themes::kHueNames[static_cast<size_t>(i)]);
-            }
-            menu.addSubMenu("Theme", themeMenu);
-
-            juce::PopupMenu modeMenu;
-            modeMenu.addItem(kThemeModeLightId, "Light");
-            modeMenu.addItem(kThemeModeDarkId, "Dark");
-            menu.addSubMenu("Mode", modeMenu);
-
-            juce::PopupMenu baseMenu;
-            baseMenu.addItem(kThemeBaseBichromaticId, "Bichromatic");
-            baseMenu.addItem(kThemeBaseTrichromaticId, "Trichromatic");
-            menu.addSubMenu("Base", baseMenu);
-            menu.addSubMenu("Patches", buildPatchesMenu());
-            menu.addSubMenu("Loops", buildLoopsMenu());
+            return buildThemeMenu();
         }
+        if (menuName == "Patches")
+        {
+            return buildPatchesMenu();
+        }
+        if (menuName == "Loops")
+        {
+            return buildLoopsMenu();
+        }
+        return {};
+    }
+
+    juce::PopupMenu buildThemeMenu()
+    {
+        juce::PopupMenu colorMenu;
+        for (int i = 0; i < Themes::kHueCount; ++i)
+        {
+            colorMenu.addItem(i + 1, Themes::kHueNames[static_cast<size_t>(i)], true,
+                              i == Themes::hueIndex(m_currentTheme));
+        }
+
+        juce::PopupMenu baseMenu;
+        baseMenu.addItem(kThemeBaseBichromaticId, "Bichromatic", true,
+                         Themes::family(m_currentTheme) == ui::ThemeFamily::Bichromatic);
+        baseMenu.addItem(kThemeBaseTrichromaticId, "Trichromatic", true,
+                         Themes::family(m_currentTheme) == ui::ThemeFamily::Trichromatic);
+
+        juce::PopupMenu modeMenu;
+        modeMenu.addItem(kThemeModeLightId, "Light", true, !Themes::isDark(m_currentTheme));
+        modeMenu.addItem(kThemeModeDarkId, "Dark", true, Themes::isDark(m_currentTheme));
+
+        juce::PopupMenu menu;
+        menu.addSubMenu("Color", colorMenu);
+        menu.addSubMenu("Base", baseMenu);
+        menu.addSubMenu("Mode", modeMenu);
         return menu;
     }
 
@@ -678,11 +697,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::PopupMenu buildLoopsMenu()
     {
         m_loopMenuNames = processorRef.listLoopNames();
+        const auto currentName = processorRef.getCurrentLoopName();
 
         juce::PopupMenu loadMenu;
         for (size_t i = 0; i < m_loopMenuNames.size(); ++i)
         {
-            loadMenu.addItem(kLoopLoadIdBase + static_cast<int>(i), m_loopMenuNames[i]);
+            loadMenu.addItem(kLoopLoadIdBase + static_cast<int>(i), m_loopMenuNames[i], true,
+                             m_loopMenuNames[i] == currentName);
         }
 
         juce::PopupMenu deleteMenu;

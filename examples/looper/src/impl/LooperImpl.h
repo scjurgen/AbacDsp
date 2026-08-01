@@ -351,6 +351,11 @@ class LooperImpl final : public EffectBase
         return m_loopStorage.listLoopNames();
     }
 
+    [[nodiscard]] std::string currentLoopName() const
+    {
+        return m_loopStorage.currentLoopName();
+    }
+
     bool deleteLoopNamed(const std::string& name)
     {
         return m_loopStorage.deleteLoopNamed(name);

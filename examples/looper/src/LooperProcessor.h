@@ -944,6 +944,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
         return result;
     }
+    [[nodiscard]] juce::String getCurrentLoopName() const
+    {
+        return pluginRunner ? juce::String(pluginRunner->currentLoopName()) : juce::String();
+    }
     void saveLoopAs(const juce::String& name)
     {
         if (pluginRunner)

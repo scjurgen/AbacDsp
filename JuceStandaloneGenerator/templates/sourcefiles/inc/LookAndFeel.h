@@ -361,6 +361,26 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         return mainFontDefinition;
     }
 
+    juce::Font getMenuBarFont(juce::MenuBarComponent&, int, const juce::String&) override
+    {
+        return mainFontDefinition;
+    }
+
+    int getDefaultMenuBarHeight() override
+    {
+        return juce::roundToInt(mainFontDefinition.getHeight() * 1.6f);
+    }
+
+    void getIdealPopupMenuItemSize(const juce::String& text, const bool isSeparator, const int standardMenuItemHeight,
+                                   int& idealWidth, int& idealHeight) override
+    {
+        LookAndFeel_V4::getIdealPopupMenuItemSize(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight);
+        if (!isSeparator)
+        {
+            idealHeight = juce::roundToInt(static_cast<float>(idealHeight) * 1.3f);
+        }
+    }
+
     juce::Font getComboBoxFont(juce::ComboBox&) override
     {
         return mainFontDefinition;
