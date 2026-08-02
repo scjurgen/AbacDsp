@@ -27,7 +27,7 @@
       "cc": {"controller": 27}},
     {"short": "SPRD", "type": "dial", "display": "Size Spread", "symbol": "sizeSpread", "default": 0, "range": [0, 10, 0.01, 0.5, false], "precision": 2, "unit": "m",
       "cc": {"controller": 36}},
-    {"short": "MDPT", "type": "dial", "display": "Mod Depth", "symbol": "modulationDepth", "default": 0, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": "",
+    {"short": "MDPT", "type": "dial", "display": "Mod Depth", "symbol": "modulationDepth", "default": 0, "range": [0, 1, 0.001, 0.35, false], "precision": 3, "unit": "",
       "cc": {"controller": 28}},
     {"short": "MDSP", "type": "dial", "display": "Mod Speed", "symbol": "modulationSpeed", "default": 0.5, "range": [0.01, 5, 0.01, 0.5, false], "precision": 2, "unit": "Hz",
       "cc": {"controller": 29}},

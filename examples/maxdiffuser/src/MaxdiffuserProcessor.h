@@ -322,10 +322,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("m").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " m"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("modulationDepth", 1), "Mod Depth", juce::NormalisableRange<float>(0, 1, 0.01, 1, false),
-            0,
+            juce::ParameterID("modulationDepth", 1), "Mod Depth",
+            juce::NormalisableRange<float>(0, 1, 0.001, 0.35, false), 0,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 2) + " "; })));
+                [](float value, int) { return juce::String(value, 3) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("modulationSpeed", 1), "Mod Speed",
             juce::NormalisableRange<float>(0.01, 5, 0.01, 0.5, false), 0.5,
