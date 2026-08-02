@@ -306,7 +306,7 @@ TEST_F(DiffuserDelayChainTest, tapSpanOneHundredAveragesAllActiveElements)
         tapped.processBlock(in.data(), tappedOut.data(), kBlockSize);
     }
 
-    const auto expected = 0.5f * (sink[1].load() + sink[2].load());
+    const auto expected = (sink[1].load() + sink[2].load()) / std::sqrt(2.f);
     for (const auto v : tappedOut)
     {
         EXPECT_NEAR(v, expected, 5E-3f);

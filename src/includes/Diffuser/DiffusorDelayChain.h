@@ -321,9 +321,12 @@ class DiffuserDelayChain
             }
         }
 
+        // Equal-power (1/sqrt(N)) rather than equal-gain (1/N) normalization: successive tap
+        // stages are increasingly decorrelated by the allpass/modulation chain, so summing them
+        // behaves like summing independent signals, whose combined RMS grows as sqrt(N).
         void finalize(const size_t numSamples, const size_t count) const noexcept
         {
-            const auto scale = 1.f / static_cast<float>(count);
+            const auto scale = 1.f / std::sqrt(static_cast<float>(count));
             for (size_t n = 0; n < numSamples; ++n)
             {
                 accum[n] *= scale;
