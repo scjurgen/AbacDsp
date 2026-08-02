@@ -38,6 +38,10 @@
     "type": "|=5",
     "composition": "C=(1:12) R=(2:1:1:1:1) A1=(LVL*500,CPU*200) A2=(DCYL, DRY, WET, WIDE, FFT*600) A3=(SMSZ, SZFC, BLG, UNDL) A4=(APU, APD, LPF, LPC, HPF, HPC) A5=(ORD, MDPT, MDSP) A6=(RVPT, PTST, PT1, PT2)"
   },
+  "performance-page": {
+    "type": "-",
+    "composition": "A1=(LVL)"
+  },
   "CPP":
   {
     "CLASS_NAME": "MiniReverbImpl<NumSamplesPerBlock>",

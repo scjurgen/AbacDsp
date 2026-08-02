@@ -21,6 +21,10 @@
     "type": "|||",
     "composition": "C=(1:1:5) A1=(LAT,LVL*400) A2=(GAIN, LOW, HIGH) A3=(FFT%1, SIG%1))"
   },
+  "performance-page": {
+    "type": "-",
+    "composition": "A1=(LVL)"
+  },
   "CPP":
   {
     "CLASS_NAME": "GainImpl<NumSamplesPerBlock>",

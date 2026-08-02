@@ -81,8 +81,8 @@ def parse_box_structure(input_str: str):
     return columns, rows, areas
 
 
-def construct_boxes(m: dict):
-    columns, rows, areas = parse_box_structure(m['layout']['composition'])
+def construct_boxes(m: dict, section: str = 'layout'):
+    columns, rows, areas = parse_box_structure(m[section]['composition'])
     result = ""
 
     def findShortEntry(short: str):
@@ -176,10 +176,9 @@ def construct_boxes(m: dict):
         // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
         const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);        
         """
-    match m['layout']['type']:
+    match m[section]['type']:
         case '-':
             result += f"""std::vector<juce::Rectangle<int>> areas(1);
-                    const auto rowHeight = area.getHeight() / {virtual_rows};
                     areas[0] = area.reduced(Constants::Margins::small);\n\n"""
             result += saveAreaRow(areas, 1)
         case '|':

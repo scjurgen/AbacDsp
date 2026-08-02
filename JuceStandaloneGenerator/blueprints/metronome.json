@@ -49,6 +49,10 @@
     "type": "||",
     "composition": "C=(1:5) A1=(PRE, DRP, SWG, ONF, SYNC, BPM, SVOL, MVOL, IVOL) A2=(SIG%1, IRIS%2)"
   },
+  "performance-page": {
+    "type": "-",
+    "composition": "A1=(SIG,IRIS)"
+  },
   "extra_ui_includes": [
     "inc/CircularBeatDisplay.h",
     "inc/CircularSpectrogramDisplay.h"

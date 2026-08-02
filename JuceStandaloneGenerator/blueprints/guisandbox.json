@@ -33,5 +33,9 @@
     "WINDOW_HEIGHT": "800",
     "type": "||||",
     "composition": "C=(1:2:2:8) A1=(LVL*2400, CPU*2400) A2=(ONF, MIX, DIV2, DPT, KNE) A3=(INP, DIV1, DNS,THR) A4=(FFT, SIG))"
+  },
+  "performance-page": {
+    "type": "-",
+    "composition": "A1=(LVL)"
   }
 }

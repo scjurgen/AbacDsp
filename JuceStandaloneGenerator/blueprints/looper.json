@@ -87,6 +87,10 @@
     "type": "|||||",
     "composition": "C=(1:1:1:1:7) A1=(BPM, CVOL, TSIG, CIN, DIV, SYNC) A2=(REC, ASTP, CTRK, TREC, THR, RBAR) A3=(PLAY, CLR, LVOL) A4=(DIV-O, ODUB,  UNDO, MIXD, DIV-S, FRZ, SEQP, CLRS) A5=(BEAT%5, SLICE%1)"
   },
+  "performance-page": {
+    "type": "-",
+    "composition": "A1=(BEAT,SLICE)"
+  },
   "extra_ui_includes": [
     "inc/SliceWaveDisplay.h",
     "inc/CircularLoopDisplay.h"

@@ -72,146 +72,169 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         auto area = getLocalBounds();
         m_menuBar.setBounds(area.removeFromTop(getLookAndFeel().getDefaultMenuBarHeight()));
         m_statusBar.setBounds(area.removeFromBottom(static_cast<int>(Constants::Text::labelHeight)));
+        auto pageSwitchArea = area.removeFromTop(static_cast<int>(Constants::Text::labelHeight));
+        m_pagePerformanceButton.setBounds(pageSwitchArea.removeFromLeft(pageSwitchArea.getWidth() / 2));
+        m_pageSettingsButton.setBounds(pageSwitchArea);
         area = area.reduced(static_cast<int>(Constants::Margins::big));
+        if (m_currentPage == Page::Performance)
+        {
+            // auto generated
+            // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
+            const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
+            std::vector<juce::Rectangle<int>> areas(1);
+            areas[0] = area.reduced(Constants::Margins::small);
 
-        // auto generated
-        // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
-        const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-        std::vector<juce::Rectangle<int>> areas(5);
-        const auto colWidth = area.getWidth() / 11;
-        areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-        areas[1] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-        areas[2] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-        areas[3] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-        areas[4] = area.reduced(Constants::Margins::small);
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(beatGauge).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(sliceGauge).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[0].toFloat());
+            }
+        }
+        else
+        {
+            // auto generated
+            // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
+            const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
+            std::vector<juce::Rectangle<int>> areas(5);
+            const auto colWidth = area.getWidth() / 11;
+            areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+            areas[1] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+            areas[2] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+            areas[3] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+            areas[4] = area.reduced(Constants::Margins::small);
 
-        {
-            juce::FlexBox box;
-            box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::column;
-            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(timeSignatureDrop)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(countInBarsDrop)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(sliceDivisionDrop)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(hostSyncSwitch)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.performLayout(areas[0].toFloat());
-        }
-        {
-            juce::FlexBox box;
-            box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::column;
-            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(recordSwitch)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(autoStopSwitch)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(clickRecordVolumeDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(threshRecSwitch)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(recordBarsDial).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[1].toFloat());
-        }
-        {
-            juce::FlexBox box;
-            box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::column;
-            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(playSwitch)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(clearSwitch)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[2].toFloat());
-        }
-        {
-            juce::FlexBox box;
-            box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::column;
-            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(divoLabel)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(overdubSwitch)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(undoSwitch)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(mixDownSwitch)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(divsLabel)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(freezeSwitch)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(seqPlaySwitch)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(clearSeqSwitch)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.performLayout(areas[3].toFloat());
-        }
-        {
-            juce::FlexBox box;
-            box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::column;
-            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(beatGauge).withFlex(5).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(sliceGauge).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[4].toFloat());
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::column;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(timeSignatureDrop)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(countInBarsDrop)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(sliceDivisionDrop)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(hostSyncSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.performLayout(areas[0].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::column;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(recordSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(autoStopSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(clickRecordVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(threshRecSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(recordBarsDial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[1].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::column;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(playSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(clearSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[2].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::column;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(divoLabel)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(overdubSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(undoSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(mixDownSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(divsLabel)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(freezeSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(seqPlaySwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(clearSeqSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.performLayout(areas[3].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::column;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(beatGauge).withFlex(5).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(sliceGauge).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[4].toFloat());
+            }
         }
     }
 #pragma GCC diagnostic pop
@@ -402,6 +425,82 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         beatGauge.setLabelText(juce::String::fromUTF8("Bar"));
         addAndMakeVisible(sliceGauge);
         sliceGauge.setLabelText(juce::String::fromUTF8("Sequencer"));
+
+        addAndMakeVisible(m_pagePerformanceButton);
+        addAndMakeVisible(m_pageSettingsButton);
+        m_pagePerformanceButton.onClick = [this] { switchPage(Page::Performance); };
+        m_pageSettingsButton.onClick = [this] { switchPage(Page::Settings); };
+        switchPage(Page::Settings);
+    }
+
+    enum class Page
+    {
+        Performance,
+        Settings
+    };
+
+    void switchPage(Page page)
+    {
+        m_currentPage = page;
+        if (page == Page::Performance)
+        {
+            divoLabel.setVisible(false);
+            divsLabel.setVisible(false);
+            recordSwitch.setVisible(false);
+            playSwitch.setVisible(false);
+            overdubSwitch.setVisible(false);
+            undoSwitch.setVisible(false);
+            mixDownSwitch.setVisible(false);
+            clearSwitch.setVisible(false);
+            threshRecSwitch.setVisible(false);
+            hostSyncSwitch.setVisible(false);
+            freeRecordSwitch.setVisible(false);
+            countInBarsDrop.setVisible(false);
+            timeSignatureDrop.setVisible(false);
+            autoStopSwitch.setVisible(false);
+            recordBarsDial.setVisible(false);
+            sliceDivisionDrop.setVisible(false);
+            bpmDial.setVisible(false);
+            clickVolumeDial.setVisible(false);
+            clickRecordVolumeDial.setVisible(false);
+            loopVolumeDial.setVisible(false);
+            recThresholdDial.setVisible(false);
+            freezeSwitch.setVisible(false);
+            seqPlaySwitch.setVisible(false);
+            clearSeqSwitch.setVisible(false);
+            beatGauge.setVisible(true);
+            sliceGauge.setVisible(true);
+        }
+        else
+        {
+            divoLabel.setVisible(true);
+            divsLabel.setVisible(true);
+            recordSwitch.setVisible(true);
+            playSwitch.setVisible(true);
+            overdubSwitch.setVisible(true);
+            undoSwitch.setVisible(true);
+            mixDownSwitch.setVisible(true);
+            clearSwitch.setVisible(true);
+            threshRecSwitch.setVisible(true);
+            hostSyncSwitch.setVisible(true);
+            freeRecordSwitch.setVisible(true);
+            countInBarsDrop.setVisible(true);
+            timeSignatureDrop.setVisible(true);
+            autoStopSwitch.setVisible(true);
+            recordBarsDial.setVisible(true);
+            sliceDivisionDrop.setVisible(true);
+            bpmDial.setVisible(true);
+            clickVolumeDial.setVisible(true);
+            clickRecordVolumeDial.setVisible(true);
+            loopVolumeDial.setVisible(true);
+            recThresholdDial.setVisible(true);
+            freezeSwitch.setVisible(true);
+            seqPlaySwitch.setVisible(true);
+            clearSeqSwitch.setVisible(true);
+            beatGauge.setVisible(true);
+            sliceGauge.setVisible(true);
+        }
+        resized();
     }
 
     void parentHierarchyChanged() override
@@ -895,6 +994,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};
+    Page m_currentPage{Page::Settings};
+    juce::TextButton m_pagePerformanceButton{"Performance"};
+    juce::TextButton m_pageSettingsButton{"Settings"};
     static constexpr int kThemeModeLightId = 9000;
     static constexpr int kThemeModeDarkId = 9001;
     static constexpr int kThemeBaseBichromaticId = 9002;

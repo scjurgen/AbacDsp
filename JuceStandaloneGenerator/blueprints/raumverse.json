@@ -48,6 +48,10 @@
     "type": "|=5",
     "composition": "C=(1:12) R=(2:1:1:1:1) A1=(LVL*500,CPU*200) A2=(DCYL, CRS, DCYH, FFT*600) A3=(SMSZ, LGSZ, UNDL, BLG) A4=(APU, APD, APC, LPF, LPC, HPF, HPC) A5=(ORD, DRY, WET, MDPT, MDSP, MDC) A6=(RVPT, PTST, PT5, PT6, PTSZ, PT1, PT2, PT3, PT4)"
   },
+  "performance-page": {
+    "type": "-",
+    "composition": "A1=(LVL)"
+  },
   "CPP":
   {
     "CLASS_NAME": "FDNExplorePedal<NumSamplesPerBlock>",

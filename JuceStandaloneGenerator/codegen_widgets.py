@@ -1,5 +1,18 @@
 from blueprint import Blueprint
 from codegen_processor import cc_enabled_controls
+from parseboxstructure import parse_box_structure
+
+_WIDGET_SUFFIX = {
+    "dial": "Dial",
+    "switch": "Switch",
+    "drop": "Drop",
+    "gauge": "Gauge",
+    "label": "Label",
+}
+
+
+def widget_varname(item: dict) -> str:
+    return f"{item['symbol']}{_WIDGET_SUFFIX[item['type']]}"
 
 
 def gauge_present(blueprint: Blueprint) -> list[str]:
@@ -174,6 +187,28 @@ def create_init_widgets(blueprint: Blueprint) -> str:
                 varname += "Label"
                 result += f"""{add_fn}({varname}); {varname}.setText(juce::String::fromUTF8("{item['display']}"), juce::dontSendNotification);\n"""
     return result
+
+
+def performance_page_shorts(blueprint: Blueprint) -> set[str]:
+    page = blueprint.get("performance-page")
+    if not page or not page.get("composition"):
+        return set()
+    _, _, areas = parse_box_structure(page["composition"])
+    return {entry["symbol"] for area in areas for entry in area}
+
+
+def create_page_switch_methods(blueprint: Blueprint) -> dict[str, str]:
+    perf_shorts = performance_page_shorts(blueprint)
+    if not perf_shorts:
+        return {"PAGE_SHOW_PERFORMANCE": "", "PAGE_SHOW_SETTINGS": ""}
+    show_performance = ""
+    show_settings = ""
+    for item in blueprint["ports-control"]:
+        varname = widget_varname(item)
+        show_settings += f"{varname}.setVisible(true);\n"
+        visible = "true" if item["short"] in perf_shorts else "false"
+        show_performance += f"{varname}.setVisible({visible});\n"
+    return {"PAGE_SHOW_PERFORMANCE": show_performance, "PAGE_SHOW_SETTINGS": show_settings}
 
 
 def create_extra_private_methods(blueprint: Blueprint) -> str:

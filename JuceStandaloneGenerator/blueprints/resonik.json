@@ -30,6 +30,10 @@
     "type": "|=4",
     "composition": "C=(1:12) R=(2:1:1:1) A1=(CPU*200, LVL*500) A2=(NCH, DRY, WET, FFT*600) A3=(LFRQ, HFRQ, DIST) A4=(DCMN, DCMX, DLMN, DLMX, Q) A5=(GMN, GMX)"
   },
+  "performance-page": {
+    "type": "-",
+    "composition": "A1=(LVL)"
+  },
   "CPP":
   {
     "CLASS_NAME": "ResonikImpl<NumSamplesPerBlock>",

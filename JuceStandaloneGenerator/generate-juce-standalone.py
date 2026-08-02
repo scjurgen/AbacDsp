@@ -34,6 +34,7 @@ from codegen_processor import (
 from codegen_widgets import (
     gauge_present, create_gauge_callbacks, create_theme_callbacks,
     create_widgets_decl, create_init_widgets, create_extra_private_methods,
+    performance_page_shorts, create_page_switch_methods,
 )
 from template_engine import (
     get_target_name, run_clang_format, create_and_save_module_substitutions,
@@ -117,6 +118,9 @@ CPP_JUCE_FILE_VARS = [
     "INIT_WIDGETS",
     "WIDGETS_DECL",
     "RESIZED_AREA",
+    "RESIZED_AREA_PERFORMANCE",
+    "PAGE_SHOW_PERFORMANCE",
+    "PAGE_SHOW_SETTINGS",
     "TIMER_CALLBACKS",
     "APPLY_THEME_CALLBACKS",
     "EXTRA_PRIVATE_METHODS",
@@ -223,6 +227,11 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
     blueprint["CPP"]["INIT_WIDGETS"] = create_init_widgets(blueprint)
     blueprint["CPP"]["WIDGETS_DECL"] = create_widgets_decl(blueprint)
     blueprint["CPP"]["RESIZED_AREA"] = construct_boxes(blueprint)
+    has_performance_page = bool(performance_page_shorts(blueprint))
+    blueprint["CPP"]["RESIZED_AREA_PERFORMANCE"] = (
+        construct_boxes(blueprint, section="performance-page") if has_performance_page else ""
+    )
+    blueprint["CPP"].update(create_page_switch_methods(blueprint))
     blueprint["CPP"]["EXTRA_PRIVATE_METHODS"] = create_extra_private_methods(blueprint)
     blueprint["CPP"]["EXTRA_PROCESSOR_METHODS"] = create_extra_processor_methods(blueprint)
     blueprint["CPP"]["EXTRA_PREPARE_CALLS"] = create_extra_prepare_calls(blueprint)
@@ -306,6 +315,8 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
         blueprint["CPP"]["GAUGES"].append("LOOPBROWSER")
     if blueprint.get("host_transport", False):
         blueprint["CPP"]["GAUGES"].append("HOSTTRANSPORT")
+    if has_performance_page:
+        blueprint["CPP"]["GAUGES"].append("PERFORMANCEPAGE")
 
     for file_field in [CPP_JUCE_FILE, CPP_JUCE_FILE_IMPLEMENT, CPP_SOURCE_FILES_IMPL,
                         CPP_SOURCE_FILES_IMPL_FILE_IO, CPP_PATCH_PARAMETERS, CPP_CC_MAPPING,

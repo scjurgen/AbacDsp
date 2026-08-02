@@ -39,6 +39,10 @@
     "type": "|=5",
     "composition": "R=(1:1:1:1:2) C=(1:12) A1=(FEED, LVL*500,CPU*200) A2=(SPD, WOW, SAT) A3=(HST, NFLR, NSDP) A4=(DEL1,DLVL1,FDBK1, DEL2,DLVL2,FDBK2) A5=(DEL3,DLVL3,FDBK3, DEL4,DLVL4,FDBK4) A6=(FFT,SIG)"
   },
+  "performance-page": {
+    "type": "-",
+    "composition": "A1=(LVL)"
+  },
   "CPP":
   {
     "CLASS_NAME": "TapeDelay<NumSamplesPerBlock>",

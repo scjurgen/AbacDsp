@@ -33,6 +33,10 @@
     "type": "||||",
     "composition": "C=(1:1:1:5) A1=(GAIN,DRY,WET,LVL*100,CPU*100) A2=(TIME,SYNC,SDIV,FDBK,LOP,HIP,ALP)  A3=(MOD,MDSP) A4=(FFT%1, SIG%1))"
   },
+  "performance-page": {
+    "type": "-",
+    "composition": "A1=(LVL)"
+  },
   "host_transport": true,
   "CPP":
   {

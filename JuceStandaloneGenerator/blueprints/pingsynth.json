@@ -41,6 +41,10 @@
     "type": "|||||",
     "composition": "C=(1:2:2:2:6) A1=(MODE,VOL,REV,LVL*200,CPU*200) A2=(TYPE,XPOS,YPOS,ATK,DCY,DCYSK,SPRD) A3=(SKW,SPRDRD,PWRRD,RNDEX,SPRKT,SPRRD) A4=(SFTEX,MINH,MAXH,MINPB,MAXPB,RANGPB) A5=(FFT%1))"
   },
+  "performance-page": {
+    "type": "-",
+    "composition": "A1=(LVL)"
+  },
   "CPP":
   {
     "CLASS_NAME": "PingSynthExplorerPedal<NumSamplesPerBlock>",

@@ -32,6 +32,10 @@
     "type": "|||||",
      "composition": "C=(1:2:2:2:6) A1=(VOL,LVL*200,CPU*200) A2=(USR1,USR2,USR3,USR4) A3=(USR5,USR6,USR7,USR8) A4=(USR9,USR10,USR11,USR12) A5=(FFT%1))"
   },
+  "performance-page": {
+    "type": "-",
+    "composition": "A1=(LVL)"
+  },
   "CPP":
   {
     "CLASS_NAME": "MiniSynthPedal<NumSamplesPerBlock>",

@@ -9,7 +9,6 @@
 #include "UiElements.h"
 
 
-//==============================================================================
 class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                         juce::Timer,
                                         juce::MenuBarModel,
@@ -73,107 +72,129 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         auto area = getLocalBounds();
         m_menuBar.setBounds(area.removeFromTop(getLookAndFeel().getDefaultMenuBarHeight()));
         m_statusBar.setBounds(area.removeFromBottom(static_cast<int>(Constants::Text::labelHeight)));
+        auto pageSwitchArea = area.removeFromTop(static_cast<int>(Constants::Text::labelHeight));
+        m_pagePerformanceButton.setBounds(pageSwitchArea.removeFromLeft(pageSwitchArea.getWidth() / 2));
+        m_pageSettingsButton.setBounds(pageSwitchArea);
         area = area.reduced(static_cast<int>(Constants::Margins::big));
+        if (m_currentPage == Page::Performance)
+        {
+            // auto generated
+            // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
+            const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
+            std::vector<juce::Rectangle<int>> areas(1);
+            areas[0] = area.reduced(Constants::Margins::small);
 
-        // auto generated
-        // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
-        const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(levelGauge).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[0].toFloat());
+            }
+        }
+        else
+        {
+            // auto generated
+            // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
+            const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
 
-        std::vector<juce::Rectangle<int>> areas(5);
-        const auto colWidth = area.getWidth() / 10;
-        const auto rowHeight = area.getHeight() / 6;
-        areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-        areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-        areas[2] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-        areas[3] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-        areas[4] = area.reduced(Constants::Margins::small);
+            std::vector<juce::Rectangle<int>> areas(5);
+            const auto colWidth = area.getWidth() / 10;
+            const auto rowHeight = area.getHeight() / 6;
+            areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+            areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[2] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[3] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[4] = area.reduced(Constants::Margins::small);
 
-        {
-            juce::FlexBox box;
-            box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::column;
-            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(syncSwitch)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(typeDrop)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(soloDrop)
-                              .withFlex(0)
-                              .withHeight(Constants::Text::labelHeight)
-                              .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                              .withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(volDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(reverbLevelWetDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(reverbDecayDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(reverbShimmerDial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(levelGauge).withHeight(100).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(cpuGauge).withHeight(100).withMargin(knobMarginSmall));
-            box.performLayout(areas[0].toFloat());
-        }
-        {
-            juce::FlexBox box;
-            box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::row;
-            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(vol1Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(vol2Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(vol3Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(vol4Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(vol5Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(vol6Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(vol7Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(vol8Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(vol9Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(vol10Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[1].toFloat());
-        }
-        {
-            juce::FlexBox box;
-            box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::row;
-            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(pitch1Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(pitch2Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(pitch3Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(pitch4Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(pitch5Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(pitch6Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(pitch7Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(pitch8Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(pitch9Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(pitch10Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[2].toFloat());
-        }
-        {
-            juce::FlexBox box;
-            box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::row;
-            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(revFeed1Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(revFeed2Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(revFeed3Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(revFeed4Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(revFeed5Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(revFeed6Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(revFeed7Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(revFeed8Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(revFeed9Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.items.add(juce::FlexItem(revFeed10Dial).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[3].toFloat());
-        }
-        {
-            juce::FlexBox box;
-            box.flexWrap = juce::FlexBox::Wrap::noWrap;
-            box.flexDirection = juce::FlexBox::Direction::row;
-            box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-            box.items.add(juce::FlexItem(spectrogramGauge).withFlex(1).withMargin(knobMarginSmall));
-            box.performLayout(areas[4].toFloat());
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::column;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(syncSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(typeDrop)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(soloDrop)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(volDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbLevelWetDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbDecayDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbShimmerDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(levelGauge).withHeight(100).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(cpuGauge).withHeight(100).withMargin(knobMarginSmall));
+                box.performLayout(areas[0].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(vol1Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(vol2Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(vol3Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(vol4Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(vol5Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(vol6Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(vol7Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(vol8Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(vol9Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(vol10Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[1].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(pitch1Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(pitch2Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(pitch3Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(pitch4Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(pitch5Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(pitch6Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(pitch7Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(pitch8Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(pitch9Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(pitch10Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[2].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(revFeed1Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(revFeed2Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(revFeed3Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(revFeed4Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(revFeed5Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(revFeed6Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(revFeed7Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(revFeed8Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(revFeed9Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(revFeed10Dial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[3].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(spectrogramGauge).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[4].toFloat());
+            }
         }
     }
 #pragma GCC diagnostic pop
@@ -310,6 +331,110 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(pitch10Dial);
         pitch10Dial.reset(valueTreeState, "pitch10");
         pitch10Dial.setLabelText(juce::String::fromUTF8("Pch 10"));
+
+        addAndMakeVisible(m_pagePerformanceButton);
+        addAndMakeVisible(m_pageSettingsButton);
+        m_pagePerformanceButton.onClick = [this] { switchPage(Page::Performance); };
+        m_pageSettingsButton.onClick = [this] { switchPage(Page::Settings); };
+        switchPage(Page::Settings);
+    }
+
+    enum class Page
+    {
+        Performance,
+        Settings
+    };
+
+    void switchPage(Page page)
+    {
+        m_currentPage = page;
+        if (page == Page::Performance)
+        {
+            syncSwitch.setVisible(false);
+            typeDrop.setVisible(false);
+            soloDrop.setVisible(false);
+            volDial.setVisible(false);
+            reverbLevelWetDial.setVisible(false);
+            reverbDecayDial.setVisible(false);
+            reverbShimmerDial.setVisible(false);
+            cpuGauge.setVisible(false);
+            levelGauge.setVisible(true);
+            spectrogramGauge.setVisible(false);
+            vol1Dial.setVisible(false);
+            vol2Dial.setVisible(false);
+            vol3Dial.setVisible(false);
+            vol4Dial.setVisible(false);
+            vol5Dial.setVisible(false);
+            vol6Dial.setVisible(false);
+            vol7Dial.setVisible(false);
+            vol8Dial.setVisible(false);
+            vol9Dial.setVisible(false);
+            vol10Dial.setVisible(false);
+            revFeed1Dial.setVisible(false);
+            revFeed2Dial.setVisible(false);
+            revFeed3Dial.setVisible(false);
+            revFeed4Dial.setVisible(false);
+            revFeed5Dial.setVisible(false);
+            revFeed6Dial.setVisible(false);
+            revFeed7Dial.setVisible(false);
+            revFeed8Dial.setVisible(false);
+            revFeed9Dial.setVisible(false);
+            revFeed10Dial.setVisible(false);
+            pitch1Dial.setVisible(false);
+            pitch2Dial.setVisible(false);
+            pitch3Dial.setVisible(false);
+            pitch4Dial.setVisible(false);
+            pitch5Dial.setVisible(false);
+            pitch6Dial.setVisible(false);
+            pitch7Dial.setVisible(false);
+            pitch8Dial.setVisible(false);
+            pitch9Dial.setVisible(false);
+            pitch10Dial.setVisible(false);
+        }
+        else
+        {
+            syncSwitch.setVisible(true);
+            typeDrop.setVisible(true);
+            soloDrop.setVisible(true);
+            volDial.setVisible(true);
+            reverbLevelWetDial.setVisible(true);
+            reverbDecayDial.setVisible(true);
+            reverbShimmerDial.setVisible(true);
+            cpuGauge.setVisible(true);
+            levelGauge.setVisible(true);
+            spectrogramGauge.setVisible(true);
+            vol1Dial.setVisible(true);
+            vol2Dial.setVisible(true);
+            vol3Dial.setVisible(true);
+            vol4Dial.setVisible(true);
+            vol5Dial.setVisible(true);
+            vol6Dial.setVisible(true);
+            vol7Dial.setVisible(true);
+            vol8Dial.setVisible(true);
+            vol9Dial.setVisible(true);
+            vol10Dial.setVisible(true);
+            revFeed1Dial.setVisible(true);
+            revFeed2Dial.setVisible(true);
+            revFeed3Dial.setVisible(true);
+            revFeed4Dial.setVisible(true);
+            revFeed5Dial.setVisible(true);
+            revFeed6Dial.setVisible(true);
+            revFeed7Dial.setVisible(true);
+            revFeed8Dial.setVisible(true);
+            revFeed9Dial.setVisible(true);
+            revFeed10Dial.setVisible(true);
+            pitch1Dial.setVisible(true);
+            pitch2Dial.setVisible(true);
+            pitch3Dial.setVisible(true);
+            pitch4Dial.setVisible(true);
+            pitch5Dial.setVisible(true);
+            pitch6Dial.setVisible(true);
+            pitch7Dial.setVisible(true);
+            pitch8Dial.setVisible(true);
+            pitch9Dial.setVisible(true);
+            pitch10Dial.setVisible(true);
+        }
+        resized();
     }
 
     void parentHierarchyChanged() override
@@ -349,30 +474,67 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
     juce::StringArray getMenuBarNames() override
     {
-        return {"Settings"};
+        juce::StringArray names{"Theme"};
+        names.add("Patches");
+        return names;
     }
 
-    juce::PopupMenu getMenuForIndex(int menuIndex, const juce::String&) override
+    juce::PopupMenu getMenuForIndex(int /*menuIndex*/, const juce::String& menuName) override
     {
-        juce::PopupMenu menu;
-        if (menuIndex == 0)
+        if (menuName == "Theme")
         {
-            juce::PopupMenu themeMenu;
-            for (size_t i = 0; i < Themes::kThemes.size(); ++i)
-            {
-                themeMenu.addItem(static_cast<int>(i) + 1, Themes::kThemes[i].name);
-            }
-            menu.addSubMenu("Theme", themeMenu);
-            menu.addSubMenu("Patches", buildPatchesMenu());
+            return buildThemeMenu();
         }
+        if (menuName == "Patches")
+        {
+            return buildPatchesMenu();
+        }
+        return {};
+    }
+
+    juce::PopupMenu buildThemeMenu()
+    {
+        juce::PopupMenu colorMenu;
+        for (int i = 0; i < Themes::kHueCount; ++i)
+        {
+            colorMenu.addItem(i + 1, Themes::kHueNames[static_cast<size_t>(i)], true,
+                              i == Themes::hueIndex(m_currentTheme));
+        }
+
+        juce::PopupMenu baseMenu;
+        baseMenu.addItem(kThemeBaseBichromaticId, "Bichromatic", true,
+                         Themes::family(m_currentTheme) == ui::ThemeFamily::Bichromatic);
+        baseMenu.addItem(kThemeBaseTrichromaticId, "Trichromatic", true,
+                         Themes::family(m_currentTheme) == ui::ThemeFamily::Trichromatic);
+
+        juce::PopupMenu modeMenu;
+        modeMenu.addItem(kThemeModeLightId, "Light", true, !Themes::isDark(m_currentTheme));
+        modeMenu.addItem(kThemeModeDarkId, "Dark", true, Themes::isDark(m_currentTheme));
+
+        juce::PopupMenu menu;
+        menu.addSubMenu("Color", colorMenu);
+        menu.addSubMenu("Base", baseMenu);
+        menu.addSubMenu("Mode", modeMenu);
         return menu;
     }
 
     void menuItemSelected(int menuItemID, int /*topLevelMenuIndex*/) override
     {
-        if (menuItemID >= 1 && menuItemID <= static_cast<int>(Themes::kThemes.size()))
+        if (menuItemID >= 1 && menuItemID <= Themes::kHueCount)
         {
-            applyTheme(static_cast<GuiConstants::Theme>(menuItemID - 1));
+            applyTheme(Themes::withHue(m_currentTheme, menuItemID - 1));
+            return;
+        }
+        if (menuItemID == kThemeModeLightId || menuItemID == kThemeModeDarkId)
+        {
+            applyTheme(Themes::withMode(m_currentTheme, menuItemID == kThemeModeDarkId));
+            return;
+        }
+        if (menuItemID == kThemeBaseBichromaticId || menuItemID == kThemeBaseTrichromaticId)
+        {
+            const auto family =
+                menuItemID == kThemeBaseTrichromaticId ? ui::ThemeFamily::Trichromatic : ui::ThemeFamily::Bichromatic;
+            applyTheme(Themes::withFamily(m_currentTheme, family));
             return;
         }
         handlePatchMenuSelection(menuItemID);
@@ -380,6 +542,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
     void applyTheme(GuiConstants::Theme preset)
     {
+        m_currentTheme = preset;
         AppSettings::saveTheme(preset);
         GuiConstants::setPreset(preset);
         setLookAndFeel(nullptr);
@@ -392,6 +555,20 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         spectrogramGauge.setGradientPreset(preset);
 
         repaint();
+    }
+
+    // AlertWindow::addTextEditor() copies ComboBox::outlineColourId onto the editor
+    // (transparent in this LookAndFeel), leaving it invisible until it gains focus;
+    // restore a visible outline and hand it keyboard focus so typing works immediately.
+    void focusNameEditor(juce::AlertWindow& dialog)
+    {
+        if (auto* editor = dialog.getTextEditor("name"))
+        {
+            editor->setColour(juce::TextEditor::outlineColourId,
+                              juce::Colour(GuiConstants::instance().colors.statusOutline));
+            editor->selectAll();
+            editor->grabKeyboardFocus();
+        }
     }
 
     juce::PopupMenu buildPatchesMenu()
@@ -502,6 +679,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                    }
                                                }),
                                            false);
+        focusNameEditor(*m_patchNameDialog);
     }
 
     void promptRename(const juce::String& oldName)
@@ -532,6 +710,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                    }
                                                }),
                                            false);
+        focusNameEditor(*m_patchNameDialog);
     }
 
     void confirmAndDeletePatch(const juce::String& name)
@@ -569,6 +748,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     StatusBar m_statusBar;
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
+    GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};
+    Page m_currentPage{Page::Settings};
+    juce::TextButton m_pagePerformanceButton{"Performance"};
+    juce::TextButton m_pageSettingsButton{"Settings"};
+    static constexpr int kThemeModeLightId = 9000;
+    static constexpr int kThemeModeDarkId = 9001;
+    static constexpr int kThemeBaseBichromaticId = 9002;
+    static constexpr int kThemeBaseTrichromaticId = 9003;
     static constexpr int kPatchSaveId = 1000;
     static constexpr int kPatchSaveAsId = 1001;
     static constexpr int kPatchLoadIdBase = 2000;
@@ -576,6 +763,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     static constexpr int kPatchRenameIdBase = 4000;
     std::unique_ptr<juce::AlertWindow> m_patchNameDialog;
     std::vector<juce::String> m_patchMenuNames;
+
 
     juce::ToggleButton syncSwitch{juce::String::fromUTF8("Sync")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncSwitchAttachment;

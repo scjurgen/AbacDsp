@@ -72,8 +72,22 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         auto area = getLocalBounds();
         m_menuBar.setBounds(area.removeFromTop(getLookAndFeel().getDefaultMenuBarHeight()));
         m_statusBar.setBounds(area.removeFromBottom(static_cast<int>(Constants::Text::labelHeight)));
+        /*START_PERFORMANCEPAGE*/
+        auto pageSwitchArea = area.removeFromTop(static_cast<int>(Constants::Text::labelHeight));
+        m_pagePerformanceButton.setBounds(pageSwitchArea.removeFromLeft(pageSwitchArea.getWidth() / 2));
+        m_pageSettingsButton.setBounds(pageSwitchArea);
+        /*END_PERFORMANCEPAGE*/
         area = area.reduced(static_cast<int>(Constants::Margins::big));
-        /*RESIZED_AREA*/
+        /*START_PERFORMANCEPAGE*/
+        if (m_currentPage == Page::Performance)
+        {
+            /*RESIZED_AREA_PERFORMANCE*/
+        }
+        else
+        /*END_PERFORMANCEPAGE*/
+        {
+            /*RESIZED_AREA*/
+        }
     }
 #pragma GCC diagnostic pop
 
@@ -88,7 +102,36 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     void initWidgets()
     {
         /*INIT_WIDGETS*/
+        /*START_PERFORMANCEPAGE*/
+        addAndMakeVisible(m_pagePerformanceButton);
+        addAndMakeVisible(m_pageSettingsButton);
+        m_pagePerformanceButton.onClick = [this] { switchPage(Page::Performance); };
+        m_pageSettingsButton.onClick = [this] { switchPage(Page::Settings); };
+        switchPage(Page::Settings);
+        /*END_PERFORMANCEPAGE*/
     }
+
+    /*START_PERFORMANCEPAGE*/
+    enum class Page
+    {
+        Performance,
+        Settings
+    };
+
+    void switchPage(Page page)
+    {
+        m_currentPage = page;
+        if (page == Page::Performance)
+        {
+            /*PAGE_SHOW_PERFORMANCE*/
+        }
+        else
+        {
+            /*PAGE_SHOW_SETTINGS*/
+        }
+        resized();
+    }
+    /*END_PERFORMANCEPAGE*/
 
     void parentHierarchyChanged() override
     {
@@ -595,6 +638,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};
+    /*START_PERFORMANCEPAGE*/
+    Page m_currentPage{Page::Settings};
+    juce::TextButton m_pagePerformanceButton{"Performance"};
+    juce::TextButton m_pageSettingsButton{"Settings"};
+    /*END_PERFORMANCEPAGE*/
     static constexpr int kThemeModeLightId = 9000;
     static constexpr int kThemeModeDarkId = 9001;
     static constexpr int kThemeBaseBichromaticId = 9002;

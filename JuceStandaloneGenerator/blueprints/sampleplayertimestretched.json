@@ -23,6 +23,10 @@
     "type": "||",
      "composition": "C=(1:9) A1=(VOL, TYPE, POS, ADV, LVL*100, CPU*100) A2=(FFT%1))"
   },
+  "performance-page": {
+    "type": "-",
+    "composition": "A1=(LVL)"
+  },
   "CPP":
   {
     "CLASS_NAME": "SamplePlayerTimeStretched<NumSamplesPerBlock>",
