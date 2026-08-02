@@ -33,6 +33,10 @@ class GenericImpl final : public EffectBase
     {
         m_elements = value;
     }
+    void setTapSpan(const float value)
+    {
+        m_tapSpan = value;
+    }
     void setFeedback(const float value)
     {
         m_feedback = value;
@@ -116,6 +120,7 @@ class GenericImpl final : public EffectBase
     float m_wet{};
     float m_preDelay{};
     float m_elements{};
+    float m_tapSpan{};
     float m_feedback{};
     float m_bulge{};
     float m_bottomSize{};

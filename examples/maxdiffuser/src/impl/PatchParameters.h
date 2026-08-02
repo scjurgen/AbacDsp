@@ -16,6 +16,7 @@ struct PatchParameters
         wet            , // dial
         preDelay       , // dial
         elements       , // dial
+        tapSpan        , // dial
         feedback       , // dial
         bulge          , // dial
         bottomSize     , // dial
@@ -38,6 +39,7 @@ float dry{0.0f};
 float wet{-6.0f};
 float preDelay{0.0f};
 float elements{6.0f};
+float tapSpan{0.0f};
 float feedback{50.0f};
 float bulge{0.46f};
 float bottomSize{0.7f};
@@ -62,6 +64,7 @@ float fdnDecay{2000.0f};
 "wet",
 "preDelay",
 "elements",
+"tapSpan",
 "feedback",
 "bulge",
 "bottomSize",
@@ -101,6 +104,7 @@ float fdnDecay{2000.0f};
         else if constexpr (ParamId == Id::wet) return wet;
         else if constexpr (ParamId == Id::preDelay) return preDelay;
         else if constexpr (ParamId == Id::elements) return elements;
+        else if constexpr (ParamId == Id::tapSpan) return tapSpan;
         else if constexpr (ParamId == Id::feedback) return feedback;
         else if constexpr (ParamId == Id::bulge) return bulge;
         else if constexpr (ParamId == Id::bottomSize) return bottomSize;
@@ -137,6 +141,8 @@ break;
  case Id::preDelay: if (!isEqual(get<Id::preDelay>(), value)) {get<Id::preDelay>() = value;m_modified = true;}
 break;
  case Id::elements: if (!isEqual(get<Id::elements>(), value)) {get<Id::elements>() = value;m_modified = true;}
+break;
+ case Id::tapSpan: if (!isEqual(get<Id::tapSpan>(), value)) {get<Id::tapSpan>() = value;m_modified = true;}
 break;
  case Id::feedback: if (!isEqual(get<Id::feedback>(), value)) {get<Id::feedback>() = value;m_modified = true;}
 break;
@@ -214,6 +220,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         wet            , // dial
         preDelay       , // dial
         elements       , // dial
+        tapSpan        , // dial
         feedback       , // dial
         bulge          , // dial
         bottomSize     , // dial

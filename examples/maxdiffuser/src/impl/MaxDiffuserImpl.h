@@ -117,6 +117,14 @@ class MaxDiffuserImpl final : public EffectBase
         }
     }
 
+    void setTapSpan(const float valueInPercentage)
+    {
+        for (auto& chain : m_diffuser)
+        {
+            chain.setTapSpan(valueInPercentage);
+        }
+    }
+
     void setFeedback(const float valueInPercentage)
     {
         const auto feedback = valueInPercentage * 0.00999f;

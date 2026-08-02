@@ -38,6 +38,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("wet", this);
         m_parameters.addParameterListener("preDelay", this);
         m_parameters.addParameterListener("elements", this);
+        m_parameters.addParameterListener("tapSpan", this);
         m_parameters.addParameterListener("feedback", this);
         m_parameters.addParameterListener("bulge", this);
         m_parameters.addParameterListener("bottomSize", this);
@@ -56,7 +57,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("fdnSize", this);
         m_parameters.addParameterListener("fdnDecay", this);
 
-        for (size_t i = 0; i < 20; ++i)
+        for (size_t i = 0; i < 21; ++i)
         {
             m_ccActive[i].controller.store(kDefaultCcMappings[i].controller, std::memory_order_relaxed);
             m_ccActive[i].valueLow.store(kDefaultCcMappings[i].valueLow, std::memory_order_relaxed);
@@ -70,6 +71,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("wet", this);
         m_parameters.removeParameterListener("preDelay", this);
         m_parameters.removeParameterListener("elements", this);
+        m_parameters.removeParameterListener("tapSpan", this);
         m_parameters.removeParameterListener("feedback", this);
         m_parameters.removeParameterListener("bulge", this);
         m_parameters.removeParameterListener("bottomSize", this);
@@ -108,7 +110,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
         for (const auto& entry : CcSettings::load())
         {
-            for (size_t i = 0; i < 20; ++i)
+            for (size_t i = 0; i < 21; ++i)
             {
                 if (kCcTargetParamIds[i] != entry.paramId)
                 {
@@ -293,6 +295,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 0) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("tapSpan", 1), "Tap Span", juce::NormalisableRange<float>(0, 100, 1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " %"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("feedback", 1), "Diffusion", juce::NormalisableRange<float>(-100, 100, 0.1, 1, false), 50,
             juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " %"; })));
@@ -404,6 +410,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setElements(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::elements, v);
+             }},
+            {"tapSpan",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setTapSpan(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::tapSpan, v);
              }},
             {"feedback",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -558,6 +570,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("elements");
             float normalized = range.convertTo0to1(params.elements);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("tapSpan"))
+        {
+            const auto& range = m_parameters.getParameterRange("tapSpan");
+            float normalized = range.convertTo0to1(params.tapSpan);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("feedback"))
@@ -838,7 +856,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         std::atomic<float> valueLow{0.f};
         std::atomic<float> valueHigh{0.f};
     };
-    std::array<CcSlot, 20> m_ccActive{};
+    std::array<CcSlot, 21> m_ccActive{};
     std::atomic<int> m_learnTargetIndex{-1};
     std::atomic<int> m_lastLearnedIndex{-1};
 
@@ -851,8 +869,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     void saveCcSettings() const
     {
         std::vector<CcMappingOverride> overrides;
-        overrides.reserve(20);
-        for (size_t i = 0; i < 20; ++i)
+        overrides.reserve(21);
+        for (size_t i = 0; i < 21; ++i)
         {
             overrides.push_back({std::string(kCcTargetParamIds[i]),
                                  m_ccActive[i].controller.load(std::memory_order_relaxed),
@@ -872,7 +890,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_lastLearnedIndex.store(learnIndex, std::memory_order_relaxed);
             return;
         }
-        for (size_t i = 0; i < 20; ++i)
+        for (size_t i = 0; i < 21; ++i)
         {
             if (m_ccActive[i].controller.load(std::memory_order_relaxed) != controller)
             {

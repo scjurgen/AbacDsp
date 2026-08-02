@@ -119,6 +119,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             box.flexDirection = juce::FlexBox::Direction::row;
             box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
             box.items.add(juce::FlexItem(elementsDial).withFlex(1).withMargin(knobMarginSmall));
+            box.items.add(juce::FlexItem(tapSpanDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(feedbackDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(bulgeDial).withFlex(1).withMargin(knobMarginSmall));
             box.items.add(juce::FlexItem(bottomSizeDial).withFlex(1).withMargin(knobMarginSmall));
@@ -206,6 +207,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                     [this](float lo, float hi) { processorRef.setCcRange(CcTarget::elements, lo, hi); },
                                     [this] { processorRef.clearCcAssignment(CcTarget::elements); },
                                     [this] { return processorRef.getCcController(CcTarget::elements); }});
+        addAndMakeVisible(tapSpanDial);
+        tapSpanDial.reset(valueTreeState, "tapSpan");
+        tapSpanDial.setLabelText(juce::String::fromUTF8("Tap Span"));
+        tapSpanDial.setCcMappable(true,
+                                  {[this] { processorRef.beginCcLearn(CcTarget::tapSpan); },
+                                   [this] { return processorRef.getCcRange(CcTarget::tapSpan); },
+                                   [this](float lo, float hi) { processorRef.setCcRange(CcTarget::tapSpan, lo, hi); },
+                                   [this] { processorRef.clearCcAssignment(CcTarget::tapSpan); },
+                                   [this] { return processorRef.getCcController(CcTarget::tapSpan); }});
         addAndMakeVisible(feedbackDial);
         feedbackDial.reset(valueTreeState, "feedback");
         feedbackDial.setLabelText(juce::String::fromUTF8("Diffusion"));
@@ -394,32 +404,47 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
     juce::StringArray getMenuBarNames() override
     {
-        return {"Settings"};
+        juce::StringArray names{"Theme"};
+        names.add("Patches");
+        return names;
     }
 
-    juce::PopupMenu getMenuForIndex(int menuIndex, const juce::String&) override
+    juce::PopupMenu getMenuForIndex(int /*menuIndex*/, const juce::String& menuName) override
     {
-        juce::PopupMenu menu;
-        if (menuIndex == 0)
+        if (menuName == "Theme")
         {
-            juce::PopupMenu themeMenu;
-            for (int i = 0; i < Themes::kHueCount; ++i)
-            {
-                themeMenu.addItem(i + 1, Themes::kHueNames[static_cast<size_t>(i)]);
-            }
-            menu.addSubMenu("Theme", themeMenu);
-
-            juce::PopupMenu modeMenu;
-            modeMenu.addItem(kThemeModeLightId, "Light");
-            modeMenu.addItem(kThemeModeDarkId, "Dark");
-            menu.addSubMenu("Mode", modeMenu);
-
-            juce::PopupMenu baseMenu;
-            baseMenu.addItem(kThemeBaseBichromaticId, "Bichromatic");
-            baseMenu.addItem(kThemeBaseTrichromaticId, "Trichromatic");
-            menu.addSubMenu("Base", baseMenu);
-            menu.addSubMenu("Patches", buildPatchesMenu());
+            return buildThemeMenu();
         }
+        if (menuName == "Patches")
+        {
+            return buildPatchesMenu();
+        }
+        return {};
+    }
+
+    juce::PopupMenu buildThemeMenu()
+    {
+        juce::PopupMenu colorMenu;
+        for (int i = 0; i < Themes::kHueCount; ++i)
+        {
+            colorMenu.addItem(i + 1, Themes::kHueNames[static_cast<size_t>(i)], true,
+                              i == Themes::hueIndex(m_currentTheme));
+        }
+
+        juce::PopupMenu baseMenu;
+        baseMenu.addItem(kThemeBaseBichromaticId, "Bichromatic", true,
+                         Themes::family(m_currentTheme) == ui::ThemeFamily::Bichromatic);
+        baseMenu.addItem(kThemeBaseTrichromaticId, "Trichromatic", true,
+                         Themes::family(m_currentTheme) == ui::ThemeFamily::Trichromatic);
+
+        juce::PopupMenu modeMenu;
+        modeMenu.addItem(kThemeModeLightId, "Light", true, !Themes::isDark(m_currentTheme));
+        modeMenu.addItem(kThemeModeDarkId, "Dark", true, Themes::isDark(m_currentTheme));
+
+        juce::PopupMenu menu;
+        menu.addSubMenu("Color", colorMenu);
+        menu.addSubMenu("Base", baseMenu);
+        menu.addSubMenu("Mode", modeMenu);
         return menu;
     }
 
@@ -459,6 +484,20 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         sizesGauge.updateColors();
 
         repaint();
+    }
+
+    // AlertWindow::addTextEditor() copies ComboBox::outlineColourId onto the editor
+    // (transparent in this LookAndFeel), leaving it invisible until it gains focus;
+    // restore a visible outline and hand it keyboard focus so typing works immediately.
+    void focusNameEditor(juce::AlertWindow& dialog)
+    {
+        if (auto* editor = dialog.getTextEditor("name"))
+        {
+            editor->setColour(juce::TextEditor::outlineColourId,
+                              juce::Colour(GuiConstants::instance().colors.statusOutline));
+            editor->selectAll();
+            editor->grabKeyboardFocus();
+        }
     }
 
     juce::PopupMenu buildPatchesMenu()
@@ -569,6 +608,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                    }
                                                }),
                                            false);
+        focusNameEditor(*m_patchNameDialog);
     }
 
     void promptRename(const juce::String& oldName)
@@ -599,6 +639,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                    }
                                                }),
                                            false);
+        focusNameEditor(*m_patchNameDialog);
     }
 
     void confirmAndDeletePatch(const juce::String& name)
@@ -654,6 +695,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial wetDial{this};
     CustomRotaryDial preDelayDial{this};
     CustomRotaryDial elementsDial{this};
+    CustomRotaryDial tapSpanDial{this};
     CustomRotaryDial feedbackDial{this};
     CustomRotaryDial bulgeDial{this};
     CustomRotaryDial bottomSizeDial{this};

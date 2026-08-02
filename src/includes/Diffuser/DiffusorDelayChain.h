@@ -30,6 +30,9 @@ class DiffuserDelayChain
         , m_bandScratch(blkSize, 0.f)
         , tmpFadeIn(blkSize, 0.f)
         , tmpFadeOut(blkSize, 0.f)
+        , m_tapAccum(blkSize, 0.f)
+        , m_tapAccumShort(blkSize, 0.f)
+        , m_tapAccumLong(blkSize, 0.f)
     {
         float f = 0.53f;
         for (auto& d : m_delay)
@@ -82,6 +85,18 @@ class DiffuserDelayChain
         m_sizeSpreadMeters = spreadInMeters;
         m_invertSpreadParity = invertParity;
         scaleDiffuser<false>();
+    }
+
+    // 0% taps only the last element (classic single-tap behavior); 100% averages the entire
+    // active chain. Scales with the live element count, so it never needs clamping against it.
+    void setTapSpan(const float percent) noexcept
+    {
+        m_tapSpanPercent = std::clamp(percent, 0.f, 100.f);
+    }
+
+    [[nodiscard]] float tapSpan() const noexcept
+    {
+        return m_tapSpanPercent;
     }
 
     void setElements(const size_t elements)
@@ -261,14 +276,75 @@ class DiffuserDelayChain
             }
             return;
         }
+        const auto tapCount = effectiveTapCount(m_elementsToUse);
+        const auto tapStart = m_elementsToUse - tapCount;
+        TapTracker tap{tapStart, m_tapAccum.data(), false};
         for (size_t i = 0; i < m_elementsToUse; ++i)
         {
             m_delay[i].processBlockInplace(target, numSamples);
             meterAll(i + 1, target, numSamples);
+            if (tapCount > 1)
+            {
+                tap.feed(i, target, numSamples);
+            }
+        }
+        if (tapCount > 1)
+        {
+            tap.finalize(numSamples, tapCount);
+            std::copy_n(m_tapAccum.data(), numSamples, target);
         }
     }
 
   private:
+    // Sums the last `count` per-element outputs of a chain into a scratch accumulator, so
+    // processBlock can output the average of the last few taps instead of only the final one.
+    struct TapTracker
+    {
+        size_t start{0};
+        float* accum{nullptr};
+        bool started{false};
+
+        void feed(const size_t index, const float* buf, const size_t numSamples) noexcept
+        {
+            if (index < start)
+            {
+                return;
+            }
+            if (!started)
+            {
+                std::copy_n(buf, numSamples, accum);
+                started = true;
+            }
+            else
+            {
+                std::transform(buf, buf + numSamples, accum, accum, std::plus<>{});
+            }
+        }
+
+        void finalize(const size_t numSamples, const size_t count) const noexcept
+        {
+            const auto scale = 1.f / static_cast<float>(count);
+            for (size_t n = 0; n < numSamples; ++n)
+            {
+                accum[n] *= scale;
+            }
+        }
+    };
+
+    // Maps the tap-mix percentage onto the chain length actually in use: 0% -> 1 (last element
+    // only), 100% -> elementCount (the whole active chain), linear in between. Always in range
+    // by construction, so no separate clamp against the live element count is needed.
+    [[nodiscard]] size_t effectiveTapCount(const size_t elementCount) const noexcept
+    {
+        if (elementCount == 0)
+        {
+            return 0;
+        }
+        const auto fraction = m_tapSpanPercent * 0.01f;
+        const auto count = 1.f + fraction * static_cast<float>(elementCount - 1);
+        return static_cast<size_t>(std::lround(count));
+    }
+
     // Raw peak tap for the visualisation sink; no-ops when no sink is registered. Reports the
     // unfiltered per-block peak (linear gain) and leaves any ballistic smoothing to the consumer.
     void meterBin(const size_t bin, const float* buf, const size_t numSamples) noexcept
@@ -483,43 +559,101 @@ class DiffuserDelayChain
 
     // Meters the settled part of the chain (shared by both fade directions) so the bins gauge
     // keeps updating during a crossfade instead of freezing at its pre-change reading.
-    void processFade(float* target, size_t numSamples, size_t elements)
+    // `elements` is always the shorter of the two in-flight lengths; when its own tap-mix
+    // window spans more than one element, the average (not just the last raw stage) seeds
+    // both fade branches. `longTracker`, if given, keeps accumulating past `elements` for the
+    // longer branch's own tap-mix, which the caller finalizes once its tail loop is done.
+    void processFade(float* target, size_t numSamples, size_t elements, TapTracker* longTracker)
     {
+        const auto tapCountShort = effectiveTapCount(elements);
+        const auto tapStartShort = elements - tapCountShort;
+        TapTracker shortTap{tapStartShort, m_tapAccumShort.data(), false};
         for (size_t i = 0; i < elements; ++i)
         {
             m_delay[i].processBlockInplace(target, numSamples);
             meterAll(i + 1, target, numSamples);
+            if (tapCountShort > 1)
+            {
+                shortTap.feed(i, target, numSamples);
+            }
+            if (longTracker != nullptr)
+            {
+                longTracker->feed(i, target, numSamples);
+            }
         }
-        m_fadeIn.processBlock(target, tmpFadeIn.data(), numSamples);
-        m_fadeOut.processBlock(target, tmpFadeOut.data(), numSamples);
+        const float* source = target;
+        if (tapCountShort > 1)
+        {
+            shortTap.finalize(numSamples, tapCountShort);
+            source = m_tapAccumShort.data();
+        }
+        m_fadeIn.processBlock(source, tmpFadeIn.data(), numSamples);
+        m_fadeOut.processBlock(source, tmpFadeOut.data(), numSamples);
     }
 
     void increaseNumElements(float* target, size_t numSamples)
     {
-        processFade(target, numSamples, m_elementsToUse);
+        const auto tapCountLong = effectiveTapCount(m_newElementsToUse);
+        const auto tapStartLong = m_newElementsToUse - tapCountLong;
+        TapTracker longTap{tapStartLong, m_tapAccumLong.data(), false};
+        processFade(target, numSamples, m_elementsToUse, tapCountLong > 1 ? &longTap : nullptr);
+
         m_delay[m_elementsToUse].processBlockInplace(tmpFadeIn.data(), numSamples);
         meterAll(m_elementsToUse + 1, tmpFadeIn.data(), numSamples);
+        if (tapCountLong > 1)
+        {
+            longTap.feed(m_elementsToUse, tmpFadeIn.data(), numSamples);
+        }
         for (size_t i = m_elementsToUse + 1; i < m_newElementsToUse; ++i)
         {
             m_delay[i].processBlockInplace(tmpFadeIn.data(), numSamples);
             meterAll(i + 1, tmpFadeIn.data(), numSamples);
+            if (tapCountLong > 1)
+            {
+                longTap.feed(i, tmpFadeIn.data(), numSamples);
+            }
         }
         checkChangeElementsDone();
-        std::copy_n(tmpFadeIn.data(), numSamples, target);
+        if (tapCountLong > 1)
+        {
+            longTap.finalize(numSamples, tapCountLong);
+            std::copy_n(m_tapAccumLong.data(), numSamples, target);
+        }
+        else
+        {
+            std::copy_n(tmpFadeIn.data(), numSamples, target);
+        }
         std::transform(target, target + numSamples, tmpFadeOut.data(), target, std::plus<>{});
     }
 
     void decreaseNumElements(float* target, size_t numSamples)
     {
-        processFade(target, numSamples, m_newElementsToUse);
+        const auto tapCountLong = effectiveTapCount(m_elementsToUse);
+        const auto tapStartLong = m_elementsToUse - tapCountLong;
+        TapTracker longTap{tapStartLong, m_tapAccumLong.data(), false};
+        processFade(target, numSamples, m_newElementsToUse, tapCountLong > 1 ? &longTap : nullptr);
+
         m_delay[m_newElementsToUse].processBlock(tmpFadeOut.data(), target, numSamples);
         meterAll(m_newElementsToUse + 1, target, numSamples);
+        if (tapCountLong > 1)
+        {
+            longTap.feed(m_newElementsToUse, target, numSamples);
+        }
         for (size_t i = m_newElementsToUse + 1; i < m_elementsToUse; ++i)
         {
             m_delay[i].processBlockInplace(target, numSamples);
             meterAll(i + 1, target, numSamples);
+            if (tapCountLong > 1)
+            {
+                longTap.feed(i, target, numSamples);
+            }
         }
         checkChangeElementsDone();
+        if (tapCountLong > 1)
+        {
+            longTap.finalize(numSamples, tapCountLong);
+            std::copy_n(m_tapAccumLong.data(), numSamples, target);
+        }
         std::transform(target, target + numSamples, tmpFadeIn.data(), target, std::plus<>{});
     }
 
@@ -557,6 +691,11 @@ class DiffuserDelayChain
     std::vector<float> tmpFadeOut{};
     bool m_fadeOutAugmentElements{false};
     bool m_fadeInReduceElements{false};
+
+    float m_tapSpanPercent{0.f};
+    std::vector<float> m_tapAccum{};
+    std::vector<float> m_tapAccumShort{};
+    std::vector<float> m_tapAccumLong{};
 };
 
 }

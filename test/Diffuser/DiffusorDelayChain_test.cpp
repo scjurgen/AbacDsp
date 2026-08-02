@@ -256,4 +256,111 @@ TEST_F(DiffuserDelayChainTest, levelSinkKeepsUpdatingWhileElementCountShrinks)
     }
     EXPECT_TRUE(bin3Changed);
 }
+
+TEST_F(DiffuserDelayChainTest, tapSpanZeroMatchesCurrentBehavior)
+{
+    DiffuserDelayChain<24000, 24> withoutTapSpan{kSampleRate, kBlockSize};
+    DiffuserDelayChain<24000, 24> withTapSpanZero{kSampleRate, kBlockSize};
+    withoutTapSpan.resetDiffuser(6, 0.5f, 0.46f, 0.7f, 7.f, skipSmoothing);
+    withTapSpanZero.resetDiffuser(6, 0.5f, 0.46f, 0.7f, 7.f, skipSmoothing);
+    withTapSpanZero.setTapSpan(0.f);
+
+    std::array<float, kBlockSize> in{};
+    in[0] = 1.f;
+    std::array<float, kBlockSize> outA{};
+    std::array<float, kBlockSize> outB{};
+    for (size_t block = 0; block < 20; ++block)
+    {
+        withoutTapSpan.processBlock(in.data(), outA.data(), kBlockSize);
+        withTapSpanZero.processBlock(in.data(), outB.data(), kBlockSize);
+        in[0] = 0.f;
+        for (size_t i = 0; i < kBlockSize; ++i)
+        {
+            EXPECT_FLOAT_EQ(outA[i], outB[i]);
+        }
+    }
+}
+
+// With a DC input, a stage's per-block peak equals its settled output value, so the level
+// sink can stand in for a per-sample probe of an otherwise inaccessible intermediate tap.
+TEST_F(DiffuserDelayChainTest, tapSpanOneHundredAveragesAllActiveElements)
+{
+    DiffuserDelayChain<24000, 24> reference{kSampleRate, kBlockSize};
+    DiffuserDelayChain<24000, 24> tapped{kSampleRate, kBlockSize};
+    reference.resetDiffuser(2, 0.3f, 0.46f, 0.7f, 7.f, skipSmoothing);
+    tapped.resetDiffuser(2, 0.3f, 0.46f, 0.7f, 7.f, skipSmoothing);
+    reference.setModulationDepth(0.f);
+    tapped.setModulationDepth(0.f);
+    tapped.setTapSpan(100.f);
+
+    std::array<std::atomic<float>, 25> sink{};
+    reference.setLevelMeterSink(&sink);
+
+    std::array<float, kBlockSize> in{};
+    std::fill(in.begin(), in.end(), 1.f);
+    std::array<float, kBlockSize> refOut{};
+    std::array<float, kBlockSize> tappedOut{};
+    for (size_t block = 0; block < 6000; ++block)
+    {
+        reference.processBlock(in.data(), refOut.data(), kBlockSize);
+        tapped.processBlock(in.data(), tappedOut.data(), kBlockSize);
+    }
+
+    const auto expected = 0.5f * (sink[1].load() + sink[2].load());
+    for (const auto v : tappedOut)
+    {
+        EXPECT_NEAR(v, expected, 5E-3f);
+    }
+}
+
+TEST_F(DiffuserDelayChainTest, tapSpanStaysWithinActiveElementCountAfterShrinking)
+{
+    std::array<float, kBlockSize> in{};
+    std::array<float, kBlockSize> out{};
+    in[0] = 1.f;
+    m_sut.setElements(3);
+    for (size_t block = 0; block < 48000 / kBlockSize; ++block)
+    {
+        m_sut.processBlock(in.data(), out.data(), kBlockSize);
+        in[0] = 0.f;
+    }
+    ASSERT_EQ(m_sut.elements(), 3u);
+
+    m_sut.setTapSpan(100.f);
+    in[0] = 1.f;
+    for (size_t block = 0; block < 100; ++block)
+    {
+        m_sut.processBlock(in.data(), out.data(), kBlockSize);
+        in[0] = 0.f;
+        for (const auto v : out)
+        {
+            EXPECT_TRUE(std::isfinite(v));
+        }
+    }
+}
+
+TEST_F(DiffuserDelayChainTest, tapSpanStaysFiniteAcrossElementCountFade)
+{
+    m_sut.setTapSpan(50.f);
+    std::array<float, kBlockSize> in{};
+    std::array<float, kBlockSize> out{};
+    in[0] = 1.f;
+    m_sut.processBlock(in.data(), out.data(), kBlockSize);
+    in[0] = 0.f;
+
+    m_sut.setElements(12);
+    for (size_t block = 0; block < 48000 / kBlockSize; ++block)
+    {
+        m_sut.processBlock(in.data(), out.data(), kBlockSize);
+    }
+    m_sut.setElements(3);
+    for (size_t block = 0; block < 48000 / kBlockSize; ++block)
+    {
+        m_sut.processBlock(in.data(), out.data(), kBlockSize);
+    }
+    for (const auto v : out)
+    {
+        EXPECT_TRUE(std::isfinite(v));
+    }
+}
 }

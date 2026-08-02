@@ -15,6 +15,8 @@
       "cc": {"controller": 22}},
     {"short": "ELM", "type": "dial", "display": "Elements", "symbol": "elements", "default": 6, "range": [0, 50, 1, 1, false], "precision": 0, "unit": "",
       "cc": {"controller": 23}},
+    {"short": "SPAN", "type": "dial", "display": "Tap Span", "symbol": "tapSpan", "default": 0, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "%",
+      "cc": {"controller": 40}},
     {"short": "FDBK", "type": "dial", "display": "Diffusion", "symbol": "feedback", "default": 50, "range": [-100, 100, 0.1, 1, false], "precision": 1, "unit": "%",
       "cc": {"controller": 24}},
     {"short": "BLG", "type": "dial", "display": "Bulge", "symbol": "bulge", "default": 0.46, "range": [-1, 1, 0.01, 1, false], "precision": 2, "unit": "",
@@ -56,7 +58,7 @@
     "WINDOW_WIDTH": "1100",
     "WINDOW_HEIGHT": "950",
     "type": "=6",
-    "composition": "R=(2:2:2:2:2:1) A1=(DRY,WET,PRED) A2=(MIX,PTCH,PTDL,PTCH2,PTDL2,PMOD) A3=(ELM,FDBK,BLG,BSZ,TSZ,SPRD) A4=(MDPT,MDSP,LPF,FMIX,FSZ,FDEC) A5=(BINSB) A6=(SIZES)"
+    "composition": "R=(2:2:2:2:2:1) A1=(DRY,WET,PRED) A2=(MIX,PTCH,PTDL,PTCH2,PTDL2,PMOD) A3=(ELM,SPAN,FDBK,BLG,BSZ,TSZ,SPRD) A4=(MDPT,MDSP,LPF,FMIX,FSZ,FDEC) A5=(BINSB) A6=(SIZES)"
   },
   "extra_ui_includes": [
     "impl/ShowProcessingBins.h",
