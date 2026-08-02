@@ -61,8 +61,8 @@
     "composition": "R=(2:2:2:2:2:1) A1=(DRY,WET,PRED) A2=(MIX,PTCH,PTDL,PTCH2,PTDL2,PMOD) A3=(ELM,SPAN,FDBK,BLG,BSZ,TSZ,SPRD) A4=(MDPT,MDSP,LPF,FMIX,FSZ,FDEC) A5=(BINSB) A6=(SIZES)"
   },
   "performance-page": {
-    "type": "-",
-    "composition": "A1=(BINSB,SIZES)"
+    "type": "≡",
+    "composition": "R=(1:1:1) A1=(DRY,WET,SPAN,FDBK) A2=(FMIX,FSZ, FDEC) A3=(BINSB)"
   },
   "extra_ui_includes": [
     "impl/ShowProcessingBins.h",

@@ -81,17 +81,40 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // auto generated
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-            std::vector<juce::Rectangle<int>> areas(1);
-            areas[0] = area.reduced(Constants::Margins::small);
+            std::vector<juce::Rectangle<int>> areas(3);
+            const auto rowHeight = area.getHeight() / 3;
+            areas[0] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[2] = area.reduced(Constants::Margins::small);
 
             {
                 juce::FlexBox box;
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
                 box.flexDirection = juce::FlexBox::Direction::row;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(binsBandsGauge).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(sizesGauge).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(dryDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(wetDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(tapSpanDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(feedbackDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[0].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(fdnMixDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(fdnSizeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(fdnDecayDial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[1].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(binsBandsGauge).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[2].toFloat());
             }
         }
         else
@@ -393,7 +416,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(m_pageSettingsButton);
         m_pagePerformanceButton.onClick = [this] { switchPage(Page::Performance); };
         m_pageSettingsButton.onClick = [this] { switchPage(Page::Settings); };
-        switchPage(Page::Settings);
+        switchPage(Page::Performance);
     }
 
     enum class Page
@@ -407,12 +430,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         m_currentPage = page;
         if (page == Page::Performance)
         {
-            dryDial.setVisible(false);
-            wetDial.setVisible(false);
+            dryDial.setVisible(true);
+            wetDial.setVisible(true);
             preDelayDial.setVisible(false);
             elementsDial.setVisible(false);
-            tapSpanDial.setVisible(false);
-            feedbackDial.setVisible(false);
+            tapSpanDial.setVisible(true);
+            feedbackDial.setVisible(true);
             bulgeDial.setVisible(false);
             bottomSizeDial.setVisible(false);
             topSizeDial.setVisible(false);
@@ -426,11 +449,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             pitch2Dial.setVisible(false);
             pitch2DelayDial.setVisible(false);
             pitchModeDrop.setVisible(false);
-            fdnMixDial.setVisible(false);
-            fdnSizeDial.setVisible(false);
-            fdnDecayDial.setVisible(false);
+            fdnMixDial.setVisible(true);
+            fdnSizeDial.setVisible(true);
+            fdnDecayDial.setVisible(true);
             binsBandsGauge.setVisible(true);
-            sizesGauge.setVisible(true);
+            sizesGauge.setVisible(false);
         }
         else
         {
@@ -773,7 +796,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};
-    Page m_currentPage{Page::Settings};
+    Page m_currentPage{Page::Performance};
     juce::TextButton m_pagePerformanceButton{"Performance"};
     juce::TextButton m_pageSettingsButton{"Settings"};
     static constexpr int kThemeModeLightId = 9000;
