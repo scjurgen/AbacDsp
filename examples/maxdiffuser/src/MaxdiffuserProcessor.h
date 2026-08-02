@@ -307,12 +307,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("bottomSize", 1), "Bottom Size",
+            juce::ParameterID("bottomSize", 1), "Early Size",
             juce::NormalisableRange<float>(0.5, 100.0, 0.1, 0.4, false), 0.7,
             juce::AudioParameterFloatAttributes{}.withLabel("m").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " m"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("topSize", 1), "Top Size", juce::NormalisableRange<float>(0.5, 100.0, 0.1, 0.4, false),
+            juce::ParameterID("topSize", 1), "Late Size", juce::NormalisableRange<float>(0.5, 100.0, 0.1, 0.4, false),
             7.0,
             juce::AudioParameterFloatAttributes{}.withLabel("m").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " m"; })));
@@ -361,15 +361,15 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID("pitchMode", 1), "Pitch Mode", juce::StringArray{"Drift", "Sync", "Vocoder"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("fdnMix", 1), "FDN Mix", juce::NormalisableRange<float>(-100, 12, 0.1, 1, false), -100,
+            juce::ParameterID("fdnMix", 1), "Reverb Mix", juce::NormalisableRange<float>(-100, 12, 0.1, 1, false), -100,
             juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " dB"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("fdnSize", 1), "FDN Size", juce::NormalisableRange<float>(1, 330, 0.1, 0.4, false), 30,
+            juce::ParameterID("fdnSize", 1), "Reverb Size", juce::NormalisableRange<float>(1, 330, 0.1, 0.4, false), 30,
             juce::AudioParameterFloatAttributes{}.withLabel("m").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " m"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("fdnDecay", 1), "FDN Decay", juce::NormalisableRange<float>(1, 100000, 1, 0.2, false),
+            juce::ParameterID("fdnDecay", 1), "Reverb Decay", juce::NormalisableRange<float>(1, 100000, 1, 0.2, false),
             2000,
             juce::AudioParameterFloatAttributes{}.withLabel("ms").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 0) + " ms"; })));

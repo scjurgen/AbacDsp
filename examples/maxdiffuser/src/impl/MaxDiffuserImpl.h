@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <iomanip>
 #include <iostream>
 
 #include "Audio/AudioBuffer.h"
@@ -157,6 +158,7 @@ class MaxDiffuserImpl final : public EffectBase
     {
         m_diffuser[0].setSizeSpread(valueInMeters, false);
         m_diffuser[1].setSizeSpread(valueInMeters, true);
+        logElementSizes();
     }
 
     void setModulationDepth(const float value)
@@ -331,26 +333,19 @@ class MaxDiffuserImpl final : public EffectBase
         return static_cast<size_t>(msecs * 0.001f * sampleRate());
     }
 
+    // Per-element left/right delay lengths and their delta, in samples, for auditing the
+    // stereo Size Spread control from the console.
     void logElementSizes() const
     {
-        std::cout << " size: ";
-        std::array<size_t, 2> absVal{};
-        for (size_t c = 0; c < m_diffuser.size(); ++c)
+        const auto left = m_diffuser[0].getElementSizesInSamples();
+        const auto right = m_diffuser[1].getElementSizesInSamples();
+        std::cout << "element  left  right  delta\n";
+        for (size_t i = 0; i < m_elements; ++i)
         {
-            const auto sizes = m_diffuser[c].getElementSizesInSamples();
-            size_t total = 0;
-            for (size_t i = 0; i < m_elements; ++i)
-            {
-                total += sizes[i];
-            }
-            std::cout << total;
-            absVal[c] = total;
-            if (c == 0)
-            {
-                std::cout << ", ";
-            }
+            const auto delta = static_cast<long long>(left[i]) - static_cast<long long>(right[i]);
+            std::cout << std::setw(7) << i << std::setw(6) << left[i] << std::setw(7) << right[i] << std::setw(7)
+                      << delta << "\n";
         }
-        std::cout << " -> " << static_cast<long long>(absVal[0]) - static_cast<long long>(absVal[1]) << "\n";
     }
 
     size_t m_elements{6};

@@ -235,7 +235,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                        [this] { return processorRef.getCcController(CcTarget::bulge); }});
         addAndMakeVisible(bottomSizeDial);
         bottomSizeDial.reset(valueTreeState, "bottomSize");
-        bottomSizeDial.setLabelText(juce::String::fromUTF8("Bottom Size"));
+        bottomSizeDial.setLabelText(juce::String::fromUTF8("Early Size"));
         bottomSizeDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::bottomSize); },
                                             [this] { return processorRef.getCcRange(CcTarget::bottomSize); },
                                             [this](float lo, float hi)
@@ -244,7 +244,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                             [this] { return processorRef.getCcController(CcTarget::bottomSize); }});
         addAndMakeVisible(topSizeDial);
         topSizeDial.reset(valueTreeState, "topSize");
-        topSizeDial.setLabelText(juce::String::fromUTF8("Top Size"));
+        topSizeDial.setLabelText(juce::String::fromUTF8("Late Size"));
         topSizeDial.setCcMappable(true,
                                   {[this] { processorRef.beginCcLearn(CcTarget::topSize); },
                                    [this] { return processorRef.getCcRange(CcTarget::topSize); },
@@ -336,7 +336,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             valueTreeState, "pitchMode", pitchModeDrop);
         addAndMakeVisible(fdnMixDial);
         fdnMixDial.reset(valueTreeState, "fdnMix");
-        fdnMixDial.setLabelText(juce::String::fromUTF8("FDN Mix"));
+        fdnMixDial.setLabelText(juce::String::fromUTF8("Reverb Mix"));
         fdnMixDial.setCcMappable(true,
                                  {[this] { processorRef.beginCcLearn(CcTarget::fdnMix); },
                                   [this] { return processorRef.getCcRange(CcTarget::fdnMix); },
@@ -345,7 +345,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   [this] { return processorRef.getCcController(CcTarget::fdnMix); }});
         addAndMakeVisible(fdnSizeDial);
         fdnSizeDial.reset(valueTreeState, "fdnSize");
-        fdnSizeDial.setLabelText(juce::String::fromUTF8("FDN Size"));
+        fdnSizeDial.setLabelText(juce::String::fromUTF8("Reverb Size"));
         fdnSizeDial.setCcMappable(true,
                                   {[this] { processorRef.beginCcLearn(CcTarget::fdnSize); },
                                    [this] { return processorRef.getCcRange(CcTarget::fdnSize); },
@@ -354,7 +354,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                    [this] { return processorRef.getCcController(CcTarget::fdnSize); }});
         addAndMakeVisible(fdnDecayDial);
         fdnDecayDial.reset(valueTreeState, "fdnDecay");
-        fdnDecayDial.setLabelText(juce::String::fromUTF8("FDN Decay"));
+        fdnDecayDial.setLabelText(juce::String::fromUTF8("Reverb Decay"));
         fdnDecayDial.setCcMappable(true,
                                    {[this] { processorRef.beginCcLearn(CcTarget::fdnDecay); },
                                     [this] { return processorRef.getCcRange(CcTarget::fdnDecay); },

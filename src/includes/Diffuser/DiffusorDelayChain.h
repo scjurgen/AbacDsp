@@ -508,7 +508,25 @@ class DiffuserDelayChain
         // Order-preserving: a size-spread offset can locally dip element i+1 below element i,
         // and sorting by value here (as generateUniquePrimeSet does) would swap which element
         // gets which length instead of nudging each element's own length by its own offset.
+        // generateUniquePrimeSequence only produces a smooth result for an ascending input, so
+        // when bottomSize > topSize deliberately makes the base table descending (denser echoes
+        // toward one end), reverse the array around the call instead of forcing ascending
+        // output on a descending table -- that would collapse every element after the first
+        // into a tight cluster near it.
+        const auto descending = topSamples < bottomSamples;
+        const auto activeSourceBegin = sourceSizes.begin();
+        const auto activeSourceEnd = sourceSizes.begin() + static_cast<std::ptrdiff_t>(m_elementsToUse);
+        if (descending)
+        {
+            std::reverse(activeSourceBegin, activeSourceEnd);
+        }
         generateUniquePrimeSequence<11u>(sourceSizes.data(), primeValues.data(), m_elementsToUse);
+        if (descending)
+        {
+            const auto activePrimeBegin = primeValues.begin();
+            const auto activePrimeEnd = primeValues.begin() + static_cast<std::ptrdiff_t>(m_elementsToUse);
+            std::reverse(activePrimeBegin, activePrimeEnd);
+        }
         for (size_t i = 0; i < m_elementsToUse; ++i)
         {
             if constexpr (fastSet)

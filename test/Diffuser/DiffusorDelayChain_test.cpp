@@ -164,6 +164,33 @@ TEST(DiffuserDelayChainSizeSpreadTest, positivelyOffsetElementNeverShrinksBelowB
     EXPECT_GE(after[0], before[0]);
 }
 
+// bottomSize > topSize is a deliberate, in-range inversion (denser echoes toward the end of the
+// chain), left un-normalized on purpose: the base size table is descending by element index.
+// generateUniquePrimeSequence forces its output ascending by processing index order, which used
+// to collapse every element after the first into a tight cluster near it instead of taping
+// smoothly downward; scaleDiffuser now reverses around the call for a descending table.
+TEST(DiffuserDelayChainSizeSpreadTest, descendingEarlyLateTableStaysMonotonicNotClustered)
+{
+    constexpr size_t kBlockSize{16};
+    constexpr float kSampleRate{48000.f};
+    DiffuserDelayChain<24000, 24> chain{kSampleRate, kBlockSize};
+    chain.resetDiffuser(10, 0.5f, 0.46f, 100.f, 1.4f, skipSmoothing);
+    chain.setModulationDepth(0.f);
+
+    std::array<float, kBlockSize> in{};
+    std::array<float, kBlockSize> out{};
+    for (size_t block = 0; block < 48000 / kBlockSize; ++block)
+    {
+        chain.processBlock(in.data(), out.data(), kBlockSize);
+    }
+
+    const auto sizes = chain.getElementSizesInSamples();
+    for (size_t i = 1; i < 10; ++i)
+    {
+        EXPECT_LT(sizes[i], sizes[i - 1]) << "element " << i;
+    }
+}
+
 TEST_F(DiffuserDelayChainTest, levelSinkStaysNullSafeByDefault)
 {
     std::array<float, kBlockSize> in{};
