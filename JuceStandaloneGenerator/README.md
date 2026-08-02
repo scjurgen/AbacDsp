@@ -13,6 +13,31 @@
 - generated files are in ./examples/yourblueprint
 - add the folder generated to CMakeLists.txt
 
+## Performance / Settings page
+
+A blueprint can optionally add a `performance-page` section, structured like
+`layout` (a `type` + `composition` string), to give the generated editor a
+second, curated page:
+
+```json
+"performance-page": {
+  "type": "-",
+  "composition": "A1=(LVL,SIZES)"
+}
+```
+
+- `composition` references existing `ports-control` items by their `short`
+  code, reusing the same widgets shown on the full Settings page (today's
+  `layout` section, unchanged) - nothing is duplicated or removed.
+- If a blueprint defines a non-empty `performance-page`, the generated editor
+  gets a small Performance/Settings switcher; widgets not referenced by
+  `performance-page.composition` are hidden while Performance is active.
+- If a blueprint has no `performance-page` section (or an empty one, e.g.
+  `distortion`), the editor keeps today's single-page layout untouched.
+- Typical candidates: the `levels` VU meter and any gauge with a `customtype`
+  (bespoke visualisations like maxdiffuser's size display or the looper's
+  CircularBarDisplays) - see the existing blueprints for examples.
+
 ## Unit tests
 
 Generator-side logic that doesn't depend on JUCE (currently: `ThemeOrbit.h`) has its own
