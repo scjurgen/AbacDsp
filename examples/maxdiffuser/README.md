@@ -1,76 +1,56 @@
-# Metronome
+# Max Diffuser
 
-A JUCE standalone metronome with damped-sine click sounds, odd-meter support, and a drop-bars
-mute feature for timing training.
+A diffuser (kind of reverb) where you can control a behaviour to extreme reflections.
+The diffuser chain can be tweaked with several parameter ot obtain various effects that vary
+from early reflection style of reverb to tsunami style of very slow building up reverberation.
+
 
 ## Purpose
 
 | Use case | How |
 |---|---|
-| Timing accuracy | Lock to the click; use the waveform display to see how tightly you land on the beat |
-| Feel & groove | Switch to a shuffle or swing preset and adjust the swing ratio |
-| Laid-back / anticipation | Use the waveform display — it shows one full beat of context so you can see whether you consistently play ahead or behind |
-| Drop-bar practice | Set a drop-bars mode; the metronome goes silent for N bars so you must keep internal time, then checks you on the return |
+| Small room effect | Low number of diffusers, slight short reverb |
+| Tsunami | 30+ elements with range sizes 1...100m, add strong modulation to cause extrem noise and lowpass everything |
+| Chorus effect | Few elements, slight Mod Depth, low Diffusion |
+| Alien effects | Pitch and/or Pitch 2 with their own Pitch Delay, moderate Pitch Mix, low Diffusion |
+| Simple tap delay | Few elements, slight Diffusion, low Tap Span so single echoes stay distinct |
+| Washing out effects | Strong Mod Depth and Mod Speed to blur the chain into a smeared wash |
+| Stereo widener / doubler | Few elements, low Diffusion, moderate Size Spread for decorrelated width without a reverb tail |
+| Metallic ringing | Early Size and Late Size close together with high Diffusion, for pitched, comb-like resonance |
+| Density ramp instead of decay | Set Early Size above Late Size so echoes get denser toward the tail instead of thinning out |
+| Thicker tail without more elements | Raise Tap Span to blend several late elements into the output instead of adding more Elements |
+| Ambient pad | Keep the diffuser subtle (few elements, low Diffusion) and lean on Reverb Mix/Size/Decay for a smoother, longer wash |
 
 ## Controls
 
 | Control | Range | Description |
 |---|---|---|
-| BPM | 40 – 250 | Tempo |
-| Preset | see table below | Rhythm and subdivision feel |
-| Swing | 1.0 – 2.0 | Swing ratio (only shown for shuffle/swing presets) |
-| Drop Bars | see table below | Bars heard vs. bars silent |
-| Metro Volume | −60 – 0 dB | Click loudness |
-| Sub Volume | −60 – 0 dB | Subdivision tick loudness |
-| Input Volume | −60 – +12 dB | Pass-through instrument level |
-| Start | on/off | Starts or stops the metronome |
+| Dry | -100 - 12 dB | Level of the unprocessed input in the output |
+| Wet | -100 - 12 dB | Level of the diffuser chain's output in the output |
+| Pre Delay | 0 - 1000 ms | Delay before the dry (unpitched) signal enters the diffuser chain |
+| Elements | 0 - 50 | Number of allpass delay stages in series; more elements thicken the diffusion |
+| Tap Span | 0 - 100% | How many of the active chain's last elements are averaged into the output tap; 0% taps only the final element, 100% averages the whole active chain |
+| Diffusion | -100 - 100% | Feedback amount of each allpass stage; higher values smear transients into a denser wash |
+| Bulge | -1 - 1 | Skews the Early/Late Size distribution across elements toward the early or late end |
+| Early Size | 0.5 - 100 m | Physical size (converted to delay length) of the first element in the chain |
+| Late Size | 0.5 - 100 m | Physical size of the last element in the chain; set below Early Size to make echoes denser toward the end instead of the start |
+| Size Spread | 0 - 10 m | Per-element size offset, alternated between channels, for stereo decorrelation; 0 keeps the chain mono, larger values widen the stereo image |
+| Mod Depth | 0 - 1 | Depth of the pitch-modulating LFO applied to every second delay element |
+| Mod Speed | 0.01 - 5 Hz | Rate of that modulation LFO |
+| Low Pass | 20 - 20000 Hz | Damping filter cutoff applied inside each element's feedback path |
+| Pitch Mix | 0 - 100% | Blend of the two pitch-shifted taps into the signal feeding the diffuser |
+| Pitch | -24 - 24 st | Pitch shift of the first, per-channel pitch tap |
+| Pitch Delay | 0 - 1000 ms | Delay before the first pitch tap |
+| Pitch 2 | -24 - 24 st | Pitch shift of the second, mono pitch tap |
+| Pitch 2 Delay | 0 - 1000 ms | Delay before the second pitch tap |
+| Pitch Mode | Drift / Sync / Vocoder | Pitch-shifting algorithm shared by both pitch taps |
+| Reverb Mix | -100 - 12 dB | Level of the FDN reverb tail (fed from the diffuser output) in the output |
+| Reverb Size | 1 - 330 m | Average delay-line size of the FDN reverb tank |
+| Reverb Decay | 1 - 100000 ms | RT60-style decay time of the FDN reverb tail |
 
-## Rhythm Presets
+## Displays
 
-Each felt beat is one pulse at the set BPM. For compound and odd meters the pulse is an eighth
-note; for 3/4 and 4/4 it is a quarter note.
-
-| Preset | Beats | Subdivisions | Notes |
-|---|---|---|---|
-| 3/4 | 3 | none | plain quarter-note waltz |
-| 3/4 8th | 3 | 8th | adds an eighth between each beat |
-| 3/4 16th | 3 | 16th | adds three sixteenths between each beat |
-| 3/4 shuffle | 3 | swing 8th | swing ratio adjustable |
-| 3/4 triplet | 3 | triplet | two triplet subdivisions per beat |
-| 4/4 | 4 | none | |
-| 4/4 8th | 4 | 8th | |
-| 4/4 16th | 4 | 16th | |
-| 4/4 shuffle | 4 | swing 8th | |
-| 4/4 triplet | 4 | triplet | |
-| 4/4 swing | 4 | swing 8th | alias for shuffle with swing ratio focus |
-| 5/4 (3+2) | 5 | none | accent groups: 3 then 2 |
-| 5/4 8th (3+2) | 5 | 8th | |
-| 5/4 (2+3) | 5 | none | accent groups: 2 then 3 |
-| 5/4 8th (2+3) | 5 | 8th | |
-| 6/8 in-2 | 2 | compound (×3) | felt as two dotted-quarter beats |
-| 6/8 in-6 | 6 | none | felt as six eighth notes; D·s·s·B·s·s |
-| 7/8 (2+2+3) | 7 | none | D·s·B·s·B·s·s |
-| 7/8 (2+3+2) | 7 | none | D·s·B·s·s·B·s |
-| 7/8 (3+2+2) | 7 | none | D·s·s·B·s·B·s |
-| 9/8 in-3 | 3 | compound (×3) | felt as three dotted-quarter beats |
-| 9/8 in-9 | 9 | none | D·s·s·B·s·s·B·s·s |
-| 11/8 (3+3+3+2) | 11 | none | D·s·s·B·s·s·B·s·s·B·s |
-| 11/8 (3+3+2+3) | 11 | none | D·s·s·B·s·s·B·s·B·s·s |
-| 13/8 (3+3+3+2+2) | 13 | none | D·s·s·B·s·s·B·s·s·B·s·B·s |
-| 13/8 (3+4+3+3) | 13 | none | D·s·s·B·s·s·s·B·s·s·B·s·s |
-
-Legend: **D** = downbeat, **B** = beat, **s** = subdivision tick
-
-## Drop Bars
-
-Silence the click for N bars to train internal pulse.
-
-| Setting       | Cycle (■ = heard, □ = silent) |
-|---------------|---|
-| Drop none     | ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ … |
-| Play 1 Drop 1 | ■ □ ■ □ ■ □ ■ □ ■ □ ■ □ … |
-| Play 3 Drop 1 | ■ ■ ■ □ ■ ■ ■ □ ■ ■ ■ □ … |
-| Play 2 Drop 2 | ■ ■ □ □ ■ ■ □ □ ■ ■ □ □ … |
-| Play 1 Drop 3 | ■ □ □ □ ■ □ □ □ ■ □ □ □ … |
-
-The cycle always restarts on the downbeat of the next heard bar.
+| Display | Shows |
+|---|---|
+| Bands | Per-element low/mid/high band level meters across the active diffuser chain |
+| Sizes | Per-element delay size, visualizing the Early/Late Size and Bulge distribution |
