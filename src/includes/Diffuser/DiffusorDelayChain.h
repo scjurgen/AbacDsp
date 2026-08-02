@@ -505,7 +505,10 @@ class DiffuserDelayChain
         {
             sourceSizes[i] = static_cast<size_t>(baseSizes[i] + offsets[i]);
         }
-        generateUniquePrimeSet<11u>(sourceSizes.data(), primeValues.data(), m_elementsToUse);
+        // Order-preserving: a size-spread offset can locally dip element i+1 below element i,
+        // and sorting by value here (as generateUniquePrimeSet does) would swap which element
+        // gets which length instead of nudging each element's own length by its own offset.
+        generateUniquePrimeSequence<11u>(sourceSizes.data(), primeValues.data(), m_elementsToUse);
         for (size_t i = 0; i < m_elementsToUse; ++i)
         {
             if constexpr (fastSet)

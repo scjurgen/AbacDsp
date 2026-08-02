@@ -1,6 +1,7 @@
-#include "Numbers/PrimeDispatcher.h"
 #include <gtest/gtest.h>
 #include <vector>
+
+#include "Numbers/PrimeDispatcher.h"
 
 namespace AbacDsp::Test
 {
@@ -55,6 +56,32 @@ TEST(PrimeDispatcherTest, GenerateUniquePrimeSet)
     EXPECT_EQ(out[1], 7);
     EXPECT_EQ(out[2], 11);
     EXPECT_EQ(out[3], 13);
+}
+
+TEST(PrimeDispatcherTest, GenerateUniquePrimeSequencePreservesIndexOrder)
+{
+    // Index 0's own value (12) is the largest of the four -- unlike generateUniquePrimeSet,
+    // which would sort by value first and hand the smallest resulting prime to index 0.
+    std::vector<size_t> values = {12, 8, 9, 11};
+    std::vector<size_t> out(4);
+    generateUniquePrimeSequence<3>(values.begin(), out.begin(), values.size());
+
+    EXPECT_EQ(out[0], 13u);
+    EXPECT_EQ(out[1], 17u);
+    EXPECT_EQ(out[2], 19u);
+    EXPECT_EQ(out[3], 23u);
+}
+
+TEST(PrimeDispatcherTest, GenerateUniquePrimeSequenceMatchesSetWhenAlreadyAscending)
+{
+    std::vector<size_t> valuesForSet = {8, 9, 11, 12};
+    std::vector<size_t> valuesForSequence = {8, 9, 11, 12};
+    std::vector<size_t> outSet(4);
+    std::vector<size_t> outSequence(4);
+    generateUniquePrimeSet<3>(valuesForSet.begin(), outSet.begin(), valuesForSet.size());
+    generateUniquePrimeSequence<3>(valuesForSequence.begin(), outSequence.begin(), valuesForSequence.size());
+
+    EXPECT_EQ(outSet, outSequence);
 }
 
 TEST(PrimeDispatcherTest, EnsureUniqueDiscreteSize)

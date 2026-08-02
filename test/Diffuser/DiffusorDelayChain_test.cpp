@@ -6,6 +6,7 @@
 #include <numeric>
 
 #include "Diffuser/DiffusorDelayChain.h"
+#include "Numbers/Convert.h"
 
 namespace AbacDsp::Test
 {
@@ -124,6 +125,43 @@ TEST_F(DiffuserDelayChainTest, parameterChangesStayFinite)
     {
         EXPECT_TRUE(std::isfinite(v));
     }
+}
+
+// Regression test for a bug where scaleDiffuser() fed the offset-perturbed per-element sizes
+// through generateUniquePrimeSet, which sorts by value before assigning primes back
+// positionally: once a spread offset flipped two neighboring elements' relative order, their
+// assigned delay lengths swapped between elements instead of drifting by the offset. Element 0
+// always gets a positive offset (invertParity=false), so its size must never drop below its
+// spread=0 baseline, however large the spread -- the old bug could make it drop far below by
+// handing it element 1's (much smaller, offset-shrunk) target instead of its own.
+TEST(DiffuserDelayChainSizeSpreadTest, positivelyOffsetElementNeverShrinksBelowBaseline)
+{
+    constexpr size_t kBlockSize{16};
+    constexpr float kSampleRate{48000.f};
+    DiffuserDelayChain<24000, 24> chain{kSampleRate, kBlockSize};
+    // Bottom/top close together so two elements pack tightly, making it easy for a modest
+    // spread to exceed half the gap between them and flip their natural ordering.
+    chain.resetDiffuser(2, 0.3f, 0.f, 0.5f, 0.55f, skipSmoothing);
+
+    const auto before = chain.getElementSizesInSamples();
+    ASSERT_LT(before[0], before[1]);
+    const auto gap = before[1] - before[0];
+
+    const auto spreadSamples = static_cast<float>(gap) * 5.f;
+    const auto spreadMeters = Convert::samplesToMeters(spreadSamples, kSampleRate);
+    chain.setSizeSpread(spreadMeters, false);
+
+    // Size changes ramp in smoothly rather than jumping instantly; let them settle before
+    // reading the result back.
+    std::array<float, kBlockSize> in{};
+    std::array<float, kBlockSize> out{};
+    for (size_t block = 0; block < 48000 / kBlockSize; ++block)
+    {
+        chain.processBlock(in.data(), out.data(), kBlockSize);
+    }
+
+    const auto after = chain.getElementSizesInSamples();
+    EXPECT_GE(after[0], before[0]);
 }
 
 TEST_F(DiffuserDelayChainTest, levelSinkStaysNullSafeByDefault)

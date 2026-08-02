@@ -97,6 +97,29 @@ inline auto generateUniquePrimeSet(const In source, Out target, const size_t num
     }
 }
 
+// Like generateUniquePrimeSet, but keeps output index i tied to input index i instead of
+// sorting by value first. Needed by callers where the index itself carries meaning (e.g. a
+// per-element delay chain nudged by a signed offset per element): sorting there can swap which
+// element ends up with which length once the offsets flip two neighbors' relative order. An
+// out-of-order input is simply nudged up to the next available prime past its predecessor's,
+// same as generateUniquePrimeSet does for duplicate values.
+template <size_t MINVALUE, typename In, typename Out>
+inline auto generateUniquePrimeSequence(In source, Out target, const size_t numItems)
+    -> std::enable_if_t<std::is_unsigned_v<typename std::iterator_traits<In>::value_type>, void>
+{
+    if (numItems == 0)
+    {
+        throw(std::invalid_argument("prime sequence generator must produce at least one element"));
+    }
+    typename std::iterator_traits<In>::value_type successivePrime = 0u;
+    for (size_t idx = 0; idx < numItems; ++idx, ++source, ++target)
+    {
+        const auto val = getUsefulPrime<MINVALUE>(std::max(*source, successivePrime));
+        *target = val;
+        successivePrime = val + 1;
+    }
+}
+
 inline void ensureUniqueDiscreteSize(size_t* discreteSize, const unsigned int last)
 {
     bool changes_made{false};
