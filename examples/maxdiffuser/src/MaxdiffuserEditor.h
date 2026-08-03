@@ -82,7 +82,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
             std::vector<juce::Rectangle<int>> areas(3);
-            const auto rowHeight = area.getHeight() / 3;
+            const auto rowHeight = area.getHeight() / 4;
             areas[0] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
             areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
             areas[2] = area.reduced(Constants::Margins::small);
@@ -123,10 +123,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
             std::vector<juce::Rectangle<int>> areas(5);
-            const auto rowHeight = area.getHeight() / 9;
-            areas[0] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
+            const auto rowHeight = area.getHeight() / 12;
+            areas[0] = area.removeFromTop(rowHeight * 3).reduced(Constants::Margins::small);
             areas[1] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
-            areas[2] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
+            areas[2] = area.removeFromTop(rowHeight * 3).reduced(Constants::Margins::small);
             areas[3] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
             areas[4] = area.reduced(Constants::Margins::small);
 
@@ -138,6 +138,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.items.add(juce::FlexItem(dryDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wetDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(preDelayDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(driveDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(eqInLowDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(eqInMidDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(eqInHighDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(eqOutLowDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(eqOutMidDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(eqOutHighDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(levelDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[0].toFloat());
             }
             {
@@ -155,6 +163,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::center)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(pitcherShelfLowDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(pitcherShelfHighDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[1].toFloat());
             }
             {
@@ -169,6 +179,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.items.add(juce::FlexItem(bottomSizeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(topSizeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(sizeSpreadDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(modulationDepthDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(modulationSpeedDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(lowPassDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(extremeStereoTapSwitch)
+                                  .withWidth(Constants::Text::labelWidth)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(wideDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[2].toFloat());
             }
             {
@@ -176,12 +195,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
                 box.flexDirection = juce::FlexBox::Direction::row;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(modulationDepthDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(modulationSpeedDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(lowPassDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(fdnMixDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(fdnSizeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(fdnDecayDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbShelfLowDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbShelfHighDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[3].toFloat());
             }
             {
@@ -398,6 +416,124 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                     [this](float lo, float hi) { processorRef.setCcRange(CcTarget::fdnDecay, lo, hi); },
                                     [this] { processorRef.clearCcAssignment(CcTarget::fdnDecay); },
                                     [this] { return processorRef.getCcController(CcTarget::fdnDecay); }});
+        addAndMakeVisible(driveDial);
+        driveDial.reset(valueTreeState, "drive");
+        driveDial.setLabelText(juce::String::fromUTF8("Drive"));
+        driveDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::drive); },
+                                       [this] { return processorRef.getCcRange(CcTarget::drive); },
+                                       [this](float lo, float hi) { processorRef.setCcRange(CcTarget::drive, lo, hi); },
+                                       [this] { processorRef.clearCcAssignment(CcTarget::drive); },
+                                       [this] { return processorRef.getCcController(CcTarget::drive); }});
+        addAndMakeVisible(eqInLowDial);
+        eqInLowDial.reset(valueTreeState, "eqInLow");
+        eqInLowDial.setLabelText(juce::String::fromUTF8("EQ In Low"));
+        eqInLowDial.setCcMappable(true,
+                                  {[this] { processorRef.beginCcLearn(CcTarget::eqInLow); },
+                                   [this] { return processorRef.getCcRange(CcTarget::eqInLow); },
+                                   [this](float lo, float hi) { processorRef.setCcRange(CcTarget::eqInLow, lo, hi); },
+                                   [this] { processorRef.clearCcAssignment(CcTarget::eqInLow); },
+                                   [this] { return processorRef.getCcController(CcTarget::eqInLow); }});
+        addAndMakeVisible(eqInMidDial);
+        eqInMidDial.reset(valueTreeState, "eqInMid");
+        eqInMidDial.setLabelText(juce::String::fromUTF8("EQ In Mid"));
+        eqInMidDial.setCcMappable(true,
+                                  {[this] { processorRef.beginCcLearn(CcTarget::eqInMid); },
+                                   [this] { return processorRef.getCcRange(CcTarget::eqInMid); },
+                                   [this](float lo, float hi) { processorRef.setCcRange(CcTarget::eqInMid, lo, hi); },
+                                   [this] { processorRef.clearCcAssignment(CcTarget::eqInMid); },
+                                   [this] { return processorRef.getCcController(CcTarget::eqInMid); }});
+        addAndMakeVisible(eqInHighDial);
+        eqInHighDial.reset(valueTreeState, "eqInHigh");
+        eqInHighDial.setLabelText(juce::String::fromUTF8("EQ In High"));
+        eqInHighDial.setCcMappable(true,
+                                   {[this] { processorRef.beginCcLearn(CcTarget::eqInHigh); },
+                                    [this] { return processorRef.getCcRange(CcTarget::eqInHigh); },
+                                    [this](float lo, float hi) { processorRef.setCcRange(CcTarget::eqInHigh, lo, hi); },
+                                    [this] { processorRef.clearCcAssignment(CcTarget::eqInHigh); },
+                                    [this] { return processorRef.getCcController(CcTarget::eqInHigh); }});
+        addAndMakeVisible(eqOutLowDial);
+        eqOutLowDial.reset(valueTreeState, "eqOutLow");
+        eqOutLowDial.setLabelText(juce::String::fromUTF8("EQ Out Low"));
+        eqOutLowDial.setCcMappable(true,
+                                   {[this] { processorRef.beginCcLearn(CcTarget::eqOutLow); },
+                                    [this] { return processorRef.getCcRange(CcTarget::eqOutLow); },
+                                    [this](float lo, float hi) { processorRef.setCcRange(CcTarget::eqOutLow, lo, hi); },
+                                    [this] { processorRef.clearCcAssignment(CcTarget::eqOutLow); },
+                                    [this] { return processorRef.getCcController(CcTarget::eqOutLow); }});
+        addAndMakeVisible(eqOutMidDial);
+        eqOutMidDial.reset(valueTreeState, "eqOutMid");
+        eqOutMidDial.setLabelText(juce::String::fromUTF8("EQ Out Mid"));
+        eqOutMidDial.setCcMappable(true,
+                                   {[this] { processorRef.beginCcLearn(CcTarget::eqOutMid); },
+                                    [this] { return processorRef.getCcRange(CcTarget::eqOutMid); },
+                                    [this](float lo, float hi) { processorRef.setCcRange(CcTarget::eqOutMid, lo, hi); },
+                                    [this] { processorRef.clearCcAssignment(CcTarget::eqOutMid); },
+                                    [this] { return processorRef.getCcController(CcTarget::eqOutMid); }});
+        addAndMakeVisible(eqOutHighDial);
+        eqOutHighDial.reset(valueTreeState, "eqOutHigh");
+        eqOutHighDial.setLabelText(juce::String::fromUTF8("EQ Out High"));
+        eqOutHighDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::eqOutHigh); },
+                                           [this] { return processorRef.getCcRange(CcTarget::eqOutHigh); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::eqOutHigh, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::eqOutHigh); },
+                                           [this] { return processorRef.getCcController(CcTarget::eqOutHigh); }});
+        addAndMakeVisible(levelDial);
+        levelDial.reset(valueTreeState, "level");
+        levelDial.setLabelText(juce::String::fromUTF8("Level"));
+        levelDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::level); },
+                                       [this] { return processorRef.getCcRange(CcTarget::level); },
+                                       [this](float lo, float hi) { processorRef.setCcRange(CcTarget::level, lo, hi); },
+                                       [this] { processorRef.clearCcAssignment(CcTarget::level); },
+                                       [this] { return processorRef.getCcController(CcTarget::level); }});
+        addAndMakeVisible(pitcherShelfLowDial);
+        pitcherShelfLowDial.reset(valueTreeState, "pitcherShelfLow");
+        pitcherShelfLowDial.setLabelText(juce::String::fromUTF8("Pitcher Shelf Low"));
+        pitcherShelfLowDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::pitcherShelfLow); },
+                                                 [this] { return processorRef.getCcRange(CcTarget::pitcherShelfLow); },
+                                                 [this](float lo, float hi)
+                                                 { processorRef.setCcRange(CcTarget::pitcherShelfLow, lo, hi); }, [this]
+                                                 { processorRef.clearCcAssignment(CcTarget::pitcherShelfLow); }, [this]
+                                                 { return processorRef.getCcController(CcTarget::pitcherShelfLow); }});
+        addAndMakeVisible(pitcherShelfHighDial);
+        pitcherShelfHighDial.reset(valueTreeState, "pitcherShelfHigh");
+        pitcherShelfHighDial.setLabelText(juce::String::fromUTF8("Pitcher Shelf High"));
+        pitcherShelfHighDial.setCcMappable(
+            true, {[this] { processorRef.beginCcLearn(CcTarget::pitcherShelfHigh); },
+                   [this] { return processorRef.getCcRange(CcTarget::pitcherShelfHigh); },
+                   [this](float lo, float hi) { processorRef.setCcRange(CcTarget::pitcherShelfHigh, lo, hi); },
+                   [this] { processorRef.clearCcAssignment(CcTarget::pitcherShelfHigh); },
+                   [this] { return processorRef.getCcController(CcTarget::pitcherShelfHigh); }});
+        addAndMakeVisible(extremeStereoTapSwitch);
+        extremeStereoTapSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "extremeStereoTap", extremeStereoTapSwitch);
+
+        addAndMakeVisible(wideDial);
+        wideDial.reset(valueTreeState, "wide");
+        wideDial.setLabelText(juce::String::fromUTF8("Wide"));
+        wideDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::wide); },
+                                      [this] { return processorRef.getCcRange(CcTarget::wide); },
+                                      [this](float lo, float hi) { processorRef.setCcRange(CcTarget::wide, lo, hi); },
+                                      [this] { processorRef.clearCcAssignment(CcTarget::wide); },
+                                      [this] { return processorRef.getCcController(CcTarget::wide); }});
+        addAndMakeVisible(reverbShelfLowDial);
+        reverbShelfLowDial.reset(valueTreeState, "reverbShelfLow");
+        reverbShelfLowDial.setLabelText(juce::String::fromUTF8("Reverb Shelf Low"));
+        reverbShelfLowDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::reverbShelfLow); },
+                                                [this] { return processorRef.getCcRange(CcTarget::reverbShelfLow); },
+                                                [this](float lo, float hi)
+                                                { processorRef.setCcRange(CcTarget::reverbShelfLow, lo, hi); }, [this]
+                                                { processorRef.clearCcAssignment(CcTarget::reverbShelfLow); }, [this]
+                                                { return processorRef.getCcController(CcTarget::reverbShelfLow); }});
+        addAndMakeVisible(reverbShelfHighDial);
+        reverbShelfHighDial.reset(valueTreeState, "reverbShelfHigh");
+        reverbShelfHighDial.setLabelText(juce::String::fromUTF8("Reverb Shelf High"));
+        reverbShelfHighDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::reverbShelfHigh); },
+                                                 [this] { return processorRef.getCcRange(CcTarget::reverbShelfHigh); },
+                                                 [this](float lo, float hi)
+                                                 { processorRef.setCcRange(CcTarget::reverbShelfHigh, lo, hi); }, [this]
+                                                 { processorRef.clearCcAssignment(CcTarget::reverbShelfHigh); }, [this]
+                                                 { return processorRef.getCcController(CcTarget::reverbShelfHigh); }});
         addAndMakeVisible(binsBandsGauge);
         binsBandsGauge.setLabelText(juce::String::fromUTF8("Bands"));
         addAndMakeVisible(sizesGauge);
@@ -443,6 +579,20 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             fdnMixDial.setVisible(true);
             fdnSizeDial.setVisible(true);
             fdnDecayDial.setVisible(true);
+            driveDial.setVisible(false);
+            eqInLowDial.setVisible(false);
+            eqInMidDial.setVisible(false);
+            eqInHighDial.setVisible(false);
+            eqOutLowDial.setVisible(false);
+            eqOutMidDial.setVisible(false);
+            eqOutHighDial.setVisible(false);
+            levelDial.setVisible(false);
+            pitcherShelfLowDial.setVisible(false);
+            pitcherShelfHighDial.setVisible(false);
+            extremeStereoTapSwitch.setVisible(false);
+            wideDial.setVisible(false);
+            reverbShelfLowDial.setVisible(false);
+            reverbShelfHighDial.setVisible(false);
             binsBandsGauge.setVisible(true);
             sizesGauge.setVisible(false);
         }
@@ -470,6 +620,20 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             fdnMixDial.setVisible(true);
             fdnSizeDial.setVisible(true);
             fdnDecayDial.setVisible(true);
+            driveDial.setVisible(true);
+            eqInLowDial.setVisible(true);
+            eqInMidDial.setVisible(true);
+            eqInHighDial.setVisible(true);
+            eqOutLowDial.setVisible(true);
+            eqOutMidDial.setVisible(true);
+            eqOutHighDial.setVisible(true);
+            levelDial.setVisible(true);
+            pitcherShelfLowDial.setVisible(true);
+            pitcherShelfHighDial.setVisible(true);
+            extremeStereoTapSwitch.setVisible(true);
+            wideDial.setVisible(true);
+            reverbShelfLowDial.setVisible(true);
+            reverbShelfHighDial.setVisible(true);
             binsBandsGauge.setVisible(false);
             sizesGauge.setVisible(true);
         }
@@ -826,6 +990,21 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial fdnMixDial{this};
     CustomRotaryDial fdnSizeDial{this};
     CustomRotaryDial fdnDecayDial{this};
+    CustomRotaryDial driveDial{this};
+    CustomRotaryDial eqInLowDial{this};
+    CustomRotaryDial eqInMidDial{this};
+    CustomRotaryDial eqInHighDial{this};
+    CustomRotaryDial eqOutLowDial{this};
+    CustomRotaryDial eqOutMidDial{this};
+    CustomRotaryDial eqOutHighDial{this};
+    CustomRotaryDial levelDial{this};
+    CustomRotaryDial pitcherShelfLowDial{this};
+    CustomRotaryDial pitcherShelfHighDial{this};
+    juce::ToggleButton extremeStereoTapSwitch{juce::String::fromUTF8("Extreme Stereo Tap")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> extremeStereoTapSwitchAttachment;
+    CustomRotaryDial wideDial{this};
+    CustomRotaryDial reverbShelfLowDial{this};
+    CustomRotaryDial reverbShelfHighDial{this};
     ShowProcessingBinsBands binsBandsGauge{};
     ShowDiffuserSizes sizesGauge{};
 

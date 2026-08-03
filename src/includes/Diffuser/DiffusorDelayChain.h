@@ -99,6 +99,25 @@ class DiffuserDelayChain
         return m_tapSpanPercent;
     }
 
+    enum class TapParity
+    {
+        All,
+        EvenOnly,
+        OddOnly,
+    };
+
+    // Restricts the tap-mix window (setTapSpan) to only even- or odd-indexed elements, so a
+    // caller can build one output channel from one parity and another from the other.
+    void setTapParity(const TapParity parity) noexcept
+    {
+        m_tapParity = parity;
+    }
+
+    [[nodiscard]] TapParity tapParity() const noexcept
+    {
+        return m_tapParity;
+    }
+
     void setElements(const size_t elements)
     {
         if (m_fadeInReduceElements || m_fadeOutAugmentElements)
@@ -278,7 +297,7 @@ class DiffuserDelayChain
         }
         const auto tapCount = effectiveTapCount(m_elementsToUse);
         const auto tapStart = m_elementsToUse - tapCount;
-        TapTracker tap{tapStart, m_tapAccum.data(), false};
+        TapTracker tap{tapStart, m_tapAccum.data(), false, m_tapParity};
         for (size_t i = 0; i < m_elementsToUse; ++i)
         {
             m_delay[i].processBlockInplace(target, numSamples);
@@ -290,7 +309,7 @@ class DiffuserDelayChain
         }
         if (tapCount > 1)
         {
-            tap.finalize(numSamples, tapCount);
+            tap.finalize(numSamples);
             std::copy_n(m_tapAccum.data(), numSamples, target);
         }
     }
@@ -303,10 +322,20 @@ class DiffuserDelayChain
         size_t start{0};
         float* accum{nullptr};
         bool started{false};
+        TapParity parity{TapParity::All};
+        size_t added{0};
 
         void feed(const size_t index, const float* buf, const size_t numSamples) noexcept
         {
             if (index < start)
+            {
+                return;
+            }
+            if (parity == TapParity::EvenOnly && (index % 2 != 0))
+            {
+                return;
+            }
+            if (parity == TapParity::OddOnly && (index % 2 == 0))
             {
                 return;
             }
@@ -319,14 +348,21 @@ class DiffuserDelayChain
             {
                 std::transform(buf, buf + numSamples, accum, accum, std::plus<>{});
             }
+            ++added;
         }
 
         // Equal-power (1/sqrt(N)) rather than equal-gain (1/N) normalization: successive tap
         // stages are increasingly decorrelated by the allpass/modulation chain, so summing them
-        // behaves like summing independent signals, whose combined RMS grows as sqrt(N).
-        void finalize(const size_t numSamples, const size_t count) const noexcept
+        // behaves like summing independent signals, whose combined RMS grows as sqrt(N). Scales
+        // by the taps actually accumulated, not the requested window size, so a parity filter
+        // that excludes half the window still normalizes correctly.
+        void finalize(const size_t numSamples) const noexcept
         {
-            const auto scale = 1.f / std::sqrt(static_cast<float>(count));
+            if (added == 0)
+            {
+                return;
+            }
+            const auto scale = 1.f / std::sqrt(static_cast<float>(added));
             for (size_t n = 0; n < numSamples; ++n)
             {
                 accum[n] *= scale;
@@ -591,7 +627,7 @@ class DiffuserDelayChain
     {
         const auto tapCountShort = effectiveTapCount(elements);
         const auto tapStartShort = elements - tapCountShort;
-        TapTracker shortTap{tapStartShort, m_tapAccumShort.data(), false};
+        TapTracker shortTap{tapStartShort, m_tapAccumShort.data(), false, m_tapParity};
         for (size_t i = 0; i < elements; ++i)
         {
             m_delay[i].processBlockInplace(target, numSamples);
@@ -608,7 +644,7 @@ class DiffuserDelayChain
         const float* source = target;
         if (tapCountShort > 1)
         {
-            shortTap.finalize(numSamples, tapCountShort);
+            shortTap.finalize(numSamples);
             source = m_tapAccumShort.data();
         }
         m_fadeIn.processBlock(source, tmpFadeIn.data(), numSamples);
@@ -619,7 +655,7 @@ class DiffuserDelayChain
     {
         const auto tapCountLong = effectiveTapCount(m_newElementsToUse);
         const auto tapStartLong = m_newElementsToUse - tapCountLong;
-        TapTracker longTap{tapStartLong, m_tapAccumLong.data(), false};
+        TapTracker longTap{tapStartLong, m_tapAccumLong.data(), false, m_tapParity};
         processFade(target, numSamples, m_elementsToUse, tapCountLong > 1 ? &longTap : nullptr);
 
         m_delay[m_elementsToUse].processBlockInplace(tmpFadeIn.data(), numSamples);
@@ -640,7 +676,7 @@ class DiffuserDelayChain
         checkChangeElementsDone();
         if (tapCountLong > 1)
         {
-            longTap.finalize(numSamples, tapCountLong);
+            longTap.finalize(numSamples);
             std::copy_n(m_tapAccumLong.data(), numSamples, target);
         }
         else
@@ -654,7 +690,7 @@ class DiffuserDelayChain
     {
         const auto tapCountLong = effectiveTapCount(m_elementsToUse);
         const auto tapStartLong = m_elementsToUse - tapCountLong;
-        TapTracker longTap{tapStartLong, m_tapAccumLong.data(), false};
+        TapTracker longTap{tapStartLong, m_tapAccumLong.data(), false, m_tapParity};
         processFade(target, numSamples, m_newElementsToUse, tapCountLong > 1 ? &longTap : nullptr);
 
         m_delay[m_newElementsToUse].processBlock(tmpFadeOut.data(), target, numSamples);
@@ -675,7 +711,7 @@ class DiffuserDelayChain
         checkChangeElementsDone();
         if (tapCountLong > 1)
         {
-            longTap.finalize(numSamples, tapCountLong);
+            longTap.finalize(numSamples);
             std::copy_n(m_tapAccumLong.data(), numSamples, target);
         }
         std::transform(target, target + numSamples, tmpFadeIn.data(), target, std::plus<>{});
@@ -717,6 +753,7 @@ class DiffuserDelayChain
     bool m_fadeInReduceElements{false};
 
     float m_tapSpanPercent{0.f};
+    TapParity m_tapParity{TapParity::All};
     std::vector<float> m_tapAccum{};
     std::vector<float> m_tapAccumShort{};
     std::vector<float> m_tapAccumLong{};

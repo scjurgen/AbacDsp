@@ -12,28 +12,42 @@ struct PatchParameters
 {
     enum class Id : int
     {
-        dry            , // dial
-        wet            , // dial
-        preDelay       , // dial
-        elements       , // dial
-        tapSpan        , // dial
-        feedback       , // dial
-        bulge          , // dial
-        bottomSize     , // dial
-        topSize        , // dial
-        sizeSpread     , // dial
-        modulationDepth, // dial
-        modulationSpeed, // dial
-        lowPass        , // dial
-        mix            , // dial
-        pitch          , // dial
-        pitchDelay     , // dial
-        pitch2         , // dial
-        pitch2Delay    , // dial
-        pitchMode      , // drop
-        fdnMix         , // dial
-        fdnSize        , // dial
-        fdnDecay        // dial
+        dry             , // dial
+        wet             , // dial
+        preDelay        , // dial
+        elements        , // dial
+        tapSpan         , // dial
+        feedback        , // dial
+        bulge           , // dial
+        bottomSize      , // dial
+        topSize         , // dial
+        sizeSpread      , // dial
+        modulationDepth , // dial
+        modulationSpeed , // dial
+        lowPass         , // dial
+        mix             , // dial
+        pitch           , // dial
+        pitchDelay      , // dial
+        pitch2          , // dial
+        pitch2Delay     , // dial
+        pitchMode       , // drop
+        fdnMix          , // dial
+        fdnSize         , // dial
+        fdnDecay        , // dial
+        drive           , // dial
+        eqInLow         , // dial
+        eqInMid         , // dial
+        eqInHigh        , // dial
+        eqOutLow        , // dial
+        eqOutMid        , // dial
+        eqOutHigh       , // dial
+        level           , // dial
+        pitcherShelfLow , // dial
+        pitcherShelfHigh, // dial
+        extremeStereoTap, // switch
+        wide            , // dial
+        reverbShelfLow  , // dial
+        reverbShelfHigh  // dial
     };
 float dry{0.0f};
 float wet{-6.0f};
@@ -57,6 +71,20 @@ size_t pitchMode{0};
 float fdnMix{-100.0f};
 float fdnSize{30.0f};
 float fdnDecay{2000.0f};
+float drive{0.0f};
+float eqInLow{0.0f};
+float eqInMid{0.0f};
+float eqInHigh{0.0f};
+float eqOutLow{0.0f};
+float eqOutMid{0.0f};
+float eqOutHigh{0.0f};
+float level{0.0f};
+float pitcherShelfLow{0.0f};
+float pitcherShelfHigh{0.0f};
+bool extremeStereoTap{false};
+float wide{0.0f};
+float reverbShelfLow{0.0f};
+float reverbShelfHigh{0.0f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
@@ -81,7 +109,21 @@ float fdnDecay{2000.0f};
 "pitchMode",
 "fdnMix",
 "fdnSize",
-"fdnDecay"
+"fdnDecay",
+"drive",
+"eqInLow",
+"eqInMid",
+"eqInHigh",
+"eqOutLow",
+"eqOutMid",
+"eqOutHigh",
+"level",
+"pitcherShelfLow",
+"pitcherShelfHigh",
+"extremeStereoTap",
+"wide",
+"reverbShelfLow",
+"reverbShelfHigh"
     });
 //        "onOff", "patch", "input", "modulationDepth", "mix", "density", "threshold", "knee"});
 
@@ -122,6 +164,20 @@ float fdnDecay{2000.0f};
         else if constexpr (ParamId == Id::fdnMix) return fdnMix;
         else if constexpr (ParamId == Id::fdnSize) return fdnSize;
         else if constexpr (ParamId == Id::fdnDecay) return fdnDecay;
+        else if constexpr (ParamId == Id::drive) return drive;
+        else if constexpr (ParamId == Id::eqInLow) return eqInLow;
+        else if constexpr (ParamId == Id::eqInMid) return eqInMid;
+        else if constexpr (ParamId == Id::eqInHigh) return eqInHigh;
+        else if constexpr (ParamId == Id::eqOutLow) return eqOutLow;
+        else if constexpr (ParamId == Id::eqOutMid) return eqOutMid;
+        else if constexpr (ParamId == Id::eqOutHigh) return eqOutHigh;
+        else if constexpr (ParamId == Id::level) return level;
+        else if constexpr (ParamId == Id::pitcherShelfLow) return pitcherShelfLow;
+        else if constexpr (ParamId == Id::pitcherShelfHigh) return pitcherShelfHigh;
+        else if constexpr (ParamId == Id::extremeStereoTap) return extremeStereoTap;
+        else if constexpr (ParamId == Id::wide) return wide;
+        else if constexpr (ParamId == Id::reverbShelfLow) return reverbShelfLow;
+        else if constexpr (ParamId == Id::reverbShelfHigh) return reverbShelfHigh;
 
     }
 
@@ -178,6 +234,34 @@ break;
 break;
  case Id::fdnDecay: if (!isEqual(get<Id::fdnDecay>(), value)) {get<Id::fdnDecay>() = value;m_modified = true;}
 break;
+ case Id::drive: if (!isEqual(get<Id::drive>(), value)) {get<Id::drive>() = value;m_modified = true;}
+break;
+ case Id::eqInLow: if (!isEqual(get<Id::eqInLow>(), value)) {get<Id::eqInLow>() = value;m_modified = true;}
+break;
+ case Id::eqInMid: if (!isEqual(get<Id::eqInMid>(), value)) {get<Id::eqInMid>() = value;m_modified = true;}
+break;
+ case Id::eqInHigh: if (!isEqual(get<Id::eqInHigh>(), value)) {get<Id::eqInHigh>() = value;m_modified = true;}
+break;
+ case Id::eqOutLow: if (!isEqual(get<Id::eqOutLow>(), value)) {get<Id::eqOutLow>() = value;m_modified = true;}
+break;
+ case Id::eqOutMid: if (!isEqual(get<Id::eqOutMid>(), value)) {get<Id::eqOutMid>() = value;m_modified = true;}
+break;
+ case Id::eqOutHigh: if (!isEqual(get<Id::eqOutHigh>(), value)) {get<Id::eqOutHigh>() = value;m_modified = true;}
+break;
+ case Id::level: if (!isEqual(get<Id::level>(), value)) {get<Id::level>() = value;m_modified = true;}
+break;
+ case Id::pitcherShelfLow: if (!isEqual(get<Id::pitcherShelfLow>(), value)) {get<Id::pitcherShelfLow>() = value;m_modified = true;}
+break;
+ case Id::pitcherShelfHigh: if (!isEqual(get<Id::pitcherShelfHigh>(), value)) {get<Id::pitcherShelfHigh>() = value;m_modified = true;}
+break;
+ case Id::extremeStereoTap: if (!isEqual(get<Id::extremeStereoTap>(), value)) {get<Id::extremeStereoTap>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::wide: if (!isEqual(get<Id::wide>(), value)) {get<Id::wide>() = value;m_modified = true;}
+break;
+ case Id::reverbShelfLow: if (!isEqual(get<Id::reverbShelfLow>(), value)) {get<Id::reverbShelfLow>() = value;m_modified = true;}
+break;
+ case Id::reverbShelfHigh: if (!isEqual(get<Id::reverbShelfHigh>(), value)) {get<Id::reverbShelfHigh>() = value;m_modified = true;}
+break;
 
             default:
                 break;
@@ -216,26 +300,40 @@ private:
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     PatchParameters,
-        dry            , // dial
-        wet            , // dial
-        preDelay       , // dial
-        elements       , // dial
-        tapSpan        , // dial
-        feedback       , // dial
-        bulge          , // dial
-        bottomSize     , // dial
-        topSize        , // dial
-        sizeSpread     , // dial
-        modulationDepth, // dial
-        modulationSpeed, // dial
-        lowPass        , // dial
-        mix            , // dial
-        pitch          , // dial
-        pitchDelay     , // dial
-        pitch2         , // dial
-        pitch2Delay    , // dial
-        pitchMode      , // drop
-        fdnMix         , // dial
-        fdnSize        , // dial
-        fdnDecay        // dial
+        dry             , // dial
+        wet             , // dial
+        preDelay        , // dial
+        elements        , // dial
+        tapSpan         , // dial
+        feedback        , // dial
+        bulge           , // dial
+        bottomSize      , // dial
+        topSize         , // dial
+        sizeSpread      , // dial
+        modulationDepth , // dial
+        modulationSpeed , // dial
+        lowPass         , // dial
+        mix             , // dial
+        pitch           , // dial
+        pitchDelay      , // dial
+        pitch2          , // dial
+        pitch2Delay     , // dial
+        pitchMode       , // drop
+        fdnMix          , // dial
+        fdnSize         , // dial
+        fdnDecay        , // dial
+        drive           , // dial
+        eqInLow         , // dial
+        eqInMid         , // dial
+        eqInHigh        , // dial
+        eqOutLow        , // dial
+        eqOutMid        , // dial
+        eqOutHigh       , // dial
+        level           , // dial
+        pitcherShelfLow , // dial
+        pitcherShelfHigh, // dial
+        extremeStereoTap, // switch
+        wide            , // dial
+        reverbShelfLow  , // dial
+        reverbShelfHigh  // dial
 )

@@ -105,6 +105,62 @@ class GenericImpl final : public EffectBase
     {
         m_fdnDecay = value;
     }
+    void setDrive(const float value)
+    {
+        m_drive = value;
+    }
+    void setEqInLow(const float value)
+    {
+        m_eqInLow = std::pow(10.f, value / 20.f);
+    }
+    void setEqInMid(const float value)
+    {
+        m_eqInMid = std::pow(10.f, value / 20.f);
+    }
+    void setEqInHigh(const float value)
+    {
+        m_eqInHigh = std::pow(10.f, value / 20.f);
+    }
+    void setEqOutLow(const float value)
+    {
+        m_eqOutLow = std::pow(10.f, value / 20.f);
+    }
+    void setEqOutMid(const float value)
+    {
+        m_eqOutMid = std::pow(10.f, value / 20.f);
+    }
+    void setEqOutHigh(const float value)
+    {
+        m_eqOutHigh = std::pow(10.f, value / 20.f);
+    }
+    void setLevel(const float value)
+    {
+        m_level = std::pow(10.f, value / 20.f);
+    }
+    void setPitcherShelfLow(const float value)
+    {
+        m_pitcherShelfLow = std::pow(10.f, value / 20.f);
+    }
+    void setPitcherShelfHigh(const float value)
+    {
+        m_pitcherShelfHigh = std::pow(10.f, value / 20.f);
+    }
+    void setExtremeStereoTap(const bool value)
+    {
+        m_extremeStereoTap = value;
+    }
+    void setWide(const float value)
+    {
+        m_wide = value;
+    }
+    void setReverbShelfLow(const float value)
+    {
+        m_reverbShelfLow = std::pow(10.f, value / 20.f);
+    }
+    void setReverbShelfHigh(const float value)
+    {
+        m_reverbShelfHigh = std::pow(10.f, value / 20.f);
+    }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
@@ -138,4 +194,18 @@ class GenericImpl final : public EffectBase
     float m_fdnMix{};
     float m_fdnSize{};
     float m_fdnDecay{};
+    float m_drive{};
+    float m_eqInLow{};
+    float m_eqInMid{};
+    float m_eqInHigh{};
+    float m_eqOutLow{};
+    float m_eqOutMid{};
+    float m_eqOutHigh{};
+    float m_level{};
+    float m_pitcherShelfLow{};
+    float m_pitcherShelfHigh{};
+    bool m_extremeStereoTap{};
+    float m_wide{};
+    float m_reverbShelfLow{};
+    float m_reverbShelfHigh{};
 };

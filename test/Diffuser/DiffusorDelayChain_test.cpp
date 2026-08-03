@@ -378,6 +378,72 @@ TEST_F(DiffuserDelayChainTest, tapSpanOneHundredAveragesAllActiveElements)
     }
 }
 
+TEST_F(DiffuserDelayChainTest, tapParityEvenOnlyAveragesEvenIndexedTaps)
+{
+    DiffuserDelayChain<24000, 24> reference{kSampleRate, kBlockSize};
+    DiffuserDelayChain<24000, 24> tapped{kSampleRate, kBlockSize};
+    reference.resetDiffuser(4, 0.3f, 0.46f, 0.7f, 7.f, skipSmoothing);
+    tapped.resetDiffuser(4, 0.3f, 0.46f, 0.7f, 7.f, skipSmoothing);
+    reference.setModulationDepth(0.f);
+    tapped.setModulationDepth(0.f);
+    tapped.setTapSpan(100.f);
+    tapped.setTapParity(DiffuserDelayChain<24000, 24>::TapParity::EvenOnly);
+
+    std::array<std::atomic<float>, 25> sink{};
+    reference.setLevelMeterSink(&sink);
+
+    std::array<float, kBlockSize> in{};
+    std::fill(in.begin(), in.end(), 1.f);
+    std::array<float, kBlockSize> refOut{};
+    std::array<float, kBlockSize> tappedOut{};
+    for (size_t block = 0; block < 6000; ++block)
+    {
+        reference.processBlock(in.data(), refOut.data(), kBlockSize);
+        tapped.processBlock(in.data(), tappedOut.data(), kBlockSize);
+    }
+
+    // Elements 0 and 2 (sink bins 1 and 3) are the even-indexed taps within the 4-element,
+    // fully-spanned window; odd-indexed elements 1 and 3 must be excluded.
+    const auto expected = (sink[1].load() + sink[3].load()) / std::sqrt(2.f);
+    for (const auto v : tappedOut)
+    {
+        EXPECT_NEAR(v, expected, 5E-3f);
+    }
+}
+
+TEST_F(DiffuserDelayChainTest, tapParityOddOnlyAveragesOddIndexedTaps)
+{
+    DiffuserDelayChain<24000, 24> reference{kSampleRate, kBlockSize};
+    DiffuserDelayChain<24000, 24> tapped{kSampleRate, kBlockSize};
+    reference.resetDiffuser(4, 0.3f, 0.46f, 0.7f, 7.f, skipSmoothing);
+    tapped.resetDiffuser(4, 0.3f, 0.46f, 0.7f, 7.f, skipSmoothing);
+    reference.setModulationDepth(0.f);
+    tapped.setModulationDepth(0.f);
+    tapped.setTapSpan(100.f);
+    tapped.setTapParity(DiffuserDelayChain<24000, 24>::TapParity::OddOnly);
+
+    std::array<std::atomic<float>, 25> sink{};
+    reference.setLevelMeterSink(&sink);
+
+    std::array<float, kBlockSize> in{};
+    std::fill(in.begin(), in.end(), 1.f);
+    std::array<float, kBlockSize> refOut{};
+    std::array<float, kBlockSize> tappedOut{};
+    for (size_t block = 0; block < 6000; ++block)
+    {
+        reference.processBlock(in.data(), refOut.data(), kBlockSize);
+        tapped.processBlock(in.data(), tappedOut.data(), kBlockSize);
+    }
+
+    // Elements 1 and 3 (sink bins 2 and 4) are the odd-indexed taps; even-indexed elements 0
+    // and 2 must be excluded, complementing tapParityEvenOnlyAveragesEvenIndexedTaps.
+    const auto expected = (sink[2].load() + sink[4].load()) / std::sqrt(2.f);
+    for (const auto v : tappedOut)
+    {
+        EXPECT_NEAR(v, expected, 5E-3f);
+    }
+}
+
 TEST_F(DiffuserDelayChainTest, tapSpanStaysWithinActiveElementCountAfterShrinking)
 {
     std::array<float, kBlockSize> in{};

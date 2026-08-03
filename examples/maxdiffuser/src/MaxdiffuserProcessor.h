@@ -56,8 +56,22 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("fdnMix", this);
         m_parameters.addParameterListener("fdnSize", this);
         m_parameters.addParameterListener("fdnDecay", this);
+        m_parameters.addParameterListener("drive", this);
+        m_parameters.addParameterListener("eqInLow", this);
+        m_parameters.addParameterListener("eqInMid", this);
+        m_parameters.addParameterListener("eqInHigh", this);
+        m_parameters.addParameterListener("eqOutLow", this);
+        m_parameters.addParameterListener("eqOutMid", this);
+        m_parameters.addParameterListener("eqOutHigh", this);
+        m_parameters.addParameterListener("level", this);
+        m_parameters.addParameterListener("pitcherShelfLow", this);
+        m_parameters.addParameterListener("pitcherShelfHigh", this);
+        m_parameters.addParameterListener("extremeStereoTap", this);
+        m_parameters.addParameterListener("wide", this);
+        m_parameters.addParameterListener("reverbShelfLow", this);
+        m_parameters.addParameterListener("reverbShelfHigh", this);
 
-        for (size_t i = 0; i < 21; ++i)
+        for (size_t i = 0; i < 34; ++i)
         {
             m_ccActive[i].controller.store(kDefaultCcMappings[i].controller, std::memory_order_relaxed);
             m_ccActive[i].valueLow.store(kDefaultCcMappings[i].valueLow, std::memory_order_relaxed);
@@ -89,6 +103,20 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("fdnMix", this);
         m_parameters.removeParameterListener("fdnSize", this);
         m_parameters.removeParameterListener("fdnDecay", this);
+        m_parameters.removeParameterListener("drive", this);
+        m_parameters.removeParameterListener("eqInLow", this);
+        m_parameters.removeParameterListener("eqInMid", this);
+        m_parameters.removeParameterListener("eqInHigh", this);
+        m_parameters.removeParameterListener("eqOutLow", this);
+        m_parameters.removeParameterListener("eqOutMid", this);
+        m_parameters.removeParameterListener("eqOutHigh", this);
+        m_parameters.removeParameterListener("level", this);
+        m_parameters.removeParameterListener("pitcherShelfLow", this);
+        m_parameters.removeParameterListener("pitcherShelfHigh", this);
+        m_parameters.removeParameterListener("extremeStereoTap", this);
+        m_parameters.removeParameterListener("wide", this);
+        m_parameters.removeParameterListener("reverbShelfLow", this);
+        m_parameters.removeParameterListener("reverbShelfHigh", this);
     }
 
     void prepareToPlay(const double sampleRate, const int samplesPerBlock) override
@@ -110,7 +138,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
         for (const auto& entry : CcSettings::load())
         {
-            for (size_t i = 0; i < 21; ++i)
+            for (size_t i = 0; i < 34; ++i)
             {
                 if (kCcTargetParamIds[i] != entry.paramId)
                 {
@@ -373,6 +401,64 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             2000,
             juce::AudioParameterFloatAttributes{}.withLabel("ms").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 0) + " ms"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("drive", 1), "Drive", juce::NormalisableRange<float>(0, 100, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " %"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("eqInLow", 1), "EQ In Low", juce::NormalisableRange<float>(-18, 18, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("eqInMid", 1), "EQ In Mid", juce::NormalisableRange<float>(-18, 18, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("eqInHigh", 1), "EQ In High", juce::NormalisableRange<float>(-18, 18, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("eqOutLow", 1), "EQ Out Low", juce::NormalisableRange<float>(-18, 18, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("eqOutMid", 1), "EQ Out Mid", juce::NormalisableRange<float>(-18, 18, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("eqOutHigh", 1), "EQ Out High", juce::NormalisableRange<float>(-18, 18, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("level", 1), "Level", juce::NormalisableRange<float>(-24, 12, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("pitcherShelfLow", 1), "Pitcher Shelf Low",
+            juce::NormalisableRange<float>(-18, 18, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("pitcherShelfHigh", 1), "Pitcher Shelf High",
+            juce::NormalisableRange<float>(-18, 18, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("extremeStereoTap", 1),
+                                                                    "Extreme Stereo Tap", 0));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("wide", 1), "Wide", juce::NormalisableRange<float>(-100, 100, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " %"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("reverbShelfLow", 1), "Reverb Shelf Low",
+            juce::NormalisableRange<float>(-18, 18, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("reverbShelfHigh", 1), "Reverb Shelf High",
+            juce::NormalisableRange<float>(-18, 18, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
 
         return {params.begin(), params.end()};
     }
@@ -518,6 +604,90 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setFdnDecay(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::fdnDecay, v);
+             }},
+            {"drive",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setDrive(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::drive, v);
+             }},
+            {"eqInLow",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setEqInLow(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::eqInLow, v);
+             }},
+            {"eqInMid",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setEqInMid(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::eqInMid, v);
+             }},
+            {"eqInHigh",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setEqInHigh(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::eqInHigh, v);
+             }},
+            {"eqOutLow",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setEqOutLow(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::eqOutLow, v);
+             }},
+            {"eqOutMid",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setEqOutMid(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::eqOutMid, v);
+             }},
+            {"eqOutHigh",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setEqOutHigh(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::eqOutHigh, v);
+             }},
+            {"level",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setLevel(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::level, v);
+             }},
+            {"pitcherShelfLow",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setPitcherShelfLow(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::pitcherShelfLow, v);
+             }},
+            {"pitcherShelfHigh",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setPitcherShelfHigh(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::pitcherShelfHigh, v);
+             }},
+            {"extremeStereoTap",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setExtremeStereoTap(static_cast<bool>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::extremeStereoTap, v);
+             }},
+            {"wide",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setWide(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::wide, v);
+             }},
+            {"reverbShelfLow",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setReverbShelfLow(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbShelfLow, v);
+             }},
+            {"reverbShelfHigh",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setReverbShelfHigh(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbShelfHigh, v);
              }},
 
         };
@@ -678,6 +848,90 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("fdnDecay");
             float normalized = range.convertTo0to1(params.fdnDecay);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("drive"))
+        {
+            const auto& range = m_parameters.getParameterRange("drive");
+            float normalized = range.convertTo0to1(params.drive);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("eqInLow"))
+        {
+            const auto& range = m_parameters.getParameterRange("eqInLow");
+            float normalized = range.convertTo0to1(params.eqInLow);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("eqInMid"))
+        {
+            const auto& range = m_parameters.getParameterRange("eqInMid");
+            float normalized = range.convertTo0to1(params.eqInMid);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("eqInHigh"))
+        {
+            const auto& range = m_parameters.getParameterRange("eqInHigh");
+            float normalized = range.convertTo0to1(params.eqInHigh);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("eqOutLow"))
+        {
+            const auto& range = m_parameters.getParameterRange("eqOutLow");
+            float normalized = range.convertTo0to1(params.eqOutLow);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("eqOutMid"))
+        {
+            const auto& range = m_parameters.getParameterRange("eqOutMid");
+            float normalized = range.convertTo0to1(params.eqOutMid);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("eqOutHigh"))
+        {
+            const auto& range = m_parameters.getParameterRange("eqOutHigh");
+            float normalized = range.convertTo0to1(params.eqOutHigh);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("level"))
+        {
+            const auto& range = m_parameters.getParameterRange("level");
+            float normalized = range.convertTo0to1(params.level);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("pitcherShelfLow"))
+        {
+            const auto& range = m_parameters.getParameterRange("pitcherShelfLow");
+            float normalized = range.convertTo0to1(params.pitcherShelfLow);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("pitcherShelfHigh"))
+        {
+            const auto& range = m_parameters.getParameterRange("pitcherShelfHigh");
+            float normalized = range.convertTo0to1(params.pitcherShelfHigh);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("extremeStereoTap"))
+        {
+            const auto& range = m_parameters.getParameterRange("extremeStereoTap");
+            float normalized = range.convertTo0to1(params.extremeStereoTap);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("wide"))
+        {
+            const auto& range = m_parameters.getParameterRange("wide");
+            float normalized = range.convertTo0to1(params.wide);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("reverbShelfLow"))
+        {
+            const auto& range = m_parameters.getParameterRange("reverbShelfLow");
+            float normalized = range.convertTo0to1(params.reverbShelfLow);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("reverbShelfHigh"))
+        {
+            const auto& range = m_parameters.getParameterRange("reverbShelfHigh");
+            float normalized = range.convertTo0to1(params.reverbShelfHigh);
             p->setValueNotifyingHost(normalized);
         }
     }
@@ -856,7 +1110,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         std::atomic<float> valueLow{0.f};
         std::atomic<float> valueHigh{0.f};
     };
-    std::array<CcSlot, 21> m_ccActive{};
+    std::array<CcSlot, 34> m_ccActive{};
     std::atomic<int> m_learnTargetIndex{-1};
     std::atomic<int> m_lastLearnedIndex{-1};
 
@@ -869,8 +1123,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     void saveCcSettings() const
     {
         std::vector<CcMappingOverride> overrides;
-        overrides.reserve(21);
-        for (size_t i = 0; i < 21; ++i)
+        overrides.reserve(34);
+        for (size_t i = 0; i < 34; ++i)
         {
             overrides.push_back({std::string(kCcTargetParamIds[i]),
                                  m_ccActive[i].controller.load(std::memory_order_relaxed),
@@ -890,7 +1144,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_lastLearnedIndex.store(learnIndex, std::memory_order_relaxed);
             return;
         }
-        for (size_t i = 0; i < 21; ++i)
+        for (size_t i = 0; i < 34; ++i)
         {
             if (m_ccActive[i].controller.load(std::memory_order_relaxed) != controller)
             {

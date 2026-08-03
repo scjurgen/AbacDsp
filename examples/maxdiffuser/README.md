@@ -21,6 +21,64 @@ from early reflection style of reverb to tsunami style of very slow building up 
 | Thicker tail without more elements | Raise Tap Span to blend several late elements into the output instead of adding more Elements |
 | Ambient pad | Keep the diffuser subtle (few elements, low Diffusion) and lean on Reverb Mix/Size/Decay for a smoother, longer wash |
 
+## Signal Flow
+
+A drive/EQ-shaped distortion sits on the dry (unpitched) path only, both
+pitch taps get a hi/lo shelf, Extreme Stereo Tap reweights each channel's
+own tap-mix window, and the FDN reverb tail gets its own hi/lo shelving.
+
+```mermaid
+flowchart TD
+    IN["Input L/R"]
+
+    IN --> PRED["Pre Delay"]
+    subgraph SHAPE["Distortion block (7 knobs)"]
+        EQIN["EQ in: low/mid/high"]
+        EQIN --> DIST["Distortion atanh(drive)"]
+        DIST --> EQOUT["EQ out: low/mid/high"]
+        EQOUT --> LEVEL["* Level"]
+    end
+    PRED --> EQIN
+    LEVEL --> DRY["dryToDiffuser L/R"]
+
+    IN --> PTDL["Pitch Delay (per ch)"] --> PT1["Pitcher 1 (per ch)"] --> PSHELF1["Hi/Lo Shelf (2 knobs)"] --> P1["pitch1Data L/R"]
+    IN --> PTDL2["Pitch 2 Delay (per ch)"] --> PT2["Pitcher 2 (per ch)"] --> PSHELF2["Hi/Lo Shelf (same 2 knobs)"] --> P2["pitch2Data L/R"]
+
+    DRY --> MIX["mix=(dry+pitch1+pitch2)/3"]
+    P1 --> MIX
+    P2 --> MIX
+
+    MIX --> CHAIN["Diffuser Delay Chain (independent L/R)\nExtreme Stereo Tap off: tap window averaged in full\nExtreme Stereo Tap on: L keeps even-indexed taps, R keeps odd-indexed taps"]
+
+    CHAIN --> WETPRE["wet L/R (pre-width)"]
+    WETPRE --> WIDE["Wide (-100..100), effective only when\nExtreme Stereo Tap is on"]
+    WIDE --> WETLR["wet L/R"]
+
+    WETLR --> FSUM["sum/FdnOrder -> mono"] --> FDN["FDN Reverb Tank"] --> RSHELF["Reverb Hi/Lo Shelf (2 knobs)"]
+
+    IN --> SUMOUT["out = dry*in + wet*wetLR + fdnMix*reverbShaped"]
+    WETLR --> SUMOUT
+    RSHELF --> SUMOUT
+    SUMOUT --> OUT["Output L/R"]
+```
+
+Notes on the EQ/distortion block: it is a single 7-knob unit (EQ in, drive,
+EQ out, level) sitting between Pre Delay and dryToDiffuser, on the dry path
+only - the two pitch paths are never distorted. The pre/post EQ wraps only
+the distortion itself, a "frown/smile" shaping pattern: boost frequencies
+with EQ in before driving them into `atanh`, then use EQ out to restore
+whatever the boost removed.
+
+The Extreme Stereo Tap switch keeps the two independent L/R diffuser chains
+and changes how each channel's own tap-mix window is weighted: off, every
+active tap is averaged equally; on, channel L's window keeps only
+even-indexed taps and channel R's keeps only odd-indexed taps (a pair of
+complementary per-tap gain masks). Wide only has an effect in that mode.
+
+The tap-mix parity gain masks (even-only vs. odd-only tap selection within
+the existing Tap Span window) are covered by
+`test/Diffuser/DiffusorDelayChain_test.cpp`.
+
 ## Controls
 
 | Control | Range | Description |
@@ -41,12 +99,26 @@ from early reflection style of reverb to tsunami style of very slow building up 
 | Pitch Mix | 0 - 100% | Blend of the two pitch-shifted taps into the signal feeding the diffuser |
 | Pitch | -24 - 24 st | Pitch shift of the first, per-channel pitch tap |
 | Pitch Delay | 0 - 1000 ms | Delay before the first pitch tap |
-| Pitch 2 | -24 - 24 st | Pitch shift of the second, mono pitch tap |
+| Pitch 2 | -24 - 24 st | Pitch shift of the second, per-channel pitch tap |
 | Pitch 2 Delay | 0 - 1000 ms | Delay before the second pitch tap |
 | Pitch Mode | Drift / Sync / Vocoder | Pitch-shifting algorithm shared by both pitch taps |
 | Reverb Mix | -100 - 12 dB | Level of the FDN reverb tail (fed from the diffuser output) in the output |
 | Reverb Size | 1 - 330 m | Average delay-line size of the FDN reverb tank |
 | Reverb Decay | 1 - 100000 ms | RT60-style decay time of the FDN reverb tail |
+| Drive | 0 - 100% | Pre-gain into the dry path's atanh distortion stage; 0 is near-unity, higher values saturate harder |
+| EQ In Low | -18 - 18 dB | Low-shelf gain (150 Hz) applied to the dry path just before the distortion stage |
+| EQ In Mid | -18 - 18 dB | Peak gain (1 kHz) applied to the dry path just before the distortion stage |
+| EQ In High | -18 - 18 dB | High-shelf gain (4 kHz) applied to the dry path just before the distortion stage |
+| EQ Out Low | -18 - 18 dB | Low-shelf gain (150 Hz) applied to the dry path just after the distortion stage |
+| EQ Out Mid | -18 - 18 dB | Peak gain (1 kHz) applied to the dry path just after the distortion stage |
+| EQ Out High | -18 - 18 dB | High-shelf gain (4 kHz) applied to the dry path just after the distortion stage |
+| Level | -24 - 12 dB | Output trim of the distortion block, applied after EQ Out |
+| Pitcher Shelf Low | -18 - 18 dB | Low-shelf gain (200 Hz) applied to both pitch taps, before they mix into the diffuser chain |
+| Pitcher Shelf High | -18 - 18 dB | High-shelf gain (5 kHz) applied to both pitch taps, before they mix into the diffuser chain |
+| Extreme Stereo Tap | off / on | Switches each channel's tap-mix window from averaging every active tap to keeping only even-indexed taps (L) or odd-indexed taps (R) |
+| Wide | -100 - 100% | Effective only with Extreme Stereo Tap on; 0 collapses L/R to mono, +-100 reaches the full/swapped tap-split image |
+| Reverb Shelf Low | -18 - 18 dB | Low-shelf gain (150 Hz) applied to the FDN reverb tail |
+| Reverb Shelf High | -18 - 18 dB | High-shelf gain (6 kHz) applied to the FDN reverb tail |
 
 ## Displays
 
