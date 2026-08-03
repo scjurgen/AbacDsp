@@ -10,7 +10,7 @@ class AppSettings
     [[nodiscard]] static GuiConstants::GradientPreset loadTheme()
     {
         const auto props = makePropsFile();
-        const auto val = props->getIntValue("theme", static_cast<int>(GuiConstants::GradientPreset::Ink));
+        const auto val = props->getIntValue("theme", static_cast<int>(Themes::makeTheme(0, true)));
         return static_cast<GuiConstants::GradientPreset>(val);
     }
 

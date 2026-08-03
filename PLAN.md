@@ -13,6 +13,6 @@ Missing buttons
 Settings menu
 - the currently selected Theme, Mode, Base submenus need a checkmark for the selected item
 - Settings:
-Theme should become it's own Menu tab (right along Settings). And inside the theme menu
+Theme should become its own Menu tab (right along Settings). And inside the theme menu
 we would have ThemeColor, Mode and Base (and I am not happy with the names)
 

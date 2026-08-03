@@ -114,7 +114,7 @@ class GuiConstants
   private:
     GuiConstants()
     {
-        applyTheme(Theme::Ink);
+        applyTheme(Themes::makeTheme(0, true));
     }
 
     void applyTheme(Theme theme)

@@ -63,6 +63,12 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         setColour(juce::PopupMenu::textColourId, label);
         setColour(juce::PopupMenu::highlightedBackgroundColourId, bgMid);
         setColour(juce::PopupMenu::highlightedTextColourId, label);
+        // The JUCE-builtin Audio/MIDI Options dialog (ChannelSelectorListBox,
+        // MidiInputSelectorComponentListBox) reads these directly; left unset they
+        // fall back to LookAndFeel_V4's own dark scheme regardless of our theme.
+        setColour(juce::ListBox::backgroundColourId, bgDark);
+        setColour(juce::ListBox::textColourId, label);
+        setColour(juce::ListBox::outlineColourId, bgMid);
     }
 
     void drawLabel(juce::Graphics& g, juce::Label& label) override
@@ -359,6 +365,26 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
     juce::Font getPopupMenuFont() override
     {
         return mainFontDefinition;
+    }
+
+    juce::Font getMenuBarFont(juce::MenuBarComponent&, int, const juce::String&) override
+    {
+        return mainFontDefinition;
+    }
+
+    int getDefaultMenuBarHeight() override
+    {
+        return juce::roundToInt(mainFontDefinition.getHeight() * 1.6f);
+    }
+
+    void getIdealPopupMenuItemSize(const juce::String& text, const bool isSeparator, const int standardMenuItemHeight,
+                                   int& idealWidth, int& idealHeight) override
+    {
+        LookAndFeel_V4::getIdealPopupMenuItemSize(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight);
+        if (!isSeparator)
+        {
+            idealHeight = juce::roundToInt(static_cast<float>(idealHeight) * 1.3f);
+        }
     }
 
     juce::Font getComboBoxFont(juce::ComboBox&) override

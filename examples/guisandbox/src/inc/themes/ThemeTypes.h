@@ -35,7 +35,7 @@ struct ThemeDefinition
     uint32_t statusOutline{};
     uint32_t labelColour{};
 
-    std::array<GradientStop, 6> spectrogramStops{};
+    std::array<GradientStop, 14> spectrogramStops{};
     size_t spectrogramStopCount{};
 
     MeterZoneColors cpuZones{};

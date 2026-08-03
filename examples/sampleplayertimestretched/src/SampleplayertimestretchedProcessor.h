@@ -59,6 +59,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         pluginRunner =
             std::make_unique<SamplePlayerTimeStretched<NumSamplesPerBlock>>(RateNormalizer::kInternalSampleRate);
+
         fixedRunner = std::make_unique<RateNormalizer>(static_cast<float>(sampleRate),
                                                        [this](const AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& input,
                                                               AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& output)
@@ -493,6 +494,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 
     std::unique_ptr<RateNormalizer> fixedRunner;
     std::unique_ptr<SamplePlayerTimeStretched<NumSamplesPerBlock>> pluginRunner;
+
     juce::AudioProcessorValueTreeState m_parameters;
     // CPU-Load
     std::atomic<float> m_cpuLoad;

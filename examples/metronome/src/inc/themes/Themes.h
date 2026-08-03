@@ -84,9 +84,16 @@ enum class Theme : int
     return static_cast<ui::ThemeFamily>(static_cast<int>(theme) / kSlotsPerFamily);
 }
 
+// Hover's base OKLCH hue, per family: re-anchors dial index 0 (Red) onto true red so
+// kHueNames' labels match what the knob renders.
+inline constexpr double kBichromaticHueAnchorDeg = 326.0;
+inline constexpr double kTrichromaticHueAnchorDeg = 19.6;
+
 [[nodiscard]] constexpr double hueDegrees(const Theme theme)
 {
-    return static_cast<double>(hueIndex(theme) * kHueStepDeg);
+    const double anchor =
+        family(theme) == ui::ThemeFamily::Trichromatic ? kTrichromaticHueAnchorDeg : kBichromaticHueAnchorDeg;
+    return static_cast<double>(hueIndex(theme) * kHueStepDeg) - anchor;
 }
 
 [[nodiscard]] constexpr Theme makeTheme(const int hueIdx, const bool dark,

@@ -138,12 +138,20 @@ class FileIo
             std::cerr << "FileIo: ERROR - Failed to open " << filename << " for reading" << std::endl;
             return false;
         }
-        nlohmann::json j;
-        in >> j;
-        m_currentParams = j.get<PatchParameters>();
-        m_currentPatchName = name;
-        m_currentParams.clearModified();
-        return true;
+        try
+        {
+            nlohmann::json j;
+            in >> j;
+            m_currentParams = j.get<PatchParameters>();
+            m_currentPatchName = name;
+            m_currentParams.clearModified();
+            return true;
+        }
+        catch (const nlohmann::json::exception& e)
+        {
+            reportCorruptPatch(filename, e.what());
+            return false;
+        }
     }
 
     bool deletePatchNamed(const std::string& name)
@@ -217,6 +225,16 @@ class FileIo
         return -1;
     }
 
+    // A patch file that fails to parse or no longer matches PatchParameters' fields must not
+    // crash the load: report it and leave m_currentParams untouched (default at startup, or
+    // whatever was last successfully loaded/edited otherwise).
+    static void reportCorruptPatch(const std::string& filename, const std::string& reason)
+    {
+        std::cerr << "FileIo: ERROR - Corrupt or incompatible patch file, keeping current settings.\n"
+                  << "  File: " << filename << "\n"
+                  << "  Reason: " << reason << std::endl;
+    }
+
     // Named patches are stored one file per name, so the name has to survive as a filename;
     // strip characters that are invalid (or awkward, e.g. path separators) across platforms.
     static std::string getNamedPatchFilename(const std::string& name)
@@ -241,7 +259,7 @@ class FileIo
         const nlohmann::json j = m_currentParams;
         out << j.dump(2);
         std::cout << "FileIo: File " << filename << " saved" << std::endl;
-        std::cout << j.dump();
+        std::cout << j.dump() << std::endl;
         return true;
     }
 
@@ -255,12 +273,20 @@ class FileIo
             m_currentParams = PatchParameters{};
             return false;
         }
-        nlohmann::json j;
-        in >> j;
-        m_currentParams = j.get<PatchParameters>();
-        std::cout << "FileIo: File " << filename << " loaded" << std::endl;
-        std::cout << j.dump();
-        return true;
+        try
+        {
+            nlohmann::json j;
+            in >> j;
+            m_currentParams = j.get<PatchParameters>();
+            std::cout << "FileIo: File " << filename << " loaded" << std::endl;
+            std::cout << j.dump() << std::endl << std::endl;
+            return true;
+        }
+        catch (const nlohmann::json::exception& e)
+        {
+            reportCorruptPatch(filename, e.what());
+            return false;
+        }
     }
 
     bool m_isInitialized = false;

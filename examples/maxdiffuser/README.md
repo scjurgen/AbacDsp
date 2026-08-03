@@ -81,11 +81,41 @@ the existing Tap Span window) are covered by
 
 ## Controls
 
+Grouped to match the plugin's layout: Pre Processing, Pitch, Diffuser, Reverb.
+
+### Pre Processing
+
 | Control | Range | Description |
 |---|---|---|
 | Dry | -100 - 12 dB | Level of the unprocessed input in the output |
 | Wet | -100 - 12 dB | Level of the diffuser chain's output in the output |
 | Pre Delay | 0 - 1000 ms | Delay before the dry (unpitched) signal enters the diffuser chain |
+| Drive | 0 - 100% | Pre-gain into the dry path's atanh distortion stage; 0 is near-unity, higher values saturate harder |
+| EQ In Low | -18 - 18 dB | Low-shelf gain (150 Hz) applied to the dry path just before the distortion stage |
+| EQ In Mid | -18 - 18 dB | Peak gain (1 kHz) applied to the dry path just before the distortion stage |
+| EQ In High | -18 - 18 dB | High-shelf gain (4 kHz) applied to the dry path just before the distortion stage |
+| EQ Out Low | -18 - 18 dB | Low-shelf gain (150 Hz) applied to the dry path just after the distortion stage |
+| EQ Out Mid | -18 - 18 dB | Peak gain (1 kHz) applied to the dry path just after the distortion stage |
+| EQ Out High | -18 - 18 dB | High-shelf gain (4 kHz) applied to the dry path just after the distortion stage |
+| Level | -24 - 12 dB | Output trim of the distortion block, applied after EQ Out |
+
+### Pitch
+
+| Control | Range | Description |
+|---|---|---|
+| Pitch Mix | 0 - 100% | Blend of the two pitch-shifted taps into the signal feeding the diffuser |
+| Pitch | -24 - 24 st | Pitch shift of the first, per-channel pitch tap |
+| Pitch Delay | 0 - 1000 ms | Delay before the first pitch tap |
+| Pitch 2 | -24 - 24 st | Pitch shift of the second, per-channel pitch tap |
+| Pitch 2 Delay | 0 - 1000 ms | Delay before the second pitch tap |
+| Pitch Mode | Drift / Sync / Vocoder | Pitch-shifting algorithm shared by both pitch taps |
+| Pitcher Shelf Low | -18 - 18 dB | Low-shelf gain (200 Hz) applied to both pitch taps, before they mix into the diffuser chain |
+| Pitcher Shelf High | -18 - 18 dB | High-shelf gain (5 kHz) applied to both pitch taps, before they mix into the diffuser chain |
+
+### Diffuser
+
+| Control | Range | Description |
+|---|---|---|
 | Elements | 0 - 50 | Number of allpass delay stages in series; more elements thicken the diffusion |
 | Tap Span | 0 - 100% | How many of the active chain's last elements are averaged into the output tap; 0% taps only the final element, 100% averages the whole active chain |
 | Diffusion | -100 - 100% | Feedback amount of each allpass stage; higher values smear transients into a denser wash |
@@ -96,27 +126,16 @@ the existing Tap Span window) are covered by
 | Mod Depth | 0 - 1 | Depth of the pitch-modulating LFO applied to every second delay element |
 | Mod Speed | 0.01 - 5 Hz | Rate of that modulation LFO |
 | Low Pass | 20 - 20000 Hz | Damping filter cutoff applied inside each element's feedback path |
-| Pitch Mix | 0 - 100% | Blend of the two pitch-shifted taps into the signal feeding the diffuser |
-| Pitch | -24 - 24 st | Pitch shift of the first, per-channel pitch tap |
-| Pitch Delay | 0 - 1000 ms | Delay before the first pitch tap |
-| Pitch 2 | -24 - 24 st | Pitch shift of the second, per-channel pitch tap |
-| Pitch 2 Delay | 0 - 1000 ms | Delay before the second pitch tap |
-| Pitch Mode | Drift / Sync / Vocoder | Pitch-shifting algorithm shared by both pitch taps |
+| Extreme Stereo Tap | off / on | Switches each channel's tap-mix window from averaging every active tap to keeping only even-indexed taps (L) or odd-indexed taps (R) |
+| Wide | -100 - 100% | Effective only with Extreme Stereo Tap on; 0 collapses L/R to mono, +-100 reaches the full/swapped tap-split image |
+
+### Reverb
+
+| Control | Range | Description |
+|---|---|---|
 | Reverb Mix | -100 - 12 dB | Level of the FDN reverb tail (fed from the diffuser output) in the output |
 | Reverb Size | 1 - 330 m | Average delay-line size of the FDN reverb tank |
 | Reverb Decay | 1 - 100000 ms | RT60-style decay time of the FDN reverb tail |
-| Drive | 0 - 100% | Pre-gain into the dry path's atanh distortion stage; 0 is near-unity, higher values saturate harder |
-| EQ In Low | -18 - 18 dB | Low-shelf gain (150 Hz) applied to the dry path just before the distortion stage |
-| EQ In Mid | -18 - 18 dB | Peak gain (1 kHz) applied to the dry path just before the distortion stage |
-| EQ In High | -18 - 18 dB | High-shelf gain (4 kHz) applied to the dry path just before the distortion stage |
-| EQ Out Low | -18 - 18 dB | Low-shelf gain (150 Hz) applied to the dry path just after the distortion stage |
-| EQ Out Mid | -18 - 18 dB | Peak gain (1 kHz) applied to the dry path just after the distortion stage |
-| EQ Out High | -18 - 18 dB | High-shelf gain (4 kHz) applied to the dry path just after the distortion stage |
-| Level | -24 - 12 dB | Output trim of the distortion block, applied after EQ Out |
-| Pitcher Shelf Low | -18 - 18 dB | Low-shelf gain (200 Hz) applied to both pitch taps, before they mix into the diffuser chain |
-| Pitcher Shelf High | -18 - 18 dB | High-shelf gain (5 kHz) applied to both pitch taps, before they mix into the diffuser chain |
-| Extreme Stereo Tap | off / on | Switches each channel's tap-mix window from averaging every active tap to keeping only even-indexed taps (L) or odd-indexed taps (R) |
-| Wide | -100 - 100% | Effective only with Extreme Stereo Tap on; 0 collapses L/R to mono, +-100 reaches the full/swapped tap-split image |
 | Reverb Shelf Low | -18 - 18 dB | Low-shelf gain (150 Hz) applied to the FDN reverb tail |
 | Reverb Shelf High | -18 - 18 dB | High-shelf gain (6 kHz) applied to the FDN reverb tail |
 
