@@ -54,3 +54,52 @@ from early reflection style of reverb to tsunami style of very slow building up 
 |---|---|
 | Bands | Per-element low/mid/high band level meters across the active diffuser chain |
 | Sizes | Per-element delay size, visualizing the Early/Late Size and Bulge distribution |
+
+## Audio flow
+```mermaid
+flowchart TD
+    IN["Stereo input"]
+    IN --> TAPS["3 raw-input taps: pre, pitch1, pitch2-mono"]
+    TAPS --> PROC["Apply delays and pitch processing"]
+    PROC --> WET["Average 3 sources into stereo wet feed"]
+    WET --> DIFF["Stereo diffuser chains"]
+    DIFF --> FDN["Mono FDN send -> stereo FDN return"]
+    IN --> MIX["Final mix: dry + diffuser + FDN"]
+    DIFF --> MIX
+    FDN --> MIX
+    MIX --> OUT["Stereo output"]
+```
+
+```mermaid
+flowchart TD
+    IN["Stereo input in(L,R)"]
+
+    IN --> TAPS["Create 3 parallel taps from raw input"]
+
+    TAPS --> PRE["Pre-delay tap, stereo\n dryToDiffuser[L/R]"]
+    TAPS --> P1["Pitch1 tap, stereo\n pitch1Data[L/R]"]
+    TAPS --> P2["Pitch2 tap source, mono\n monoDry = 0.5 * (L + R)"]
+
+    PRE --> PRE_D["m_preDelay[L/R]"]
+    P1 --> P1_D["m_pitchDelay[L/R]"]
+    P1_D --> P1_P["m_pitcher[L/R]"]
+    P2 --> P2_D["m_pitch2Delay"]
+    P2_D --> P2_P["m_pitcher2"]
+
+    PRE_D --> WET["Per-channel wet build\nwet[c] = (pre[c] + pitch1[c] + monoPitch2) / 3"]
+    P1_P --> WET
+    P2_P --> WET
+
+    WET --> DIFF["Stereo diffuser stage\nm_diffuser[0], m_diffuser[1]"]
+    DIFF --> WET_LR["Diffused wetData[L/R]"]
+
+    WET_LR --> FDN_SEND["Mono FDN send\nfdnIn = (wetL + wetR) / FdnOrder"]
+    FDN_SEND --> FDN["m_fdn.processBlockSplit"]
+    FDN --> FDN_LR["Stereo FDN return\nfdnOut[L/R]"]
+
+    IN --> MIX["Final stereo mix"]
+    WET_LR --> MIX
+    FDN_LR --> MIX
+
+    MIX --> OUT["out[L/R] = m_dry*in + m_wet*wetData + m_fdnMix*fdnOut"]
+```
