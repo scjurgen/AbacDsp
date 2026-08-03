@@ -5,6 +5,8 @@
  * Keep the file readonly
  */
 
+#include <map>
+
 #include "MaxdiffuserProcessor.h"
 #include "UiElements.h"
 
@@ -773,29 +775,43 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         }
     }
 
+    // A "/" in a patch name (e.g. "chorus/classic tri chorus") groups it under a folder
+    // submenu; root-level patches stay directly in the returned menu.
+    juce::PopupMenu buildGroupedPatchMenu(int idBase, const juce::String& tickedName = {})
+    {
+        juce::PopupMenu rootMenu;
+        std::map<juce::String, juce::PopupMenu> folderMenus;
+        for (size_t i = 0; i < m_patchMenuNames.size(); ++i)
+        {
+            const auto& fullName = m_patchMenuNames[i];
+            const int itemId = idBase + static_cast<int>(i);
+            const int slashIndex = fullName.lastIndexOfChar('/');
+            if (slashIndex < 0)
+            {
+                rootMenu.addItem(itemId, fullName, true, fullName == tickedName);
+            }
+            else
+            {
+                const auto folder = fullName.substring(0, slashIndex);
+                const auto leaf = fullName.substring(slashIndex + 1);
+                folderMenus[folder].addItem(itemId, leaf, true, fullName == tickedName);
+            }
+        }
+        for (auto& [folder, menu] : folderMenus)
+        {
+            rootMenu.addSubMenu(folder, menu);
+        }
+        return rootMenu;
+    }
+
     juce::PopupMenu buildPatchesMenu()
     {
         m_patchMenuNames = processorRef.listPatchNames();
         const auto currentName = processorRef.getCurrentPatchName();
 
-        juce::PopupMenu loadMenu;
-        for (size_t i = 0; i < m_patchMenuNames.size(); ++i)
-        {
-            loadMenu.addItem(kPatchLoadIdBase + static_cast<int>(i), m_patchMenuNames[i], true,
-                             m_patchMenuNames[i] == currentName);
-        }
-
-        juce::PopupMenu deleteMenu;
-        for (size_t i = 0; i < m_patchMenuNames.size(); ++i)
-        {
-            deleteMenu.addItem(kPatchDeleteIdBase + static_cast<int>(i), m_patchMenuNames[i]);
-        }
-
-        juce::PopupMenu renameMenu;
-        for (size_t i = 0; i < m_patchMenuNames.size(); ++i)
-        {
-            renameMenu.addItem(kPatchRenameIdBase + static_cast<int>(i), m_patchMenuNames[i]);
-        }
+        auto loadMenu = buildGroupedPatchMenu(kPatchLoadIdBase, currentName);
+        auto deleteMenu = buildGroupedPatchMenu(kPatchDeleteIdBase);
+        auto renameMenu = buildGroupedPatchMenu(kPatchRenameIdBase);
 
         juce::PopupMenu patches;
         patches.addSubMenu("Load", loadMenu, !m_patchMenuNames.empty());
