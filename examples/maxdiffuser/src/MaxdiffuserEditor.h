@@ -122,14 +122,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // auto generated
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-            std::vector<juce::Rectangle<int>> areas(6);
-            const auto rowHeight = area.getHeight() / 11;
+            std::vector<juce::Rectangle<int>> areas(5);
+            const auto rowHeight = area.getHeight() / 9;
             areas[0] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
             areas[1] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
             areas[2] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
             areas[3] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
-            areas[4] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
-            areas[5] = area.reduced(Constants::Margins::small);
+            areas[4] = area.reduced(Constants::Margins::small);
 
             {
                 juce::FlexBox box;
@@ -190,16 +189,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
                 box.flexDirection = juce::FlexBox::Direction::row;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(binsBandsGauge).withFlex(1).withMargin(knobMarginSmall));
-                box.performLayout(areas[4].toFloat());
-            }
-            {
-                juce::FlexBox box;
-                box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::row;
-                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
                 box.items.add(juce::FlexItem(sizesGauge).withFlex(1).withMargin(knobMarginSmall));
-                box.performLayout(areas[5].toFloat());
+                box.performLayout(areas[4].toFloat());
             }
         }
     }
@@ -479,7 +470,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             fdnMixDial.setVisible(true);
             fdnSizeDial.setVisible(true);
             fdnDecayDial.setVisible(true);
-            binsBandsGauge.setVisible(true);
+            binsBandsGauge.setVisible(false);
             sizesGauge.setVisible(true);
         }
         resized();

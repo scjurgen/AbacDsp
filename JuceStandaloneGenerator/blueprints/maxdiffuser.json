@@ -57,8 +57,8 @@
   "layout": {
     "WINDOW_WIDTH": "1100",
     "WINDOW_HEIGHT": "950",
-    "type": "=6",
-    "composition": "R=(2:2:2:2:2:1) A1=(DRY,WET,PRED) A2=(MIX,PTCH,PTDL,PTCH2,PTDL2,PMOD) A3=(ELM,SPAN,FDBK,BLG,BSZ,TSZ,SPRD) A4=(MDPT,MDSP,LPF,FMIX,FSZ,FDEC) A5=(BINSB) A6=(SIZES)"
+    "type": "=5",
+    "composition": "R=(2:2:2:2:1) A1=(DRY,WET,PRED) A2=(MIX,PTCH,PTDL,PTCH2,PTDL2,PMOD) A3=(ELM,SPAN,FDBK,BLG,BSZ,TSZ,SPRD) A4=(MDPT,MDSP,LPF,FMIX,FSZ,FDEC) A5=(SIZES)"
   },
   "performance-page": {
     "type": "≡",

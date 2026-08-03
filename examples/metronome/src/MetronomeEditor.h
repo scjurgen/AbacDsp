@@ -256,7 +256,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(m_pageSettingsButton);
         m_pagePerformanceButton.onClick = [this] { switchPage(Page::Performance); };
         m_pageSettingsButton.onClick = [this] { switchPage(Page::Settings); };
-        switchPage(Page::Settings);
+        switchPage(Page::Performance);
     }
 
     enum class Page
@@ -278,7 +278,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             onOffSwitch.setVisible(false);
             hostSyncSwitch.setVisible(false);
             presetDrop.setVisible(false);
-            swingRatioDial.setVisible(false);
             signalGauge.setVisible(true);
             irisGauge.setVisible(true);
         }
@@ -292,7 +291,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             onOffSwitch.setVisible(true);
             hostSyncSwitch.setVisible(true);
             presetDrop.setVisible(true);
-            swingRatioDial.setVisible(true);
             signalGauge.setVisible(true);
             irisGauge.setVisible(true);
         }
@@ -617,7 +615,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};
-    Page m_currentPage{Page::Settings};
+    Page m_currentPage{Page::Performance};
     juce::TextButton m_pagePerformanceButton{"Performance"};
     juce::TextButton m_pageSettingsButton{"Settings"};
     static constexpr int kThemeModeLightId = 9000;
