@@ -88,8 +88,8 @@
     "composition": "C=(1:1:1:1) A1=(SYNC, TSIG, CIN, BPM, DIV, RBAR, ASTP) A2=(REC, TREC, THR, CVOL, CTRK) A3=(PLAY, CLR, LVOL, FRZ) A4=(DIV-O, ODUB, UNDO, MIXD, DIV-S, SEQP, CLRS)"
   },
   "performance-page": {
-    "type": "-",
-    "composition": "A1=(BEAT,SLICE)"
+    "type": "||",
+    "composition": "C=(3:1) A1=(BEAT) A2=(REC, PLAY, CLR, CVOL, LVOL, ODUB, UNDO, MIXD)"
   },
   "extra_ui_includes": [
     "inc/SliceWaveDisplay.h",
