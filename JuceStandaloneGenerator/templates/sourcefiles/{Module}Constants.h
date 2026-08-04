@@ -37,6 +37,12 @@ constexpr float medium = 4.0f;
 constexpr float big = 8.0f;
 }
 
+namespace Dial
+{
+constexpr float minSize = 80.0f;
+constexpr float maxSize = 180.0f;
+}
+
 namespace InitJuce
 {
 constexpr auto WindowWidth{/*WINDOW_WIDTH*/};
