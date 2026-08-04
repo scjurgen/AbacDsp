@@ -368,13 +368,13 @@ class LooperImpl final : public EffectBase
 
     // Guarded like requestFreeze(); writes <loopsDirectory>/<name>.wav + .json
     // on a background worker: file I/O is not RT-safe.
-    void requestSaveLoopAs(const std::string& name)
+    void requestSaveLoopAs(const std::string& name, const std::string& patchParamsJson = {})
     {
         if (isRecording() || isOverdubbing() || m_recorder.loopLengthFrames() == 0)
         {
             return;
         }
-        m_loopStorage.requestSave(name);
+        m_loopStorage.requestSave(name, patchParamsJson);
     }
 
     [[nodiscard]] bool isLoopSavePending() const noexcept

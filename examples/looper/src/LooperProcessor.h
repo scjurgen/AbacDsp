@@ -952,7 +952,14 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         if (pluginRunner)
         {
-            pluginRunner->requestSaveLoopAs(name.toStdString());
+            pluginRunner->requestSaveLoopAs(name.toStdString(), m_fileIo.currentParametersAsJson());
+        }
+    }
+    void applyLoadedLoopPatchParams(const juce::String& json)
+    {
+        if (m_fileIo.loadParametersFromJson(json.toStdString()))
+        {
+            applyLoadedParametersToHost();
         }
     }
     void requestLoadLoop(const juce::String& name)

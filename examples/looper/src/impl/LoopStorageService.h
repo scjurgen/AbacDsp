@@ -47,6 +47,7 @@ class LoopStorageService
         bool hasConflict{false};
         float wavBpm{0.f};
         float jsonBpm{0.f};
+        std::string patchParamsJson; // empty if the loop predates this field or had none
     };
 
     // One frozen track's audio (interleaved) plus its slices, already laid
@@ -199,13 +200,16 @@ class LoopStorageService
 
     // Guarded by the caller (recording/overdub/empty-loop checks); writes
     // <loopsDirectory>/<name>.wav + .json on the save worker (file I/O isn't RT-safe).
-    void requestSave(const std::string& name)
+    // patchParamsJson is an opaque snapshot (caller's patch/parameter state) embedded
+    // in the sidecar so a loop reload can restore the settings it was captured with.
+    void requestSave(const std::string& name, const std::string& patchParamsJson = {})
     {
         if (m_loopSavePending || m_loopsDirectory.empty() || sanitizeLoopName(name).empty())
         {
             return;
         }
         m_loopSaveName = name;
+        m_loopSaveParamsJson = patchParamsJson;
         m_loopSaveRequestedGen = m_loopSaveRequestGen.load(std::memory_order_relaxed) + 1;
         m_loopSavePending = true;
         m_loopSaveRequestGen.store(m_loopSaveRequestedGen, std::memory_order_release);
@@ -454,6 +458,17 @@ class LoopStorageService
             }
 
             nlohmann::json j = meta;
+            if (!m_loopSaveParamsJson.empty())
+            {
+                try
+                {
+                    j["patchParams"] = nlohmann::json::parse(m_loopSaveParamsJson);
+                }
+                catch (const nlohmann::json::exception& e)
+                {
+                    std::cerr << "LoopStorageService: failed to embed patch params: " << e.what() << std::endl;
+                }
+            }
             if (m_sliceLibrary.trackCount() > 0)
             {
                 j["pattern"] = m_pattern;
@@ -556,6 +571,10 @@ class LoopStorageService
                     nlohmann::json j;
                     jsonIn >> j;
                     sidecarMeta = j.get<AbacDsp::LoopMetadata>();
+                    if (j.contains("patchParams"))
+                    {
+                        outcome.patchParamsJson = j.at("patchParams").dump();
+                    }
                     if (j.contains("pattern") && j.contains("tracks"))
                     {
                         loadSequencerData(j);
@@ -660,6 +679,7 @@ class LoopStorageService
 
     std::string m_loopsDirectory; // set once via setLoopsDirectory(), before any save/load
     std::string m_loopSaveName;
+    std::string m_loopSaveParamsJson;
     bool m_loopSavePending{false};
     uint64_t m_loopSaveRequestedGen{0};
     std::atomic<uint64_t> m_loopSaveRequestGen{0};

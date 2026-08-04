@@ -623,12 +623,17 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         }
         else if (!outcome.hasConflict)
         {
+            if (!outcome.patchParamsJson.empty())
+            {
+                processorRef.applyLoadedLoopPatchParams(juce::String(outcome.patchParamsJson));
+            }
             m_statusBar.showMessage("Loaded");
         }
         else
         {
             const auto wavBpm = outcome.wavBpm;
             const auto jsonBpm = outcome.jsonBpm;
+            const auto patchParamsJson = juce::String(outcome.patchParamsJson);
             juce::NativeMessageBox::showAsync(
                 juce::MessageBoxOptions()
                     .withIconType(juce::MessageBoxIconType::QuestionIcon)
@@ -636,9 +641,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                     .withMessage("The saved tempo doesn't match the file's embedded tempo. Which one should be used?")
                     .withButton(juce::String::fromUTF8("File (") + juce::String(wavBpm, 1) + " BPM)")
                     .withButton(juce::String::fromUTF8("Saved (") + juce::String(jsonBpm, 1) + " BPM)"),
-                [this, wavBpm, jsonBpm](int result)
+                [this, wavBpm, jsonBpm, patchParamsJson](int result)
                 {
                     processorRef.resolveLoopLoadBpm(result == 0 ? wavBpm : jsonBpm);
+                    if (patchParamsJson.isNotEmpty())
+                    {
+                        processorRef.applyLoadedLoopPatchParams(patchParamsJson);
+                    }
                     m_statusBar.showMessage("Loaded");
                 });
         }
