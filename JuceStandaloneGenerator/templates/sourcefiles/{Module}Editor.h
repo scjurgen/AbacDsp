@@ -123,6 +123,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     void switchPage(Page page)
     {
         m_currentPage = page;
+        m_pagePerformanceButton.setToggleState(page == Page::Performance, juce::dontSendNotification);
+        m_pageSettingsButton.setToggleState(page == Page::Settings, juce::dontSendNotification);
         if (page == Page::Performance)
         {
             /*PAGE_SHOW_PERFORMANCE*/

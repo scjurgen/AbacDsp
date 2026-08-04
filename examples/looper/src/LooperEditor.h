@@ -5,6 +5,8 @@
  * Keep the file readonly
  */
 
+#include <map>
+
 #include "LooperProcessor.h"
 #include "UiElements.h"
 
@@ -99,21 +101,23 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // auto generated
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-            std::vector<juce::Rectangle<int>> areas(5);
-            const auto colWidth = area.getWidth() / 11;
+            std::vector<juce::Rectangle<int>> areas(4);
+            const auto colWidth = area.getWidth() / 4;
             areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
             areas[1] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
             areas[2] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-            areas[3] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-            areas[4] = area.reduced(Constants::Margins::small);
+            areas[3] = area.reduced(Constants::Margins::small);
 
             {
                 juce::FlexBox box;
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
                 box.flexDirection = juce::FlexBox::Direction::column;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(hostSyncSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(timeSignatureDrop)
                                   .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
@@ -124,12 +128,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(sliceDivisionDrop)
                                   .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(hostSyncSwitch)
+                box.items.add(juce::FlexItem(recordBarsDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(autoStopSwitch)
                                   .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
@@ -146,19 +152,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(autoStopSwitch)
-                                  .withFlex(0)
-                                  .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                                  .withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(clickRecordVolumeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(threshRecSwitch)
                                   .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(recordBarsDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(clickRecordVolumeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[1].toFloat());
             }
             {
@@ -177,6 +178,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(loopVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(freezeSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.performLayout(areas[2].toFloat());
             }
             {
@@ -209,11 +215,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(freezeSwitch)
-                                  .withFlex(0)
-                                  .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(seqPlaySwitch)
                                   .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
@@ -225,15 +226,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
                 box.performLayout(areas[3].toFloat());
-            }
-            {
-                juce::FlexBox box;
-                box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::column;
-                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(beatGauge).withFlex(5).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(sliceGauge).withFlex(1).withMargin(knobMarginSmall));
-                box.performLayout(areas[4].toFloat());
             }
         }
     }
@@ -430,7 +422,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(m_pageSettingsButton);
         m_pagePerformanceButton.onClick = [this] { switchPage(Page::Performance); };
         m_pageSettingsButton.onClick = [this] { switchPage(Page::Settings); };
-        switchPage(Page::Settings);
+        switchPage(Page::Performance);
     }
 
     enum class Page
@@ -442,6 +434,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     void switchPage(Page page)
     {
         m_currentPage = page;
+        m_pagePerformanceButton.setToggleState(page == Page::Performance, juce::dontSendNotification);
+        m_pageSettingsButton.setToggleState(page == Page::Settings, juce::dontSendNotification);
         if (page == Page::Performance)
         {
             divoLabel.setVisible(false);
@@ -483,7 +477,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             clearSwitch.setVisible(true);
             threshRecSwitch.setVisible(true);
             hostSyncSwitch.setVisible(true);
-            freeRecordSwitch.setVisible(true);
+            freeRecordSwitch.setVisible(false);
             countInBarsDrop.setVisible(true);
             timeSignatureDrop.setVisible(true);
             autoStopSwitch.setVisible(true);
@@ -497,8 +491,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             freezeSwitch.setVisible(true);
             seqPlaySwitch.setVisible(true);
             clearSeqSwitch.setVisible(true);
-            beatGauge.setVisible(true);
-            sliceGauge.setVisible(true);
+            beatGauge.setVisible(false);
+            sliceGauge.setVisible(false);
         }
         resized();
     }
@@ -642,29 +636,43 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         }
     }
 
+    // A "/" in a patch name (e.g. "chorus/classic tri chorus") groups it under a folder
+    // submenu; root-level patches stay directly in the returned menu.
+    juce::PopupMenu buildGroupedPatchMenu(int idBase, const juce::String& tickedName = {})
+    {
+        juce::PopupMenu rootMenu;
+        std::map<juce::String, juce::PopupMenu> folderMenus;
+        for (size_t i = 0; i < m_patchMenuNames.size(); ++i)
+        {
+            const auto& fullName = m_patchMenuNames[i];
+            const int itemId = idBase + static_cast<int>(i);
+            const int slashIndex = fullName.lastIndexOfChar('/');
+            if (slashIndex < 0)
+            {
+                rootMenu.addItem(itemId, fullName, true, fullName == tickedName);
+            }
+            else
+            {
+                const auto folder = fullName.substring(0, slashIndex);
+                const auto leaf = fullName.substring(slashIndex + 1);
+                folderMenus[folder].addItem(itemId, leaf, true, fullName == tickedName);
+            }
+        }
+        for (auto& [folder, menu] : folderMenus)
+        {
+            rootMenu.addSubMenu(folder, menu);
+        }
+        return rootMenu;
+    }
+
     juce::PopupMenu buildPatchesMenu()
     {
         m_patchMenuNames = processorRef.listPatchNames();
         const auto currentName = processorRef.getCurrentPatchName();
 
-        juce::PopupMenu loadMenu;
-        for (size_t i = 0; i < m_patchMenuNames.size(); ++i)
-        {
-            loadMenu.addItem(kPatchLoadIdBase + static_cast<int>(i), m_patchMenuNames[i], true,
-                             m_patchMenuNames[i] == currentName);
-        }
-
-        juce::PopupMenu deleteMenu;
-        for (size_t i = 0; i < m_patchMenuNames.size(); ++i)
-        {
-            deleteMenu.addItem(kPatchDeleteIdBase + static_cast<int>(i), m_patchMenuNames[i]);
-        }
-
-        juce::PopupMenu renameMenu;
-        for (size_t i = 0; i < m_patchMenuNames.size(); ++i)
-        {
-            renameMenu.addItem(kPatchRenameIdBase + static_cast<int>(i), m_patchMenuNames[i]);
-        }
+        auto loadMenu = buildGroupedPatchMenu(kPatchLoadIdBase, currentName);
+        auto deleteMenu = buildGroupedPatchMenu(kPatchDeleteIdBase);
+        auto renameMenu = buildGroupedPatchMenu(kPatchRenameIdBase);
 
         juce::PopupMenu patches;
         patches.addSubMenu("Load", loadMenu, !m_patchMenuNames.empty());
@@ -994,7 +1002,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};
-    Page m_currentPage{Page::Settings};
+    Page m_currentPage{Page::Performance};
     juce::TextButton m_pagePerformanceButton{"Performance"};
     juce::TextButton m_pageSettingsButton{"Settings"};
     static constexpr int kThemeModeLightId = 9000;
