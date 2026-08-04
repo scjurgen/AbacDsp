@@ -130,6 +130,8 @@ class LoopStorageService
         m_loopsDirectory = std::move(dir);
     }
 
+    // A "/" in a loop name (e.g. "drums/verse groove") denotes a subfolder,
+    // mirroring FileIo's named-patch convention; scans recursively to find them.
     [[nodiscard]] std::vector<std::string> listLoopNames() const
     {
         std::vector<std::string> names;
@@ -137,11 +139,13 @@ class LoopStorageService
         {
             return names;
         }
-        for (const auto& entry : std::filesystem::directory_iterator(m_loopsDirectory))
+        const std::filesystem::path root(m_loopsDirectory);
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(root))
         {
             if (entry.path().extension() == ".wav")
             {
-                names.push_back(entry.path().stem().string());
+                auto relative = entry.path().lexically_relative(root).replace_extension().generic_string();
+                names.push_back(std::move(relative));
             }
         }
         std::ranges::sort(names);
@@ -175,6 +179,7 @@ class LoopStorageService
             return false;
         }
         std::error_code ec;
+        std::filesystem::create_directories(loopWavPath(newName).parent_path(), ec);
         std::filesystem::rename(loopWavPath(oldName), loopWavPath(newName), ec);
         if (ec)
         {
@@ -334,49 +339,109 @@ class LoopStorageService
   private:
     // Named patches sanitize with juce::String; this is JUCE-free (Impl stays
     // library-agnostic), so filesystem-unsafe characters are stripped by hand.
+    // A "/" denotes a subfolder (each segment sanitized on its own); segments
+    // that go empty after trimming (leading/trailing/doubled slashes) are dropped.
     [[nodiscard]] static std::string sanitizeLoopName(const std::string& name)
     {
-        std::string result;
-        for (const char c : name)
+        std::vector<std::string> segments;
+        size_t start = 0;
+        while (start <= name.size())
         {
-            if (std::string_view("/\\:*?\"<>|").find(c) == std::string_view::npos)
+            const auto slash = name.find('/', start);
+            const auto end = (slash == std::string::npos) ? name.size() : slash;
+            std::string segment;
+            for (size_t i = start; i < end; ++i)
             {
-                result += c;
+                if (std::string_view("\\:*?\"<>|").find(name[i]) == std::string_view::npos)
+                {
+                    segment += name[i];
+                }
             }
+            const auto first = segment.find_first_not_of(" \t");
+            if (first != std::string::npos)
+            {
+                const auto last = segment.find_last_not_of(" \t");
+                segments.push_back(segment.substr(first, last - first + 1));
+            }
+            if (slash == std::string::npos)
+            {
+                break;
+            }
+            start = slash + 1;
         }
-        const auto first = result.find_first_not_of(" \t");
-        if (first == std::string::npos)
+        if (segments.empty())
         {
             return {};
         }
-        const auto last = result.find_last_not_of(" \t");
-        return result.substr(first, last - first + 1);
+        std::string joined = segments.front();
+        for (size_t i = 1; i < segments.size(); ++i)
+        {
+            joined += "/" + segments[i];
+        }
+        return joined;
     }
 
-    [[nodiscard]] std::filesystem::path loopWavPath(const std::string& name) const
+    // <loopsDirectory>/<folder segments>/<leaf>, without an extension; the
+    // leaf's parent directories are created on demand for the writing paths.
+    [[nodiscard]] std::filesystem::path loopBasePath(const std::string& name, const bool createDirs = false) const
     {
-        return std::filesystem::path(m_loopsDirectory) / (sanitizeLoopName(name) + ".wav");
+        const auto sanitized = sanitizeLoopName(name);
+        if (sanitized.empty())
+        {
+            return {};
+        }
+        std::filesystem::path path(m_loopsDirectory);
+        size_t start = 0;
+        while (true)
+        {
+            const auto slash = sanitized.find('/', start);
+            path /= sanitized.substr(start, slash == std::string::npos ? std::string::npos : slash - start);
+            if (slash == std::string::npos)
+            {
+                break;
+            }
+            start = slash + 1;
+        }
+        if (createDirs)
+        {
+            std::filesystem::create_directories(path.parent_path());
+        }
+        return path;
+    }
+
+    [[nodiscard]] std::filesystem::path loopWavPath(const std::string& name, const bool createDirs = false) const
+    {
+        auto path = loopBasePath(name, createDirs);
+        path += ".wav";
+        return path;
     }
 
     [[nodiscard]] std::filesystem::path loopJsonPath(const std::string& name) const
     {
-        return std::filesystem::path(m_loopsDirectory) / (sanitizeLoopName(name) + ".json");
+        auto path = loopBasePath(name);
+        path += ".json";
+        return path;
     }
 
     [[nodiscard]] std::filesystem::path loopMidPath(const std::string& name) const
     {
-        return std::filesystem::path(m_loopsDirectory) / (sanitizeLoopName(name) + ".mid");
+        auto path = loopBasePath(name);
+        path += ".mid";
+        return path;
     }
 
     [[nodiscard]] std::filesystem::path loopTrackWavPath(const std::string& name, const size_t track) const
     {
-        return std::filesystem::path(m_loopsDirectory) /
-               (sanitizeLoopName(name) + "_track" + std::to_string(track) + ".wav");
+        auto path = loopBasePath(name);
+        path += "_track" + std::to_string(track) + ".wav";
+        return path;
     }
 
     [[nodiscard]] std::filesystem::path loopOverdubWavPath(const std::string& name) const
     {
-        return std::filesystem::path(m_loopsDirectory) / (sanitizeLoopName(name) + "_overdub.wav");
+        auto path = loopBasePath(name);
+        path += "_overdub.wav";
+        return path;
     }
 
     // MIDI ticks spanned by one bar of the given meter (denominator convention:
@@ -429,7 +494,7 @@ class LoopStorageService
             const float beats = (samplesPerBeat > 0.f) ? static_cast<float>(loopLen) / samplesPerBeat : 0.f;
             const float bars = beats / static_cast<float>(m_seq.beatsPerBar());
             const AbacDsp::LoopMetadata meta{1, m_appliedBpm, bars, beats};
-            AbacDsp::LoopFile<nlohmann::json>::saveStereoWav(loopWavPath(m_loopSaveName).string(), left, right,
+            AbacDsp::LoopFile<nlohmann::json>::saveStereoWav(loopWavPath(m_loopSaveName, true).string(), left, right,
                                                              m_sampleRate, meta);
 
             // Standard MIDI File sidecar carrying the take's own tempo + meter
