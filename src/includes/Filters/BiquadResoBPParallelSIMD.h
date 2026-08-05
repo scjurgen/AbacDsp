@@ -59,7 +59,7 @@ namespace AbacDsp
  */
 template <size_t NumElements, size_t BlockSize>
     requires(NumElements % 4 == 0 && NumElements > 0)
-class BiquadResoBpParallelSIMD
+class BiquadResoBPParallelSIMD
 {
     /// @brief Three coefficients suffice: the bandpass design fixes b1 = 0 and b2 = -b0.
     struct BandPassCoefficients
@@ -72,13 +72,13 @@ class BiquadResoBpParallelSIMD
   public:
     static constexpr size_t NumSimdGroups = NumElements / 4;
 
-    explicit BiquadResoBpParallelSIMD(const float sampleRate)
+    explicit BiquadResoBPParallelSIMD(const float sampleRate)
         : m_sampleRate(sampleRate)
     {
     }
 
-    BiquadResoBpParallelSIMD()
-        : BiquadResoBpParallelSIMD(48000.f)
+    BiquadResoBPParallelSIMD()
+        : BiquadResoBPParallelSIMD(48000.f)
     {
     }
 

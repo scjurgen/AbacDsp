@@ -22,7 +22,7 @@ TEST(BiquadResoBPParallelSIMDTest, identicalResponse4)
     constexpr float sampleRate{48000.f};
     constexpr size_t NumElements{4};
 
-    BiquadResoBpParallelSIMD<NumElements, BlockSize> sut{sampleRate};
+    BiquadResoBPParallelSIMD<NumElements, BlockSize> sut{sampleRate};
     std::array<BiquadResoBP, NumElements> reference{BiquadResoBP(sampleRate), BiquadResoBP(sampleRate),
                                                     BiquadResoBP(sampleRate), BiquadResoBP(sampleRate)};
     constexpr std::array frequencies{20.f, 100.f, 1000.f, 2000.f};

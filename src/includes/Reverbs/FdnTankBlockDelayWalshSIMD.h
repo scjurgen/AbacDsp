@@ -24,7 +24,7 @@ namespace AbacDsp
  */
 template <size_t MaxSizePerElement, size_t ORDER, size_t BlockSize>
     requires(MaxSizePerElement % BlockSize == 0)
-class FdnTankBlockDelaySIMDWalsh
+class FdnTankBlockDelayWalshSIMD
 {
   public:
     struct DelayWarp
@@ -41,7 +41,7 @@ class FdnTankBlockDelaySIMDWalsh
         float spreadLines{0.f};
     };
     using Delay = ParallelPlainDelay<BlockSize, ORDER, MaxSizePerElement>;
-    explicit FdnTankBlockDelaySIMDWalsh(const float sampleRate)
+    explicit FdnTankBlockDelayWalshSIMD(const float sampleRate)
         : m_feedBackGain(1.0f / std::sqrt(static_cast<float>(ORDER)))
         , m_sampleRate(sampleRate)
     {

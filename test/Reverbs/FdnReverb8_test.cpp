@@ -259,7 +259,7 @@ TEST(FdnReverb8, checkSimd)
 TEST(FdnReverb8, checkSimdWalsh)
 {
     constexpr size_t BlockSize{16};
-    FdnTankBlockDelaySIMDWalsh<4096, 8, BlockSize> sut{48000.f};
+    FdnTankBlockDelayWalshSIMD<4096, 8, BlockSize> sut{48000.f};
     sut.setDecay(30.f);
     sut.setMinSize(0.1);
     sut.setMaxSize(1.0);
