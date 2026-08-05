@@ -26,8 +26,9 @@ enum class TransitionPhase
  * 1.5 caps it at a fifth up, and a shortening move uses its reciprocal.
  *
  * The ramp length follows from that budget. Easing bumps the rate by at most
- * c = maxAdvance - 1 but averages 2c/3 over the quadratic curve, so covering a
- * distance d needs 1.5*d/c steps, which is the constant in setNewDelta().
+ * c = maxAdvance - 1 but averages 2c/3 over the quadratic curve and 8c/15 over
+ * the quartic, so covering a distance d needs 1.5*d/c or 1.875*d/c steps
+ * respectively; see kQuadraticRampScale / kQuarticRampScale in setNewDelta().
  *
  * A request arriving mid-ramp is held and applied on completion, one deep.
  * @see https://ccrma.stanford.edu/~jos/pasp/Time_Varying_Delay_Effects.html
@@ -74,7 +75,10 @@ class FracReadHead
         m_maxAdvance = m_reducingDelta ? (1 / maxAdvance) : maxAdvance;
 
         const float advanceDeviation = m_maxAdvance - 1.0f;
-        m_totalSteps = static_cast<size_t>(std::ceil(std::abs(1.5f * deltaDifference / advanceDeviation)));
+        constexpr float kQuadraticRampScale = 3.0f / 2.0f;
+        constexpr float kQuarticRampScale = 15.0f / 8.0f;
+        constexpr float rampScale = quartic ? kQuarticRampScale : kQuadraticRampScale;
+        m_totalSteps = static_cast<size_t>(std::ceil(std::abs(rampScale * deltaDifference / advanceDeviation)));
 
         if (m_totalSteps == 0)
         {
