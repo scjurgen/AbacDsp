@@ -222,9 +222,7 @@ class OnePoleFilter : public OnePoleBase<OnePoleFilter<FilterCharacteristic, Cla
  * @ingroup filters
  * @brief Two-channel one-pole section: state per channel, one shared coefficient set.
  *
- * Both channels therefore always track the same cutoff. Only LowPass, HighPass
- * and AllPass are implemented; HighPassLeaky has no branch in stepStereo(), so
- * that instantiation leaves the output arguments unwritten.
+ * Both channels therefore always track the same cutoff.
  */
 template <OnePoleFilterCharacteristic FilterCharacteristic, bool ClampValues = false>
 class OnePoleFilterStereo
@@ -282,6 +280,18 @@ class OnePoleFilterStereo
             outLeft = outL;
             outRight = outR;
         }
+        else if constexpr (FilterCharacteristic == OnePoleFilterCharacteristic::HighPassLeaky)
+        {
+            m_v[0] = left + this->m_fdbk * (m_v[0] - left);
+            m_v[1] = right + this->m_fdbk * (m_v[1] - right);
+            if constexpr (ClampValues)
+            {
+                m_v[0] = std::clamp(m_v[0], -1.f, 1.f);
+                m_v[1] = std::clamp(m_v[1], -1.f, 1.f);
+            }
+            outLeft = left - m_v[0];
+            outRight = right - m_v[1];
+        }
     }
 
     void processBlock(float* inPlaceLeft, float* inPlaceRight, const size_t numSamples) noexcept
@@ -316,9 +326,7 @@ class OnePoleFilterStereo
  * @ingroup filters
  * @brief One-pole section over NumChannels interleaved channels, one shared coefficient set.
  *
- * step() consumes exactly one interleaved frame. As with the stereo variant,
- * HighPassLeaky has no branch and that instantiation passes the frame through
- * unchanged.
+ * step() consumes exactly one interleaved frame.
  */
 template <OnePoleFilterCharacteristic FilterCharacteristic, size_t NumChannels, bool ClampValues = false>
 class MultiChannelOnePoleFilter
@@ -368,6 +376,15 @@ class MultiChannelOnePoleFilter
                 }
                 m_v[ch] = out;
                 inPlace[ch] = out;
+            }
+            else if constexpr (FilterCharacteristic == OnePoleFilterCharacteristic::HighPassLeaky)
+            {
+                m_v[ch] = inPlace[ch] + this->m_fdbk * (m_v[ch] - inPlace[ch]);
+                if constexpr (ClampValues)
+                {
+                    m_v[ch] = std::clamp(m_v[ch], -1.f, 1.f);
+                }
+                inPlace[ch] = inPlace[ch] - m_v[ch];
             }
         }
     }

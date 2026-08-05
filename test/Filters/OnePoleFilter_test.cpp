@@ -195,7 +195,7 @@ TEST(DspOnePoleFilterTest, ClampKeepsStateFiniteForAllCharacteristics)
     exerciseMonoClamp<OnePoleFilterCharacteristic::AllPass>();
 }
 
-// --- Stereo version (AllPass, LowPass, HighPass; no HighPassLeaky) ---
+// --- Stereo version ---
 
 template <OnePoleFilterCharacteristic Characteristic>
 void exerciseStereoBlockOverloadsAgree()
@@ -228,7 +228,46 @@ TEST(DspOnePoleFilterStereoTest, BlockOverloadsAgree)
 {
     exerciseStereoBlockOverloadsAgree<OnePoleFilterCharacteristic::LowPass>();
     exerciseStereoBlockOverloadsAgree<OnePoleFilterCharacteristic::HighPass>();
+    exerciseStereoBlockOverloadsAgree<OnePoleFilterCharacteristic::HighPassLeaky>();
     exerciseStereoBlockOverloadsAgree<OnePoleFilterCharacteristic::AllPass>();
+}
+
+TEST(DspOnePoleFilterStereoTest, HighPassLeakyMatchesMonoPerChannel)
+{
+    OnePoleFilterStereo<OnePoleFilterCharacteristic::HighPassLeaky> stereoSut{48000.f, 1000.f};
+    OnePoleFilter<OnePoleFilterCharacteristic::HighPassLeaky> monoLeft{48000.f, 1000.f};
+    OnePoleFilter<OnePoleFilterCharacteristic::HighPassLeaky> monoRight{48000.f, 1000.f};
+
+    std::array<float, 8> left{1.f, 0.5f, -0.3f, 0.8f, -1.f, 0.2f, 0.1f, -0.6f};
+    std::array<float, 8> right{-1.f, 0.4f, 0.2f, -0.5f, 0.9f, -0.7f, 0.3f, 0.6f};
+
+    for (size_t i = 0; i < left.size(); ++i)
+    {
+        float outLeft = 0.0f;
+        float outRight = 0.0f;
+        stereoSut.stepStereo(left[i], right[i], outLeft, outRight);
+        EXPECT_FLOAT_EQ(outLeft, monoLeft.step(left[i]));
+        EXPECT_FLOAT_EQ(outRight, monoRight.step(right[i]));
+    }
+}
+
+TEST(DspOnePoleFilterStereoTest, HighPassLeakyCopyBlockWritesOutputs)
+{
+    OnePoleFilterStereo<OnePoleFilterCharacteristic::HighPassLeaky> sut{48000.f, 1000.f};
+    std::array<float, 4> left{1.f, -1.f, 1.f, -1.f};
+    std::array<float, 4> right{-1.f, 1.f, -1.f, 1.f};
+    std::array<float, 4> outLeft{-9.f, -9.f, -9.f, -9.f};
+    std::array<float, 4> outRight{-9.f, -9.f, -9.f, -9.f};
+
+    sut.processBlock(left.data(), right.data(), outLeft.data(), outRight.data(), left.size());
+
+    for (size_t i = 0; i < left.size(); ++i)
+    {
+        EXPECT_NE(outLeft[i], -9.f);
+        EXPECT_NE(outRight[i], -9.f);
+        EXPECT_TRUE(std::isfinite(outLeft[i]));
+        EXPECT_TRUE(std::isfinite(outRight[i]));
+    }
 }
 
 TEST(DspOnePoleFilterStereoTest, ChannelsRemainIndependent)
@@ -261,6 +300,7 @@ TEST(DspOnePoleFilterStereoTest, ClampKeepsStateFinite)
 {
     exerciseStereoClamp<OnePoleFilterCharacteristic::LowPass>();
     exerciseStereoClamp<OnePoleFilterCharacteristic::HighPass>();
+    exerciseStereoClamp<OnePoleFilterCharacteristic::HighPassLeaky>();
     exerciseStereoClamp<OnePoleFilterCharacteristic::AllPass>();
 }
 
@@ -297,7 +337,36 @@ TEST(DspMultiChannelOnePoleFilterTest, BlockOverloadsAgree)
 {
     exerciseMultiChannelBlockOverloadsAgree<OnePoleFilterCharacteristic::LowPass>();
     exerciseMultiChannelBlockOverloadsAgree<OnePoleFilterCharacteristic::HighPass>();
+    exerciseMultiChannelBlockOverloadsAgree<OnePoleFilterCharacteristic::HighPassLeaky>();
     exerciseMultiChannelBlockOverloadsAgree<OnePoleFilterCharacteristic::AllPass>();
+}
+
+TEST(DspMultiChannelOnePoleFilterTest, HighPassLeakyMatchesMonoPerChannel)
+{
+    constexpr size_t numChannels = 2;
+    MultiChannelOnePoleFilter<OnePoleFilterCharacteristic::HighPassLeaky, numChannels> multiSut{48000.f, 1000.f};
+    OnePoleFilter<OnePoleFilterCharacteristic::HighPassLeaky> monoCh0{48000.f, 1000.f};
+    OnePoleFilter<OnePoleFilterCharacteristic::HighPassLeaky> monoCh1{48000.f, 1000.f};
+
+    std::array<std::array<float, numChannels>, 8> frames{{
+        {1.f, -1.f},
+        {0.5f, 0.4f},
+        {-0.3f, 0.2f},
+        {0.8f, -0.5f},
+        {-1.f, 0.9f},
+        {0.2f, -0.7f},
+        {0.1f, 0.3f},
+        {-0.6f, 0.6f},
+    }};
+
+    for (auto& frame : frames)
+    {
+        const auto in0 = frame[0];
+        const auto in1 = frame[1];
+        multiSut.step(frame.data());
+        EXPECT_FLOAT_EQ(frame[0], monoCh0.step(in0));
+        EXPECT_FLOAT_EQ(frame[1], monoCh1.step(in1));
+    }
 }
 
 template <OnePoleFilterCharacteristic Characteristic>
@@ -327,6 +396,7 @@ TEST(DspMultiChannelOnePoleFilterTest, BlocksPassThroughWhenFeedbackZero)
 {
     exerciseMultiChannelZeroFeedback<OnePoleFilterCharacteristic::LowPass>();
     exerciseMultiChannelZeroFeedback<OnePoleFilterCharacteristic::HighPass>();
+    exerciseMultiChannelZeroFeedback<OnePoleFilterCharacteristic::HighPassLeaky>();
     exerciseMultiChannelZeroFeedback<OnePoleFilterCharacteristic::AllPass>();
 }
 
