@@ -8,11 +8,22 @@
 
 namespace AbacDsp
 {
-/*
- * prime number are needed for delay buffer chains (without modulation)
- * to avoid phase cancellation effects
+/**
+ * @file
+ * @ingroup numbers
+ * @brief Prime delay lengths for unmodulated delay chains.
  *
+ * Delay lines whose lengths share a common factor reinforce each other at that
+ * period, piling their modes onto the same frequencies and turning a diffuse
+ * tail into an audible pitch. Mutually prime lengths have no common period
+ * shorter than their product, so the reinforcement never arrives.
+ *
+ * Modulated lines do not need this, since the modulation already breaks the
+ * coincidence.
  */
+
+/// @ingroup numbers
+/// @brief Primality by 6k +/- 1 trial division. Exact, and fast enough for setup-time use.
 [[nodiscard]] inline bool isPrimeNumber(const size_t n)
 {
     if (n == 2 || n == 3)
@@ -33,6 +44,10 @@ namespace AbacDsp
     return true;
 }
 
+/// @ingroup numbers
+/// @brief Next prime at or above wIn, floored at MINVALUE.
+/// Gives up after 250 odd candidates and returns a non-prime; that bound is only reachable
+/// above 387 million samples, a period of over two hours at 48 kHz.
 template <size_t MINVALUE>
     requires(MINVALUE >= 3)
 [[nodiscard]] inline size_t getUsefulPrime(const size_t wIn)
@@ -56,6 +71,8 @@ template <size_t MINVALUE>
     return n;
 }
 
+/// @ingroup numbers
+/// @brief Maps each input size to a prime, sorted by value first so the results stay distinct.
 template <size_t MINVALUE, typename InputIterator>
 inline auto returnOrderedPrimeTable(InputIterator source, InputIterator target, size_t numItems)
     -> std::enable_if_t<std::is_same_v<typename std::iterator_traits<InputIterator>::value_type, size_t>, void>
@@ -77,6 +94,9 @@ inline auto returnOrderedPrimeTable(InputIterator source, InputIterator target, 
     }
 }
 
+/// @ingroup numbers
+/// @brief Distinct primes for a set of requested sizes, sorted by value.
+/// A duplicate request is nudged up to the next free prime, so no two lines can share a length.
 template <size_t MINVALUE, typename In, typename Out>
 inline auto generateUniquePrimeSet(const In source, Out target, const size_t numItems)
     -> std::enable_if_t<std::is_unsigned_v<typename std::iterator_traits<In>::value_type>, void>
@@ -97,12 +117,16 @@ inline auto generateUniquePrimeSet(const In source, Out target, const size_t num
     }
 }
 
-// Like generateUniquePrimeSet, but keeps output index i tied to input index i instead of
-// sorting by value first. Needed by callers where the index itself carries meaning (e.g. a
-// per-element delay chain nudged by a signed offset per element): sorting there can swap which
-// element ends up with which length once the offsets flip two neighbors' relative order. An
-// out-of-order input is simply nudged up to the next available prime past its predecessor's,
-// same as generateUniquePrimeSet does for duplicate values.
+/**
+ * @ingroup numbers
+ * @brief Distinct primes keeping output index i tied to input index i, without sorting.
+ *
+ * Sorting by value would let two elements swap lengths as soon as a signed
+ * per-element offset flips their relative order, which matters wherever the
+ * index itself carries meaning. An out-of-order input is instead nudged past
+ * its predecessor's prime, the same treatment duplicates get in
+ * generateUniquePrimeSet().
+ */
 template <size_t MINVALUE, typename In, typename Out>
 inline auto generateUniquePrimeSequence(In source, Out target, const size_t numItems)
     -> std::enable_if_t<std::is_unsigned_v<typename std::iterator_traits<In>::value_type>, void>

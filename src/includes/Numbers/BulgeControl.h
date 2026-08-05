@@ -8,8 +8,8 @@
 namespace AbacDsp
 {
 /*
- * bulge table
- * concept:
+ * Retained for the worked example below; the contract is on the class itself.
+ *
  * using a single normalized parameter (-1...+1) control the geometric sizes of parallel delay buffers.
  * Negative values pull to the left causing longer delay values
 
@@ -62,6 +62,19 @@ y      |          **                #####              $$               |
 */
 
 
+/**
+ * @ingroup numbers
+ * @brief Bends a set of evenly spaced values towards one end, under a single -1..+1 control.
+ *
+ * Delay lines spread linearly between two bounds give an even echo density,
+ * which is rarely what a room does. One parameter that clusters the lengths
+ * towards the short or the long end changes the character of a diffuser without
+ * changing its count or its bounds, and passes through even spacing at zero.
+ *
+ * The curve is a power law with the exponent driven exponentially by the
+ * control, so equal steps of the parameter make equally sized changes in shape
+ * across its whole range.
+ */
 class Bulge
 {
   public:

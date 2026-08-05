@@ -8,6 +8,10 @@
 
 namespace AbacDsp
 {
+/// @ingroup generators
+/// @brief One partial: frequency, starting gain, decay rate, and how late it enters.
+/// The per-partial delay is what separates a struck sound from an additive chord, since real
+/// resonators do not excite every mode at the same instant.
 struct Harmonic
 {
     float f;
@@ -16,6 +20,16 @@ struct Harmonic
     int delay;
 };
 
+/**
+ * @ingroup generators
+ * @brief Builds a partial series from a formula rather than a fixed table.
+ *
+ * Taking the frequency ratio as a callable of the partial index covers
+ * harmonic, stretched and inharmonic series with one class: a piano's
+ * progressive sharpening and a bell's non-integer ratios are both just a
+ * different function, not a different generator.
+ * @see https://en.wikipedia.org/wiki/Additive_synthesis
+ */
 template <size_t N>
 class HarmonicGenerator
 {
@@ -52,7 +66,8 @@ class HarmonicGenerator
         m_randomSpread = value;
     }
 
-    [[nodiscard]] size_t addHarmonics(Harmonic* target, size_t idx, const size_t count, const float baseFrequency, const float power)
+    [[nodiscard]] size_t addHarmonics(Harmonic* target, size_t idx, const size_t count, const float baseFrequency,
+                                      const float power)
     {
         m_power = power;
 
@@ -134,6 +149,20 @@ class HarmonicGenerator
     HarmonicFormula m_harmonicFormula;
 };
 
+/**
+ * @ingroup generators
+ * @brief Ready-made partial-ratio formulas for HarmonicGenerator.
+ *
+ * Each returns a callable of (partial index, strength) giving a frequency ratio
+ * against the fundamental. The chord and tuning entries index a small ratio
+ * table by index modulo its size and multiply by the octave, `index / size + 1`;
+ * that integer division is deliberate floor division, not an accidental
+ * truncation of a float expression.
+ *
+ * The percussion sets are measured inharmonic ratios, which is why they sound
+ * like struck metal: no ratio is a whole multiple of another, so the partials
+ * never fuse into a single perceived pitch.
+ */
 namespace HarmonicFormulas
 {
 inline auto odd()

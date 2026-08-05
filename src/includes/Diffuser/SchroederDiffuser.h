@@ -10,6 +10,15 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup diffuser
+ * @brief Distributes delay-line sizes between a bottom and a top bound along a bulge curve.
+ *
+ * Bulge bends the distribution away from linear, clustering sizes towards one
+ * end so that echo density is not spread evenly across the chain. The resulting
+ * sizes are then snapped to distinct primes, which keeps the sections from
+ * sharing a common period and reinforcing each other into an audible pitch.
+ */
 template <size_t NumElements>
 class Bulge2
 {
@@ -52,6 +61,16 @@ class Bulge2
 /* use gain 0 and size 1 if you want to bypass elements
  */
 
+/**
+ * @ingroup diffuser
+ * @brief Series chain of Schroeder allpass sections with prime-spaced lengths.
+ *
+ * Each section multiplies the echo density of the one before it, so a chain of
+ * n sections reaches density that a single section could only approach with an
+ * impractically high gain and audible ringing. Sizes come from Bulge2, spread
+ * between a bottom and top bound and snapped to distinct primes.
+ * @see https://ccrma.stanford.edu/~jos/pasp/Schroeder_Allpass_Sections.html
+ */
 template <size_t MaxDelayLength, size_t NumElements, size_t BlockSize>
 class SchroederDiffuser
 {

@@ -11,6 +11,7 @@ namespace AbacDsp::BlockProc
 {
 
 /**
+ * @ingroup blockprocessors
  * @brief Realtime mono pitch shifter built directly on the streaming
  * PhaseVocoderPitcher: no time-stretch/resample stage and no seeking, so the
  * only latency is the vocoder's own fixed analysis window

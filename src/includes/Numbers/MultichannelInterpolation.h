@@ -2,6 +2,14 @@
 
 #include <cstddef>
 
+/**
+ * @ingroup numbers
+ * @brief Fractional-delay interpolators, templated on sample type.
+ *
+ * The type-generic twin of AbacDsp::Interpolation, for the paths that need
+ * double precision. Same contract: caller guarantees the support width.
+ * @see https://yehar.com/blog/wp-content/uploads/2009/08/deip.pdf
+ */
 template <typename T_>
 class Interpolation
 {
@@ -61,6 +69,14 @@ class Interpolation
     }
 };
 
+/**
+ * @ingroup numbers
+ * @brief Interpolates every channel of an interleaved frame at one shared fraction.
+ *
+ * Reading all channels at the same offset in a single pass keeps the frame in
+ * cache and, more importantly, guarantees the channels stay sample-aligned:
+ * interpolating them separately invites a drift that would smear the image.
+ */
 template <size_t NumChannels>
     requires(NumChannels > 0)
 class MultichannelInterpolation
@@ -108,6 +124,8 @@ class MultichannelInterpolation
     }
 };
 
+/// @ingroup numbers
+/// @brief Kernel tag: 2-point linear. Support, Pre and Post let a caller size its guard region.
 struct LinearKernel
 {
     static constexpr int Support = 2;
@@ -119,6 +137,8 @@ struct LinearKernel
     }
 };
 
+/// @ingroup numbers
+/// @brief Kernel tag: 4-point Catmull-Rom, the usual default for delay-line reads.
 struct CatmullRomKernel
 {
     static constexpr int Support = 4;
@@ -130,6 +150,8 @@ struct CatmullRomKernel
     }
 };
 
+/// @ingroup numbers
+/// @brief Kernel tag: 4-point optimal. Same support as Catmull-Rom, flatter response, coefficients fitted rather than derived.
 struct Optimal4Kernel
 {
     static constexpr int Support = 4;

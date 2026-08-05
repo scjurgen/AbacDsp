@@ -8,17 +8,22 @@
 namespace AbacDsp
 {
 
-/*
- * Raised-cosine position modulator for modulated delay read heads - same role and public
- * interface as Modulation (triangle position sweep), but the position's rate of change is
- * itself a sine, not a square wave. A triangle sweep has a *constant* velocity that flips sign
- * at each turnaround, which turns into an abrupt, two-state pitch shift once the swing is large
- * enough to be audible (see Modulation_test.cpp, RateOfChangeIsTwoConstantValuesNotASmoothCurve).
- * This sweeps position as depth/2 * (1 - cos(phase)), from 0 up to depth and back over one full
- * cycle, whose derivative varies continuously - a smooth vibrato instead of two alternating
- * pitches.
- * Speed and depth changes are deferred to the trough (phase == 0, position == 0) so the read
- * position never jumps, matching Modulation's turnaround-deferred update.
+/**
+ * @ingroup modulation
+ * @brief Raised-cosine position modulator for delay read heads.
+ *
+ * Same role and public interface as Modulation, but the position's rate of
+ * change is a sine rather than a square wave. A triangle sweep moves at
+ * constant velocity that flips sign at each turnaround, and since pitch
+ * deviation follows velocity, that becomes an abrupt two-state pitch shift once
+ * the swing is large enough to hear.
+ *
+ * Position here is depth/2 * (1 - cos(phase)), running from 0 to depth and back
+ * over one cycle. Its derivative varies continuously, giving vibrato instead of
+ * two alternating pitches.
+ *
+ * Speed and depth changes are deferred to the trough, where phase and position
+ * are both zero, so the read head never jumps.
  */
 class SineModulation
 {

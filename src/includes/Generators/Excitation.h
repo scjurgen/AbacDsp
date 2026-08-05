@@ -10,6 +10,15 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup generators
+ * @brief Window shapes, allocated per call.
+ *
+ * Returns a fresh vector each time and is meant for one-off table construction,
+ * not for anything on a per-block path. AbacDsp::HannWindow and
+ * AbacDsp::BlackmanWindow are the allocation-free functor equivalents.
+ * @see https://en.wikipedia.org/wiki/Window_function
+ */
 class WindowFunctions
 {
   public:
@@ -44,6 +53,18 @@ class WindowFunctions
     }
 };
 
+/**
+ * @ingroup generators
+ * @brief Blends a periodic table against a fixed noise table by a single mix control.
+ *
+ * The noise is generated once and replayed, not drawn fresh, so an excitation
+ * is reproducible run to run and a rendered result can be diffed against a
+ * reference. The mix runs from pure tone to pure noise, which spans the range
+ * from a bowed to a struck or blown excitation without switching source.
+ *
+ * Both tables carry one guard sample past the end so the interpolator never
+ * needs a wrap test.
+ */
 class Excitation
 {
   public:

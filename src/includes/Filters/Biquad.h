@@ -13,6 +13,9 @@
 
 namespace AbacDsp
 {
+/// @ingroup filters
+/// @brief Biquad magnitude in dB at normalised frequency cf = f/fs, valid over [0, 0.5].
+/// Evaluated through the phi = 4*sin^2(pi*cf) substitution, so no complex arithmetic is needed.
 [[nodiscard]] inline float biquadMagnitudeInDb(const float cf, const float b0, const float b1, const float b2,
                                                const float a1, const float a2)
 {
@@ -23,6 +26,9 @@ namespace AbacDsp
     return db;
 }
 
+/// @ingroup filters
+/// @brief Biquad magnitude as a linear ratio at normalised frequency cf = f/fs.
+/// Accumulates in double, so it stays usable in the deep notches where the float dB path loses digits.
 [[nodiscard]] inline float biquadMagnitudeLinear(const float cf, const float b0, const float b1, const float b2,
                                                  const float a1, const float a2)
 {
@@ -37,6 +43,9 @@ namespace AbacDsp
     return static_cast<float>(std::sqrt(numerator / denominator));
 }
 
+/// @ingroup filters
+/// @brief Raises 10 to the power of biquadMagnitudeInDb().
+/// That is 10^dB, not the 10^(dB/20) a dB-to-ratio conversion calls for; biquadMagnitudeLinear() is the ratio.
 [[nodiscard]] inline float biquadMagnitude(const float cf, const float b0, const float b1, const float b2,
                                            const float a1, const float a2)
 {
@@ -44,6 +53,17 @@ namespace AbacDsp
 }
 
 
+/**
+ * @ingroup filters
+ * @brief Response shape, fixed at compile time by Biquad and BiquadStereo.
+ *
+ * LowPass, HighPass, BandPass, Notch and Peak are designed from the prewarped
+ * K = tan(pi*f/fs); AllPass, LoShelf and HiShelf use the cookbook alpha =
+ * sin(w0)/(2Q) form instead. Both are bilinear designs, only the algebra differs.
+ *
+ * OnePole and FreeCoefficients are not designed at all: coefficients()
+ * leaves them at pass-through and the coefficients must be set directly.
+ */
 enum class BiquadFilterType
 {
     LowPass,
@@ -59,6 +79,16 @@ enum class BiquadFilterType
 };
 
 
+/**
+ * @ingroup filters
+ * @brief Coefficient design and frequency-response evaluation for one biquad section.
+ *
+ * Coefficients are divided through by a0 at design time, so the difference
+ * equation never divides. Frequency is clamped to [1 Hz, fs/2] before the
+ * prewarp. Q is the analog Q, putting Butterworth at 1/sqrt(2). peakGain is in
+ * dB and is read only by Peak, LoShelf and HiShelf.
+ * @see https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
+ */
 class BiquadCoefficients
 {
   public:
@@ -189,6 +219,19 @@ class BiquadCoefficients
 };
 
 
+/**
+ * @ingroup filters
+ * @brief Mono biquad section in transposed Direct Form II.
+ *
+ * Two state words, and the form usually preferred for floating point; Direct
+ * Form I is the safer choice when the arithmetic is fixed point.
+ *
+ * Each response gets its own step function so that the coefficient identities
+ * the design produces collapse into fewer multiplies: BandPass has b1 = 0 and
+ * b2 = -b0, Notch has b2 = b0 and a1 = b1, Peak and AllPass have a1 = b1. The
+ * shelves and FreeCoefficients fall back to the generic step.
+ * @see https://ccrma.stanford.edu/~jos/filters/Transposed_Direct_Forms.html
+ */
 template <BiquadFilterType type>
 class Biquad : public BiquadCoefficients
 {
@@ -315,6 +358,14 @@ class Biquad : public BiquadCoefficients
     std::array<float, 2> m_z{};
 };
 
+/**
+ * @ingroup filters
+ * @brief Two-channel biquad sharing one coefficient set, state kept per channel.
+ *
+ * Both channels advance within the same loop iteration, so the coefficients are
+ * read once per frame instead of once per channel. BiquadFilterType::OnePole is
+ * meaningful only here: it selects a first-order step that ignores b2 and a2.
+ */
 template <BiquadFilterType type>
 class BiquadStereo : public BiquadCoefficients
 {
@@ -477,11 +528,25 @@ class BiquadStereo : public BiquadCoefficients
     std::array<std::array<float, 2>, 2> m_z{};
 };
 
+/**
+ * @ingroup filters
+ * @brief Chebyshev lowpass or highpass up to MAX_ORDER, as a cascade of biquad sections.
+ *
+ * computeType1() gives an equiripple passband and a monotonic stopband;
+ * computeType2() flattens the passband and moves the ripple into the stopband,
+ * placing finite zeros there. Ripple is in dB for both.
+ *
+ * Prototype poles sit on an ellipse whose eccentricity follows from the ripple,
+ * and reach the z plane through the bilinear transform. An odd order leaves one
+ * real pole over, which becomes a first-order section at the end of the cascade.
+ * @see https://en.wikipedia.org/wiki/Chebyshev_filter
+ */
 class ChebyshevBiquad
 {
   public:
     static constexpr auto MAX_ORDER = 12u;
 
+    /// @brief One section's transfer function, already normalised by a0.
     struct Coefficients
     {
         float b0, b1, b2;
@@ -510,6 +575,8 @@ class ChebyshevBiquad
         }
     }
 
+    /// @brief fC is the prewarped cutoff tan(pi*f/fs), beta the cos(w0) constant of the
+    /// lowpass-to-highpass transform, a the ripple-derived asinh(1/eps)/order that sets the pole ellipse.
     struct InitialFactors
     {
         float fC, beta, a;
@@ -682,7 +749,8 @@ class ChebyshevBiquad
 
 
     // 3 x mul
-    [[nodiscard]] float stepChebyType1(const float in, const float b0, const float a1, const float a2, float& z0, float& z1) noexcept
+    [[nodiscard]] float stepChebyType1(const float in, const float b0, const float a1, const float a2, float& z0,
+                                       float& z1) noexcept
     {
         const auto t = in * b0;
         const auto out = t + z0;
@@ -692,8 +760,8 @@ class ChebyshevBiquad
     }
 
     // 4 x mul
-    [[nodiscard]] float stepChebyType2(const float in, const float b0, const float b1, const float a1, const float a2, float& z0,
-                         float& z1) noexcept
+    [[nodiscard]] float stepChebyType2(const float in, const float b0, const float b1, const float a1, const float a2,
+                                       float& z0, float& z1) noexcept
     {
         const auto t = in * b0;
         const auto out = t + z0;
@@ -852,6 +920,16 @@ class ChebyshevBiquad
     std::array<Biquad<BiquadFilterType::FreeCoefficients>, 2> m_biquadSinglePole;
 };
 
+/**
+ * @ingroup filters
+ * @brief Standalone peaking EQ section, coefficients recomputed on demand.
+ *
+ * Boost and cut swap which side of the design carries the gain factor V, so a
+ * cut of -x dB inverts a boost of +x dB exactly. Q is floored at 0.01 to keep
+ * the design finite. Transposed Direct Form II again, but with the output held
+ * in the state array, hence three floats where two carry actual state.
+ * @see https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
+ */
 class PeakBiquad
 {
   public:

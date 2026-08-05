@@ -7,6 +7,10 @@
 namespace AbacDsp
 {
 
+/// @ingroup reverbs
+/// @brief Unnormalised order-16 Hadamard mix in Sylvester (natural) row order.
+/// Written out flat: 16*16 adds, no temporaries, and no dependence between outputs.
+/// HadamardWalsh16.h computes the identical matrix with a butterfly, in fewer adds.
 inline void hadamardFeed16(const float* col, float* sum) noexcept
 {
     sum[0] = col[0] + col[1] + col[2] + col[3] + col[4] + col[5] + col[6] + col[7] + col[8] + col[9] + col[10] +
@@ -50,6 +54,8 @@ inline void hadamardFeed16(const std::array<float, 16>& col, std::array<float, 1
 
 #if defined(USE_SIMD_FRAMEWORK)
 
+/// @ingroup reverbs
+/// @brief SIMD form of hadamardFeed16(), building each row as a masked multiply plus a horizontal add.
 inline void hadamardFeed16_simd(const float* col, float* sum) noexcept
 {
     const simd_float4 v0 = simd_make_float4(col[0], col[1], col[2], col[3]);

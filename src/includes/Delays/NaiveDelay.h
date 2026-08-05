@@ -7,6 +7,19 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup delays
+ * @brief Integer-sample delay line with independent read and write cursors.
+ *
+ * Naive in the sense that the delay is whole samples only: there is no
+ * interpolation, so setSize() steps the read cursor and any change clicks.
+ * That also makes it the cheapest line here, one store and one load per sample,
+ * and the exact one to measure the interpolating variants against.
+ *
+ * Length is clamped to MAXSIZE - 2, keeping the cursors apart even at maximum.
+ * The buffer is a std::vector sized once in the constructor, so the delay never
+ * allocates after construction but is not usable as a constexpr object.
+ */
 template <size_t MAXSIZE>
 class NaiveDelay
 {

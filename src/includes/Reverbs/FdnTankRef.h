@@ -9,6 +9,23 @@
 
 namespace AbacDsp
 {
+/**
+ * @ingroup reverbs
+ * @brief Reference feedback delay network: plain delays, Hadamard mixing, nothing else.
+ *
+ * The minimal correct FDN, kept as the baseline the elaborated tanks are
+ * measured against. Integer delays with no interpolation, no modulation, no
+ * damping and no stereo treatment, so its tail is metallic by design.
+ *
+ * The two facts that make an FDN work are visible here without distraction: the
+ * mixing matrix is orthogonal, so the loop is lossless on its own, and decay is
+ * then set purely by a per-line gain. That gain solves g = 0.001^(len/fs/t),
+ * giving each line the same -60 dB time regardless of its length.
+ *
+ * Line lengths are snapped to primes so no two lines share a period and the
+ * modes do not pile up on common multiples.
+ * @see https://ccrma.stanford.edu/~jos/pasp/FDN_Reverberation.html
+ */
 template <size_t MaxSizePerElement, size_t MAXORDER, size_t BlockSize>
 class FdnTankRef
 {
@@ -36,6 +53,8 @@ class FdnTankRef
         computeDelaySizes();
     }
 
+    /// @brief Converts a path length in metres to a delay in samples, snapped to a prime.
+    /// 333.3 m/s stands in for the speed of sound, so line lengths keep their room scale across sample rates.
     [[nodiscard]] size_t computeSizeFromMeters(const float meters) const
     {
         auto w = static_cast<size_t>(m_sampleRate * meters / 333.3f);

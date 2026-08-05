@@ -13,8 +13,9 @@
 namespace AbacDsp
 {
 
-/*
- * Granular time domain pitch shifter.
+/**
+ * @ingroup delays
+ * @brief Granular time domain pitch shifter.
  *
  * One ring buffer. The write head advances one sample per input sample; a read head
  * advances at `advance` (the pitch ratio v), so it drifts against the write head and has
@@ -22,7 +23,7 @@ namespace AbacDsp
  * reset is not heard.
  *
  *
- * GEOMETRY
+ * ## Geometry
  *
  * drift is how fast a head moves against the write head:
  *
@@ -53,7 +54,7 @@ namespace AbacDsp
  * gain, and the material jumped a whole buffer length.
  *
  *
- * THE HANDOFF
+ * ## The handoff
  *
  * triggerFade takes over the fade in head's position, so that position has to advance
  * BEFORE the handoff. Otherwise the outgoing head re-reads its own last sample and the
@@ -62,7 +63,7 @@ namespace AbacDsp
  * that was audible at every pitch setting including unity.
  *
  *
- * MEASURING THIS THING
+ * ## Measuring this thing
  *
  * All of these were learned the hard way while chasing that crackle:
  *
@@ -83,7 +84,7 @@ namespace AbacDsp
  *   near the carrier; a step discontinuity reaches Nyquist.
  *
  *
- * KNOWN AND ACCEPTED
+ * ## Known and accepted
  *
  * The jitter combs the crossfade. At 200 Hz the period is 240 samples while the jitter
  * spans 0..200, so grains land at near arbitrary phase and only about 10 dB of spurious
@@ -109,10 +110,11 @@ class PitchFadeWindowDelay
   public:
     static constexpr size_t MaxInterpolationWidth{4};
 
+    /// @brief How a new grain's start position is chosen.
     enum class GrainMode
     {
-        DriftJitter,
-        PitchSynchronous
+        DriftJitter,     ///< Random offset away from the write head. Combs the crossfade, needs no pitch estimate.
+        PitchSynchronous ///< Snapped to a whole period of the detected pitch, so grains splice in phase.
     };
 
     PitchFadeWindowDelay()
@@ -133,9 +135,10 @@ class PitchFadeWindowDelay
         updateGeometry();
     }
 
-    /*
-     * Constructs the pitch tracker and switches to GrainMode::PitchSynchronous. Call
-     * setGrainMode(GrainMode::DriftJitter) to switch back without tearing it down.
+    /**
+     * @brief Constructs the pitch tracker and switches to GrainMode::PitchSynchronous.
+     *
+     * Call setGrainMode(GrainMode::DriftJitter) to switch back without tearing it down.
      *
      * lookaheadSamples delays the material grains are cut from (not the tracker: Yin
      * always sees the live signal) so that, like a lookahead compressor's detector,
@@ -326,7 +329,8 @@ class PitchFadeWindowDelay
         return Interpolation::hermite43x(&m_buffer[base], fractional);
     }
 
-    // How far a read head moves against the write head per sample.
+    /// @brief How far a read head moves against the write head per sample.
+    /// Zero at unity forward, which is why a grain there never expires on drift alone.
     [[nodiscard]] float driftFactor() const noexcept
     {
         const float advance = m_readHeads.advance;
@@ -337,13 +341,16 @@ class PitchFadeWindowDelay
         return advance > 1.f ? advance - 1.f : 1.f - advance;
     }
 
+    /// @brief A planned grain: how many samples it may run, and how far it travels in that time.
     struct Grain
     {
         size_t life{MinLife};
         float span{0.f};
     };
 
-    /*
+    /**
+     * @brief Plans a grain from drift alone, for GrainMode::DriftJitter.
+     *
      * A grain only has to be reset once its head has drifted a window away from where it
      * started, which is what takes window/drift samples: the smaller the pitch shift, the
      * longer a grain stays valid, and at unity it never expires at all. MaxGrainLife caps
@@ -359,7 +366,9 @@ class PitchFadeWindowDelay
         return {life, drift * static_cast<float>(life)};
     }
 
-    /*
+    /**
+     * @brief Plans a grain around the detected period, for GrainMode::PitchSynchronous.
+     *
      * Classic PSOLA analysis windows span two periods with 50% overlap, so life targets
      * 2*period; triggerFade then clamps the requested fade time to (life-1)/2, which lands
      * fadeTime on roughly one period on its own. life is still bounded by window/drift and

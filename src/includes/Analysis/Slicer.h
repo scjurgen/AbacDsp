@@ -13,16 +13,30 @@
 namespace AbacDsp
 {
 
+/// @ingroup analysis
+/// @brief Half-open slice range into a loop, in frames.
 struct Slice
 {
     size_t startFrame{0};
     size_t lengthFrames{0};
 };
 
-// Cuts a recorded loop into slices, either on a musical grid or at detected
-// transients (optionally snapped to the grid and to zero crossings for
-// click-free edges). Runs once when recording stops, not on the audio hot path,
-// so it is allowed to allocate its result vectors.
+/**
+ * @ingroup analysis
+ * @brief Cuts a loop into slices, on a musical grid or at detected transients.
+ *
+ * Three detection strategies with different failure modes: a fixed grid ignores
+ * the audio entirely, spectral flux against a global threshold misses quiet
+ * notes next to loud ones, and the adaptive threshold tracks the local flux
+ * level so a note is judged against its own neighbourhood.
+ *
+ * Detected onsets can be snapped to the grid and to zero crossings, since a cut
+ * anywhere else starts on a step and clicks.
+ *
+ * Allocates its results, so it is not realtime-safe.
+ * @see Bello et al., "A Tutorial on Onset Detection in Music Signals",
+ *      IEEE Trans. Speech and Audio Processing 13(5), 2005.
+ */
 class Slicer
 {
   public:

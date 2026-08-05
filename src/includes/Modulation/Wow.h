@@ -11,10 +11,22 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup modulation
+ * @brief Slow tape speed drift, from a mean-reverting random process rather than an LFO.
+ *
+ * Wow is the slow end of tape speed error, below roughly 6 Hz, where flutter is
+ * the fast end. The source is an Ornstein-Uhlenbeck process, not a periodic
+ * oscillator: real transport drift wanders and returns without ever repeating,
+ * and a listener picks out a repeating cycle immediately.
+ *
+ * Variance and drift shape that wandering independently of its depth.
+ * @see https://en.wikipedia.org/wiki/Wow_and_flutter
+ */
 class Wow
 {
   public:
-    // Exponent for the perceptual depth taper; tuned by ear against alternatives (e.g. 2.5).
+    /// Exponent for the perceptual depth taper; tuned by ear against alternatives such as 2.5.
     static constexpr float perceptualDepthExponent{3.0f};
 
     explicit Wow(const float sampleRate)
@@ -48,8 +60,8 @@ class Wow
         m_depth = v;
     }
 
-    // Taper so a linear UI knob feels natural: low settings barely modulate,
-    // and depth only ramps up steeply near the top of the range.
+    /// @brief Sets depth through a power taper so a linear control feels natural.
+    /// Low settings barely modulate and depth only climbs steeply near the top of the range.
     void setPerceptualDepth(const float v) noexcept
     {
         setDepth(std::pow(v, perceptualDepthExponent));

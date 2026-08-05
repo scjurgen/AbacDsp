@@ -4,10 +4,19 @@
 
 namespace AbacDsp
 {
-// Paul Kellett's pink noise algorithm; FastPink=true: 3-pole ±0.5dB, false: 7-pole ±0.05dB
+/**
+ * @ingroup filters
+ * @brief Pole and gain sets for PinkFilter, after Paul Kellett.
+ *
+ * Each pole is a one-pole lowpass; spacing them about a decade apart and summing
+ * their outputs approximates a -3 dB/octave slope by staircase. The direct term
+ * carries the top of the band, above the highest pole.
+ * @see https://www.musicdsp.org/en/latest/Filters/76-pink-noise-filter.html
+ */
 template <bool FastPink>
 struct PinkCoeffs;
 
+/// @brief Three poles, accurate to about +/-0.5 dB over the audio band.
 template <>
 struct PinkCoeffs<true>
 {
@@ -17,6 +26,7 @@ struct PinkCoeffs<true>
     static constexpr float direct = 0.1848f;
 };
 
+/// @brief Seven poles, accurate to about +/-0.05 dB, at rather more than twice the cost.
 template <>
 struct PinkCoeffs<false>
 {
@@ -27,6 +37,15 @@ struct PinkCoeffs<false>
     static constexpr float direct = 0.5362f;
 };
 
+/**
+ * @ingroup filters
+ * @brief Shapes white noise to pink, -3 dB/octave, by summing a bank of one-pole lowpasses.
+ *
+ * The input is assumed to be white and uncorrelated; feeding it anything else
+ * gives a -3 dB/octave tilt of that signal rather than pink noise. State is one
+ * float per pole, so the whole filter is three or seven floats.
+ * @see https://en.wikipedia.org/wiki/Pink_noise
+ */
 template <bool FastPink = true>
 class PinkFilter
 {

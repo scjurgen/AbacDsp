@@ -10,9 +10,20 @@
 namespace AudioUtility
 {
 
+/**
+ * @ingroup audiofile
+ * @brief Decodes Ogg Vorbis to float PCM through libvorbisfile.
+ *
+ * Decodes the whole stream into memory in one call; there is no streaming
+ * interface, so file length bounds usable memory. getInfo() reads only the
+ * header, so a caller can size storage or reject a file without paying for the
+ * decode.
+ * @see https://xiph.org/vorbis/doc/vorbisfile/
+ */
 class LoadOgg
 {
   public:
+    /// @brief Stream properties. All zero when the file could not be opened.
     struct OggInfo
     {
         int sampleRate;

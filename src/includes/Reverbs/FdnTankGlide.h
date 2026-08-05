@@ -18,11 +18,21 @@
 namespace AbacDsp
 {
 
-// FDN reverb tank whose per-line delay lengths never jump or crossfade when changed: they
-// pitch-glide to the new length (ModulationDelayNoFeedback, ChangeSizeMode::PITCH), so a resize
-// produces a brief, intentional pitch-bend rather than a click. Leaner than FdnTankSpiced: no interaural time
-// difference ITD/stereo taps, no callback manager. Up to NumDampedLines lines get a lowpass in the feedback path to
-// absorb highs; up to NumModulatedLines lines keep their delay's built-in modulation for extra dispersion.
+/**
+ * @ingroup reverbs
+ * @brief FDN whose lines pitch-glide to a new length instead of jumping or crossfading.
+ *
+ * A resize produces a brief, intentional pitch bend rather than a click, which
+ * turns room-size changes into a usable gesture instead of something to hide.
+ * Leaner than FdnTankSpiced: no interaural time difference taps and no callback
+ * manager.
+ *
+ * Up to NumDampedLines carry a lowpass in the feedback path and up to
+ * NumModulatedLines keep their built-in modulation. Both are subsets rather
+ * than the whole set because the mixing matrix distributes one line's character
+ * across the network within a few circulations.
+ * @see https://ccrma.stanford.edu/~jos/pasp/FDN_Reverberation.html
+ */
 template <size_t MaxSizePerElement, size_t ORDER, size_t BlockSize, size_t NumDampedLines = 4,
           size_t NumModulatedLines = 4>
     requires(ORDER == 4 || ORDER == 8 || ORDER == 16 || ORDER == 32) && (NumDampedLines <= ORDER) &&
@@ -30,6 +40,7 @@ template <size_t MaxSizePerElement, size_t ORDER, size_t BlockSize, size_t NumDa
 class FdnTankGlide
 {
   public:
+    /// @brief Distribution of line lengths: bounds plus a bulge that bends the spacing away from linear.
     struct DelayWarp
     {
         [[nodiscard]] float getBulgeValue(const float x, const float bulgePower = 4.0f) const noexcept

@@ -42,10 +42,26 @@ namespace AbacDsp
  * Par Simd 10000 1.10x
  */
 
+/**
+ * @ingroup filters
+ * @brief Four-lane SIMD bank of resonant bandpasses, summed into one output.
+ *
+ * Coefficients live in two representations at once: per element for design and
+ * queries, and transposed into lane-major groups of four for the vector loop.
+ * updateSoACoefficients() keeps the second copy in step, so every design entry
+ * point has to end in it. NumElements is required to be a multiple of the lane
+ * width for that transpose to be exact.
+ *
+ * The group loop is outermost and the sample loop inner, so a group's
+ * coefficients stay in registers for a whole block. Measured speedups over the
+ * scalar bank are tabulated above and collapse to near parity past 40 elements.
+ * @see https://en.wikipedia.org/wiki/AoS_and_SoA
+ */
 template <size_t NumElements, size_t BlockSize>
     requires(NumElements % 4 == 0 && NumElements > 0)
 class BiquadResoBpParallelSIMD
 {
+    /// @brief Three coefficients suffice: the bandpass design fixes b1 = 0 and b2 = -b0.
     struct BandPassCoefficients
     {
         float b0{};
@@ -78,6 +94,8 @@ class BiquadResoBpParallelSIMD
         computeCoefficients(mainIndex, index, frequency, Q);
     }
 
+    /// @brief Sets Q from a decay time in seconds, reusing the K and kSquare left behind by the
+    /// last computeCoefficients() on this mainIndex, so it keeps that call's frequency.
     void setDecay(const size_t mainIndex, const size_t index, const float t) noexcept
     {
         constexpr auto k = 0.1447648273f;
@@ -105,6 +123,8 @@ class BiquadResoBpParallelSIMD
         updateSoACoefficients(mainIndex, index);
     }
 
+    /// @brief Runs the whole bank over one block, accumulating every element into outBuffer.
+    /// The two SIMD paths advance only the lane-major state; the scalar fallback advances m_z instead.
     void process(const float* in, float* outBuffer) noexcept
     {
         for (size_t s = 0; s < BlockSize; ++s)
@@ -170,6 +190,7 @@ class BiquadResoBpParallelSIMD
         }
     }
 
+    /// @brief Clears one element's state in both the per-element and the lane-major representation.
     void reset(const size_t mainIndex, const float v1 = 0.f, const float v2 = 0.f) noexcept
     {
         m_z[mainIndex][0] = v1;
@@ -180,6 +201,8 @@ class BiquadResoBpParallelSIMD
         m_z1[groupIndex][laneIndex] = v2;
     }
 
+    /// @brief Response of one element's coefficient set at hz, returned in decibels despite the name.
+    /// Evaluated against the sampleRate argument, not the object's own, so the 48 kHz default can mislead.
     [[nodiscard]] float magnitude(const size_t mainIndex, const size_t subIndex, const float hz,
                                   const float sampleRate = 48000.f) const noexcept
     {
@@ -198,6 +221,8 @@ class BiquadResoBpParallelSIMD
         m_currentSet = damp ? 1 : 0;
     }
 
+    /// @brief Reports inactive after 32 consecutive calls with both state words under 1e-5.
+    /// Reads m_z, which the SIMD paths never write, so the answer only tracks reality in a scalar build.
     [[nodiscard]] bool isActive(const size_t mainIndex) noexcept
     {
         if (std::abs(m_z[mainIndex][0]) > 1E-5f || std::abs(m_z[mainIndex][1]) > 1E-5f)

@@ -7,16 +7,26 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup generators
+ * @brief Gain ramp with a settled state, so a held note costs nothing once the attack is over.
+ *
+ * The Active state exists to take the ramp arithmetic out of the steady case:
+ * once the target is reached the block is passed at unit gain with no per-sample
+ * multiply, which matters because most of a note's life is spent there.
+ */
 template <size_t BlockSize>
 class AttackRamp
 {
   public:
+    /// @brief Ramp shape. Exponential tracks loudness perception; Linear is right for a crossfade leg.
     enum class RampMode
     {
         Linear,
         Exponential
     };
 
+    /// @brief Idle is silent, Ramping applies the curve, Active is settled and bypasses the gain stage.
     enum class State
     {
         Idle,

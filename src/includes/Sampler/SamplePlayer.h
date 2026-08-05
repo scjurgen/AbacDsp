@@ -10,6 +10,9 @@
 
 #include "AudioFile.h"
 
+/// @ingroup sampler
+/// @brief Loads a WAV into an interleaved stereo buffer, clamping to [-1, 1].
+/// A mono file is duplicated to both channels, so callers never branch on channel count.
 class AudiofileIO
 {
   public:
@@ -53,6 +56,14 @@ class AudiofileIO
     }
 };
 
+/**
+ * @ingroup sampler
+ * @brief Fixed voice pool triggering raw sample buffers.
+ *
+ * Voice allocation scans for a finished slot and gives up if none is free
+ * rather than stealing, so a sustained note is never cut off by a later one.
+ * The audio data is borrowed by pointer and must outlive the voice playing it.
+ */
 template <size_t MaxVoices>
 class SamplePlayer
 {
@@ -115,6 +126,15 @@ class SamplePlayer
     std::array<BasicSamplePlayer, MaxVoices> m_voices{};
 };
 
+/**
+ * @ingroup sampler
+ * @brief Multisampled instrument: one layer per MIDI step, with round-robin alternates.
+ *
+ * Round robins exist to defeat the machine-gun effect: repeating one recording
+ * at speed reads as artificial precisely because real repeated strikes never
+ * match. The alternation order is drawn from a long precomputed shuffle rather
+ * than cycling, so the pattern itself does not become audible.
+ */
 template <size_t BASENOTE, size_t MIDI_STEPS, size_t ROUND_ROBINS>
 class Instrument
 {

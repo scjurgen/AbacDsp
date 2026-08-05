@@ -11,17 +11,22 @@
 #include <string_view>
 #include <vector>
 
-/*
- * Four-stage one-pole (pole-mixing / multimode VCF) filter family.
+/**
+ * @file
+ * @ingroup filters
+ * @brief Four-stage one-pole (pole-mixing / multimode VCF) filter family.
  *
  * All variants share one topology: four cascaded one-pole lowpass stages, an
  * optional resonance feedback, and an output that is a weighted mix of the
- * stage outputs (pole mixing). Mixing small integer weights yields low-, high-,
- * band-, all-pass and notch responses; see poleMixingList for named presets.
+ * stage outputs (pole mixing). Small integer weights yield low-, high-, band-,
+ * all-pass and notch responses; see poleMixingList for named presets.
  *
- * refs:
- *   http://electronotes.netfirms.com/EN85VCF.pdf
- *   https://expeditionelectronics.com/Diy/Polemixing/math
+ * The economy of the structure is that all of those responses cost the same
+ * four one-pole stages, and switching between them is a change of five weights
+ * with no coefficient redesign and no discontinuity in the stage states.
+ *
+ * @see http://electronotes.netfirms.com/EN85VCF.pdf
+ * @see https://expeditionelectronics.com/Diy/Polemixing
  */
 
 namespace AbacDsp
@@ -29,6 +34,9 @@ namespace AbacDsp
 
 // --- shared four-stage core ---
 
+/// @ingroup filters
+/// @brief Advances the four cascaded one-pole stages by one sample, in place.
+/// Each stage feeds the next within the same sample, so the cascade has no internal delay.
 inline void advanceFourStages(std::array<float, 4>& v, const float feed, const float pole) noexcept
 {
     v[0] = feed + pole * (v[0] - feed);
@@ -37,19 +45,25 @@ inline void advanceFourStages(std::array<float, 4>& v, const float feed, const f
     v[3] = v[2] + pole * (v[3] - v[2]);
 }
 
-// second-order bandpass tap of the cascade, used for resonance feedback
+/// @ingroup filters
+/// @brief Second-order bandpass tap of the cascade, -v3 + 2*v2 - v1, used for resonance feedback.
+/// A second difference of adjacent taps; feeding this back peaks the response without dragging the cutoff.
 [[nodiscard]] inline float bandpassTap(const std::array<float, 4>& v) noexcept
 {
     return -v[3] + 2.f * v[2] - v[1];
 }
 
-// tap0 is the pre-cascade input (or saturated feedback); v holds the four stage outputs
+/// @ingroup filters
+/// @brief Weighted sum of the input tap and the four stage outputs, weights fixed at compile time.
+/// tap0 is the pre-cascade input, or the saturated feedback where the variant applies one.
 template <int w0, int w1, int w2, int w3, int w4>
 [[nodiscard]] constexpr float mixTaps(const float tap0, const std::array<float, 4>& v) noexcept
 {
     return w0 * tap0 + w1 * v[0] + w2 * v[1] + w3 * v[2] + w4 * v[3];
 }
 
+/// @ingroup filters
+/// @brief Runtime-weighted overload of mixTaps(), for variants whose response is chosen at runtime.
 [[nodiscard]] inline float mixTaps(const std::array<float, 5>& w, const float tap0,
                                    const std::array<float, 4>& v) noexcept
 {
@@ -59,12 +73,25 @@ template <int w0, int w1, int w2, int w3, int w4>
 
 // --- named coefficient presets ---
 
+/// @ingroup filters
+/// @brief A named set of five mixing weights.
 struct PoleMixingList
 {
     std::string_view name;
     std::array<float, 5> cf;
 };
 
+/**
+ * @ingroup filters
+ * @brief Named mixing-weight presets covering the responses the topology can reach.
+ *
+ * The highpass rows are binomial: HP1 is (1, -1), HP2 (1, -2, 1), HP4
+ * (1, -4, 6, -4, 1). That is (1 - LP)^n expanded over the stage taps, since a
+ * one-pole highpass is the input minus its lowpass and the cascade supplies
+ * every power of the lowpass in one place. The allpass rows follow the same
+ * pattern with the ratio doubled, and the notch rows are highpass rows detuned
+ * so a zero lands on the unit circle.
+ */
 inline const std::vector<PoleMixingList> poleMixingList = {
     {"LP1", {0, -1, 0, 0, 0}},
     {"LP2", {0, 0, 1, 0, 0}},
@@ -119,6 +146,8 @@ inline const std::vector<PoleMixingList> poleMixingList = {
     {"20db LP shelf", {0.1f, -0.6f, 1.1f, -2.8f, 3.2f}},
 };
 
+/// @ingroup filters
+/// @brief Index of a preset by name. Throws std::out_of_range when the name is unknown.
 [[nodiscard]] inline size_t findFilterIndex(std::string_view target)
 {
     auto it = std::ranges::find_if(poleMixingList, [target](const PoleMixingList& pm) { return pm.name == target; });
@@ -129,6 +158,15 @@ inline const std::vector<PoleMixingList> poleMixingList = {
     throw std::out_of_range("PoleMixingList name not found");
 }
 
+/**
+ * @ingroup filters
+ * @brief Scales a requested resonance down as the cutoff approaches the upper eighth of the rate.
+ *
+ * Above fs/8 the effective resonance is multiplied by (fs/8)/f, falling to zero
+ * at Nyquist. The four-stage feedback loop grows unstable as the poles crowd
+ * the top of the band, and this keeps a fixed user setting usable across the
+ * whole sweep rather than only in the lower octaves.
+ */
 class ResonanceFrequencyModifier
 {
   public:
@@ -182,10 +220,19 @@ class ResonanceFrequencyModifier
 };
 
 
-/*
- * this class calculates the magnitude and phase response of the filter as theoretical values
- * the math for it is found here: https://expeditionelectronics.com/Diy/Polemixing/math
- * this class can be used to generate a visual plot
+/**
+ * @ingroup filters
+ * @brief Closed-form magnitude and phase of the pole-mixing topology, for plotting.
+ *
+ * Analytic rather than measured, so it costs nothing to sweep and carries no
+ * state. setCoefficients() folds the five mixing weights into the numerator
+ * powers x0..x4 once, leaving magnitude() a polynomial evaluation.
+ *
+ * magnitude() works in analog terms, w normalised to the cutoff, and matches
+ * the discrete filter only well below Nyquist. magnitudeBP() and
+ * magnitudeBP2() evaluate the actual discrete cascade on the unit circle and
+ * agree with the running filter across the whole band.
+ * @see https://expeditionelectronics.com/Diy/Polemixing
  */
 template <std::floating_point T>
 class FourStageFilterTheoretical
@@ -318,11 +365,20 @@ class FourStageFilterTheoretical
 };
 
 
-/*
- * Resonant four-stage filter with atan input saturation, resonance feedback
- * from the last stage, and step-count-smoothed cutoff transitions. Derived
- * classes fold compile-time integer mixing weights (f0..f4) into the output,
- * see the aliases at the end of the file.
+/**
+ * @ingroup filters
+ * @brief Resonant four-stage filter with atan saturation and linearly ramped cutoff.
+ *
+ * Resonance is fed back from the last stage rather than the bandpass tap, which
+ * gives the steeper, more classic self-oscillation of the two variants here.
+ * The atan is what keeps that loop bounded once the feedback exceeds unity.
+ *
+ * setCutoff() ramps the pole linearly over setSmoothingSteps() samples and
+ * snaps to the target at the end of the ramp, so a sweep cannot leave the pole
+ * short of where it was asked to go. Steps of 0 means an immediate jump.
+ *
+ * Derived classes fold compile-time integer weights into the output; see the
+ * aliases below.
  */
 class FourStageFilter
 {
@@ -442,7 +498,8 @@ class FourStageFilter
     }
 
   private:
-    // per-rate cubic corrections so a requested cutoff lands on the measured response
+    /// @brief Per-rate cubic corrections so a requested cutoff lands on the measured response.
+    /// Fitted for 44.1, 48, 96, 192 and 384 kHz only; every other rate falls through uncorrected.
     [[nodiscard]] float warpCutoffForSampleRate(const float cutoff) const noexcept
     {
         const float x = cutoff;
@@ -485,7 +542,9 @@ class FourStageFilter
     std::array<float, 4> m_v{};
 };
 
-// optimized for fixed coefficients, small integer weights fold into adds
+/// @ingroup filters
+/// @brief FourStageFilter with the mixing weights fixed at compile time.
+/// Small integer weights fold into adds and shifts, so the output mix costs almost nothing.
 template <int f0, int f1, int f2, int f3, int f4>
 class FixedFourStageFilter final : public FourStageFilter
 {
@@ -503,7 +562,8 @@ class FixedFourStageFilter final : public FourStageFilter
     }
 };
 
-// with resonance the atan stage acts as a gentle saturator, hence bypass is not pointless
+/// @ingroup filters
+/// @brief Passes the input tap alone. Not a no-op: with resonance up, the atan still saturates.
 using ByPassSmooth = FixedFourStageFilter<1, 0, 0, 0, 0>;
 using Lp6Smooth = FixedFourStageFilter<0, 1, 0, 0, 0>;
 using Lp12Smooth = FixedFourStageFilter<0, 0, 1, 0, 0>;
@@ -534,10 +594,19 @@ using Notch12Lp6Smooth = FixedFourStageFilter<0, -1, 2, -2, 0>;
 using Allpass18Lp6Smooth = FixedFourStageFilter<0, -1, 3, -6, 4>;
 
 
-/*
- * Resonant four-stage filter with runtime mixing coefficients, x/sqrt(1+x^2)
- * input saturation, bandpass-tap resonance feedback and exponentially smoothed
- * cutoff/resonance. Suited to fast voltage control (CC).
+/**
+ * @ingroup filters
+ * @brief Four-stage filter with runtime mixing weights and exponentially smoothed controls.
+ *
+ * Differs from FourStageFilter on three counts: the weights are settable per
+ * call rather than baked in, resonance is fed back from bandpassTap() instead
+ * of the last stage, and both pole and resonance follow one-pole smoothers
+ * instead of a fixed-length linear ramp. The smoother never quite arrives,
+ * which is the trade for absorbing a continuous stream of control changes
+ * without stair-stepping.
+ *
+ * Saturation is x/sqrt(1+x^2), chosen over tanh and atan for cost; see the
+ * table in compress().
  */
 class Filter1Pole4StageSmooth
 {
@@ -565,8 +634,8 @@ class Filter1Pole4StageSmooth
         m_targetResonance = value;
     }
 
-    // because we are in the digital domain we need to adapt the resonance frequency
-    // this solution seems to be more efficient than implementing
+    /// @brief Warps a requested cutoff onto the frequency the discrete cascade actually resonates at.
+    /// Piecewise cubic fit with a break at 2800 Hz, cheaper than solving the pole placement directly.
     [[nodiscard]] static float adaptResonanceFrequency(const float x) noexcept
     {
         if (x > 2800.f)
@@ -585,6 +654,7 @@ class Filter1Pole4StageSmooth
         m_targetPole = std::exp(-2.0f * std::numbers::pi_v<float> * x / m_sampleRate);
     }
 
+    /// @brief Sets the cutoff with no warp, placing the pole straight from the requested frequency.
     void setCutoffFrequencyClean(const float cutoffFrequency) noexcept
     {
         m_cutoff = cutoffFrequency;
@@ -650,7 +720,15 @@ class Filter1Pole4StageSmooth
     std::array<float, 5> m_coefficients{0.f, -1.f, 0.f, 0.f, 0.f};
 };
 
-// four one-pole stages with compile-time mixing weights, no resonance or saturation
+/**
+ * @ingroup filters
+ * @brief Four one-pole stages with compile-time weights, no resonance and no saturation.
+ *
+ * With no feedback loop the response is exactly the product of four one-poles,
+ * so it is unconditionally stable and entirely linear. That makes it the
+ * variant to reach for when the filter has to be analysed or inverted rather
+ * than played.
+ */
 template <int f0, int f1, int f2, int f3, int f4>
 class FourStageOnePoleFilterNoResonance
 {

@@ -17,18 +17,34 @@
 namespace AbacDsp
 {
 
+/// @ingroup diffuser
+/// @brief Which signal the allpass feeds back into its own write path.
 enum class AllpassFeedbackStyle
 {
-    Direct,    // feeds the raw delayed sample back into the write path (legacy behavior)
-    Schroeder, // classic Schroeder allpass: feeds the filter output back into the write path
+    Direct,    ///< The raw delayed sample. Not a true allpass: the magnitude response is not flat.
+    Schroeder, ///< The section output, giving the textbook flat-magnitude allpass.
 };
 
+/**
+ * @ingroup diffuser
+ * @brief Modulated allpass delay line, the diffusion element of the reverb chain.
+ *
+ * Adds to the plain Schroeder section a modulated read position, a crossfade
+ * for length changes, and a choice of feedback topology. The modulation is what
+ * breaks up the fixed comb pattern a static allpass chain leaves on sustained
+ * material.
+ *
+ * Buffer length scales with the sample rate from a size quoted at 48 kHz, so a
+ * given configuration keeps its physical dimensions rather than its sample
+ * count when the rate changes. Six samples of wrap padding serve the
+ * interpolator.
+ */
 template <size_t MaxSize48Khz, size_t BlockSize>
 class AllPassDelay
 {
   public:
-    static constexpr size_t minDelaySize{
-        51u}; // don't allow delay lines shorter than 51, ( a wall at the distance of 30cm [@ 48kHz] )
+    /// Shortest permitted line: below this the reflection sits closer than about 30 cm and reads as comb colouration.
+    static constexpr size_t minDelaySize{51u};
 
     explicit AllPassDelay(const float sampleRate)
         : m_sampleRate(sampleRate)
@@ -177,16 +193,29 @@ class AllPassDelay
     std::vector<float> m_buffer{};
 };
 
+/**
+ * @ingroup diffuser
+ * @brief Allpass delay with sine modulation, in-loop filtering and smoothed length changes.
+ *
+ * The fullest of the allpass variants here: a modulated read head, a lowpass
+ * and an allpass inside the loop for damping and dispersion, and a crossfade
+ * that absorbs length changes. Style selects whether the feedback is a true
+ * Schroeder allpass or the flatter-sounding direct form.
+ *
+ * The modulation is a sine, not a triangle. A triangular delay modulation has a
+ * piecewise-constant derivative, and since pitch deviation follows that
+ * derivative it produces a two-state warble rather than vibrato.
+ */
 template <size_t MaxSize48Khz, AllpassFeedbackStyle Style = AllpassFeedbackStyle::Direct>
 class ModulatingAllPassDelay
 {
   public:
-    static constexpr float maxFilterFrequency{
-        20001.f}; // lowpass only active if frequency under 20001 (20kHz inclusive)
-    static constexpr size_t minDelaySize{
-        51u}; // don't allow delay lines shorter than 51, ( a wall at the distance of 30cm [@ 48kHz] )
-    static constexpr float modulationSafetyMargin{
-        8.f}; // headroom kept between the modulated read head and the write head, in samples
+    /// Lowpass is bypassed at or above this, so 20 kHz means "off" rather than a filter at the band edge.
+    static constexpr float maxFilterFrequency{20001.f};
+    /// Shortest permitted line: below this the reflection sits closer than about 30 cm at 48 kHz.
+    static constexpr size_t minDelaySize{51u};
+    /// Samples kept between the modulated read head and the write head, so modulation cannot overtake it.
+    static constexpr float modulationSafetyMargin{8.f};
 
     explicit ModulatingAllPassDelay(const float sampleRate)
         : m_sampleRate(sampleRate)
@@ -442,6 +471,16 @@ class ModulatingAllPassDelay
     std::vector<float> m_buffer{};
 };
 
+/**
+ * @ingroup diffuser
+ * @brief Modulated allpass with a runtime maximum size and no crossfade on length changes.
+ *
+ * Sizing is a constructor argument rather than a template parameter, which
+ * makes a heterogeneous array of these possible at the cost of a heap
+ * allocation each. Dropping the crossfade machinery means a length change is
+ * audible, so sizes are expected to be set once and left alone.
+ * @tparam positiveOnly Restricts modulation to lengthening the line only, never shortening it.
+ */
 template <bool positiveOnly>
 class ModulatingAllPassDelayNoSoftAdapt
 {
@@ -612,6 +651,14 @@ class ModulatingAllPassDelayNoSoftAdapt
     std::vector<float> m_buffer{};
 };
 
+/**
+ * @ingroup diffuser
+ * @brief Unmodulated allpass delay with lowpass, highpass and dispersion in the loop.
+ *
+ * The cheapest variant: no modulation and no crossfade, so a fixed length and a
+ * static comb pattern. The 25 Hz highpass in the loop is the one thing it will
+ * not run without, since any DC offset compounds on every circulation.
+ */
 class FixedAllpassDelay
 {
   public:

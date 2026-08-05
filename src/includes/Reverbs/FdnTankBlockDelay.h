@@ -1,13 +1,16 @@
 #pragma once
 
-#include "HadamardFeed.h"
 #include "Delays/ParallelPlainDelay.h"
+#include "HadamardFeed.h"
 #include "Helpers/ConstructArray.h"
 #include "Numbers/PrimeDispatcher.h"
 
 namespace AbacDsp
 {
 
+/// @ingroup reverbs
+/// @brief Distribution of line lengths: bounds plus a bulge that bends the spacing away from linear.
+/// Bulge clusters lengths toward one end, which shapes how echo density builds rather than how dense it gets.
 struct DelayWarp
 {
     float getBulgeValue(const float x, const float bulgePower = 4.0f)
@@ -21,6 +24,18 @@ struct DelayWarp
     float spreadLines{0.f};
 };
 
+/**
+ * @ingroup reverbs
+ * @brief Block-processed FDN mixing through runtime-dispatched hadamardFeed().
+ *
+ * One of four tanks that differ only in the mixing implementation, so the cost
+ * of a mixing strategy can be measured in a working reverb rather than a
+ * microbenchmark. Delay handling, sizing and decay are identical across all four.
+ *
+ * Order is a runtime switch inside the mix, so this one variant covers every
+ * order the dispatcher knows, including the non-power-of-two 12, 20, 24 and 28
+ * that no butterfly can reach.
+ */
 template <size_t MaxSizePerElement, size_t ORDER, size_t BlockSize>
     requires(MaxSizePerElement % BlockSize == 0)
 class FdnTankBlockDelay

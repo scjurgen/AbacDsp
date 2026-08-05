@@ -1,0 +1,69 @@
+# Doxygen config for the AbacDsp API site.
+# Run from the project root: doxygen docs/Doxyfile  (or dev-scripts/dev-docs.sh)
+
+PROJECT_NAME           = AbacDsp
+PROJECT_BRIEF          = "Header-only C++20 DSP library"
+PROJECT_NUMBER         =
+
+OUTPUT_DIRECTORY       = docs
+CREATE_SUBDIRS         = NO
+HTML_OUTPUT            = html
+GENERATE_LATEX         = NO
+GENERATE_HTML          = YES
+
+INPUT                  = src/includes \
+                         docs/mainpage.dox \
+                         docs/groups.dox
+FILE_PATTERNS          = *.h *.dox
+RECURSIVE              = YES
+STRIP_FROM_PATH        = src/includes
+
+# Machine-generated coefficient tables; the design rationale lives in
+# documentation/Filters/SincFilterDesign/Readme.md, linked from SincFilter.h.
+EXCLUDE_PATTERNS       = */Sinc/sinc_*.h
+
+# Only documented entities appear; an undocumented class is a gap, not a page.
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+HIDE_UNDOC_MEMBERS     = NO
+HIDE_UNDOC_CLASSES     = YES
+JAVADOC_AUTOBRIEF      = NO
+BUILTIN_STL_SUPPORT    = YES
+SORT_MEMBER_DOCS       = NO
+DISTRIBUTE_GROUP_DOC   = NO
+
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = NO
+WARN_AS_ERROR          = FAIL_ON_WARNINGS
+
+# Pick the Apple/NEON arm so intrinsic-gated bodies parse; the x86 arm of the
+# same functions is therefore not represented in the generated site.
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+PREDEFINED             = __APPLE__= \
+                         USE_SIMD_FRAMEWORK=
+
+HAVE_DOT               = YES
+CLASS_GRAPH            = YES
+COLLABORATION_GRAPH    = NO
+INCLUDE_GRAPH          = NO
+INCLUDED_BY_GRAPH      = NO
+DIRECTORY_GRAPH        = NO
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES
+
+# doxygen-awesome-css requires a light base colorstyle and the treeview sidebar.
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+FULL_SIDEBAR           = NO
+HTML_COLORSTYLE        = LIGHT
+HTML_HEADER            = docs/theme/header.html
+HTML_EXTRA_STYLESHEET  = docs/theme/doxygen-awesome.css \
+                         docs/theme/doxygen-awesome-sidebar-only.css
+HTML_EXTRA_FILES       = docs/theme/doxygen-awesome-darkmode-toggle.js
+HTML_DYNAMIC_SECTIONS  = YES

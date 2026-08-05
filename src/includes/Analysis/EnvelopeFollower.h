@@ -10,6 +10,18 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup analysis
+ * @brief Sliding-window RMS over a circular buffer.
+ *
+ * The running sum of squares is a fixed-point integer accumulator, not a float.
+ * Add-then-subtract on a float sum drifts as values enter and leave the window
+ * and the error never washes out, because the sum is never recomputed from
+ * scratch; in integers the two operations cancel exactly.
+ *
+ * 24 fractional bits over a one-second window at 48 kHz needs about 40 bits,
+ * which is why the accumulator is 64-bit.
+ */
 class RmsFollower
 {
   public:
@@ -119,6 +131,16 @@ class RmsFollower
     float m_reciprocalWidth{0.f};
 };
 
+/**
+ * @ingroup analysis
+ * @brief Peak follower with one-pole attack and release ballistics.
+ *
+ * Attack and release are specified as the time to traverse DBRange decibels,
+ * and the exponential coefficient is derived from that. An exponential curve
+ * never actually arrives, so a time constant only means something once paired
+ * with how far it has to travel.
+ * @tparam DBRange Decibel span the attack and release times refer to.
+ */
 template <size_t DBRange>
 class PeakEnvelopeFollower
 {

@@ -11,6 +11,10 @@ namespace AbacDsp
 {
 constexpr int SrPullConvertMaxRatio = 16;
 
+/// @ingroup srconverter
+/// @brief Pull-conversion call state, including the end-of-input flag that flushes the tail.
+/// Without that flag the last kernel-width of samples could never be produced, since the
+/// interpolator would still be waiting for input to its right.
 struct SrConverterData
 {
     const float* dataIn;
@@ -21,6 +25,17 @@ struct SrConverterData
     float ratio;
 };
 
+/**
+ * @ingroup srconverter
+ * @brief Pull-model sample rate converter: asks a callback for input as it needs it.
+ *
+ * The converter drives, requesting source frames through a callback, which
+ * fits a file or generator that can be asked for more at any time. See
+ * SrPushConverter for the inverse arrangement used on a live audio path.
+ *
+ * The internal buffer is sized for SrPullConvertMaxRatio, so ratios beyond
+ * that would overrun and are not supported.
+ */
 class SrPullConverter
 {
     static constexpr size_t MAXCHANNELS = 2;

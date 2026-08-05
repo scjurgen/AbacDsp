@@ -4,6 +4,17 @@
 
 namespace AbacDsp
 {
+/**
+ * @ingroup filters
+ * @brief Double-precision twin of the BiquadCoefficients designs, filter type chosen at runtime.
+ *
+ * Designs coefficients only: there is no step or processBlock. The algebra
+ * mirrors BiquadCoefficients rather than being derived independently, so a
+ * disagreement between the two points at float round-off, not at the design.
+ *
+ * calculateCoefficients() throws std::invalid_argument for OnePole and
+ * FreeCoefficients, which have no design to run.
+ */
 class BiquadReference
 {
   public:
@@ -166,6 +177,8 @@ class BiquadReference
         b2 = (1 + alpha) / a0;
     }
 
+    /// @brief Response at hz, returned in decibels despite the name.
+    /// Argument is hertz, not the normalised f/fs the free functions in Biquad.h take.
     [[nodiscard]] double magnitude(const double hz) const noexcept
     {
         const auto phi = 4 * std::pow(std::sin(2 * std::numbers::pi_v<double> * hz / m_sampleRate / 2), 2);

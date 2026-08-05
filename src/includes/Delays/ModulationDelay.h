@@ -10,6 +10,24 @@
 
 namespace AbacDsp
 {
+/**
+ * @ingroup delays
+ * @brief Modulated feedback delay that retunes by glide, at half or double read speed.
+ *
+ * A length change does not crossfade or jump: the read head runs at 0.5x or 2x
+ * until it has drifted to the new distance, so the tail audibly falls or rises
+ * an octave on the way, the way a tape machine does when the transport speed
+ * changes. It settles within a four-sample bucket of the target rather than
+ * exactly on it.
+ *
+ * The buffer is MaxSizeInSamples + 6 and the first six samples are mirrored
+ * past the end, so the four-point Hermite interpolator can read across the wrap
+ * with no branch and no modulo on the hot path.
+ *
+ * feedBackByTime() solves the feedback gain for a chosen decay: gain =
+ * db^(distance / fs / seconds), reaching db after that time.
+ * @see https://ccrma.stanford.edu/~jos/pasp/Time_Varying_Delay_Effects.html
+ */
 template <size_t MaxSizeInSamples>
 class ModulatingDelayPitchedAdjust
 {
@@ -52,6 +70,8 @@ class ModulatingDelayPitchedAdjust
         m_feedback = std::clamp(gain, -0.99999f, 0.99999f);
     }
 
+    /// @brief Sets feedback so the tail falls to db after msecs. Default 0.001 is -60 dB.
+    /// Depends on the current distance, so it is recomputed whenever a glide finishes.
     void feedBackByTime(const float msecs, const float db = 0.001f, const bool negative = false) noexcept
     {
         m_decayMsecs = msecs;
@@ -150,6 +170,7 @@ class ModulatingDelayPitchedAdjust
     }
 
   private:
+    /// @brief Starts a glide towards newSize by detuning the read rate: 0.5x to lengthen, 2x to shorten.
     void adjustBufferByPitching(const size_t newSize) noexcept
     {
         m_newDistance = newSize;

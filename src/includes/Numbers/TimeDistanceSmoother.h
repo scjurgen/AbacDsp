@@ -7,6 +7,18 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup numbers
+ * @brief Keeps a read position a target distance behind a write position, correcting by drift.
+ *
+ * The distance is held by nudging the read rate rather than by moving the read
+ * position, so a correction is inaudible where a jump would click. A cooldown
+ * after each correction stops the mechanism oscillating around its target.
+ *
+ * Positions are FloatType, defaulting to double, because a float mantissa
+ * loses sub-sample resolution once a buffer position grows past a few hundred
+ * thousand samples.
+ */
 template <std::floating_point FloatType = double>
 class TimeDistanceSmoother
 {

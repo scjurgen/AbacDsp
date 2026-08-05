@@ -13,11 +13,34 @@
 
 namespace AbacDsp
 {
+/**
+ * @ingroup delays
+ * @brief Multi-head tape delay whose transport speed is a real, rate-limited variable.
+ *
+ * Unlike a delay that moves its read head, this varies the rate at which
+ * material is laid down: input is resampled by the transport ratio before it
+ * reaches the ring buffer, so the buffer holds tape, not samples. Read heads
+ * then run at a fixed rate over it. Everything already recorded keeps the pitch
+ * it was recorded at, which is what a real machine does and a read-head delay
+ * cannot reproduce.
+ *
+ * Speed changes obey an exponential model: the time to reach a new ratio is
+ * proportional to the number of octaves between them, so doubling always takes
+ * the same time regardless of where the transport started. Braking is slower
+ * than acceleration, as it is on a real transport with no active brake.
+ *
+ * Wow and flutter scale with the transport ratio, since both are geometry
+ * defects of a moving mechanism rather than fixed-frequency modulations. The
+ * buffer keeps six frames of wrap padding for the Catmull-Rom interpolator.
+ * @see https://en.wikipedia.org/wiki/Wow_and_flutter
+ */
 template <size_t BufferSize, size_t NumChannels, size_t NumReadHeads, size_t TileSize>
 class VariSpeedTapeDelay
 {
   public:
+    /// Octaves per second when speeding up.
     static constexpr auto accelPerSec = 6.f;
+    /// Octaves per second when slowing down, deliberately below accelPerSec.
     static constexpr auto brakePerSec = 3.f;
     static constexpr auto NoisePeakQ = 0.1f;
     using TapeInterpolation = MultichannelInterpolation<NumChannels>;
@@ -64,6 +87,8 @@ class VariSpeedTapeDelay
         }
     }
 
+    /// @brief Resamples one tile by the current transport ratio and lays it onto the tape.
+    /// Output frame count varies with the ratio, which is why the ring write is a separate step.
     void feed(const std::array<float, NumChannels * TileSize>& in) noexcept
     {
         const auto w = m_wow.step();
@@ -80,6 +105,8 @@ class VariSpeedTapeDelay
         }
     }
 
+    /// @brief Moves one head to delta frames behind the write head, gliding unless forced.
+    /// Kept 1000 frames clear of both ends so wow and flutter cannot push it past the write head.
     void setReadHead(const size_t hdIdx, const float delta, const bool force = false) noexcept
     {
         constexpr float MaxModulationSafety{1000.f};
@@ -95,9 +122,10 @@ class VariSpeedTapeDelay
         }
     }
 
+    /// @brief Sets the transport speed, ratio 1.0 being nominal, reached over a rate-limited glide.
+    /// Transition time is octaves-to-travel over accelPerSec or brakePerSec, so it is speed-independent.
     void setRatio(const float targetRatio, const bool force = false) noexcept
     {
-        // acceleration and braking model based on exponential model (doubling speed is always same time)
         const auto ctRatio = std::clamp(targetRatio, 0.001f, 8.f);
         const auto last = std::clamp(m_ratio.getLastValue(), 0.001f, 8.f);
         const auto delta = std::abs(std::log2(ctRatio / last));
@@ -153,6 +181,8 @@ class VariSpeedTapeDelay
     }
 
   private:
+    /// @brief Appends frames at the write head, taking a bulk copy when the run does not wrap.
+    /// The first six frames are duplicated past the end so the interpolator can read across the seam.
     void writeToRingBuffer(const float* data, const size_t frames) noexcept
     {
         if (m_writeHead >= 6)

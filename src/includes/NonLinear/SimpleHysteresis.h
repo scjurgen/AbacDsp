@@ -7,6 +7,19 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup nonlinear
+ * @brief Asymmetric envelope whose attack and decay rates differ, and are themselves smoothed.
+ *
+ * Rising and falling at different rates makes the output depend on the
+ * direction of travel, so a given input maps to different outputs depending on
+ * where it came from: hysteresis, the behaviour of magnetic media and of many
+ * analog envelope circuits.
+ *
+ * The rate coefficients are themselves ramped over a millisecond, so switching
+ * direction does not put a discontinuity into the envelope.
+ * @see https://en.wikipedia.org/wiki/Hysteresis
+ */
 class SimpleHysteresis
 {
   public:

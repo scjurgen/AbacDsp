@@ -7,15 +7,22 @@
 
 #include "Numbers/Convert.h"
 
-/*
- * Dattorro 48kHz:
- *     229  0.75
- *     173  0.75
- *     613  0.625
- *     449  0.625
- */
 namespace AbacDsp
 {
+/**
+ * @ingroup diffuser
+ * @brief Schroeder allpass section: a delay line wrapped in a feedforward and feedback gain pair.
+ *
+ * Flat magnitude response with a dense, decaying impulse response, which is
+ * what makes it the standard building block for smearing an impulse into
+ * diffusion without colouring the spectrum. Gain sets echo density against
+ * ringing; beyond about 0.7 the section starts to sound tonal.
+ *
+ * Delay lengths are chosen mutually prime so that the sections in a chain do
+ * not reinforce each other at a common period. Dattorro's set at 48 kHz is
+ * 229 and 173 at gain 0.75, then 613 and 449 at 0.625.
+ * @see https://ccrma.stanford.edu/~jos/pasp/Schroeder_Allpass_Sections.html
+ */
 template <size_t MaxSize, size_t BlockSize>
 class SchroederAllPass
 {

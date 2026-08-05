@@ -8,12 +8,20 @@
 namespace AbacDsp
 {
 
-/*
- * Triangle position modulator for modulated delay read heads.
- * tick() advances one step; lastValuePair() yields the integer offset and
- * the fractional part for interpolated buffer reads.
- * Speed and depth changes are deferred to a direction turnaround so the
- * read position never jumps.
+/**
+ * @ingroup modulation
+ * @brief Triangle position modulator for delay read heads.
+ *
+ * tick() advances one step; lastValuePair() gives the integer offset and the
+ * fraction for an interpolated read.
+ *
+ * Speed and depth changes are deferred until a direction turnaround, where the
+ * position is momentarily stationary, so a parameter change cannot make the
+ * read head jump.
+ *
+ * A triangle gives a piecewise-constant rate of change and therefore a
+ * two-state pitch deviation rather than vibrato. SineModulation is the choice
+ * where that flip-flop is audible.
  */
 class Modulation
 {

@@ -20,6 +20,22 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup diffuser
+ * @brief Chain of modulated allpass sections with tappable intermediate outputs and level metering.
+ *
+ * Density compounds along the chain, so the output can be taken from the last
+ * section alone or averaged across the last few taps. Averaging trades some of
+ * the accumulated density for a shorter effective build-up, which is the knob
+ * for how quickly the diffusion arrives rather than how dense it becomes.
+ *
+ * Sizes are spread between a bottom and top bound in metres rather than
+ * samples, so a configuration keeps its room dimensions across sample rates,
+ * and are snapped to distinct primes to avoid a shared period.
+ *
+ * The optional level sinks publish per-element magnitudes through atomics, so a
+ * display can read them without ever blocking the audio thread.
+ */
 template <size_t MaxDelayLength, size_t NumElements, AllpassFeedbackStyle Style = AllpassFeedbackStyle::Direct>
 class DiffuserDelayChain
 {
@@ -182,11 +198,12 @@ class DiffuserDelayChain
         m_levelSink = sink;
     }
 
+    /// @brief Per-element low, mid and high magnitudes, published for a display to poll.
     using BandLevelSink = std::array<std::array<std::atomic<float>, 3>, NumElements + 1>;
 
-    // Configures the fixed low/mid/high per-bin filter bank used by the band-level sink below.
-    // lowHz/highHz are the low-pass and high-pass corners; the mid band-pass sits at their
-    // geometric mean with a wide Q so the three bands overlap.
+    /// @brief Configures the fixed low/mid/high filter bank feeding the band-level sink.
+    /// The mid band sits at the geometric mean of the two corners with a wide Q, so the bands overlap
+    /// rather than leaving gaps where energy would be reported by neither.
     void configureBandFilters(const float sampleRate, const float lowHz, const float highHz) noexcept
     {
         constexpr float kOuterQ = 0.7071f;
@@ -315,8 +332,9 @@ class DiffuserDelayChain
     }
 
   private:
-    // Sums the last `count` per-element outputs of a chain into a scratch accumulator, so
-    // processBlock can output the average of the last few taps instead of only the final one.
+    /// @brief Accumulates the last few per-element outputs so the chain can emit their average.
+    /// Parity filtering exists because adjacent sections are correlated; taking every other tap
+    /// widens the spread of delay lengths in the average without lengthening the chain.
     struct TapTracker
     {
         size_t start{0};

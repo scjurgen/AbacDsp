@@ -7,16 +7,37 @@
 
 namespace AbacDsp
 {
-// N.B.: two HighPass variants with slightly different characteristics — see HighPassLeaky vs HighPass
+/**
+ * @ingroup filters
+ * @brief Response of a one-pole section.
+ *
+ * LowPass, HighPass and HighPassLeaky place the pole by matched-z,
+ * p = exp(-2*pi*fc/fs). AllPass instead uses the bilinear map, so its
+ * coefficient is tan-based and setCutoff() names the frequency at which the
+ * phase shift reaches 90 degrees rather than a -3 dB point.
+ */
 enum class OnePoleFilterCharacteristic
 {
     LowPass,
-    HighPass,
-    AllPass,
-    // y[n] = x[n] - lowpass(x[n]); gain at Nyquist is slightly below 0dB, unlike canonical HighPass
-    HighPassLeaky
+    HighPass,     ///< a0 = (1 + p)/2 normalises the response to exactly unity gain at Nyquist.
+    AllPass,      ///< Unity magnitude at every frequency; only the phase is shaped.
+    HighPassLeaky ///< y[n] = x[n] - lowpass(x[n]). One state less, but Nyquist gain 2p/(1 + p) stays under unity.
 };
 
+/**
+ * @ingroup filters
+ * @brief Coefficient and analysis half of a one-pole section, shared by the channel variants.
+ *
+ * First order: 6 dB/octave asymptote, no resonance, stable while |p| < 1.
+ * CRTP rather than virtual, so reset() reaches the derived resetImpl() without
+ * a vtable and the per-sample path keeps no indirect call.
+ *
+ * The stored coefficient is the pole itself, which makes setFeedback() and
+ * setDecayTime() direct alternatives to setCutoff(). setDecayTime() solves
+ * p = fraction^(1/(t*fs)), the pole whose impulse response has fallen to
+ * fraction after t seconds. setCutoff() at or above Nyquist sets p to 0.
+ * @see https://ccrma.stanford.edu/~jos/filters/One_Pole.html
+ */
 template <typename Derived, OnePoleFilterCharacteristic FilterCharacteristic>
 class OnePoleBase
 {
@@ -104,7 +125,14 @@ class OnePoleBase
 };
 
 
-// --- Mono version ---
+/**
+ * @ingroup filters
+ * @brief Mono one-pole section. All four characteristics are implemented.
+ *
+ * One float of state, two for HighPass, which also needs the previous input.
+ * ClampValues bounds the stored state to [-1, 1]: it caps what the recursion
+ * can accumulate, at the price of distorting any signal driven above unity.
+ */
 template <OnePoleFilterCharacteristic FilterCharacteristic, bool ClampValues = false>
 class OnePoleFilter : public OnePoleBase<OnePoleFilter<FilterCharacteristic, ClampValues>, FilterCharacteristic>
 {
@@ -190,7 +218,14 @@ class OnePoleFilter : public OnePoleBase<OnePoleFilter<FilterCharacteristic, Cla
     float m_x1{0.f};
 };
 
-// --- Stereo version ---
+/**
+ * @ingroup filters
+ * @brief Two-channel one-pole section: state per channel, one shared coefficient set.
+ *
+ * Both channels therefore always track the same cutoff. Only LowPass, HighPass
+ * and AllPass are implemented; HighPassLeaky has no branch in stepStereo(), so
+ * that instantiation leaves the output arguments unwritten.
+ */
 template <OnePoleFilterCharacteristic FilterCharacteristic, bool ClampValues = false>
 class OnePoleFilterStereo
     : public OnePoleBase<OnePoleFilterStereo<FilterCharacteristic, ClampValues>, FilterCharacteristic>
@@ -277,7 +312,14 @@ class OnePoleFilterStereo
     std::array<float, 2> m_x1{};
 };
 
-// --- Arbitrary channel count version (MultiChannel) ---
+/**
+ * @ingroup filters
+ * @brief One-pole section over NumChannels interleaved channels, one shared coefficient set.
+ *
+ * step() consumes exactly one interleaved frame. As with the stereo variant,
+ * HighPassLeaky has no branch and that instantiation passes the frame through
+ * unchanged.
+ */
 template <OnePoleFilterCharacteristic FilterCharacteristic, size_t NumChannels, bool ClampValues = false>
 class MultiChannelOnePoleFilter
     : public OnePoleBase<MultiChannelOnePoleFilter<FilterCharacteristic, NumChannels, ClampValues>,

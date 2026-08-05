@@ -12,10 +12,19 @@
 namespace AbacDsp
 {
 
-// Plays slices of a loop buffer, launched one at a time (typically on beat-grid
-// boundaries). Each voice applies a short click-free fade at both edges; a slice
-// still ringing when the next is launched overlaps it via the voice pool. The
-// loop audio is borrowed (owned by the LoopRecorder), not copied.
+/**
+ * @ingroup sampler
+ * @brief Plays slices of a loop buffer, one launch at a time, overlapping through a voice pool.
+ *
+ * A slice cut anywhere but a zero crossing starts and ends on a step, so every
+ * voice fades both edges. That fade is why launching a new slice cannot simply
+ * stop the previous one: it has to keep running until its tail is done, which
+ * is what the voice pool is for.
+ *
+ * The loop audio is borrowed as a span, not copied, so a slice bank costs only
+ * its boundary list. The slice vector is reserved up front so a freshly cut
+ * bank can be published from the audio thread without allocating.
+ */
 template <size_t BlockSize>
 class SlicePlayer
 {
@@ -119,6 +128,7 @@ class SlicePlayer
     }
 
   private:
+    /// @brief One playing slice: its position, its fade state, and which slice it is.
     struct Voice
     {
         bool active{false};

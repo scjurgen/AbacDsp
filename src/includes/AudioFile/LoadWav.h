@@ -8,6 +8,14 @@
 namespace AudioUtility
 {
 
+/**
+ * @ingroup audiofile
+ * @brief Reads WAV data from disk or memory into float channel vectors.
+ *
+ * Every accessor returns an empty result rather than throwing when the file is
+ * missing or has no frames, so a caller checks one emptiness condition instead
+ * of handling two failure kinds.
+ */
 class LoadWav
 {
   public:

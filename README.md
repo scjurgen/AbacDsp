@@ -135,6 +135,29 @@ independent of anything in this codebase. Stick with Valgrind for now; revisit A
 once that toolchain issue is fixed upstream, or run it inside the Linux container
 instead of natively.
 
+## API documentation
+
+Every public type in `src/includes/` carries a Doxygen brief. Build the site
+with:
+```bash
+./dev-scripts/dev-docs.sh          # writes docs/html/index.html
+./dev-scripts/dev-docs.sh --open   # and opens it
+```
+Requires `doxygen` (`brew install doxygen`); graphviz is used for inheritance
+graphs if present. Output goes to `docs/html/` and is gitignored; the config
+(`docs/Doxyfile`), the vendored theme (`docs/theme/`) and the module pages
+(`docs/groups.dox`, `docs/mainpage.dox`) are tracked.
+
+The build runs with `WARN_AS_ERROR=FAIL_ON_WARNINGS`, so a malformed command or
+an unresolvable cross-reference fails rather than producing a quietly wrong page.
+
+Comments document a class's own contract and the reasoning behind it, not who
+calls it; use cases belong in separate documents. External citations point at
+stable sources and are collected in `WEB-REFERENCES.md`, checked with:
+```bash
+./dev-scripts/dev-check-urls.sh    # every URL in src/includes and WEB-REFERENCES.md
+```
+
 ## IDE Setup
 
 ### clangd / static analysis

@@ -10,6 +10,10 @@
 namespace AbacDsp
 {
 
+/// @ingroup modulation
+/// @brief One cosine component of the flutter sum, at a fixed multiple of the base rate.
+/// Uses a cubic cosine approximation: flutter is a slow control signal, so a fraction of a
+/// percent of shape error is inaudible and the cost drops well below a library call.
 class FlutterLfo
 {
   public:
@@ -29,8 +33,8 @@ class FlutterLfo
     [[nodiscard]] static float fastCos(const float x) noexcept
     {
         // 1 - 6 * x^2 / (pi^2) + 4 * x^3 / (|pi^3|)
-        constexpr float c1 = 0.60792710185403f; // 6/π²
-        constexpr float c2 = 0.12900613773279f; // 4/π³
+        constexpr float c1 = 0.60792710185403f; // 6/pi^2
+        constexpr float c2 = 0.12900613773279f; // 4/pi^3
         const auto xSquare = x * x;
         const auto xCube = xSquare * x;
         return 1.f - c1 * xSquare + c2 * std::abs(xCube);
@@ -60,6 +64,18 @@ class FlutterLfo
     float m_phase;
 };
 
+/**
+ * @ingroup modulation
+ * @brief Fast tape speed irregularity, summed from three detuned cosines.
+ *
+ * Flutter is the fast end of tape speed error, above roughly 6 Hz, where wow is
+ * the slow end. Three components at 1x, 2x and 3x the base rate with unrelated
+ * phase offsets never repeat on a short cycle, so the result reads as
+ * mechanical irregularity rather than as an LFO.
+ *
+ * Rate and depth are smoothed, since a step in either is itself a pitch jump.
+ * @see https://en.wikipedia.org/wiki/Wow_and_flutter
+ */
 class Flutter
 {
   public:

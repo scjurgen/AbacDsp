@@ -6,6 +6,10 @@
 namespace AbacDsp
 {
 
+/// @ingroup srconverter
+/// @brief One-shot offline resample of an interleaved buffer.
+/// Allocates and builds a fresh kernel per call, so it belongs in tests and file conversion,
+/// never on an audio path where SrPushConverter should be held and reused.
 class ConvertSampleBuffer
 {
   public:

@@ -5,6 +5,18 @@
 #include <utility>
 
 
+/**
+ * @file
+ * @ingroup helpers
+ * @brief Builds a std::array whose element type has no default constructor.
+ *
+ * std::array value-initialises its elements, so it cannot hold a type that
+ * requires constructor arguments, which every stateful processor here does
+ * because they all take a sample rate. Expanding an index sequence into the
+ * aggregate initialiser constructs each element in place with the same
+ * arguments, keeping the array inline and allocation-free.
+ */
+
 namespace AbacDsp
 {
 

@@ -42,10 +42,21 @@ Intel actually good at 32 :
 
  */
 
+/**
+ * @ingroup generators
+ * @brief Four-lane SIMD resonator bank for modal voices.
+ *
+ * The vector counterpart of the bank inside ResoGenerator, with coefficients
+ * held lane-major so a group of four resonators advances in one pass.
+ * Measured speedups are tabulated above and fall off past 40 elements, where
+ * the state stops fitting in cache.
+ * @see https://en.wikipedia.org/wiki/AoS_and_SoA
+ */
 template <size_t NumElements, size_t BlockSize>
     requires(NumElements % 4 == 0 && NumElements > 0)
 class ResoBpParallelSIMD
 {
+    /// @brief Three coefficients suffice: the bandpass design fixes b1 = 0 and b2 = -b0.
     struct BandPassCoefficients
     {
         float b0{};

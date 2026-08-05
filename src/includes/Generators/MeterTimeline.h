@@ -7,17 +7,27 @@
 namespace AbacDsp
 {
 
+/// @ingroup generators
+/// @brief One time signature and the bar index at which it takes effect.
 struct MeterSegment
 {
-    size_t startBar{0}; // 0-based bar index where this meter begins
+    size_t startBar{0}; ///< 0-based bar index where this meter begins.
     size_t beatsPerBar{4};
-    bool eighthUnit{false}; // false: beat = quarter note; true: beat = eighth note
+    bool eighthUnit{false}; ///< false: beat is a quarter note; true: beat is an eighth.
 };
 
-// Tracks a sequence of meter (time signature) changes across a take/loop, each
-// starting at a specific bar index, so a loop whose meter changes partway
-// through can be replayed bar-accurately instead of assuming one constant bar
-// length for the whole loop.
+/**
+ * @ingroup generators
+ * @brief Sequence of time-signature changes, with cumulative frame positions.
+ *
+ * A single bar length cannot describe a passage whose meter changes partway
+ * through, so bar boundaries are accumulated across segments instead of being
+ * computed from one constant. That is what lets a position in frames be mapped
+ * back to the correct bar and beat when the meter is not uniform.
+ *
+ * The cumulative table is rebuilt on edit rather than maintained incrementally,
+ * so lookups stay a binary search and never depend on edit order.
+ */
 class MeterTimeline
 {
   public:

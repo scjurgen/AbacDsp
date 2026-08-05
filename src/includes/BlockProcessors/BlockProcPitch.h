@@ -11,6 +11,18 @@
 namespace AbacDsp::BlockProc
 {
 
+/**
+ * @ingroup blockprocessors
+ * @brief Pitch shifter with two mutually exclusive engines.
+ *
+ * Default is PitchFadeWindowDelay, a crossfaded variable delay: no latency, but
+ * periodic at the grain rate. Enabling the phase vocoder routes to
+ * PhaseVocoderPitch instead, spectrally cleaner at the cost of its fixed
+ * analysis latency.
+ *
+ * Both engines are built lazily, so an unused one costs nothing; the first
+ * enable of either allocates and must not run on the audio thread.
+ */
 template <size_t BlockSize>
 class Pitch final : public BlockProcessorBase<BlockSize>
 {

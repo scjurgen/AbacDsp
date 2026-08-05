@@ -6,6 +6,21 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup generators
+ * @brief Mean-reverting noise: random walk pulled back towards a centre.
+ *
+ * A plain random walk drifts without bound, which is useless as a modulation
+ * source because it wanders off and never comes back. Adding a restoring force
+ * proportional to the displacement gives noise that stays near its mean while
+ * remaining genuinely random, with a spectrum that is flat below the reversion
+ * rate and rolls off above it.
+ *
+ * theta and mu are derived from sigma rather than set independently, so one
+ * control moves amplitude and reversion rate together and the process cannot be
+ * put into a state where it stops reverting.
+ * @see https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process
+ */
 class OrnsteinUhlenbeckProcess
 {
   public:

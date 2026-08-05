@@ -10,9 +10,22 @@
 
 namespace AbacDsp
 {
+/**
+ * @ingroup analysis
+ * @brief Scrolling mel-scale spectrogram, transformed on a worker thread.
+ *
+ * A linear bin axis spends most of its resolution on the top octave, where the
+ * ear resolves least. Mel spacing redistributes it to match perception, so the
+ * image shows the detail a listener actually hears.
+ *
+ * The FFT and filterbank run off-thread; the producing side only copies samples
+ * and advances a queue index, so it never blocks or allocates.
+ * @see https://en.wikipedia.org/wiki/Mel_scale
+ */
 class MelSpectroGram
 {
   public:
+    /// @brief Snapshot for the drawing side. The pointer stays valid until the next resize.
     struct ImageSet
     {
         size_t currentSlice;
@@ -221,6 +234,8 @@ class MelSpectroGram
     std::thread m_workerThread;
 };
 
+/// @ingroup analysis
+/// @brief A SpectrogramBase image plus the sample rate, FFT length and hop needed to label its axes.
 struct SpectrumImageSet
 {
     size_t activeSlice;
@@ -229,7 +244,7 @@ struct SpectrumImageSet
     const float* data;
     float sampleRate;
     unsigned fftLength;
-    float windowForwardRatio; // hop / fftLength — for time axis labelling
+    float windowForwardRatio; // hop / fftLength, for time axis labelling
 
     [[nodiscard]] size_t size() const noexcept
     {
@@ -237,6 +252,18 @@ struct SpectrumImageSet
     }
 };
 
+/**
+ * @ingroup analysis
+ * @brief Off-thread STFT engine; subclasses decide what to do with each magnitude frame.
+ *
+ * Frames cross to the worker through a four-slot queue with atomic indices, so
+ * the producing side never blocks and never allocates.
+ *
+ * Every concrete subclass must call stopWorker() as the first statement of its
+ * own destructor. By the time this base destructor runs, the derived vtable
+ * entry is already gone, and a still-running worker would call a pure virtual.
+ * @see https://ccrma.stanford.edu/~jos/sasp/Short_Time_Fourier_Transform.html
+ */
 class SpectrogramBase
 {
   public:
@@ -274,7 +301,7 @@ class SpectrogramBase
         onFftLengthChanged();
     }
 
-    // ratio in (0, 1) — fraction of fftLength advanced per frame
+    // ratio in (0, 1), fraction of fftLength advanced per frame
     void setWindowForward(const float ratio)
     {
         m_windowForwardRatio = std::clamp(ratio, 0.01f, 0.99f);
@@ -405,6 +432,8 @@ class SpectrogramBase
     std::thread m_workerThread;
 };
 
+/// @ingroup analysis
+/// @brief Scrolling spectrogram: one magnitude column per STFT frame in a ring of slices.
 class SimpleSpectrogram : public SpectrogramBase
 {
   public:
@@ -469,6 +498,15 @@ class SimpleSpectrogram : public SpectrogramBase
     std::vector<float> m_spectrogram;
 };
 
+/**
+ * @ingroup analysis
+ * @brief Waterfall plot drawn by the floating-horizon hidden-line rule.
+ *
+ * Each new spectrum is drawn only where it rises above every curve already in
+ * front of it. One running silhouette per column is enough to decide that, so
+ * the stacked-ridges look costs no depth buffer and no sorting.
+ * @see https://en.wikipedia.org/wiki/Hidden-line_removal
+ */
 class FloatingHorizonFFTImage : public SpectrogramBase
 {
   public:

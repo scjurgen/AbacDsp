@@ -8,6 +8,13 @@ namespace AbacDsp
 {
 namespace BlockProc
 {
+/**
+ * @ingroup blockprocessors
+ * @brief Block-wise first-order highpass, formed as y = lp - x.
+ *
+ * The subtraction order makes the output -hp: correct magnitude, inverted
+ * polarity. Filter theory: see Filters/OnePoleFilter.h.
+ */
 template <size_t BlockSize>
 class Highpass final : public BlockProcessorBase<BlockSize>
 {

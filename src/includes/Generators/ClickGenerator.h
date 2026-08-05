@@ -8,6 +8,8 @@
 namespace AbacDsp
 {
 
+/// @ingroup generators
+/// @brief Which of the three click voices a beat triggers, or none.
 enum class ClickAccent : uint8_t
 {
     None,
@@ -16,6 +18,9 @@ enum class ClickAccent : uint8_t
     Downbeat
 };
 
+/// @ingroup generators
+/// @brief Pitches for the three accents and their shared decay.
+/// Accents are distinguished by pitch rather than level, which survives being played quietly.
 struct ClickVoiceConfig
 {
     float downbeatFrequencyHz{400.f};
@@ -24,8 +29,15 @@ struct ClickVoiceConfig
     float decaySeconds{0.04f};
 };
 
-// Three damped-sine voices (downbeat / beat / subdivision) sharing one output.
-// Extracted from the metronome so the looper and metronome use the same click.
+/**
+ * @ingroup generators
+ * @brief Three damped-sine click voices sharing one output.
+ *
+ * A damped sine is the whole click: an exponentially decaying sinusoid has a
+ * compact envelope and a single spectral peak, so it reads as a transient
+ * without the broadband spray of a filtered impulse and without needing a
+ * sample.
+ */
 class ClickGenerator
 {
   public:

@@ -6,6 +6,9 @@
 namespace AbacDsp
 {
 
+/// @ingroup sampler
+/// @brief One scheduled slice trigger. timingOffsetFrames is a fixed displacement (shuffle),
+/// humanizeAmountFrames a random one re-rolled each repeat, so groove and looseness stay independent.
 struct SequenceEvent
 {
     size_t stepPosition{0}; // quantized position within the pattern, in steps
@@ -19,11 +22,15 @@ struct SequenceEvent
     float humanizeAmountFrames{0.f}; // humanize: max +/- jitter, re-rolled per pattern repeat
 };
 
-// Plain event-list data for a loop-synced step sequence. Pattern length is
-// expressed in whole bars (matching the base looper's own bar length so a
-// pattern always wraps in sync), subdivided into stepsPerBeat steps per beat.
-// No audio, no clock: SequencerEngine converts step positions to
-// sample-accurate trigger times against the live BeatSequencer.
+/**
+ * @ingroup sampler
+ * @brief Event-list data for a loop-synced step sequence. No audio and no clock.
+ *
+ * Length is in whole bars and positions are in steps, never in frames, so a
+ * pattern survives a tempo change untouched and always wraps in sync with the
+ * loop. SequencerEngine is what turns a step position into a sample-accurate
+ * trigger time against the live BeatSequencer.
+ */
 class SequencePattern
 {
   public:

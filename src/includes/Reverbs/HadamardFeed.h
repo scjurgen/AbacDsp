@@ -1,7 +1,29 @@
 #pragma once
 
+/**
+ * @file
+ * @ingroup reverbs
+ * @brief Runtime-order Hadamard mixing for feedback delay networks.
+ *
+ * A feedback delay network needs an orthogonal mixing matrix so the loop
+ * neither creates nor destroys energy: with the mixing lossless, one scalar
+ * gain sets the decay time and nothing else has to be re-tuned. Hadamard
+ * matrices are the cheapest orthogonal choice, since every entry is +/-1 and
+ * the whole mix is adds and subtracts with no multiply.
+ *
+ * These are unnormalised. The rows have norm sqrt(order), so the caller has to
+ * apply the 1/sqrt(order) factor; the FDN tanks fold it into their feedback
+ * gain rather than paying for it here.
+ *
+ * @see https://en.wikipedia.org/wiki/Hadamard_matrix
+ */
+
 namespace AbacDsp
 {
+/// @ingroup reverbs
+/// @brief Mixes `order` inputs through a Hadamard matrix chosen at runtime.
+/// Handles 2, 4, 8, 12, 16, 20, 24, 28 and 32; anything else passes col[0] through unmixed.
+/// Orders 12, 20, 24 and 28 exist only as explicit tables, having no power-of-two butterfly.
 inline void hadamardFeed(const unsigned order, const float* col, float* sum) noexcept
 {
     switch (order)

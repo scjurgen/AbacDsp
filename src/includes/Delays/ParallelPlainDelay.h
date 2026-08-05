@@ -6,6 +6,22 @@
 
 namespace AbacDsp
 {
+/**
+ * @ingroup delays
+ * @brief Block-copied multichannel delay, one independent length per channel and optional extra taps.
+ *
+ * Each channel carries its own delay length, so this is a set of parallel lines
+ * rather than one line applied across channels. Delays are whole samples; there
+ * is no interpolation and a length change steps.
+ *
+ * The buffer runs one block past MAXSIZE and the first block is mirrored into
+ * that tail once per cycle. A read that straddles the wrap is then a contiguous
+ * copy, so the inner loops carry no bounds test and vectorise.
+ *
+ * Heads beyond the first are placed relative to the main head by
+ * setRelativeHead() and advanced separately by processHead(), which lets one
+ * line feed several taps without storing the signal more than once.
+ */
 template <size_t BlockSize, size_t CHANNELS, size_t MAXSIZE, size_t NUMREADHEADS = 1>
     requires(BlockSize > 0 && MAXSIZE > BlockSize && CHANNELS > 1)
 class ParallelPlainDelay
@@ -40,6 +56,8 @@ class ParallelPlainDelay
         }
     }
 
+    /// @brief Offsets read head headIdx from the main head on one channel. Head 0 is the main head.
+    /// The offset survives later setSize() calls, which reposition every head from the new length.
     void setRelativeHead(const size_t headIdx, const size_t index, const int newDistance) noexcept
     {
         assert(headIdx > 0 && headIdx < m_read.size() && index < m_read[headIdx].size());
@@ -52,6 +70,8 @@ class ParallelPlainDelay
         }
     }
 
+    /// @brief Writes one block, reads the main head, and advances both.
+    /// The wrap mirror is refreshed here, on the cycle where the write head returns to zero.
     void processBlock(const std::array<std::array<float, BlockSize>, CHANNELS>& src,
                       std::array<std::array<float, BlockSize>, CHANNELS>& target) noexcept
     {
@@ -91,6 +111,7 @@ class ParallelPlainDelay
         }
     }
 
+    /// @brief Reads and advances one auxiliary head. Must be called once per processBlock() to stay in step.
     void processHead(const size_t idx, std::array<std::array<float, BlockSize>, CHANNELS>& target) noexcept
     {
         assert(idx > 0 && idx < m_read.size());

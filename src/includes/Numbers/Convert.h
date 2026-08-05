@@ -6,8 +6,21 @@
 
 #include "Numbers/Approximation.h"
 
+/**
+ * @file
+ * @ingroup numbers
+ * @brief Unit conversions between the domains a control and the DSP work in.
+ *
+ * Panning here is the sin/cos constant-power law, not a linear crossfade: two
+ * uncorrelated signals summed at linear half gain lose about 3 dB in the
+ * middle of the sweep, which a listener hears as a hole in the centre.
+ * @see https://en.wikipedia.org/wiki/Decibel
+ */
+
 namespace Convert
 {
+/// @ingroup numbers
+/// @brief Constant-power pan factors, angle given in percent over -100 to +100.
 template <std::floating_point T>
 void getPanFactor(const T angleInPercent, T& left, T& right)
 {
@@ -19,6 +32,9 @@ void getPanFactor(const T angleInPercent, T& left, T& right)
     right = f * (cosVal + sinVal);
 }
 
+/// @ingroup numbers
+/// @brief Constant-power pan factors from a normalised -1 to +1 angle.
+/// Uses the minimax polynomial sin and cos, so it is cheap enough to call per sample.
 template <std::floating_point T>
 void getPanFactorNormalized(const T angleNormalized, T& left, T& right)
 {
@@ -31,12 +47,16 @@ void getPanFactorNormalized(const T angleNormalized, T& left, T& right)
     right = f * (cosVal + sinVal);
 }
 
+/// @ingroup numbers
+/// @brief Decibels to an amplitude ratio: 10^(dB/20).
 template <std::floating_point T>
 [[nodiscard]] T dbToGain(const T dB)
 {
     return std::pow(T(10), dB / T(20));
 }
 
+/// @ingroup numbers
+/// @brief Amplitude ratio to decibels, returning negative infinity at zero rather than a domain error.
 template <std::floating_point T>
 [[nodiscard]] T gainToDb(const T gain)
 {

@@ -11,6 +11,19 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup sampler
+ * @brief Time-stretches a stereo sample by phase-vocoder resynthesis.
+ *
+ * Analysis and synthesis hops differ, which is what stretches time; each bin's
+ * phase is advanced by its own instantaneous frequency so partials stay
+ * continuous across the rate change instead of phasing against each other.
+ *
+ * Pitch is unaffected, so this pairs with ResamplingPitchShifter to get either
+ * effect independently. Owns raw pffft buffers and frees them in the
+ * destructor, so it is neither copyable nor movable as written.
+ * @see https://ccrma.stanford.edu/~jos/sasp/Phase_Vocoder.html
+ */
 class StretchedSampleProducer
 {
   public:
@@ -95,7 +108,9 @@ class StretchedSampleProducer
             if (getAvailableSamples() == 0)
             {
                 if (!processFrame(samples, dataSize))
+                {
                     return false;
+                }
             }
 
             if (m_samplesToSkip > 0)
@@ -197,7 +212,9 @@ class StretchedSampleProducer
     [[nodiscard]] bool processFrame(const float* samples, const size_t dataSize)
     {
         if (!fillInputBuffer(samples, dataSize))
+        {
             return false;
+        }
 
         processChannel(m_inputBufferL.data(), m_outputRingL.data(), m_prevPhaseL, m_synthPhaseL);
         processChannel(m_inputBufferR.data(), m_outputRingR.data(), m_prevPhaseR, m_synthPhaseR);

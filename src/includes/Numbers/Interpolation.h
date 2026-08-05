@@ -2,6 +2,20 @@
 
 namespace AbacDsp
 {
+/**
+ * @ingroup numbers
+ * @brief Fractional-delay interpolators, from zero-order hold to six-point optimal.
+ *
+ * All take a pointer to consecutive samples and a fraction in [0, 1), and none
+ * checks bounds: the caller guarantees the support width, which is why the
+ * delay lines in this library carry wrap padding.
+ *
+ * The choice is a cost against high-frequency loss. Linear is one multiply and
+ * attenuates badly near a half-sample offset; Catmull-Rom costs a few more and
+ * is flat far higher; the optimal kernels are least-squares fits that beat a
+ * polynomial of the same order for the same arithmetic.
+ * @see https://yehar.com/blog/wp-content/uploads/2009/08/deip.pdf
+ */
 class Interpolation
 {
   public:

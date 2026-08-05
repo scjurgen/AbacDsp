@@ -13,6 +13,9 @@ namespace AbacDsp
 {
 constexpr float SrConvertMaxRatio{128};
 
+/// @ingroup srconverter
+/// @brief Push-conversion call state: what was offered, what was taken, what came out.
+/// Frames consumed and generated are both reported because a rate change makes them differ.
 struct SrPushConverterData
 {
     const float* dataIn;
@@ -22,6 +25,18 @@ struct SrPushConverterData
     float ratio;
 };
 
+/**
+ * @ingroup srconverter
+ * @brief Push-model sample rate converter: caller supplies input, takes whatever comes out.
+ *
+ * The caller drives, so this suits a real-time path where input arrives on
+ * someone else's schedule and the output count per call is not known in
+ * advance. SrPullConverter inverts that: it asks for input when it needs it,
+ * which suits a file or offline source.
+ *
+ * Conversion is windowed-sinc interpolation through a shared SincFilter, so a
+ * kernel is built once and used by every converter that references it.
+ */
 template <size_t MAXCHANNELS>
 class SrPushConverter
 {

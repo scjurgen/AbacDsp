@@ -1,0 +1,59 @@
+/**
+ * @mainpage AbacDsp
+ *
+ * A header-only C++20 DSP library. The core in `src/includes/` has no external
+ * dependencies; JUCE appears only in the example plugins.
+ *
+ * @section conventions Conventions
+ *
+ * These hold across the whole library, and knowing them makes most individual
+ * classes predictable.
+ *
+ * **Sample rate in the constructor.** Stateful processors take `float
+ * sampleRate` on construction and derive their coefficients there. There is no
+ * separate prepare step, and no processor reads a global rate.
+ *
+ * **Block size as a template parameter.** Processing operates on
+ * `std::array<float, BlockSize>` rather than a pointer and a length, so the
+ * loop bound is a compile-time constant. Block sizes of 8 to 16 samples are
+ * typical. AbacDsp::FixedSizeProcessor adapts an arbitrary external block size
+ * to a fixed internal one, at exactly one internal block of latency.
+ *
+ * **No allocation after construction.** Anything on an audio path sizes its
+ * storage up front. Where a class does allocate, or blocks, or holds a lock,
+ * its documentation says so; treat that as the exception it is.
+ *
+ * **Wrap padding on interpolated buffers.** Delay lines that interpolate carry
+ * a few samples of the buffer duplicated past its end, so a four- or six-point
+ * kernel reads across the seam without a bounds test. The padding width is part
+ * of each class's contract.
+ *
+ * **Prime delay lengths.** Delay lines whose lengths share a common factor
+ * reinforce each other at that period. Unmodulated chains snap their lengths to
+ * distinct primes; see @ref numbers.
+ *
+ * @section reading Where to start
+ *
+ * @ref filters and @ref delays hold the primitives most of the rest is built
+ * from. @ref reverbs and @ref diffuser show them composed into complete
+ * effects. @ref numbers carries the interpolation and conversion routines
+ * everything else depends on.
+ *
+ * The module list has a page per domain, each stating the design decision that
+ * domain turns on.
+ *
+ * @section refs External references
+ *
+ * Citations throughout point at stable sources, chiefly Julius Smith's online
+ * books at CCRMA, the Audio EQ Cookbook, and the DAFx paper archive. They are
+ * collected in `WEB-REFERENCES.md` at the repository root and checked with
+ * `dev-scripts/dev-check-urls.sh`.
+ *
+ * @section building Building the documentation
+ *
+ * @code{.sh}
+ * dev-scripts/dev-docs.sh
+ * @endcode
+ *
+ * Output lands in `docs/html/index.html`.
+ */

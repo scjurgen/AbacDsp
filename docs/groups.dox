@@ -1,0 +1,243 @@
+/**
+ * @defgroup analysis Analysis
+ * @brief Measurement rather than production: envelopes, spectra, pitch and onsets.
+ *
+ * Split sharply by realtime safety. The envelope followers and the octave-band
+ * meter are fixed-size and allocation-free. Everything transform-based here
+ * allocates, and the spectrograms move the work to a worker thread through a
+ * lock-free queue rather than pretending otherwise.
+ *
+ * The transforms in this group are correctness-first references, computed in
+ * double where it helps. Realtime spectral processing lives in @ref spectral
+ * and goes through pffft.
+ */
+
+/**
+ * @defgroup audio Audio
+ * @brief Buffers, block-size adaptation and gain ramps.
+ *
+ * The block-size convention of the library starts here: processors are written
+ * against a compile-time block size, and AudioBuffer stores frames interleaved
+ * so a frame's channels share a cache line.
+ */
+
+/**
+ * @defgroup audiofile AudioFile
+ * @brief WAV and Ogg Vorbis reading and writing.
+ *
+ * Every entry point blocks and allocates. Nothing in this group belongs on an
+ * audio thread.
+ */
+
+/**
+ * @defgroup blockprocessors BlockProcessors
+ * @brief Thin dispatch layers over per-sample loops.
+ *
+ * A block processor adds no arithmetic of its own; it changes the granularity
+ * at which a per-sample loop is invoked, so the loop bound becomes a
+ * compile-time constant and the body stays vectorisable.
+ *
+ * Virtual dispatch happens once per block rather than once per sample, which is
+ * what makes a runtime-configurable processing chain affordable.
+ */
+
+/**
+ * @defgroup delays Delays
+ * @brief Delay lines, and four different answers to changing their length.
+ *
+ * Every delay line faces the same problem: moving a read head discontinuously
+ * clicks. The classes here differ mainly in which artifact they accept instead.
+ *
+ * | Approach | Artifact | Class |
+ * | --- | --- | --- |
+ * | Jump the read head | Click | NaiveDelay |
+ * | Crossfade two heads | Brief comb filtering | DispersionDelay |
+ * | Ease the read rate | Transient pitch bend | FracReadHead |
+ * | Glide at 0.5x or 2x | Audible octave sweep | ModulatingDelayPitchedAdjust |
+ *
+ * VariSpeedTapeDelay sidesteps the question by varying the rate at which
+ * material is recorded, so its buffer holds tape rather than samples.
+ *
+ * Interpolated lines carry wrap padding, typically six samples, so a four-point
+ * interpolator can read across the seam without a branch.
+ */
+
+/**
+ * @defgroup diffuser Diffuser
+ * @brief Allpass chains that smear an impulse into diffusion without colouring it.
+ *
+ * An allpass section has a flat magnitude response and a dense, decaying
+ * impulse response, which is exactly what is wanted to build echo density
+ * without imposing a spectrum. Sections in series multiply density, so a short
+ * chain reaches what one section could only approach at a gain high enough to
+ * ring audibly.
+ *
+ * Lengths are snapped to distinct primes throughout, so no two sections share a
+ * period and reinforce each other into a pitch.
+ *
+ * @see https://ccrma.stanford.edu/~jos/pasp/Schroeder_Allpass_Sections.html
+ */
+
+/**
+ * @defgroup filters Filters
+ * @brief One-pole, biquad, state variable, ladder and windowed-sinc filters.
+ *
+ * Transposed Direct Form II throughout the biquads: two state words, and the
+ * form usually preferred for floating point, where Direct Form I is the safer
+ * choice in fixed point.
+ *
+ * Two coefficient conventions coexist and are worth telling apart. The
+ * lowpass, highpass, bandpass, notch and peak designs use the prewarped
+ * K = tan(pi*f/fs); the allpass and shelf designs use the cookbook
+ * alpha = sin(w0)/(2Q). Both are bilinear designs; only the algebra differs.
+ *
+ * SvfResoBP is the exception to the direct forms. It integrates the analog
+ * state variable filter by the trapezoidal rule and resolves the zero-delay
+ * feedback algebraically, which is what keeps it stable when the cutoff is
+ * modulated per sample.
+ *
+ * @see https://ccrma.stanford.edu/~jos/filters/
+ * @see https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
+ */
+
+/**
+ * @defgroup generators Generators
+ * @brief Sources: modal voices, clicks, noise processes and musical clocks.
+ *
+ * The modal voices ring resonators rather than summing oscillators, so each
+ * partial carries its own decay without an envelope per partial, and partials
+ * enter on staggered delays because a real resonator does not excite every mode
+ * at once.
+ *
+ * The noise sources are deliberately not white. Mean reversion, velvet grids
+ * and fractal walks each produce a different kind of structured irregularity,
+ * which is what makes them usable as modulation rather than as hiss.
+ */
+
+/**
+ * @defgroup helpers Helpers
+ * @brief Small utilities: array construction, SIMD selection, test formatting.
+ */
+
+/**
+ * @defgroup modulation Modulation
+ * @brief Wow, flutter and the position modulators that drive delay read heads.
+ *
+ * Pitch deviation follows the rate of change of the delay, not the delay
+ * itself. A triangle sweep therefore has a piecewise-constant derivative and
+ * produces a two-state warble rather than vibrato, which is why SineModulation
+ * exists alongside Modulation and is the default for anything audible.
+ *
+ * Wow and flutter are the slow and fast halves of tape speed error, split at
+ * roughly 6 Hz. Wow is driven by a mean-reverting random process rather than an
+ * oscillator, because a listener picks a repeating cycle out immediately.
+ *
+ * @see https://en.wikipedia.org/wiki/Wow_and_flutter
+ */
+
+/**
+ * @defgroup naivegenerators NaiveGenerators
+ * @brief Waveforms computed straight from the phase, aliasing included.
+ *
+ * The aliasing is the point. These define what the ideal waveform is before
+ * band limiting, and are the baseline the wavetable oscillator is measured
+ * against. Sine and noise do not alias and are usable directly.
+ */
+
+/**
+ * @defgroup nonlinear NonLinear
+ * @brief Memoryless and hysteretic nonlinearities.
+ */
+
+/**
+ * @defgroup numbers Numbers
+ * @brief Interpolation, conversions, easing curves, primes and approximations.
+ *
+ * The interpolators are the substrate of every fractional delay in the library.
+ * None checks bounds: the caller guarantees the support width, which is why the
+ * delay lines carry wrap padding.
+ *
+ * The prime helpers exist for one reason. Delay lengths sharing a common factor
+ * reinforce at that period and turn a diffuse tail into an audible pitch;
+ * mutually prime lengths have no common period short enough to matter.
+ */
+
+/**
+ * @defgroup parameters Parameters
+ * @brief Smoothing and mapping between control values and DSP quantities.
+ *
+ * Applying a control change at once puts a step into the signal: a click on a
+ * gain, a zipper on anything swept. Everything here exists to spread that step
+ * over a few milliseconds.
+ */
+
+/**
+ * @defgroup reverbs Reverbs
+ * @brief Feedback delay networks and the Hadamard mixing they are built on.
+ *
+ * An FDN needs an orthogonal mixing matrix, so that the feedback loop neither
+ * creates nor destroys energy on its own. With the mixing lossless, decay time
+ * becomes a single scalar gain and nothing else has to be retuned when it
+ * changes.
+ *
+ * Hadamard matrices are the cheapest orthogonal choice: every entry is +/-1, so
+ * mixing is adds and subtracts with no multiply. The mixing functions here are
+ * unnormalised, and the tanks fold the 1/sqrt(order) factor into their feedback
+ * gain instead.
+ *
+ * The `HadamardWalsh*` files compute the identical matrix in identical row
+ * order via the fast butterfly, not a sequency-ordered variant: 160 adds at
+ * order 32 against 1024 written flat.
+ *
+ * FdnTankRef is the bare network, kept as the baseline the elaborated tanks are
+ * measured against.
+ *
+ * @see https://ccrma.stanford.edu/~jos/pasp/FDN_Reverberation.html
+ */
+
+/**
+ * @defgroup sampler Sampler
+ * @brief Loop capture, slicing, sample playback and step sequencing.
+ *
+ * The realtime and file-IO halves are strictly separated. Players and
+ * recorders reserve all storage at construction and borrow audio by span or
+ * pointer; the file classes block and allocate freely.
+ *
+ * The sequencer is driven from the same grid-event stream as the looper's own
+ * clock rather than from a clock of its own, which makes drift against the loop
+ * impossible rather than merely unlikely.
+ */
+
+/**
+ * @defgroup srconverter SamplerateConverter
+ * @brief Push and pull sample rate conversion over windowed-sinc kernels.
+ *
+ * Push and pull differ in who drives. The push converter takes input when the
+ * caller has it and returns whatever comes out, which suits a live audio path;
+ * the pull converter asks a callback for input as it needs it, which suits a
+ * file or generator.
+ */
+
+/**
+ * @defgroup spectral Spectral
+ * @brief Realtime frequency-domain processing over pffft.
+ *
+ * @see https://ccrma.stanford.edu/~jos/sasp/
+ */
+
+/**
+ * @defgroup synthhandling SynthHandling
+ * @brief MIDI-side state that is not signal processing.
+ */
+
+/**
+ * @defgroup wavetables Wavetables
+ * @brief Mipmapped band-limited wavetable oscillators.
+ *
+ * A single table holds a fixed set of harmonics, so playing it faster pushes
+ * those harmonics past Nyquist. Each mipmap level therefore drops the partials
+ * that would alias at its own pitch, and lookup takes the highest level still
+ * safe for the requested increment.
+ *
+ * @see https://www.earlevel.com/main/2012/05/04/a-wavetable-oscillator-part-1/
+ */

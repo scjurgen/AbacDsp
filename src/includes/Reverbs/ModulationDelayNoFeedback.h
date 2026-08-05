@@ -11,30 +11,34 @@
 
 namespace AbacDsp
 {
+/// @ingroup reverbs
+/// @brief How a delay line gets from its current length to a requested one.
 enum class ChangeSizeMode
 {
-    HARDSWITCH,
-    FADE,
-    PITCH,
+    HARDSWITCH, ///< Move the read head at once. Cheapest, and audible as a click.
+    FADE,       ///< Crossfade two read heads. Briefly comb-filters while both are live.
+    PITCH,      ///< Glide the read rate. Bends pitch for the duration of the move.
 };
 
-/*
- * no filters
- * no feedback
- * modulation
- * soft size adaption
+/**
+ * @ingroup reverbs
+ * @brief Modulated delay line with no feedback and no filtering, sized at runtime.
  *
- * sizes: changed realtime when pitching or jump
- * in FADE it waits until fade done, then starts new fade for last position request
+ * Deliberately stripped: a reverb tank supplies its own feedback path, damping
+ * and mixing, so a line that duplicated any of it would either double the
+ * filtering or fight the tank's own loop gain. What remains is storage,
+ * interpolated reads, modulation, and the three ways of changing length.
  *
+ * In FADE mode a request arriving mid-fade is held until the current one
+ * finishes, then applied, so length changes queue rather than interrupt.
+ * Six samples of wrap padding serve the interpolator.
  */
-
 template <size_t MAXSIZE>
 class ModulationDelayNoFeedback
 {
   public:
-    static constexpr float modulationSafetyMargin{
-        8.f}; // headroom kept between the modulated read head and the write head, in samples
+    /// Samples kept between the modulated read head and the write head, so modulation cannot overtake it.
+    static constexpr float modulationSafetyMargin{8.f};
 
     explicit ModulationDelayNoFeedback()
     {

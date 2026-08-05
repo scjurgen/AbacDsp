@@ -7,6 +7,10 @@
 namespace AbacDsp
 {
 
+/// @ingroup reverbs
+/// @brief Unnormalised order-8 Hadamard mix in Sylvester (natural) row order.
+/// Written out flat: 8*8 adds, no temporaries, and no dependence between outputs.
+/// HadamardWalsh8.h computes the identical matrix with a butterfly, in fewer adds.
 inline void hadamardFeed8(const float* col, float* sum) noexcept
 {
     sum[0] = col[0] + col[1] + col[2] + col[3] + col[4] + col[5] + col[6] + col[7];
@@ -26,6 +30,8 @@ inline void hadamardFeed8(const std::array<float, 8>& col, std::array<float, 8>&
 
 #if defined(USE_SIMD_FRAMEWORK)
 
+/// @ingroup reverbs
+/// @brief SIMD form of hadamardFeed8(), building each row as a masked multiply plus a horizontal add.
 inline void hadamardFeed8_simd(const float* col, float* sum) noexcept
 {
     const simd_float4 v0 = simd_make_float4(col[0], col[1], col[2], col[3]);

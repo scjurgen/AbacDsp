@@ -13,6 +13,21 @@
 
 namespace AbacDsp
 {
+/**
+ * @ingroup reverbs
+ * @brief Feedback delay network with dispersion, modulation, damping and pitched taps.
+ *
+ * Builds on the bare network of FdnTankRef with everything that removes its
+ * metallic character: an allpass per line for dispersion, modulated lines to
+ * break up the fixed comb pattern, a lowpass and highpass on a subset of lines
+ * for frequency-dependent decay, and two pitch-shifted taps.
+ *
+ * Only MaxSpecialFilters lines carry filters and only NumPitchDelays are
+ * pitched, because the mixing matrix spreads any one line's colour across all
+ * of them within a few circulations. Treating every line would cost order times
+ * as much for an effect that is already fully diffused.
+ * @see https://ccrma.stanford.edu/~jos/pasp/FDN_Reverberation.html
+ */
 template <size_t MaxSizePerElement, size_t MAXORDER, size_t BlockSize>
 class FdnTank
 {

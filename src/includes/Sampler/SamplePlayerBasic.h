@@ -8,6 +8,14 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup sampler
+ * @brief Single-voice stereo sample playback at a fractional read rate.
+ *
+ * One voice, one shared_ptr to the data, optional looping. The lowpass tracks
+ * the read rate: playing a sample faster shifts its content up, and without
+ * filtering the top of that content folds back as alias.
+ */
 class SamplePlayerBasic
 {
   public:

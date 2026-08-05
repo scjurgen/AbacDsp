@@ -9,6 +9,17 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup audio
+ * @brief Fixed-capacity interleaved multichannel buffer with frame-wise iteration.
+ *
+ * Storage is one std::array, so the buffer lives inline and never allocates.
+ * Interleaved layout puts a frame's channels on the same cache line, at the
+ * cost of making single-channel sweeps strided.
+ *
+ * mux() and demux() throw on a size mismatch rather than truncating, since a
+ * partially filled buffer is harder to diagnose than a thrown exception.
+ */
 template <size_t Channels, size_t NumFrames>
 class AudioBuffer
 {

@@ -7,9 +7,23 @@
 
 namespace AbacDsp
 {
+/**
+ * @ingroup filters
+ * @brief Bank of NumElements resonant bandpasses, summed into one output.
+ *
+ * Every element is the three-coefficient bandpass of BiquadResoBP (b1 = 0,
+ * b2 = -b0) with its own state, frequency and pair of switchable coefficient
+ * sets, so the bank represents a set of independently decaying modes.
+ *
+ * process() puts the sample loop outermost, so each sample walks every
+ * element's state in turn. BiquadResoBPParallelSIMD holds the same bank with
+ * that nesting reversed.
+ * @see https://ccrma.stanford.edu/~jos/pasp/Modal_Representation.html
+ */
 template <size_t NumElements, size_t BlockSize>
 class BiquadResoBandPassParallel
 {
+    /// @brief Three coefficients suffice: the bandpass design fixes b1 = 0 and b2 = -b0.
     struct BandPassCoefficients
     {
         float b0{};
@@ -39,6 +53,8 @@ class BiquadResoBandPassParallel
         computeCoefficients(mainIndex, index, frequency, Q);
     }
 
+    /// @brief Sets Q from a decay time in seconds, reusing the K and kSquare left behind by the
+    /// last computeCoefficients() on this mainIndex, so it keeps that call's frequency.
     void setDecay(const size_t mainIndex, const size_t index, const float t)
     {
         constexpr auto k = 0.1447648273f; // 1.f / std::log(1000.f); //  1/6.9078f
@@ -92,6 +108,8 @@ class BiquadResoBandPassParallel
         m_z[mainIndex][1] = v2;
     }
 
+    /// @brief Response of one element's coefficient set at hz, returned in decibels despite the name.
+    /// Evaluated against the sampleRate argument, not the object's own, so the 48 kHz default can mislead.
     [[nodiscard]] float magnitude(const size_t mainIndex, const size_t subIndex, const float hz,
                                   const float sampleRate = 48000.f) const noexcept
     {
@@ -110,6 +128,8 @@ class BiquadResoBandPassParallel
         m_currentSet[mainIndex] = damp ? 1 : 0;
     }
 
+    /// @brief Reports inactive once 32 consecutive calls have found both state words under 1e-5.
+    /// The count advances per call, not per sample, so the timeout follows the polling rate.
     [[nodiscard]] bool isActive(const size_t mainIndex) noexcept
     {
         if (std::abs(m_z[mainIndex][0]) > 1E-5f || std::abs(m_z[mainIndex][1]) > 1E-5f)

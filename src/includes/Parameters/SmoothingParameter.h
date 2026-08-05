@@ -6,6 +6,17 @@
 
 namespace AbacDsp
 {
+/**
+ * @ingroup parameters
+ * @brief Linear ramp between parameter values over a fixed number of steps.
+ *
+ * Applying a control change at once puts a step into the signal, which is
+ * audible as a click on a gain and as a zipper on anything swept. Ramping over
+ * a few milliseconds removes it.
+ *
+ * The final step is assigned rather than accumulated, so a long ramp cannot
+ * drift away from its target through repeated addition.
+ */
 class LinearSmoothing
 {
   public:

@@ -6,6 +6,21 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup generators
+ * @brief Escape-time iteration of a Julia set, used as a deterministic modulation source.
+ *
+ * Iterating z -> z^power + c gives a value that varies wildly with position but
+ * is entirely reproducible from its coordinates: no state, no seed, and the
+ * same input always yields the same output. That makes it a source of
+ * structured irregularity where a random generator would give unrepeatable
+ * results and an LFO would give an audible period.
+ *
+ * The bail radius is far above the usual 2 because the iteration count is
+ * wanted as a smooth quantity, not as a set membership test; escaping early
+ * would quantise the output into visible steps.
+ * @see https://en.wikipedia.org/wiki/Julia_set
+ */
 class JuliaIter
 {
     static constexpr size_t MaxIter{100};
@@ -56,6 +71,19 @@ class JuliaIter
     float power{2.f};
 };
 
+/**
+ * @ingroup generators
+ * @brief Oscillator that reads its waveform off a circular path through a Julia set.
+ *
+ * A phasor drives a point around an ellipse in the complex plane and the escape
+ * count at that point becomes the output sample. The waveform is therefore
+ * whatever the fractal looks like along that path: strictly periodic, so it has
+ * a definite pitch, but with harmonic content that changes completely as the
+ * path is moved or resized.
+ *
+ * Not band-limited. The escape count is a step function of position, so the
+ * output has discontinuities and will alias.
+ */
 class JuliaWalk : public JuliaIter
 {
   public:

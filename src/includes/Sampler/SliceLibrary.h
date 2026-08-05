@@ -11,8 +11,10 @@
 namespace AbacDsp
 {
 
-// One slice's thumbnail (see SliceLibrary::thumbnail()) placed on a normalized
-// 0..1 timeline, e.g. a sequencer pattern. Not a ring buffer, unlike SpectrumImageSet.
+/// @ingroup sampler
+/// @brief A slice thumbnail placed on a normalised 0..1 timeline.
+/// Positions are normalised rather than in frames so the same thumbnail draws correctly at any zoom.
+/// Not a ring buffer, unlike SpectrumImageSet: the data pointer is stable until the library is cleared.
 struct SequencerSliceThumbnail
 {
     float normalizedStart{0.f};
@@ -23,17 +25,22 @@ struct SequencerSliceThumbnail
     float sampleRate{48000.f};
 };
 
-// Stores and owns interleaved stereo audio slices in an internal pool.
-// Slices are grouped into tracks; new tracks are appended and never overwrite
-// existing data until clear() is called.
-//
-// Each slice references a contiguous region in the pool and is addressed by
-// (track, indexInTrack). The pool grows monotonically up to maxFrames; if
-// capacity is exceeded during extraction, remaining slices of that track are
-// ignored.
-//
-// Preallocates storage to avoid allocations during extraction after
-// construction. Not thread-safe.
+/**
+ * @ingroup sampler
+ * @brief Owns interleaved stereo slices in one pool, grouped into append-only tracks.
+ *
+ * A single pool with slices as offsets into it, rather than a vector per slice:
+ * that keeps a whole track contiguous in memory and means adding slices cannot
+ * invalidate a pointer another track is already using.
+ *
+ * The pool grows monotonically up to maxFrames and is never compacted. Once
+ * capacity is reached the remaining slices of that extraction are dropped
+ * rather than evicting earlier ones, so audio already published to a player
+ * stays valid. clear() is the only way back.
+ *
+ * All storage is reserved at construction, so extraction does not allocate.
+ * Not thread-safe.
+ */
 class SliceLibrary
 {
   public:
@@ -42,6 +49,8 @@ class SliceLibrary
     static constexpr size_t kThumbHeight = 32; // frequency bins
     static constexpr size_t kThumbFloats = kThumbWidth * kThumbHeight;
 
+    /// @brief Where a slice lives in the pool, plus the peak and RMS measured at extraction.
+    /// peak is stored so a player can normalise a slice to unity before applying an event's own gain.
     struct SliceInfo
     {
         size_t track{0};

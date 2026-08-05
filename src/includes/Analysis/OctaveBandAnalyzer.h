@@ -9,6 +9,19 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup analysis
+ * @brief Ten-octave constant-Q level meter built from a decimating filter cascade.
+ *
+ * A fixed-rate bandpass bank gets progressively more expensive towards the
+ * bottom, where narrow bands need long filters. Halving the rate each octave
+ * lets every octave reuse the same coefficients at the same relative
+ * bandwidth, so cost per octave is constant instead of growing.
+ *
+ * Q follows from BinsPerOctave so the bands meet at their -3 dB points and the
+ * summed response stays flat. All storage is fixed-size, so nothing allocates.
+ * @see https://en.wikipedia.org/wiki/Constant-Q_transform
+ */
 template <size_t BlockSize, size_t BinsPerOctave>
     requires(BinsPerOctave >= 1 && BinsPerOctave <= 6)
 class OctaveBandAnalyzer

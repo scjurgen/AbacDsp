@@ -9,6 +9,16 @@
 namespace AbacDsp::BlockProc
 {
 
+/**
+ * @ingroup blockprocessors
+ * @brief Vibrato by fractional-delay modulation, driven by a Wow generator.
+ *
+ * Pitch deviation comes from the rate of change of the delay, not from
+ * resampling. Nominal delay sits at MaxDepth so the read head can swing both
+ * ways without meeting the write head. Linear interpolation, so the response
+ * dips as the fractional part nears 0.5.
+ * @see https://ccrma.stanford.edu/~jos/pasp/Vibrato_Simulation.html
+ */
 template <size_t BlockSize>
 class Vibrato final : public BlockProcessorBase<BlockSize>
 {

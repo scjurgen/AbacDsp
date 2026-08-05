@@ -1,19 +1,34 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
+#include <memory>
 #include <numbers>
 #include <vector>
-#include <memory>
-#include <algorithm>
 
 namespace AbacDsp
 {
 
+/// @ingroup sampler
+/// @brief Anything that can fill a stereo pair of buffers on demand and report whether it succeeded.
 template <typename Producer>
 concept SampleProducerConcept = requires(Producer p, float* l, float* r, size_t n) {
     { p.produceSamples(l, r, n) } -> std::convertible_to<bool>;
 };
 
+/**
+ * @ingroup sampler
+ * @brief Shifts pitch by resampling, pulling from an upstream producer through a ring buffer.
+ *
+ * Resampling changes pitch and duration together. Chained after a producer that
+ * already stretches time, the two effects cancel and the result is pitch shift
+ * at the original tempo, which is why this is a wrapper rather than a
+ * standalone shifter.
+ *
+ * The ring buffer decouples the two rates: a shifted read consumes a different
+ * number of source frames than it produces, so the producer is pulled only when
+ * the buffer runs low rather than once per output block.
+ */
 template <SampleProducerConcept Producer>
 class ResamplingPitchShifter
 {

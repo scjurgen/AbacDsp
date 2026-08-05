@@ -8,6 +8,14 @@
 
 namespace AbacDsp
 {
+/**
+ * @ingroup parameters
+ * @brief Per-sample linear ramp producing a whole block of values at once.
+ *
+ * Where LinearSmoothing yields one value per call, this fills a block, so a
+ * modulated gain can be applied with a vectorisable multiply instead of a
+ * per-sample function call.
+ */
 template <size_t BlockSize>
 class LinearSmoothingParameter
 {
@@ -74,6 +82,9 @@ class LinearSmoothingParameter
     std::array<float, BlockSize> m_values{};
 };
 
+/// @ingroup parameters
+/// @brief Plain value holder with no smoothing, for parameters read once per block.
+/// Present so a caller can swap smoothing in or out without changing the call site.
 class LinearParameter
 {
   public:

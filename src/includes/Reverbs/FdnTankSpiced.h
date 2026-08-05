@@ -17,16 +17,26 @@
 namespace AbacDsp
 {
 
-/*
- * ITD = Interaural Time Difference
+/**
+ * @ingroup reverbs
+ * @brief FdnTankSpicedBase plus an injectable per-line processor.
  *
- * Enhanced FDN with callback system for delay line processing
+ * Adds a CallbackManager so any BlockProcessorBase can be dropped into a chosen
+ * delay line at runtime, which is what makes the colouring of a line a
+ * composition decision rather than something baked into the tank. Interaural
+ * time difference taps and the length distribution work as in
+ * FdnTankSpicedBase.
+ *
+ * Slots left empty cost one null check per block, so a tank with two coloured
+ * lines out of thirty-two pays for two.
+ * @see AbacDsp::CallbackManager
  */
 template <size_t MaxSizePerElement, size_t ORDER, size_t BlockSize>
     requires(ORDER == 4 || ORDER == 8 || ORDER == 16 || ORDER == 32)
 class FdnTankSpiced
 {
   public:
+    /// @brief Distribution of line lengths: bounds plus a bulge that bends the spacing away from linear.
     struct DelayWarp
     {
         [[nodiscard]] float getBulgeValue(const float x, const float bulgePower = 4.0f) const noexcept

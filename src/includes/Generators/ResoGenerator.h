@@ -10,6 +10,20 @@
 
 namespace AbacDsp
 {
+/**
+ * @ingroup generators
+ * @brief Modal voice: a bank of resonant bandpasses excited by a shared impulse.
+ *
+ * Rings a set of resonators instead of summing oscillators. Each partial then
+ * carries its own decay for free, which is what additive synthesis has to
+ * simulate with an envelope per partial and what struck and plucked sounds
+ * actually do.
+ *
+ * Partials enter on their own delays rather than all at once, since a real
+ * resonator does not excite every mode at the same instant, and the staggered
+ * onset is much of what makes a strike read as physical.
+ * @see https://ccrma.stanford.edu/~jos/pasp/Modal_Representation.html
+ */
 template <size_t BlockSize, size_t NumElements>
 class ResoGenerator
 {
@@ -91,8 +105,8 @@ class ResoGenerator
 
     void pitchBendCents(const size_t minNote, const size_t maxNote, const float cents) noexcept
     {
-        (void)minNote;
-        (void)maxNote;
+        (void) minNote;
+        (void) maxNote;
         m_bq[0].pitchBendCents(cents);
     }
 

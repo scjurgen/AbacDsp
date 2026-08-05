@@ -7,6 +7,20 @@
 
 namespace AbacDsp
 {
+/**
+ * @ingroup filters
+ * @brief Gain correction lookup that levels a resonator across pitch and decay time.
+ *
+ * A resonator's peak gain rises with both Q and centre frequency, so struck
+ * notes would otherwise differ in loudness by tens of dB across the range. The
+ * table holds natural logs of the measured correction, bilinearly interpolated
+ * and exponentiated on the way out, which keeps the interpolation smooth in the
+ * domain where the quantity actually varies smoothly.
+ *
+ * Rows are MIDI note numbers in steps of 12, columns are decay times from
+ * 2^-10 to 2^6 seconds. Values were fitted offline; see
+ * documentation/Filters/BandpassImpulses.
+ */
 class ResonanceCompensation
 {
     static constexpr std::array<std::array<float, 17>, 12> m_lut{{
@@ -77,8 +91,23 @@ class ResonanceCompensation
     }
 };
 
+/**
+ * @ingroup filters
+ * @brief Resonant bandpass as a topology-preserving state variable filter, with two switchable sets.
+ *
+ * Where BiquadResoBP uses a direct form, this integrates the analog SVF by the
+ * trapezoidal rule and resolves the zero-delay feedback algebraically. The
+ * result stays well behaved when the cutoff is modulated per sample, which is
+ * where a direct-form biquad misbehaves; the cost is five coefficients instead
+ * of three.
+ *
+ * g = tan(pi*f/fs) and k = 1/Q. step() returns k*v1, the bandpass tap scaled by
+ * 1/Q; ResonanceCompensation covers the level variation that remains.
+ * @see https://cytomic.com/files/dsp/SvfLinearTrapOptimised2.pdf
+ */
 class SvfResoBP
 {
+    /// @brief SVF coefficient set: the prewarped g, the damping k = 1/Q, and the three derived gains.
     struct BandPassCoefficients
     {
         float g{};
@@ -124,6 +153,8 @@ class SvfResoBP
         updateK(index, Q);
     }
 
+    /// @brief Retunes by cents, holding the decay time rather than Q: recomputeCoefficientsWithBend()
+    /// derives k from m_decayT at the bent frequency. Only the active set is updated.
     void pitchBendCents(const float cents) noexcept
     {
         m_pitchBend = cents;
@@ -162,6 +193,8 @@ class SvfResoBP
         return cf.k * v1;
     }
 
+    /// @brief Advances the resonator with no input, so it rings on from its own state.
+    /// State is clamped to +/-1000 here but not in step(), bounding a runaway in the free-running case.
     [[nodiscard]] float step0() noexcept
     {
         const auto& cf = m_cf[m_currentSet];
@@ -189,12 +222,14 @@ class SvfResoBP
         m_z[1] = v2;
     }
 
+    /// @brief Scales the stored state, shaping the ring-down without recomputing coefficients.
     void pump(const float f) noexcept
     {
         m_z[0] *= f;
         m_z[1] *= f;
     }
 
+    /// @brief Approximate envelope of the ringing, taking the two integrator states as a quadrature pair.
     [[nodiscard]] float currentMagnitudeSquared() const noexcept
     {
         return m_z[0] * m_z[0] + m_z[1] * m_z[1];

@@ -9,6 +9,21 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup generators
+ * @brief Sparse impulse noise on a velvet grid, each impulse rung through a resonant filter.
+ *
+ * Velvet noise places one impulse at a random position within each fixed grid
+ * cell instead of drawing a sample per frame. The result sounds smoother than
+ * white noise at a fraction of the nonzero samples, because the ear hears the
+ * absence of correlation, not the density.
+ *
+ * Ringing each impulse rather than emitting it bare is what turns hiss into
+ * crackle: an isolated resonant decay reads as a discrete physical event, so
+ * the output suggests vinyl or fire rather than broadband noise.
+ * @see Valimaki, Holm-Rasmussen, Alary, Lehtonen, "Late Reverberation Synthesis
+ *      Using Filtered Velvet Noise", Applied Sciences 7(5), 2017.
+ */
 class VelvetCrackleGenerator
 {
   public:
@@ -63,6 +78,8 @@ class VelvetCrackleGenerator
     }
 
   private:
+    /// @brief One resonator: its tuning and its two state words. Impulses are assigned to these round-robin
+    /// so a new crackle can start before the previous one has finished ringing.
     struct FilterState
     {
         float freq{4000.0f};

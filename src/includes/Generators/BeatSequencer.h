@@ -7,6 +7,10 @@
 namespace AbacDsp
 {
 
+/// @ingroup generators
+/// @brief Where subdivision hits fall inside a beat.
+/// Shuffle and Triplet both divide by three but place their hits differently: Triplet is even, Shuffle skips the
+/// middle.
 enum class SubdivType : uint8_t
 {
     None,
@@ -17,12 +21,22 @@ enum class SubdivType : uint8_t
     Compound3
 };
 
-// Sample-accurate musical grid: tracks position within a beat and beat index
-// within a bar, emitting one GridEvent per sample. Host-syncable via ppq.
-// Extracted from the metronome so the looper shares the same clock.
+/**
+ * @ingroup generators
+ * @brief Sample-accurate musical grid, emitting one event per sample.
+ *
+ * Reporting per sample rather than per beat is what makes the grid usable as a
+ * clock: a caller learns the exact frame a beat starts on, so a triggered event
+ * lands on the sample rather than at the next block boundary.
+ *
+ * Position is carried as an integer sample count within the beat instead of an
+ * accumulated float phase, so a long run cannot drift away from the bar line.
+ * The grid can be realigned to a host quarter-note position at any time.
+ */
 class BeatSequencer
 {
   public:
+    /// @brief What one sample lands on: its position in the beat, and whether it starts a beat, subdivision or bar.
     struct GridEvent
     {
         size_t beatSamplePos{0};  // position within the beat for this sample (pre-advance)

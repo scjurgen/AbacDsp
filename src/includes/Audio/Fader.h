@@ -20,18 +20,34 @@ namespace AbacDsp
     return ((f5 * sqrX + f3) * sqrX + f1) * x + f0;
 }
 
+/// @ingroup audio
+/// @brief Fade direction.
 enum class FadeMode
 {
     In,
     Out
 };
 
+/// @ingroup audio
+/// @brief Gain shape over the fade.
+/// Sine is equal-power: two uncorrelated signals crossfaded linearly dip about 3 dB in the middle,
+/// because their powers add rather than their amplitudes.
 enum class FadeCurve
 {
     Linear,
     Sine
 };
 
+/**
+ * @ingroup audio
+ * @brief Sample-counted gain ramp for click-free starts, stops and splices.
+ *
+ * Direction and curve are template parameters, so the per-sample path carries
+ * no branch on either.
+ *
+ * The sine curve is a polynomial approximation accurate to about -100 dB, well
+ * under the resolution of the gain it is applied to.
+ */
 template <FadeMode fadeMode, FadeCurve fadeCurve>
 class Fader
 {

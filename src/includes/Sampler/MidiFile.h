@@ -12,8 +12,10 @@ namespace AbacDsp
 {
 
 // A single Time Signature meta event at an absolute tick position.
-// denominatorPower is the MIDI convention: denominator = 2^denominatorPower
-// (2 -> quarter note, 3 -> eighth note).
+/// @ingroup sampler
+/// @brief A time signature at a tick position.
+/// denominatorPower follows the MIDI convention denominator = 2^denominatorPower,
+/// so 2 means a quarter note and 3 an eighth.
 struct MidiTimeSignatureEvent
 {
     uint32_t tick{0};
@@ -21,10 +23,14 @@ struct MidiTimeSignatureEvent
     uint8_t denominatorPower{2};
 };
 
-// Minimal Standard MIDI File (Format 0) reader/writer: a single track carrying
-// only a Set Tempo event and a sequence of Time Signature events (no notes).
-// Enough to persist a take's tempo and meter-change timeline as a standard,
-// externally-readable .mid file, without pulling in a full MIDI library.
+/**
+ * @ingroup sampler
+ * @brief Minimal Format 0 MIDI file holding only tempo and time-signature events.
+ *
+ * No note data and no general MIDI parsing. Writing the tempo map as a real
+ * .mid rather than a private format means any DAW can import a take's timing
+ * directly, and it costs a few hundred lines instead of a MIDI library.
+ */
 class MidiFile
 {
   public:

@@ -15,9 +15,9 @@
  * BasicFFT (allocates heap while computing)
  * KissFft (I guess save)
  *
- * N.B.: for efficient fft use pffft (pretty fast fft) License Permissive, BSD‑style (no copyleft)
+ * N.B.: for efficient fft use pffft (pretty fast fft) License Permissive, BSD-style (no copyleft)
  * or use fftw3 (limited license, bit probelmatic: under its default GPLv2+ license,
- * is not suitable for a proprietary closed‑source plugin unless you are prepared to:
+ * is not suitable for a proprietary closed-source plugin unless you are prepared to:
  *    - release the plugin under GPL and ship its source, or
  *    - purchase a commercial FFTW license from MIT
  */
@@ -25,20 +25,36 @@
 namespace AbacDsp
 {
 
-// Window type tags
+/// @ingroup analysis
+/// @brief Window tag: Hann. Side lobes -31 dB, rolling off at 18 dB/octave.
 struct FftHannWindow
 {
 };
+/// @ingroup analysis
+/// @brief Window tag: flat top. Amplitude-accurate to about 0.01 dB, at several times the main-lobe width.
 struct FftFlatTopWindow
 {
 };
+/// @ingroup analysis
+/// @brief Window tag: none. Correct only when the signal is exactly periodic in the window.
 struct FftRectangularWindow
 {
 };
+/// @ingroup analysis
+/// @brief Window tag: Blackman. Side lobes -58 dB, at 1.5x the main-lobe width of Hann.
 struct FftBlackmanWindow
 {
 };
 
+/**
+ * @ingroup analysis
+ * @brief Magnitude spectra from a textbook radix-2 DFT, in double precision.
+ *
+ * Allocates per call and computes in double: correctness over speed, so a
+ * result here can be trusted as the reference a faster transform is checked
+ * against. Requires a power-of-two length.
+ * @see https://ccrma.stanford.edu/~jos/mdft/
+ */
 class BasicFFT
 {
   public:
@@ -162,6 +178,20 @@ class BasicFFT
 };
 
 
+/**
+ * @ingroup analysis
+ * @brief Measures a magnitude response by averaging windowed spectra of a noise excitation.
+ *
+ * Welch's method: overlapping windows averaged together. One transform of a
+ * noise response is itself noisy, since each bin is a single sample of a random
+ * variable; averaging many reduces that variance without needing a longer
+ * signal.
+ *
+ * The DC bin is dropped and the result normalised to its own peak, so what
+ * comes back is a shape to compare against a reference curve, not a calibrated
+ * level.
+ * @see https://en.wikipedia.org/wiki/Welch%27s_method
+ */
 class FFTResponse
 {
   public:
@@ -334,6 +364,15 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
  */
 
+/**
+ * @ingroup analysis
+ * @brief Mixed-radix complex FFT, ported from kissfft.
+ *
+ * Mixed radix rather than radix-2, so lengths need not be powers of two.
+ * Allocates on construction and on resize(), so a given size is set up once and
+ * reused.
+ * @see https://github.com/mborgerding/kissfft
+ */
 template <typename T_Scalar>
 class KissFft
 {
@@ -613,6 +652,9 @@ class KissFft
     std::vector<std::complex<T_Scalar>> _scratchbuf;
 };
 
+/// @ingroup analysis
+/// @brief Hann-windowed magnitude spectrum at a length fixed by resize() rather than by the type.
+/// The window is precomputed per size; WindowedMagnitudesFft is the compile-time-length equivalent.
 class HannWindowMagnitudesFft
 {
   public:
@@ -666,6 +708,14 @@ class HannWindowMagnitudesFft
     std::vector<std::complex<float>> tmpOut;
 };
 
+/**
+ * @ingroup analysis
+ * @brief Magnitude spectrum at a compile-time length, window supplied as a functor.
+ *
+ * Only the first N/2 bins are written: for a real input the rest are the complex
+ * conjugate mirror and carry no further information.
+ * @tparam WindowFunction Callable (n, N) -> float, such as HannWindow or BlackmanWindow.
+ */
 template <typename WindowFunction, size_t N>
 class WindowedMagnitudesFft
 {
@@ -708,6 +758,8 @@ class WindowedMagnitudesFft
     WindowFunction windowFunction;
 };
 
+/// @ingroup analysis
+/// @brief Hann window functor for WindowedMagnitudesFft.
 struct HannWindow
 {
     float operator()(const size_t n, const size_t N) const noexcept
@@ -717,6 +769,8 @@ struct HannWindow
     }
 };
 
+/// @ingroup analysis
+/// @brief Blackman window functor. Lower side lobes than Hann, wider main lobe.
 struct BlackmanWindow
 {
     float operator()(const size_t n, const size_t N) const noexcept

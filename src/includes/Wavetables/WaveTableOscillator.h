@@ -9,9 +9,23 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup wavetables
+ * @brief Morphing wavetable oscillator over three waveform slots.
+ *
+ * Holds three sets at once and crossfades between adjacent pairs, so the morph
+ * control sweeps a continuous path through them rather than switching. Two
+ * mipmap levels are read per sample, one from each side of the morph.
+ *
+ * Table selection uses twice the actual phase increment. That gives away the
+ * top octave of harmonics but leaves headroom for pitch modulation to push the
+ * oscillator up without crossing into the level's aliasing range mid-note.
+ * @see https://www.earlevel.com/main/2012/05/04/a-wavetable-oscillator-part-1/
+ */
 class WaveTableOscillator
 {
   public:
+    /// @brief Pulse-width modulation depth. Applied by phase distortion, so it works on any waveform, not just a pulse.
     enum class PwmMode
     {
         Off,

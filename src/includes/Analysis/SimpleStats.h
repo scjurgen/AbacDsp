@@ -12,6 +12,16 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup analysis
+ * @brief Accumulates values and reports mean, variance, min, max and percentiles.
+ *
+ * Every data point is retained, because percentiles cannot be computed from a
+ * running summary. That also fixes what this is: an offline tool, since memory
+ * grows without bound.
+ *
+ * Statistics are computed lazily and cached, so adding a point stays a push_back.
+ */
 template <typename T>
 class SimpleStats
 {

@@ -8,13 +8,30 @@
 namespace AbacDsp
 {
 
+/// @ingroup delays
+/// @brief Whether the head is tracking at unit rate or currently easing towards a new delay.
 enum class TransitionPhase
 {
     Idle,
     Ramping
 };
 
-// quartic=true: smoother ease in/out; quartic=false: more aggressive quadratic acceleration
+/**
+ * @ingroup delays
+ * @brief Fractional read head that changes its delay by briefly running off-rate, never by jumping.
+ *
+ * Moving a read pointer discontinuously clicks. Instead the advance rate eases
+ * away from 1.0 and back, so the head drifts to its new distance from the write
+ * head. The audible cost is a transient pitch shift bounded by maxAdvance:
+ * 1.5 caps it at a fifth up, and a shortening move uses its reciprocal.
+ *
+ * The ramp length follows from that budget. Easing bumps the rate by at most
+ * c = maxAdvance - 1 but averages 2c/3 over the quadratic curve, so covering a
+ * distance d needs 1.5*d/c steps, which is the constant in setNewDelta().
+ *
+ * A request arriving mid-ramp is held and applied on completion, one deep.
+ * @see https://ccrma.stanford.edu/~jos/pasp/Time_Varying_Delay_Effects.html
+ */
 template <size_t WrapSize, bool quartic = false>
 class FracReadHead
 {
@@ -24,6 +41,7 @@ class FracReadHead
     {
     }
 
+    /// @brief A request that arrived mid-ramp, replayed once the current one finishes.
     struct Scheduled
     {
         bool hasNewValues;
@@ -31,6 +49,8 @@ class FracReadHead
         float maxAdvance;
     };
 
+    /// @brief Requests a new distance behind the reference position, reached over a ramp.
+    /// Moves under 0.001 samples are ignored; maxAdvance caps the rate excursion and so the ramp length.
     void setNewDelta(const float newTargetDelta, const float maxAdvance = 1.5f) noexcept
     {
         if (m_currentPhase != TransitionPhase::Idle)
@@ -65,6 +85,8 @@ class FracReadHead
         m_currentStep = 0;
     }
 
+    /// @brief Advances one sample and returns the new read position.
+    /// Position and advance are kept in double: at large WrapSize a float loses the fractional part.
     float step(const float referencePosition) noexcept
     {
         m_referencePosition = referencePosition;
@@ -107,6 +129,7 @@ class FracReadHead
         return static_cast<float>(m_position);
     }
 
+    /// @brief Distance behind the reference position last passed to step(), wrapped into [0, WrapSize).
     [[nodiscard]] float getCurrentDelta() const noexcept
     {
         double v = m_referencePosition - m_position;

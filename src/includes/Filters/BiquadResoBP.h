@@ -8,12 +8,23 @@
 namespace AbacDsp
 {
 
-/*
- * we have two sets of coefficients, one for normal operation,
- * one joker, for e.g. fast decay (q=0.1)
+/**
+ * @ingroup filters
+ * @brief Resonant bandpass biquad holding two switchable coefficient sets.
+ *
+ * The bandpass design leaves b1 = 0 and b2 = -b0, so a section needs only three
+ * stored coefficients and three multiplies per sample.
+ *
+ * Both sets live side by side and damp() picks between them, making a jump from
+ * a ringing Q to a fast-decaying one an index change rather than a
+ * recomputation. The response steps discontinuously at the switch.
+ *
+ * setByDecay() converts a decay time to Q through Q = pi*f*t/ln(1000), the
+ * relation for which t is the time to fall by 60 dB.
  */
 class BiquadResoBP
 {
+    /// @brief Three coefficients suffice: the bandpass design fixes b1 = 0 and b2 = -b0.
     struct BandPassCoefficients
     {
         float b0{};
@@ -50,6 +61,8 @@ class BiquadResoBP
         computeCoefficients(index, frequency, Q);
     }
 
+    /// @brief Sets Q from a decay time, reusing the K and kSquare left behind by the last
+    /// computeCoefficients() call. It therefore applies to that call's frequency, never a new one.
     void setDecay(const size_t index, const float t)
     {
         m_decayMax = static_cast<int>(m_sampleRate * t * 0.001f);
@@ -86,6 +99,8 @@ class BiquadResoBP
         return out;
     }
 
+    /// @brief Advances the resonator with no input, so it rings on from its own state.
+    /// Saves the input multiply; at high Q the decaying output is a damped sinusoid.
     [[nodiscard]] float step0() noexcept
     {
         const auto out = m_z[0];
@@ -110,12 +125,15 @@ class BiquadResoBP
         m_z[1] = v2;
     }
 
+    /// @brief Scales the stored state, shaping the ring-down without recomputing coefficients.
     void pump(const float f) noexcept
     {
         m_z[0] *= f;
         m_z[1] *= f;
     }
 
+    /// @brief Approximate envelope of the ringing, taking the two state words as a quadrature pair.
+    /// They are only near-orthogonal, so this tracks the envelope rather than measuring it.
     [[nodiscard]] float currentMagnitudeSquared() const noexcept
     {
         return m_z[0] * m_z[0] + m_z[1] * m_z[1];
@@ -126,6 +144,8 @@ class BiquadResoBP
         return std::sqrt(currentMagnitudeSquared());
     }
 
+    /// @brief Response of coefficient set index at hz, returned in decibels despite the name.
+    /// Evaluated against the sampleRate argument, not the object's own, so the 48 kHz default can mislead.
     [[nodiscard]] float magnitude(const size_t index, const float hz, const float sampleRate = 48000.f) const noexcept
     {
         const auto b0 = static_cast<double>(m_cf[index].b0);

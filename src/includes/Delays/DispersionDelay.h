@@ -10,6 +10,23 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup delays
+ * @brief Integer delay that retunes by crossfading two read cursors, with an allpass on the input.
+ *
+ * Two cursors are kept. A length change parks the idle one at the new distance
+ * and crossfades linearly over setFadeWindowSize() samples. Compared with the
+ * alternatives this trades a different artifact: NaiveDelay clicks, FracReadHead
+ * shifts pitch, and this one briefly comb-filters while both cursors are
+ * audible. A request arriving mid-fade is held and applied on completion, one
+ * deep.
+ *
+ * The one-pole allpass on the write path adds frequency-dependent delay, which
+ * smears an impulse instead of reflecting it intact. Its cutoff is the
+ * frequency where the phase shift reaches 90 degrees, so lowering it draws more
+ * of the band into the smear; the default sits just under Nyquist.
+ * @see https://ccrma.stanford.edu/~jos/pasp/Dispersion.html
+ */
 template <size_t MAXSIZE>
 class DispersionDelay
 {

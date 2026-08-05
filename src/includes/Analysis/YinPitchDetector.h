@@ -9,6 +9,21 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup analysis
+ * @brief Monophonic pitch tracker using the YIN cumulative mean normalised difference function.
+ *
+ * Plain autocorrelation peaks just as strongly at twice the period as at the
+ * period itself, which is where its octave errors come from. Normalising the
+ * difference function by its own running mean suppresses the later peak, so the
+ * first minimum below threshold is the true period.
+ *
+ * Pitch is recomputed once per hop, not per sample; step() returns the last
+ * estimate in between. The analysis buffer holds several periods of the lowest
+ * detectable frequency, which sets the latency.
+ * @see de Cheveigne and Kawahara, "YIN, a fundamental frequency estimator for
+ *      speech and music", JASA 111(4), 2002.
+ */
 class YinPitchDetector
 {
   public:

@@ -9,6 +9,9 @@
 namespace AbacDsp
 {
 
+/// @ingroup audio
+/// @brief Milliseconds to samples, clamped to [1, maxValue].
+/// The floor of 1 keeps a rounded-to-zero time from turning a delay into a direct connection.
 [[nodiscard]] inline size_t getSamplesPerMillisecond(const float milliseconds, const float sampleRate,
                                                      const size_t maxValue) noexcept
 {
@@ -16,6 +19,16 @@ namespace AbacDsp
     return std::clamp<size_t>(size, 1, maxValue);
 }
 
+/**
+ * @ingroup audio
+ * @brief Adapts an arbitrary external block size to a fixed internal one.
+ *
+ * Buffers input until a whole internal block is available, so the wrapped
+ * processor always sees exactly FixedFrameSize samples. That costs exactly
+ * FixedFrameSize samples of latency, and it is unconditional: even an external
+ * block of the same size is delayed by one.
+ * @tparam ExternalBufferType Buffer exposing getNumChannels, getNumSamples and getReadPointer.
+ */
 template <size_t Channels, size_t FixedFrameSize, typename ExternalBufferType>
 class FixedSizeProcessor
 {

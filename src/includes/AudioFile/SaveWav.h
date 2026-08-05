@@ -8,6 +8,14 @@
 
 namespace AudioUtility
 {
+/**
+ * @ingroup audiofile
+ * @brief Writes float PCM to 24-bit WAV, on disk or in memory.
+ *
+ * 24 bit is fixed. It is the shortest depth whose quantisation floor sits below
+ * the noise floor of anything this writes, so a saved file never becomes the
+ * limiting stage, and the size cost over 16 bit is a third.
+ */
 class SaveWav
 {
   public:

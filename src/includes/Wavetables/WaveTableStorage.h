@@ -14,6 +14,8 @@
 namespace AbacDsp
 {
 
+/// @ingroup wavetables
+/// @brief Built-in waveform shapes. Last is a count marker and must stay at the end.
 enum class BasicWave
 {
     Sine = 0,
@@ -36,13 +38,24 @@ inline const std::vector<std::string> waveTablesAsString{
 
 constexpr size_t WaveTableSize{2048};
 
+/// @ingroup wavetables
+/// @brief One mipmap level: a band-limited table and the highest phase increment it may be played at.
 struct WaveTable
 {
     float topFreq{};
-    std::array<float, WaveTableSize + 1> data{}; // Extra sample for interpolation
+    std::array<float, WaveTableSize + 1> data{}; ///< One sample past the end, so interpolation needs no wrap test.
 };
 
-
+/**
+ * @ingroup wavetables
+ * @brief All mipmap levels of one waveform, ordered by increasing top frequency.
+ *
+ * A single table cannot serve the whole range: it holds a fixed set of
+ * harmonics, and playing it fast pushes those harmonics past Nyquist. Each
+ * level therefore drops the partials that would alias at its own pitch, and
+ * lookup picks the highest level still safe for the requested increment.
+ * @see https://www.earlevel.com/main/2012/05/04/a-wavetable-oscillator-part-1/
+ */
 struct WaveTableSet
 {
     BasicWave wave;
@@ -55,6 +68,18 @@ struct WaveTableSet
     }
 };
 
+/**
+ * @ingroup wavetables
+ * @brief Shared store of the built-in wavetable sets, generated once on first use.
+ *
+ * Building the mipmaps means an FFT and a synthesis pass per level per
+ * waveform, far too much to repeat per voice, and the tables are immutable
+ * once built. They are therefore generated lazily and shared by every
+ * oscillator.
+ *
+ * Consequence worth knowing: the first call pays the whole construction cost,
+ * so it must not be the one made from the audio thread.
+ */
 class WaveTableStore
 {
   public:

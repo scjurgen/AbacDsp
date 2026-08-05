@@ -15,6 +15,8 @@
 
 namespace AbacDsp
 {
+/// @ingroup naivegenerators
+/// @brief Waveform shape, selected at compile time.
 enum class Wave
 {
     Sine,
@@ -24,6 +26,19 @@ enum class Wave
     Noise
 };
 
+/**
+ * @ingroup naivegenerators
+ * @brief Waveform generators computed directly from the phase, aliasing included.
+ *
+ * Naive means the discontinuous shapes are evaluated straight from the phasor
+ * with no band limiting, so a saw or square aliases audibly above a few hundred
+ * hertz. That is the point: these are the baseline the band-limited generators
+ * and the wavetable oscillator are compared against, and the reference for what
+ * the ideal waveform is before any anti-aliasing is applied.
+ *
+ * Sine and Noise do not alias and are usable as ordinary sources.
+ * @see https://en.wikipedia.org/wiki/Aliasing
+ */
 template <Wave Style>
 class Generator
 {

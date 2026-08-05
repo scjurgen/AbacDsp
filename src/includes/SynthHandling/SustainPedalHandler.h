@@ -32,6 +32,17 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup synthhandling
+ * @brief Defers note-offs while the sustain pedal is held.
+ *
+ * A note released under the pedal must keep sounding but must also still end
+ * when the pedal lifts, so its note-off is recorded rather than dropped and
+ * replayed on release.
+ *
+ * Re-attacking a held note has to clear its pending release, otherwise the
+ * pedal lift would cut off a note that was struck again after the release.
+ */
 class SustainPedalHandler
 {
     struct ActiveNoteSlots

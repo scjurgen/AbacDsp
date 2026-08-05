@@ -1,5 +1,6 @@
 /**
- * @file Approximations_generated.h
+ * @file
+ * @ingroup numbers
  * @brief Minimax (Remez) polynomial approximations of sin and cos.
  *
  * All functions are single-precision, branch-free, and use Horner evaluation.

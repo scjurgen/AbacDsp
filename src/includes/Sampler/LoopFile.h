@@ -13,10 +13,11 @@
 namespace AbacDsp
 {
 
-// Belief data about a saved loop the audio itself can't tell us (unlike
-// sample rate/length/channels, which are read straight back off the WAV).
-// bars/beats are informational only (derived from bpm + length at save time,
-// so a human reading the file doesn't have to do that math themselves).
+/// @ingroup sampler
+/// @brief What a saved loop cannot state about itself.
+/// Sample rate, length and channel count are read back off the WAV; tempo is not recoverable
+/// from the audio, so it has to be carried alongside. bars and beats are derived at save time
+/// and informational only, so a human reading the file need not redo the arithmetic.
 struct LoopMetadata
 {
     int version{1};
@@ -25,7 +26,9 @@ struct LoopMetadata
     float beats{0.f};
 };
 
-// Shape nlohmann::json satisfies; keeps this header free of a JSON dependency.
+/// @ingroup sampler
+/// @brief The shape nlohmann::json satisfies, taken as a template parameter so this header
+/// needs no JSON dependency of its own and the library stays free of one.
 template <typename Json>
 concept JsonLike = requires(const LoopMetadata& meta, const std::string& text, Json j) {
     { Json(meta) };
@@ -34,9 +37,17 @@ concept JsonLike = requires(const LoopMetadata& meta, const std::string& text, J
     { j.template get<LoopMetadata>() } -> std::same_as<LoopMetadata>;
 };
 
-// WAV load/save with LoopMetadata embedded in the iXML chunk. `Json` supplies
-// the (de)serialization, e.g. LoopFile<nlohmann::json>::saveStereoWav(...),
-// with `to_json`/`from_json` for LoopMetadata defined by the caller.
+/**
+ * @ingroup sampler
+ * @brief WAV load and save with LoopMetadata embedded in the iXML chunk.
+ *
+ * iXML is a standard chunk that other tools ignore gracefully, so a loop
+ * written here stays a plain WAV everywhere else while still carrying its
+ * tempo. Json supplies the serialisation, with to_json and from_json for
+ * LoopMetadata defined by the caller.
+ *
+ * Blocking file IO throughout: a loading-thread class, never an audio one.
+ */
 template <JsonLike Json>
 class LoopFile
 {

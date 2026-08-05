@@ -3,26 +3,37 @@
 #include <random>
 
 #include "Delays/ParallelPlainDelay.h"
-#include "HadamardWalsh4.h"
-#include "HadamardWalsh8.h"
 #include "HadamardWalsh16.h"
 #include "HadamardWalsh32.h"
+#include "HadamardWalsh4.h"
+#include "HadamardWalsh8.h"
 #include "Numbers/PrimeDispatcher.h"
 
 namespace AbacDsp
 {
-/*
- * ITD = Interaural Time Difference
+/**
+ * @ingroup reverbs
+ * @brief FDN with per-line stereo taps offset by an interaural time difference.
  *
- * TODO: New design goals:
- *   - optional callbacks for delay result manipulation (e.g. filters, modulation)
+ * Each line is read twice, a few samples apart, and the two reads are sent to
+ * opposite channels. The ear localises a sound largely by the arrival-time
+ * difference between the two sides, so offsetting the taps places each line at
+ * its own apparent position and the tail acquires width without any added
+ * decorrelation stage.
+ *
+ * Offsets stay under about 0.33 ms, the largest genuine interaural delay a head
+ * produces. Beyond that the two taps separate into audible echoes instead of
+ * fusing into one placed source.
+ *
+ * Order is restricted to a power of two because the mixing uses the butterfly.
+ * @see https://en.wikipedia.org/wiki/Interaural_time_difference
  */
-
 template <size_t MaxSizePerElement, size_t ORDER, size_t BlockSize>
     requires(ORDER == 4 || ORDER == 8 || ORDER == 16 || ORDER == 32)
 class FdnTankSpicedBase
 {
   public:
+    /// @brief Distribution of line lengths: bounds plus a bulge that bends the spacing away from linear.
     struct DelayWarp
     {
         [[nodiscard]] float getBulgeValue(const float x, const float bulgePower = 4.0f) const noexcept

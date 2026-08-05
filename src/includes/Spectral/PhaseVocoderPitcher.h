@@ -12,6 +12,7 @@ namespace AbacDsp
 {
 
 /**
+ * @ingroup spectral
  * @brief Realtime streaming phase-vocoder pitch shifter (mono).
  *
  * Continuously analyses incoming audio in fixed-size 87.5%-overlapped (8x)
@@ -22,6 +23,7 @@ namespace AbacDsp
  * fully settle before a position is read back out). 8x overlap (vs. the more
  * common 4x) measurably reduces residual phase-lock artifacts (see
  * lockPhases()) at 2x the FFT rate.
+ * @see https://ccrma.stanford.edu/~jos/sasp/Phase_Vocoder.html
  */
 class PhaseVocoderPitcher
 {

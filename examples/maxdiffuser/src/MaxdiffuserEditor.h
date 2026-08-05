@@ -557,6 +557,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     void switchPage(Page page)
     {
         m_currentPage = page;
+        m_pagePerformanceButton.setToggleState(page == Page::Performance, juce::dontSendNotification);
+        m_pageSettingsButton.setToggleState(page == Page::Settings, juce::dontSendNotification);
         if (page == Page::Performance)
         {
             dryDial.setVisible(true);
@@ -775,15 +777,36 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         }
     }
 
-    // A "/" in a patch name (e.g. "chorus/classic tri chorus") groups it under a folder
-    // submenu; root-level patches stay directly in the returned menu.
-    juce::PopupMenu buildGroupedPatchMenu(int idBase, const juce::String& tickedName = {})
+    // Joins a folder ("" means root) and a leaf name into the "folder/leaf" form
+    // FileIo/LoopStorageService use on disk.
+    [[nodiscard]] static juce::String combineFolderAndName(const juce::String& folder, const juce::String& name)
+    {
+        return folder.isEmpty() ? name : folder + "/" + name;
+    }
+
+    // Splits "folder/sub/leaf" back into {"folder/sub", "leaf"} to prefill a rename
+    // dialog's two fields; folder is empty for a root-level name.
+    [[nodiscard]] static std::pair<juce::String, juce::String> splitFolderAndName(const juce::String& fullName)
+    {
+        const int slashIndex = fullName.lastIndexOfChar('/');
+        if (slashIndex < 0)
+        {
+            return {juce::String(), fullName};
+        }
+        return {fullName.substring(0, slashIndex), fullName.substring(slashIndex + 1)};
+    }
+
+    // A "/" in a name (e.g. "chorus/classic tri chorus") groups it under a folder
+    // submenu; root-level entries stay directly in the returned menu. Shared by the
+    // patches and (when present) loops menus.
+    juce::PopupMenu buildGroupedMenu(const std::vector<juce::String>& names, int idBase,
+                                     const juce::String& tickedName = {})
     {
         juce::PopupMenu rootMenu;
         std::map<juce::String, juce::PopupMenu> folderMenus;
-        for (size_t i = 0; i < m_patchMenuNames.size(); ++i)
+        for (size_t i = 0; i < names.size(); ++i)
         {
-            const auto& fullName = m_patchMenuNames[i];
+            const auto& fullName = names[i];
             const int itemId = idBase + static_cast<int>(i);
             const int slashIndex = fullName.lastIndexOfChar('/');
             if (slashIndex < 0)
@@ -802,6 +825,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             rootMenu.addSubMenu(folder, menu);
         }
         return rootMenu;
+    }
+
+    juce::PopupMenu buildGroupedPatchMenu(int idBase, const juce::String& tickedName = {})
+    {
+        return buildGroupedMenu(m_patchMenuNames, idBase, tickedName);
     }
 
     juce::PopupMenu buildPatchesMenu()
@@ -871,25 +899,30 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
     void promptSaveAs()
     {
-        m_patchNameDialog = std::make_unique<juce::AlertWindow>(
-            "Save Patch", "Enter a name for this patch:", juce::MessageBoxIconType::NoIcon);
-        m_patchNameDialog->addTextEditor("name", processorRef.getCurrentPatchName());
+        const auto [folder, name] = splitFolderAndName(processorRef.getCurrentPatchName());
+        m_patchNameDialog =
+            std::make_unique<juce::AlertWindow>("Save Patch", juce::String(), juce::MessageBoxIconType::NoIcon);
+        m_patchNameDialog->addTextEditor("folder", folder, "Folder (optional):");
+        m_patchNameDialog->addTextEditor("name", name, "Name:");
         m_patchNameDialog->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
         m_patchNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
         m_patchNameDialog->enterModalState(true,
                                            juce::ModalCallbackFunction::create(
                                                [this](int result)
                                                {
-                                                   const auto name =
+                                                   const auto folderText =
+                                                       m_patchNameDialog->getTextEditorContents("folder").trim();
+                                                   const auto nameText =
                                                        m_patchNameDialog->getTextEditorContents("name").trim();
                                                    m_patchNameDialog.reset();
-                                                   if (result != 1 || name.isEmpty())
+                                                   if (result != 1 || nameText.isEmpty())
                                                    {
                                                        return;
                                                    }
-                                                   if (processorRef.saveCurrentPatchAs(name))
+                                                   const auto fullName = combineFolderAndName(folderText, nameText);
+                                                   if (processorRef.saveCurrentPatchAs(fullName))
                                                    {
-                                                       m_statusBar.showMessage("Saved '" + name + "'");
+                                                       m_statusBar.showMessage("Saved '" + fullName + "'");
                                                    }
                                                    else
                                                    {
@@ -902,19 +935,28 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
     void promptRename(const juce::String& oldName)
     {
-        m_patchNameDialog = std::make_unique<juce::AlertWindow>(
-            "Rename Patch", "Enter a new name for \"" + oldName + "\":", juce::MessageBoxIconType::NoIcon);
-        m_patchNameDialog->addTextEditor("name", oldName);
+        const auto [folder, name] = splitFolderAndName(oldName);
+        m_patchNameDialog = std::make_unique<juce::AlertWindow>("Rename Patch \"" + oldName + "\"", juce::String(),
+                                                                juce::MessageBoxIconType::NoIcon);
+        m_patchNameDialog->addTextEditor("folder", folder, "Folder (optional):");
+        m_patchNameDialog->addTextEditor("name", name, "Name:");
         m_patchNameDialog->addButton("Rename", 1, juce::KeyPress(juce::KeyPress::returnKey));
         m_patchNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
         m_patchNameDialog->enterModalState(true,
                                            juce::ModalCallbackFunction::create(
                                                [this, oldName](int result)
                                                {
-                                                   const auto newName =
+                                                   const auto folderText =
+                                                       m_patchNameDialog->getTextEditorContents("folder").trim();
+                                                   const auto nameText =
                                                        m_patchNameDialog->getTextEditorContents("name").trim();
                                                    m_patchNameDialog.reset();
-                                                   if (result != 1 || newName.isEmpty() || newName == oldName)
+                                                   if (result != 1 || nameText.isEmpty())
+                                                   {
+                                                       return;
+                                                   }
+                                                   const auto newName = combineFolderAndName(folderText, nameText);
+                                                   if (newName == oldName)
                                                    {
                                                        return;
                                                    }

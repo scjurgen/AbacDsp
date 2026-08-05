@@ -11,6 +11,17 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup reverbs
+ * @brief Block-processed FDN mixing through the scalar butterfly, hadamardWalshN().
+ *
+ * One of four tanks that differ only in the mixing implementation, so the cost
+ * of a mixing strategy can be measured in a working reverb rather than a
+ * microbenchmark. Delay handling, sizing and decay are identical across all four.
+ *
+ * Log-stage butterfly rather than the flat expansion: 160 adds at order 32
+ * against 1024. The matrix and the row order are identical to the flat form.
+ */
 template <size_t MaxSizePerElement, size_t ORDER, size_t BlockSize>
     requires(MaxSizePerElement % BlockSize == 0)
 class FdnTankBlockDelayWalsh

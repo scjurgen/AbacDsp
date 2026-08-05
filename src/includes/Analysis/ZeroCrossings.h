@@ -1,5 +1,18 @@
 #pragma once
 
+/**
+ * @file
+ * @ingroup analysis
+ * @brief Period-length estimation from zero crossings.
+ *
+ * Far cheaper than autocorrelation, and adequate when the signal is already
+ * known to be near-sinusoidal. It degrades badly otherwise: any harmonic strong
+ * enough to add its own crossings is counted as extra periods.
+ *
+ * Every entry point can remove DC first, because an offset shifts where the
+ * crossings fall and biases the estimate in one direction.
+ */
+
 #include <algorithm>
 #include <cmath>
 #include <concepts>
@@ -11,6 +24,9 @@
 namespace AbacDsp
 {
 
+/// @ingroup analysis
+/// @brief Period-length spread over one analysed buffer.
+/// A large standard deviation means the crossings were irregular and the mean should not be trusted.
 struct ZeroCrossingStatistics
 {
     float meanPeriodLen{0.0f};
@@ -31,7 +47,7 @@ template <std::floating_point T>
 }
 
 /*
- * The preprocessing lambda handles baselines other than 0 — e.g. modulation
+ * The preprocessing lambda handles baselines other than 0, e.g. modulation
  * oscillating around 0.5 would use [](float x) { return x - 0.5f; }
  */
 template <std::floating_point T, typename PreprocessFunc = std::function<T(T)>>

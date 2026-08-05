@@ -5,9 +5,28 @@
 namespace AbacDsp
 {
 
+/**
+ * @ingroup filters
+ * @brief Windowed-sinc interpolation kernel, oversampled and stored for phase-major access.
+ *
+ * The kernel is tabulated at `increment` subsample phases and read back with
+ * linear interpolation between neighbouring entries, which is what lets one
+ * table serve any fractional delay. First differences are precomputed into a
+ * parallel array so that interpolation is a single multiply-add rather than a
+ * second, unpredictable table fetch.
+ *
+ * The table is also held in an interleaved copy where all coefficients sharing
+ * a phase sit contiguously. A convolution pass runs at one fixed phase, so this
+ * layout turns a stride-`increment` walk into a sequential one. Both copies are
+ * padded to a whole multiple of `increment` so no pass can run off the end.
+ *
+ * Coefficient sets are generated offline; see documentation/Filters/SincFilterDesign.
+ * @see https://ccrma.stanford.edu/~jos/resample/
+ */
 class SincFilter
 {
   public:
+    /// @brief Number of subsample phases the kernel was tabulated at, and the kernel itself.
     struct InitParam
     {
         size_t increment;
@@ -43,6 +62,8 @@ class SincFilter
         }
     }
 
+    /// @brief Delay-line size that keeps the kernel in range at ratios up to maxRatio.
+    /// Heuristic: three kernel widths scaled by the ratio, with a 4096-sample floor.
     [[nodiscard]] size_t getBufferSize(const float maxRatio, const size_t channels) const noexcept
     {
         const auto width =
@@ -75,11 +96,15 @@ class SincFilter
         return m_interleavedCoeffs[idx] + fraction * m_interleavedCoeffsDelta[idx];
     }
 
+    /// @brief Maps a kernel index to its position in the phase-major copy.
+    /// Phase (index % increment) selects the block, index / increment the offset within it.
     [[nodiscard]] size_t getInterleavedIndex(size_t originalIndex) const noexcept
     {
         return (originalIndex % m_increment) * m_sizeInterleaved + originalIndex / m_increment;
     }
 
+    /// @brief Convolves one kernel half at a fixed phase, walking the buffer forwards.
+    /// Kernel indices descend through the phase-major copy, so the coefficient reads stay sequential.
     template <size_t NumChannels>
     void processFixUp(const size_t items, const float* buffer, size_t bIdx, const float fraction, const size_t idx,
                       float* result) const noexcept
@@ -95,6 +120,8 @@ class SincFilter
         }
     }
 
+    /// @brief Mirror of processFixUp() for the other kernel half, walking the buffer backwards.
+    /// The kernel is symmetric, so the two halves share coefficients and differ only in buffer direction.
     template <size_t NumChannels>
     void processFixDown(const size_t items, const float* buffer, size_t bIdx, const float fraction, const size_t idx,
                         float* result) const noexcept
@@ -110,6 +137,14 @@ class SincFilter
         }
     }
 
+    /**
+     * @brief Convolves one kernel half while the phase advances, as it must when the rates differ.
+     *
+     * Walks the kernel in fixed-point: filterIdx counts in units of 1/DiscreteSteps, so the
+     * integer part indexes the table and the low bits give the interpolation fraction. The
+     * fraction is then carried by subtraction and wrapped, avoiding a divide per tap.
+     * DiscreteSteps must be a power of two for the mask on filterIdx to be valid.
+     */
     template <size_t NumChannels, size_t DiscreteSteps, int32_t DataStep, int32_t term>
     void processFilterHalf(int32_t filterIdx, const float* buffer, size_t bIdx, const int32_t increment,
                            float* result) const noexcept

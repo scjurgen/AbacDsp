@@ -51,7 +51,6 @@ cpp_juce_cmake = "CMakeListsExamples.txt"
 cpp_target_dir = "../examples/{module}"
 main_target_dir = "../examples"
 new_constants = {
-    "MAIN_COLOR": "0xffdddddd",
     "WINDOW_WIDTH": "1024",
     "WINDOW_HEIGHT": "600"
 }
@@ -97,7 +96,6 @@ CPP_CC_SETTINGS = "impl/CcSettings.h"
 CPP_SOURCE_FILES_UNIT_TEST = "unittests/{Module}_tests.cpp"
 
 CPP_CONSTANTS = [
-    "MAIN_COLOR",
     "WINDOW_WIDTH",
     "WINDOW_HEIGHT"
 ]

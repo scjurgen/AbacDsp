@@ -14,18 +14,18 @@
 namespace AbacDsp
 {
 
-// A per-voice insert effect: mono, one instance per channel so stereo
-// channels never share state. reset() re-primes the effect for a fresh
-// trigger (voice start or a stolen voice's new note).
+/// @ingroup sampler
+/// @brief A per-voice insert effect: mono, one instance per channel so stereo channels never share state.
+/// reset() re-primes the effect for a fresh trigger, whether a voice start or a stolen voice's new note.
 template <typename T>
 concept VoiceEffect = requires(T effect, float sample) {
     { effect.process(sample) } -> std::same_as<float>;
     { effect.reset() } -> std::same_as<void>;
 };
 
-// Identity insert: stands in for the real per-voice effects (compression,
-// distortion) that are dropped in later; satisfies VoiceEffect so
-// SequencerEngine's insert slot exists and is exercised now.
+/// @ingroup sampler
+/// @brief Identity insert. Satisfies VoiceEffect so the slot is instantiated and exercised
+/// even when no real effect is fitted, which keeps the templated path compiled and tested.
 struct PassthroughEffect
 {
     [[nodiscard]] float process(const float sample) const noexcept
@@ -36,23 +36,30 @@ struct PassthroughEffect
     void reset() noexcept {}
 };
 
-// Polyphonic voice pool that plays SliceLibrary slices on the beat grid,
-// scheduled by a SequencePattern's step events. Driven sample-by-sample by
-// the same BeatSequencer::GridEvent stream the looper's own clock already
-// produces (not a separate clock), so the sequencer can never drift from
-// the loop or its click. Each voice reads its slice at a fractional rate
-// set by SequenceEvent::pitchRatio (hermite interpolation, resampling only,
-// no time-stretch); reverse reads the slice back-to-front. Oldest-voice
-// steal and edge-fades mirror SlicePlayer. At trigger time a voice's level
-// is SequenceEvent::gain scaled by the slice's stored peak (normalizing
-// each slice to unity before the event's own gain is applied), then routed
-// through a per-channel Effect insert (a no-op PassthroughEffect by
-// default; swap in a real one via the template parameter once
-// Dynamics/Compressor.h etc. exist). Not thread-safe; library/pattern
-// pointers are borrowed and must outlive the engine.
-// NOTE: triggerVoice() logs every trigger via std::cout for diagnostics.
-// This is NOT realtime-safe (std::cout can block) -- accepted deliberately
-// for now, revisit if it causes audio-thread dropouts.
+/**
+ * @ingroup sampler
+ * @brief Polyphonic voice pool playing SliceLibrary slices on the beat grid.
+ *
+ * Driven sample by sample from the same BeatSequencer::GridEvent stream the
+ * looper's own clock produces, not from a clock of its own. Sharing the clock
+ * rather than synchronising two is what makes drift against the loop
+ * impossible rather than merely unlikely.
+ *
+ * Each voice reads its slice at a fractional rate set by
+ * SequenceEvent::pitchRatio, using Hermite interpolation. That is resampling,
+ * so pitch and duration move together; reverse simply reads back to front.
+ * Oldest-voice stealing and edge fades mirror SlicePlayer.
+ *
+ * Voice level is the event gain scaled by the slice's stored peak, normalising
+ * every slice to unity first, so an event's gain means the same thing whatever
+ * slice it lands on. Output passes through a per-channel Effect insert.
+ *
+ * Not thread-safe. Library and pattern pointers are borrowed and must outlive
+ * the engine.
+ *
+ * @warning triggerVoice() logs every trigger through std::cout. That can block
+ *          and is not realtime-safe; it is accepted deliberately for now.
+ */
 template <VoiceEffect Effect = PassthroughEffect>
 class SequencerEngine
 {
@@ -156,6 +163,7 @@ class SequencerEngine
     }
 
   private:
+    /// @brief One playing slice. startOrder is a monotonic counter, so stealing picks the oldest by comparison.
     struct Voice
     {
         bool active{false};

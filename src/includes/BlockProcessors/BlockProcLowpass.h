@@ -8,6 +8,10 @@ namespace AbacDsp
 {
 namespace BlockProc
 {
+/**
+ * @ingroup blockprocessors
+ * @brief Block-wise one-pole lowpass. Filter theory: see Filters/OnePoleFilter.h.
+ */
 template <size_t BlockSize>
 class Lowpass final : public BlockProcessorBase<BlockSize>
 {

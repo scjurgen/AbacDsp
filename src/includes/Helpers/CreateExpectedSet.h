@@ -7,6 +7,16 @@
 #include <string>
 #include <vector>
 
+/**
+ * @file
+ * @ingroup helpers
+ * @brief Formats sample buffers as C++ literals for pasting into tests.
+ *
+ * Turns a measured buffer into a golden vector, so a reference is captured from
+ * a known-good run instead of being written by hand. Test-support only: it
+ * allocates, streams and formats.
+ */
+
 namespace CreateExpectedSet
 {
 

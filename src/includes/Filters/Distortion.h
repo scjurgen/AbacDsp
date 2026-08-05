@@ -7,9 +7,22 @@
 namespace AbacDsp
 {
 
-// Symmetric atanh waveshaper. `drive` is a linear pre-gain applied before the input is clamped
-// to +-tanh(1); atanh(tanh(1)) == 1 by construction, so the output is bounded to [-1, 1] without
-// an explicit rescale, and drive 0 gives unity gain for small signals (atanh(x) ~= x near 0).
+/**
+ * @ingroup filters
+ * @brief Symmetric atanh waveshaper with a linear pre-gain.
+ *
+ * atanh expands rather than compresses: the curve steepens towards its limit
+ * instead of flattening, so this is a harder-edged shaper than the usual tanh
+ * and produces its harmonics right up against the clip point rather than
+ * easing into them.
+ *
+ * The input is clamped to +/-tanh(1) before shaping. Since atanh(tanh(1)) is
+ * exactly 1, that bounds the output to [-1, 1] with no rescaling pass, and
+ * drive 0 leaves small signals at unity because atanh(x) approaches x near 0.
+ *
+ * Memoryless, so it aliases: the harmonics it creates are not band-limited.
+ * @see https://ccrma.stanford.edu/~jos/pasp/Memoryless_Nonlinearities.html
+ */
 class AtanhDrive
 {
   public:
@@ -24,6 +37,7 @@ class AtanhDrive
     }
 
   private:
+    /// tanh(1), the input at which atanh reaches exactly 1.
     static constexpr float kClampMargin{0.7615941560f};
 
     [[nodiscard]] float shape(const float v) const noexcept

@@ -82,8 +82,8 @@
     {"short": "SIZES", "type": "gauge", "gaugetype": "processingbins", "display": "Sizes", "symbol": "sizes", "customtype": "ShowDiffuserSizes"}
   ],
   "layout": {
-    "WINDOW_WIDTH": "1400",
-    "WINDOW_HEIGHT": "800",
+    "WINDOW_WIDTH": "800",
+    "WINDOW_HEIGHT": "600",
     "type": "=5",
     "composition": "R=(3:2:3:2:2) A1=(DRY,WET,PRED,DRV,EQIL,EQIM,EQIH,EQOL,EQOM,EQOH,LVL) A2=(MIX,PTCH,PTDL,PTCH2,PTDL2,PMOD,PSLO,PSHI) A3=(ELM,SPAN,FDBK,BLG,BSZ,TSZ,SPRD,MDPT,MDSP,LPF,XTAP,WIDE) A4=(FMIX,FSZ,FDEC,RSLO,RSHI) A5=(SIZES)"
   },

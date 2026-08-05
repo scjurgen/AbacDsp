@@ -9,6 +9,9 @@
 namespace AbacDsp
 {
 
+/// @ingroup generators
+/// @brief One partial of a modal voice as stored in a CSV row.
+/// ratio is relative to the fundamental, so a voice definition transposes without editing.
 struct CsvVoice
 {
     float ratio;
@@ -19,6 +22,9 @@ struct CsvVoice
     float waitMs;
 };
 
+/// @ingroup generators
+/// @brief Loads modal voice definitions from a CSV file. Returns false if the file cannot be opened.
+/// Blocking file IO and allocating: a loading-time call, never a per-block one.
 [[nodiscard]] inline bool readVoiceSettings(const std::string_view filename, std::vector<CsvVoice>& settings)
 {
     std::ifstream file(std::string{filename});

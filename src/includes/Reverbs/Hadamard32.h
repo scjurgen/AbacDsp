@@ -7,6 +7,10 @@
 namespace AbacDsp
 {
 
+/// @ingroup reverbs
+/// @brief Unnormalised order-32 Hadamard mix in Sylvester (natural) row order.
+/// Written out flat: 32*32 adds, no temporaries, and no dependence between outputs.
+/// HadamardWalsh32.h computes the identical matrix with a butterfly, in fewer adds.
 inline void hadamardFeed32(const float* col, float* sum) noexcept
 {
     sum[0] = col[0] + col[1] + col[2] + col[3] + col[4] + col[5] + col[6] + col[7] + col[8] + col[9] + col[10] +
@@ -146,6 +150,8 @@ inline void hadamardFeed32(const std::array<float, 32>& col, std::array<float, 3
 
 #if defined(USE_X86_INTRINSICS)
 
+/// @ingroup reverbs
+/// @brief SIMD form of hadamardFeed32(), building each row as a masked multiply plus a horizontal add.
 inline void hadamardFeed32_simd(const float* col, float* sum) noexcept
 {
     const __m128 v0 = _mm_loadu_ps(&col[0]);

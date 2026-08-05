@@ -1,5 +1,16 @@
 #pragma once
 
+/**
+ * @file
+ * @ingroup helpers
+ * @brief Selects the SIMD backend and defines the macro the vector paths switch on.
+ *
+ * Apple platforms get simd/simd.h and USE_SIMD_FRAMEWORK; x86-64 elsewhere gets
+ * the SSE intrinsics and USE_X86_INTRINSICS. Non-Apple arm64 is a hard `#error`
+ * rather than a silent scalar fallback, so an unported build fails loudly
+ * instead of quietly running several times slower.
+ */
+
 // clang-format off
 
 #if defined(__APPLE__)

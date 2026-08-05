@@ -6,6 +6,9 @@
 
 namespace AbacDsp
 {
+/// @ingroup generators
+/// @brief Fills target with a sine, phase accumulated in double.
+/// The reference the band-limited generators are measured against, so accuracy matters more than speed here.
 inline void renderReferenceSineWave(std::vector<float>& target, const double sampleRate, const double frequency)
 {
     double phase{0.0};

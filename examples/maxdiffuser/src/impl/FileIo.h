@@ -87,6 +87,28 @@ class FileIo
         return m_currentParams;
     }
 
+    [[nodiscard]] std::string currentParametersAsJson() const
+    {
+        return nlohmann::json(m_currentParams).dump();
+    }
+
+    // Applies a full parameter snapshot captured elsewhere (e.g. embedded in a
+    // saved loop) rather than one of the on-disk patch slots/names.
+    bool loadParametersFromJson(const std::string& text)
+    {
+        try
+        {
+            m_currentParams = nlohmann::json::parse(text).get<PatchParameters>();
+            m_currentParams.clearModified();
+            return true;
+        }
+        catch (const nlohmann::json::exception& e)
+        {
+            reportCorruptPatch("<embedded>", e.what());
+            return false;
+        }
+    }
+
     void forceSave()
     {
         savePatch(m_currentPatch);

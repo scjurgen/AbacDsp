@@ -7,6 +7,10 @@
 namespace AbacDsp
 {
 
+/// @ingroup reverbs
+/// @brief Unnormalised order-32 Hadamard mix via the fast Walsh-Hadamard butterfly.
+/// 5 stages of pairwise add/subtract at doubling stride: 160 adds against 1024 for the flat form.
+/// Produces exactly the same matrix and row order as hadamardFeed32(), only faster.
 inline void hadamardWalsh32(const float* input, float* output) noexcept
 {
     std::array<float, 32> temp1{}, temp2{}, temp3{}, temp4{};
@@ -62,6 +66,8 @@ inline void hadamardWalsh32(const std::array<float, 32>& input, std::array<float
 
 #if defined(USE_SIMD_FRAMEWORK)
 
+/// @ingroup reverbs
+/// @brief SIMD form of hadamardWalsh32(), each butterfly stage as a shuffle and a signed add.
 inline void hadamardWalsh32_simd(const float* input, float* output) noexcept
 {
     const simd_float4 v0 = simd_make_float4(input[0], input[1], input[2], input[3]);

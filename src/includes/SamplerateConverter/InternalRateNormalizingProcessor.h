@@ -14,13 +14,22 @@
 namespace AbacDsp
 {
 
-// Runs a fixed-size ProcessFunction at a constant internal sample rate regardless of the host's
-// actual rate: audio is pushed through SrPushConverter (host -> internal), chunked into
-// FixedFrameSize blocks for the ProcessFunction via FixedSizeProcessor, then pushed back
-// (internal -> host) into a small FIFO so processBlock() always returns exactly as many host-rate
-// samples as it was given. At hostSampleRate == kInternalSampleRate both converters are skipped
-// entirely: the host buffer's own pointers are handed straight to FixedSizeProcessor, so the
-// common case pays no resampling cost.
+/**
+ * @ingroup srconverter
+ * @brief Runs a processor at a fixed internal sample rate whatever rate the host uses.
+ *
+ * Audio is converted host to internal, chunked into FixedFrameSize blocks, and
+ * converted back into a FIFO, so processBlock() always returns exactly as many
+ * host-rate samples as it was given.
+ *
+ * The point is that any tuning done against one sample rate stays valid at all
+ * of them: coefficients, table sizes and time constants inside the processor
+ * never see the host rate at all.
+ *
+ * When the host already runs at kInternalSampleRate both converters are
+ * bypassed and the host buffer is handed straight through, so the common case
+ * pays nothing for the machinery.
+ */
 template <size_t Channels, size_t FixedFrameSize, typename ExternalBufferType>
 class InternalRateNormalizingProcessor
 {

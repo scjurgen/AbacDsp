@@ -10,17 +10,31 @@
 namespace AbacDsp
 {
 
+/// @ingroup sampler
+/// @brief Transport state of the loop.
 enum class LooperState : uint8_t
 {
-    Empty,       // no loop captured yet
-    Recording,   // capturing the first loop
-    Playing,     // looping playback
-    Overdubbing, // playing while summing input into the loop
-    Stopped      // has a loop, not playing
+    Empty,       ///< No loop captured yet.
+    Recording,   ///< Capturing the first loop.
+    Playing,     ///< Looping playback.
+    Overdubbing, ///< Playing while summing input into the loop.
+    Stopped      ///< Has a loop, not playing.
 };
 
-// Stereo loop capture/playback: finalizes either freestyle (stopRecordFree())
-// or bar-locked (stopRecordBarLocked()). No audio-thread allocation.
+/**
+ * @ingroup sampler
+ * @brief Stereo loop capture and playback with two ways of deciding where the loop ends.
+ *
+ * stopRecordFree() takes the loop length from where recording stopped;
+ * stopRecordBarLocked() snaps it to the musical grid, which means the end can
+ * land before or after the stop. Material recorded past a bar-locked end is not
+ * discarded but folded back over the start, so a player who overshoots the
+ * downbeat keeps the note they played.
+ *
+ * Every buffer, including the fold scratch, is sized at construction from the
+ * maximum recording time, so nothing on the audio thread allocates. The scratch
+ * covers half a bar at the slowest supported tempo.
+ */
 template <size_t BlockSize>
 class LoopRecorder
 {
