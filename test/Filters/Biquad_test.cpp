@@ -700,4 +700,24 @@ TEST(DspBiquadFilterTest, PeakFilter)
     }
 }
 
+TEST(DspBiquadFilterTest, biquadMagnitudeReturnsLinearRatioNotDbExponent)
+{
+    // Flat gain-of-2 section (b0 = 2, all other coefficients 0): magnitude is exactly 2 at every frequency.
+    for (float cf = 0.01f; cf <= 0.49f; cf += 0.05f)
+    {
+        EXPECT_NEAR(biquadMagnitude(cf, 2.f, 0.f, 0.f, 0.f, 0.f), 2.f, 1e-5f) << "at cf:" << cf;
+    }
+}
+
+TEST(DspBiquadFilterTest, coefficientsMagnitudeMatchesLinearRatio)
+{
+    Biquad<BiquadFilterType::Peak> sut;
+    sut.computeCoefficients(48000.f, 1000.f, StandardQValue, 6.f);
+    for (float hz = 50.f; hz <= 16000.f; hz *= 1.3f)
+    {
+        const auto cf = hz / 48000.f;
+        EXPECT_NEAR(sut.magnitude(cf), sut.magnitudeLinear(cf), 1e-4f) << "at hz:" << hz;
+    }
+}
+
 }

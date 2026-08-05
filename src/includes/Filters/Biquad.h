@@ -44,12 +44,13 @@ namespace AbacDsp
 }
 
 /// @ingroup filters
-/// @brief Raises 10 to the power of biquadMagnitudeInDb().
-/// That is 10^dB, not the 10^(dB/20) a dB-to-ratio conversion calls for; biquadMagnitudeLinear() is the ratio.
+/// @brief Converts biquadMagnitudeInDb() back to a linear ratio via 10^(dB/20).
+/// biquadMagnitudeLinear() computes the same ratio directly and is preferred near deep notches,
+/// where accumulating in float dB loses digits that the double path retains.
 [[nodiscard]] inline float biquadMagnitude(const float cf, const float b0, const float b1, const float b2,
                                            const float a1, const float a2)
 {
-    return std::pow(10.0f, biquadMagnitudeInDb(cf, b0, b1, b2, a1, a2));
+    return std::pow(10.0f, biquadMagnitudeInDb(cf, b0, b1, b2, a1, a2) / 20.0f);
 }
 
 
@@ -211,7 +212,7 @@ class BiquadCoefficients
 
     [[nodiscard]] float magnitude(const float cf) const
     {
-        return std::pow(10.0f, magnitudeInDb(cf));
+        return std::pow(10.0f, magnitudeInDb(cf) / 20.0f);
     }
 
   protected:
