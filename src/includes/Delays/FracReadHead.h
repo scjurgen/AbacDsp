@@ -37,10 +37,7 @@ template <size_t WrapSize, bool quartic = false>
 class FracReadHead
 {
   public:
-    explicit FracReadHead(const float sampleRate) noexcept
-        : m_sampleRate(sampleRate)
-    {
-    }
+    explicit FracReadHead([[maybe_unused]] const float sampleRate) noexcept {}
 
     /// @brief A request that arrived mid-ramp, replayed once the current one finishes.
     struct Scheduled
@@ -70,9 +67,8 @@ class FracReadHead
             return;
         }
 
-        m_targetDelta = newTargetDelta;
-        m_reducingDelta = deltaDifference > 0;
-        m_maxAdvance = m_reducingDelta ? (1 / maxAdvance) : maxAdvance;
+        const bool reducingDelta = deltaDifference > 0;
+        m_maxAdvance = reducingDelta ? (1 / maxAdvance) : maxAdvance;
 
         const float advanceDeviation = m_maxAdvance - 1.0f;
         constexpr float kQuadraticRampScale = 3.0f / 2.0f;
@@ -166,15 +162,12 @@ class FracReadHead
     }
 
   private:
-    const float m_sampleRate;
     double m_position{0.0};
     double m_advance{1.0};
-    float m_targetDelta{0.0f};
     float m_maxAdvance{1.5f};
     size_t m_totalSteps{0};
     TransitionPhase m_currentPhase{TransitionPhase::Idle};
     size_t m_currentStep{0};
-    bool m_reducingDelta{false};
     float m_referencePosition{0.0f};
     Scheduled m_scheduled{false, 0.0f, 0.0f};
 };
