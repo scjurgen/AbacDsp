@@ -66,8 +66,8 @@ class SincFilter
     /// Heuristic: three kernel widths scaled by the ratio, with a 4096-sample floor.
     [[nodiscard]] size_t getBufferSize(const float maxRatio, const size_t channels) const noexcept
     {
-        const auto width =
-            static_cast<size_t>(3 * lrint(static_cast<float>(m_coeffs.size() / m_increment) * maxRatio) + 1);
+        const auto width = static_cast<size_t>(
+            3 * lrint(static_cast<float>(m_coeffs.size()) / static_cast<float>(m_increment) * maxRatio) + 1);
         return 1 + channels * (1 + std::max<size_t>(width, 4096));
     }
 
