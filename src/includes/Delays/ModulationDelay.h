@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 #include <span>
 #include <vector>
 
@@ -101,7 +102,10 @@ class ModulatingDelayPitchedAdjust
     [[nodiscard]] float step(const float in) noexcept
     {
         sweepTick();
-        const auto depth = m_modWidth * (std::abs(m_currentPhase) + 1) + 1; // triangular wave
+        // Raised cosine of the sawtooth phase: same 0-at-trough/1-at-edges range as std::abs()
+        // would give, but a continuously-varying derivative instead of a sign flip at the trough.
+        const auto shapedPhase = 0.5f * (1.0f - std::cos(std::numbers::pi_v<float> * m_currentPhase));
+        const auto depth = m_modWidth * (shapedPhase + 1) + 1;
         float dHead = m_headRead + depth;
         if (dHead >= MaxSizeInSamples)
         {

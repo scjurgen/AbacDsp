@@ -398,4 +398,68 @@ TEST(ModulatingDelayPitchedAdjustTest, modulationDepthAndSpeedAlterOutputOverTim
     EXPECT_GT(rmsDiff, 0.05);
 }
 
+// Regression test for the flip-flop artifact: step() used to shape depth as
+// m_modWidth * (abs(sawtoothPhase) + 1) + 1, a linear triangle whose rate of
+// change is exactly two constant values that flip sign at the trough (see
+// Modulation_test.cpp for the same signature on the sibling Modulation class).
+// There is no direct getter for the read position, so this primes the buffer
+// with one full lap of an exact linear ramp first: cubic Hermite interpolation
+// of a linear signal is itself exact, so successive output differences equal
+// (up to a known scale) successive differences of the modulated read position.
+TEST(ModulatingDelayPitchedAdjustTest, ModulationRateOfChangeSpreadsSmoothlyNotAsTwoConstantValues)
+{
+    constexpr float sampleRate = 48000.f;
+    constexpr size_t maxSize = 16384;
+    constexpr size_t delaySize = 4000;
+    constexpr float rampSlope = 0.01f;
+
+    ModulatingDelayPitchedAdjust<maxSize> sut(sampleRate);
+    sut.setModDepth(0.f);
+    sut.setFeedback(0.f);
+    sut.setSize(delaySize);
+    settleAfterSizeChange(sut, 20000);
+
+    // One full lap so every buffer position holds a single-generation ramp,
+    // with the one seam left far behind the read head (which trails the write
+    // head by delaySize, comfortably more than the observation window below).
+    for (size_t i = 0; i < maxSize; ++i)
+    {
+        std::ignore = sut.step(static_cast<float>(i) * rampSlope);
+    }
+
+    sut.setModDepth(0.2f);
+    sut.setModSpeed(200.f);
+
+    constexpr size_t observationSteps = 600;
+    std::vector<float> out(observationSteps);
+    for (size_t i = 0; i < observationSteps; ++i)
+    {
+        out[i] = sut.step(0.f);
+    }
+
+    std::vector<float> deltas;
+    for (size_t i = 1; i < out.size(); ++i)
+    {
+        deltas.push_back(out[i] - out[i - 1]);
+    }
+
+    const auto [minIt, maxIt] = std::minmax_element(deltas.begin(), deltas.end());
+    const float minDelta = *minIt;
+    const float maxDelta = *maxIt;
+
+    size_t nearExtreme = 0;
+    for (const auto d : deltas)
+    {
+        if (std::abs(d - minDelta) < 1e-4f || std::abs(d - maxDelta) < 1e-4f)
+        {
+            ++nearExtreme;
+        }
+    }
+    const float fractionNearExtreme = static_cast<float>(nearExtreme) / static_cast<float>(deltas.size());
+    EXPECT_LT(fractionNearExtreme, 0.5f)
+        << "expected the rate of change to spread smoothly across many values instead of sitting "
+           "at two extremes (a square-wave rate of change), which would mean the triangle-shaped "
+           "modulation artifact regressed";
+}
+
 }
