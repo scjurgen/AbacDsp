@@ -29,6 +29,7 @@ class ParallelPlainDelay
   public:
     ParallelPlainDelay()
     {
+        m_currentDelayWidth.fill(static_cast<int>(MAXSIZE / 8));
         for (size_t c = 0; c < CHANNELS; ++c)
         {
             m_buffer[c].resize(BlockSize + (MAXSIZE / BlockSize + 1) * BlockSize);
@@ -133,7 +134,7 @@ class ParallelPlainDelay
     }
 
   private:
-    alignas(16) std::array<int, CHANNELS> m_currentDelayWidth{MAXSIZE / 8};
+    alignas(16) std::array<int, CHANNELS> m_currentDelayWidth{};
     alignas(16) std::array<std::array<int, CHANNELS>, NUMREADHEADS - 1> m_deltaTaps{};
     alignas(16) std::array<std::array<int, CHANNELS>, NUMREADHEADS> m_read{};
     alignas(16) std::array<std::vector<float>, CHANNELS> m_buffer;
