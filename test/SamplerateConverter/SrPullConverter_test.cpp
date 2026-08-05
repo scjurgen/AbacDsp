@@ -1,10 +1,10 @@
-#include "SamplerateConverter/SrPullConverter.h"
-#include "Filters/Sinc/sinc_4.h"
-
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
-
 #include <vector>
+
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+
+#include "Filters/Sinc/sinc_4.h"
+#include "SamplerateConverter/SrPullConverter.h"
 
 namespace AbacDsp::Test
 {
@@ -29,23 +29,23 @@ using PullCb = std::function<long(float**, size_t)>;
 PullCb makeCallback(const std::vector<float>& data, size_t numChannels = 1)
 {
     return PullCb{[&data, numChannels, served = false](float** ptr, size_t) mutable -> long
-    {
-        if (served)
-        {
-            *ptr = nullptr;
-            return 0;
-        }
-        served = true;
-        *ptr = const_cast<float*>(data.data());
-        return static_cast<long>(data.size() / numChannels);
-    }};
+                  {
+                      if (served)
+                      {
+                          *ptr = nullptr;
+                          return 0;
+                      }
+                      served = true;
+                      *ptr = const_cast<float*>(data.data());
+                      return static_cast<long>(data.size() / numChannels);
+                  }};
 }
 }
 
 // ----- frame-count tests -----
 // For the pull converter, numSamples is the requested OUTPUT frame count.
-// ratio > 1: upsample – N output frames consume ~N/ratio input frames.
-// ratio < 1: downsample – N output frames consume ~N/ratio (> N) input frames.
+// ratio > 1: upsample - N output frames consume ~N/ratio input frames.
+// ratio < 1: downsample - N output frames consume ~N/ratio (> N) input frames.
 
 TEST(SrPullConverterTest, NeutralRatioFrameCount)
 {
@@ -110,7 +110,9 @@ TEST(SrPullConverterTest, DcPreservedNeutralRatio)
 
     ASSERT_GT(generated, kStartupSkip);
     for (size_t i = kStartupSkip; i < generated; ++i)
+    {
         EXPECT_NEAR(out[i], 1.0f, kDcTolerance) << "at index " << i;
+    }
 }
 
 TEST(SrPullConverterTest, DcPreservedUpsampleRatio2)
@@ -124,7 +126,9 @@ TEST(SrPullConverterTest, DcPreservedUpsampleRatio2)
 
     ASSERT_GT(generated, kStartupSkip);
     for (size_t i = kStartupSkip; i < generated; ++i)
+    {
         EXPECT_NEAR(out[i], 1.0f, kDcTolerance) << "at index " << i;
+    }
 }
 
 TEST(SrPullConverterTest, DcPreservedDownsampleRatioHalf)
@@ -138,7 +142,9 @@ TEST(SrPullConverterTest, DcPreservedDownsampleRatioHalf)
 
     ASSERT_GT(generated, kStartupSkip);
     for (size_t i = kStartupSkip; i < generated; ++i)
+    {
         EXPECT_NEAR(out[i], 1.0f, kDcTolerance) << "at index " << i;
+    }
 }
 
 // ----- stereo path -----
@@ -191,7 +197,9 @@ TEST(SrPullConverterTest, ResetRestoresInitialState)
 
     ASSERT_EQ(gen, genFresh);
     for (size_t i = 0; i < gen; ++i)
+    {
         EXPECT_NEAR(outAfterReset[i], outFresh[i], 1e-5f) << "at index " << i;
+    }
 }
 
 }
