@@ -1,48 +1,46 @@
 #pragma once
 
 #include "Delays/ParallelPlainDelay.h"
-#include "HadamardFeed.h"
-#include "Helpers/ConstructArray.h"
 #include "Numbers/PrimeDispatcher.h"
+#include "Reverbs/HadamardWalsh16.h"
+#include "Reverbs/HadamardWalsh32.h"
+#include "Reverbs/HadamardWalsh4.h"
+#include "Reverbs/HadamardWalsh8.h"
 
 namespace AbacDsp
 {
 
-/// @ingroup reverbs
-/// @brief Distribution of line lengths: bounds plus a bulge that bends the spacing away from linear.
-/// Bulge clusters lengths toward one end, which shapes how echo density builds rather than how dense it gets.
-struct DelayWarp
-{
-    float getBulgeValue(const float x, const float bulgePower = 4.0f)
-    {
-        return bulge < 0 ? 1 - std::pow(1 - x, std::pow(bulgePower, bulge)) : std::pow(x, std::pow(bulgePower, -bulge));
-    }
-
-    float minSize{100};
-    float maxSize{210};
-    float bulge{-0.6f};
-    float spreadLines{0.f};
-};
-
 /**
  * @ingroup reverbs
- * @brief Block-processed FDN mixing through runtime-dispatched hadamardFeed().
+ * @brief Block-processed FDN mixing through the scalar butterfly, hadamardWalshN().
  *
  * One of four tanks that differ only in the mixing implementation, so the cost
  * of a mixing strategy can be measured in a working reverb rather than a
  * microbenchmark. Delay handling, sizing and decay are identical across all four.
  *
- * Order is a runtime switch inside the mix, so this one variant covers every
- * order the dispatcher knows, including the non-power-of-two 12, 20, 24 and 28
- * that no butterfly can reach.
+ * Log-stage butterfly rather than the flat expansion: 160 adds at order 32
+ * against 1024. The matrix and the row order are identical to the flat form.
  */
 template <size_t MaxSizePerElement, size_t ORDER, size_t BlockSize>
     requires(MaxSizePerElement % BlockSize == 0)
-class FdnTankBlockDelay
+class FdnTankBlockDelayWalsh
 {
   public:
+    struct DelayWarp
+    {
+        float getBulgeValue(const float x, const float bulgePower = 4.0f) const noexcept
+        {
+            return bulge < 0 ? 1 - std::pow(1 - x, std::pow(bulgePower, bulge))
+                             : std::pow(x, std::pow(bulgePower, -bulge));
+        }
+
+        float minSize{100};
+        float maxSize{210};
+        float bulge{-0.6f};
+        float spreadLines{0.f};
+    };
     using Delay = ParallelPlainDelay<BlockSize, ORDER, MaxSizePerElement>;
-    explicit FdnTankBlockDelay(const float sampleRate)
+    explicit FdnTankBlockDelayWalsh(const float sampleRate)
         : m_feedBackGain(1.0f / std::sqrt(static_cast<float>(ORDER)))
         , m_sampleRate(sampleRate)
     {
@@ -82,6 +80,7 @@ class FdnTankBlockDelay
         {
             return;
         }
+
         m_currentWidth[index] = value;
         m_delay.setSize(index, value - 2 * BlockSize);
         const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
@@ -163,7 +162,22 @@ class FdnTankBlockDelay
 
     void matrixFeed(size_t idx)
     {
-        hadamardFeed(ORDER, m_lastValue[idx].data(), m_feedValue[idx].data());
+        if constexpr (ORDER == 4)
+        {
+            hadamardWalsh4(m_lastValue[idx].data(), m_feedValue[idx].data());
+        }
+        if constexpr (ORDER == 8)
+        {
+            hadamardWalsh8(m_lastValue[idx].data(), m_feedValue[idx].data());
+        }
+        if constexpr (ORDER == 16)
+        {
+            hadamardWalsh16(m_lastValue[idx].data(), m_feedValue[idx].data());
+        }
+        if constexpr (ORDER == 32)
+        {
+            hadamardWalsh32(m_lastValue[idx].data(), m_feedValue[idx].data());
+        }
         for (size_t o = 0; o < ORDER; ++o)
         {
             m_lastValue[idx][o] = m_outValue[o][idx];
@@ -244,13 +258,13 @@ class FdnTankBlockDelay
     DelayWarp m_warp;
 
     float m_mono{0.0f};
-    std::array<size_t, ORDER> m_currentWidth{};
-    std::array<std::array<float, BlockSize>, ORDER> m_inValue{};
-    std::array<std::array<float, BlockSize>, ORDER> m_outValue{};
-    std::array<std::array<float, ORDER>, BlockSize> m_lastValue{};
-    std::array<std::array<float, ORDER>, BlockSize> m_feedValue{};
+    alignas(16) std::array<size_t, ORDER> m_currentWidth{};
+    alignas(16) std::array<std::array<float, BlockSize>, ORDER> m_inValue{};
+    alignas(16) std::array<std::array<float, BlockSize>, ORDER> m_outValue{};
+    alignas(16) std::array<std::array<float, ORDER>, BlockSize> m_lastValue{};
+    alignas(16) std::array<std::array<float, ORDER>, BlockSize> m_feedValue{};
+    alignas(16) std::array<float, ORDER> m_gain{};
     float m_msecs{100.0f};
-    std::array<float, ORDER> m_gain{};
     Delay m_delay{};
 
     bool m_spreadSymmetric{false};

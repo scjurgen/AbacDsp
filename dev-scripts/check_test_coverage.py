@@ -35,6 +35,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INCLUDE_ROOT = ROOT / "src" / "includes"
+REFSRC_ROOT = ROOT / "refsrc"
 SRC_ROOT = ROOT / "src"
 TEST_ROOT = ROOT / "test"
 EXCEPTIONS_FILE = TEST_ROOT / "coverage_exceptions.txt"
@@ -72,7 +73,12 @@ def quoted_includes(path: Path) -> list[str]:
 def resolve_include(spec: str, from_dir: Path | None = None) -> str | None:
     """Resolve a quoted #include target the way the compiler would: relative to the
     including file's own directory first, then relative to the src/includes search path.
-    Returns a path relative to src/includes, or None if it doesn't resolve under there."""
+    Returns a path relative to src/includes, or None if it doesn't resolve under there.
+
+    refsrc/ (reference-only headers used solely by tests) is also on the compiler's
+    search path but is deliberately excluded from the coverage graph; a resolution
+    there is tagged rather than dropped, so naming_mismatches still sees test files
+    that reach a real header alongside a refsrc one as multi-header."""
     search_dirs = []
     if from_dir is not None:
         search_dirs.append(from_dir)
@@ -81,6 +87,11 @@ def resolve_include(spec: str, from_dir: Path | None = None) -> str | None:
         candidate = (base / spec).resolve()
         if candidate.is_file() and INCLUDE_ROOT in candidate.parents:
             return rel_to_include_root(candidate)
+    search_dirs = ([from_dir] if from_dir is not None else []) + [REFSRC_ROOT]
+    for base in search_dirs:
+        candidate = (base / spec).resolve()
+        if candidate.is_file() and REFSRC_ROOT in candidate.parents:
+            return f"<refsrc>/{candidate.relative_to(REFSRC_ROOT).as_posix()}"
     return None
 
 

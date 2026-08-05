@@ -3,9 +3,9 @@
 #include <random>
 
 #include "Delays/NaiveDelay.h"
-#include "HadamardFeed.h"
 #include "Helpers/ConstructArray.h"
 #include "Numbers/PrimeDispatcher.h"
+#include "Reverbs/HadamardFeed.h"
 
 namespace AbacDsp
 {

@@ -114,6 +114,7 @@ macro(package_add_test TESTNAME)
 endmacro()
 
 include_directories("${PROJECT_SOURCE_DIR}/src/includes")
+include_directories("${PROJECT_SOURCE_DIR}/refsrc")
 
 mark_as_advanced(
     BUILD_GMOCK
