@@ -1,21 +1,66 @@
 # TODO
 
+## Abacdsp (general)
 
-## Host sync 
+### License compliance
+Check LGPL compliance of the pure library and the examples. Create relative documentation and compliance. Add license information in about boxes for examples.
+
+### Project goals
+Add general goals of the project:
+
+Library: specialised versions that are typical for music/audio engineering with a balance of efficiency and originality (e.g. 4 pole filters, diffusers, resonance stuff, delays).
+
+Examples are designed to:
+- showcase the library and how to connect the various processing blocks
+- focus on accessibility (online readers, parameters, color contrast)
+- focus on interactive performance using various interface methods (add also multiple performance page options?)
+
+### Blockoperations
+Check if this can be done better (a global concept for multichannel processing).
+
+## Examples
+
+### Clap
+Juce clap support: build and how to test?
+
+### Explore Performance
+Explore a way to have custom performance pages.
+
+## Maxdiffuser
+- up to 100 diffuser elements
+- random distribution add
+- pitch by relative scale
+- outputs with tuned ringmod reads
+- outputs with tuned resonators
+
+## Looper
+
+### Modes and button states
+
+Button states depend on various modes
+1) Free, Overdub, Play, Undo, Clear should not be active as long as there is no loop
+2) Mix Down only active when an Overdub exists
+3) Host Sync only when we are in a host
+4) Seq Play and Clear Seq only when we have a sequence
+
+Missing buttons
+- No click mode (only free run) -> Record bars click volume, click->track disabled.
+
+### Host sync
 - host sync must be disabled if we are not in a host.
 
-## bug
+### Bug
 loading a loop while play is on the metronome needs to be aligned. Probably we want another behaviour in the future which would be to schedule
 the loaded loop and play it when the current loop is ending (with a fade in/out operation). For now we just stop the looper, load the file, and wait for a new play signal.
 
-## UI
+### UI
 - visualise current bar with an overlay
-
 - naming: setRecord is not correct it should be toggleRecordMode
 - refactor switches and visualisations (red recording mode)
 
-## Code quality
-### Sanitizier
+### Code quality
+
+#### Sanitizier
 
 - Tried wiring up ASan+UBSan via a CMake ENABLE_SANITIZERS option (2026-07-11):
   AddressSanitizer's dynamic runtime hangs at process startup on this Mac
@@ -25,10 +70,79 @@ the loaded loop and play it when the current loop is ending (with a fade in/out 
   either once Apple/LLVM fixes this, or by running it in the Linux Docker
   container instead of natively.
 
-## Cleanup
+### Part-based looping (new concept)
+Add one more concept: Part-based looping inside a loop slot.
 
-## Project Generator
+Requirements:
+- Each loop slot can hold up to 4 parts (A, B, C, D).
+- Recording a new part must not discard the existing part.
+- User can queue switching from the current part to another part.
+- Switching happens only at the end of the current loop cycle.
+- Apply a short fade-out/fade-in or crossfade at the switch boundary to avoid clicks.
+- Analyze whether parts should be required to share the same loop length, especially in Clocked mode.
+- Define how part switching interacts with overdub layers, pending layers, retrospective capture, downmix, playback defaults, persistence, and current visualization.
+- Prefer a minimal-risk design that fits the existing codebase.
 
+### Quantized slice looper
+- Sequencer mode vs looper mode (when sequencer is active the looper is slave)
+- tempo finder
+- inc dec time
+- support multitrack (also sliced)
+- humanize
+- experimental: re-adjust bpm with tap
+- experimental: slicing fun (play slices based on input)
+
+### Thanos performance page (Infinity Stones concept)
+Add a "Thanos" performance page.
+
+Infinity stones delay/looper: maybe use multiple tracks and do operations between them.
+
+7 buttons (color buttons are momentary):
+- Reality (red): control matter (transform recorded material, i.e. filter, distort, ring)
+- Mind (yellow): changes speed by combining 2 envelopes (fast and slow decay)
+- Soul (orange): create new dimensions (copy latest material to various positions)
+- Time (green): reverse and fast forward in loop (toggle back and forth?)
+- Space (blue): change portals (taps added the longer you hold) or copy to new tracks
+- Power (purple): power up content in loop (compress to 1)
+- Flick (black): kill half of the sounds (or tracks)
+
+General parameter:
+- Regen (0 = delay ... inf = looper)
+
+## JuceStandaloneGenerator
+
+### Split into Multipage
+
+Analyse what it would involve to have a multipage display with for now only 2 tabs (performance, settings).
+
+A performance page which contains:
+ - selected parameters important for live performance or automation of a created preset (e.g. maxdiffuser: dry, wet,
+  etc.) They should be marked in the blueprint, probably a specific section that references the parameter and adds info for the position, sizes.
+ - custom visualisations (e.g. maxdiffuser the display, or in the looper the CircularDisplays)
+
+A settings page
+- containing all the current parameters which are generated by the current jucestandalonegenerator
+
+### Python code
+- distinct Midi/Audio
+- add 5.1
+- generate and include fft, wave, level and CPU only when present
+- remove ports in and out and use defaults
+- make generic impl/classname concept better
+- remove plugintype etc.
+
+### C++ processing
+- add smoothed options for parameters
+- more unit-test stubs
+- check cpu gauges
+- add 5.1 processing
+- support transport
+
+### C++ UI
+- use soft gradient in main window
+- use backdrop
+
+### UI and presets (misc)
 - Make the UI better (again)
   - automatic position stuff
   - integer parameters honored correctly
@@ -37,3 +151,247 @@ the loaded loop and play it when the current loop is ending (with a fade in/out 
 - Synth modules without AudioIn
 - 5.1
 - Background silkmask
+
+## src/includes (DSP library code-quality findings)
+
+Findings noticed while documenting the headers. Not analysed, not fixed.
+
+### Filters/OnePoleFilter.h
+
+#### processBlock early-out assumes pole 0 means pass-through
+
+Both `processBlock` overloads return early (or `copy_n`) when the coefficient is
+0. That is only the identity for LowPass:
+
+| Characteristic | Output at p = 0 | Early-out yields |
+| --- | --- | --- |
+| LowPass | `y = x` | `y = x`, correct |
+| HighPassLeaky | `y = x - x = 0` | `y = x` |
+| AllPass | one-sample delay | `y = x` |
+| HighPass | `y = 0.5 * (x - x[n-1])` | `y = x` |
+
+`setCutoff()` at or above Nyquist sets the coefficient to 0, so this state is
+reachable through the normal API, not only through `setFeedback(0)`.
+
+### Filters/Biquad.h
+
+#### BiquadStereo::reset() is private
+
+`Biquad::reset()` is public; the stereo twin declares the same method in the
+private section, so a `BiquadStereo` cannot have its state cleared from outside.
+Either it should be public or it should be removed.
+
+#### ChebyshevBiquad has dead members
+
+- `m_isType1` is assigned in `computeType1()` and `computeType2()` and never
+  read anywhere. `processBlock()` always runs `stepChebyType2()`.
+- `stepChebyType1()` has no caller in `src/` or `test/`. It is public, so it may
+  be intended as API, but nothing exercises it.
+- `m_biquadSinglePole` is declared and never touched.
+- `m_biquads` is only written by `assignToBiquads()` and read by
+  `getMagnitudeInDb()`; the audio path uses the raw `coefficients` array
+  instead, so the whole biquad array exists only for response plotting.
+
+#### computeType2 odd-order section looks inconsistent with computeType1
+
+Two lines in the `order & 1` branch of `computeType2()` differ from the
+equivalent code in `computeType1()` and from the even-order branch just above
+them:
+
+- `coefficients[m_elements - 1].a1 = -fZZeroReal;` takes the denominator
+  coefficient from the *zero*. `computeType1()` uses `-fZPole.real()` there.
+- the highpass pole transform divides by
+  `std::complex<float>(1 - beta * fZPole.real(), -fZPole.imag())`, where every
+  other instance of that transform uses `-beta * fZPole.imag()` for the
+  imaginary part.
+
+Both may be deliberate, but they read as transcription slips. Worth checking an
+odd-order Type 2 highpass response against a reference.
+
+### Filters/BiquadReference.h
+
+#### Throws std::invalid_argument without including stdexcept
+
+`calculateCoefficients()` throws `std::invalid_argument` in its `default` case.
+The file includes only `Filters/Biquad.h`, and neither that header nor anything
+it pulls in includes `<stdexcept>`. It compiles today because libc++ reaches the
+declaration transitively through `<iostream>`, which is not guaranteed by the
+standard and can break on another toolchain.
+
+### Filters/BiquadResoBP.h
+
+#### isActive() never counts the decay down
+
+`isActive()` returns true unconditionally while `m_decayCount > 0`, but nothing
+in the class ever decrements it. `triggered()` sets it to `m_decayMax` and it
+stays there, so a triggered resonator reports active forever and the
+silence-detection branch below becomes unreachable.
+
+`SvfResoBP::isActive()` is the same function with `m_decayCount--` present
+(SvfResoBP.h:217), so this reads as an omission rather than a design choice.
+
+#### setDecay() mixes milliseconds and seconds
+
+`setByDecay()` takes `t` in seconds and uses it consistently for both
+`m_decayMax` and the Q formula.
+
+`setDecay()` treats `t` as milliseconds for `m_decayMax`
+(`m_sampleRate * t * 0.001f`) but then feeds the same unscaled value into
+`Q = pi * f * t * k`, which expects seconds. The resulting Q is 1000x too large.
+
+#### setDecay() silently reuses the previous frequency
+
+`setDecay()` reads the `K` and `kSquare` members cached by the last
+`computeCoefficients()` call rather than deriving them from `m_frequency`. The
+new coefficients therefore belong to whatever frequency was set last, and the
+dependency is invisible at the call site. Documented as-is for now.
+
+#### magnitude() has a sample rate default that can disagree with the object
+
+`magnitude(index, hz, sampleRate = 48000.f)` evaluates against the argument
+while the object carries its own `m_sampleRate`. A caller who omits the argument
+at any other rate gets the wrong curve with no diagnostic.
+
+The b1 = 0 and b2 = -b0 substitutions are also left unsimplified in the
+expression: `std::pow((b0 + 0 + -b0), 2)` is identically zero.
+
+#### m_sampleRate is a public data member
+
+Declared public, mid-class, with the `m_` prefix, next to a `setSampleRate()`
+that does the same job.
+
+### Filters/BiquadResoBandPassParallel.h
+
+#### Carries the same defects as BiquadResoBP, minus the unit bug
+
+Verified present here as well:
+
+- `magnitude()` returns dB despite the name, evaluates against a `sampleRate`
+  argument defaulting to 48000 rather than the object's own, and leaves the
+  `b1 = 0` / `b2 = -b0` substitutions unsimplified, including the identically
+  zero `std::pow((b0 + 0 + -b0), 2)`.
+- `m_sampleRate` is a public data member sitting next to its own setter.
+- `setDecay()` reuses the `K` / `kSquare` cached by the last
+  `computeCoefficients()` on that `mainIndex`.
+
+Not present here: the millisecond/second mix-up, since this class has no
+`m_decayMax` and treats `t` as seconds throughout.
+
+#### isActive() silence threshold disagrees with the sibling
+
+This class compares against `1E-5f`; `BiquadResoBP::isActive()` uses `1E-6f`.
+The 32-call hold-off is the same in both. No obvious reason for the difference.
+
+### Filters/BiquadResoBPParallelSIMD.h
+
+#### isActive() reads state the SIMD paths never write
+
+`process()` advances `m_z0` / `m_z1` (the lane-major state) in both the
+`USE_SIMD_FRAMEWORK` and `USE_X86_INTRINSICS` paths. The per-element `m_z` array
+is only written by `reset()` and by the scalar `#else` fallback.
+
+`isActive()` and the `m_z` half of `reset()` therefore read stale data on every
+platform that actually takes a SIMD path, which is all of them in practice. A
+ringing element reports itself inactive after 32 calls because `m_z` is still
+zero from construction.
+
+Either `process()` should mirror the lane state back, or `isActive()` should read
+`m_z0` / `m_z1` and index by group and lane the way `reset()` already does.
+
+#### damp() is global here, per-element in the sibling
+
+`BiquadResoBpParallelSIMD::damp(bool)` switches a single `m_currentSet` for the
+whole bank. `BiquadResoBandPassParallel::damp(size_t, bool)` switches one
+element. The banks are otherwise presented as interchangeable.
+
+#### magnitude() and setDecay() carry the same issues as the other two banks
+
+Same dB-despite-the-name return, same misleading `sampleRate = 48000.f`
+default, same unsimplified `(b0 + 0 + -b0)`, same cached-`K` dependency in
+`setDecay()`. `m_sampleRate` is correctly private here, unlike in the other two.
+
+#### Class name and file name disagree
+
+File is `BiquadResoBPParallelSIMD.h`, class is `BiquadResoBpParallelSIMD`.
+
+### Filters/SvfResoBP.h
+
+#### computeCoefficients() discards its Q argument
+
+```cpp
+const float k = 1.f / std::max(Q, 0.01f);
+m_cf[index].k = k;                      // set from the Q argument
+recomputeCoefficientsWithBend(index);   // immediately overwrites k from m_decayT
+```
+
+`recomputeCoefficientsWithBend()` recomputes `Q = pi * bendFrequency * m_decayT * decayConst`
+and assigns `m_cf[index].k` again, so the caller's `Q` never reaches the filter.
+
+This bites at construction: the constructor calls `computeCoefficients(0, 1000.f)`
+and `computeCoefficients(1, 1000.f)` while `m_decayT` is still 0, giving `Q = 0`,
+clamped to 0.01, so `k = 100`. A freshly constructed `SvfResoBP` is heavily
+damped rather than sitting at the documented default of `Q = 1/sqrt(2)`.
+
+#### m_decayT changes unit depending on which setter was used
+
+`setByDecay()` stores `m_decayT = t` with `t` in seconds
+(`m_decayMax = m_sampleRate * t`).
+
+`setDecay()` stores `m_decayT = t` with `t` in milliseconds
+(`m_decayMax = m_sampleRate * t * 0.001f`) but still feeds it to the seconds-based
+`Q = pi * f * t * k` formula, and leaves it in `m_decayT` for
+`recomputeCoefficientsWithBend()` to reuse later. Same millisecond/second
+confusion as `BiquadResoBP::setDecay()`.
+
+#### pitchBendCents() only updates the active coefficient set
+
+`recomputeCoefficientsWithBend(m_currentSet)` leaves the other set at the old
+pitch, so a later `damp()` switch jumps back to the unbent frequency.
+
+#### ResonanceCompensation interpolates linearly across a geometric axis
+
+The column index comes from `log2(time) + 10`, but `col_frac` is
+`(time - m_times[col]) / (m_times[col + 1] - m_times[col])`, a linear fraction
+between two points that are a factor of two apart. The comment above it says
+"Bilinear interpolation in log-space", which is true of the row axis and of the
+stored values, but not of this fraction.
+
+### Filters/PoleMixingFilter.h
+
+#### Dead reference URL in the source
+
+The file header and `FourStageFilterTheoretical` both cited
+`https://expeditionelectronics.com/Diy/Polemixing/math`, which now returns 404.
+The parent page `https://expeditionelectronics.com/Diy/Polemixing` is live and
+was substituted. The Wayback capture of the original is at
+`https://web.archive.org/web/2023/https://expeditionelectronics.com/Diy/Polemixing/math`
+if the derivation itself is wanted.
+
+#### warpCutoffForSampleRate only covers five sample rates
+
+Cubic fits exist for 44100, 48000, 96000, 192000 and 384000. Every other rate,
+88200 and 176400 included, falls through and returns the cutoff uncorrected, so
+the requested and realised cutoffs silently diverge there.
+
+#### Duplicate aliases
+
+`Notch12Smooth` and `Phaser12Smooth` are both
+`FixedFourStageFilter<1, -2, 2, 0, 0>`, so they name the same type and cannot be
+overloaded apart. `Bp24Smooth` is `<0, 0, 4, -8, 4>` where the `BP4` preset in
+`poleMixingList` is `{0, 0, 2, -4, 2}`: the same shape at twice the gain, which
+may or may not be deliberate.
+
+#### poleMixingList could be constexpr
+
+It is an `inline const std::vector`, so it allocates during static
+initialisation and its contents are not usable in constant expressions. The
+project style prefers `std::to_array` for tables of this kind, which would make
+it constexpr and allocation-free.
+
+#### Three near-duplicate resonator banks
+
+`BiquadResoBP`, `BiquadResoBandPassParallel` and `BiquadResoBPParallelSIMD`
+repeat the same coefficient design, the same two-set `damp()` switch and the
+same `magnitude()` body, diverging in small ways that look accidental rather
+than intended. Worth deciding whether one parameterised implementation can
+replace them.
