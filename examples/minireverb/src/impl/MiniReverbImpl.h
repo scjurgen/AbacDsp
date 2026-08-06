@@ -1,15 +1,14 @@
 #pragma once
 
-#include "EffectBase.h"
 #include "Audio/AudioBuffer.h"
-#include "Reverbs/FdnTankSpiced.h"
-#include "Reverbs/FdnTankSpicedBase.h"
-#include "Reverbs/FdnTankBlockDelayWalsh.h"
-#include "Reverbs/FdnTankBlockDelayWalshSIMD.h"
 #include "BlockProcessors/BlockProcHighpass.h"
 #include "BlockProcessors/BlockProcLowpass.h"
-#include "BlockProcessors/BlockProcVibrato.h"
 #include "BlockProcessors/BlockProcPitch.h"
+#include "BlockProcessors/BlockProcVibrato.h"
+#include "EffectBase.h"
+#include "Reverbs/FdnTankBlockDelayWalshSIMD.h"
+#include "Reverbs/FdnTankSpiced.h"
+#include "Reverbs/FdnTankSpicedBase.h"
 
 template <size_t BlockSize>
 class MiniReverbImpl final : public EffectBase
