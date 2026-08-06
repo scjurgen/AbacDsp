@@ -23,8 +23,8 @@
   },
   "CPP":
   {
-    "CLASS_NAME": "GenericImpl<NumSamplesPerBlock>",
-    "INCLUDE_PEDAL": "impl/GenericImpl.h",
+    "CLASS_NAME": "StubImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/StubImpl.h",
     "PROCMODE": "Stereo-Stereo"
   }
 }

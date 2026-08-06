@@ -1,40 +1,26 @@
 #pragma once
 
-#include <cassert>
-#include <cmath>
-#include <cstdint>
-#include <functional>
-
+#include "EffectBase.h"
 #include "Analysis/Spectrogram.h"
 #include "Audio/AudioBuffer.h"
-#include "EffectBase.h"
+
+#include <cassert>
+#include <cstdint>
+#include <cmath>
+#include <functional>
 
 template <size_t BlockSize>
-class GenericImpl final : public EffectBase
+class StubImpl final : public EffectBase
 {
   public:
-    explicit GenericImpl(const float sampleRate)
+    explicit StubImpl(const float sampleRate)
         : EffectBase(sampleRate)
     {
+        /*START_SHOWWAVEFORM*/
         m_visualWavedata.resize(6000);
+        /*END_SHOWWAVEFORM*/
     }
-    void setGain(const float value)
-    {
-        m_gain = std::pow(10.f, value / 20.f);
-    }
-    void setLowShelving(const float value)
-    {
-        m_lowShelving = std::pow(10.f, value / 20.f);
-    }
-    void setHighShelving(const float value)
-    {
-        m_highShelving = std::pow(10.f, value / 20.f);
-    }
-    void setLatency(const float value)
-    {
-        m_latency = value;
-    }
-
+    /*SETTERS*/
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
         for (size_t i = 0; i < BlockSize; ++i)
@@ -43,6 +29,7 @@ class GenericImpl final : public EffectBase
             out(i, 1) = in(i, 1);
         }
 
+        /*START_SHOWWAVEFORM*/
         for (size_t i = 0; i < BlockSize; ++i)
         {
             m_visualWavedata[m_currentSample] = out(i, 0) + out(i, 1);
@@ -52,22 +39,23 @@ class GenericImpl final : public EffectBase
                 m_currentSample = 0;
             }
         }
+        /*END_SHOWWAVEFORM*/
     }
+    /*START_SHOWWAVEFORM*/
     const std::vector<float>& visualizeWaveData()
     {
         m_preparedWavedata.resize(m_visualWavedata.size());
         m_preparedWavedata = m_visualWavedata;
         return m_preparedWavedata;
     }
+    /*END_SHOWWAVEFORM*/
 
   private:
-    float m_gain{};
-    float m_lowShelving{};
-    float m_highShelving{};
-    float m_latency{};
+    /*SETTERS_PARAMS*/
 
-
+    /*START_SHOWWAVEFORM*/
     std::vector<float> m_visualWavedata;
     std::vector<float> m_preparedWavedata;
     size_t m_currentSample = 0;
+    /*END_SHOWWAVEFORM*/
 };

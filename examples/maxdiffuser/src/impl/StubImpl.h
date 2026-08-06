@@ -10,10 +10,10 @@
 #include "EffectBase.h"
 
 template <size_t BlockSize>
-class GenericImpl final : public EffectBase
+class StubImpl final : public EffectBase
 {
   public:
-    explicit GenericImpl(const float sampleRate)
+    explicit StubImpl(const float sampleRate)
         : EffectBase(sampleRate)
     {
     }

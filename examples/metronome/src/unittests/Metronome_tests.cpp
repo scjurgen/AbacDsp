@@ -1,7 +1,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "impl/GenericImpl.h"
+#include "impl/StubImpl.h"
 
 TEST(Metronometest, failed)
 {

@@ -86,8 +86,8 @@ file(GLOB ImplFiles "src/impl/*.h" "src/impl/*.cpp")
 
 set(SourceFiles ${IncludeFiles} ${RootFiles} ${ImplFiles})
 
-# exclude GenericImpl.h if needed
-list(FILTER SourceFiles EXCLUDE REGEX ".*GenericImpl\\.h$")
+# exclude StubImpl.h if needed
+list(FILTER SourceFiles EXCLUDE REGEX ".*StubImpl\\.h$")
 
 # Include directories for AbacDsp library (from main project)
 target_include_directories("${PROJECT_NAME}" PUBLIC ../../src/includes)

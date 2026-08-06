@@ -92,7 +92,7 @@ Rotary knob mapped to an `AudioParameterFloat`.
 | `unit` | Unit suffix appended to the value string |
 | `count` | Expands to `count` separate controls; use `{}` in `short`, `display`, `symbol` as a 1-based index placeholder |
 
-When `unit` is `dB` / `db` / `DB`, `GenericImpl` auto-converts the value with `pow(10, v/20)`.
+When `unit` is `dB` / `db` / `DB`, `StubImpl` auto-converts the value with `pow(10, v/20)`.
 
 `count` also works on `switch` items, with the same `{}` placeholder expansion.
 
@@ -303,7 +303,7 @@ Example: `A1=(LVL*500, CPU*200, BPM)` — LVL gets 500 px, CPU gets 200 px, BPM 
 | `src/<Name>Editor.h` | yes | never |
 | `src/<Name>Constants.h` | yes | never |
 | `src/impl/PatchParameters.h` | yes | never |
-| `src/impl/GenericImpl.h` | yes | never (reference stub only) |
+| `src/impl/StubImpl.h` | yes | never (reference stub only) |
 | `src/impl/FileIo.h` | yes | never |
 | `src/impl/CcMapping.h` | yes | never |
 | `src/impl/CcSettings.h` | yes | never |

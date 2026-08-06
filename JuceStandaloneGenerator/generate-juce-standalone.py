@@ -88,7 +88,7 @@ CPP_JUCE_FILE_IMPLEMENT = "{Module}Processor.cpp"
 CPP_JUCE_FILE_EDITOR = "{Module}Editor.h"
 CPP_JUCE_FILE_CONSTANTS = "{Module}Constants.h"
 
-CPP_SOURCE_FILES_IMPL = "impl/GenericImpl.h"
+CPP_SOURCE_FILES_IMPL = "impl/StubImpl.h"
 CPP_SOURCE_FILES_IMPL_FILE_IO = "impl/FileIo.h"
 CPP_PATCH_PARAMETERS = "impl/PatchParameters.h"
 CPP_CC_MAPPING = "impl/CcMapping.h"

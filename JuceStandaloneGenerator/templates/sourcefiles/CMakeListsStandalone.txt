@@ -82,8 +82,8 @@ file(GLOB ImplFiles "src/impl/*.h" "src/impl/*.cpp")
 
 set(SourceFiles ${IncludeFiles} ${RootFiles} ${ImplFiles})
 
-# exclude GenericImpl.h, you should rename and implement
-list(FILTER SourceFiles EXCLUDE REGEX ".*\\GenericImpl\\.h$")
+# exclude StubImpl.h, you should rename and implement
+list(FILTER SourceFiles EXCLUDE REGEX ".*\\StubImpl\\.h$")
 
 target_include_directories("${PROJECT_NAME}" PUBLIC 3rdparty/AbacDsp/src/includes)
 
