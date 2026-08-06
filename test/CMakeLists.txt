@@ -182,6 +182,7 @@ if(ENABLE_COVERAGE)
         add_custom_target(
             coverage
             COMMAND ${CMAKE_COMMAND} -E make_directory ${COVERAGE_DIR}
+            COMMAND find ${CMAKE_BINARY_DIR} -name "*.gcda" -delete
             COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
             COMMAND
                 ${GCOVR_PATH} --root ${PROJECT_SOURCE_DIR} --filter
