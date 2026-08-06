@@ -1,0 +1,379 @@
+cat krachpedal-tanpura.ttl 
+@prefix ns0: <http://lv2plug.in/ns/lv2core#> .
+@prefix ns1: <http://moddevices.com/ns/mod#> .
+@prefix doap: <http://usefulinc.com/ns/doap#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ns2: <http://lv2plug.in/ns/extensions/units#> .
+@prefix time: <http://lv2plug.in/ns/ext/time#> .
+@prefix state: <http://lv2plug.in/ns/ext/state#> .
+@prefix urid:  <http://lv2plug.in/ns/ext/urid#> .
+@prefix work:  <http://lv2plug.in/ns/ext/worker#> .
+@prefix pprop: <http://lv2plug.in/ns/ext/port-props#> .
+@prefix ui:   <http://lv2plug.in/ns/extensions/ui#> .
+@prefix unit: <http://lv2plug.in/ns/extensions/units#> .
+@prefix mod:  <http://moddevices.com/ns/mod#> .
+
+@prefix atom: <http://lv2plug.in/ns/ext/atom#> .
+@prefix urid: <http://lv2plug.in/ns/ext/urid#> .
+@prefix midi: <http://lv2plug.in/ns/ext/midi#> .
+
+
+<http://lv2plug.in/plugins/krachpedal-tanpura>
+  a <http://lv2plug.in/ns/lv2core#InstrumentPlugin>, <http://lv2plug.in/ns/lv2core#Plugin> ;
+  ns0:project <http://lv2plug.in/ns/lv2> ;
+  ns0:requiredFeature <http://lv2plug.in/ns/ext/buf-size#boundedBlockLength> ,
+                      <http://lv2plug.in/ns/ext/urid#map> ;
+  ns0:requiredFeature <http://lv2plug.in/ns/ext/state#loadDefaultState> ,
+                      <http://lv2plug.in/ns/ext/urid#map> ,
+                      <http://lv2plug.in/ns/ext/worker#schedule> ;
+  ns0:extensionData <http://lv2plug.in/ns/ext/options#interface> ,
+                    <http://lv2plug.in/ns/ext/state#interface> ,
+                    <http://kxstudio.sf.net/ns/lv2ext/programs#Interface> ;
+  ns0:microVersion 16 ;
+  ns0:minorVersion 0 ;
+  ns0:majorVersion 0 ;
+  ns1:brand "Krachpedale" ;
+  doap:name "Tanpura" ;
+  doap:developer [
+    foaf:homepage <http://www.krachpedale.de/index.html> ;
+    foaf:mbox <mailto:info@krachpedale.de> ;
+    foaf:name "Jürgen Schwietering"
+  ] ;
+  doap:maintainer [
+    foaf:homepage <http://www.krachpedale.de/tanpura.html> ;
+    foaf:mbox <mailto:info@krachpedale.de> ;
+    foaf:name "Jürgen Schwietering"
+  ] ;
+  rdfs:comment """✨ tanpura synth""" ;
+  ns0:optionalFeature ns0:hardRTCapable ;
+  ns0:port 
+        [a ns0:InputPort, atom:AtomPort; atom:bufferType atom:Sequence; atom:supports midi:MidiEvent ;
+        ns0:designation ns0:control ; ns0:index 0; ns0:symbol "in"; ns0:name "In" ],
+        [ a ns0:AudioPort, ns0:OutputPort; ns0:index 1; ns0:symbol "left"; ns0:name "Left"],
+        [ a ns0:AudioPort, ns0:OutputPort; ns0:index 2; ns0:symbol "right"; ns0:name "Right"],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 3;
+  ns0:symbol "key";
+  ns0:name "Key";
+  ns0:portProperty ns0:integer;
+  ns0:portProperty ns0:enumeration;
+  ns0:scalePoint [rdfs:label "C0"; rdf:value 0];
+  ns0:scalePoint [rdfs:label "C#/Db0"; rdf:value 1];
+  ns0:scalePoint [rdfs:label "D0"; rdf:value 2];
+  ns0:scalePoint [rdfs:label "D#,Eb0"; rdf:value 3];
+  ns0:scalePoint [rdfs:label "E0"; rdf:value 4];
+  ns0:scalePoint [rdfs:label "F0"; rdf:value 5];
+  ns0:scalePoint [rdfs:label "F#/Gb0"; rdf:value 6];
+  ns0:scalePoint [rdfs:label "G0"; rdf:value 7];
+  ns0:scalePoint [rdfs:label "G#/Ab0"; rdf:value 8];
+  ns0:scalePoint [rdfs:label "A0"; rdf:value 9];
+  ns0:scalePoint [rdfs:label "Bb0"; rdf:value 10];
+  ns0:scalePoint [rdfs:label "B0"; rdf:value 11];
+  ns0:scalePoint [rdfs:label "C1"; rdf:value 12];
+  ns0:scalePoint [rdfs:label "C#/Db1"; rdf:value 13];
+  ns0:scalePoint [rdfs:label "D1"; rdf:value 14];
+  ns0:scalePoint [rdfs:label "D#,Eb1"; rdf:value 15];
+  ns0:scalePoint [rdfs:label "E1"; rdf:value 16];
+  ns0:scalePoint [rdfs:label "F1"; rdf:value 17];
+  ns0:scalePoint [rdfs:label "F#/Gb1"; rdf:value 18];
+  ns0:scalePoint [rdfs:label "G1"; rdf:value 19];
+  ns0:scalePoint [rdfs:label "G#/Ab1"; rdf:value 20];
+  ns0:scalePoint [rdfs:label "A1"; rdf:value 21];
+  ns0:scalePoint [rdfs:label "Bb1"; rdf:value 22];
+  ns0:scalePoint [rdfs:label "B1"; rdf:value 23];
+  ns0:scalePoint [rdfs:label "C2"; rdf:value 24];
+  ns0:scalePoint [rdfs:label "C#/Db2"; rdf:value 25];
+  ns0:scalePoint [rdfs:label "D2"; rdf:value 26];
+  ns0:scalePoint [rdfs:label "D#,Eb2"; rdf:value 27];
+  ns0:scalePoint [rdfs:label "E2"; rdf:value 28];
+  ns0:scalePoint [rdfs:label "F2"; rdf:value 29];
+  ns0:scalePoint [rdfs:label "F#/Gb2"; rdf:value 30];
+  ns0:scalePoint [rdfs:label "G2"; rdf:value 31];
+  ns0:scalePoint [rdfs:label "G#/Ab2"; rdf:value 32];
+  ns0:scalePoint [rdfs:label "A2"; rdf:value 33];
+  ns0:scalePoint [rdfs:label "Bb2"; rdf:value 34];
+  ns0:scalePoint [rdfs:label "B2"; rdf:value 35];
+  ns0:scalePoint [rdfs:label "C3"; rdf:value 36];
+  ns0:portProperty ns0:dropbox;
+  ns0:default 12;
+  ns0:minimum 0;
+  ns0:maximum 36;
+],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 4;
+  ns0:symbol "level";
+  ns0:name "Level";
+  ns0:portProperty ns0:;
+  ns0:default 0;
+  ns0:minimum -80;
+  ns0:maximum 0;
+  unit:unit unit:dB; ],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 5;
+  ns0:symbol "tuning";
+  ns0:name "Tuning";
+  ns0:portProperty ns0:;
+  ns0:default 440;
+  ns0:minimum 400;
+  ns0:maximum 800;
+],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 6;
+  ns0:symbol "detuneString1";
+  ns0:name "Detune 1";
+  ns0:portProperty ns0:integer;
+  ns0:default 0;
+  ns0:minimum -50;
+  ns0:maximum 50;
+  unit:unit unit:cents; ],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 7;
+  ns0:symbol "detuneString2";
+  ns0:name "Detune 2";
+  ns0:portProperty ns0:integer;
+  ns0:default 5;
+  ns0:minimum -50;
+  ns0:maximum 50;
+  unit:unit unit:cents; ],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 8;
+  ns0:symbol "detuneString3";
+  ns0:name "Detune 3";
+  ns0:portProperty ns0:integer;
+  ns0:default -5;
+  ns0:minimum -50;
+  ns0:maximum 50;
+  unit:unit unit:cents; ],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 9;
+  ns0:symbol "detuneString4";
+  ns0:name "Detune 4";
+  ns0:portProperty ns0:integer;
+  ns0:default 7;
+  ns0:minimum -50;
+  ns0:maximum 50;
+  unit:unit unit:cents; ],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 10;
+  ns0:symbol "detuneString5";
+  ns0:name "Detune 5";
+  ns0:portProperty ns0:integer;
+  ns0:default -2;
+  ns0:minimum -50;
+  ns0:maximum 50;
+  unit:unit unit:cents; ],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 11;
+  ns0:symbol "pattern";
+  ns0:name "Pattern";
+  ns0:portProperty ns0:integer;
+  ns0:portProperty ns0:enumeration;
+  ns0:scalePoint [rdfs:label "H1 H2 1 -"; rdf:value 0];
+  ns0:scalePoint [rdfs:label "H1 H2 8 1 -"; rdf:value 1];
+  ns0:scalePoint [rdfs:label "H1 H2 8 8 1 -"; rdf:value 2];
+  ns0:scalePoint [rdfs:label "H1 H2 - 8 8 1 -"; rdf:value 3];
+  ns0:portProperty ns0:dropbox;
+  ns0:default 0;
+  ns0:minimum 0;
+  ns0:maximum 3;
+],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 12;
+  ns0:symbol "slide";
+  ns0:name "Slide %";
+  ns0:portProperty ns0:integer;
+  ns0:default 0;
+  ns0:minimum 0;
+  ns0:maximum 100;
+],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 13;
+  ns0:symbol "harmonicFirst";
+  ns0:name "Set Harmonic 1";
+  ns0:portProperty ns0:integer;
+  ns0:portProperty ns0:enumeration;
+  ns0:scalePoint [rdfs:label "-12  sā सा"; rdf:value 0];
+  ns0:scalePoint [rdfs:label "-11  "; rdf:value 1];
+  ns0:scalePoint [rdfs:label "-10  re र"; rdf:value 2];
+  ns0:scalePoint [rdfs:label "-9  "; rdf:value 3];
+  ns0:scalePoint [rdfs:label "-8  ga ग"; rdf:value 4];
+  ns0:scalePoint [rdfs:label "-7  ma म"; rdf:value 5];
+  ns0:scalePoint [rdfs:label "-6 "; rdf:value 6];
+  ns0:scalePoint [rdfs:label "-5 pa प"; rdf:value 7];
+  ns0:scalePoint [rdfs:label "-4  "; rdf:value 8];
+  ns0:scalePoint [rdfs:label "-3  dha ध"; rdf:value 9];
+  ns0:scalePoint [rdfs:label "-2  "; rdf:value 10];
+  ns0:scalePoint [rdfs:label "-1 ni नी"; rdf:value 11];
+  ns0:scalePoint [rdfs:label "0 Sā सा"; rdf:value 12];
+  ns0:scalePoint [rdfs:label "1  "; rdf:value 13];
+  ns0:scalePoint [rdfs:label "2  re र"; rdf:value 14];
+  ns0:scalePoint [rdfs:label "3  "; rdf:value 15];
+  ns0:scalePoint [rdfs:label "4  ga ग"; rdf:value 16];
+  ns0:scalePoint [rdfs:label "5  ma म"; rdf:value 17];
+  ns0:scalePoint [rdfs:label "6  "; rdf:value 18];
+  ns0:scalePoint [rdfs:label "7 pa प"; rdf:value 19];
+  ns0:scalePoint [rdfs:label "8  "; rdf:value 20];
+  ns0:scalePoint [rdfs:label "9  dha ध"; rdf:value 21];
+  ns0:scalePoint [rdfs:label "10  "; rdf:value 22];
+  ns0:scalePoint [rdfs:label "11 ni नी"; rdf:value 23];
+  ns0:scalePoint [rdfs:label "0 Sā सा"; rdf:value 24];
+  ns0:portProperty ns0:dropbox;
+  ns0:default 7;
+  ns0:minimum 0;
+  ns0:maximum 24;
+],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 14;
+  ns0:symbol "harmonicSecond";
+  ns0:name "Set Harmonic 2";
+  ns0:portProperty ns0:integer;
+  ns0:portProperty ns0:enumeration;
+  ns0:scalePoint [rdfs:label "-12  sā सा"; rdf:value 0];
+  ns0:scalePoint [rdfs:label "-11  "; rdf:value 1];
+  ns0:scalePoint [rdfs:label "-10  re र"; rdf:value 2];
+  ns0:scalePoint [rdfs:label "-9  "; rdf:value 3];
+  ns0:scalePoint [rdfs:label "-8  ga ग"; rdf:value 4];
+  ns0:scalePoint [rdfs:label "-7  ma म"; rdf:value 5];
+  ns0:scalePoint [rdfs:label "-6 "; rdf:value 6];
+  ns0:scalePoint [rdfs:label "-5 pa प"; rdf:value 7];
+  ns0:scalePoint [rdfs:label "-4  "; rdf:value 8];
+  ns0:scalePoint [rdfs:label "-3  dha ध"; rdf:value 9];
+  ns0:scalePoint [rdfs:label "-2  "; rdf:value 10];
+  ns0:scalePoint [rdfs:label "-1 ni नी"; rdf:value 11];
+  ns0:scalePoint [rdfs:label "0 Sā सा"; rdf:value 12];
+  ns0:scalePoint [rdfs:label "1  "; rdf:value 13];
+  ns0:scalePoint [rdfs:label "2  re र"; rdf:value 14];
+  ns0:scalePoint [rdfs:label "3  "; rdf:value 15];
+  ns0:scalePoint [rdfs:label "4  ga ग"; rdf:value 16];
+  ns0:scalePoint [rdfs:label "5  ma म"; rdf:value 17];
+  ns0:scalePoint [rdfs:label "6  "; rdf:value 18];
+  ns0:scalePoint [rdfs:label "7 pa प"; rdf:value 19];
+  ns0:scalePoint [rdfs:label "8  "; rdf:value 20];
+  ns0:scalePoint [rdfs:label "9  dha ध"; rdf:value 21];
+  ns0:scalePoint [rdfs:label "10  "; rdf:value 22];
+  ns0:scalePoint [rdfs:label "11 ni नी"; rdf:value 23];
+  ns0:scalePoint [rdfs:label "0 Sā सा"; rdf:value 24];
+  ns0:portProperty ns0:dropbox;
+  ns0:default 0;
+  ns0:minimum 0;
+  ns0:maximum 24;
+],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 15;
+  ns0:symbol "playStop";
+  ns0:name "Play";
+  ns0:portProperty ns0:toggled;
+  ns0:default 0;
+  ns0:minimum 0;
+  ns0:maximum 1;
+],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 16;
+  ns0:symbol "picksPerMinute";
+  ns0:name "Picks/M";
+  ns0:portProperty ns0:integer;
+  ns0:default 100;
+  ns0:minimum 5;
+  ns0:maximum 400;
+],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 17;
+  ns0:symbol "pauseLength";
+  ns0:name "Pause";
+  ns0:portProperty ns0:logarithmic;
+  ns0:default 10;
+  ns0:minimum 1;
+  ns0:maximum 30000;
+  unit:unit unit:msec; ],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 18;
+  ns0:symbol "attack";
+  ns0:name "Attack";
+  ns0:portProperty ns0:logarithmic;
+  ns0:default 10;
+  ns0:minimum 1;
+  ns0:maximum 3000;
+  unit:unit unit:msec; ],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 19;
+  ns0:symbol "decay";
+  ns0:name "Decay";
+  ns0:portProperty ns0:logarithmic;
+  ns0:default 10;
+  ns0:minimum 1;
+  ns0:maximum 30000;
+  unit:unit unit:msec; ],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 20;
+  ns0:symbol "levelSustain";
+  ns0:name "Sustain";
+  ns0:portProperty ns0:;
+  ns0:default 0.2;
+  ns0:minimum 0;
+  ns0:maximum 1.0;
+],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 21;
+  ns0:symbol "lfoDepth";
+  ns0:name "Filter LFO Depth";
+  ns0:portProperty ns0:;
+  ns0:default 0.5;
+  ns0:minimum 0;
+  ns0:maximum 2;
+],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 22;
+  ns0:symbol "attackFilter";
+  ns0:name "Filter Attack";
+  ns0:portProperty ns0:logarithmic;
+  ns0:default 10;
+  ns0:minimum 1;
+  ns0:maximum 3000;
+  unit:unit unit:msec; ],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 23;
+  ns0:symbol "decayFilter";
+  ns0:name "Filter Decay";
+  ns0:portProperty ns0:logarithmic;
+  ns0:default 10;
+  ns0:minimum 1;
+  ns0:maximum 30000;
+  unit:unit unit:msec; ],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 24;
+  ns0:symbol "levelSustainFilter";
+  ns0:name "Filter Sustain";
+  ns0:portProperty ns0:;
+  ns0:default 0.0;
+  ns0:minimum 0;
+  ns0:maximum 1.0;
+],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 25;
+  ns0:symbol "filterCutoff";
+  ns0:name "Filter Cutoff";
+  ns0:portProperty ns0:;
+  ns0:default 0;
+  ns0:minimum -60;
+  ns0:maximum 48;
+  unit:unit unit:semitone; ],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 26;
+  ns0:symbol "filterResonance";
+  ns0:name "Filter Resonance";
+  ns0:portProperty ns0:;
+  ns0:default 0.1;
+  ns0:minimum 0;
+  ns0:maximum 2.0;
+],
+  [ a ns0:InputPort, ns0:ControlPort;
+  ns0:index 27;
+  ns0:symbol "contourFilter";
+  ns0:name "Contour F";
+  ns0:portProperty ns0:;
+  ns0:default 0.0;
+  ns0:minimum -4;
+  ns0:maximum 4;
+  unit:unit unit:octv; ]
