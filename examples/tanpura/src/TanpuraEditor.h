@@ -124,6 +124,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(slideDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(slideTimeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(harmonicFirstDrop)
                                   .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
@@ -212,6 +213,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(slideDial);
         slideDial.reset(valueTreeState, "slide");
         slideDial.setLabelText(juce::String::fromUTF8("Slide"));
+        addAndMakeVisible(slideTimeDial);
+        slideTimeDial.reset(valueTreeState, "slideTime");
+        slideTimeDial.setLabelText(juce::String::fromUTF8("Slide Time"));
         addAndMakeVisible(harmonicFirstDrop);
         harmonicFirstDrop.addItemList(valueTreeState.getParameter("harmonicFirst")->getAllValueStrings(), 1);
         harmonicFirstDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
@@ -651,6 +655,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::ComboBox patternDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> patternDropAttachment;
     CustomRotaryDial slideDial{this};
+    CustomRotaryDial slideTimeDial{this};
     juce::ComboBox harmonicFirstDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> harmonicFirstDropAttachment;
     juce::ComboBox harmonicSecondDrop{};

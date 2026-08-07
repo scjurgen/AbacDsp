@@ -57,6 +57,10 @@ class StubImpl final : public EffectBase
     {
         m_slide = value;
     }
+    void setSlideTime(const float value)
+    {
+        m_slideTime = value;
+    }
     void setHarmonicFirst(const size_t value)
     {
         m_harmonicFirst = value;
@@ -138,6 +142,7 @@ class StubImpl final : public EffectBase
     float m_detuneString5{};
     size_t m_pattern{};
     float m_slide{};
+    float m_slideTime{};
     size_t m_harmonicFirst{};
     size_t m_harmonicSecond{};
     bool m_playStop{};

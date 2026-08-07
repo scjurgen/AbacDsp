@@ -1,13 +1,12 @@
 #pragma once
 
-#include <cassert>
-#include <cmath>
-#include <cstdint>
-#include <functional>
+#include <cstddef>
 
-#include "Analysis/Spectrogram.h"
 #include "Audio/AudioBuffer.h"
 #include "EffectBase.h"
+#include "Generators/KarplusStrongEnsemble.h"
+#include "Numbers/Convert.h"
+#include "PluckSequencer.h"
 
 template <size_t BlockSize>
 class TanpuraImpl final : public EffectBase
@@ -15,142 +14,180 @@ class TanpuraImpl final : public EffectBase
   public:
     explicit TanpuraImpl(const float sampleRate)
         : EffectBase(sampleRate)
+        , m_ensemble(sampleRate)
+        , m_sequencer(sampleRate)
     {
     }
+
     void setKey(const size_t value)
     {
-        m_key = value;
+        m_sequencer.setKey(value);
     }
+
     void setLevel(const float value)
     {
-        m_level = std::pow(10.f, value / 20.f);
+        m_level = Convert::dbToGain(value);
     }
+
     void setTuning(const float value)
     {
-        m_tuning = value;
+        m_sequencer.setTuning(value);
     }
+
     void setDetuneString1(const float value)
     {
-        m_detuneString1 = value;
+        m_sequencer.setDetuneCents(0, value);
     }
+
     void setDetuneString2(const float value)
     {
-        m_detuneString2 = value;
+        m_sequencer.setDetuneCents(1, value);
     }
+
     void setDetuneString3(const float value)
     {
-        m_detuneString3 = value;
+        m_sequencer.setDetuneCents(2, value);
     }
+
     void setDetuneString4(const float value)
     {
-        m_detuneString4 = value;
+        m_sequencer.setDetuneCents(3, value);
     }
+
     void setDetuneString5(const float value)
     {
-        m_detuneString5 = value;
+        m_sequencer.setDetuneCents(4, value);
     }
+
     void setPattern(const size_t value)
     {
-        m_pattern = value;
+        m_sequencer.setPattern(value);
     }
+
     void setSlide(const float value)
     {
-        m_slide = value;
+        m_sequencer.setSlidePercent(value);
     }
+
+    void setSlideTime(const float value)
+    {
+        m_sequencer.setSlideTimeMs(value);
+    }
+
     void setHarmonicFirst(const size_t value)
     {
-        m_harmonicFirst = value;
+        m_sequencer.setHarmonicFirst(value);
     }
+
     void setHarmonicSecond(const size_t value)
     {
-        m_harmonicSecond = value;
+        m_sequencer.setHarmonicSecond(value);
     }
+
     void setPlayStop(const bool value)
     {
-        m_playStop = value;
+        m_sequencer.setPlaying(value);
     }
+
     void setPicksPerMinute(const float value)
     {
-        m_picksPerMinute = value;
+        m_sequencer.setPicksPerMinute(value);
     }
+
     void setPauseLength(const float value)
     {
-        m_pauseLength = value;
+        m_sequencer.setPauseLengthMs(value);
     }
+
     void setAttack(const float value)
     {
-        m_attack = value;
+        forEachVoice([value](auto& voice) { voice.attackTime(value); });
     }
+
     void setDecay(const float value)
     {
-        m_decay = value;
+        forEachVoice([value](auto& voice) { voice.setDecayByTime(value); });
     }
+
     void setLevelSustain(const float value)
     {
-        m_levelSustain = value;
+        forEachVoice([value](auto& voice) { voice.setConstFeed(value); });
     }
+
     void setLfoDepth(const float value)
     {
-        m_lfoDepth = value;
+        forEachVoice([value](auto& voice) { voice.setFilterLfoDepthOctaves(value); });
     }
+
     void setAttackFilter(const float value)
     {
-        m_attackFilter = value;
+        m_attackFilterMsecs = value;
+        updateFilterEnvelope();
     }
+
     void setDecayFilter(const float value)
     {
-        m_decayFilter = value;
+        m_decayFilterMsecs = value;
+        updateFilterEnvelope();
     }
+
     void setLevelSustainFilter(const float value)
     {
         m_levelSustainFilter = value;
-    }
-    void setFilterCutoff(const float value)
-    {
-        m_filterCutoff = value;
-    }
-    void setFilterResonance(const float value)
-    {
-        m_filterResonance = value;
-    }
-    void setContourFilter(const float value)
-    {
-        m_contourFilter = value;
+        updateFilterEnvelope();
     }
 
-    void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
+    void setFilterCutoff(const float value)
+    {
+        forEachVoice([value](auto& voice) { voice.setFilterCutoffSemitones(value); });
+    }
+
+    void setFilterResonance(const float value)
+    {
+        forEachVoice([value](auto& voice) { voice.setFilterResonance(value); });
+    }
+
+    void setContourFilter(const float value)
+    {
+        forEachVoice([value](auto& voice) { voice.setKeyTracking(value); });
+    }
+
+    void processBlock([[maybe_unused]] const AbacDsp::AudioBuffer<2, BlockSize>& in,
+                      AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
         for (size_t i = 0; i < BlockSize; ++i)
         {
-            out(i, 0) = in(i, 0);
-            out(i, 1) = in(i, 1);
+            m_sequencer.step(m_ensemble);
+            const auto sample = m_ensemble.step() * m_level;
+            out(i, 0) = sample;
+            out(i, 1) = sample;
         }
     }
 
   private:
-    size_t m_key{};
-    float m_level{};
-    float m_tuning{};
-    float m_detuneString1{};
-    float m_detuneString2{};
-    float m_detuneString3{};
-    float m_detuneString4{};
-    float m_detuneString5{};
-    size_t m_pattern{};
-    float m_slide{};
-    size_t m_harmonicFirst{};
-    size_t m_harmonicSecond{};
-    bool m_playStop{};
-    float m_picksPerMinute{};
-    float m_pauseLength{};
-    float m_attack{};
-    float m_decay{};
-    float m_levelSustain{};
-    float m_lfoDepth{};
-    float m_attackFilter{};
-    float m_decayFilter{};
-    float m_levelSustainFilter{};
-    float m_filterCutoff{};
-    float m_filterResonance{};
-    float m_contourFilter{};
+    static constexpr size_t kMaxStringLength{10000};
+    static constexpr size_t kNumVoices{5};
+
+    template <typename Fn>
+    void forEachVoice(Fn&& fn)
+    {
+        for (size_t i = 0; i < kNumVoices; ++i)
+        {
+            fn(m_ensemble.voice(i));
+        }
+    }
+
+    void updateFilterEnvelope()
+    {
+        forEachVoice([this](auto& voice)
+                     { voice.setFilterEnvelope(m_attackFilterMsecs, m_decayFilterMsecs, m_levelSustainFilter); });
+    }
+
+    AbacDsp::KarplusStrongEnsemble<kNumVoices, kMaxStringLength> m_ensemble;
+    PluckSequencer<kMaxStringLength> m_sequencer;
+
+    float m_level{1.f};
+    float m_attackFilterMsecs{10.f};
+    float m_decayFilterMsecs{10.f};
+    float m_levelSustainFilter{0.f};
 };

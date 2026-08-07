@@ -44,6 +44,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("detuneString5", this);
         m_parameters.addParameterListener("pattern", this);
         m_parameters.addParameterListener("slide", this);
+        m_parameters.addParameterListener("slideTime", this);
         m_parameters.addParameterListener("harmonicFirst", this);
         m_parameters.addParameterListener("harmonicSecond", this);
         m_parameters.addParameterListener("playStop", this);
@@ -74,6 +75,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("detuneString5", this);
         m_parameters.removeParameterListener("pattern", this);
         m_parameters.removeParameterListener("slide", this);
+        m_parameters.removeParameterListener("slideTime", this);
         m_parameters.removeParameterListener("harmonicFirst", this);
         m_parameters.removeParameterListener("harmonicSecond", this);
         m_parameters.removeParameterListener("playStop", this);
@@ -307,6 +309,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::ParameterID("slide", 1), "Slide", juce::NormalisableRange<float>(0, 100, 1, 1, false), 0,
             juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 0) + " %"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("slideTime", 1), "Slide Time", juce::NormalisableRange<float>(1, 3000, 0.1, 0.35, false),
+            150,
+            juce::AudioParameterFloatAttributes{}.withLabel("ms").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " ms"; })));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID("harmonicFirst", 1), "Set Harmonic 1",
             juce::StringArray{"-12 sā सा", "-11", "-10 re र", "-9",     "-8 ga ग",  "-7 ma म", "-6",
@@ -451,6 +458,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setSlide(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::slide, v);
+             }},
+            {"slideTime",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setSlideTime(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::slideTime, v);
              }},
             {"harmonicFirst",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -629,6 +642,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("slide");
             float normalized = range.convertTo0to1(params.slide);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("slideTime"))
+        {
+            const auto& range = m_parameters.getParameterRange("slideTime");
+            float normalized = range.convertTo0to1(params.slideTime);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("harmonicFirst"))

@@ -20,6 +20,7 @@
 
     {"short": "PATT", "type": "drop", "display": "Pattern", "symbol": "pattern", "default": 0, "listitems": ["H1 H2 1 -", "H1 H2 8 1 -", "H1 H2 8 8 1 -", "H1 H2 - 8 8 1 -"]},
     {"short": "SLIDE", "type": "dial", "display": "Slide", "symbol": "slide", "default": 0, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "%"},
+    {"short": "SLDT", "type": "dial", "display": "Slide Time", "symbol": "slideTime", "default": 150, "range": [1, 3000, 0.1, 0.35, false], "precision": 1, "unit": "ms"},
     {"short": "HARM1", "type": "drop", "display": "Set Harmonic 1", "symbol": "harmonicFirst", "default": 7, "listitems": ["-12 sā सा", "-11", "-10 re र", "-9", "-8 ga ग", "-7 ma म", "-6", "-5 pa प", "-4", "-3 dha ध", "-2", "-1 ni नी", "0 Sā सा", "1", "2 re र", "3", "4 ga ग", "5 ma म", "6", "7 pa प", "8", "9 dha ध", "10", "11 ni नी", "0 Sā सा"]},
     {"short": "HARM2", "type": "drop", "display": "Set Harmonic 2", "symbol": "harmonicSecond", "default": 0, "listitems": ["-12 sā सा", "-11", "-10 re र", "-9", "-8 ga ग", "-7 ma म", "-6", "-5 pa प", "-4", "-3 dha ध", "-2", "-1 ni नी", "0 Sā सा", "1", "2 re र", "3", "4 ga ग", "5 ma म", "6", "7 pa प", "8", "9 dha ध", "10", "11 ni नी", "0 Sā सा"]},
     {"short": "PLAY", "type": "switch", "display": "Play", "symbol": "playStop", "default": 0},
@@ -42,7 +43,7 @@
     "WINDOW_WIDTH": "1400",
     "WINDOW_HEIGHT": "800",
     "type": "|||||",
-    "composition": "C=(1:1:1:1:1) A1=(KEY,VOL,TUNE) A2=(DET1,DET2,DET3,DET4,DET5) A3=(PATT,SLIDE,HARM1,HARM2,PLAY) A4=(PPM,PAUSE,ATK,DCY,SUS,LFOD) A5=(ATKF,DCYF,SUSF,CUTF,RESF,CONTF))"
+    "composition": "C=(1:1:1:1:1) A1=(KEY,VOL,TUNE) A2=(DET1,DET2,DET3,DET4,DET5) A3=(PATT,SLIDE,SLDT,HARM1,HARM2,PLAY) A4=(PPM,PAUSE,ATK,DCY,SUS,LFOD) A5=(ATKF,DCYF,SUSF,CUTF,RESF,CONTF))"
   },
   "CPP":
   {

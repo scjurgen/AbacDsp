@@ -22,6 +22,7 @@ struct PatchParameters
         detuneString5     , // dial
         pattern           , // drop
         slide             , // dial
+        slideTime         , // dial
         harmonicFirst     , // drop
         harmonicSecond    , // drop
         playStop          , // switch
@@ -48,6 +49,7 @@ float detuneString4{7.0f};
 float detuneString5{-2.0f};
 size_t pattern{0};
 float slide{0.0f};
+float slideTime{150.0f};
 size_t harmonicFirst{7};
 size_t harmonicSecond{0};
 bool playStop{false};
@@ -76,6 +78,7 @@ float contourFilter{0.0f};
 "detuneString5",
 "pattern",
 "slide",
+"slideTime",
 "harmonicFirst",
 "harmonicSecond",
 "playStop",
@@ -119,6 +122,7 @@ float contourFilter{0.0f};
         else if constexpr (ParamId == Id::detuneString5) return detuneString5;
         else if constexpr (ParamId == Id::pattern) return pattern;
         else if constexpr (ParamId == Id::slide) return slide;
+        else if constexpr (ParamId == Id::slideTime) return slideTime;
         else if constexpr (ParamId == Id::harmonicFirst) return harmonicFirst;
         else if constexpr (ParamId == Id::harmonicSecond) return harmonicSecond;
         else if constexpr (ParamId == Id::playStop) return playStop;
@@ -165,6 +169,8 @@ break;
  case Id::pattern: if (!isEqual(get<Id::pattern>(), value)) {get<Id::pattern>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
  case Id::slide: if (!isEqual(get<Id::slide>(), value)) {get<Id::slide>() = value;m_modified = true;}
+break;
+ case Id::slideTime: if (!isEqual(get<Id::slideTime>(), value)) {get<Id::slideTime>() = value;m_modified = true;}
 break;
  case Id::harmonicFirst: if (!isEqual(get<Id::harmonicFirst>(), value)) {get<Id::harmonicFirst>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
@@ -244,6 +250,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         detuneString5     , // dial
         pattern           , // drop
         slide             , // dial
+        slideTime         , // dial
         harmonicFirst     , // drop
         harmonicSecond    , // drop
         playStop          , // switch
