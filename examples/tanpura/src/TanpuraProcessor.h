@@ -50,6 +50,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("harmonicFirst", this);
         m_parameters.addParameterListener("harmonicSecond", this);
         m_parameters.addParameterListener("playStop", this);
+        m_parameters.addParameterListener("humanizeTiming", this);
+        m_parameters.addParameterListener("humanizeLevel", this);
         m_parameters.addParameterListener("bpm", this);
         m_parameters.addParameterListener("hostSync", this);
         m_parameters.addParameterListener("pluckDivision", this);
@@ -59,6 +61,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("levelSustain", this);
         m_parameters.addParameterListener("lfoDepth", this);
         m_parameters.addParameterListener("lfoSpeed", this);
+        m_parameters.addParameterListener("lfoSpeedVariation", this);
         m_parameters.addParameterListener("attackFilter", this);
         m_parameters.addParameterListener("decayFilter", this);
         m_parameters.addParameterListener("levelSustainFilter", this);
@@ -86,6 +89,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("harmonicFirst", this);
         m_parameters.removeParameterListener("harmonicSecond", this);
         m_parameters.removeParameterListener("playStop", this);
+        m_parameters.removeParameterListener("humanizeTiming", this);
+        m_parameters.removeParameterListener("humanizeLevel", this);
         m_parameters.removeParameterListener("bpm", this);
         m_parameters.removeParameterListener("hostSync", this);
         m_parameters.removeParameterListener("pluckDivision", this);
@@ -95,6 +100,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("levelSustain", this);
         m_parameters.removeParameterListener("lfoDepth", this);
         m_parameters.removeParameterListener("lfoSpeed", this);
+        m_parameters.removeParameterListener("lfoSpeedVariation", this);
         m_parameters.removeParameterListener("attackFilter", this);
         m_parameters.removeParameterListener("decayFilter", this);
         m_parameters.removeParameterListener("levelSustainFilter", this);
@@ -389,6 +395,16 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("playStop", 1),
                                                                     juce::String::fromUTF8("Play"), 0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("humanizeTiming", 1), juce::String::fromUTF8("Humanize Timing"),
+            juce::NormalisableRange<float>(0, 100, 1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " %"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("humanizeLevel", 1), juce::String::fromUTF8("Humanize Level"),
+            juce::NormalisableRange<float>(0, 100, 1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " %"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("bpm", 1), juce::String::fromUTF8("BPM"),
             juce::NormalisableRange<float>(40, 250, 0.1, 1, false), 120,
             juce::AudioParameterFloatAttributes{}.withLabel("BPM").withStringFromValueFunction(
@@ -438,6 +454,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::NormalisableRange<float>(0.01, 20, 0.01, 0.25, false), 0.5,
             juce::AudioParameterFloatAttributes{}.withLabel("Hz").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " Hz"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("lfoSpeedVariation", 1), juce::String::fromUTF8("Filter LFO Variation"),
+            juce::NormalisableRange<float>(0, 100, 1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " %"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("attackFilter", 1), juce::String::fromUTF8("Filter Attack"),
             juce::NormalisableRange<float>(1, 3000, 0.1, 0.35, false), 10,
@@ -578,6 +599,18 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                  p.pluginRunner->setPlayStop(static_cast<bool>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::playStop, v);
              }},
+            {"humanizeTiming",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setHumanizeTiming(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::humanizeTiming, v);
+             }},
+            {"humanizeLevel",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setHumanizeLevel(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::humanizeLevel, v);
+             }},
             {"bpm",
              [](AudioPluginAudioProcessor& p, const float v)
              {
@@ -631,6 +664,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setLfoSpeed(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::lfoSpeed, v);
+             }},
+            {"lfoSpeedVariation",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setLfoSpeedVariation(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::lfoSpeedVariation, v);
              }},
             {"attackFilter",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -793,6 +832,18 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             float normalized = range.convertTo0to1(params.playStop);
             p->setValueNotifyingHost(normalized);
         }
+        if (auto* p = m_parameters.getParameter("humanizeTiming"))
+        {
+            const auto& range = m_parameters.getParameterRange("humanizeTiming");
+            float normalized = range.convertTo0to1(params.humanizeTiming);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("humanizeLevel"))
+        {
+            const auto& range = m_parameters.getParameterRange("humanizeLevel");
+            float normalized = range.convertTo0to1(params.humanizeLevel);
+            p->setValueNotifyingHost(normalized);
+        }
         if (auto* p = m_parameters.getParameter("bpm"))
         {
             const auto& range = m_parameters.getParameterRange("bpm");
@@ -845,6 +896,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("lfoSpeed");
             float normalized = range.convertTo0to1(params.lfoSpeed);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("lfoSpeedVariation"))
+        {
+            const auto& range = m_parameters.getParameterRange("lfoSpeedVariation");
+            float normalized = range.convertTo0to1(params.lfoSpeedVariation);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("attackFilter"))

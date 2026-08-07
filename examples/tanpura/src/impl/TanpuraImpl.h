@@ -3,12 +3,15 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <random>
 #include <string_view>
 
 #include "Audio/AudioBuffer.h"
 #include "EffectBase.h"
 #include "Filters/Biquad.h"
 #include "Generators/KarplusStrongEnsemble.h"
+#include "Generators/OrnsteinUhlenbeckProcess.h"
+#include "Helpers/ConstructArray.h"
 #include "Numbers/Convert.h"
 #include "PluckSequencer.h"
 #include "Reverbs/FdnTankGlide.h"
@@ -22,8 +25,16 @@ class TanpuraImpl final : public EffectBase
         , m_ensemble(sampleRate)
         , m_sequencer(sampleRate)
         , m_fdn(sampleRate)
+        , m_lfoWander(AbacDsp::constructArray<AbacDsp::OrnsteinUhlenbeckProcess, kNumVoices>(
+              sampleRate / static_cast<float>(BlockSize)))
     {
         m_fdn.setModulation(kReverbModulationDepth, kReverbModulationSpeedHz);
+        std::mt19937 rng{std::random_device{}()};
+        std::uniform_real_distribution<float> dist{-1.f, 1.f};
+        for (auto& offset : m_voiceLfoStaticOffset)
+        {
+            offset = dist(rng);
+        }
     }
 
     void setKey(const int value)
@@ -151,6 +162,11 @@ class TanpuraImpl final : public EffectBase
         return m_hostSync ? hostTransport().isPlaying : m_manualPlaying;
     }
 
+    [[nodiscard]] float voiceLfoSpeed(const size_t index) const noexcept
+    {
+        return m_lastVoiceLfoSpeed[index];
+    }
+
     [[nodiscard]] static float intervalMsForDivision(const float bpm, const int divisionIndex) noexcept
     {
         return kSyncDivisions[clampDivisionIndex(divisionIndex)].quarterNotes * (60000.f / bpm);
@@ -176,10 +192,26 @@ class TanpuraImpl final : public EffectBase
         forEachVoice([value](auto& voice) { voice.setFilterLfoDepthOctaves(value); });
     }
 
-    void setLfoSpeed(const float value)
+    void setLfoSpeed(const float value) noexcept
     {
-        forEachVoice([value](auto& voice) { voice.setFilterLfoSpeed(value); });
+        m_lfoSpeed = value;
     }
+
+    void setLfoSpeedVariation(const float percent) noexcept
+    {
+        m_lfoSpeedVariationPercent = std::clamp(percent, 0.f, 100.f);
+    }
+
+    void setHumanizeTiming(const float percent)
+    {
+        m_sequencer.setHumanizeTiming(percent);
+    }
+
+    void setHumanizeLevel(const float percent)
+    {
+        m_sequencer.setHumanizeLevel(percent);
+    }
+
     void setAttackFilter(const float value)
     {
         m_attackFilterMsecs = value;
@@ -251,6 +283,8 @@ class TanpuraImpl final : public EffectBase
     static constexpr float kReverbShelfLowHz{150.f};
     static constexpr float kReverbShelfHighHz{6000.f};
     static constexpr float kEqShelfQ{0.707f};
+    static constexpr float kMaxVoiceLfoSpreadFraction{0.15f}; // per-voice static offset bound at 100% variation
+    static constexpr float kMaxLfoWanderSigma{0.1f};          // shared wander bound at 100% variation
 
     struct SyncDivision
     {
@@ -297,6 +331,24 @@ class TanpuraImpl final : public EffectBase
         m_sequencer.setIntervalMs(intervalMsForDivision(bpm, static_cast<int>(m_pluckDivisionIndex)));
         m_sequencer.setPauseGapMs(intervalMsForDivision(bpm, static_cast<int>(m_pauseDivisionIndex)));
         m_sequencer.setPlaying(effectivePlaying());
+        updateLfoSpeeds();
+    }
+
+    // At 0% variation, every voice's wander sigma/mu settle to 0 (mu = sigma in
+    // OrnsteinUhlenbeckProcess), so this reduces exactly to the old shared-speed behavior.
+    void updateLfoSpeeds() noexcept
+    {
+        const auto amount = m_lfoSpeedVariationPercent * 0.01f;
+        const auto sigma = amount * kMaxLfoWanderSigma;
+        for (size_t i = 0; i < kNumVoices; ++i)
+        {
+            m_lfoWander[i].setSigma(sigma);
+            const auto wander = m_lfoWander[i].step() - sigma;
+            const auto speed =
+                m_lfoSpeed * (1.f + m_voiceLfoStaticOffset[i] * kMaxVoiceLfoSpreadFraction * amount) * (1.f + wander);
+            m_lastVoiceLfoSpeed[i] = std::max(0.01f, speed);
+            m_ensemble.voice(i).setFilterLfoSpeed(m_lastVoiceLfoSpeed[i]);
+        }
     }
 
     AbacDsp::KarplusStrongEnsemble<kNumVoices, kMaxStringLength> m_ensemble;
@@ -304,6 +356,9 @@ class TanpuraImpl final : public EffectBase
     Fdn m_fdn;
     std::array<LoShelfFilter, 2> m_reverbShelfLow{};
     std::array<HiShelfFilter, 2> m_reverbShelfHigh{};
+    std::array<AbacDsp::OrnsteinUhlenbeckProcess, kNumVoices> m_lfoWander;
+    std::array<float, kNumVoices> m_voiceLfoStaticOffset{};
+    std::array<float, kNumVoices> m_lastVoiceLfoSpeed{};
 
     float m_level{1.f};
     float m_reverbDryGain{1.f};
@@ -313,6 +368,8 @@ class TanpuraImpl final : public EffectBase
     bool m_manualPlaying{false};
     size_t m_pluckDivisionIndex{4};
     size_t m_pauseDivisionIndex{4};
+    float m_lfoSpeed{0.5f};
+    float m_lfoSpeedVariationPercent{0.f};
     float m_attackFilterMsecs{10.f};
     float m_decayFilterMsecs{10.f};
     float m_levelSustainFilter{0.f};

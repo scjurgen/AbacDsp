@@ -189,6 +189,88 @@ TEST(PluckSequencer, SlidePercentControlsBendFrequency)
     EXPECT_NEAR(ratio, 0.5, 0.05);
 }
 
+TEST(PluckSequencer, HumanizeTimingNeverDriftsFromNominalGrid)
+{
+    TestSequencer seq(kSampleRate);
+    TestEnsemble ensemble(kSampleRate);
+    seq.setPattern(0);           // "H1 H2 1 -", 3 steps
+    seq.setIntervalMs(25.f);     // 1200 samples at 48 kHz
+    seq.setPauseGapMs(125.f);    // 6000 samples
+    seq.setHumanizeTiming(80.f); // strong jitter - the point of this test
+    seq.setPlaying(true);
+
+    constexpr int64_t intervalSamples{1200};
+    constexpr int64_t pauseSamples{6000};
+    constexpr int64_t perCycleSamples{3 * intervalSamples + pauseSamples};
+
+    size_t previousStepIndex = seq.stepIndex();
+    int cyclesCompleted = 0;
+    for (size_t i = 0; i < 2'000'000 && cyclesCompleted < 50; ++i)
+    {
+        seq.step(ensemble);
+        if (seq.stepIndex() == 0 && previousStepIndex != 0)
+        {
+            ++cyclesCompleted;
+            // Jitter perturbs when each event actually fires, but never the nominal grid
+            // itself - so after any whole number of cycles this must be exact, regardless
+            // of how much jitter was applied along the way.
+            EXPECT_EQ(seq.nominalPositionSamples(), cyclesCompleted * perCycleSamples);
+        }
+        previousStepIndex = seq.stepIndex();
+    }
+    EXPECT_EQ(cyclesCompleted, 50);
+}
+
+TEST(PluckSequencer, HumanizeLevelStaysWithinBoundAndIsNoOpAtZero)
+{
+    TestSequencer seq(kSampleRate);
+
+    for (int i = 0; i < 1000; ++i)
+    {
+        EXPECT_EQ(seq.rollPluckGain(), 1.f); // no variation configured yet
+    }
+
+    seq.setHumanizeLevel(30.f);
+    bool sawNonUnityGain = false;
+    for (int i = 0; i < 1000; ++i)
+    {
+        const auto gain = seq.rollPluckGain();
+        EXPECT_GE(gain, 0.7f);
+        EXPECT_LE(gain, 1.3f);
+        sawNonUnityGain = sawNonUnityGain || gain != 1.f;
+    }
+    EXPECT_TRUE(sawNonUnityGain);
+}
+
+TEST(TanpuraImpl, LfoSpeedVariationIsNoOpAtZeroAndDiffersAcrossVoicesAbove)
+{
+    TanpuraImpl<16> impl(kSampleRate);
+    impl.setLfoSpeed(0.5f);
+
+    AbacDsp::AudioBuffer<2, 16> in{};
+    AbacDsp::AudioBuffer<2, 16> out{};
+    impl.processBlock(in, out);
+
+    for (size_t i = 1; i < TestSequencer::kNumVoices; ++i)
+    {
+        EXPECT_FLOAT_EQ(impl.voiceLfoSpeed(i), impl.voiceLfoSpeed(0));
+    }
+    EXPECT_FLOAT_EQ(impl.voiceLfoSpeed(0), 0.5f);
+
+    impl.setLfoSpeedVariation(100.f);
+    for (size_t block = 0; block < 10; ++block) // let the wander step away from its start-at-0 initial value
+    {
+        impl.processBlock(in, out);
+    }
+
+    bool sawDifference = false;
+    for (size_t i = 1; i < TestSequencer::kNumVoices; ++i)
+    {
+        sawDifference = sawDifference || impl.voiceLfoSpeed(i) != impl.voiceLfoSpeed(0);
+    }
+    EXPECT_TRUE(sawDifference);
+}
+
 TEST(TanpuraImpl, IntervalMsForDivisionMatchesMusicalRatios)
 {
     using Impl = TanpuraImpl<32>;

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <random>
 
 #include "Generators/AdsEnvelope.h"
@@ -84,8 +85,7 @@ class PluckSequencer
     void setPattern(const size_t index) noexcept
     {
         m_patternIndex = std::min(index, kPatterns.size() - 1);
-        m_stepIndex = 0;
-        m_samplesUntilNextEvent = 0;
+        resetClocks();
     }
 
     void setSlidePercent(const float percent) noexcept
@@ -108,6 +108,16 @@ class PluckSequencer
         m_pauseGapMs = ms;
     }
 
+    void setHumanizeTiming(const float percent) noexcept
+    {
+        m_humanizeTimingPercent = std::clamp(percent, 0.f, 100.f);
+    }
+
+    void setHumanizeLevel(const float percent) noexcept
+    {
+        m_humanizeLevelPercent = std::clamp(percent, 0.f, 100.f);
+    }
+
     void setDetuneCents(const size_t voiceIndex, const float cents) noexcept
     {
         m_detuneCents[voiceIndex] = cents;
@@ -117,8 +127,7 @@ class PluckSequencer
     {
         if (playing && !m_playing)
         {
-            m_stepIndex = 0;
-            m_samplesUntilNextEvent = 0;
+            resetClocks();
         }
         m_playing = playing;
     }
@@ -152,8 +161,23 @@ class PluckSequencer
         return m_sliding;
     }
 
+    [[nodiscard]] int64_t nominalPositionSamples() const noexcept
+    {
+        return m_nominalPositionSamples;
+    }
+
+    [[nodiscard]] float rollPluckGain() noexcept
+    {
+        if (m_humanizeLevelPercent <= 0.f)
+        {
+            return kPluckGain;
+        }
+        const auto unit = m_uniformDist(m_rng) * 0.02f - 1.f; // 0..100 -> -1..+1
+        return std::max(0.f, kPluckGain * (1.f + unit * m_humanizeLevelPercent * 0.01f));
+    }
+
   private:
-    static constexpr float kKeyIndexToNoteOffset{12.f}; // KEY dropdown index 0 = C0 = note 12 (60 = C4)
+    static constexpr float kKeyIndexToNoteOffset{24.f}; // KEY dropdown index 0 = C0 = note 12 (60 = C4)
     static constexpr float kHarmonicIndexCenter{12.f};  // harmonic dropdown index 12 = unison with key
     static constexpr float kPluckGain{1.f};
 
@@ -185,11 +209,32 @@ class PluckSequencer
         return m_uniformDist(m_rng) < m_slidePercent;
     }
 
+    // Gaussian, hard-clamped to +/- humanizeTiming% of the nominal step so a rare tail draw
+    // can't exceed the configured bound or push the scheduled wait negative.
+    [[nodiscard]] int64_t rollTimingJitterSamples(const size_t nominalStepSamples) noexcept
+    {
+        if (m_humanizeTimingPercent <= 0.f)
+        {
+            return 0;
+        }
+        const auto boundSamples = static_cast<float>(nominalStepSamples) * m_humanizeTimingPercent * 0.01f;
+        const auto jitter = m_normalDist(m_rng) * (boundSamples / 3.f);
+        return static_cast<int64_t>(std::clamp(jitter, -boundSamples, boundSamples));
+    }
+
+    void resetClocks() noexcept
+    {
+        m_stepIndex = 0;
+        m_samplesUntilNextEvent = 0;
+        m_nominalPositionSamples = 0;
+        m_actualPositionSamples = 0;
+    }
+
     void triggerStep(AbacDsp::KarplusStrongEnsemble<kNumVoices, MaxLength>& ensemble,
                      const PluckStep& thisStep) noexcept
     {
         auto& voice = ensemble.voice(thisStep.voiceIndex);
-        voice.trigger(noteForRole(thisStep.role), kPluckGain, m_tuning);
+        voice.trigger(noteForRole(thisStep.role), rollPluckGain(), m_tuning);
         voice.bendInCents(m_detuneCents[thisStep.voiceIndex]);
         if (thisStep.role != PluckRole::Harmonic1)
         {
@@ -219,15 +264,19 @@ class PluckSequencer
             triggerStep(ensemble, thisStep);
         }
         ++m_stepIndex;
-        if (m_stepIndex >= pattern.stepCount)
+        const bool wrapping = m_stepIndex >= pattern.stepCount;
+        if (wrapping)
         {
             m_stepIndex = 0;
-            m_samplesUntilNextEvent = msToSamples(m_intervalMs) + msToSamples(m_pauseGapMs);
         }
-        else
-        {
-            m_samplesUntilNextEvent = msToSamples(m_intervalMs);
-        }
+        const auto nominalStepSamples =
+            wrapping ? msToSamples(m_intervalMs) + msToSamples(m_pauseGapMs) : msToSamples(m_intervalMs);
+        m_nominalPositionSamples += static_cast<int64_t>(nominalStepSamples);
+
+        const auto targetActual = m_nominalPositionSamples + rollTimingJitterSamples(nominalStepSamples);
+        const auto wait = std::max<int64_t>(1, targetActual - m_actualPositionSamples);
+        m_samplesUntilNextEvent = static_cast<size_t>(wait);
+        m_actualPositionSamples += wait;
     }
 
     float m_sampleRate;
@@ -239,12 +288,16 @@ class PluckSequencer
     float m_slideTimeMs{150.f};
     float m_intervalMs{600.f};
     float m_pauseGapMs{10.f};
+    float m_humanizeTimingPercent{0.f};
+    float m_humanizeLevelPercent{0.f};
     std::array<float, kNumVoices> m_detuneCents{};
     bool m_playing{false};
 
     size_t m_patternIndex{0};
     size_t m_stepIndex{0};
     size_t m_samplesUntilNextEvent{0};
+    int64_t m_nominalPositionSamples{0};
+    int64_t m_actualPositionSamples{0};
 
     bool m_sliding{false};
     size_t m_slideVoiceIndex{0};
@@ -252,4 +305,5 @@ class PluckSequencer
 
     std::mt19937 m_rng{std::random_device{}()};
     std::uniform_real_distribution<float> m_uniformDist{0.f, 100.f};
+    std::normal_distribution<float> m_normalDist{0.f, 1.f};
 };

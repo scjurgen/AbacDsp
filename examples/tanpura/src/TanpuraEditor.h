@@ -155,6 +155,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::center)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(humanizeTimingDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(humanizeLevelDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[1].toFloat());
             }
             {
@@ -183,6 +185,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.items.add(juce::FlexItem(levelSustainDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(lfoDepthDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(lfoSpeedDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(lfoSpeedVariationDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[2].toFloat());
             }
             {
@@ -287,6 +290,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         playStopSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "playStop", playStopSwitch);
 
+        addAndMakeVisible(humanizeTimingDial);
+        humanizeTimingDial.reset(valueTreeState, "humanizeTiming");
+        humanizeTimingDial.setLabelText(juce::String::fromUTF8("Humanize Timing"));
+        addAndMakeVisible(humanizeLevelDial);
+        humanizeLevelDial.reset(valueTreeState, "humanizeLevel");
+        humanizeLevelDial.setLabelText(juce::String::fromUTF8("Humanize Level"));
         addAndMakeVisible(bpmDial);
         bpmDial.reset(valueTreeState, "bpm");
         bpmDial.setLabelText(juce::String::fromUTF8("BPM"));
@@ -317,6 +326,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(lfoSpeedDial);
         lfoSpeedDial.reset(valueTreeState, "lfoSpeed");
         lfoSpeedDial.setLabelText(juce::String::fromUTF8("Filter LFO Speed"));
+        addAndMakeVisible(lfoSpeedVariationDial);
+        lfoSpeedVariationDial.reset(valueTreeState, "lfoSpeedVariation");
+        lfoSpeedVariationDial.setLabelText(juce::String::fromUTF8("Filter LFO Variation"));
         addAndMakeVisible(attackFilterDial);
         attackFilterDial.reset(valueTreeState, "attackFilter");
         attackFilterDial.setLabelText(juce::String::fromUTF8("Filter Attack"));
@@ -372,6 +384,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             harmonicFirstDrop.setVisible(false);
             harmonicSecondDrop.setVisible(false);
             playStopSwitch.setVisible(false);
+            humanizeTimingDial.setVisible(false);
+            humanizeLevelDial.setVisible(false);
             bpmDial.setVisible(true);
             hostSyncSwitch.setVisible(false);
             pluckDivisionDrop.setVisible(false);
@@ -381,6 +395,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             levelSustainDial.setVisible(false);
             lfoDepthDial.setVisible(false);
             lfoSpeedDial.setVisible(false);
+            lfoSpeedVariationDial.setVisible(false);
             attackFilterDial.setVisible(false);
             decayFilterDial.setVisible(false);
             levelSustainFilterDial.setVisible(false);
@@ -406,6 +421,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             harmonicFirstDrop.setVisible(true);
             harmonicSecondDrop.setVisible(true);
             playStopSwitch.setVisible(true);
+            humanizeTimingDial.setVisible(true);
+            humanizeLevelDial.setVisible(true);
             bpmDial.setVisible(true);
             hostSyncSwitch.setVisible(true);
             pluckDivisionDrop.setVisible(true);
@@ -415,6 +432,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             levelSustainDial.setVisible(true);
             lfoDepthDial.setVisible(true);
             lfoSpeedDial.setVisible(true);
+            lfoSpeedVariationDial.setVisible(true);
             attackFilterDial.setVisible(true);
             decayFilterDial.setVisible(true);
             levelSustainFilterDial.setVisible(true);
@@ -825,6 +843,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> harmonicSecondDropAttachment;
     juce::ToggleButton playStopSwitch{juce::String::fromUTF8("Play")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> playStopSwitchAttachment;
+    CustomRotaryDial humanizeTimingDial{this};
+    CustomRotaryDial humanizeLevelDial{this};
     CustomRotaryDial bpmDial{this};
     juce::ToggleButton hostSyncSwitch{juce::String::fromUTF8("Host Sync")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> hostSyncSwitchAttachment;
@@ -837,6 +857,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial levelSustainDial{this};
     CustomRotaryDial lfoDepthDial{this};
     CustomRotaryDial lfoSpeedDial{this};
+    CustomRotaryDial lfoSpeedVariationDial{this};
     CustomRotaryDial attackFilterDial{this};
     CustomRotaryDial decayFilterDial{this};
     CustomRotaryDial levelSustainFilterDial{this};

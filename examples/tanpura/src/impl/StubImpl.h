@@ -81,6 +81,14 @@ class StubImpl final : public EffectBase
     {
         m_playStop = value;
     }
+    void setHumanizeTiming(const float value)
+    {
+        m_humanizeTiming = value;
+    }
+    void setHumanizeLevel(const float value)
+    {
+        m_humanizeLevel = value;
+    }
     void setBpm(const float value)
     {
         m_bpm = value;
@@ -116,6 +124,10 @@ class StubImpl final : public EffectBase
     void setLfoSpeed(const float value)
     {
         m_lfoSpeed = value;
+    }
+    void setLfoSpeedVariation(const float value)
+    {
+        m_lfoSpeedVariation = value;
     }
     void setAttackFilter(const float value)
     {
@@ -168,6 +180,8 @@ class StubImpl final : public EffectBase
     size_t m_harmonicFirst{};
     size_t m_harmonicSecond{};
     bool m_playStop{};
+    float m_humanizeTiming{};
+    float m_humanizeLevel{};
     float m_bpm{};
     bool m_hostSync{};
     size_t m_pluckDivision{};
@@ -177,6 +191,7 @@ class StubImpl final : public EffectBase
     float m_levelSustain{};
     float m_lfoDepth{};
     float m_lfoSpeed{};
+    float m_lfoSpeedVariation{};
     float m_attackFilter{};
     float m_decayFilter{};
     float m_levelSustainFilter{};
