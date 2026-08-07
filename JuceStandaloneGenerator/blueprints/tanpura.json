@@ -38,6 +38,7 @@
     {"short": "ATK", "type": "dial", "display": "Attack", "symbol": "attack", "default": 10, "range": [1, 3000, 0.1, 0.35, false], "precision": 1, "unit": "ms"},
     {"short": "DCY", "type": "dial", "display": "Decay", "symbol": "decay", "default": 10, "range": [1, 100000, 1, 0.25, false], "precision": 1, "unit": "ms"},
     {"short": "SUS", "type": "dial", "display": "Sustain", "symbol": "levelSustain", "default": 0.2, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
+    {"short": "SUSH", "type": "dial", "display": "Sustain Humanize", "symbol": "sustainHumanize", "default": 0, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "%"},
     {"short": "LFOD", "type": "dial", "display": "Filter LFO Depth", "symbol": "lfoDepth", "default": 0.5, "range": [0, 2, 0.01, 1, false], "precision": 2, "unit": ""},
     {"short": "LFOS", "type": "dial", "display": "Filter LFO Speed", "symbol": "lfoSpeed", "default": 0.5, "range": [0.01, 20, 0.01, 0.25, false], "precision": 2, "unit": "Hz"},
     {"short": "LFOV", "type": "dial", "display": "Filter LFO Variation", "symbol": "lfoSpeedVariation", "default": 0, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "%"},
@@ -53,7 +54,7 @@
     "WINDOW_WIDTH": "1400",
     "WINDOW_HEIGHT": "800",
     "type": "=5",
-    "composition": "R=(1:1:1:1:1) A1=(KEY,VOL,TUNE,DET) A2=(PATT,SLIDE,SLDT,HARM1,HARM2,PLAY,HTIM,HLVL) A3=(BPM,SYNC,PLDV,PADV,ATK,DCY,SUS,LFOD,LFOS,LFOV) A4=(ATKF,DCYF,SUSF,CUTF,RESF,CONTF) A5=(RDRY,RWET,RSZ,RDEC,RSLO,RSHI)"
+    "composition": "R=(1:1:1:1:1) A1=(KEY,VOL,TUNE,DET) A2=(PATT,SLIDE,SLDT,HARM1,HARM2,PLAY,HTIM,HLVL) A3=(BPM,SYNC,PLDV,PADV,ATK,DCY,SUS,SUSH,LFOD,LFOS,LFOV) A4=(ATKF,DCYF,SUSF,CUTF,RESF,CONTF) A5=(RDRY,RWET,RSZ,RDEC,RSLO,RSHI)"
   },
   "performance-page": {
     "type": "-",

@@ -27,6 +27,8 @@ class TanpuraImpl final : public EffectBase
         , m_fdn(sampleRate)
         , m_lfoWander(AbacDsp::constructArray<AbacDsp::OrnsteinUhlenbeckProcess, kNumVoices>(
               sampleRate / static_cast<float>(BlockSize)))
+        , m_sustainWander(AbacDsp::constructArray<AbacDsp::OrnsteinUhlenbeckProcess, kNumVoices>(
+              sampleRate / static_cast<float>(BlockSize)))
     {
         m_fdn.setModulation(kReverbModulationDepth, kReverbModulationSpeedHz);
         std::mt19937 rng{std::random_device{}()};
@@ -167,6 +169,11 @@ class TanpuraImpl final : public EffectBase
         return m_lastVoiceLfoSpeed[index];
     }
 
+    [[nodiscard]] float voiceSustainFeed(const size_t index) const noexcept
+    {
+        return m_lastVoiceSustainFeed[index];
+    }
+
     [[nodiscard]] static float intervalMsForDivision(const float bpm, const int divisionIndex) noexcept
     {
         return kSyncDivisions[clampDivisionIndex(divisionIndex)].quarterNotes * (60000.f / bpm);
@@ -182,9 +189,14 @@ class TanpuraImpl final : public EffectBase
         forEachVoice([value](auto& voice) { voice.setDecayByTime(value); });
     }
 
-    void setLevelSustain(const float value)
+    void setLevelSustain(const float value) noexcept
     {
-        forEachVoice([value](auto& voice) { voice.setConstFeed(value); });
+        m_levelSustainBase = value;
+    }
+
+    void setSustainHumanize(const float percent) noexcept
+    {
+        m_sustainHumanizePercent = std::clamp(percent, 0.f, 100.f);
     }
 
     void setLfoDepth(const float value)
@@ -285,6 +297,7 @@ class TanpuraImpl final : public EffectBase
     static constexpr float kEqShelfQ{0.707f};
     static constexpr float kMaxVoiceLfoSpreadFraction{0.15f}; // per-voice static offset bound at 100% variation
     static constexpr float kMaxLfoWanderSigma{0.1f};          // shared wander bound at 100% variation
+    static constexpr float kMaxSustainWanderSigma{0.3f};      // per-voice sustain wander bound at 100% humanize
 
     struct SyncDivision
     {
@@ -332,6 +345,7 @@ class TanpuraImpl final : public EffectBase
         m_sequencer.setPauseGapMs(intervalMsForDivision(bpm, static_cast<int>(m_pauseDivisionIndex)));
         m_sequencer.setPlaying(effectivePlaying());
         updateLfoSpeeds();
+        updateSustainFeed();
     }
 
     // At 0% variation, every voice's wander sigma/mu settle to 0 (mu = sigma in
@@ -351,14 +365,32 @@ class TanpuraImpl final : public EffectBase
         }
     }
 
+    // Gates the string's constant excitation feed off when not playing, so a voice already
+    // in its sustain phase falls back to normal per-period decay instead of ringing forever.
+    void updateSustainFeed() noexcept
+    {
+        const auto gate = effectivePlaying() ? 1.f : 0.f;
+        const auto amount = m_sustainHumanizePercent * 0.01f;
+        const auto sigma = amount * kMaxSustainWanderSigma;
+        for (size_t i = 0; i < kNumVoices; ++i)
+        {
+            m_sustainWander[i].setSigma(sigma);
+            const auto wander = m_sustainWander[i].step() - sigma;
+            m_lastVoiceSustainFeed[i] = std::clamp(m_levelSustainBase * (1.f + wander), 0.f, 1.f) * gate;
+            m_ensemble.voice(i).setConstFeed(m_lastVoiceSustainFeed[i]);
+        }
+    }
+
     AbacDsp::KarplusStrongEnsemble<kNumVoices, kMaxStringLength> m_ensemble;
     PluckSequencer<kMaxStringLength> m_sequencer;
     Fdn m_fdn;
     std::array<LoShelfFilter, 2> m_reverbShelfLow{};
     std::array<HiShelfFilter, 2> m_reverbShelfHigh{};
     std::array<AbacDsp::OrnsteinUhlenbeckProcess, kNumVoices> m_lfoWander;
+    std::array<AbacDsp::OrnsteinUhlenbeckProcess, kNumVoices> m_sustainWander;
     std::array<float, kNumVoices> m_voiceLfoStaticOffset{};
     std::array<float, kNumVoices> m_lastVoiceLfoSpeed{};
+    std::array<float, kNumVoices> m_lastVoiceSustainFeed{};
 
     float m_level{1.f};
     float m_reverbDryGain{1.f};
@@ -370,6 +402,8 @@ class TanpuraImpl final : public EffectBase
     size_t m_pauseDivisionIndex{4};
     float m_lfoSpeed{0.5f};
     float m_lfoSpeedVariationPercent{0.f};
+    float m_levelSustainBase{0.2f};
+    float m_sustainHumanizePercent{0.f};
     float m_attackFilterMsecs{10.f};
     float m_decayFilterMsecs{10.f};
     float m_levelSustainFilter{0.f};

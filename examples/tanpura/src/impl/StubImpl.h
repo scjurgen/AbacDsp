@@ -117,6 +117,10 @@ class StubImpl final : public EffectBase
     {
         m_levelSustain = value;
     }
+    void setSustainHumanize(const float value)
+    {
+        m_sustainHumanize = value;
+    }
     void setLfoDepth(const float value)
     {
         m_lfoDepth = value;
@@ -189,6 +193,7 @@ class StubImpl final : public EffectBase
     float m_attack{};
     float m_decay{};
     float m_levelSustain{};
+    float m_sustainHumanize{};
     float m_lfoDepth{};
     float m_lfoSpeed{};
     float m_lfoSpeedVariation{};

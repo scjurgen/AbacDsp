@@ -3,7 +3,7 @@
   "plugintype": "ReverbPlugin",
   "boxy": "boxy",
   "plugintype-see-also": "http://lv2plug.in/ns/lv2core#ReverbPlugin",
-  "description": ["Diffuser delay chain: up to 50 modulated allpass delays in series with pre-delay, pitching, bulge size distribution and damping."],
+  "description": ["Diffuser delay chain: up to 100 modulated allpass delays in series with pre-delay, pitching, bulge size distribution and damping."],
   "patches": true,
   "ports-control":
   [
@@ -13,7 +13,7 @@
       "cc": {"controller": 21}},
     {"short": "PRED", "type": "dial", "display": "Pre Delay", "symbol": "preDelay", "default": 0, "range": [0, 1000, 1, 0.5, false], "precision": 0, "unit": "ms",
       "cc": {"controller": 22}},
-    {"short": "ELM", "type": "dial", "display": "Elements", "symbol": "elements", "default": 6, "range": [0, 50, 1, 1, false], "precision": 0, "unit": "",
+    {"short": "ELM", "type": "dial", "display": "Elements", "symbol": "elements", "default": 6, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "",
       "cc": {"controller": 23}},
     {"short": "SPAN", "type": "dial", "display": "Tap Span", "symbol": "tapSpan", "default": 0, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "%",
       "cc": {"controller": 40}},
@@ -97,9 +97,9 @@
     "impl/ShowDiffuserSizes.h"
   ],
   "processor_forwards": [
-    {"name": "getProcessingBinLevels", "type": "std::array<float, 51>", "noexcept": true},
-    {"name": "getProcessingBinBandLevels", "type": "std::array<std::array<float, 3>, 51>", "noexcept": true},
-    {"name": "getElementSizesInMeters", "type": "std::array<float, 50>", "noexcept": true}
+    {"name": "getProcessingBinLevels", "type": "std::array<float, 101>", "noexcept": true},
+    {"name": "getProcessingBinBandLevels", "type": "std::array<std::array<float, 3>, 101>", "noexcept": true},
+    {"name": "getElementSizesInMeters", "type": "std::array<float, 100>", "noexcept": true}
   ],
   "extra_timer_callbacks": [
     "binsBandsGauge.update(processorRef.getProcessingBinBandLevels(), static_cast<size_t>(valueTreeState.getRawParameterValue(\"elements\")->load()));",

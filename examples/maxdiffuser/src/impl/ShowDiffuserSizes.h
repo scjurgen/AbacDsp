@@ -19,7 +19,7 @@
 class ShowDiffuserSizes : public juce::Component
 {
   public:
-    static constexpr size_t kMaxElements{50};
+    static constexpr size_t kMaxElements{100};
     static constexpr size_t kMeterDbRange{100};
     static constexpr size_t kNumBands{3};
     static constexpr size_t kLow{0};

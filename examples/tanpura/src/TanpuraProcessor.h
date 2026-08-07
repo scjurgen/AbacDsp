@@ -59,6 +59,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("attack", this);
         m_parameters.addParameterListener("decay", this);
         m_parameters.addParameterListener("levelSustain", this);
+        m_parameters.addParameterListener("sustainHumanize", this);
         m_parameters.addParameterListener("lfoDepth", this);
         m_parameters.addParameterListener("lfoSpeed", this);
         m_parameters.addParameterListener("lfoSpeedVariation", this);
@@ -98,6 +99,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("attack", this);
         m_parameters.removeParameterListener("decay", this);
         m_parameters.removeParameterListener("levelSustain", this);
+        m_parameters.removeParameterListener("sustainHumanize", this);
         m_parameters.removeParameterListener("lfoDepth", this);
         m_parameters.removeParameterListener("lfoSpeed", this);
         m_parameters.removeParameterListener("lfoSpeedVariation", this);
@@ -445,6 +447,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("sustainHumanize", 1), juce::String::fromUTF8("Sustain Humanize"),
+            juce::NormalisableRange<float>(0, 100, 1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " %"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("lfoDepth", 1), juce::String::fromUTF8("Filter LFO Depth"),
             juce::NormalisableRange<float>(0, 2, 0.01, 1, false), 0.5,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
@@ -652,6 +659,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setLevelSustain(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::levelSustain, v);
+             }},
+            {"sustainHumanize",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setSustainHumanize(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::sustainHumanize, v);
              }},
             {"lfoDepth",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -884,6 +897,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("levelSustain");
             float normalized = range.convertTo0to1(params.levelSustain);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("sustainHumanize"))
+        {
+            const auto& range = m_parameters.getParameterRange("sustainHumanize");
+            float normalized = range.convertTo0to1(params.sustainHumanize);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("lfoDepth"))

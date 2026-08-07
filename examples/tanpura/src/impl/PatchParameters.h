@@ -37,6 +37,7 @@ struct PatchParameters
         attack            , // dial
         decay             , // dial
         levelSustain      , // dial
+        sustainHumanize   , // dial
         lfoDepth          , // dial
         lfoSpeed          , // dial
         lfoSpeedVariation , // dial
@@ -72,6 +73,7 @@ size_t pauseDivision{4};
 float attack{10.0f};
 float decay{10.0f};
 float levelSustain{0.2f};
+float sustainHumanize{0.0f};
 float lfoDepth{0.5f};
 float lfoSpeed{0.5f};
 float lfoSpeedVariation{0.0f};
@@ -109,6 +111,7 @@ float contourFilter{0.0f};
 "attack",
 "decay",
 "levelSustain",
+"sustainHumanize",
 "lfoDepth",
 "lfoSpeed",
 "lfoSpeedVariation",
@@ -161,6 +164,7 @@ float contourFilter{0.0f};
         else if constexpr (ParamId == Id::attack) return attack;
         else if constexpr (ParamId == Id::decay) return decay;
         else if constexpr (ParamId == Id::levelSustain) return levelSustain;
+        else if constexpr (ParamId == Id::sustainHumanize) return sustainHumanize;
         else if constexpr (ParamId == Id::lfoDepth) return lfoDepth;
         else if constexpr (ParamId == Id::lfoSpeed) return lfoSpeed;
         else if constexpr (ParamId == Id::lfoSpeedVariation) return lfoSpeedVariation;
@@ -231,6 +235,8 @@ break;
  case Id::decay: if (!isEqual(get<Id::decay>(), value)) {get<Id::decay>() = value;m_modified = true;}
 break;
  case Id::levelSustain: if (!isEqual(get<Id::levelSustain>(), value)) {get<Id::levelSustain>() = value;m_modified = true;}
+break;
+ case Id::sustainHumanize: if (!isEqual(get<Id::sustainHumanize>(), value)) {get<Id::sustainHumanize>() = value;m_modified = true;}
 break;
  case Id::lfoDepth: if (!isEqual(get<Id::lfoDepth>(), value)) {get<Id::lfoDepth>() = value;m_modified = true;}
 break;
@@ -313,6 +319,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         attack            , // dial
         decay             , // dial
         levelSustain      , // dial
+        sustainHumanize   , // dial
         lfoDepth          , // dial
         lfoSpeed          , // dial
         lfoSpeedVariation , // dial

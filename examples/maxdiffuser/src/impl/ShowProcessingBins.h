@@ -30,7 +30,7 @@ template <BinsDisplayMode Mode, LevelUnit Unit>
 class ShowProcessingBins : public juce::Component
 {
   public:
-    static constexpr size_t kNumBins{51};
+    static constexpr size_t kNumBins{101};
     static constexpr size_t kMeterDbRange{100};
 
     ShowProcessingBins()

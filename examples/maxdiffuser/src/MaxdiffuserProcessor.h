@@ -319,7 +319,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("ms").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 0) + " ms"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("elements", 1), "Elements", juce::NormalisableRange<float>(0, 50, 1, 1, false), 6,
+            juce::ParameterID("elements", 1), "Elements", juce::NormalisableRange<float>(0, 100, 1, 1, false), 6,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 0) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -1025,17 +1025,17 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 #pragma GCC diagnostic pop
 
 
-    [[nodiscard]] std::array<float, 51> getProcessingBinLevels() const noexcept
+    [[nodiscard]] std::array<float, 101> getProcessingBinLevels() const noexcept
     {
-        return pluginRunner ? pluginRunner->getProcessingBinLevels() : std::array<float, 51>{};
+        return pluginRunner ? pluginRunner->getProcessingBinLevels() : std::array<float, 101>{};
     }
-    [[nodiscard]] std::array<std::array<float, 3>, 51> getProcessingBinBandLevels() const noexcept
+    [[nodiscard]] std::array<std::array<float, 3>, 101> getProcessingBinBandLevels() const noexcept
     {
-        return pluginRunner ? pluginRunner->getProcessingBinBandLevels() : std::array<std::array<float, 3>, 51>{};
+        return pluginRunner ? pluginRunner->getProcessingBinBandLevels() : std::array<std::array<float, 3>, 101>{};
     }
-    [[nodiscard]] std::array<float, 50> getElementSizesInMeters() const noexcept
+    [[nodiscard]] std::array<float, 100> getElementSizesInMeters() const noexcept
     {
-        return pluginRunner ? pluginRunner->getElementSizesInMeters() : std::array<float, 50>{};
+        return pluginRunner ? pluginRunner->getElementSizesInMeters() : std::array<float, 100>{};
     }
 
 

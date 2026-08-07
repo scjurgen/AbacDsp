@@ -47,18 +47,6 @@ concept DelayCallback = requires(T t, float* data) {
  *
  * Slots are shared_ptr and may be empty; an empty slot costs one null check.
  * Shared ownership means one processor instance can occupy several slots, in
- * which case they share its state rather than each holding their own.
- *
- * Slot assignment is unsynchronised. Calling setCallback() or removeCallback()
- * concurrently with processCallbacks() is a data race, and the shared_ptr
- * refcount traffic makes it one that will not reliably show up in testing.
- */
-/**
- * @ingroup blockprocessors
- * @brief Fixed array of ORDER optional BlockProcessorBase slots, applied in index order.
- *
- * Slots are shared_ptr and may be empty; an empty slot costs one null check.
- * Shared ownership means one processor instance can occupy several slots, in
  * which case those slots share its state rather than each holding their own.
  *
  * Slot assignment is unsynchronised. shared_ptr keeps its refcount atomic but

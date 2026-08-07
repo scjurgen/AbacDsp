@@ -1,14 +1,14 @@
-#include <chrono>
-#include <iostream>
-#include <vector>
-#include <array>
-#include <iomanip>
 #include <algorithm>
+#include <array>
+#include <chrono>
+#include <iomanip>
+#include <iostream>
 #include <string>
+#include <vector>
 
-#include "Filters/BiquadResoBandPassParallel.h"
-#include "Filters/BiquadResoBPParallelSIMD.h"
 #include "Filters/BiquadResoBP.h"
+#include "Filters/BiquadResoBPParallelSIMD.h"
+#include "Filters/BiquadResoBandPassParallel.h"
 
 namespace AbacDsp::Test
 {
@@ -177,7 +177,7 @@ void runPerfTestsImpl(auto& results, std::index_sequence<Ns...>)
              {
                  std::stringstream ss;
                  ss << "Par Simd  " << N;
-                 results.push_back(perf<BiquadResoBpParallelSIMD<N, BlockSize>>(ss.str(), N));
+                 results.push_back(perf<BiquadResoBPParallelSIMD<N, BlockSize>>(ss.str(), N));
              }
          }()),
      ...);

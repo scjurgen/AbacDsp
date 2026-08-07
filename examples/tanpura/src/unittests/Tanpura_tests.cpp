@@ -271,6 +271,36 @@ TEST(TanpuraImpl, LfoSpeedVariationIsNoOpAtZeroAndDiffersAcrossVoicesAbove)
     EXPECT_TRUE(sawDifference);
 }
 
+TEST(TanpuraImpl, SustainHumanizeIsNoOpAtZeroAndDiffersAcrossVoicesAbove)
+{
+    TanpuraImpl<16> impl(kSampleRate);
+    impl.setPlayStop(true); // gate open, so sustain feed is nonzero and humanize is observable
+    impl.setLevelSustain(0.4f);
+
+    AbacDsp::AudioBuffer<2, 16> in{};
+    AbacDsp::AudioBuffer<2, 16> out{};
+    impl.processBlock(in, out);
+
+    for (size_t i = 1; i < TestSequencer::kNumVoices; ++i)
+    {
+        EXPECT_FLOAT_EQ(impl.voiceSustainFeed(i), impl.voiceSustainFeed(0));
+    }
+    EXPECT_FLOAT_EQ(impl.voiceSustainFeed(0), 0.4f);
+
+    impl.setSustainHumanize(100.f);
+    for (size_t block = 0; block < 10; ++block) // let the wander step away from its start-at-0 initial value
+    {
+        impl.processBlock(in, out);
+    }
+
+    bool sawDifference = false;
+    for (size_t i = 1; i < TestSequencer::kNumVoices; ++i)
+    {
+        sawDifference = sawDifference || impl.voiceSustainFeed(i) != impl.voiceSustainFeed(0);
+    }
+    EXPECT_TRUE(sawDifference);
+}
+
 TEST(TanpuraImpl, IntervalMsForDivisionMatchesMusicalRatios)
 {
     using Impl = TanpuraImpl<32>;
@@ -410,4 +440,58 @@ TEST(TanpuraImpl, ReverbTailPersistsAfterDrySignalSettlesWhenWet)
 {
     EXPECT_LT(energyAfterDrySettles(0.f, -100.f), 1e-6);
     EXPECT_GT(energyAfterDrySettles(-100.f, 0.f), 1e-4);
+}
+
+// A high sustain level keeps a Karplus-Strong voice's constant feed replenishing its
+// per-period decay indefinitely, which is the drone's whole point while playing - but that
+// feed must gate off on stop, or an already-ringing voice never dies.
+TEST(TanpuraImpl, SustainFeedGatesOffAfterStopAndAllowsRingToDecay)
+{
+    constexpr size_t blockSize{64};
+    TanpuraImpl<blockSize> impl(kSampleRate);
+    impl.setKey(24);
+    impl.setPattern(2); // "H1 H2 8 8 1 -", plucks all 5 strings
+    impl.setBpm(250.f);
+    impl.setPluckDivision(12); // "1/16T", the fastest division -> 40 ms/step at 250 BPM
+    impl.setPauseDivision(12);
+    impl.setAttack(1.f);
+    impl.setDecay(300.f);
+    impl.setLevelSustain(0.6f); // high sustain: without gating this would ring forever
+
+    AbacDsp::AudioBuffer<2, blockSize> in{};
+    AbacDsp::AudioBuffer<2, blockSize> out{};
+
+    impl.setPlayStop(true);
+    for (size_t block = 0; block < 500; ++block) // let voices trigger and settle into sustain
+    {
+        impl.processBlock(in, out);
+    }
+
+    double energyWhilePlaying = 0.0;
+    for (size_t block = 0; block < 50; ++block)
+    {
+        impl.processBlock(in, out);
+        for (size_t i = 0; i < blockSize; ++i)
+        {
+            energyWhilePlaying += static_cast<double>(out(i, 0)) * out(i, 0);
+        }
+    }
+    EXPECT_GT(energyWhilePlaying, 1e-6); // audibly ringing while playing
+
+    impl.setPlayStop(false);
+    for (size_t block = 0; block < 5000; ++block) // long enough for the gated decay to finish
+    {
+        impl.processBlock(in, out);
+    }
+
+    double energyAfterStop = 0.0;
+    for (size_t block = 0; block < 50; ++block)
+    {
+        impl.processBlock(in, out);
+        for (size_t i = 0; i < blockSize; ++i)
+        {
+            energyAfterStop += static_cast<double>(out(i, 0)) * out(i, 0);
+        }
+    }
+    EXPECT_LT(energyAfterStop, 1e-6); // gated off: decays to silence instead of ringing forever
 }

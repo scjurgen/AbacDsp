@@ -1,8 +1,8 @@
 # BlockProcessors
 
-Goal is to have simple processors that can be set as callbacks for the FDN based reverb tank.
+Goal is to have simple processors that can be set as callbacks for higher layer modules.
 
-The processors can do post delay line manipulations that then are fed back to the FDN.
+The processors can do post delay line manipulations that then are fed back to e.g. an FDN.
 
 All processors in this section work inplace.
 

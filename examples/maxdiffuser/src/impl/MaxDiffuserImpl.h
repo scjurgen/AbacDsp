@@ -23,7 +23,7 @@ class MaxDiffuserImpl final : public EffectBase
 {
   public:
     static constexpr size_t MaxDelaySamples{24000};
-    static constexpr size_t MaxElements{50};
+    static constexpr size_t MaxElements{100};
     static constexpr size_t MaxPreDelaySamples{96000};
     static constexpr size_t FdnOrder{32};
     static constexpr size_t FdnMaxSizePerElement{100000};
