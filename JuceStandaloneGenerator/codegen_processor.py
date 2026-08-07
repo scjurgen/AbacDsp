@@ -239,7 +239,7 @@ def create_parameter_layout(blueprint: Blueprint) -> str:
         match item['type']:
             case 'dial':
                 precision = item['precision']
-                ln = f"""std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("{param_id}", 1), "{param_name}",
+                ln = f"""std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("{param_id}", 1), juce::String::fromUTF8("{param_name}"),
                     juce::NormalisableRange<float>({item['rangeStart']}, {item['rangeEnd']}, {item['intervalValue']}, {item['skewFactor']}, {item['useSymmetricSkew']}),
                     {param_default},
                     juce::AudioParameterFloatAttributes{{}}
@@ -247,16 +247,16 @@ def create_parameter_layout(blueprint: Blueprint) -> str:
                         .withStringFromValueFunction([](float value, int) {{ return juce::String(value, {precision}) + " {item['unit']}"; }}))"""
                 result += f"params.push_back({ln});\n"
             case 'switch':
-                ln = f"""std::make_unique<juce::AudioParameterBool>(juce::ParameterID("{param_id}",1), "{param_name}", {param_default})"""
+                ln = f"""std::make_unique<juce::AudioParameterBool>(juce::ParameterID("{param_id}",1), juce::String::fromUTF8("{param_name}"), {param_default})"""
                 result += f"params.push_back({ln});\n"
             case 'drop':
                 if isinstance(item['listitems'], list):
-                    menu_list = 'juce::StringArray {' + ','.join(f'"{i}"' for i in item['listitems']) + '}'
+                    menu_list = 'juce::StringArray {' + ','.join(f'juce::String::fromUTF8("{i}")' for i in item['listitems']) + '}'
                 else:
                     menu_list = 'juce::StringArray {' + ','.join(
-                        f'"{item["listitems"].format(i+1)}"' for i in range(item['count'])
+                        f'juce::String::fromUTF8("{item["listitems"].format(i+1)}")' for i in range(item['count'])
                     ) + '}'
-                ln = f"""std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("{param_id}",1), "{item["display"]}", {menu_list}, {param_default})"""
+                ln = f"""std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("{param_id}",1), juce::String::fromUTF8("{item["display"]}"), {menu_list}, {param_default})"""
                 result += f"params.push_back({ln});\n"
             case 'gauge' | 'label':
                 pass

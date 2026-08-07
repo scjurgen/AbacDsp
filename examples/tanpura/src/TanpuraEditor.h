@@ -74,7 +74,33 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         auto area = getLocalBounds();
         m_menuBar.setBounds(area.removeFromTop(getLookAndFeel().getDefaultMenuBarHeight()));
         m_statusBar.setBounds(area.removeFromBottom(static_cast<int>(Constants::Text::labelHeight)));
+        auto pageSwitchArea = area.removeFromTop(static_cast<int>(Constants::Text::labelHeight));
+        m_pagePerformanceButton.setBounds(pageSwitchArea.removeFromLeft(pageSwitchArea.getWidth() / 2));
+        m_pageSettingsButton.setBounds(pageSwitchArea);
         area = area.reduced(static_cast<int>(Constants::Margins::big));
+        if (m_currentPage == Page::Performance)
+        {
+            // auto generated
+            // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
+            const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
+            std::vector<juce::Rectangle<int>> areas(1);
+            areas[0] = area.reduced(Constants::Margins::small);
+
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(levelDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbDryDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbWetDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbSizeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbDecayDial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[0].toFloat());
+            }
+        }
+        else
         {
             // auto generated
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
@@ -309,8 +335,95 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(contourFilterDial);
         contourFilterDial.reset(valueTreeState, "contourFilter");
         contourFilterDial.setLabelText(juce::String::fromUTF8("Contour F"));
+
+        addAndMakeVisible(m_pagePerformanceButton);
+        addAndMakeVisible(m_pageSettingsButton);
+        m_pagePerformanceButton.onClick = [this] { switchPage(Page::Performance); };
+        m_pageSettingsButton.onClick = [this] { switchPage(Page::Settings); };
+        switchPage(Page::Performance);
     }
 
+    enum class Page
+    {
+        Performance,
+        Settings
+    };
+
+    void switchPage(Page page)
+    {
+        m_currentPage = page;
+        m_pagePerformanceButton.setToggleState(page == Page::Performance, juce::dontSendNotification);
+        m_pageSettingsButton.setToggleState(page == Page::Settings, juce::dontSendNotification);
+        if (page == Page::Performance)
+        {
+            keyDrop.setVisible(false);
+            levelDial.setVisible(true);
+            tuningDial.setVisible(false);
+            detuneDial.setVisible(false);
+            reverbDryDial.setVisible(true);
+            reverbWetDial.setVisible(true);
+            reverbSizeDial.setVisible(true);
+            reverbDecayDial.setVisible(true);
+            reverbShelfLowDial.setVisible(false);
+            reverbShelfHighDial.setVisible(false);
+            patternDrop.setVisible(false);
+            slideDial.setVisible(false);
+            slideTimeDial.setVisible(false);
+            harmonicFirstDrop.setVisible(false);
+            harmonicSecondDrop.setVisible(false);
+            playStopSwitch.setVisible(false);
+            bpmDial.setVisible(true);
+            hostSyncSwitch.setVisible(false);
+            pluckDivisionDrop.setVisible(false);
+            pauseDivisionDrop.setVisible(false);
+            attackDial.setVisible(false);
+            decayDial.setVisible(false);
+            levelSustainDial.setVisible(false);
+            lfoDepthDial.setVisible(false);
+            lfoSpeedDial.setVisible(false);
+            attackFilterDial.setVisible(false);
+            decayFilterDial.setVisible(false);
+            levelSustainFilterDial.setVisible(false);
+            filterCutoffDial.setVisible(false);
+            filterResonanceDial.setVisible(false);
+            contourFilterDial.setVisible(false);
+        }
+        else
+        {
+            keyDrop.setVisible(true);
+            levelDial.setVisible(true);
+            tuningDial.setVisible(true);
+            detuneDial.setVisible(true);
+            reverbDryDial.setVisible(true);
+            reverbWetDial.setVisible(true);
+            reverbSizeDial.setVisible(true);
+            reverbDecayDial.setVisible(true);
+            reverbShelfLowDial.setVisible(true);
+            reverbShelfHighDial.setVisible(true);
+            patternDrop.setVisible(true);
+            slideDial.setVisible(true);
+            slideTimeDial.setVisible(true);
+            harmonicFirstDrop.setVisible(true);
+            harmonicSecondDrop.setVisible(true);
+            playStopSwitch.setVisible(true);
+            bpmDial.setVisible(true);
+            hostSyncSwitch.setVisible(true);
+            pluckDivisionDrop.setVisible(true);
+            pauseDivisionDrop.setVisible(true);
+            attackDial.setVisible(true);
+            decayDial.setVisible(true);
+            levelSustainDial.setVisible(true);
+            lfoDepthDial.setVisible(true);
+            lfoSpeedDial.setVisible(true);
+            attackFilterDial.setVisible(true);
+            decayFilterDial.setVisible(true);
+            levelSustainFilterDial.setVisible(true);
+            filterCutoffDial.setVisible(true);
+            filterResonanceDial.setVisible(true);
+            contourFilterDial.setVisible(true);
+        }
+        resized();
+    }
 
     void parentHierarchyChanged() override
     {
@@ -675,6 +788,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};
+    Page m_currentPage{Page::Performance};
+    juce::TextButton m_pagePerformanceButton{"Performance"};
+    juce::TextButton m_pageSettingsButton{"Settings"};
     static constexpr int kThemeModeLightId = 9000;
     static constexpr int kThemeModeDarkId = 9001;
     static constexpr int kThemeBaseBichromaticId = 9002;
