@@ -26,6 +26,9 @@ explore
 JuceStandaloneGenerator/theme-review/output
 JuceStandaloneGenerator/.gm_scratch
 
+# Temp
+TEMP_TODO.md
+
 # Generated API documentation (docs/Doxyfile and docs/theme are tracked)
 docs/html
 
