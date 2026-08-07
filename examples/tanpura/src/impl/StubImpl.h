@@ -113,6 +113,10 @@ class StubImpl final : public EffectBase
     {
         m_decay = value;
     }
+    void setDecayOctave(const float value)
+    {
+        m_decayOctave = value;
+    }
     void setLevelSustain(const float value)
     {
         m_levelSustain = value;
@@ -192,6 +196,7 @@ class StubImpl final : public EffectBase
     size_t m_pauseDivision{};
     float m_attack{};
     float m_decay{};
+    float m_decayOctave{};
     float m_levelSustain{};
     float m_sustainHumanize{};
     float m_lfoDepth{};

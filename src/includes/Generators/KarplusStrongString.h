@@ -135,6 +135,7 @@ class KarplusStrongString
 
     void trigger(const float note, const float gain, const float orchestraTuning = 440.f) noexcept
     {
+        m_lastTriggeredNote = note;
         if (m_attackTimeSamples <= 1.f)
         {
             m_gainAdvance = 0.f;
@@ -160,6 +161,7 @@ class KarplusStrongString
         m_pluckOffset = m_pluckType == PluckType::WhiteRoundRobin ? nextPluckOffset() : 0;
         m_fraction = 0.f;
         setRelativePitch(m_currentPitchBend);
+        computeDecay();
     }
 
     void muteString() noexcept
@@ -197,6 +199,7 @@ class KarplusStrongString
     {
         m_currentPitchBend = Convert::centsToRelativePitch(cents);
         setRelativePitch(m_currentPitchBend);
+        computeDecay();
     }
 
     void setConstFeed(const float value) noexcept
@@ -232,6 +235,12 @@ class KarplusStrongString
         m_damper.setCutoff(cutoff);
     }
 
+    void setDecayOctaveFactor(const float factor) noexcept
+    {
+        m_decayOctaveFactor = factor;
+        computeDecay();
+    }
+
 
     [[nodiscard]] bool isActive() const noexcept
     {
@@ -249,6 +258,7 @@ class KarplusStrongString
 
     static constexpr size_t kReadLookback{6}; // also the mirrored-wrap padding count; the two must match
     static constexpr size_t kMinBufferSize{113};
+    static constexpr float kReferenceNote{60.f}; // C4; setDecayByTime() is exact at this note
     static constexpr size_t kPluckNoiseSize{MaxLength * 16};
     static constexpr unsigned kPluckNoiseSeed{2};
 
@@ -276,8 +286,10 @@ class KarplusStrongString
 
     void computeDecay() noexcept
     {
-        const auto decayFactor =
-            static_cast<float>(m_currentBufferSize) / (m_sampleRate * m_decayInMilliseconds / 1000.f);
+        const auto octavesFromReference = (m_lastTriggeredNote - kReferenceNote) / 12.f;
+        const auto effectiveDecayMs = m_decayInMilliseconds * std::exp2(-m_decayOctaveFactor * octavesFromReference);
+        const auto periodInSamples = static_cast<float>(m_currentBufferSize) / m_advancePhase;
+        const auto decayFactor = periodInSamples / (m_sampleRate * effectiveDecayMs / 1000.f);
         m_decayGain = std::pow(0.1f, decayFactor); // -20 dB assumed as the decay-time reference level
     }
 
@@ -409,6 +421,8 @@ class KarplusStrongString
 
     float m_decayInMilliseconds{3500.f};
     float m_decayGain{0.99259f};
+    float m_decayOctaveFactor{1.f};
+    float m_lastTriggeredNote{kReferenceNote};
 
     size_t m_activePluck{0U};
     size_t m_pluckOffset{0};

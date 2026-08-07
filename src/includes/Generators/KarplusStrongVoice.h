@@ -85,6 +85,11 @@ class KarplusStrongVoice
         m_string.setDecayByTime(msecs);
     }
 
+    void setDecayOctaveFactor(const float factor) noexcept
+    {
+        m_string.setDecayOctaveFactor(factor);
+    }
+
     void setConstFeed(const float value) noexcept
     {
         m_string.setConstFeed(value);

@@ -40,6 +40,36 @@ using TestString = KarplusStrongString<10000>;
     std::ranges::sort(pitches);
     return pitches[pitches.size() / 2];
 }
+
+// dB drop from the pluck's initial peak to the peak elapsedSeconds later, with the damper
+// bypassed so only setDecayByTime()/setDecayOctaveFactor() are under test.
+[[nodiscard]] float measureDecayDb(const float note, const float decayMs, const float octaveFactor,
+                                   const float elapsedSeconds)
+{
+    TestString sut{kSampleRate};
+    sut.setPluckType(PluckType::WhiteStatic);
+    sut.setDecayByTime(decayMs);
+    sut.setDecayOctaveFactor(octaveFactor);
+    sut.trigger(note, 1.f);
+    sut.setDamperCutoff(24000.f);
+
+    float earlyPeak = 0.f;
+    for (int i = 0; i < 1000; ++i)
+    {
+        earlyPeak = std::max(earlyPeak, std::abs(sut.step()));
+    }
+    const auto elapsedSamples = static_cast<int>(kSampleRate * elapsedSeconds);
+    for (int i = 0; i < elapsedSamples; ++i)
+    {
+        std::ignore = sut.step();
+    }
+    float latePeak = 0.f;
+    for (int i = 0; i < 1000; ++i)
+    {
+        latePeak = std::max(latePeak, std::abs(sut.step()));
+    }
+    return 20.f * std::log10(latePeak / earlyPeak);
+}
 }
 
 TEST(KarplusStrongString, roundRobinPluckDiverges)
@@ -107,6 +137,55 @@ TEST(KarplusStrongString, decaysTowardsSilenceOverTime)
         latePeak = std::max(latePeak, std::abs(sut.step()));
     }
     EXPECT_GT(earlyPeak, latePeak * 2.f);
+}
+
+TEST(KarplusStrongString, extremeDecayTime)
+{
+    TestString sut{kSampleRate};
+    sut.setPluckType(PluckType::WhiteStatic);
+    sut.setDecayByTime(100000.f); // 100 secs
+    sut.trigger(60.f, 1.f);
+    sut.setDamperCutoff(24000); // bypass the damper so only decayGain is under test
+
+    float earlyPeak = 0.f;
+    for (int i = 0; i < 1000; ++i)
+    {
+        earlyPeak = std::max(earlyPeak, std::abs(sut.step()));
+    }
+    float latePeak = 0.f;
+    for (int i = 0; i < 48000 * 100; ++i)
+    {
+        std::ignore = sut.step();
+    }
+    for (int i = 0; i < 1000; ++i)
+    {
+        latePeak = std::max(latePeak, std::abs(sut.step()));
+    }
+    EXPECT_GT(latePeak, 0.0001f);
+}
+
+TEST(KarplusStrongString, decayScalesPerOctave)
+{
+    constexpr float decayMs = 2000.f;
+    const auto dbAt60 = measureDecayDb(60.f, decayMs, 1.f, decayMs / 1000.f);
+    const auto dbAt72 = measureDecayDb(72.f, decayMs, 1.f, decayMs / 1000.f);
+    const auto dbAt48 = measureDecayDb(48.f, decayMs, 1.f, decayMs / 1000.f);
+
+    EXPECT_NEAR(dbAt60, -20.f, 2.f); // reference note: unaffected by the octave factor
+    EXPECT_LT(dbAt72, dbAt60);       // octave up: decays faster (shorter string)
+    EXPECT_GT(dbAt48, dbAt60);       // octave down: decays slower (longer string)
+}
+
+TEST(KarplusStrongString, decayOctaveFactorZeroIsFlatAcrossNotes)
+{
+    constexpr float decayMs = 2000.f;
+    const auto dbAt60 = measureDecayDb(60.f, decayMs, 0.f, decayMs / 1000.f);
+    const auto dbAt72 = measureDecayDb(72.f, decayMs, 0.f, decayMs / 1000.f);
+    const auto dbAt48 = measureDecayDb(48.f, decayMs, 0.f, decayMs / 1000.f);
+
+    EXPECT_NEAR(dbAt60, -20.f, 2.f);
+    EXPECT_NEAR(dbAt72, dbAt60, 2.f);
+    EXPECT_NEAR(dbAt48, dbAt60, 2.f);
 }
 
 TEST(KarplusStrongString, isActiveTracksTriggerStopAndMute)
