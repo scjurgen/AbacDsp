@@ -437,7 +437,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_envInput[c].feed(std::span{buffer.getReadPointer(c), static_cast<size_t>(buffer.getNumSamples())});
             m_inputDb[c].store(std::log10(m_envInput[c].getRms()) * 20.f);
         }
-        if ((getTotalNumInputChannels() == 2) && (getTotalNumOutputChannels() == 2))
+        if (getTotalNumOutputChannels() == 2)
         {
             fixedRunner->processBlock(buffer);
         }

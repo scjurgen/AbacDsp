@@ -859,7 +859,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                 pluginRunner->processMidi(msg.data);
             }
         }
-        if ((getTotalNumInputChannels() == 2) && (getTotalNumOutputChannels() == 2))
+        if (getTotalNumOutputChannels() == 2)
         {
             fixedRunner->processBlock(buffer);
         }

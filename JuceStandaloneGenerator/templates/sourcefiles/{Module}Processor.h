@@ -465,7 +465,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             }
         }
         /*END_HOSTTRANSPORT*/
-        if ((getTotalNumInputChannels() == 2) && (getTotalNumOutputChannels() == 2))
+        if (getTotalNumOutputChannels() == 2)
         {
             fixedRunner->processBlock(buffer);
         }

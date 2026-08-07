@@ -334,7 +334,7 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
     digest = hashlib.sha256(blueprint["CPP"]["module"].encode("utf-8")).hexdigest()
 
     blueprint["CPP"]["PluginCode"] = blueprint["plugintype"][0] + digest[1:4].upper()
-    blueprint["CPP"]['IsSynth'] = "FALSE"
+    blueprint["CPP"]['IsSynth'] = "TRUE" if blueprint["plugintype"] == "InstrumentPlugin" else "FALSE"
     blueprint["CPP"]['NeedsMidiInput'] = "TRUE" if int(blueprint["CPP"]["NUM_CC_TARGETS"]) > 0 else "FALSE"
     blueprint["CPP"]['NeedsMidiOutput'] = "FALSE"
     blueprint["CPP"]['IsMidiEffect'] = "FALSE"
