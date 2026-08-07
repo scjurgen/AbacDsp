@@ -198,6 +198,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             {
                 bpmDial.setValue(processorRef.getCurrentBpm());
             }
+            playStopSwitch.setEnabled(!processorRef.isHostSynced());
+            if (processorRef.isHostSynced())
+            {
+                playStopSwitch.setToggleState(processorRef.getIsEffectivelyPlaying(), juce::dontSendNotification);
+            }
         }
     }
 

@@ -218,6 +218,27 @@ TEST(TanpuraImpl, HostSyncSwitchesBetweenManualAndClampedHostBpm)
     EXPECT_FLOAT_EQ(impl.currentBpm(), 20.f);
 }
 
+TEST(TanpuraImpl, HostSyncMakesTransportOverrideTheManualPlayStopSwitch)
+{
+    TanpuraImpl<32> impl(kSampleRate);
+    impl.setPlayStop(true);
+    EXPECT_TRUE(impl.effectivePlaying()); // manual switch governs while unsynced
+
+    impl.setHostSync(true);
+    EXPECT_FALSE(impl.effectivePlaying()); // transport not playing overrides the switch
+
+    EffectBase::HostTransport transport{};
+    transport.isPlaying = true;
+    impl.setHostTransport(transport);
+    EXPECT_TRUE(impl.effectivePlaying());
+
+    impl.setPlayStop(false); // still ignored while synced and transport is playing
+    EXPECT_TRUE(impl.effectivePlaying());
+
+    impl.setHostSync(false);
+    EXPECT_FALSE(impl.effectivePlaying()); // back to the manual switch
+}
+
 TEST(TanpuraImpl, ProcessBlockProducesBoundedFiniteOutput)
 {
     constexpr size_t blockSize{32};

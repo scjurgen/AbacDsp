@@ -54,11 +54,14 @@
   },
   "extra_timer_callbacks": [
     "bpmDial.setEnabled(!processorRef.isHostSynced());",
-    "if (processorRef.isHostSynced()) { bpmDial.setValue(processorRef.getCurrentBpm()); }"
+    "if (processorRef.isHostSynced()) { bpmDial.setValue(processorRef.getCurrentBpm()); }",
+    "playStopSwitch.setEnabled(!processorRef.isHostSynced());",
+    "if (processorRef.isHostSynced()) { playStopSwitch.setToggleState(processorRef.getIsEffectivelyPlaying(), juce::dontSendNotification); }"
   ],
   "processor_forwards": [
     {"name": "getCurrentBpm", "call": "currentBpm", "type": "float", "default": "120.f"},
-    {"name": "isHostSynced", "type": "bool"}
+    {"name": "isHostSynced", "type": "bool"},
+    {"name": "getIsEffectivelyPlaying", "call": "effectivePlaying", "type": "bool"}
   ],
   "host_transport": true,
   "CPP":

@@ -951,6 +951,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner && pluginRunner->isHostSynced();
     }
+    [[nodiscard]] bool getIsEffectivelyPlaying() const noexcept
+    {
+        return pluginRunner && pluginRunner->effectivePlaying();
+    }
 
 
     [[nodiscard]] bool hasRunner() const

@@ -111,9 +111,9 @@ class TanpuraImpl final : public EffectBase
         m_sequencer.setHarmonicSecond(value);
     }
 
-    void setPlayStop(const bool value)
+    void setPlayStop(const bool value) noexcept
     {
-        m_sequencer.setPlaying(value);
+        m_manualPlaying = value;
     }
 
     void setBpm(const float value) noexcept
@@ -144,6 +144,11 @@ class TanpuraImpl final : public EffectBase
     [[nodiscard]] bool isHostSynced() const noexcept
     {
         return m_hostSync;
+    }
+
+    [[nodiscard]] bool effectivePlaying() const noexcept
+    {
+        return m_hostSync ? hostTransport().isPlaying : m_manualPlaying;
     }
 
     [[nodiscard]] static float intervalMsForDivision(const float bpm, const int divisionIndex) noexcept
@@ -291,6 +296,7 @@ class TanpuraImpl final : public EffectBase
         const float bpm = currentBpm();
         m_sequencer.setIntervalMs(intervalMsForDivision(bpm, static_cast<int>(m_pluckDivisionIndex)));
         m_sequencer.setPauseGapMs(intervalMsForDivision(bpm, static_cast<int>(m_pauseDivisionIndex)));
+        m_sequencer.setPlaying(effectivePlaying());
     }
 
     AbacDsp::KarplusStrongEnsemble<kNumVoices, kMaxStringLength> m_ensemble;
@@ -304,6 +310,7 @@ class TanpuraImpl final : public EffectBase
     float m_reverbWetGain{0.f};
     float m_manualBpm{120.f};
     bool m_hostSync{false};
+    bool m_manualPlaying{false};
     size_t m_pluckDivisionIndex{4};
     size_t m_pauseDivisionIndex{4};
     float m_attackFilterMsecs{10.f};
