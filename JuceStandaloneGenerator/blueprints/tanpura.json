@@ -12,7 +12,7 @@
     {"short": "VOL", "type": "dial", "display": "Level", "symbol": "level", "default": 0, "range": [-80, 0, 0.1, 1, false], "precision": 1, "unit": "dB"},
     {"short": "TUNE", "type": "dial", "display": "Tuning", "symbol": "tuning", "default": 440, "range": [400, 800, 0.1, 1, false], "precision": 1, "unit": "Hz"},
 
-    {"short": "DET", "type": "dial", "display": "Detune", "symbol": "detune", "default": 5, "range": [-50, 50, 1, 1, false], "precision": 0, "unit": "ct"},
+    {"short": "DET", "type": "dial", "display": "Detune", "symbol": "detune", "default": 5, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "ct"},
     {"short": "RDRY", "type": "dial", "display": "Reverb Dry", "symbol": "reverbDry", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
     {"short": "RWET", "type": "dial", "display": "Reverb Wet", "symbol": "reverbWet", "default": -100, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
     {"short": "RSZ", "type": "dial", "display": "Reverb Size", "symbol": "reverbSize", "default": 30, "range": [1, 330, 0.1, 0.4, false], "precision": 1, "unit": "m"},
@@ -26,13 +26,18 @@
     {"short": "HARM1", "type": "drop", "display": "Set Harmonic 1", "symbol": "harmonicFirst", "default": 7, "listitems": ["-12 sā सा", "-11", "-10 re र", "-9", "-8 ga ग", "-7 ma म", "-6", "-5 pa प", "-4", "-3 dha ध", "-2", "-1 ni नी", "0 Sā सा", "1", "2 re र", "3", "4 ga ग", "5 ma म", "6", "7 pa प", "8", "9 dha ध", "10", "11 ni नी", "0 Sā सा"]},
     {"short": "HARM2", "type": "drop", "display": "Set Harmonic 2", "symbol": "harmonicSecond", "default": 0, "listitems": ["-12 sā सा", "-11", "-10 re र", "-9", "-8 ga ग", "-7 ma म", "-6", "-5 pa प", "-4", "-3 dha ध", "-2", "-1 ni नी", "0 Sā सा", "1", "2 re र", "3", "4 ga ग", "5 ma म", "6", "7 pa प", "8", "9 dha ध", "10", "11 ni नी", "0 Sā सा"]},
     {"short": "PLAY", "type": "switch", "display": "Play", "symbol": "playStop", "default": 0},
-    {"short": "PPM", "type": "dial", "display": "Picks/M", "symbol": "picksPerMinute", "default": 100, "range": [5, 400, 1, 1, false], "precision": 0, "unit": ""},
-    {"short": "PAUSE", "type": "dial", "display": "Pause", "symbol": "pauseLength", "default": 10, "range": [1, 30000, 0.1, 0.25, false], "precision": 1, "unit": "ms"},
+    {"short": "BPM", "type": "dial", "display": "BPM", "symbol": "bpm", "default": 120, "range": [40, 250, 0.1, 1, false], "precision": 1, "unit": "BPM"},
+    {"short": "SYNC", "type": "switch", "display": "Host Sync", "symbol": "hostSync", "default": 0},
+    {"short": "PLDV", "type": "drop", "display": "Pluck Division", "symbol": "pluckDivision", "default": 4,
+      "listitems": ["1/1", "1/2", "1/2.", "1/2T", "1/4", "1/4.", "1/4T", "1/8", "1/8.", "1/8T", "1/16", "1/16.", "1/16T"]},
+    {"short": "PADV", "type": "drop", "display": "Pause Division", "symbol": "pauseDivision", "default": 4,
+      "listitems": ["1/1", "1/2", "1/2.", "1/2T", "1/4", "1/4.", "1/4T", "1/8", "1/8.", "1/8T", "1/16", "1/16.", "1/16T"]},
 
     {"short": "ATK", "type": "dial", "display": "Attack", "symbol": "attack", "default": 10, "range": [1, 3000, 0.1, 0.35, false], "precision": 1, "unit": "ms"},
-    {"short": "DCY", "type": "dial", "display": "Decay", "symbol": "decay", "default": 10, "range": [1, 30000, 0.1, 0.25, false], "precision": 1, "unit": "ms"},
+    {"short": "DCY", "type": "dial", "display": "Decay", "symbol": "decay", "default": 10, "range": [1, 100000, 1, 0.25, false], "precision": 1, "unit": "ms"},
     {"short": "SUS", "type": "dial", "display": "Sustain", "symbol": "levelSustain", "default": 0.2, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
     {"short": "LFOD", "type": "dial", "display": "Filter LFO Depth", "symbol": "lfoDepth", "default": 0.5, "range": [0, 2, 0.01, 1, false], "precision": 2, "unit": ""},
+    {"short": "LFOS", "type": "dial", "display": "Filter LFO Speed", "symbol": "lfoSpeed", "default": 0.5, "range": [0.01, 20, 0.01, 0.25, false], "precision": 2, "unit": "Hz"},
 
     {"short": "ATKF", "type": "dial", "display": "Filter Attack", "symbol": "attackFilter", "default": 10, "range": [1, 3000, 0.1, 0.35, false], "precision": 1, "unit": "ms"},
     {"short": "DCYF", "type": "dial", "display": "Filter Decay", "symbol": "decayFilter", "default": 10, "range": [1, 30000, 0.1, 0.25, false], "precision": 1, "unit": "ms"},
@@ -44,9 +49,18 @@
   "layout": {
     "WINDOW_WIDTH": "1400",
     "WINDOW_HEIGHT": "800",
-    "type": "|||||",
-    "composition": "C=(1:1:1:1:1) A1=(KEY,VOL,TUNE) A2=(DET,RDRY,RWET,RSZ,RDEC,RSLO,RSHI) A3=(PATT,SLIDE,SLDT,HARM1,HARM2,PLAY) A4=(PPM,PAUSE,ATK,DCY,SUS,LFOD) A5=(ATKF,DCYF,SUSF,CUTF,RESF,CONTF))"
+    "type": "=5",
+    "composition": "R=(1:1:1:1:1) A1=(KEY,VOL,TUNE,DET) A2=(PATT,SLIDE,SLDT,HARM1,HARM2,PLAY) A3=(BPM,SYNC,PLDV,PADV,ATK,DCY,SUS,LFOD,LFOS) A4=(ATKF,DCYF,SUSF,CUTF,RESF,CONTF) A5=(RDRY,RWET,RSZ,RDEC,RSLO,RSHI)"
   },
+  "extra_timer_callbacks": [
+    "bpmDial.setEnabled(!processorRef.isHostSynced());",
+    "if (processorRef.isHostSynced()) { bpmDial.setValue(processorRef.getCurrentBpm()); }"
+  ],
+  "processor_forwards": [
+    {"name": "getCurrentBpm", "call": "currentBpm", "type": "float", "default": "120.f"},
+    {"name": "isHostSynced", "type": "bool"}
+  ],
+  "host_transport": true,
   "CPP":
   {
     "CLASS_NAME": "TanpuraImpl<NumSamplesPerBlock>",

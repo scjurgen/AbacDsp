@@ -26,11 +26,11 @@ struct PluckStep
 };
 
 /**
- * Auto-pluck sequencer for the tanpura's 5-string ensemble: walks a fixed role pattern at
- * picksPerMinute, maps each role to a note (key/harmonic offsets), and independently rolls
+ * Auto-pluck sequencer for the tanpura's 5-string ensemble: walks a fixed role pattern at a
+ * fixed interval, maps each role to a note (key/harmonic offsets), and independently rolls
  * a slide-in chance each time the Harmonic1 role comes up. The trailing dash every pattern
- * ends with is not stored as a step: it stands for the pauseLength gap applied once per
- * cycle after the last real step, unconditionally.
+ * ends with is a virtual, silent pluck one interval after the last real step; the pause gap
+ * is an additional wait after that virtual pluck before the pattern repeats from step 0.
  */
 template <size_t MaxLength>
 class PluckSequencer
@@ -98,14 +98,14 @@ class PluckSequencer
         m_slideTimeMs = ms;
     }
 
-    void setPicksPerMinute(const float picksPerMinute) noexcept
+    void setIntervalMs(const float ms) noexcept
     {
-        m_intervalMs = 60000.f / picksPerMinute;
+        m_intervalMs = ms;
     }
 
-    void setPauseLengthMs(const float ms) noexcept
+    void setPauseGapMs(const float ms) noexcept
     {
-        m_pauseLengthMs = ms;
+        m_pauseGapMs = ms;
     }
 
     void setDetuneCents(const size_t voiceIndex, const float cents) noexcept
@@ -222,7 +222,7 @@ class PluckSequencer
         if (m_stepIndex >= pattern.stepCount)
         {
             m_stepIndex = 0;
-            m_samplesUntilNextEvent = msToSamples(m_pauseLengthMs);
+            m_samplesUntilNextEvent = msToSamples(m_intervalMs) + msToSamples(m_pauseGapMs);
         }
         else
         {
@@ -238,7 +238,7 @@ class PluckSequencer
     float m_slidePercent{0.f};
     float m_slideTimeMs{150.f};
     float m_intervalMs{600.f};
-    float m_pauseLengthMs{10.f};
+    float m_pauseGapMs{10.f};
     std::array<float, kNumVoices> m_detuneCents{};
     bool m_playing{false};
 

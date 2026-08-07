@@ -1,7 +1,9 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
+#include <string_view>
 
 #include "Audio/AudioBuffer.h"
 #include "EffectBase.h"
@@ -24,7 +26,7 @@ class TanpuraImpl final : public EffectBase
         m_fdn.setModulation(kReverbModulationDepth, kReverbModulationSpeedHz);
     }
 
-    void setKey(const size_t value)
+    void setKey(const int value)
     {
         m_sequencer.setKey(value);
     }
@@ -114,14 +116,39 @@ class TanpuraImpl final : public EffectBase
         m_sequencer.setPlaying(value);
     }
 
-    void setPicksPerMinute(const float value)
+    void setBpm(const float value) noexcept
     {
-        m_sequencer.setPicksPerMinute(value);
+        m_manualBpm = value;
     }
 
-    void setPauseLength(const float value)
+    void setHostSync(const bool value) noexcept
     {
-        m_sequencer.setPauseLengthMs(value);
+        m_hostSync = value;
+    }
+
+    void setPluckDivision(const int index) noexcept
+    {
+        m_pluckDivisionIndex = clampDivisionIndex(index);
+    }
+
+    void setPauseDivision(const int index) noexcept
+    {
+        m_pauseDivisionIndex = clampDivisionIndex(index);
+    }
+
+    [[nodiscard]] float currentBpm() const noexcept
+    {
+        return m_hostSync ? std::clamp(static_cast<float>(hostTransport().bpm), 20.f, 300.f) : m_manualBpm;
+    }
+
+    [[nodiscard]] bool isHostSynced() const noexcept
+    {
+        return m_hostSync;
+    }
+
+    [[nodiscard]] static float intervalMsForDivision(const float bpm, const int divisionIndex) noexcept
+    {
+        return kSyncDivisions[clampDivisionIndex(divisionIndex)].quarterNotes * (60000.f / bpm);
     }
 
     void setAttack(const float value)
@@ -144,6 +171,10 @@ class TanpuraImpl final : public EffectBase
         forEachVoice([value](auto& voice) { voice.setFilterLfoDepthOctaves(value); });
     }
 
+    void setLfoSpeed(const float value)
+    {
+        forEachVoice([value](auto& voice) { voice.setFilterLfoSpeed(value); });
+    }
     void setAttackFilter(const float value)
     {
         m_attackFilterMsecs = value;
@@ -169,7 +200,7 @@ class TanpuraImpl final : public EffectBase
 
     void setFilterResonance(const float value)
     {
-        forEachVoice([value](auto& voice) { voice.setFilterResonance(value); });
+        forEachVoice([value](auto& voice) { voice.setFilterResonance(value * 2.1f); });
     }
 
     void setContourFilter(const float value)
@@ -180,6 +211,7 @@ class TanpuraImpl final : public EffectBase
     void processBlock([[maybe_unused]] const AbacDsp::AudioBuffer<2, BlockSize>& in,
                       AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
+        updateTiming();
         std::array<float, BlockSize> dry{};
         for (size_t i = 0; i < BlockSize; ++i)
         {
@@ -215,6 +247,21 @@ class TanpuraImpl final : public EffectBase
     static constexpr float kReverbShelfHighHz{6000.f};
     static constexpr float kEqShelfQ{0.707f};
 
+    struct SyncDivision
+    {
+        std::string_view name;
+        float quarterNotes;
+    };
+
+    // clang-format off
+    static constexpr auto kSyncDivisions = std::to_array<SyncDivision>({
+        {"1/1",   4.f},      {"1/2",   2.f},      {"1/2.",  3.f},      {"1/2T",  4.f / 3.f},
+        {"1/4",   1.f},      {"1/4.",  1.5f},     {"1/4T",  2.f / 3.f},
+        {"1/8",   0.5f},     {"1/8.",  0.75f},    {"1/8T",  1.f / 3.f},
+        {"1/16",  0.25f},    {"1/16.", 0.375f},   {"1/16T", 1.f / 6.f},
+    });
+    // clang-format on
+
     using Fdn = AbacDsp::FdnTankGlide<kFdnMaxSizePerElement, kFdnOrder, BlockSize>;
     using LoShelfFilter = AbacDsp::Biquad<AbacDsp::BiquadFilterType::LoShelf>;
     using HiShelfFilter = AbacDsp::Biquad<AbacDsp::BiquadFilterType::HiShelf>;
@@ -234,6 +281,18 @@ class TanpuraImpl final : public EffectBase
                      { voice.setFilterEnvelope(m_attackFilterMsecs, m_decayFilterMsecs, m_levelSustainFilter); });
     }
 
+    [[nodiscard]] static size_t clampDivisionIndex(const int index) noexcept
+    {
+        return static_cast<size_t>(std::clamp(index, 0, static_cast<int>(kSyncDivisions.size()) - 1));
+    }
+
+    void updateTiming() noexcept
+    {
+        const float bpm = currentBpm();
+        m_sequencer.setIntervalMs(intervalMsForDivision(bpm, static_cast<int>(m_pluckDivisionIndex)));
+        m_sequencer.setPauseGapMs(intervalMsForDivision(bpm, static_cast<int>(m_pauseDivisionIndex)));
+    }
+
     AbacDsp::KarplusStrongEnsemble<kNumVoices, kMaxStringLength> m_ensemble;
     PluckSequencer<kMaxStringLength> m_sequencer;
     Fdn m_fdn;
@@ -243,6 +302,10 @@ class TanpuraImpl final : public EffectBase
     float m_level{1.f};
     float m_reverbDryGain{1.f};
     float m_reverbWetGain{0.f};
+    float m_manualBpm{120.f};
+    bool m_hostSync{false};
+    size_t m_pluckDivisionIndex{4};
+    size_t m_pauseDivisionIndex{4};
     float m_attackFilterMsecs{10.f};
     float m_decayFilterMsecs{10.f};
     float m_levelSustainFilter{0.f};

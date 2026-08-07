@@ -59,7 +59,7 @@ class KarplusStrongString
         , m_brownDamper(sampleRate)
     {
         m_dcFilter.setCutoff(20.f);
-        m_damper.setCutoff(5000.f);
+        m_damper.setCutoff(22000.f);
         m_brownDamper.setCutoff(10.f);
         m_initFilter.setParameterSmoothTimeMs(0.f);
         m_initFilter.setFilterCoefficients({0.f, 0.f, 0.f, 0.f, 1.f}); // Lp24: pass the last stage only
@@ -226,6 +226,12 @@ class KarplusStrongString
         m_damperFactor = damperFactor;
         m_damper.setCutoff(computeDamperCutoff(m_baseFrequency, m_damperFactor, 2.f, 0.25f));
     }
+
+    void setDamperCutoff(const float cutoff) noexcept
+    {
+        m_damper.setCutoff(cutoff);
+    }
+
 
     [[nodiscard]] bool isActive() const noexcept
     {

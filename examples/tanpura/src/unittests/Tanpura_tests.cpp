@@ -53,13 +53,13 @@ TEST(PluckSequencer, PatternTableMatchesSpec)
     EXPECT_EQ(p3.steps[5].voiceIndex, 4u);
 }
 
-TEST(PluckSequencer, DashUsesNormalIntervalAndPauseAppliesOncePerCycle)
+TEST(PluckSequencer, DashUsesNormalIntervalAndWrapAddsIntervalPlusPauseGap)
 {
     TestSequencer seq(kSampleRate);
     TestEnsemble ensemble(kSampleRate);
-    seq.setPattern(3);             // "H1 H2 - 8 8 1 -"
-    seq.setPicksPerMinute(6000.f); // 10 ms/step -> 480 samples at 48 kHz
-    seq.setPauseLengthMs(100.f);   // 4800 samples
+    seq.setPattern(3);        // "H1 H2 - 8 8 1 -"
+    seq.setIntervalMs(10.f);  // 10 ms/step -> 480 samples at 48 kHz
+    seq.setPauseGapMs(100.f); // 4800 samples, deliberately not a multiple of intervalSamples
 
     constexpr size_t intervalSamples{480};
     constexpr size_t pauseSamples{4800};
@@ -81,15 +81,16 @@ TEST(PluckSequencer, DashUsesNormalIntervalAndPauseAppliesOncePerCycle)
     }
 
     // step0 fires immediately; H1,H2,Pause,Octave,Octave all take one normal interval each
-    // (the inner dash is not longer than a real step); only the wrap after the last step
-    // (Root) takes the dedicated pauseLength gap.
+    // (the inner dash is not longer than a real step); the wrap after the last step (Root)
+    // reaches the trailing dash's own virtual-pluck slot (one more interval) and then adds
+    // the pause gap on top of that before the next cycle's H1.
     const std::vector<size_t> expected{1,
                                        intervalSamples + 1,
                                        intervalSamples + 1,
                                        intervalSamples + 1,
                                        intervalSamples + 1,
                                        intervalSamples + 1,
-                                       pauseSamples + 1};
+                                       intervalSamples + pauseSamples + 1};
     EXPECT_EQ(callsBetweenSteps, expected);
 }
 
@@ -98,7 +99,7 @@ TEST(PluckSequencer, PlayStopGatesNewPlucksAndResumesFromStart)
     TestSequencer seq(kSampleRate);
     TestEnsemble ensemble(kSampleRate);
     seq.setPattern(0);
-    seq.setPicksPerMinute(6000.f);
+    seq.setIntervalMs(10.f);
     seq.setPlaying(true);
     seq.step(ensemble); // fires H1, stepIndex -> 1
     EXPECT_EQ(seq.stepIndex(), 1u);
@@ -121,8 +122,8 @@ TEST(PluckSequencer, ZeroSlidePercentNeverSlides)
     TestSequencer seq(kSampleRate);
     TestEnsemble ensemble(kSampleRate);
     seq.setPattern(0);
-    seq.setPicksPerMinute(6000.f);
-    seq.setPauseLengthMs(1.f);
+    seq.setIntervalMs(10.f);
+    seq.setPauseGapMs(1.f);
     seq.setHarmonicFirst(19); // offset != 0, so a slide would be audible if it happened
     seq.setSlidePercent(0.f);
     seq.setPlaying(true);
@@ -139,8 +140,8 @@ TEST(PluckSequencer, HundredPercentSlideAlwaysSlides)
     TestSequencer seq(kSampleRate);
     TestEnsemble ensemble(kSampleRate);
     seq.setPattern(0);
-    seq.setPicksPerMinute(6000.f);
-    seq.setPauseLengthMs(1.f);
+    seq.setIntervalMs(10.f);
+    seq.setPauseGapMs(1.f);
     seq.setHarmonicFirst(19);
     seq.setSlideTimeMs(1.f); // short, so each slide finishes well before the next H1 pluck
     seq.setSlidePercent(100.f);
@@ -160,8 +161,8 @@ TEST(PluckSequencer, SlidePercentControlsBendFrequency)
     TestSequencer seq(kSampleRate);
     TestEnsemble ensemble(kSampleRate);
     seq.setPattern(0); // "H1 H2 1 -", 3 steps, fast cycling
-    seq.setPicksPerMinute(6000.f);
-    seq.setPauseLengthMs(1.f);
+    seq.setIntervalMs(10.f);
+    seq.setPauseGapMs(1.f);
     seq.setHarmonicFirst(19);
     seq.setSlideTimeMs(1.f); // finishes long before the next H1 pluck comes around
     seq.setSlidePercent(50.f);
@@ -188,6 +189,35 @@ TEST(PluckSequencer, SlidePercentControlsBendFrequency)
     EXPECT_NEAR(ratio, 0.5, 0.05);
 }
 
+TEST(TanpuraImpl, IntervalMsForDivisionMatchesMusicalRatios)
+{
+    using Impl = TanpuraImpl<32>;
+    EXPECT_FLOAT_EQ(Impl::intervalMsForDivision(120.f, 0), 2000.f); // "1/1" at 120 BPM
+    EXPECT_FLOAT_EQ(Impl::intervalMsForDivision(120.f, 4), 500.f);  // "1/4" at 120 BPM
+    EXPECT_FLOAT_EQ(Impl::intervalMsForDivision(120.f, 7), 250.f);  // "1/8" at 120 BPM
+    EXPECT_FLOAT_EQ(Impl::intervalMsForDivision(120.f, 100), Impl::intervalMsForDivision(120.f, 12));
+}
+
+TEST(TanpuraImpl, HostSyncSwitchesBetweenManualAndClampedHostBpm)
+{
+    TanpuraImpl<32> impl(kSampleRate);
+    impl.setBpm(90.f);
+    EXPECT_FLOAT_EQ(impl.currentBpm(), 90.f);
+
+    EffectBase::HostTransport transport{};
+    transport.bpm = 500.0; // above the clamp ceiling
+    impl.setHostTransport(transport);
+    EXPECT_FLOAT_EQ(impl.currentBpm(), 90.f); // still unsynced, host bpm ignored
+
+    impl.setHostSync(true);
+    EXPECT_TRUE(impl.isHostSynced());
+    EXPECT_FLOAT_EQ(impl.currentBpm(), 300.f); // clamped to the ceiling
+
+    transport.bpm = 5.0; // below the clamp floor
+    impl.setHostTransport(transport);
+    EXPECT_FLOAT_EQ(impl.currentBpm(), 20.f);
+}
+
 TEST(TanpuraImpl, ProcessBlockProducesBoundedFiniteOutput)
 {
     constexpr size_t blockSize{32};
@@ -195,8 +225,9 @@ TEST(TanpuraImpl, ProcessBlockProducesBoundedFiniteOutput)
     impl.setKey(24);
     impl.setLevel(-6.f);
     impl.setPattern(2);
-    impl.setPicksPerMinute(300.f);
-    impl.setPauseLength(20.f);
+    impl.setBpm(200.f);
+    impl.setPluckDivision(4);  // "1/4" -> 300 ms/step at 200 BPM
+    impl.setPauseDivision(10); // "1/16" -> 75 ms pause gap
     impl.setAttack(5.f);
     impl.setDecay(200.f);
     impl.setLevelSustain(0.3f);
@@ -234,8 +265,9 @@ namespace
     TanpuraImpl<blockSize> impl(kSampleRate);
     impl.setKey(24);
     impl.setPattern(2); // "H1 H2 8 8 1 -", feeds all 5 strings into the tank
-    impl.setPicksPerMinute(6000.f);
-    impl.setPauseLength(1.f);
+    impl.setBpm(250.f);
+    impl.setPluckDivision(12); // "1/16T", the fastest division -> 40 ms/step at 250 BPM
+    impl.setPauseDivision(12);
     impl.setAttack(1.f);
     impl.setDecay(5.f); // very short: dry signal is effectively silent within ~50 ms
     impl.setLevelSustain(0.f);
@@ -248,7 +280,7 @@ namespace
     AbacDsp::AudioBuffer<2, blockSize> out{};
 
     impl.setPlayStop(true);
-    for (size_t block = 0; block < 100; ++block) // feed several plucks into the tank
+    for (size_t block = 0; block < 500; ++block) // ~2.8 pattern cycles at 40 ms/step
     {
         impl.processBlock(in, out);
     }

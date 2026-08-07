@@ -28,12 +28,15 @@ struct PatchParameters
         harmonicFirst     , // drop
         harmonicSecond    , // drop
         playStop          , // switch
-        picksPerMinute    , // dial
-        pauseLength       , // dial
+        bpm               , // dial
+        hostSync          , // switch
+        pluckDivision     , // drop
+        pauseDivision     , // drop
         attack            , // dial
         decay             , // dial
         levelSustain      , // dial
         lfoDepth          , // dial
+        lfoSpeed          , // dial
         attackFilter      , // dial
         decayFilter       , // dial
         levelSustainFilter, // dial
@@ -57,12 +60,15 @@ float slideTime{150.0f};
 size_t harmonicFirst{7};
 size_t harmonicSecond{0};
 bool playStop{false};
-float picksPerMinute{100.0f};
-float pauseLength{10.0f};
+float bpm{120.0f};
+bool hostSync{false};
+size_t pluckDivision{4};
+size_t pauseDivision{4};
 float attack{10.0f};
 float decay{10.0f};
 float levelSustain{0.2f};
 float lfoDepth{0.5f};
+float lfoSpeed{0.5f};
 float attackFilter{10.0f};
 float decayFilter{10.0f};
 float levelSustainFilter{0.0f};
@@ -88,12 +94,15 @@ float contourFilter{0.0f};
 "harmonicFirst",
 "harmonicSecond",
 "playStop",
-"picksPerMinute",
-"pauseLength",
+"bpm",
+"hostSync",
+"pluckDivision",
+"pauseDivision",
 "attack",
 "decay",
 "levelSustain",
 "lfoDepth",
+"lfoSpeed",
 "attackFilter",
 "decayFilter",
 "levelSustainFilter",
@@ -134,12 +143,15 @@ float contourFilter{0.0f};
         else if constexpr (ParamId == Id::harmonicFirst) return harmonicFirst;
         else if constexpr (ParamId == Id::harmonicSecond) return harmonicSecond;
         else if constexpr (ParamId == Id::playStop) return playStop;
-        else if constexpr (ParamId == Id::picksPerMinute) return picksPerMinute;
-        else if constexpr (ParamId == Id::pauseLength) return pauseLength;
+        else if constexpr (ParamId == Id::bpm) return bpm;
+        else if constexpr (ParamId == Id::hostSync) return hostSync;
+        else if constexpr (ParamId == Id::pluckDivision) return pluckDivision;
+        else if constexpr (ParamId == Id::pauseDivision) return pauseDivision;
         else if constexpr (ParamId == Id::attack) return attack;
         else if constexpr (ParamId == Id::decay) return decay;
         else if constexpr (ParamId == Id::levelSustain) return levelSustain;
         else if constexpr (ParamId == Id::lfoDepth) return lfoDepth;
+        else if constexpr (ParamId == Id::lfoSpeed) return lfoSpeed;
         else if constexpr (ParamId == Id::attackFilter) return attackFilter;
         else if constexpr (ParamId == Id::decayFilter) return decayFilter;
         else if constexpr (ParamId == Id::levelSustainFilter) return levelSustainFilter;
@@ -190,9 +202,13 @@ break;
 break;
  case Id::playStop: if (!isEqual(get<Id::playStop>(), value)) {get<Id::playStop>() = static_cast<bool>(value) ;m_modified = true;}
 break;
- case Id::picksPerMinute: if (!isEqual(get<Id::picksPerMinute>(), value)) {get<Id::picksPerMinute>() = value;m_modified = true;}
+ case Id::bpm: if (!isEqual(get<Id::bpm>(), value)) {get<Id::bpm>() = value;m_modified = true;}
 break;
- case Id::pauseLength: if (!isEqual(get<Id::pauseLength>(), value)) {get<Id::pauseLength>() = value;m_modified = true;}
+ case Id::hostSync: if (!isEqual(get<Id::hostSync>(), value)) {get<Id::hostSync>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::pluckDivision: if (!isEqual(get<Id::pluckDivision>(), value)) {get<Id::pluckDivision>() = static_cast<size_t>(value) ;m_modified = true;}
+break;
+ case Id::pauseDivision: if (!isEqual(get<Id::pauseDivision>(), value)) {get<Id::pauseDivision>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
  case Id::attack: if (!isEqual(get<Id::attack>(), value)) {get<Id::attack>() = value;m_modified = true;}
 break;
@@ -201,6 +217,8 @@ break;
  case Id::levelSustain: if (!isEqual(get<Id::levelSustain>(), value)) {get<Id::levelSustain>() = value;m_modified = true;}
 break;
  case Id::lfoDepth: if (!isEqual(get<Id::lfoDepth>(), value)) {get<Id::lfoDepth>() = value;m_modified = true;}
+break;
+ case Id::lfoSpeed: if (!isEqual(get<Id::lfoSpeed>(), value)) {get<Id::lfoSpeed>() = value;m_modified = true;}
 break;
  case Id::attackFilter: if (!isEqual(get<Id::attackFilter>(), value)) {get<Id::attackFilter>() = value;m_modified = true;}
 break;
@@ -268,12 +286,15 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         harmonicFirst     , // drop
         harmonicSecond    , // drop
         playStop          , // switch
-        picksPerMinute    , // dial
-        pauseLength       , // dial
+        bpm               , // dial
+        hostSync          , // switch
+        pluckDivision     , // drop
+        pauseDivision     , // drop
         attack            , // dial
         decay             , // dial
         levelSustain      , // dial
         lfoDepth          , // dial
+        lfoSpeed          , // dial
         attackFilter      , // dial
         decayFilter       , // dial
         levelSustainFilter, // dial

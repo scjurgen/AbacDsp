@@ -38,6 +38,7 @@ class KarplusStrongVoice
         , m_filterEnvelope(sampleRate)
         , m_filterLfo(sampleRate)
     {
+        m_string.setDamperCutoff(22000);
         m_vcf.setFilterCoefficients({0.f, 0.f, 0.f, 0.f, 1.f}); // Lp24: pass the last stage only
         m_vcf.setParameterSmoothTimeMs(kVcfSmoothingMs);
         m_filterLfo.setModulationDepth(1.f);
@@ -121,10 +122,16 @@ class KarplusStrongVoice
         m_filterLfo.setModulationSpeed(rateHz);
     }
 
+    void setFilterLfoSpeed(const float rateHz) noexcept
+    {
+        m_filterLfo.setModulationSpeed(rateHz);
+    }
+
     void setFilterLfoDepthOctaves(const float depthOctaves) noexcept
     {
         m_lfoDepthOctaves = depthOctaves;
     }
+
 
     void setFilterEnvelope(const float attackMsecs, const float decayMsecs, const float sustainLevel,
                            const float curve = 0.f) noexcept

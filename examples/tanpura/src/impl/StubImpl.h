@@ -81,13 +81,21 @@ class StubImpl final : public EffectBase
     {
         m_playStop = value;
     }
-    void setPicksPerMinute(const float value)
+    void setBpm(const float value)
     {
-        m_picksPerMinute = value;
+        m_bpm = value;
     }
-    void setPauseLength(const float value)
+    void setHostSync(const bool value)
     {
-        m_pauseLength = value;
+        m_hostSync = value;
+    }
+    void setPluckDivision(const size_t value)
+    {
+        m_pluckDivision = value;
+    }
+    void setPauseDivision(const size_t value)
+    {
+        m_pauseDivision = value;
     }
     void setAttack(const float value)
     {
@@ -104,6 +112,10 @@ class StubImpl final : public EffectBase
     void setLfoDepth(const float value)
     {
         m_lfoDepth = value;
+    }
+    void setLfoSpeed(const float value)
+    {
+        m_lfoSpeed = value;
     }
     void setAttackFilter(const float value)
     {
@@ -156,12 +168,15 @@ class StubImpl final : public EffectBase
     size_t m_harmonicFirst{};
     size_t m_harmonicSecond{};
     bool m_playStop{};
-    float m_picksPerMinute{};
-    float m_pauseLength{};
+    float m_bpm{};
+    bool m_hostSync{};
+    size_t m_pluckDivision{};
+    size_t m_pauseDivision{};
     float m_attack{};
     float m_decay{};
     float m_levelSustain{};
     float m_lfoDepth{};
+    float m_lfoSpeed{};
     float m_attackFilter{};
     float m_decayFilter{};
     float m_levelSustainFilter{};
