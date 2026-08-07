@@ -506,7 +506,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             {"key",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setKey(static_cast<int>(v));
+                 p.pluginRunner->setKey(static_cast<size_t>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::key, v);
              }},
             {"level",
@@ -566,7 +566,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             {"pattern",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setPattern(static_cast<int>(v));
+                 p.pluginRunner->setPattern(static_cast<size_t>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::pattern, v);
              }},
             {"slide",
@@ -584,13 +584,13 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             {"harmonicFirst",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setHarmonicFirst(static_cast<int>(v));
+                 p.pluginRunner->setHarmonicFirst(static_cast<size_t>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::harmonicFirst, v);
              }},
             {"harmonicSecond",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setHarmonicSecond(static_cast<int>(v));
+                 p.pluginRunner->setHarmonicSecond(static_cast<size_t>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::harmonicSecond, v);
              }},
             {"playStop",

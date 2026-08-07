@@ -37,7 +37,7 @@ class TanpuraImpl final : public EffectBase
         }
     }
 
-    void setKey(const int value)
+    void setKey(const size_t value)
     {
         m_sequencer.setKey(value);
     }
