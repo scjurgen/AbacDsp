@@ -29,25 +29,33 @@ class StubImpl final : public EffectBase
     {
         m_tuning = value;
     }
-    void setDetuneString1(const float value)
+    void setDetune(const float value)
     {
-        m_detuneString1 = value;
+        m_detune = value;
     }
-    void setDetuneString2(const float value)
+    void setReverbDry(const float value)
     {
-        m_detuneString2 = value;
+        m_reverbDry = std::pow(10.f, value / 20.f);
     }
-    void setDetuneString3(const float value)
+    void setReverbWet(const float value)
     {
-        m_detuneString3 = value;
+        m_reverbWet = std::pow(10.f, value / 20.f);
     }
-    void setDetuneString4(const float value)
+    void setReverbSize(const float value)
     {
-        m_detuneString4 = value;
+        m_reverbSize = value;
     }
-    void setDetuneString5(const float value)
+    void setReverbDecay(const float value)
     {
-        m_detuneString5 = value;
+        m_reverbDecay = value;
+    }
+    void setReverbShelfLow(const float value)
+    {
+        m_reverbShelfLow = std::pow(10.f, value / 20.f);
+    }
+    void setReverbShelfHigh(const float value)
+    {
+        m_reverbShelfHigh = std::pow(10.f, value / 20.f);
     }
     void setPattern(const size_t value)
     {
@@ -135,11 +143,13 @@ class StubImpl final : public EffectBase
     size_t m_key{};
     float m_level{};
     float m_tuning{};
-    float m_detuneString1{};
-    float m_detuneString2{};
-    float m_detuneString3{};
-    float m_detuneString4{};
-    float m_detuneString5{};
+    float m_detune{};
+    float m_reverbDry{};
+    float m_reverbWet{};
+    float m_reverbSize{};
+    float m_reverbDecay{};
+    float m_reverbShelfLow{};
+    float m_reverbShelfHigh{};
     size_t m_pattern{};
     float m_slide{};
     float m_slideTime{};

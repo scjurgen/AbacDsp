@@ -15,11 +15,13 @@ struct PatchParameters
         key               , // drop
         level             , // dial
         tuning            , // dial
-        detuneString1     , // dial
-        detuneString2     , // dial
-        detuneString3     , // dial
-        detuneString4     , // dial
-        detuneString5     , // dial
+        detune            , // dial
+        reverbDry         , // dial
+        reverbWet         , // dial
+        reverbSize        , // dial
+        reverbDecay       , // dial
+        reverbShelfLow    , // dial
+        reverbShelfHigh   , // dial
         pattern           , // drop
         slide             , // dial
         slideTime         , // dial
@@ -42,11 +44,13 @@ struct PatchParameters
 size_t key{12};
 float level{0.0f};
 float tuning{440.0f};
-float detuneString1{0.0f};
-float detuneString2{5.0f};
-float detuneString3{-5.0f};
-float detuneString4{7.0f};
-float detuneString5{-2.0f};
+float detune{5.0f};
+float reverbDry{0.0f};
+float reverbWet{-100.0f};
+float reverbSize{30.0f};
+float reverbDecay{2000.0f};
+float reverbShelfLow{0.0f};
+float reverbShelfHigh{0.0f};
 size_t pattern{0};
 float slide{0.0f};
 float slideTime{150.0f};
@@ -71,11 +75,13 @@ float contourFilter{0.0f};
         "key",
 "level",
 "tuning",
-"detuneString1",
-"detuneString2",
-"detuneString3",
-"detuneString4",
-"detuneString5",
+"detune",
+"reverbDry",
+"reverbWet",
+"reverbSize",
+"reverbDecay",
+"reverbShelfLow",
+"reverbShelfHigh",
 "pattern",
 "slide",
 "slideTime",
@@ -115,11 +121,13 @@ float contourFilter{0.0f};
         if constexpr (ParamId == Id::key) return key;
         else if constexpr (ParamId == Id::level) return level;
         else if constexpr (ParamId == Id::tuning) return tuning;
-        else if constexpr (ParamId == Id::detuneString1) return detuneString1;
-        else if constexpr (ParamId == Id::detuneString2) return detuneString2;
-        else if constexpr (ParamId == Id::detuneString3) return detuneString3;
-        else if constexpr (ParamId == Id::detuneString4) return detuneString4;
-        else if constexpr (ParamId == Id::detuneString5) return detuneString5;
+        else if constexpr (ParamId == Id::detune) return detune;
+        else if constexpr (ParamId == Id::reverbDry) return reverbDry;
+        else if constexpr (ParamId == Id::reverbWet) return reverbWet;
+        else if constexpr (ParamId == Id::reverbSize) return reverbSize;
+        else if constexpr (ParamId == Id::reverbDecay) return reverbDecay;
+        else if constexpr (ParamId == Id::reverbShelfLow) return reverbShelfLow;
+        else if constexpr (ParamId == Id::reverbShelfHigh) return reverbShelfHigh;
         else if constexpr (ParamId == Id::pattern) return pattern;
         else if constexpr (ParamId == Id::slide) return slide;
         else if constexpr (ParamId == Id::slideTime) return slideTime;
@@ -156,15 +164,19 @@ break;
 break;
  case Id::tuning: if (!isEqual(get<Id::tuning>(), value)) {get<Id::tuning>() = value;m_modified = true;}
 break;
- case Id::detuneString1: if (!isEqual(get<Id::detuneString1>(), value)) {get<Id::detuneString1>() = value;m_modified = true;}
+ case Id::detune: if (!isEqual(get<Id::detune>(), value)) {get<Id::detune>() = value;m_modified = true;}
 break;
- case Id::detuneString2: if (!isEqual(get<Id::detuneString2>(), value)) {get<Id::detuneString2>() = value;m_modified = true;}
+ case Id::reverbDry: if (!isEqual(get<Id::reverbDry>(), value)) {get<Id::reverbDry>() = value;m_modified = true;}
 break;
- case Id::detuneString3: if (!isEqual(get<Id::detuneString3>(), value)) {get<Id::detuneString3>() = value;m_modified = true;}
+ case Id::reverbWet: if (!isEqual(get<Id::reverbWet>(), value)) {get<Id::reverbWet>() = value;m_modified = true;}
 break;
- case Id::detuneString4: if (!isEqual(get<Id::detuneString4>(), value)) {get<Id::detuneString4>() = value;m_modified = true;}
+ case Id::reverbSize: if (!isEqual(get<Id::reverbSize>(), value)) {get<Id::reverbSize>() = value;m_modified = true;}
 break;
- case Id::detuneString5: if (!isEqual(get<Id::detuneString5>(), value)) {get<Id::detuneString5>() = value;m_modified = true;}
+ case Id::reverbDecay: if (!isEqual(get<Id::reverbDecay>(), value)) {get<Id::reverbDecay>() = value;m_modified = true;}
+break;
+ case Id::reverbShelfLow: if (!isEqual(get<Id::reverbShelfLow>(), value)) {get<Id::reverbShelfLow>() = value;m_modified = true;}
+break;
+ case Id::reverbShelfHigh: if (!isEqual(get<Id::reverbShelfHigh>(), value)) {get<Id::reverbShelfHigh>() = value;m_modified = true;}
 break;
  case Id::pattern: if (!isEqual(get<Id::pattern>(), value)) {get<Id::pattern>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
@@ -243,11 +255,13 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         key               , // drop
         level             , // dial
         tuning            , // dial
-        detuneString1     , // dial
-        detuneString2     , // dial
-        detuneString3     , // dial
-        detuneString4     , // dial
-        detuneString5     , // dial
+        detune            , // dial
+        reverbDry         , // dial
+        reverbWet         , // dial
+        reverbSize        , // dial
+        reverbDecay       , // dial
+        reverbShelfLow    , // dial
+        reverbShelfHigh   , // dial
         pattern           , // drop
         slide             , // dial
         slideTime         , // dial

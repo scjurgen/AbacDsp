@@ -200,6 +200,12 @@ TEST(TanpuraImpl, ProcessBlockProducesBoundedFiniteOutput)
     impl.setAttack(5.f);
     impl.setDecay(200.f);
     impl.setLevelSustain(0.3f);
+    impl.setReverbDry(0.f);
+    impl.setReverbWet(-6.f);
+    impl.setReverbSize(30.f);
+    impl.setReverbDecay(2000.f);
+    impl.setReverbShelfLow(6.f);
+    impl.setReverbShelfHigh(-6.f);
     impl.setPlayStop(true);
 
     AbacDsp::AudioBuffer<2, blockSize> in{};
@@ -215,4 +221,58 @@ TEST(TanpuraImpl, ProcessBlockProducesBoundedFiniteOutput)
             EXPECT_LE(std::abs(out(i, 1)), 10.f);
         }
     }
+}
+
+namespace
+{
+// Plucks a handful of strings with a very short string decay, stops new plucks, lets the
+// dry signal die out, then measures energy in a later window: with the reverb fully wet
+// and a long reverb decay, that window should still be alive; with it fully dry, silent.
+[[nodiscard]] double energyAfterDrySettles(const float reverbDryDb, const float reverbWetDb)
+{
+    constexpr size_t blockSize{64};
+    TanpuraImpl<blockSize> impl(kSampleRate);
+    impl.setKey(24);
+    impl.setPattern(2); // "H1 H2 8 8 1 -", feeds all 5 strings into the tank
+    impl.setPicksPerMinute(6000.f);
+    impl.setPauseLength(1.f);
+    impl.setAttack(1.f);
+    impl.setDecay(5.f); // very short: dry signal is effectively silent within ~50 ms
+    impl.setLevelSustain(0.f);
+    impl.setReverbDry(reverbDryDb);
+    impl.setReverbWet(reverbWetDb);
+    impl.setReverbSize(30.f);
+    impl.setReverbDecay(5000.f); // long: the tank is still alive well past the dry settle time
+
+    AbacDsp::AudioBuffer<2, blockSize> in{};
+    AbacDsp::AudioBuffer<2, blockSize> out{};
+
+    impl.setPlayStop(true);
+    for (size_t block = 0; block < 100; ++block) // feed several plucks into the tank
+    {
+        impl.processBlock(in, out);
+    }
+    impl.setPlayStop(false);
+    for (size_t block = 0; block < 100; ++block) // let the short dry decay fully settle
+    {
+        impl.processBlock(in, out);
+    }
+
+    double energy = 0.0;
+    for (size_t block = 0; block < 50; ++block)
+    {
+        impl.processBlock(in, out);
+        for (size_t i = 0; i < blockSize; ++i)
+        {
+            energy += static_cast<double>(out(i, 0)) * out(i, 0);
+        }
+    }
+    return energy;
+}
+}
+
+TEST(TanpuraImpl, ReverbTailPersistsAfterDrySignalSettlesWhenWet)
+{
+    EXPECT_LT(energyAfterDrySettles(0.f, -100.f), 1e-6);
+    EXPECT_GT(energyAfterDrySettles(-100.f, 0.f), 1e-4);
 }

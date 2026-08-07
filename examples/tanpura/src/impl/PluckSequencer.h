@@ -197,7 +197,7 @@ class PluckSequencer
         }
         if (rollSlide())
         {
-            m_slideShaper.reset(-100.f * m_harmonicFirstOffset);
+            m_slideShaper.reset(100.f * (m_harmonicSecondOffset - m_harmonicFirstOffset));
             m_slideShaper.setNewFramesAndTarget(msToSamples(m_slideTimeMs), 0.f, 0.f);
             m_slideVoiceIndex = thisStep.voiceIndex;
             m_sliding = true;

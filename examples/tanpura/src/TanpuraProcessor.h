@@ -37,11 +37,13 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("key", this);
         m_parameters.addParameterListener("level", this);
         m_parameters.addParameterListener("tuning", this);
-        m_parameters.addParameterListener("detuneString1", this);
-        m_parameters.addParameterListener("detuneString2", this);
-        m_parameters.addParameterListener("detuneString3", this);
-        m_parameters.addParameterListener("detuneString4", this);
-        m_parameters.addParameterListener("detuneString5", this);
+        m_parameters.addParameterListener("detune", this);
+        m_parameters.addParameterListener("reverbDry", this);
+        m_parameters.addParameterListener("reverbWet", this);
+        m_parameters.addParameterListener("reverbSize", this);
+        m_parameters.addParameterListener("reverbDecay", this);
+        m_parameters.addParameterListener("reverbShelfLow", this);
+        m_parameters.addParameterListener("reverbShelfHigh", this);
         m_parameters.addParameterListener("pattern", this);
         m_parameters.addParameterListener("slide", this);
         m_parameters.addParameterListener("slideTime", this);
@@ -68,11 +70,13 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("key", this);
         m_parameters.removeParameterListener("level", this);
         m_parameters.removeParameterListener("tuning", this);
-        m_parameters.removeParameterListener("detuneString1", this);
-        m_parameters.removeParameterListener("detuneString2", this);
-        m_parameters.removeParameterListener("detuneString3", this);
-        m_parameters.removeParameterListener("detuneString4", this);
-        m_parameters.removeParameterListener("detuneString5", this);
+        m_parameters.removeParameterListener("detune", this);
+        m_parameters.removeParameterListener("reverbDry", this);
+        m_parameters.removeParameterListener("reverbWet", this);
+        m_parameters.removeParameterListener("reverbSize", this);
+        m_parameters.removeParameterListener("reverbDecay", this);
+        m_parameters.removeParameterListener("reverbShelfLow", this);
+        m_parameters.removeParameterListener("reverbShelfHigh", this);
         m_parameters.removeParameterListener("pattern", this);
         m_parameters.removeParameterListener("slide", this);
         m_parameters.removeParameterListener("slideTime", this);
@@ -283,25 +287,38 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("Hz").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " Hz"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("detuneString1", 1), "Detune 1", juce::NormalisableRange<float>(-50, 50, 1, 1, false), 0,
+            juce::ParameterID("detune", 1), "Detune", juce::NormalisableRange<float>(-50, 50, 1, 1, false), 5,
             juce::AudioParameterFloatAttributes{}.withLabel("ct").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 0) + " ct"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("detuneString2", 1), "Detune 2", juce::NormalisableRange<float>(-50, 50, 1, 1, false), 5,
-            juce::AudioParameterFloatAttributes{}.withLabel("ct").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " ct"; })));
+            juce::ParameterID("reverbDry", 1), "Reverb Dry", juce::NormalisableRange<float>(-100, 12, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("detuneString3", 1), "Detune 3", juce::NormalisableRange<float>(-50, 50, 1, 1, false), -5,
-            juce::AudioParameterFloatAttributes{}.withLabel("ct").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " ct"; })));
+            juce::ParameterID("reverbWet", 1), "Reverb Wet", juce::NormalisableRange<float>(-100, 12, 0.1, 1, false),
+            -100,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("detuneString4", 1), "Detune 4", juce::NormalisableRange<float>(-50, 50, 1, 1, false), 7,
-            juce::AudioParameterFloatAttributes{}.withLabel("ct").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " ct"; })));
+            juce::ParameterID("reverbSize", 1), "Reverb Size", juce::NormalisableRange<float>(1, 330, 0.1, 0.4, false),
+            30,
+            juce::AudioParameterFloatAttributes{}.withLabel("m").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " m"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("detuneString5", 1), "Detune 5", juce::NormalisableRange<float>(-50, 50, 1, 1, false), -2,
-            juce::AudioParameterFloatAttributes{}.withLabel("ct").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " ct"; })));
+            juce::ParameterID("reverbDecay", 1), "Reverb Decay",
+            juce::NormalisableRange<float>(1, 100000, 1, 0.2, false), 2000,
+            juce::AudioParameterFloatAttributes{}.withLabel("ms").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " ms"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("reverbShelfLow", 1), "Reverb Shelf Low",
+            juce::NormalisableRange<float>(-18, 18, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("reverbShelfHigh", 1), "Reverb Shelf High",
+            juce::NormalisableRange<float>(-18, 18, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID("pattern", 1), "Pattern",
             juce::StringArray{"H1 H2 1 -", "H1 H2 8 1 -", "H1 H2 8 8 1 -", "H1 H2 - 8 8 1 -"}, 0));
@@ -417,35 +434,47 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                  p.pluginRunner->setTuning(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::tuning, v);
              }},
-            {"detuneString1",
+            {"detune",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setDetuneString1(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::detuneString1, v);
+                 p.pluginRunner->setDetune(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::detune, v);
              }},
-            {"detuneString2",
+            {"reverbDry",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setDetuneString2(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::detuneString2, v);
+                 p.pluginRunner->setReverbDry(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbDry, v);
              }},
-            {"detuneString3",
+            {"reverbWet",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setDetuneString3(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::detuneString3, v);
+                 p.pluginRunner->setReverbWet(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbWet, v);
              }},
-            {"detuneString4",
+            {"reverbSize",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setDetuneString4(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::detuneString4, v);
+                 p.pluginRunner->setReverbSize(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbSize, v);
              }},
-            {"detuneString5",
+            {"reverbDecay",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setDetuneString5(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::detuneString5, v);
+                 p.pluginRunner->setReverbDecay(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbDecay, v);
+             }},
+            {"reverbShelfLow",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setReverbShelfLow(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbShelfLow, v);
+             }},
+            {"reverbShelfHigh",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setReverbShelfHigh(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbShelfHigh, v);
              }},
             {"pattern",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -602,34 +631,46 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             float normalized = range.convertTo0to1(params.tuning);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("detuneString1"))
+        if (auto* p = m_parameters.getParameter("detune"))
         {
-            const auto& range = m_parameters.getParameterRange("detuneString1");
-            float normalized = range.convertTo0to1(params.detuneString1);
+            const auto& range = m_parameters.getParameterRange("detune");
+            float normalized = range.convertTo0to1(params.detune);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("detuneString2"))
+        if (auto* p = m_parameters.getParameter("reverbDry"))
         {
-            const auto& range = m_parameters.getParameterRange("detuneString2");
-            float normalized = range.convertTo0to1(params.detuneString2);
+            const auto& range = m_parameters.getParameterRange("reverbDry");
+            float normalized = range.convertTo0to1(params.reverbDry);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("detuneString3"))
+        if (auto* p = m_parameters.getParameter("reverbWet"))
         {
-            const auto& range = m_parameters.getParameterRange("detuneString3");
-            float normalized = range.convertTo0to1(params.detuneString3);
+            const auto& range = m_parameters.getParameterRange("reverbWet");
+            float normalized = range.convertTo0to1(params.reverbWet);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("detuneString4"))
+        if (auto* p = m_parameters.getParameter("reverbSize"))
         {
-            const auto& range = m_parameters.getParameterRange("detuneString4");
-            float normalized = range.convertTo0to1(params.detuneString4);
+            const auto& range = m_parameters.getParameterRange("reverbSize");
+            float normalized = range.convertTo0to1(params.reverbSize);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("detuneString5"))
+        if (auto* p = m_parameters.getParameter("reverbDecay"))
         {
-            const auto& range = m_parameters.getParameterRange("detuneString5");
-            float normalized = range.convertTo0to1(params.detuneString5);
+            const auto& range = m_parameters.getParameterRange("reverbDecay");
+            float normalized = range.convertTo0to1(params.reverbDecay);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("reverbShelfLow"))
+        {
+            const auto& range = m_parameters.getParameterRange("reverbShelfLow");
+            float normalized = range.convertTo0to1(params.reverbShelfLow);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("reverbShelfHigh"))
+        {
+            const auto& range = m_parameters.getParameterRange("reverbShelfHigh");
+            float normalized = range.convertTo0to1(params.reverbShelfHigh);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pattern"))
