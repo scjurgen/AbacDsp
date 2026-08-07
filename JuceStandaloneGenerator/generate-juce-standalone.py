@@ -93,7 +93,7 @@ CPP_SOURCE_FILES_IMPL_FILE_IO = "impl/FileIo.h"
 CPP_PATCH_PARAMETERS = "impl/PatchParameters.h"
 CPP_CC_MAPPING = "impl/CcMapping.h"
 CPP_CC_SETTINGS = "impl/CcSettings.h"
-CPP_SOURCE_FILES_UNIT_TEST = "unittests/{Module}_tests.cpp"
+CPP_SOURCE_FILES_UNIT_TEST = "unittests/StubImpl_tests.cpp"
 
 CPP_CONSTANTS = [
     "WINDOW_WIDTH",
