@@ -2,9 +2,9 @@
 
 #include <array>
 #include <cmath>
-#include <string_view>
-
 #include <nlohmann/json.hpp>
+#include <string>
+#include <string_view>
 
 using json = nlohmann::json;
 
@@ -54,6 +54,8 @@ struct PatchParameters
                 break;
         }
     }
+
+/*ScriptUpdateMethods*/
 
     [[nodiscard]] bool isModified() const
     {

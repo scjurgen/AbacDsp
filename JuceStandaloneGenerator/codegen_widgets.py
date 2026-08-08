@@ -8,6 +8,7 @@ _WIDGET_SUFFIX = {
     "drop": "Drop",
     "gauge": "Gauge",
     "label": "Label",
+    "script": "Button",
 }
 
 
@@ -128,6 +129,9 @@ def create_widgets_decl(blueprint: Blueprint) -> str:
             case "label":
                 varname = f"{symbol}Label"
                 result += f"juce::Label {varname}{{}};\n"
+            case "script":
+                varname = f"{symbol}Button"
+                result += f"""juce::TextButton {varname}{{juce::String::fromUTF8("{item['display']}")}};\n"""
     return result
 
 def create_init_widgets(blueprint: Blueprint) -> str:
@@ -186,6 +190,11 @@ def create_init_widgets(blueprint: Blueprint) -> str:
             case "label":
                 varname += "Label"
                 result += f"""{add_fn}({varname}); {varname}.setText(juce::String::fromUTF8("{item['display']}"), juce::dontSendNotification);\n"""
+            case "script":
+                varname += "Button"
+                # Fixed name, not per-symbol: mirrors ProcessorScriptMethods only
+                # supporting the first "script"-type port (see its docstring).
+                result += f"""{add_fn}({varname}); {varname}.onClick = [this] {{ openScriptEditor(); }};\n"""
     return result
 
 

@@ -83,8 +83,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // auto generated
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-            std::vector<juce::Rectangle<int>> areas(1);
-            areas[0] = area.reduced(Constants::Margins::small);
+            std::vector<juce::Rectangle<int>> areas(3);
+            const auto rowHeight = area.getHeight() / 3;
+            areas[0] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[2] = area.reduced(Constants::Margins::small);
 
             {
                 juce::FlexBox box;
@@ -92,12 +95,40 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.flexDirection = juce::FlexBox::Direction::row;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
                 box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(playStopSwitch)
+                                  .withWidth(Constants::Text::labelWidth)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(levelDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(keyDrop)
+                                  .withFlex(1)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withMargin(knobMarginSmall));
+                box.performLayout(areas[0].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(lfoDepthDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(filterResonanceDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(filterCutoffDial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[1].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
                 box.items.add(juce::FlexItem(reverbDryDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(reverbWetDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(reverbSizeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(reverbDecayDial).withFlex(1).withMargin(knobMarginSmall));
-                box.performLayout(areas[0].toFloat());
+                box.items.add(juce::FlexItem(spectrogramGauge).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[2].toFloat());
             }
         }
         else
@@ -224,6 +255,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         if (processorRef.hasRunner())
         {
+            spectrogramGauge.update(processorRef.getSpectrogram());
+
             bpmDial.setEnabled(!processorRef.isHostSynced());
             if (processorRef.isHostSynced())
             {
@@ -355,6 +388,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(contourFilterDial);
         contourFilterDial.reset(valueTreeState, "contourFilter");
         contourFilterDial.setLabelText(juce::String::fromUTF8("Contour F"));
+        addAndMakeVisible(spectrogramGauge);
+        spectrogramGauge.setLabelText(juce::String::fromUTF8("Spectrogram"));
 
         addAndMakeVisible(m_pagePerformanceButton);
         addAndMakeVisible(m_pageSettingsButton);
@@ -376,7 +411,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         m_pageSettingsButton.setToggleState(page == Page::Settings, juce::dontSendNotification);
         if (page == Page::Performance)
         {
-            keyDrop.setVisible(false);
+            keyDrop.setVisible(true);
             levelDial.setVisible(true);
             tuningDial.setVisible(false);
             detuneDial.setVisible(false);
@@ -391,7 +426,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             slideTimeDial.setVisible(false);
             harmonicFirstDrop.setVisible(false);
             harmonicSecondDrop.setVisible(false);
-            playStopSwitch.setVisible(false);
+            playStopSwitch.setVisible(true);
             humanizeTimingDial.setVisible(false);
             humanizeLevelDial.setVisible(false);
             bpmDial.setVisible(true);
@@ -403,15 +438,16 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             decayOctaveDial.setVisible(false);
             levelSustainDial.setVisible(false);
             sustainHumanizeDial.setVisible(false);
-            lfoDepthDial.setVisible(false);
+            lfoDepthDial.setVisible(true);
             lfoSpeedDial.setVisible(false);
             lfoSpeedVariationDial.setVisible(false);
             attackFilterDial.setVisible(false);
             decayFilterDial.setVisible(false);
             levelSustainFilterDial.setVisible(false);
-            filterCutoffDial.setVisible(false);
-            filterResonanceDial.setVisible(false);
+            filterCutoffDial.setVisible(true);
+            filterResonanceDial.setVisible(true);
             contourFilterDial.setVisible(false);
+            spectrogramGauge.setVisible(true);
         }
         else
         {
@@ -451,6 +487,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             filterCutoffDial.setVisible(true);
             filterResonanceDial.setVisible(true);
             contourFilterDial.setVisible(true);
+            spectrogramGauge.setVisible(false);
         }
         resized();
     }
@@ -568,6 +605,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         setLookAndFeel(m_laf.get());
         juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
         backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
+        spectrogramGauge.setGradientPreset(preset);
 
         repaint();
     }
@@ -878,6 +916,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial filterCutoffDial{this};
     CustomRotaryDial filterResonanceDial{this};
     CustomRotaryDial contourFilterDial{this};
+    SpectrogramDisplay spectrogramGauge{AppSettings::loadTheme()};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
 };

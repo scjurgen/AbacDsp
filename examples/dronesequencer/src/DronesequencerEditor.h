@@ -7,7 +7,7 @@
 
 #include <map>
 
-#include "/*MODULE_UPPER*/Processor.h"
+#include "DronesequencerProcessor.h"
 #include "UiElements.h"
 
 
@@ -74,21 +74,133 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         auto area = getLocalBounds();
         m_menuBar.setBounds(area.removeFromTop(getLookAndFeel().getDefaultMenuBarHeight()));
         m_statusBar.setBounds(area.removeFromBottom(static_cast<int>(Constants::Text::labelHeight)));
-        /*START_PERFORMANCEPAGE*/
         auto pageSwitchArea = area.removeFromTop(static_cast<int>(Constants::Text::labelHeight));
         m_pagePerformanceButton.setBounds(pageSwitchArea.removeFromLeft(pageSwitchArea.getWidth() / 2));
         m_pageSettingsButton.setBounds(pageSwitchArea);
-        /*END_PERFORMANCEPAGE*/
         area = area.reduced(static_cast<int>(Constants::Margins::big));
-        /*START_PERFORMANCEPAGE*/
         if (m_currentPage == Page::Performance)
         {
-            /*RESIZED_AREA_PERFORMANCE*/
+            // auto generated
+            // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
+            const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
+            std::vector<juce::Rectangle<int>> areas(1);
+            areas[0] = area.reduced(Constants::Margins::small);
+
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(levelDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(scriptButton)
+                                  .withWidth(Constants::Text::labelWidth)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbDryDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbWetDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbSizeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbDecayDial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[0].toFloat());
+            }
         }
         else
-        /*END_PERFORMANCEPAGE*/
         {
-            /*RESIZED_AREA*/
+            // auto generated
+            // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
+            const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
+            std::vector<juce::Rectangle<int>> areas(5);
+            const auto rowHeight = area.getHeight() / 5;
+            areas[0] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[2] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[3] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[4] = area.reduced(Constants::Margins::small);
+
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(levelDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(tuningDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(transposeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(detuneDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(voicesDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(scriptButton)
+                                  .withWidth(Constants::Text::labelWidth)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withMargin(knobMarginSmall));
+                box.performLayout(areas[0].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(playStopSwitch)
+                                  .withWidth(Constants::Text::labelWidth)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(hostSyncSwitch)
+                                  .withWidth(Constants::Text::labelWidth)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(divisionDrop)
+                                  .withFlex(1)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(humanizeTimingDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(humanizeLevelDial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[1].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(attackDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(decayDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(decayOctaveDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(levelSustainDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(sustainHumanizeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(lfoDepthDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(lfoSpeedDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(lfoSpeedVariationDial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[2].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(attackFilterDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(decayFilterDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(levelSustainFilterDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(filterCutoffDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(filterResonanceDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(contourFilterDial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[3].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(reverbDryDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbWetDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbSizeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbDecayDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbShelfLowDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbShelfHighDial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[4].toFloat());
+            }
         }
     }
 #pragma GCC diagnostic pop
@@ -97,23 +209,127 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         if (processorRef.hasRunner())
         {
-            /*TIMER_CALLBACKS*/
+            bpmDial.setEnabled(!processorRef.isHostSynced());
+            if (processorRef.isHostSynced())
+            {
+                bpmDial.setValue(processorRef.getCurrentBpm());
+            }
+            playStopSwitch.setEnabled(!processorRef.isHostSynced());
+            if (processorRef.isHostSynced())
+            {
+                playStopSwitch.setToggleState(processorRef.getIsEffectivelyPlaying(), juce::dontSendNotification);
+            }
         }
     }
 
     void initWidgets()
     {
-        /*INIT_WIDGETS*/
-        /*START_PERFORMANCEPAGE*/
+        addAndMakeVisible(levelDial);
+        levelDial.reset(valueTreeState, "level");
+        levelDial.setLabelText(juce::String::fromUTF8("Level"));
+        addAndMakeVisible(tuningDial);
+        tuningDial.reset(valueTreeState, "tuning");
+        tuningDial.setLabelText(juce::String::fromUTF8("Tuning"));
+        addAndMakeVisible(transposeDial);
+        transposeDial.reset(valueTreeState, "transpose");
+        transposeDial.setLabelText(juce::String::fromUTF8("Transpose"));
+        addAndMakeVisible(detuneDial);
+        detuneDial.reset(valueTreeState, "detune");
+        detuneDial.setLabelText(juce::String::fromUTF8("Detune"));
+        addAndMakeVisible(voicesDial);
+        voicesDial.reset(valueTreeState, "voices");
+        voicesDial.setLabelText(juce::String::fromUTF8("Voices"));
+        addAndMakeVisible(scriptButton);
+        scriptButton.onClick = [this] { openScriptEditor(); };
+        addAndMakeVisible(reverbDryDial);
+        reverbDryDial.reset(valueTreeState, "reverbDry");
+        reverbDryDial.setLabelText(juce::String::fromUTF8("Reverb Dry"));
+        addAndMakeVisible(reverbWetDial);
+        reverbWetDial.reset(valueTreeState, "reverbWet");
+        reverbWetDial.setLabelText(juce::String::fromUTF8("Reverb Wet"));
+        addAndMakeVisible(reverbSizeDial);
+        reverbSizeDial.reset(valueTreeState, "reverbSize");
+        reverbSizeDial.setLabelText(juce::String::fromUTF8("Reverb Size"));
+        addAndMakeVisible(reverbDecayDial);
+        reverbDecayDial.reset(valueTreeState, "reverbDecay");
+        reverbDecayDial.setLabelText(juce::String::fromUTF8("Reverb Decay"));
+        addAndMakeVisible(reverbShelfLowDial);
+        reverbShelfLowDial.reset(valueTreeState, "reverbShelfLow");
+        reverbShelfLowDial.setLabelText(juce::String::fromUTF8("Reverb Shelf Low"));
+        addAndMakeVisible(reverbShelfHighDial);
+        reverbShelfHighDial.reset(valueTreeState, "reverbShelfHigh");
+        reverbShelfHighDial.setLabelText(juce::String::fromUTF8("Reverb Shelf High"));
+        addAndMakeVisible(playStopSwitch);
+        playStopSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "playStop", playStopSwitch);
+
+        addAndMakeVisible(humanizeTimingDial);
+        humanizeTimingDial.reset(valueTreeState, "humanizeTiming");
+        humanizeTimingDial.setLabelText(juce::String::fromUTF8("Humanize Timing"));
+        addAndMakeVisible(humanizeLevelDial);
+        humanizeLevelDial.reset(valueTreeState, "humanizeLevel");
+        humanizeLevelDial.setLabelText(juce::String::fromUTF8("Humanize Level"));
+        addAndMakeVisible(bpmDial);
+        bpmDial.reset(valueTreeState, "bpm");
+        bpmDial.setLabelText(juce::String::fromUTF8("BPM"));
+        addAndMakeVisible(hostSyncSwitch);
+        hostSyncSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "hostSync", hostSyncSwitch);
+
+        addAndMakeVisible(divisionDrop);
+        divisionDrop.addItemList(valueTreeState.getParameter("division")->getAllValueStrings(), 1);
+        divisionDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "division", divisionDrop);
+        addAndMakeVisible(attackDial);
+        attackDial.reset(valueTreeState, "attack");
+        attackDial.setLabelText(juce::String::fromUTF8("Attack"));
+        addAndMakeVisible(decayDial);
+        decayDial.reset(valueTreeState, "decay");
+        decayDial.setLabelText(juce::String::fromUTF8("Decay"));
+        addAndMakeVisible(decayOctaveDial);
+        decayOctaveDial.reset(valueTreeState, "decayOctave");
+        decayOctaveDial.setLabelText(juce::String::fromUTF8("Decay Octave"));
+        addAndMakeVisible(levelSustainDial);
+        levelSustainDial.reset(valueTreeState, "levelSustain");
+        levelSustainDial.setLabelText(juce::String::fromUTF8("Sustain"));
+        addAndMakeVisible(sustainHumanizeDial);
+        sustainHumanizeDial.reset(valueTreeState, "sustainHumanize");
+        sustainHumanizeDial.setLabelText(juce::String::fromUTF8("Sustain Humanize"));
+        addAndMakeVisible(lfoDepthDial);
+        lfoDepthDial.reset(valueTreeState, "lfoDepth");
+        lfoDepthDial.setLabelText(juce::String::fromUTF8("Filter LFO Depth"));
+        addAndMakeVisible(lfoSpeedDial);
+        lfoSpeedDial.reset(valueTreeState, "lfoSpeed");
+        lfoSpeedDial.setLabelText(juce::String::fromUTF8("Filter LFO Speed"));
+        addAndMakeVisible(lfoSpeedVariationDial);
+        lfoSpeedVariationDial.reset(valueTreeState, "lfoSpeedVariation");
+        lfoSpeedVariationDial.setLabelText(juce::String::fromUTF8("Filter LFO Variation"));
+        addAndMakeVisible(attackFilterDial);
+        attackFilterDial.reset(valueTreeState, "attackFilter");
+        attackFilterDial.setLabelText(juce::String::fromUTF8("Filter Attack"));
+        addAndMakeVisible(decayFilterDial);
+        decayFilterDial.reset(valueTreeState, "decayFilter");
+        decayFilterDial.setLabelText(juce::String::fromUTF8("Filter Decay"));
+        addAndMakeVisible(levelSustainFilterDial);
+        levelSustainFilterDial.reset(valueTreeState, "levelSustainFilter");
+        levelSustainFilterDial.setLabelText(juce::String::fromUTF8("Filter Sustain"));
+        addAndMakeVisible(filterCutoffDial);
+        filterCutoffDial.reset(valueTreeState, "filterCutoff");
+        filterCutoffDial.setLabelText(juce::String::fromUTF8("Filter Cutoff"));
+        addAndMakeVisible(filterResonanceDial);
+        filterResonanceDial.reset(valueTreeState, "filterResonance");
+        filterResonanceDial.setLabelText(juce::String::fromUTF8("Filter Resonance"));
+        addAndMakeVisible(contourFilterDial);
+        contourFilterDial.reset(valueTreeState, "contourFilter");
+        contourFilterDial.setLabelText(juce::String::fromUTF8("Contour F"));
+
         addAndMakeVisible(m_pagePerformanceButton);
         addAndMakeVisible(m_pageSettingsButton);
         m_pagePerformanceButton.onClick = [this] { switchPage(Page::Performance); };
         m_pageSettingsButton.onClick = [this] { switchPage(Page::Settings); };
         switchPage(Page::Performance);
-        /*END_PERFORMANCEPAGE*/
     }
 
-    /*START_PERFORMANCEPAGE*/
     enum class Page
     {
         Performance,
@@ -127,15 +343,76 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         m_pageSettingsButton.setToggleState(page == Page::Settings, juce::dontSendNotification);
         if (page == Page::Performance)
         {
-            /*PAGE_SHOW_PERFORMANCE*/
+            levelDial.setVisible(true);
+            tuningDial.setVisible(false);
+            transposeDial.setVisible(false);
+            detuneDial.setVisible(false);
+            voicesDial.setVisible(false);
+            scriptButton.setVisible(true);
+            reverbDryDial.setVisible(true);
+            reverbWetDial.setVisible(true);
+            reverbSizeDial.setVisible(true);
+            reverbDecayDial.setVisible(true);
+            reverbShelfLowDial.setVisible(false);
+            reverbShelfHighDial.setVisible(false);
+            playStopSwitch.setVisible(false);
+            humanizeTimingDial.setVisible(false);
+            humanizeLevelDial.setVisible(false);
+            bpmDial.setVisible(true);
+            hostSyncSwitch.setVisible(false);
+            divisionDrop.setVisible(false);
+            attackDial.setVisible(false);
+            decayDial.setVisible(false);
+            decayOctaveDial.setVisible(false);
+            levelSustainDial.setVisible(false);
+            sustainHumanizeDial.setVisible(false);
+            lfoDepthDial.setVisible(false);
+            lfoSpeedDial.setVisible(false);
+            lfoSpeedVariationDial.setVisible(false);
+            attackFilterDial.setVisible(false);
+            decayFilterDial.setVisible(false);
+            levelSustainFilterDial.setVisible(false);
+            filterCutoffDial.setVisible(false);
+            filterResonanceDial.setVisible(false);
+            contourFilterDial.setVisible(false);
         }
         else
         {
-            /*PAGE_SHOW_SETTINGS*/
+            levelDial.setVisible(true);
+            tuningDial.setVisible(true);
+            transposeDial.setVisible(true);
+            detuneDial.setVisible(true);
+            voicesDial.setVisible(true);
+            scriptButton.setVisible(true);
+            reverbDryDial.setVisible(true);
+            reverbWetDial.setVisible(true);
+            reverbSizeDial.setVisible(true);
+            reverbDecayDial.setVisible(true);
+            reverbShelfLowDial.setVisible(true);
+            reverbShelfHighDial.setVisible(true);
+            playStopSwitch.setVisible(true);
+            humanizeTimingDial.setVisible(true);
+            humanizeLevelDial.setVisible(true);
+            bpmDial.setVisible(true);
+            hostSyncSwitch.setVisible(true);
+            divisionDrop.setVisible(true);
+            attackDial.setVisible(true);
+            decayDial.setVisible(true);
+            decayOctaveDial.setVisible(true);
+            levelSustainDial.setVisible(true);
+            sustainHumanizeDial.setVisible(true);
+            lfoDepthDial.setVisible(true);
+            lfoSpeedDial.setVisible(true);
+            lfoSpeedVariationDial.setVisible(true);
+            attackFilterDial.setVisible(true);
+            decayFilterDial.setVisible(true);
+            levelSustainFilterDial.setVisible(true);
+            filterCutoffDial.setVisible(true);
+            filterResonanceDial.setVisible(true);
+            contourFilterDial.setVisible(true);
         }
         resized();
     }
-    /*END_PERFORMANCEPAGE*/
 
     void parentHierarchyChanged() override
     {
@@ -175,15 +452,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::StringArray getMenuBarNames() override
     {
         juce::StringArray names{"Theme"};
-        /*START_PRESETBROWSER*/
         names.add("Patches");
-        /*END_PRESETBROWSER*/
-        /*START_LOOPBROWSER*/
-        names.add("Loops");
-        /*END_LOOPBROWSER*/
-        /*START_SCRIPTBROWSER*/
         names.add("Scripts");
-        /*END_SCRIPTBROWSER*/
         return names;
     }
 
@@ -193,24 +463,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         {
             return buildThemeMenu();
         }
-        /*START_PRESETBROWSER*/
         if (menuName == "Patches")
         {
             return buildPatchesMenu();
         }
-        /*END_PRESETBROWSER*/
-        /*START_LOOPBROWSER*/
-        if (menuName == "Loops")
-        {
-            return buildLoopsMenu();
-        }
-        /*END_LOOPBROWSER*/
-        /*START_SCRIPTBROWSER*/
         if (menuName == "Scripts")
         {
             return buildScriptsMenu();
         }
-        /*END_SCRIPTBROWSER*/
         return {};
     }
 
@@ -259,15 +519,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             applyTheme(Themes::withFamily(m_currentTheme, family));
             return;
         }
-        /*START_PRESETBROWSER*/
         handlePatchMenuSelection(menuItemID);
-        /*END_PRESETBROWSER*/
-        /*START_LOOPBROWSER*/
-        handleLoopMenuSelection(menuItemID);
-        /*END_LOOPBROWSER*/
-        /*START_SCRIPTBROWSER*/
         handleScriptMenuSelection(menuItemID);
-        /*END_SCRIPTBROWSER*/
     }
 
     void applyTheme(GuiConstants::Theme preset)
@@ -280,7 +533,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         setLookAndFeel(m_laf.get());
         juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
         backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
-        /*APPLY_THEME_CALLBACKS*/
+
         repaint();
     }
 
@@ -317,7 +570,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         return {fullName.substring(0, slashIndex), fullName.substring(slashIndex + 1)};
     }
 
-    /*START_PRESETBROWSER*/
     // A "/" in a name (e.g. "chorus/classic tri chorus") groups it under a folder
     // submenu; root-level entries stay directly in the returned menu. Shared by the
     // patches and (when present) loops menus.
@@ -519,194 +771,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                               }
                                           });
     }
-    /*END_PRESETBROWSER*/
 
-    /*START_LOOPBROWSER*/
-    // Reuses buildGroupedMenu() from the PRESETBROWSER section above; a blueprint
-    // with loops but no patches would need that helper pulled out of its guard.
-    juce::PopupMenu buildLoopsMenu()
-    {
-        m_loopMenuNames = processorRef.listLoopNames();
-        const auto currentName = processorRef.getCurrentLoopName();
 
-        auto loadMenu = buildGroupedMenu(m_loopMenuNames, kLoopLoadIdBase, currentName);
-        auto deleteMenu = buildGroupedMenu(m_loopMenuNames, kLoopDeleteIdBase);
-        auto renameMenu = buildGroupedMenu(m_loopMenuNames, kLoopRenameIdBase);
-
-        juce::PopupMenu loops;
-        loops.addSubMenu("Load", loadMenu, !m_loopMenuNames.empty());
-        loops.addItem(kLoopSaveAsId, "Save As...");
-        loops.addSubMenu("Delete", deleteMenu, !m_loopMenuNames.empty());
-        loops.addSubMenu("Rename", renameMenu, !m_loopMenuNames.empty());
-        return loops;
-    }
-
-    void handleLoopMenuSelection(int menuItemID)
-    {
-        if (menuItemID == kLoopSaveAsId)
-        {
-            promptSaveLoopAs();
-        }
-        else if (menuItemID >= kLoopLoadIdBase &&
-                 menuItemID < kLoopLoadIdBase + static_cast<int>(m_loopMenuNames.size()))
-        {
-            const auto& name = m_loopMenuNames[static_cast<size_t>(menuItemID - kLoopLoadIdBase)];
-            processorRef.requestLoadLoop(name);
-            m_statusBar.showMessage("Loading '" + name + "'...");
-        }
-        else if (menuItemID >= kLoopDeleteIdBase &&
-                 menuItemID < kLoopDeleteIdBase + static_cast<int>(m_loopMenuNames.size()))
-        {
-            confirmAndDeleteLoop(m_loopMenuNames[static_cast<size_t>(menuItemID - kLoopDeleteIdBase)]);
-        }
-        else if (menuItemID >= kLoopRenameIdBase &&
-                 menuItemID < kLoopRenameIdBase + static_cast<int>(m_loopMenuNames.size()))
-        {
-            promptRenameLoop(m_loopMenuNames[static_cast<size_t>(menuItemID - kLoopRenameIdBase)]);
-        }
-    }
-
-    void promptSaveLoopAs()
-    {
-        m_loopNameDialog =
-            std::make_unique<juce::AlertWindow>("Save Loop", juce::String(), juce::MessageBoxIconType::NoIcon);
-        m_loopNameDialog->addTextEditor("folder", "", "Folder (optional):");
-        m_loopNameDialog->addTextEditor("name", "", "Name:");
-        m_loopNameDialog->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
-        m_loopNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
-        m_loopNameDialog->enterModalState(true,
-                                          juce::ModalCallbackFunction::create(
-                                              [this](int result)
-                                              {
-                                                  const auto folderText =
-                                                      m_loopNameDialog->getTextEditorContents("folder").trim();
-                                                  const auto nameText =
-                                                      m_loopNameDialog->getTextEditorContents("name").trim();
-                                                  m_loopNameDialog.reset();
-                                                  if (result != 1 || nameText.isEmpty())
-                                                  {
-                                                      return;
-                                                  }
-                                                  const auto fullName = combineFolderAndName(folderText, nameText);
-                                                  processorRef.saveLoopAs(fullName);
-                                                  m_statusBar.showMessage("Saving '" + fullName + "'...");
-                                              }),
-                                          false);
-        focusNameEditor(*m_loopNameDialog);
-    }
-
-    void promptRenameLoop(const juce::String& oldName)
-    {
-        const auto [folder, name] = splitFolderAndName(oldName);
-        m_loopNameDialog = std::make_unique<juce::AlertWindow>("Rename Loop \"" + oldName + "\"", juce::String(),
-                                                               juce::MessageBoxIconType::NoIcon);
-        m_loopNameDialog->addTextEditor("folder", folder, "Folder (optional):");
-        m_loopNameDialog->addTextEditor("name", name, "Name:");
-        m_loopNameDialog->addButton("Rename", 1, juce::KeyPress(juce::KeyPress::returnKey));
-        m_loopNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
-        m_loopNameDialog->enterModalState(true,
-                                          juce::ModalCallbackFunction::create(
-                                              [this, oldName](int result)
-                                              {
-                                                  const auto folderText =
-                                                      m_loopNameDialog->getTextEditorContents("folder").trim();
-                                                  const auto nameText =
-                                                      m_loopNameDialog->getTextEditorContents("name").trim();
-                                                  m_loopNameDialog.reset();
-                                                  if (result != 1 || nameText.isEmpty())
-                                                  {
-                                                      return;
-                                                  }
-                                                  const auto newName = combineFolderAndName(folderText, nameText);
-                                                  if (newName == oldName)
-                                                  {
-                                                      return;
-                                                  }
-                                                  if (processorRef.renameLoop(oldName, newName))
-                                                  {
-                                                      m_statusBar.showMessage("Renamed to '" + newName + "'");
-                                                  }
-                                                  else
-                                                  {
-                                                      m_statusBar.showMessage("Rename failed");
-                                                  }
-                                              }),
-                                          false);
-        focusNameEditor(*m_loopNameDialog);
-    }
-
-    void confirmAndDeleteLoop(const juce::String& name)
-    {
-        juce::NativeMessageBox::showAsync(juce::MessageBoxOptions()
-                                              .withIconType(juce::MessageBoxIconType::WarningIcon)
-                                              .withTitle("Delete Loop")
-                                              .withMessage("Delete loop \"" + name + "\"?")
-                                              .withButton("Yes")
-                                              .withButton("No"),
-                                          [this, name](int result)
-                                          {
-                                              if (result != 0)
-                                              {
-                                                  return;
-                                              }
-                                              if (processorRef.deleteLoopNamed(name))
-                                              {
-                                                  m_statusBar.showMessage("Deleted '" + name + "'");
-                                              }
-                                              else
-                                              {
-                                                  m_statusBar.showMessage("Delete failed");
-                                              }
-                                          });
-    }
-
-    // Polled every timer tick (see extra_timer_callbacks); surfaces a BPM
-    // conflict prompt or a status message once a background load finishes.
-    void handleLoopLoadOutcome()
-    {
-        const auto outcome = processorRef.consumeLoopLoadOutcome();
-        if (!outcome.attempted)
-        {
-            return;
-        }
-        if (!outcome.success)
-        {
-            m_statusBar.showMessage("Load failed");
-        }
-        else if (!outcome.hasConflict)
-        {
-            if (!outcome.patchParamsJson.empty())
-            {
-                processorRef.applyLoadedLoopPatchParams(juce::String(outcome.patchParamsJson));
-            }
-            m_statusBar.showMessage("Loaded");
-        }
-        else
-        {
-            const auto wavBpm = outcome.wavBpm;
-            const auto jsonBpm = outcome.jsonBpm;
-            const auto patchParamsJson = juce::String(outcome.patchParamsJson);
-            juce::NativeMessageBox::showAsync(
-                juce::MessageBoxOptions()
-                    .withIconType(juce::MessageBoxIconType::QuestionIcon)
-                    .withTitle("Tempo Mismatch")
-                    .withMessage("The saved tempo doesn't match the file's embedded tempo. Which one should be used?")
-                    .withButton(juce::String::fromUTF8("File (") + juce::String(wavBpm, 1) + " BPM)")
-                    .withButton(juce::String::fromUTF8("Saved (") + juce::String(jsonBpm, 1) + " BPM)"),
-                [this, wavBpm, jsonBpm, patchParamsJson](int result)
-                {
-                    processorRef.resolveLoopLoadBpm(result == 0 ? wavBpm : jsonBpm);
-                    if (patchParamsJson.isNotEmpty())
-                    {
-                        processorRef.applyLoadedLoopPatchParams(patchParamsJson);
-                    }
-                    m_statusBar.showMessage("Loaded");
-                });
-        }
-    }
-    /*END_LOOPBROWSER*/
-
-    /*START_SCRIPTBROWSER*/
     // Reuses buildGroupedMenu() from the PRESETBROWSER section above, same as
     // LOOPBROWSER does - a blueprint with a script port but no patches would need that
     // helper pulled out of its guard.
@@ -881,9 +947,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                               }
                                           });
     }
-    /*END_SCRIPTBROWSER*/
 
-    /*EXTRA_PRIVATE_METHODS*/
+
   private:
     AudioPluginAudioProcessor& processorRef;
     juce::AudioProcessorValueTreeState& valueTreeState;
@@ -894,16 +959,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};
-    /*START_PERFORMANCEPAGE*/
     Page m_currentPage{Page::Performance};
     juce::TextButton m_pagePerformanceButton{"Performance"};
     juce::TextButton m_pageSettingsButton{"Settings"};
-    /*END_PERFORMANCEPAGE*/
     static constexpr int kThemeModeLightId = 9000;
     static constexpr int kThemeModeDarkId = 9001;
     static constexpr int kThemeBaseBichromaticId = 9002;
     static constexpr int kThemeBaseTrichromaticId = 9003;
-    /*START_PRESETBROWSER*/
     static constexpr int kPatchSaveId = 1000;
     static constexpr int kPatchSaveAsId = 1001;
     static constexpr int kPatchLoadIdBase = 2000;
@@ -911,26 +973,50 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     static constexpr int kPatchRenameIdBase = 4000;
     std::unique_ptr<juce::AlertWindow> m_patchNameDialog;
     std::vector<juce::String> m_patchMenuNames;
-    /*END_PRESETBROWSER*/
 
-    /*START_LOOPBROWSER*/
-    static constexpr int kLoopSaveAsId = 5000;
-    static constexpr int kLoopLoadIdBase = 6000;
-    static constexpr int kLoopDeleteIdBase = 7000;
-    static constexpr int kLoopRenameIdBase = 8000;
-    std::unique_ptr<juce::AlertWindow> m_loopNameDialog;
-    std::vector<juce::String> m_loopMenuNames;
-    /*END_LOOPBROWSER*/
 
-    /*START_SCRIPTBROWSER*/
     static constexpr int kScriptSaveAsId = 10000;
     static constexpr int kScriptLoadIdBase = 11000;
     static constexpr int kScriptDeleteIdBase = 12000;
     static constexpr int kScriptRenameIdBase = 13000;
     std::unique_ptr<juce::AlertWindow> m_scriptNameDialog;
     std::vector<juce::String> m_scriptMenuNames;
-    /*END_SCRIPTBROWSER*/
 
-    /*WIDGETS_DECL*/
+    CustomRotaryDial levelDial{this};
+    CustomRotaryDial tuningDial{this};
+    CustomRotaryDial transposeDial{this};
+    CustomRotaryDial detuneDial{this};
+    CustomRotaryDial voicesDial{this};
+    juce::TextButton scriptButton{juce::String::fromUTF8("Script")};
+    CustomRotaryDial reverbDryDial{this};
+    CustomRotaryDial reverbWetDial{this};
+    CustomRotaryDial reverbSizeDial{this};
+    CustomRotaryDial reverbDecayDial{this};
+    CustomRotaryDial reverbShelfLowDial{this};
+    CustomRotaryDial reverbShelfHighDial{this};
+    juce::ToggleButton playStopSwitch{juce::String::fromUTF8("Play")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> playStopSwitchAttachment;
+    CustomRotaryDial humanizeTimingDial{this};
+    CustomRotaryDial humanizeLevelDial{this};
+    CustomRotaryDial bpmDial{this};
+    juce::ToggleButton hostSyncSwitch{juce::String::fromUTF8("Host Sync")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> hostSyncSwitchAttachment;
+    juce::ComboBox divisionDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> divisionDropAttachment;
+    CustomRotaryDial attackDial{this};
+    CustomRotaryDial decayDial{this};
+    CustomRotaryDial decayOctaveDial{this};
+    CustomRotaryDial levelSustainDial{this};
+    CustomRotaryDial sustainHumanizeDial{this};
+    CustomRotaryDial lfoDepthDial{this};
+    CustomRotaryDial lfoSpeedDial{this};
+    CustomRotaryDial lfoSpeedVariationDial{this};
+    CustomRotaryDial attackFilterDial{this};
+    CustomRotaryDial decayFilterDial{this};
+    CustomRotaryDial levelSustainFilterDial{this};
+    CustomRotaryDial filterCutoffDial{this};
+    CustomRotaryDial filterResonanceDial{this};
+    CustomRotaryDial contourFilterDial{this};
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
 };

@@ -13,28 +13,24 @@ struct PatchParameters
 {
     enum class Id : int
     {
-        key               , // drop
         level             , // dial
         tuning            , // dial
+        transpose         , // dial
         detune            , // dial
+        voices            , // dial
+        script            , // script
         reverbDry         , // dial
         reverbWet         , // dial
         reverbSize        , // dial
         reverbDecay       , // dial
         reverbShelfLow    , // dial
         reverbShelfHigh   , // dial
-        pattern           , // drop
-        slide             , // dial
-        slideTime         , // dial
-        harmonicFirst     , // drop
-        harmonicSecond    , // drop
         playStop          , // switch
         humanizeTiming    , // dial
         humanizeLevel     , // dial
         bpm               , // dial
         hostSync          , // switch
-        pluckDivision     , // drop
-        pauseDivision     , // drop
+        division          , // drop
         attack            , // dial
         decay             , // dial
         decayOctave       , // dial
@@ -50,30 +46,26 @@ struct PatchParameters
         filterResonance   , // dial
         contourFilter      // dial
     };
-size_t key{12};
 float level{0.0f};
 float tuning{440.0f};
+float transpose{0.0f};
 float detune{5.0f};
+float voices{4.0f};
+std::string script{};
 float reverbDry{0.0f};
 float reverbWet{-100.0f};
 float reverbSize{30.0f};
 float reverbDecay{2000.0f};
 float reverbShelfLow{0.0f};
 float reverbShelfHigh{0.0f};
-size_t pattern{0};
-float slide{0.0f};
-float slideTime{150.0f};
-size_t harmonicFirst{7};
-size_t harmonicSecond{0};
 bool playStop{false};
 float humanizeTiming{0.0f};
 float humanizeLevel{0.0f};
 float bpm{120.0f};
 bool hostSync{false};
-size_t pluckDivision{4};
-size_t pauseDivision{4};
+size_t division{4};
 float attack{10.0f};
-float decay{10.0f};
+float decay{30000.0f};
 float decayOctave{1.0f};
 float levelSustain{0.2f};
 float sustainHumanize{0.0f};
@@ -81,7 +73,7 @@ float lfoDepth{0.5f};
 float lfoSpeed{0.5f};
 float lfoSpeedVariation{0.0f};
 float attackFilter{10.0f};
-float decayFilter{10.0f};
+float decayFilter{1000.0f};
 float levelSustainFilter{0.0f};
 float filterCutoff{0.0f};
 float filterResonance{0.1f};
@@ -89,28 +81,23 @@ float contourFilter{0.0f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
-        "key",
-"level",
+        "level",
 "tuning",
+"transpose",
 "detune",
+"voices",
 "reverbDry",
 "reverbWet",
 "reverbSize",
 "reverbDecay",
 "reverbShelfLow",
 "reverbShelfHigh",
-"pattern",
-"slide",
-"slideTime",
-"harmonicFirst",
-"harmonicSecond",
 "playStop",
 "humanizeTiming",
 "humanizeLevel",
 "bpm",
 "hostSync",
-"pluckDivision",
-"pauseDivision",
+"division",
 "attack",
 "decay",
 "decayOctave",
@@ -143,28 +130,24 @@ float contourFilter{0.0f};
     template<Id ParamId>
     auto& get()
     {
-        if constexpr (ParamId == Id::key) return key;
-        else if constexpr (ParamId == Id::level) return level;
+        if constexpr (ParamId == Id::level) return level;
         else if constexpr (ParamId == Id::tuning) return tuning;
+        else if constexpr (ParamId == Id::transpose) return transpose;
         else if constexpr (ParamId == Id::detune) return detune;
+        else if constexpr (ParamId == Id::voices) return voices;
+        else if constexpr (ParamId == Id::script) return script;
         else if constexpr (ParamId == Id::reverbDry) return reverbDry;
         else if constexpr (ParamId == Id::reverbWet) return reverbWet;
         else if constexpr (ParamId == Id::reverbSize) return reverbSize;
         else if constexpr (ParamId == Id::reverbDecay) return reverbDecay;
         else if constexpr (ParamId == Id::reverbShelfLow) return reverbShelfLow;
         else if constexpr (ParamId == Id::reverbShelfHigh) return reverbShelfHigh;
-        else if constexpr (ParamId == Id::pattern) return pattern;
-        else if constexpr (ParamId == Id::slide) return slide;
-        else if constexpr (ParamId == Id::slideTime) return slideTime;
-        else if constexpr (ParamId == Id::harmonicFirst) return harmonicFirst;
-        else if constexpr (ParamId == Id::harmonicSecond) return harmonicSecond;
         else if constexpr (ParamId == Id::playStop) return playStop;
         else if constexpr (ParamId == Id::humanizeTiming) return humanizeTiming;
         else if constexpr (ParamId == Id::humanizeLevel) return humanizeLevel;
         else if constexpr (ParamId == Id::bpm) return bpm;
         else if constexpr (ParamId == Id::hostSync) return hostSync;
-        else if constexpr (ParamId == Id::pluckDivision) return pluckDivision;
-        else if constexpr (ParamId == Id::pauseDivision) return pauseDivision;
+        else if constexpr (ParamId == Id::division) return division;
         else if constexpr (ParamId == Id::attack) return attack;
         else if constexpr (ParamId == Id::decay) return decay;
         else if constexpr (ParamId == Id::decayOctave) return decayOctave;
@@ -191,14 +174,17 @@ float contourFilter{0.0f};
     {
         switch (id)
         {
- case Id::key: if (!isEqual(get<Id::key>(), value)) {get<Id::key>() = static_cast<size_t>(value) ;m_modified = true;}
-break;
  case Id::level: if (!isEqual(get<Id::level>(), value)) {get<Id::level>() = value;m_modified = true;}
 break;
  case Id::tuning: if (!isEqual(get<Id::tuning>(), value)) {get<Id::tuning>() = value;m_modified = true;}
 break;
+ case Id::transpose: if (!isEqual(get<Id::transpose>(), value)) {get<Id::transpose>() = value;m_modified = true;}
+break;
  case Id::detune: if (!isEqual(get<Id::detune>(), value)) {get<Id::detune>() = value;m_modified = true;}
 break;
+ case Id::voices: if (!isEqual(get<Id::voices>(), value)) {get<Id::voices>() = value;m_modified = true;}
+break;
+ case Id::script: break;
  case Id::reverbDry: if (!isEqual(get<Id::reverbDry>(), value)) {get<Id::reverbDry>() = value;m_modified = true;}
 break;
  case Id::reverbWet: if (!isEqual(get<Id::reverbWet>(), value)) {get<Id::reverbWet>() = value;m_modified = true;}
@@ -211,16 +197,6 @@ break;
 break;
  case Id::reverbShelfHigh: if (!isEqual(get<Id::reverbShelfHigh>(), value)) {get<Id::reverbShelfHigh>() = value;m_modified = true;}
 break;
- case Id::pattern: if (!isEqual(get<Id::pattern>(), value)) {get<Id::pattern>() = static_cast<size_t>(value) ;m_modified = true;}
-break;
- case Id::slide: if (!isEqual(get<Id::slide>(), value)) {get<Id::slide>() = value;m_modified = true;}
-break;
- case Id::slideTime: if (!isEqual(get<Id::slideTime>(), value)) {get<Id::slideTime>() = value;m_modified = true;}
-break;
- case Id::harmonicFirst: if (!isEqual(get<Id::harmonicFirst>(), value)) {get<Id::harmonicFirst>() = static_cast<size_t>(value) ;m_modified = true;}
-break;
- case Id::harmonicSecond: if (!isEqual(get<Id::harmonicSecond>(), value)) {get<Id::harmonicSecond>() = static_cast<size_t>(value) ;m_modified = true;}
-break;
  case Id::playStop: if (!isEqual(get<Id::playStop>(), value)) {get<Id::playStop>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::humanizeTiming: if (!isEqual(get<Id::humanizeTiming>(), value)) {get<Id::humanizeTiming>() = value;m_modified = true;}
@@ -231,9 +207,7 @@ break;
 break;
  case Id::hostSync: if (!isEqual(get<Id::hostSync>(), value)) {get<Id::hostSync>() = static_cast<bool>(value) ;m_modified = true;}
 break;
- case Id::pluckDivision: if (!isEqual(get<Id::pluckDivision>(), value)) {get<Id::pluckDivision>() = static_cast<size_t>(value) ;m_modified = true;}
-break;
- case Id::pauseDivision: if (!isEqual(get<Id::pauseDivision>(), value)) {get<Id::pauseDivision>() = static_cast<size_t>(value) ;m_modified = true;}
+ case Id::division: if (!isEqual(get<Id::division>(), value)) {get<Id::division>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
  case Id::attack: if (!isEqual(get<Id::attack>(), value)) {get<Id::attack>() = value;m_modified = true;}
 break;
@@ -269,6 +243,7 @@ break;
         }
     }
 
+void updateScript(const std::string& value) { if (script != value) { script = value; m_modified = true; } }
 
 
     [[nodiscard]] bool isModified() const
@@ -303,28 +278,24 @@ private:
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     PatchParameters,
-        key               , // drop
         level             , // dial
         tuning            , // dial
+        transpose         , // dial
         detune            , // dial
+        voices            , // dial
+        script            , // script
         reverbDry         , // dial
         reverbWet         , // dial
         reverbSize        , // dial
         reverbDecay       , // dial
         reverbShelfLow    , // dial
         reverbShelfHigh   , // dial
-        pattern           , // drop
-        slide             , // dial
-        slideTime         , // dial
-        harmonicFirst     , // drop
-        harmonicSecond    , // drop
         playStop          , // switch
         humanizeTiming    , // dial
         humanizeLevel     , // dial
         bpm               , // dial
         hostSync          , // switch
-        pluckDivision     , // drop
-        pauseDivision     , // drop
+        division          , // drop
         attack            , // dial
         decay             , // dial
         decayOctave       , // dial

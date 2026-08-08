@@ -213,6 +213,106 @@ class FileIo
     }
 
 
+    void updateScript(const std::string& value)
+    {
+        if (!m_isInitialized)
+        {
+            return;
+        }
+        m_currentParams.updateScript(value);
+    }
+
+    [[nodiscard]] const std::string& currentScript() const
+    {
+        return m_currentParams.script;
+    }
+
+    [[nodiscard]] std::vector<std::string> listScriptNames() const
+    {
+        std::vector<std::string> names;
+        const auto rootDir = getScriptDirectory();
+        for (const auto& f : rootDir.findChildFiles(juce::File::findFiles, true, "*.lua"))
+        {
+            const auto relative = f.getRelativePathFrom(rootDir).replaceCharacter('\\', '/');
+            names.push_back(relative.upToLastOccurrenceOf(".lua", false, false).toStdString());
+        }
+        std::sort(names.begin(), names.end());
+        return names;
+    }
+
+    [[nodiscard]] const std::string& currentScriptName() const
+    {
+        return m_currentScriptName;
+    }
+
+    bool saveScriptNamed(const std::string& name)
+    {
+        const std::string filename = getScriptFilename(name);
+        if (filename.empty())
+        {
+            return false;
+        }
+        std::ofstream out(filename);
+        if (!out)
+        {
+            std::cerr << "FileIo: ERROR - Failed to open " << filename << " for writing" << std::endl;
+            return false;
+        }
+        out << m_currentParams.script;
+        m_currentScriptName = name;
+        return true;
+    }
+
+    bool loadScriptNamed(const std::string& name)
+    {
+        const std::string filename = getScriptFilename(name);
+        std::ifstream in(filename);
+        if (filename.empty() || !in)
+        {
+            std::cerr << "FileIo: ERROR - Failed to open " << filename << " for reading" << std::endl;
+            return false;
+        }
+        std::ostringstream buffer;
+        buffer << in.rdbuf();
+        updateScript(buffer.str());
+        m_currentScriptName = name;
+        return true;
+    }
+
+    bool deleteScriptNamed(const std::string& name)
+    {
+        const std::string filename = getScriptFilename(name);
+        if (filename.empty())
+        {
+            return false;
+        }
+        if (name == m_currentScriptName)
+        {
+            m_currentScriptName.clear();
+        }
+        return juce::File(filename).deleteFile();
+    }
+
+    bool renameScriptNamed(const std::string& oldName, const std::string& newName)
+    {
+        const std::string oldFilename = getScriptFilename(oldName);
+        const std::string newFilename = getScriptFilename(newName);
+        if (oldFilename.empty() || newFilename.empty())
+        {
+            return false;
+        }
+        if (!juce::File(oldFilename).moveFileTo(juce::File(newFilename)))
+        {
+            return false;
+        }
+        if (oldName == m_currentScriptName)
+        {
+            m_currentScriptName = newName;
+        }
+        return true;
+    }
+
+
   private:
     // JUCE's userApplicationDataDirectory is bare "~/Library" on macOS; the
     // "Application Support" segment is a convention apps must add themselves.
@@ -223,7 +323,7 @@ class FileIo
 #if JUCE_MAC
         base = base.getChildFile("Application Support");
 #endif
-        const auto dir = base.getChildFile("AbacDsp").getChildFile("Tanpura");
+        const auto dir = base.getChildFile("AbacDsp").getChildFile("Dronesequencer");
         dir.createDirectory();
         return dir;
     }
@@ -294,6 +394,47 @@ class FileIo
     }
 
 
+    static juce::File getScriptDirectory()
+    {
+        auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
+#if JUCE_MAC
+        base = base.getChildFile("Application Support");
+#endif
+        const auto dir = base.getChildFile("AbacDsp").getChildFile("Dronesequencer").getChildFile("Scripts");
+        dir.createDirectory();
+        return dir;
+    }
+
+    static std::string getScriptFilename(const std::string& name)
+    {
+        juce::StringArray segments;
+        segments.addTokens(juce::String(name), "/", "");
+        segments.trim();
+        segments.removeEmptyStrings();
+        if (segments.isEmpty())
+        {
+            return {};
+        }
+        juce::File dir = getScriptDirectory();
+        for (int i = 0; i < segments.size() - 1; ++i)
+        {
+            const juce::String sanitized = segments[i].removeCharacters("\\:*?\"<>|");
+            if (sanitized.isEmpty())
+            {
+                return {};
+            }
+            dir = dir.getChildFile(sanitized);
+        }
+        const juce::String fileName = segments[segments.size() - 1].removeCharacters("\\:*?\"<>|");
+        if (fileName.isEmpty())
+        {
+            return {};
+        }
+        dir.createDirectory();
+        return dir.getChildFile(fileName + ".lua").getFullPathName().toStdString();
+    }
+
+
     bool savePatch(const std::vector<int>& patchIndex)
     {
         const std::string filename = getPatchFilename(patchIndex);
@@ -341,4 +482,5 @@ class FileIo
     std::vector<int> m_currentPatch;
     PatchParameters m_currentParams;
     std::string m_currentPatchName;
+    std::string m_currentScriptName;
 };

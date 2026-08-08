@@ -10,3 +10,9 @@
 [submodule "3rdparty/pffft"]
 	path = 3rdparty/pffft
 	url = https://github.com/marton78/pffft.git
+[submodule "3rdparty/lua"]
+	path = 3rdparty/lua
+	url = https://github.com/lua/lua.git
+[submodule "3rdparty/sol2"]
+	path = 3rdparty/sol2
+	url = https://github.com/ThePhD/sol2.git

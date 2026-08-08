@@ -5,6 +5,7 @@
 #include <functional>
 #include <iostream>
 #include <juce_core/juce_core.h>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -211,6 +212,8 @@ class FileIo
         return true;
     }
 
+    /*FileIoScriptMethods*/
+
   private:
     // JUCE's userApplicationDataDirectory is bare "~/Library" on macOS; the
     // "Application Support" segment is a convention apps must add themselves.
@@ -291,6 +294,8 @@ class FileIo
         return dir.getChildFile(fileName + ".json").getFullPathName().toStdString();
     }
 
+    /*FileIoScriptPrivate*/
+
     bool savePatch(const std::vector<int>& patchIndex)
     {
         const std::string filename = getPatchFilename(patchIndex);
@@ -338,4 +343,5 @@ class FileIo
     std::vector<int> m_currentPatch;
     PatchParameters m_currentParams;
     std::string m_currentPatchName;
+    /*FileIoScriptMembers*/
 };

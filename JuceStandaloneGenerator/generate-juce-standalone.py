@@ -30,6 +30,10 @@ from codegen_processor import (
     create_extra_processor_methods, create_extra_prepare_calls,
     create_extra_processor_members, create_extra_get_state_calls,
     create_extra_set_state_calls, create_cc_mapping,
+    create_patch_parameters_script_methods, create_load_script_calls,
+    create_fileio_script_methods, create_fileio_script_private,
+    create_fileio_script_members, create_processor_script_methods,
+    has_script_port,
 )
 from codegen_widgets import (
     gauge_present, create_gauge_callbacks, create_theme_callbacks,
@@ -71,6 +75,7 @@ CPP_SOURCE_FILES_FIXED = [
     "inc/MomentaryToggleButton.h",
     "inc/GenericMeter.h",
     "inc/StatusBar.h",
+    "inc/ScriptEditorWindow.h",
     "inc/SpectrogramDisplay.h",
     "inc/VuMeter.h",
     "inc/WaveformMeter.h",
@@ -140,7 +145,13 @@ CPP_JUCE_FILE_VARS = [
     "CC_DEFAULT_MAPPINGS",
     "CC_TARGET_PARAMID_LIST",
     "CC_TARGET_FULL_RANGE",
-    "NUM_CC_TARGETS"
+    "NUM_CC_TARGETS",
+    "ScriptUpdateMethods",
+    "LoadScriptCalls",
+    "FileIoScriptMethods",
+    "FileIoScriptPrivate",
+    "FileIoScriptMembers",
+    "ProcessorScriptMethods"
 ]
 
 
@@ -221,6 +232,12 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
     blueprint["CPP"]["PatchCount"] = get_patch_count(blueprint)
     blueprint["CPP"]["ParamStructMembers"] = create_struct_variables_implementation(blueprint)
     blueprint["CPP"].update(create_cc_mapping(blueprint))
+    blueprint["CPP"]["ScriptUpdateMethods"] = create_patch_parameters_script_methods(blueprint)
+    blueprint["CPP"]["LoadScriptCalls"] = create_load_script_calls(blueprint)
+    blueprint["CPP"]["FileIoScriptMethods"] = create_fileio_script_methods(blueprint)
+    blueprint["CPP"]["FileIoScriptPrivate"] = create_fileio_script_private(blueprint)
+    blueprint["CPP"]["FileIoScriptMembers"] = create_fileio_script_members(blueprint)
+    blueprint["CPP"]["ProcessorScriptMethods"] = create_processor_script_methods(blueprint)
 
     blueprint["CPP"]["INIT_WIDGETS"] = create_init_widgets(blueprint)
     blueprint["CPP"]["WIDGETS_DECL"] = create_widgets_decl(blueprint)
@@ -311,6 +328,8 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
         blueprint["CPP"]["GAUGES"].append("PRESETBROWSER")
     if blueprint.get("loops", False):
         blueprint["CPP"]["GAUGES"].append("LOOPBROWSER")
+    if has_script_port(blueprint):
+        blueprint["CPP"]["GAUGES"].append("SCRIPTBROWSER")
     if blueprint.get("host_transport", False):
         blueprint["CPP"]["GAUGES"].append("HOSTTRANSPORT")
     if has_performance_page:

@@ -3,6 +3,10 @@ from typing import Any
 from blueprint import Blueprint
 
 
+def has_script_port(blueprint: Blueprint) -> bool:
+    return any(item['type'] == 'script' for item in blueprint["ports-control"])
+
+
 def create_patch_changed(blueprint: Blueprint) -> str:
     conditions = []
     for item in blueprint["ports-control"]:
@@ -60,10 +64,19 @@ def update_param_by_id(blueprint: Blueprint) -> str:
                     cast_value = f"""static_cast<size_t>(value) """
             if cast_value is not None:
                 result += f""" case Id::{param_id}: if (!isEqual(get<Id::{param_id}>(), value)) {{get<Id::{param_id}>() = {cast_value};m_modified = true;}}\nbreak;\n"""
+            elif item['type'] == 'script':
+                # No float-keyed update path for a string field (see update{Symbol}()
+                # instead) - explicit no-op case rather than relying on the switch's
+                # default:, since -Wswitch-enum flags any Id left unhandled either way.
+                result += f""" case Id::{param_id}: break;\n"""
     return result
 
+# "script" is included here (unlike the dial/switch/drop-only helpers below) because
+# this same generated list feeds both the "enum class Id" body and, verbatim, the
+# nlohmann serialization macro's field list further down in the template - leaving it
+# out would silently drop script text from patch JSON entirely.
 def id_list(blueprint: Blueprint) -> str:
-    items = [item for item in blueprint["ports-control"] if 'patch' not in item and item['type'] in ["dial", "switch", "drop"]]
+    items = [item for item in blueprint["ports-control"] if 'patch' not in item and item['type'] in ["dial", "switch", "drop", "script"]]
     if not items:
         return ""
 
@@ -85,7 +98,7 @@ def param_const_expr_list(blueprint: Blueprint) -> str:
     items= []
     for item in blueprint["ports-control"]:
         if 'patch' not in item:
-            if item['type'] in ["dial","switch","drop"]:
+            if item['type'] in ["dial","switch","drop","script"]:
                 items.append(f"""if constexpr (ParamId == Id::{item['symbol']}) return {item['symbol']};\n""")
     return "        else ".join(items)
 
@@ -134,7 +147,290 @@ def create_struct_variables_implementation(blueprint: Blueprint) -> str:
                     result += f"bool {symbol}{{{'true' if default else 'false'}}};\n"
                 case "drop":
                     result += f"size_t {symbol}{{{default}}};\n"
+                case "script":
+                    # Empty by default (rather than duplicating the engine's stub script text
+                    # here) - a never-saved patch leaves whatever the DSP impl already loaded
+                    # at construction untouched; see create_load_script_calls().
+                    result += f'std::string {symbol}{{}};\n'
     return result
+
+# Per-symbol "script" update methods for PatchParameters, bypassing the float-keyed
+# updateById() switch entirely - there's no APVTS parameter for a text blob to drive it.
+def create_patch_parameters_script_methods(blueprint: Blueprint) -> str:
+    result = ""
+    for item in blueprint["ports-control"]:
+        if item['type'] == 'script':
+            symbol = item['symbol']
+            upper = symbol[0].upper() + symbol[1:]
+            result += (f"""void update{upper}(const std::string& value) {{ """
+                       f"""if ({symbol} != value) {{ {symbol} = value; m_modified = true; }} }}\n""")
+    return result
+
+# Pushed into applyLoadedParametersToHost() after a patch load: an empty stored script
+# means "this patch never touched it", so the engine's own already-loaded script (its
+# stub, or whatever a prior loadScript() call left running) is left alone. Guarded on
+# pluginRunner since a named-patch load (unlike the numbered-slot path, which only runs
+# from parameterChanged() after pluginRunner already exists) can run before prepareToPlay().
+def create_load_script_calls(blueprint: Blueprint) -> str:
+    result = ""
+    for item in blueprint["ports-control"]:
+        if item['type'] == 'script':
+            symbol = item['symbol']
+            upper = symbol[0].upper() + symbol[1:]
+            result += (f"""if (pluginRunner != nullptr && !params.{symbol}.empty()) """
+                       f"""{{ pluginRunner->set{upper}(params.{symbol}); }}\n""")
+    return result
+
+# FileIo public API for a "script"-type port: update/current mirror updateParameter()'s
+# shape but for the string field directly; the rest is a named-item pool (list/save/
+# load/delete/rename) structurally identical to the named-patch pool above it, just
+# storing plain-text .lua files instead of JSON patch snapshots.
+def create_fileio_script_methods(blueprint: Blueprint) -> str:
+    result = ""
+    for item in blueprint["ports-control"]:
+        if item['type'] != 'script':
+            continue
+        symbol = item['symbol']
+        upper = symbol[0].upper() + symbol[1:]
+        result += f"""
+    void update{upper}(const std::string& value)
+    {{
+        if (!m_isInitialized)
+        {{
+            return;
+        }}
+        m_currentParams.update{upper}(value);
+    }}
+
+    [[nodiscard]] const std::string& current{upper}() const
+    {{
+        return m_currentParams.{symbol};
+    }}
+
+    [[nodiscard]] std::vector<std::string> list{upper}Names() const
+    {{
+        std::vector<std::string> names;
+        const auto rootDir = get{upper}Directory();
+        for (const auto& f : rootDir.findChildFiles(juce::File::findFiles, true, "*.lua"))
+        {{
+            const auto relative = f.getRelativePathFrom(rootDir).replaceCharacter('\\\\', '/');
+            names.push_back(relative.upToLastOccurrenceOf(".lua", false, false).toStdString());
+        }}
+        std::sort(names.begin(), names.end());
+        return names;
+    }}
+
+    [[nodiscard]] const std::string& current{upper}Name() const
+    {{
+        return m_current{upper}Name;
+    }}
+
+    bool save{upper}Named(const std::string& name)
+    {{
+        const std::string filename = get{upper}Filename(name);
+        if (filename.empty())
+        {{
+            return false;
+        }}
+        std::ofstream out(filename);
+        if (!out)
+        {{
+            std::cerr << "FileIo: ERROR - Failed to open " << filename << " for writing" << std::endl;
+            return false;
+        }}
+        out << m_currentParams.{symbol};
+        m_current{upper}Name = name;
+        return true;
+    }}
+
+    bool load{upper}Named(const std::string& name)
+    {{
+        const std::string filename = get{upper}Filename(name);
+        std::ifstream in(filename);
+        if (filename.empty() || !in)
+        {{
+            std::cerr << "FileIo: ERROR - Failed to open " << filename << " for reading" << std::endl;
+            return false;
+        }}
+        std::ostringstream buffer;
+        buffer << in.rdbuf();
+        update{upper}(buffer.str());
+        m_current{upper}Name = name;
+        return true;
+    }}
+
+    bool delete{upper}Named(const std::string& name)
+    {{
+        const std::string filename = get{upper}Filename(name);
+        if (filename.empty())
+        {{
+            return false;
+        }}
+        if (name == m_current{upper}Name)
+        {{
+            m_current{upper}Name.clear();
+        }}
+        return juce::File(filename).deleteFile();
+    }}
+
+    bool rename{upper}Named(const std::string& oldName, const std::string& newName)
+    {{
+        const std::string oldFilename = get{upper}Filename(oldName);
+        const std::string newFilename = get{upper}Filename(newName);
+        if (oldFilename.empty() || newFilename.empty())
+        {{
+            return false;
+        }}
+        if (!juce::File(oldFilename).moveFileTo(juce::File(newFilename)))
+        {{
+            return false;
+        }}
+        if (oldName == m_current{upper}Name)
+        {{
+            m_current{upper}Name = newName;
+        }}
+        return true;
+    }}
+"""
+    return result
+
+# Private helpers backing create_fileio_script_methods() above: the on-disk pool
+# directory (a "<symbol>Scripts" sibling of the patch directory) and its filename
+# sanitizing/subfolder logic, copied from getPatchDirectory()/getNamedPatchFilename().
+def create_fileio_script_private(blueprint: Blueprint) -> str:
+    result = ""
+    module_upper = blueprint["CPP"]["MODULE_UPPER"]
+    for item in blueprint["ports-control"]:
+        if item['type'] != 'script':
+            continue
+        symbol = item['symbol']
+        upper = symbol[0].upper() + symbol[1:]
+        # Not embedding "/*MODULE_UPPER*/" here for the templating engine to resolve:
+        # substitution runs once, in CPP_JUCE_FILE_VARS order, and MODULE_UPPER (near
+        # the top of that list) would run before FileIoScriptPrivate (appended at the
+        # end) has even inserted this text into the document - so it would never see it.
+        result += f"""
+    static juce::File get{upper}Directory()
+    {{
+        auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
+#if JUCE_MAC
+        base = base.getChildFile("Application Support");
+#endif
+        const auto dir = base.getChildFile("AbacDsp").getChildFile("{module_upper}").getChildFile("Scripts");
+        dir.createDirectory();
+        return dir;
+    }}
+
+    static std::string get{upper}Filename(const std::string& name)
+    {{
+        juce::StringArray segments;
+        segments.addTokens(juce::String(name), "/", "");
+        segments.trim();
+        segments.removeEmptyStrings();
+        if (segments.isEmpty())
+        {{
+            return {{}};
+        }}
+        juce::File dir = get{upper}Directory();
+        for (int i = 0; i < segments.size() - 1; ++i)
+        {{
+            const juce::String sanitized = segments[i].removeCharacters("\\\\:*?\\"<>|");
+            if (sanitized.isEmpty())
+            {{
+                return {{}};
+            }}
+            dir = dir.getChildFile(sanitized);
+        }}
+        const juce::String fileName = segments[segments.size() - 1].removeCharacters("\\\\:*?\\"<>|");
+        if (fileName.isEmpty())
+        {{
+            return {{}};
+        }}
+        dir.createDirectory();
+        return dir.getChildFile(fileName + ".lua").getFullPathName().toStdString();
+    }}
+"""
+    return result
+
+def create_fileio_script_members(blueprint: Blueprint) -> str:
+    result = ""
+    for item in blueprint["ports-control"]:
+        if item['type'] == 'script':
+            upper = item['symbol'][0].upper() + item['symbol'][1:]
+            result += f"std::string m_current{upper}Name;\n"
+    return result
+
+# Fixed-name convenience wrappers (getScriptText, applyScriptText, listScriptNames, ...)
+# around the per-symbol FileIo/DSP methods above, so the Editor's popup/menu code (also
+# fixed-name, mirroring buildPatchesMenu()'s static shape) doesn't need to know the
+# port's actual symbol. Only the first "script"-type port gets this treatment - one
+# script pool per instrument is the only case any blueprint so far needs; a blueprint
+# wanting more would still have working per-symbol FileIo methods to build on directly.
+def create_processor_script_methods(blueprint: Blueprint) -> str:
+    script_items = [item for item in blueprint["ports-control"] if item['type'] == 'script']
+    if not script_items:
+        return ""
+    symbol = script_items[0]['symbol']
+    upper = symbol[0].upper() + symbol[1:]
+    return f"""
+    [[nodiscard]] juce::String getScriptText() const
+    {{
+        return juce::String(m_fileIo.current{upper}());
+    }}
+
+    bool applyScriptText(const juce::String& text)
+    {{
+        if (pluginRunner == nullptr)
+        {{
+            return false;
+        }}
+        const bool ok = pluginRunner->set{upper}(text.toStdString());
+        if (ok)
+        {{
+            m_fileIo.update{upper}(text.toStdString());
+        }}
+        return ok;
+    }}
+
+    [[nodiscard]] std::vector<juce::String> listScriptNames() const
+    {{
+        std::vector<juce::String> result;
+        for (const auto& n : m_fileIo.list{upper}Names())
+        {{
+            result.push_back(juce::String(n));
+        }}
+        return result;
+    }}
+
+    [[nodiscard]] juce::String getCurrentScriptName() const
+    {{
+        return juce::String(m_fileIo.current{upper}Name());
+    }}
+
+    bool requestLoadScript(const juce::String& name)
+    {{
+        if (!m_fileIo.load{upper}Named(name.toStdString()))
+        {{
+            return false;
+        }}
+        return applyScriptText(juce::String(m_fileIo.current{upper}()));
+    }}
+
+    bool saveCurrentScriptAs(const juce::String& name)
+    {{
+        return m_fileIo.save{upper}Named(name.toStdString());
+    }}
+
+    bool deleteScriptNamed(const juce::String& name)
+    {{
+        return m_fileIo.delete{upper}Named(name.toStdString());
+    }}
+
+    bool renameScript(const juce::String& oldName, const juce::String& newName)
+    {{
+        return m_fileIo.rename{upper}Named(oldName.toStdString(), newName.toStdString());
+    }}
+"""
 
 def create_variables_implementation(blueprint: Blueprint) -> str:
     result = ""

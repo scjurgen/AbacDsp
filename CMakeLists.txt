@@ -35,6 +35,7 @@ if(BUILD_FULL_PROJECT)
     # EXAMPLES - only when building full project
     add_subdirectory(examples/SamplePlayer)
     add_subdirectory(examples/delay)
+    add_subdirectory(examples/dronesequencer)
     add_subdirectory(examples/guisandbox)
     add_subdirectory(examples/looper)
     add_subdirectory(examples/maxdiffuser)
