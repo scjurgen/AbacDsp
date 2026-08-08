@@ -790,6 +790,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             }
             return juce::String(processorRef.scriptErrorMessage());
         };
+        editorComponent->onReset = [this] { return juce::String(processorRef.getScriptSkeleton()); };
 
         juce::DialogWindow::LaunchOptions options;
         options.content.setOwned(editorComponent);

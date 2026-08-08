@@ -143,6 +143,54 @@ class DroneSequencerImpl final : public EffectBase
         return m_scriptEngine.lastError();
     }
 
+    // Shown by the popup editor's Reset button, not the engine's own default script.
+    [[nodiscard]] static std::string scriptSkeleton()
+    {
+        return std::string(DroneScriptEngine::kFullSkeletonScript);
+    }
+
+    // Channel Voice messages only (status 0x80-0xEF): their length is fully determined
+    // by the status byte's high nibble, so no separate length parameter is needed here -
+    // matches EffectBase::processMidi()'s existing (byte-pointer-only) signature.
+    void processMidi(const uint8_t* msg) override
+    {
+        const uint8_t channel = msg[0] & 0x0Fu;
+        switch (msg[0] & 0xF0u)
+        {
+            case 0x90u: // Note On; velocity 0 is a Note Off per MIDI running-status convention
+                if (msg[2] == 0)
+                {
+                    m_scriptEngine.notifyNoteOff(channel, msg[1], msg[2]);
+                }
+                else
+                {
+                    m_scriptEngine.notifyNoteOn(channel, msg[1], msg[2]);
+                }
+                break;
+            case 0x80u: // Note Off
+                m_scriptEngine.notifyNoteOff(channel, msg[1], msg[2]);
+                break;
+            case 0xB0u: // Control Change
+                m_scriptEngine.notifyCC(channel, msg[1], msg[2]);
+                break;
+            case 0xC0u: // Program Change
+                m_scriptEngine.notifyProgramChange(channel, msg[1]);
+                break;
+            case 0xD0u: // Channel Pressure (Aftertouch)
+                m_scriptEngine.notifyAftertouch(channel, msg[1]);
+                break;
+            case 0xA0u: // Polyphonic Key Pressure (Poly Pressure)
+                m_scriptEngine.notifyPolyPressure(channel, msg[1], msg[2]);
+                break;
+            case 0xE0u: // Pitch Bend: wire format is 14-bit 0..16383 (center 8192); re-centered
+                        // to -8192..8191 (center 0) before the script sees it.
+                m_scriptEngine.notifyPitchBend(channel, ((static_cast<int>(msg[2]) << 7) | msg[1]) - 8192);
+                break;
+            default:
+                break;
+        }
+    }
+
     [[nodiscard]] float currentBpm() const noexcept
     {
         return m_hostSync ? std::clamp(static_cast<float>(hostTransport().bpm), 20.f, 300.f) : m_manualBpm;
@@ -357,11 +405,36 @@ class DroneSequencerImpl final : public EffectBase
     }
 #pragma GCC diagnostic pop
 
+    // OnStart()/OnStop() fire on any effective start/stop transition - the manual Play
+    // switch toggling in manual mode, or the host transport's play state when Host Sync
+    // is on - so a script can reset its own counters/state. JUCE's transport only
+    // exposes a play/not-playing bool (no distinct pause), and the sequencer itself
+    // always resets its clock on any stop->start transition rather than resuming, so
+    // there is no separate "paused" state to report here either.
+    void notifyTransportIfChanged() noexcept
+    {
+        const bool playing = effectivePlaying();
+        if (playing == m_lastNotifiedPlaying)
+        {
+            return;
+        }
+        m_lastNotifiedPlaying = playing;
+        if (playing)
+        {
+            m_scriptEngine.notifyStart();
+        }
+        else
+        {
+            m_scriptEngine.notifyStop();
+        }
+    }
+
     void updateTiming() noexcept
     {
         const float bpm = currentBpm();
         m_sequencer.setIntervalMs(intervalMsForDivision(bpm, static_cast<int>(m_divisionIndex)));
         m_sequencer.setPlaying(effectivePlaying());
+        notifyTransportIfChanged();
         notifyTimingIfChanged(bpm);
         updateLfoSpeeds();
         updateSustainFeed();
@@ -421,6 +494,7 @@ class DroneSequencerImpl final : public EffectBase
     size_t m_divisionIndex{4};
     float m_lastNotifiedBpm{-1.f};
     size_t m_lastNotifiedDivisionIndex{static_cast<size_t>(-1)};
+    bool m_lastNotifiedPlaying{false};
     float m_lfoSpeed{0.5f};
     float m_lfoSpeedVariationPercent{0.f};
     float m_levelSustainBase{0.2f};

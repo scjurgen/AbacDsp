@@ -1038,6 +1038,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner ? pluginRunner->scriptError() : std::string{};
     }
+    [[nodiscard]] std::string getScriptSkeleton() const
+    {
+        return pluginRunner ? pluginRunner->scriptSkeleton() : std::string{};
+    }
 
 
     [[nodiscard]] bool hasRunner() const

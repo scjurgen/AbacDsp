@@ -8,12 +8,16 @@
 // dialog closes. Apply calls onApply and, only on success (empty returned string), closes
 // the dialog itself; a non-empty return is shown inline and the dialog stays open so the
 // user can fix a compile error without losing their edits. Cancel always just closes.
+// Reset replaces the editor's text with onReset()'s skeleton but does not apply or close -
+// it's still just an edit, undoable by Cancel, until Apply is clicked.
 class ScriptEditorWindow final : public juce::Component
 {
   public:
     // Returns an error message to display (and keep the dialog open), or an empty
     // string on success (closes the dialog).
     std::function<juce::String(const juce::String&)> onApply;
+    // Returns the skeleton text to load into the editor.
+    std::function<juce::String()> onReset;
 
     ScriptEditorWindow()
     {
@@ -26,6 +30,10 @@ class ScriptEditorWindow final : public juce::Component
         m_errorLabel.setColour(juce::Label::textColourId, juce::Colours::orangered);
         m_errorLabel.setJustificationType(juce::Justification::centredLeft);
         addAndMakeVisible(m_errorLabel);
+
+        m_resetButton.setButtonText("Reset");
+        m_resetButton.onClick = [this] { reset(); };
+        addAndMakeVisible(m_resetButton);
 
         m_applyButton.setButtonText("Apply");
         m_applyButton.onClick = [this] { apply(); };
@@ -50,6 +58,7 @@ class ScriptEditorWindow final : public juce::Component
         m_cancelButton.setBounds(buttonRow.removeFromRight(90));
         buttonRow.removeFromRight(8);
         m_applyButton.setBounds(buttonRow.removeFromRight(90));
+        m_resetButton.setBounds(buttonRow.removeFromLeft(90));
         area.removeFromBottom(4);
         m_errorLabel.setBounds(area.removeFromBottom(20));
         area.removeFromBottom(4);
@@ -74,6 +83,16 @@ class ScriptEditorWindow final : public juce::Component
         }
     }
 
+    void reset()
+    {
+        if (!onReset)
+        {
+            return;
+        }
+        m_editor.setText(onReset(), juce::dontSendNotification);
+        m_errorLabel.setText({}, juce::dontSendNotification);
+    }
+
     void closeParentDialog()
     {
         if (auto* dw = findParentComponentOfClass<juce::DialogWindow>())
@@ -84,6 +103,7 @@ class ScriptEditorWindow final : public juce::Component
 
     juce::TextEditor m_editor;
     juce::Label m_errorLabel;
+    juce::TextButton m_resetButton;
     juce::TextButton m_applyButton;
     juce::TextButton m_cancelButton;
 };

@@ -1,4 +1,7 @@
+#include <cassert>
 #include <gtest/gtest.h>
+#include <memory>
+#include <string>
 #include <tuple>
 
 #include "impl/DroneScriptEngine.h"
@@ -126,6 +129,188 @@ TEST(DroneScriptEngine, NotifyTimingFeedsGlobalsIntoNextNotes)
     ASSERT_EQ(result.count, 1u);
     EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 133.f);
     EXPECT_FLOAT_EQ(result.notes[0].delayMs, 7.f);
+}
+
+namespace
+{
+// Every MIDI notify*() test loads a script recording the last-seen event as globals,
+// then smuggles them back out through the already-proven NextNotes()/DroneNote channel
+// rather than adding a test-only "read a Lua global" API to production code.
+// Returned via unique_ptr: DroneScriptEngine is deliberately non-movable (its pool's
+// free-list pointers are relative to its own arena's address), so it can't come back
+// from a factory function by value.
+std::unique_ptr<DroneScriptEngine> makeEngineRecordingLastEvent(const char* globalsAssignment)
+{
+    auto engine = std::make_unique<DroneScriptEngine>();
+    std::string script = globalsAssignment;
+    script += R"(
+        function NextNotes()
+            return { { note = A or -1, velocity = B or -1, channel = C or -1, length = D or -1, delay = 0 } }
+        end
+    )";
+    [[maybe_unused]] const bool loaded = engine->loadScript(script);
+    assert(loaded);
+    return engine;
+}
+}
+
+TEST(DroneScriptEngine, NotifyNoteOnDispatchesToOnNoteOn)
+{
+    auto engine = makeEngineRecordingLastEvent(R"(
+        function OnNoteOn(channel, note, velocity) A = note; B = velocity; C = channel end
+    )");
+    engine->notifyNoteOn(2, 60, 100);
+    const auto result = engine->nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 60.f);
+    EXPECT_FLOAT_EQ(result.notes[0].velocity, 100.f);
+    EXPECT_EQ(result.notes[0].channel, 2u);
+}
+
+TEST(DroneScriptEngine, NotifyNoteOffDispatchesToOnNoteOff)
+{
+    auto engine = makeEngineRecordingLastEvent(R"(
+        function OnNoteOff(channel, note, velocity) A = note; B = velocity; C = channel end
+    )");
+    engine->notifyNoteOff(1, 61, 5);
+    const auto result = engine->nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 61.f);
+    EXPECT_FLOAT_EQ(result.notes[0].velocity, 5.f);
+    EXPECT_EQ(result.notes[0].channel, 1u);
+}
+
+TEST(DroneScriptEngine, NotifyCcDispatchesToOnCC)
+{
+    auto engine = makeEngineRecordingLastEvent(R"(
+        function OnCC(channel, ccNumber, value) A = ccNumber; B = value; C = channel end
+    )");
+    engine->notifyCC(3, 74, 127);
+    const auto result = engine->nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 74.f);
+    EXPECT_FLOAT_EQ(result.notes[0].velocity, 127.f);
+    EXPECT_EQ(result.notes[0].channel, 3u);
+}
+
+TEST(DroneScriptEngine, NotifyProgramChangeDispatchesToOnProgramChange)
+{
+    auto engine = makeEngineRecordingLastEvent(R"(
+        function OnProgramChange(channel, program) A = program; C = channel end
+    )");
+    engine->notifyProgramChange(4, 12);
+    const auto result = engine->nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 12.f);
+    EXPECT_EQ(result.notes[0].channel, 4u);
+}
+
+TEST(DroneScriptEngine, NotifyAftertouchDispatchesToOnAftertouch)
+{
+    auto engine = makeEngineRecordingLastEvent(R"(
+        function OnAftertouch(channel, value) A = value; C = channel end
+    )");
+    engine->notifyAftertouch(5, 99);
+    const auto result = engine->nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 99.f);
+    EXPECT_EQ(result.notes[0].channel, 5u);
+}
+
+TEST(DroneScriptEngine, NotifyPolyPressureDispatchesToOnPolyPressure)
+{
+    auto engine = makeEngineRecordingLastEvent(R"(
+        function OnPolyPressure(channel, note, value) A = note; B = value; C = channel end
+    )");
+    engine->notifyPolyPressure(6, 72, 80);
+    const auto result = engine->nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 72.f);
+    EXPECT_FLOAT_EQ(result.notes[0].velocity, 80.f);
+    EXPECT_EQ(result.notes[0].channel, 6u);
+}
+
+TEST(DroneScriptEngine, NotifyPitchBendDispatchesToOnPitchBend)
+{
+    auto engine = makeEngineRecordingLastEvent(R"(
+        function OnPitchBend(channel, bendValue) A = bendValue; C = channel end
+    )");
+    engine->notifyPitchBend(7, 8192);
+    const auto result = engine->nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 8192.f);
+    EXPECT_EQ(result.notes[0].channel, 7u);
+}
+
+TEST(DroneScriptEngine, MissingMidiHandlersAreSilentlyIgnored)
+{
+    // No OnNoteOn/etc defined at all - should behave like OnTiming's absence: no-op,
+    // no error, previous NextNotes() behavior unaffected.
+    DroneScriptEngine engine;
+    engine.notifyNoteOn(0, 60, 100);
+    engine.notifyNoteOff(0, 60, 0);
+    engine.notifyCC(0, 1, 1);
+    engine.notifyProgramChange(0, 1);
+    engine.notifyAftertouch(0, 1);
+    engine.notifyPolyPressure(0, 60, 1);
+    engine.notifyPitchBend(0, 8192);
+    EXPECT_FALSE(engine.hasError());
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u) << "stub script's NextNotes should be unaffected";
+}
+
+TEST(DroneScriptEngine, NotifyStartAndStopDispatchToOnStartAndOnStop)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        Started = 0
+        Stopped = 0
+        function OnStart() Started = Started + 1 end
+        function OnStop() Stopped = Stopped + 1 end
+        function NextNotes()
+            return { { note = Started, velocity = Stopped, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+    engine.notifyStart();
+    engine.notifyStart();
+    engine.notifyStop();
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 2.f) << "OnStart should have fired twice";
+    EXPECT_FLOAT_EQ(result.notes[0].velocity, 1.f) << "OnStop should have fired once";
+}
+
+TEST(DroneScriptEngine, MissingStartStopHandlersAreSilentlyIgnored)
+{
+    DroneScriptEngine engine;
+    engine.notifyStart();
+    engine.notifyStop();
+    EXPECT_FALSE(engine.hasError());
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u) << "stub script's NextNotes should be unaffected";
+}
+
+TEST(DroneScriptEngine, FullSkeletonScriptLoadsCleanlyAndDefinesEveryHandler)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(DroneScriptEngine::kFullSkeletonScript));
+    EXPECT_FALSE(engine.hasError());
+    const auto result = engine.nextNotes();
+    EXPECT_EQ(result.count, 0u) << "skeleton's NextNotes deliberately returns an empty table";
+
+    // Exercise every handler the skeleton claims to define - none should error, since an
+    // empty function body is trivially valid regardless of the arguments passed to it.
+    engine.notifyTiming(120.f, 4);
+    engine.notifyStart();
+    engine.notifyStop();
+    engine.notifyNoteOn(0, 60, 100);
+    engine.notifyNoteOff(0, 60, 0);
+    engine.notifyCC(0, 1, 1);
+    engine.notifyProgramChange(0, 1);
+    engine.notifyAftertouch(0, 1);
+    engine.notifyPolyPressure(0, 60, 1);
+    engine.notifyPitchBend(0, 0);
+    EXPECT_FALSE(engine.hasError());
 }
 
 TEST(DroneScriptEngine, NoteFieldsRoundTripThroughLua)

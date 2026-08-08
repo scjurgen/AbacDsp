@@ -14,7 +14,7 @@ asked to keep up with.
 | Transpose | -24 - +24 st | Added to every note height the script returns |
 | Detune | 0 - 100 ct | Per-string detune spread (scales a fixed per-voice pattern) |
 | Voices | 1 - 8 | How many strings are triggerable; `channel` values beyond this clamp to the last one |
-| Script | (button) | Opens the popup editor for the current patch's script |
+| Script | (button) | Opens the popup editor for the current patch's script. The editor's own Reset button replaces the text with a full skeleton (every available hook, stubbed out) - Cancel discards it, Apply commits it. |
 | BPM | 40 - 250 | Tempo |
 | Host Sync | on/off | Follow the host transport's BPM/play state instead of BPM/Play |
 | Division | 1/1 - 1/16T | Clock division the script is asked for notes at |
@@ -63,6 +63,44 @@ Each note is a table with:
 | `length` | ms until the string is muted; 0 lets it ring out via Attack/Decay/Sustain instead of being cut off. |
 | `delay` | ms offset from the nominal beat; may be negative to fire early. The sequencer always asks a short lookahead before the beat, so a small negative `delay` is normal, not a bug. |
 
+## Transport
+
+```lua
+function OnStart() end  -- fires on any effective start
+function OnStop() end   -- fires on any effective stop
+```
+
+These fire on a start/stop transition of the clock: the manual Play switch toggling, or the
+host transport's play state when Host Sync is on - whichever one is actually driving playback.
+Useful for resetting your own counters/state (e.g. the `step` variable in the arpeggio example
+below) so a script restarts from a known point every time, rather than wherever it happened to
+be left. There's no separate "paused" callback: the host doesn't reliably report pause as
+distinct from stop, and the sequencer's own clock always resets on any stop-to-start
+transition rather than resuming, so there's nothing paused to report either.
+
+## Incoming MIDI
+
+If the host sends the plugin MIDI, each event calls an optional handler - define whichever
+ones your script needs; an undefined handler is simply never called, same as `OnTiming`. None
+of these are required to make sound (that's `NextNotes()`'s job) - they're for reacting to a
+controller, DAW automation lane, or another track's MIDI, e.g. to change what `NextNotes()`
+does next by setting a global.
+
+```lua
+function OnNoteOn(channel, note, velocity) end     -- velocity 1..127 (0 arrives as OnNoteOff instead)
+function OnNoteOff(channel, note, velocity) end    -- velocity 0..127 (release velocity, often 0)
+function OnCC(channel, ccNumber, value) end        -- ccNumber and value 0..127
+function OnProgramChange(channel, program) end     -- program 0..127
+function OnAftertouch(channel, value) end          -- channel pressure, value 0..127
+function OnPolyPressure(channel, note, value) end  -- per-note pressure, value 0..127
+function OnPitchBend(channel, bendValue) end       -- 14-bit, -8192..8191, center 0
+```
+
+`channel` is 0-based (0..15), matching `channel` in the note table above - it is the MIDI
+channel the event arrived on, unrelated to which string gets plucked. A Note On with velocity
+0 is normalized to a Note Off before your script ever sees it, per standard MIDI convention;
+you don't need to check for that case yourself in `OnNoteOn`.
+
 ### Example: a 4-step arpeggio across three strings
 
 Demonstrates stepping through a pattern, mixing short plucks with one longer sustained note,
@@ -80,6 +118,10 @@ local step = 1
 function OnTiming(bpm, division)
     BPM = bpm
     DIVISION = division
+end
+
+function OnStart()
+    step = 1 -- always start the pattern from the beginning, not wherever it last stopped
 end
 
 function NextNotes()

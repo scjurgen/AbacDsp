@@ -57,11 +57,75 @@ class DroneScriptEngine
 "end\n";
     // clang-format on
 
+    // Shown by the popup editor's Reset button: every available hook, ready to fill in,
+    // as opposed to kStubScript above (which is deliberately minimal - what a fresh
+    // patch actually plays out of the box).
+    // clang-format off
+    static constexpr std::string_view kFullSkeletonScript =
+"-- DroneSequencer script skeleton - every available hook, ready to fill in.\n"
+"-- Delete anything you don't need; an undefined function is simply never called.\n"
+"\n"
+"function OnTiming(bpm, division)\n"
+"    BPM = bpm\n"
+"    DIVISION = division\n"
+"end\n"
+"\n"
+"function NextNotes()\n"
+"    return {}\n"
+"end\n"
+"\n"
+"-- Fires on any start/stop transition: the manual Play switch toggling, or the host\n"
+"-- transport's play state when Host Sync is on. Useful for resetting your own state.\n"
+"function OnStart()\n"
+"end\n"
+"\n"
+"function OnStop()\n"
+"end\n"
+"\n"
+"function OnNoteOn(channel, note, velocity)\n"
+"end\n"
+"\n"
+"function OnNoteOff(channel, note, velocity)\n"
+"end\n"
+"\n"
+"function OnCC(channel, ccNumber, value)\n"
+"end\n"
+"\n"
+"function OnProgramChange(channel, program)\n"
+"end\n"
+"\n"
+"function OnAftertouch(channel, value)\n"
+"end\n"
+"\n"
+"function OnPolyPressure(channel, note, value)\n"
+"end\n"
+"\n"
+"function OnPitchBend(channel, bendValue)\n"
+"end\n";
+    // clang-format on
+
     explicit DroneScriptEngine(size_t poolBytes = 512 * 1024);
 
     bool loadScript(std::string_view source);
 
     void notifyTiming(float bpm, int divisionIndex) noexcept;
+
+    // Fires on any effective start/stop transition (see kFullSkeletonScript's comment).
+    void notifyStart() noexcept;
+    void notifyStop() noexcept;
+
+    // MIDI event dispatch - each maps to an optional Lua handler (OnNoteOn, OnNoteOff,
+    // OnCC, OnProgramChange, OnAftertouch, OnPolyPressure, OnPitchBend); a script that
+    // doesn't define one simply never gets called for that event, same as OnTiming.
+    // channel is 0-based (0..15); a Note On with velocity 0 is normalized to a Note Off
+    // by the caller (DroneSequencerImpl), per standard MIDI running-status convention.
+    void notifyNoteOn(int channel, int noteHeight, int velocity) noexcept;
+    void notifyNoteOff(int channel, int noteHeight, int velocity) noexcept;
+    void notifyCC(int channel, int ccNumber, int value) noexcept;
+    void notifyProgramChange(int channel, int program) noexcept;
+    void notifyAftertouch(int channel, int value) noexcept;
+    void notifyPolyPressure(int channel, int noteHeight, int value) noexcept;
+    void notifyPitchBend(int channel, int bendValue) noexcept;
 
     struct NextNotesResult
     {
@@ -107,11 +171,47 @@ class DroneScriptEngine
 
     void bindFunctions();
 
+    // Shared body for every optional-handler dispatch (notifyTiming and all the MIDI
+    // notify*() methods): no-op if the script didn't define this handler, catches
+    // anything the call throws, and clears/sets m_lastError to reflect this call only.
+    template <typename... Args>
+    void callHandler(sol::protected_function& fn, Args&&... args) noexcept
+    {
+        if (!fn.valid())
+        {
+            return;
+        }
+        try
+        {
+            const sol::protected_function_result result = fn(std::forward<Args>(args)...);
+            if (!result.valid())
+            {
+                const sol::error err = result;
+                m_lastError = err.what();
+                return;
+            }
+            m_lastError.clear();
+        }
+        catch (const std::exception& e)
+        {
+            m_lastError = e.what();
+        }
+    }
+
     DroneScriptMemoryPool m_pool;
     std::unique_ptr<lua_State, LuaStateDeleter> m_state;
     sol::state_view m_lua;
     sol::protected_function m_nextNotesFn;
     sol::protected_function m_onTimingFn;
+    sol::protected_function m_onNoteOnFn;
+    sol::protected_function m_onNoteOffFn;
+    sol::protected_function m_onCcFn;
+    sol::protected_function m_onProgramChangeFn;
+    sol::protected_function m_onAftertouchFn;
+    sol::protected_function m_onPolyPressureFn;
+    sol::protected_function m_onPitchBendFn;
+    sol::protected_function m_onStartFn;
+    sol::protected_function m_onStopFn;
     std::string m_lastError;
 };
 
@@ -129,6 +229,15 @@ inline void DroneScriptEngine::bindFunctions()
 {
     m_nextNotesFn = m_lua["NextNotes"];
     m_onTimingFn = m_lua["OnTiming"];
+    m_onNoteOnFn = m_lua["OnNoteOn"];
+    m_onNoteOffFn = m_lua["OnNoteOff"];
+    m_onCcFn = m_lua["OnCC"];
+    m_onProgramChangeFn = m_lua["OnProgramChange"];
+    m_onAftertouchFn = m_lua["OnAftertouch"];
+    m_onPolyPressureFn = m_lua["OnPolyPressure"];
+    m_onPitchBendFn = m_lua["OnPitchBend"];
+    m_onStartFn = m_lua["OnStart"];
+    m_onStopFn = m_lua["OnStop"];
 }
 
 inline bool DroneScriptEngine::loadScript(const std::string_view source)
@@ -155,25 +264,52 @@ inline bool DroneScriptEngine::loadScript(const std::string_view source)
 
 inline void DroneScriptEngine::notifyTiming(const float bpm, const int divisionIndex) noexcept
 {
-    if (!m_onTimingFn.valid())
-    {
-        return;
-    }
-    try
-    {
-        const sol::protected_function_result result = m_onTimingFn(bpm, divisionIndex);
-        if (!result.valid())
-        {
-            const sol::error err = result;
-            m_lastError = err.what();
-            return;
-        }
-        m_lastError.clear();
-    }
-    catch (const std::exception& e)
-    {
-        m_lastError = e.what();
-    }
+    callHandler(m_onTimingFn, bpm, divisionIndex);
+}
+
+inline void DroneScriptEngine::notifyStart() noexcept
+{
+    callHandler(m_onStartFn);
+}
+
+inline void DroneScriptEngine::notifyStop() noexcept
+{
+    callHandler(m_onStopFn);
+}
+
+inline void DroneScriptEngine::notifyNoteOn(const int channel, const int noteHeight, const int velocity) noexcept
+{
+    callHandler(m_onNoteOnFn, channel, noteHeight, velocity);
+}
+
+inline void DroneScriptEngine::notifyNoteOff(const int channel, const int noteHeight, const int velocity) noexcept
+{
+    callHandler(m_onNoteOffFn, channel, noteHeight, velocity);
+}
+
+inline void DroneScriptEngine::notifyCC(const int channel, const int ccNumber, const int value) noexcept
+{
+    callHandler(m_onCcFn, channel, ccNumber, value);
+}
+
+inline void DroneScriptEngine::notifyProgramChange(const int channel, const int program) noexcept
+{
+    callHandler(m_onProgramChangeFn, channel, program);
+}
+
+inline void DroneScriptEngine::notifyAftertouch(const int channel, const int value) noexcept
+{
+    callHandler(m_onAftertouchFn, channel, value);
+}
+
+inline void DroneScriptEngine::notifyPolyPressure(const int channel, const int noteHeight, const int value) noexcept
+{
+    callHandler(m_onPolyPressureFn, channel, noteHeight, value);
+}
+
+inline void DroneScriptEngine::notifyPitchBend(const int channel, const int bendValue) noexcept
+{
+    callHandler(m_onPitchBendFn, channel, bendValue);
 }
 
 inline DroneScriptEngine::NextNotesResult DroneScriptEngine::nextNotes() noexcept

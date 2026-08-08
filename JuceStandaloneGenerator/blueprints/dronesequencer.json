@@ -69,7 +69,8 @@
     {"name": "isHostSynced", "type": "bool"},
     {"name": "getIsEffectivelyPlaying", "call": "effectivePlaying", "type": "bool"},
     {"name": "hasScriptError", "type": "bool"},
-    {"name": "scriptErrorMessage", "call": "scriptError", "type": "std::string"}
+    {"name": "scriptErrorMessage", "call": "scriptError", "type": "std::string"},
+    {"name": "getScriptSkeleton", "call": "scriptSkeleton", "type": "std::string"}
   ],
   "host_transport": true,
   "CPP":
