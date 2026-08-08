@@ -94,11 +94,59 @@ function NextNotes()
 end
 ```
 
-### Notes on the sandbox
+## Available functions
 
-- A script that fails to compile or errors at runtime is rejected; whatever script was
-  running before (the stub, on a fresh patch) keeps playing. The popup editor shows the error
+Only Lua's `base`, `math`, `table`, and `string` standard libraries are loaded - there is no
+`io`, `os`, or `require`. Notably, **there is no bare `rand()`** (that's a C function, not
+Lua) - use `math.random()`.
+
+| Call | Returns |
+|---|---|
+| `math.random()` | float in `[0, 1)` |
+| `math.random(m)` | integer in `[1, m]` |
+| `math.random(m, n)` | integer in `[m, n]` |
+| `math.randomseed(x)` | reseeds the generator (scripts don't need this; each load starts freshly seeded) |
+| `math.floor(x)`, `math.ceil(x)` | round down/up to an integer (as a float) |
+| `math.abs(x)`, `math.max(a, b, ...)`, `math.min(a, b, ...)` | |
+| `math.sin(x)`, `math.cos(x)`, `math.tan(x)` | radians, e.g. for LFO-style modulation of `note`/`delay` over successive calls |
+| `math.sqrt(x)`, `math.exp(x)`, `math.log(x)`, `math.log(x, base)` | |
+| `math.fmod(x, y)` | floating-point remainder |
+| `math.pi`, `math.huge` | constants |
+| `x ^ y` | power (there is no `math.pow` in this Lua version - use the `^` operator) |
+| `#t` | length of table/array `t` |
+| `table.insert(t, v)`, `table.remove(t)`, `table.concat(t, sep)`, `table.sort(t)` | |
+| `string.format(fmt, ...)`, `string.sub`, `string.len`, `#s` | mainly useful for building error messages, not note data |
+| `tostring(x)`, `tonumber(x)`, `type(x)` | |
+
+Example using `math.random` for a wandering pitch, and `math.sin` for a slow vibrato-like
+drift applied via `delay`:
+
+```lua
+function NextNotes()
+    local jitterSemitones = math.random(-2, 2)
+    local wobbleMs = 8 * math.sin(os_time and os_time() or 0) -- os is not available; see below
+    return {
+        { note = 60 + jitterSemitones, velocity = 0.8, channel = 0, length = 0, delay = 0 },
+    }
+end
+```
+
+(That `os_time` reference is deliberately left broken above as a reminder: `os` is not
+loaded, so keep any notion of "elapsed time" in your own counter - e.g. a `local step`
+incremented once per `NextNotes()` call, as in the arpeggio example - rather than reaching
+for a wall-clock function.)
+
+## Notes on the sandbox
+
+- A script that fails to *compile* (a syntax error, or an error in code that runs
+  immediately when the script loads) is rejected at Apply time; the popup shows the error
   inline and stays open so you can fix it without losing your edit.
+- A script that compiles fine but errors *when actually called* later (inside `NextNotes()`
+  or `OnTiming()`, once real playback reaches that code path) can't be caught at Apply time -
+  Lua doesn't know that in advance. That kind of error shows up in the status bar instead,
+  the first time it happens, and playback silently produces no notes until it's fixed.
+- Either way, whatever script was running before (the stub, on a fresh patch) keeps playing
+  underneath a rejected Apply - a bad script never leaves you with nothing.
 - `NextNotes()` returning more than 8 notes in one call has the extras dropped.
 - Not yet implemented: pitch bends. The note struct is deliberately built so a `bend =
   {interval, time, curve}` field can be added later without reshaping what's already there.

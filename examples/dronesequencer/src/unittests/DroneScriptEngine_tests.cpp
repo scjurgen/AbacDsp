@@ -61,6 +61,54 @@ TEST(DroneScriptEngine, MalformedScriptIsRejectedAndPreviousScriptKeepsRunning)
     EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 61.f);
 }
 
+TEST(DroneScriptEngine, TopLevelRuntimeErrorIsRejectedAtLoadTime)
+{
+    // Not a syntax error - "rand" is a real Lua expression, just an undefined global -
+    // so this only fails when the top-level chunk actually runs (calls it), not when
+    // it's parsed. Distinct from MalformedScriptIsRejectedAndPreviousScriptKeepsRunning,
+    // which covers a genuine parse/syntax failure.
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript("function NextNotes() return { { note = 61 } } end"));
+
+    EXPECT_FALSE(engine.loadScript("x = rand()\nfunction NextNotes() return {} end"));
+    EXPECT_TRUE(engine.hasError());
+    EXPECT_FALSE(engine.lastError().empty());
+
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u) << "previous script's NextNotes should still be running";
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 61.f);
+}
+
+TEST(DroneScriptEngine, RuntimeErrorInsideNextNotesIsCaughtPerCallAndClearsOnRecovery)
+{
+    // A script that compiles fine (loadScript succeeds) can still error every time it's
+    // actually called, e.g. a typo'd function name only reached inside the function body.
+    // This must be caught per-call, not just at load time.
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        should_fail = true
+        function NextNotes()
+            if should_fail then
+                local a = 60 + rand()
+                return { { note = a } }
+            end
+            return { { note = 61 } }
+        end
+    )"));
+    EXPECT_FALSE(engine.hasError()) << "loading must not eagerly call NextNotes()";
+
+    const auto failing = engine.nextNotes();
+    EXPECT_EQ(failing.count, 0u);
+    EXPECT_TRUE(engine.hasError());
+    EXPECT_FALSE(engine.lastError().empty());
+
+    ASSERT_TRUE(engine.loadScript("should_fail = false"));
+    const auto recovered = engine.nextNotes();
+    ASSERT_EQ(recovered.count, 1u);
+    EXPECT_FLOAT_EQ(recovered.notes[0].noteHeight, 61.f);
+    EXPECT_FALSE(engine.hasError()) << "a later successful call must clear the stale error";
+}
+
 TEST(DroneScriptEngine, NotifyTimingFeedsGlobalsIntoNextNotes)
 {
     DroneScriptEngine engine;

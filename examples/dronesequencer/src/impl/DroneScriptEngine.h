@@ -166,7 +166,9 @@ inline void DroneScriptEngine::notifyTiming(const float bpm, const int divisionI
         {
             const sol::error err = result;
             m_lastError = err.what();
+            return;
         }
+        m_lastError.clear();
     }
     catch (const std::exception& e)
     {
@@ -211,6 +213,7 @@ inline DroneScriptEngine::NextNotesResult DroneScriptEngine::nextNotes() noexcep
             note.delayMs = entry->get_or("delay", 0.f);
             ++out.count;
         }
+        m_lastError.clear();
     }
     catch (const std::exception& e)
     {

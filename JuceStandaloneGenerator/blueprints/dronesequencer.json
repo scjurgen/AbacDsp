@@ -61,7 +61,8 @@
     "bpmDial.setEnabled(!processorRef.isHostSynced());",
     "if (processorRef.isHostSynced()) { bpmDial.setValue(processorRef.getCurrentBpm()); }",
     "playStopSwitch.setEnabled(!processorRef.isHostSynced());",
-    "if (processorRef.isHostSynced()) { playStopSwitch.setToggleState(processorRef.getIsEffectivelyPlaying(), juce::dontSendNotification); }"
+    "if (processorRef.isHostSynced()) { playStopSwitch.setToggleState(processorRef.getIsEffectivelyPlaying(), juce::dontSendNotification); }",
+    "pollScriptError();"
   ],
   "processor_forwards": [
     {"name": "getCurrentBpm", "call": "currentBpm", "type": "float", "default": "120.f"},

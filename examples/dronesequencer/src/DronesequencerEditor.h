@@ -219,6 +219,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             {
                 playStopSwitch.setToggleState(processorRef.getIsEffectivelyPlaying(), juce::dontSendNotification);
             }
+            pollScriptError();
         }
     }
 
@@ -800,6 +801,28 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         options.launchAsync();
     }
 
+    // Apply-time only catches errors the script hits while its top-level chunk runs
+    // (i.e. at load); a script that compiles fine but errors when NextNotes()/OnTiming()
+    // are actually called later (on the audio thread, once real data flows through it)
+    // has nowhere else to surface that - poll for it instead. Called every timer tick
+    // (see extra_timer_callbacks); tracks the last-shown message so a persistent error
+    // doesn't keep resetting the status bar's fade timer forever.
+    void pollScriptError()
+    {
+        if (!processorRef.hasScriptError())
+        {
+            m_lastScriptErrorShown.clear();
+            return;
+        }
+        const auto message = juce::String(processorRef.scriptErrorMessage());
+        if (message == m_lastScriptErrorShown)
+        {
+            return;
+        }
+        m_lastScriptErrorShown = message;
+        m_statusBar.showMessage("Script error: " + message);
+    }
+
     juce::PopupMenu buildScriptsMenu()
     {
         m_scriptMenuNames = processorRef.listScriptNames();
@@ -981,6 +1004,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     static constexpr int kScriptRenameIdBase = 13000;
     std::unique_ptr<juce::AlertWindow> m_scriptNameDialog;
     std::vector<juce::String> m_scriptMenuNames;
+    juce::String m_lastScriptErrorShown;
 
     CustomRotaryDial levelDial{this};
     CustomRotaryDial tuningDial{this};
