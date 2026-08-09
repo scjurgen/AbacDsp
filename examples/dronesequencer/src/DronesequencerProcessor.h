@@ -107,6 +107,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     void prepareToPlay(const double sampleRate, const int samplesPerBlock) override
     {
         pluginRunner = std::make_unique<DroneSequencerImpl<NumSamplesPerBlock>>(RateNormalizer::kInternalSampleRate);
+        if (!m_fileIo.currentScript().empty())
+        {
+            pluginRunner->setScript(m_fileIo.currentScript());
+        }
 
         fixedRunner = std::make_unique<RateNormalizer>(static_cast<float>(sampleRate),
                                                        [this](const AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& input,

@@ -181,6 +181,21 @@ def create_load_script_calls(blueprint: Blueprint) -> str:
                        f"""{{ pluginRunner->set{upper}(params.{symbol}); }}\n""")
     return result
 
+# Pushed into prepareToPlay() right after pluginRunner is (re)constructed: without this,
+# a freshly built pluginRunner starts with the DSP impl's own default script rather than
+# whatever FileIo already loaded at construction, until the next patch load or manual
+# script-editor Apply overwrites it. Mirrors create_load_script_calls() above, sourced
+# from FileIo directly since there is no local "params" at this point.
+def create_prepare_script_calls(blueprint: Blueprint) -> str:
+    result = ""
+    for item in blueprint["ports-control"]:
+        if item['type'] == 'script':
+            symbol = item['symbol']
+            upper = symbol[0].upper() + symbol[1:]
+            result += (f"""if (!m_fileIo.current{upper}().empty()) """
+                       f"""{{ pluginRunner->set{upper}(m_fileIo.current{upper}()); }}\n""")
+    return result
+
 # FileIo public API for a "script"-type port: update/current mirror updateParameter()'s
 # shape but for the string field directly; the rest is a named-item pool (list/save/
 # load/delete/rename) structurally identical to the named-patch pool above it, just
@@ -491,7 +506,7 @@ def create_extra_processor_methods(blueprint: Blueprint) -> str:
 # by default, so blueprints that don't set it get byte-identical output.
 def create_extra_prepare_calls(blueprint: Blueprint) -> str:
     calls = blueprint.get("extra_prepare_calls", [])
-    return "\n".join(calls) + ("\n" if calls else "")
+    return create_prepare_script_calls(blueprint) + "\n".join(calls) + ("\n" if calls else "")
 
 # Extra private member declarations, right after the pluginRunner unique_ptr.
 def create_extra_processor_members(blueprint: Blueprint) -> str:
