@@ -55,9 +55,11 @@ JUCE-based plugins under `examples/` (built with `-DBUILD_FULL_PROJECT=ON`, see 
 - `metronome` (damped-sine click, circular beat/spectrogram displays)
 - `looper` (bar-quantized slicing looper with a concentric bar/loop clock display)
 - `sampleplayer`, `sampleplayertimestretched`
+- `dronesequencer` (Lua-scripted Karplus-Strong drone sequencer), `tanpura`
+  (plucked-string tanpura simulation)
 
-Most are generated from a blueprint via `JuceStandaloneGenerator/`; the hand-written
-DSP lives in each example's `src/impl/`.
+See `examples/README.md` for a description of each one, and how the generated JUCE
+plumbing relates to each example's hand-written DSP.
 
 ## Building
 
