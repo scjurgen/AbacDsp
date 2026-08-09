@@ -16,14 +16,28 @@ question, Claude should answer the question, but NEVER go ahead implicitly; inst
 
 ## Build Commands
 
-development scripts are available in ./dev-scripts. 
-The cover following topics:
- - building
- - configure
- - coverage
- - exploration
- - testing
- - warning check
+**Always use `./dev-scripts/` for building, testing, configuring, coverage and warning
+checks instead of raw `cmake`/`ctest`/compiler invocations.** This applies to planning
+too: when a task's plan includes a build or test step, name the specific dev-script for
+it rather than a generic "build/test" step; only fall back to a raw command if no script
+covers the case, and say so explicitly.
+
+- `dev-configure.sh` - configure `build-tests/` (core library + unit tests, no JUCE).
+- `dev-build.sh [target...]` - build one or more targets in `build-tests/` (default:
+  `run_unit_tests`).
+- `dev-test.sh [ctest-regex]` - build and run tests via ctest in `build-tests/`.
+- `dev-test-full.sh <target...> [-- ctest-regex]` - build and run tests for anything
+  under `BUILD_FULL_PROJECT` (a JUCE example plugin target, its own unittests, etc.) in
+  `cmake-build-debug/`; pass a regex that matches nothing (e.g. `-- "^$"`) for a
+  build-only check without running the test suite.
+- `dev-warnings.sh` - clean rebuild of `build-tests/`, reporting every non-3rdparty
+  compiler warning.
+- `dev-coverage.sh` / `dev-cov-file.sh` - full or single-file/single-target line/branch
+  coverage (see Documentation section of `README.md` for detail).
+- `dev-explore.sh [source.cpp]` / `dev-explore-lua.sh` - throwaway DSP/Lua experiments
+  against the header-only library, built in the gitignored `explore/`.
+- `dev-docs.sh` - build the Doxygen API site into `docs/html/`.
+- `dev-check-urls.sh` - verify documentation reference URLs resolve.
 
 Key CMake options: `BUILD_FULL_PROJECT` (OFF), `PACKAGE_TESTS` (ON), `PERFORMANCE_TESTS` (OFF), `EXPLORE_STUFF` (OFF).
 
