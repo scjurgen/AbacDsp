@@ -76,6 +76,7 @@ CPP_SOURCE_FILES_FIXED = [
     "inc/GenericMeter.h",
     "inc/StatusBar.h",
     "inc/ScriptEditorWindow.h",
+    "inc/AboutWindow.h",
     "inc/SpectrogramDisplay.h",
     "inc/VuMeter.h",
     "inc/WaveformMeter.h",

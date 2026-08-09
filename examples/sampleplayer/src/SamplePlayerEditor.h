@@ -543,7 +543,18 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             "Just an explorer for MPE reso synth.\n\nPart of the AbacDsp project - core DSP library is MIT "
             "licensed.\n\nBuilt with JUCE, licensed under AGPLv3 (or a commercial JUCE licence).\n\nFull third-party "
             "license details: THIRD-PARTY-LICENSES.md in the AbacDsp repository.";
-        juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, header, body);
+
+        auto* aboutComponent = new AboutWindow();
+        aboutComponent->setAboutText(body);
+
+        juce::DialogWindow::LaunchOptions options;
+        options.content.setOwned(aboutComponent);
+        options.dialogTitle = header;
+        options.dialogBackgroundColour = juce::Colour(GuiConstants::instance().colors.background);
+        options.escapeKeyTriggersCloseButton = true;
+        options.useNativeTitleBar = true;
+        options.resizable = true;
+        options.launchAsync();
     }
 
     void menuItemSelected(int menuItemID, int /*topLevelMenuIndex*/) override

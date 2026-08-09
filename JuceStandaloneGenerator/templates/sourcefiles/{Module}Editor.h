@@ -257,7 +257,18 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         const juce::String header = juce::String(JucePlugin_Name) + " v" + JucePlugin_VersionString;
         const juce::String body = juce::String(JucePlugin_Manufacturer) + "\n\n"
                                                                           "/*ABOUT_TEXT*/";
-        juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, header, body);
+
+        auto* aboutComponent = new AboutWindow();
+        aboutComponent->setAboutText(body);
+
+        juce::DialogWindow::LaunchOptions options;
+        options.content.setOwned(aboutComponent);
+        options.dialogTitle = header;
+        options.dialogBackgroundColour = juce::Colour(GuiConstants::instance().colors.background);
+        options.escapeKeyTriggersCloseButton = true;
+        options.useNativeTitleBar = true;
+        options.resizable = true;
+        options.launchAsync();
     }
 
     void menuItemSelected(int menuItemID, int /*topLevelMenuIndex*/) override

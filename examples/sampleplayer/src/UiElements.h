@@ -15,6 +15,7 @@
 #include "inc/GenericMeter.h"
 #include "inc/StatusBar.h"
 #include "inc/ScriptEditorWindow.h"
+#include "inc/AboutWindow.h"
 #include "inc/SpectrogramDisplay.h"
 #include "inc/VuMeter.h"
 #include "inc/WaveformMeter.h"
