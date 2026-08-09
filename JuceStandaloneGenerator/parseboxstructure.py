@@ -17,6 +17,7 @@ patterns = ["-",  # (C1) (A1) (h)
             "|-"  # (C1:C2) (A1-2) (vh)
             "=",  # (R1:R2) (A1-2) (hh)
             "≡",  # (R1:R2:R3) (A1-A) (hhh)
+            "=3",  # (R1:R2:R3:R4) (A1-A) (hhhh) // TODO
             "=4",  # (R1:R2:R3:R4) (A1-A) (hhhh) // TODO
             "=5",  # (R1:R2:R3:R4:R5) (A1-5) (hhhhh)
             "=|",  # (C1:C2  R1:R2)  (A1-3) (hh v) // TODO
@@ -273,7 +274,7 @@ def construct_boxes(m: dict, section: str = 'layout'):
                                    areas[1] = area.reduced(Constants::Margins::small);\n\n"""
             result += saveAreaRow(areas, 1)
             result += saveAreaRow(areas, 2)
-        case '≡':
+        case '≡' | '=3':
             result += f"""std::vector<juce::Rectangle<int>> areas(3);
                    const auto rowHeight = area.getHeight() / {virtual_rows};
                                    areas[0] = area.removeFromTop(rowHeight*{rows[0]}).reduced(Constants::Margins::small);
