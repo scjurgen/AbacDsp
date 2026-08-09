@@ -6,15 +6,32 @@ Dsp code for abacad projects
 Have handy classes for various DSP tasks.
 No dependencies for the dsp code it self (examples and unit-test have submodules based code)
 
+### Library
+
+Specialized building blocks typical for music/audio engineering, balancing efficiency
+and originality (four-pole filters, diffusers, resonance modeling, delays, ...).
+
+### Examples
+
+Examples are designed to:
+- showcase the library and how to connect its various processing blocks
+- focus on accessibility (screen readers, parameter labeling, color contrast)
+- focus on interactive performance using various interface methods (including multiple
+  performance-page layouts)
+- explore extended capabilities through embedded scripting (dronesequencer's Lua engine),
+  leaving room for LLM-assisted behavior in the future
+
 ### Submodules used
 - googletest
 - Audiofile
 - juce v8
 - pffft
+- lua
+- sol2
 
 ### Class design
 
-- float based unless we really need precision for iterative algorithms
+- float based unless we really need extra precision for iterative algorithms or reference
 - mostly templates based for adaptive code and better optimisations.
 - classes should ctor with the samplerate
 - blockoperations of BlockSize=8 or 16 Samples for better compiler optimisations
@@ -37,7 +54,6 @@ No dependencies for the dsp code it self (examples and unit-test have submodules
 - Spectral processing and Wavetables
 - Numbers: math/conversion helpers (interpolation, easing, dB/frequency)
 - WAV/OGG file I/O
-
 
 
 ### Usage
