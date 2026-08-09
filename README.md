@@ -176,6 +176,16 @@ stable sources and are collected in `WEB-REFERENCES.md`, checked with:
 ./dev-scripts/dev-check-urls.sh    # every URL in src/includes and WEB-REFERENCES.md
 ```
 
+## License
+
+AbacDsp's own code is MIT licensed (see `LICENSE`). That covers the
+header-only core library in `src/includes/` outright. The example plugins
+under `examples/` additionally link JUCE, which is AGPLv3-or-commercial; no
+commercial JUCE license is configured here, so a built example plugin is
+effectively AGPLv3, not MIT. See `THIRD-PARTY-LICENSES.md` for the full
+breakdown of every submodule's license and what that split means in
+practice.
+
 ## IDE Setup
 
 ### clangd / static analysis
