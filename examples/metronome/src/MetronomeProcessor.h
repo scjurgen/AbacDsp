@@ -253,39 +253,67 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("bpm", 1), "BPM", juce::NormalisableRange<float>(40, 250, 0.1, 1, false), 120,
+            juce::ParameterID("bpm", 1), juce::String::fromUTF8("BPM"),
+            juce::NormalisableRange<float>(40, 250, 0.1, 1, false), 120,
             juce::AudioParameterFloatAttributes{}.withLabel("BPM").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " BPM"; })));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
-            juce::ParameterID("dropBars", 1), "Drop Bars",
-            juce::StringArray{"Drop none", "Play 1 Drop 1", "Play 3 Drop 1", "Play 2 Drop 2", "Play 1 Drop 3"}, 0));
+            juce::ParameterID("dropBars", 1), juce::String::fromUTF8("Drop Bars"),
+            juce::StringArray{juce::String::fromUTF8("Drop none"), juce::String::fromUTF8("Play 1 Drop 1"),
+                              juce::String::fromUTF8("Play 3 Drop 1"), juce::String::fromUTF8("Play 2 Drop 2"),
+                              juce::String::fromUTF8("Play 1 Drop 3")},
+            0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("metroVolume", 1), "Metro Volume", juce::NormalisableRange<float>(-60, 0, 0.1, 1, false),
-            -6,
+            juce::ParameterID("metroVolume", 1), juce::String::fromUTF8("Metro Volume"),
+            juce::NormalisableRange<float>(-60, 0, 0.1, 1, false), -6,
             juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " dB"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("inputVolume", 1), "Input Volume", juce::NormalisableRange<float>(-60, 12, 0.1, 1, false),
-            0,
+            juce::ParameterID("inputVolume", 1), juce::String::fromUTF8("Input Volume"),
+            juce::NormalisableRange<float>(-60, 12, 0.1, 1, false), 0,
             juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " dB"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("subVolume", 1), "Sub Volume", juce::NormalisableRange<float>(-60, 0, 0.1, 1, false), -15,
+            juce::ParameterID("subVolume", 1), juce::String::fromUTF8("Sub Volume"),
+            juce::NormalisableRange<float>(-60, 0, 0.1, 1, false), -15,
             juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " dB"; })));
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("onOff", 1), "Start", 0));
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("hostSync", 1), "Host Sync", 0));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("onOff", 1),
+                                                                    juce::String::fromUTF8("Start"), 0));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("hostSync", 1),
+                                                                    juce::String::fromUTF8("Host Sync"), 0));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
-            juce::ParameterID("preset", 1), "Preset",
-            juce::StringArray{"3/4",           "3/4 8th",   "3/4 16th",       "3/4 shuffle",    "3/4 triplet",
-                              "4/4",           "4/4 8th",   "4/4 16th",       "4/4 shuffle",    "4/4 triplet",
-                              "4/4 swing",     "5/4 (3+2)", "5/4 8th (3+2)",  "5/4 (2+3)",      "5/4 8th (2+3)",
-                              "6/8 in-2",      "6/8 in-6",  "7/8 (2+2+3)",    "7/8 (2+3+2)",    "7/8 (3+2+2)",
-                              "9/8 in-3",      "9/8 in-9",  "11/8 (3+3+3+2)", "11/8 (3+3+2+3)", "13/8 (3+3+3+2+2)",
-                              "13/8 (3+4+3+3)"},
+            juce::ParameterID("preset", 1), juce::String::fromUTF8("Preset"),
+            juce::StringArray{juce::String::fromUTF8("3/4"),
+                              juce::String::fromUTF8("3/4 8th"),
+                              juce::String::fromUTF8("3/4 16th"),
+                              juce::String::fromUTF8("3/4 shuffle"),
+                              juce::String::fromUTF8("3/4 triplet"),
+                              juce::String::fromUTF8("4/4"),
+                              juce::String::fromUTF8("4/4 8th"),
+                              juce::String::fromUTF8("4/4 16th"),
+                              juce::String::fromUTF8("4/4 shuffle"),
+                              juce::String::fromUTF8("4/4 triplet"),
+                              juce::String::fromUTF8("4/4 swing"),
+                              juce::String::fromUTF8("5/4 (3+2)"),
+                              juce::String::fromUTF8("5/4 8th (3+2)"),
+                              juce::String::fromUTF8("5/4 (2+3)"),
+                              juce::String::fromUTF8("5/4 8th (2+3)"),
+                              juce::String::fromUTF8("6/8 in-2"),
+                              juce::String::fromUTF8("6/8 in-6"),
+                              juce::String::fromUTF8("7/8 (2+2+3)"),
+                              juce::String::fromUTF8("7/8 (2+3+2)"),
+                              juce::String::fromUTF8("7/8 (3+2+2)"),
+                              juce::String::fromUTF8("9/8 in-3"),
+                              juce::String::fromUTF8("9/8 in-9"),
+                              juce::String::fromUTF8("11/8 (3+3+3+2)"),
+                              juce::String::fromUTF8("11/8 (3+3+2+3)"),
+                              juce::String::fromUTF8("13/8 (3+3+3+2+2)"),
+                              juce::String::fromUTF8("13/8 (3+4+3+3)")},
             6));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("swingRatio", 1), "Swing", juce::NormalisableRange<float>(1.0, 2.0, 0.01, 1, false), 1.5,
+            juce::ParameterID("swingRatio", 1), juce::String::fromUTF8("Swing"),
+            juce::NormalisableRange<float>(1.0, 2.0, 0.01, 1, false), 1.5,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " "; })));
 
@@ -543,7 +571,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                 pluginRunner->setHostTransport(transport);
             }
         }
-        if ((getTotalNumInputChannels() == 2) && (getTotalNumOutputChannels() == 2))
+        if (getTotalNumOutputChannels() == 2)
         {
             fixedRunner->processBlock(buffer);
         }

@@ -5,6 +5,7 @@
 #include <functional>
 #include <iostream>
 #include <juce_core/juce_core.h>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -211,6 +212,7 @@ class FileIo
         return true;
     }
 
+
   private:
     // JUCE's userApplicationDataDirectory is bare "~/Library" on macOS; the
     // "Application Support" segment is a convention apps must add themselves.
@@ -290,6 +292,7 @@ class FileIo
         dir.createDirectory();
         return dir.getChildFile(fileName + ".json").getFullPathName().toStdString();
     }
+
 
     bool savePatch(const std::vector<int>& patchIndex)
     {

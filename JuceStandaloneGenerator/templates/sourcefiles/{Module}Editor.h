@@ -184,6 +184,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         /*START_SCRIPTBROWSER*/
         names.add("Scripts");
         /*END_SCRIPTBROWSER*/
+        names.add("About");
         return names;
     }
 
@@ -211,6 +212,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             return buildScriptsMenu();
         }
         /*END_SCRIPTBROWSER*/
+        if (menuName == "About")
+        {
+            return buildAboutMenu();
+        }
         return {};
     }
 
@@ -240,8 +245,28 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         return menu;
     }
 
+    juce::PopupMenu buildAboutMenu()
+    {
+        juce::PopupMenu menu;
+        menu.addItem(kAboutShowInfoId, "License Info...");
+        return menu;
+    }
+
+    void showAboutDialog()
+    {
+        const juce::String header = juce::String(JucePlugin_Name) + " v" + JucePlugin_VersionString;
+        const juce::String body = juce::String(JucePlugin_Manufacturer) + "\n\n"
+                                                                          "/*ABOUT_TEXT*/";
+        juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, header, body);
+    }
+
     void menuItemSelected(int menuItemID, int /*topLevelMenuIndex*/) override
     {
+        if (menuItemID == kAboutShowInfoId)
+        {
+            showAboutDialog();
+            return;
+        }
         if (menuItemID >= 1 && menuItemID <= Themes::kHueCount)
         {
             applyTheme(Themes::withHue(m_currentTheme, menuItemID - 1));
@@ -926,6 +951,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     static constexpr int kThemeModeDarkId = 9001;
     static constexpr int kThemeBaseBichromaticId = 9002;
     static constexpr int kThemeBaseTrichromaticId = 9003;
+    static constexpr int kAboutShowInfoId = 14000;
     /*START_PRESETBROWSER*/
     static constexpr int kPatchSaveId = 1000;
     static constexpr int kPatchSaveAsId = 1001;

@@ -235,30 +235,36 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     {
         std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("onOff", 1), "Power", 0));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("onOff", 1),
+                                                                    juce::String::fromUTF8("Power"), 0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("input", 1), "Input", juce::NormalisableRange<float>(0, 50, 0.1, 1, false), 2,
+            juce::ParameterID("input", 1), juce::String::fromUTF8("Input"),
+            juce::NormalisableRange<float>(0, 50, 0.1, 1, false), 2,
             juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " dB"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("modulationDepth", 1), "Depth", juce::NormalisableRange<float>(1, 50, 0.01, 0.8, false),
-            2,
+            juce::ParameterID("modulationDepth", 1), juce::String::fromUTF8("Depth"),
+            juce::NormalisableRange<float>(1, 50, 0.01, 0.8, false), 2,
             juce::AudioParameterFloatAttributes{}.withLabel("ms").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " ms"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("mix", 1), "Mix", juce::NormalisableRange<float>(-100, 100, 1, 1, false), 0.0,
+            juce::ParameterID("mix", 1), juce::String::fromUTF8("Mix"),
+            juce::NormalisableRange<float>(-100, 100, 1, 1, false), 0.0,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("density", 1), "Density", juce::NormalisableRange<float>(1, 12, 0.01, 1, false), 1,
+            juce::ParameterID("density", 1), juce::String::fromUTF8("Density"),
+            juce::NormalisableRange<float>(1, 12, 0.01, 1, false), 1,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("threshold", 1), "Threshold", juce::NormalisableRange<float>(1, 12, 0, 1, false), 1,
+            juce::ParameterID("threshold", 1), juce::String::fromUTF8("Threshold"),
+            juce::NormalisableRange<float>(1, 12, 0, 1, false), 1,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 4) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("knee", 1), "Knee", juce::NormalisableRange<float>(1, 12, 0.01, 1, false), 1,
+            juce::ParameterID("knee", 1), juce::String::fromUTF8("Knee"),
+            juce::NormalisableRange<float>(1, 12, 0.01, 1, false), 1,
             juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " dB"; })));
 
@@ -451,6 +457,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         return m_fileIo.renamePatchNamed(oldName.toStdString(), newName.toStdString());
     }
 
+
     void computeCpuLoad(std::chrono::nanoseconds elapsed, size_t numSamples)
     {
         samplesProcessed += numSamples;
@@ -490,7 +497,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_envInput[c].feed(std::span{buffer.getReadPointer(c), static_cast<size_t>(buffer.getNumSamples())});
             m_inputDb[c].store(std::log10(m_envInput[c].getRms()) * 20.f);
         }
-        if ((getTotalNumInputChannels() == 2) && (getTotalNumOutputChannels() == 2))
+        if (getTotalNumOutputChannels() == 2)
         {
             fixedRunner->processBlock(buffer);
         }

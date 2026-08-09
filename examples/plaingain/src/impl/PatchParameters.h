@@ -3,6 +3,7 @@
 #include <array>
 #include <cmath>
 #include <nlohmann/json.hpp>
+#include <string>
 #include <string_view>
 
 using json = nlohmann::json;
@@ -75,6 +76,8 @@ break;
                 break;
         }
     }
+
+
 
     [[nodiscard]] bool isModified() const
     {

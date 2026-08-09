@@ -5,6 +5,8 @@
  * Keep the file readonly
  */
 
+#include <map>
+
 #include "PlaingainProcessor.h"
 #include "UiElements.h"
 
@@ -171,7 +173,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(m_pageSettingsButton);
         m_pagePerformanceButton.onClick = [this] { switchPage(Page::Performance); };
         m_pageSettingsButton.onClick = [this] { switchPage(Page::Settings); };
-        switchPage(Page::Settings);
+        switchPage(Page::Performance);
     }
 
     enum class Page
@@ -183,6 +185,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     void switchPage(Page page)
     {
         m_currentPage = page;
+        m_pagePerformanceButton.setToggleState(page == Page::Performance, juce::dontSendNotification);
+        m_pageSettingsButton.setToggleState(page == Page::Settings, juce::dontSendNotification);
         if (page == Page::Performance)
         {
             gainDial.setVisible(false);
@@ -245,6 +249,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         juce::StringArray names{"Theme"};
         names.add("Patches");
+        names.add("About");
         return names;
     }
 
@@ -257,6 +262,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         if (menuName == "Patches")
         {
             return buildPatchesMenu();
+        }
+        if (menuName == "About")
+        {
+            return buildAboutMenu();
         }
         return {};
     }
@@ -287,8 +296,32 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         return menu;
     }
 
+    juce::PopupMenu buildAboutMenu()
+    {
+        juce::PopupMenu menu;
+        menu.addItem(kAboutShowInfoId, "License Info...");
+        return menu;
+    }
+
+    void showAboutDialog()
+    {
+        const juce::String header = juce::String(JucePlugin_Name) + " v" + JucePlugin_VersionString;
+        const juce::String body =
+            juce::String(JucePlugin_Manufacturer) +
+            "\n\n"
+            "Just a plain gain with latency\n\nPart of the AbacDsp project - core DSP library is MIT "
+            "licensed.\n\nBuilt with JUCE, licensed under AGPLv3 (or a commercial JUCE licence).\n\nFull third-party "
+            "license details: THIRD-PARTY-LICENSES.md in the AbacDsp repository.";
+        juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, header, body);
+    }
+
     void menuItemSelected(int menuItemID, int /*topLevelMenuIndex*/) override
     {
+        if (menuItemID == kAboutShowInfoId)
+        {
+            showAboutDialog();
+            return;
+        }
         if (menuItemID >= 1 && menuItemID <= Themes::kHueCount)
         {
             applyTheme(Themes::withHue(m_currentTheme, menuItemID - 1));
@@ -340,29 +373,69 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         }
     }
 
+    // Joins a folder ("" means root) and a leaf name into the "folder/leaf" form
+    // FileIo/LoopStorageService use on disk.
+    [[nodiscard]] static juce::String combineFolderAndName(const juce::String& folder, const juce::String& name)
+    {
+        return folder.isEmpty() ? name : folder + "/" + name;
+    }
+
+    // Splits "folder/sub/leaf" back into {"folder/sub", "leaf"} to prefill a rename
+    // dialog's two fields; folder is empty for a root-level name.
+    [[nodiscard]] static std::pair<juce::String, juce::String> splitFolderAndName(const juce::String& fullName)
+    {
+        const int slashIndex = fullName.lastIndexOfChar('/');
+        if (slashIndex < 0)
+        {
+            return {juce::String(), fullName};
+        }
+        return {fullName.substring(0, slashIndex), fullName.substring(slashIndex + 1)};
+    }
+
+    // A "/" in a name (e.g. "chorus/classic tri chorus") groups it under a folder
+    // submenu; root-level entries stay directly in the returned menu. Shared by the
+    // patches and (when present) loops menus.
+    juce::PopupMenu buildGroupedMenu(const std::vector<juce::String>& names, int idBase,
+                                     const juce::String& tickedName = {})
+    {
+        juce::PopupMenu rootMenu;
+        std::map<juce::String, juce::PopupMenu> folderMenus;
+        for (size_t i = 0; i < names.size(); ++i)
+        {
+            const auto& fullName = names[i];
+            const int itemId = idBase + static_cast<int>(i);
+            const int slashIndex = fullName.lastIndexOfChar('/');
+            if (slashIndex < 0)
+            {
+                rootMenu.addItem(itemId, fullName, true, fullName == tickedName);
+            }
+            else
+            {
+                const auto folder = fullName.substring(0, slashIndex);
+                const auto leaf = fullName.substring(slashIndex + 1);
+                folderMenus[folder].addItem(itemId, leaf, true, fullName == tickedName);
+            }
+        }
+        for (auto& [folder, menu] : folderMenus)
+        {
+            rootMenu.addSubMenu(folder, menu);
+        }
+        return rootMenu;
+    }
+
+    juce::PopupMenu buildGroupedPatchMenu(int idBase, const juce::String& tickedName = {})
+    {
+        return buildGroupedMenu(m_patchMenuNames, idBase, tickedName);
+    }
+
     juce::PopupMenu buildPatchesMenu()
     {
         m_patchMenuNames = processorRef.listPatchNames();
         const auto currentName = processorRef.getCurrentPatchName();
 
-        juce::PopupMenu loadMenu;
-        for (size_t i = 0; i < m_patchMenuNames.size(); ++i)
-        {
-            loadMenu.addItem(kPatchLoadIdBase + static_cast<int>(i), m_patchMenuNames[i], true,
-                             m_patchMenuNames[i] == currentName);
-        }
-
-        juce::PopupMenu deleteMenu;
-        for (size_t i = 0; i < m_patchMenuNames.size(); ++i)
-        {
-            deleteMenu.addItem(kPatchDeleteIdBase + static_cast<int>(i), m_patchMenuNames[i]);
-        }
-
-        juce::PopupMenu renameMenu;
-        for (size_t i = 0; i < m_patchMenuNames.size(); ++i)
-        {
-            renameMenu.addItem(kPatchRenameIdBase + static_cast<int>(i), m_patchMenuNames[i]);
-        }
+        auto loadMenu = buildGroupedPatchMenu(kPatchLoadIdBase, currentName);
+        auto deleteMenu = buildGroupedPatchMenu(kPatchDeleteIdBase);
+        auto renameMenu = buildGroupedPatchMenu(kPatchRenameIdBase);
 
         juce::PopupMenu patches;
         patches.addSubMenu("Load", loadMenu, !m_patchMenuNames.empty());
@@ -422,25 +495,30 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
     void promptSaveAs()
     {
-        m_patchNameDialog = std::make_unique<juce::AlertWindow>(
-            "Save Patch", "Enter a name for this patch:", juce::MessageBoxIconType::NoIcon);
-        m_patchNameDialog->addTextEditor("name", processorRef.getCurrentPatchName());
+        const auto [folder, name] = splitFolderAndName(processorRef.getCurrentPatchName());
+        m_patchNameDialog =
+            std::make_unique<juce::AlertWindow>("Save Patch", juce::String(), juce::MessageBoxIconType::NoIcon);
+        m_patchNameDialog->addTextEditor("folder", folder, "Folder (optional):");
+        m_patchNameDialog->addTextEditor("name", name, "Name:");
         m_patchNameDialog->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
         m_patchNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
         m_patchNameDialog->enterModalState(true,
                                            juce::ModalCallbackFunction::create(
                                                [this](int result)
                                                {
-                                                   const auto name =
+                                                   const auto folderText =
+                                                       m_patchNameDialog->getTextEditorContents("folder").trim();
+                                                   const auto nameText =
                                                        m_patchNameDialog->getTextEditorContents("name").trim();
                                                    m_patchNameDialog.reset();
-                                                   if (result != 1 || name.isEmpty())
+                                                   if (result != 1 || nameText.isEmpty())
                                                    {
                                                        return;
                                                    }
-                                                   if (processorRef.saveCurrentPatchAs(name))
+                                                   const auto fullName = combineFolderAndName(folderText, nameText);
+                                                   if (processorRef.saveCurrentPatchAs(fullName))
                                                    {
-                                                       m_statusBar.showMessage("Saved '" + name + "'");
+                                                       m_statusBar.showMessage("Saved '" + fullName + "'");
                                                    }
                                                    else
                                                    {
@@ -453,19 +531,28 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
     void promptRename(const juce::String& oldName)
     {
-        m_patchNameDialog = std::make_unique<juce::AlertWindow>(
-            "Rename Patch", "Enter a new name for \"" + oldName + "\":", juce::MessageBoxIconType::NoIcon);
-        m_patchNameDialog->addTextEditor("name", oldName);
+        const auto [folder, name] = splitFolderAndName(oldName);
+        m_patchNameDialog = std::make_unique<juce::AlertWindow>("Rename Patch \"" + oldName + "\"", juce::String(),
+                                                                juce::MessageBoxIconType::NoIcon);
+        m_patchNameDialog->addTextEditor("folder", folder, "Folder (optional):");
+        m_patchNameDialog->addTextEditor("name", name, "Name:");
         m_patchNameDialog->addButton("Rename", 1, juce::KeyPress(juce::KeyPress::returnKey));
         m_patchNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
         m_patchNameDialog->enterModalState(true,
                                            juce::ModalCallbackFunction::create(
                                                [this, oldName](int result)
                                                {
-                                                   const auto newName =
+                                                   const auto folderText =
+                                                       m_patchNameDialog->getTextEditorContents("folder").trim();
+                                                   const auto nameText =
                                                        m_patchNameDialog->getTextEditorContents("name").trim();
                                                    m_patchNameDialog.reset();
-                                                   if (result != 1 || newName.isEmpty() || newName == oldName)
+                                                   if (result != 1 || nameText.isEmpty())
+                                                   {
+                                                       return;
+                                                   }
+                                                   const auto newName = combineFolderAndName(folderText, nameText);
+                                                   if (newName == oldName)
                                                    {
                                                        return;
                                                    }
@@ -518,13 +605,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};
-    Page m_currentPage{Page::Settings};
+    Page m_currentPage{Page::Performance};
     juce::TextButton m_pagePerformanceButton{"Performance"};
     juce::TextButton m_pageSettingsButton{"Settings"};
     static constexpr int kThemeModeLightId = 9000;
     static constexpr int kThemeModeDarkId = 9001;
     static constexpr int kThemeBaseBichromaticId = 9002;
     static constexpr int kThemeBaseTrichromaticId = 9003;
+    static constexpr int kAboutShowInfoId = 14000;
     static constexpr int kPatchSaveId = 1000;
     static constexpr int kPatchSaveAsId = 1001;
     static constexpr int kPatchLoadIdBase = 2000;

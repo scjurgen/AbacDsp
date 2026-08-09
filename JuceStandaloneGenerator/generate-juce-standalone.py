@@ -33,7 +33,7 @@ from codegen_processor import (
     create_patch_parameters_script_methods, create_load_script_calls,
     create_fileio_script_methods, create_fileio_script_private,
     create_fileio_script_members, create_processor_script_methods,
-    has_script_port,
+    has_script_port, create_about_text,
 )
 from codegen_widgets import (
     gauge_present, create_gauge_callbacks, create_theme_callbacks,
@@ -151,7 +151,8 @@ CPP_JUCE_FILE_VARS = [
     "FileIoScriptMethods",
     "FileIoScriptPrivate",
     "FileIoScriptMembers",
-    "ProcessorScriptMethods"
+    "ProcessorScriptMethods",
+    "ABOUT_TEXT"
 ]
 
 
@@ -193,6 +194,7 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
     blueprint["CPP"]["name"] = blueprint["name"]
     blueprint["CPP"]["MODULE"] = blueprint["name"]
     blueprint["CPP"]["MODULE_UPPER"] = blueprint["Module"]
+    blueprint["CPP"]["ABOUT_TEXT"] = create_about_text(blueprint)
     blueprint["CPP"]["ADD_PARAMETERS"] = ""
     blueprint["CPP"]["ID_PARAMETERS"] = ""
     blueprint["CPP"]["NEW_RUNNER"] = ""

@@ -5,6 +5,7 @@
 #include <functional>
 #include <iostream>
 #include <juce_core/juce_core.h>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -87,6 +88,28 @@ class FileIo
         return m_currentParams;
     }
 
+    [[nodiscard]] std::string currentParametersAsJson() const
+    {
+        return nlohmann::json(m_currentParams).dump();
+    }
+
+    // Applies a full parameter snapshot captured elsewhere (e.g. embedded in a
+    // saved loop) rather than one of the on-disk patch slots/names.
+    bool loadParametersFromJson(const std::string& text)
+    {
+        try
+        {
+            m_currentParams = nlohmann::json::parse(text).get<PatchParameters>();
+            m_currentParams.clearModified();
+            return true;
+        }
+        catch (const nlohmann::json::exception& e)
+        {
+            reportCorruptPatch("<embedded>", e.what());
+            return false;
+        }
+    }
+
     void forceSave()
     {
         savePatch(m_currentPatch);
@@ -96,9 +119,11 @@ class FileIo
     [[nodiscard]] std::vector<std::string> listPatchNames() const
     {
         std::vector<std::string> names;
-        for (const auto& f : getPatchDirectory().findChildFiles(juce::File::findFiles, false, "*.json"))
+        const auto rootDir = getPatchDirectory();
+        for (const auto& f : rootDir.findChildFiles(juce::File::findFiles, true, "*.json"))
         {
-            names.push_back(f.getFileNameWithoutExtension().toStdString());
+            const auto relative = f.getRelativePathFrom(rootDir).replaceCharacter('\\', '/');
+            names.push_back(relative.upToLastOccurrenceOf(".json", false, false).toStdString());
         }
         std::sort(names.begin(), names.end());
         return names;
@@ -187,6 +212,7 @@ class FileIo
         return true;
     }
 
+
   private:
     // JUCE's userApplicationDataDirectory is bare "~/Library" on macOS; the
     // "Application Support" segment is a convention apps must add themselves.
@@ -235,17 +261,38 @@ class FileIo
                   << "  Reason: " << reason << std::endl;
     }
 
-    // Named patches are stored one file per name, so the name has to survive as a filename;
-    // strip characters that are invalid (or awkward, e.g. path separators) across platforms.
+    // Named patches are stored one file per name. A "/" in the name denotes a subfolder
+    // (e.g. "chorus/classic tri chorus"), created on demand; each path segment is otherwise
+    // sanitized to strip characters invalid in filenames across platforms.
     static std::string getNamedPatchFilename(const std::string& name)
     {
-        const juce::String sanitized = juce::String(name).removeCharacters("/\\:*?\"<>|").trim();
-        if (sanitized.isEmpty())
+        juce::StringArray segments;
+        segments.addTokens(juce::String(name), "/", "");
+        segments.trim();
+        segments.removeEmptyStrings();
+        if (segments.isEmpty())
         {
             return {};
         }
-        return getPatchDirectory().getChildFile(sanitized + ".json").getFullPathName().toStdString();
+        juce::File dir = getPatchDirectory();
+        for (int i = 0; i < segments.size() - 1; ++i)
+        {
+            const juce::String sanitized = segments[i].removeCharacters("\\:*?\"<>|");
+            if (sanitized.isEmpty())
+            {
+                return {};
+            }
+            dir = dir.getChildFile(sanitized);
+        }
+        const juce::String fileName = segments[segments.size() - 1].removeCharacters("\\:*?\"<>|");
+        if (fileName.isEmpty())
+        {
+            return {};
+        }
+        dir.createDirectory();
+        return dir.getChildFile(fileName + ".json").getFullPathName().toStdString();
     }
+
 
     bool savePatch(const std::vector<int>& patchIndex)
     {

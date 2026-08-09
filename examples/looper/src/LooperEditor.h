@@ -577,6 +577,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         juce::StringArray names{"Theme"};
         names.add("Patches");
         names.add("Loops");
+        names.add("About");
         return names;
     }
 
@@ -593,6 +594,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         if (menuName == "Loops")
         {
             return buildLoopsMenu();
+        }
+        if (menuName == "About")
+        {
+            return buildAboutMenu();
         }
         return {};
     }
@@ -623,8 +628,33 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         return menu;
     }
 
+    juce::PopupMenu buildAboutMenu()
+    {
+        juce::PopupMenu menu;
+        menu.addItem(kAboutShowInfoId, "License Info...");
+        return menu;
+    }
+
+    void showAboutDialog()
+    {
+        const juce::String header = juce::String(JucePlugin_Name) + " v" + JucePlugin_VersionString;
+        const juce::String body =
+            juce::String(JucePlugin_Manufacturer) +
+            "\n\n"
+            "Records audio, quantizes the loop to whole bars, slices it,  and plays the slices back locked to a "
+            "metronome click.\n\nPart of the AbacDsp project - core DSP library is MIT licensed.\n\nBuilt with JUCE, "
+            "licensed under AGPLv3 (or a commercial JUCE licence).\n\nFull third-party license details: "
+            "THIRD-PARTY-LICENSES.md in the AbacDsp repository.";
+        juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, header, body);
+    }
+
     void menuItemSelected(int menuItemID, int /*topLevelMenuIndex*/) override
     {
+        if (menuItemID == kAboutShowInfoId)
+        {
+            showAboutDialog();
+            return;
+        }
         if (menuItemID >= 1 && menuItemID <= Themes::kHueCount)
         {
             applyTheme(Themes::withHue(m_currentTheme, menuItemID - 1));
@@ -1098,6 +1128,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     static constexpr int kThemeModeDarkId = 9001;
     static constexpr int kThemeBaseBichromaticId = 9002;
     static constexpr int kThemeBaseTrichromaticId = 9003;
+    static constexpr int kAboutShowInfoId = 14000;
     static constexpr int kPatchSaveId = 1000;
     static constexpr int kPatchSaveAsId = 1001;
     static constexpr int kPatchLoadIdBase = 2000;
@@ -1112,6 +1143,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     static constexpr int kLoopRenameIdBase = 8000;
     std::unique_ptr<juce::AlertWindow> m_loopNameDialog;
     std::vector<juce::String> m_loopMenuNames;
+
 
     juce::Label divoLabel{};
     juce::Label divsLabel{};

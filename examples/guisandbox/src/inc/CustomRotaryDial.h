@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <functional>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <memory>
@@ -216,7 +217,9 @@ class CustomRotaryDial : public juce::Component
         const auto bounds = getLocalBounds().reduced(2);
         const auto fontHeight = static_cast<int>(m_label.getFont().getHeight());
 
-        const auto knobSize = std::min(bounds.getWidth(), bounds.getHeight() - fontHeight);
+        const auto knobSize =
+            std::clamp(std::min(bounds.getWidth(), bounds.getHeight() - fontHeight),
+                       static_cast<int>(Constants::Dial::minSize), static_cast<int>(Constants::Dial::maxSize));
         const auto xOffset = (bounds.getWidth() - knobSize) / 2;
         const auto yOffset = (bounds.getHeight() - knobSize - fontHeight) / 2;
 

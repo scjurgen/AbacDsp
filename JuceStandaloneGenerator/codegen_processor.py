@@ -1,3 +1,4 @@
+import re
 from typing import Any
 
 from blueprint import Blueprint
@@ -5,6 +6,24 @@ from blueprint import Blueprint
 
 def has_script_port(blueprint: Blueprint) -> bool:
     return any(item['type'] == 'script' for item in blueprint["ports-control"])
+
+# Body text for the Settings > About > License Info dialog, shared verbatim by every
+# blueprint. \n\n here is a literal two-character escape landing inside a C++ string
+# literal in the template, not a real newline - see showAboutDialog() in the Editor
+# template for where this gets concatenated in.
+def create_about_text(blueprint: Blueprint) -> str:
+    description = blueprint.get("description", "").replace("\n", " ").strip()
+    # Several blueprint descriptions still carry a leading placeholder emoji
+    # (e.g. "✨ Tanpura drone synth..."); strip it rather than surface
+    # non-ASCII in this dialog's text.
+    description = re.sub(r'^[^\x00-\x7f]+\s*', '', description)
+    lines = [description] if description else []
+    lines.append("Part of the AbacDsp project - core DSP library is MIT licensed.")
+    lines.append("Built with JUCE, licensed under AGPLv3 (or a commercial JUCE licence).")
+    if has_script_port(blueprint):
+        lines.append("Scripting powered by Lua and sol2 (both MIT licensed).")
+    lines.append("Full third-party license details: THIRD-PARTY-LICENSES.md in the AbacDsp repository.")
+    return "\\n\\n".join(lines)
 
 
 def create_patch_changed(blueprint: Blueprint) -> str:

@@ -54,7 +54,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         setColour(juce::TextButton::buttonColourId, bgDark);
         setColour(juce::TextButton::buttonOnColourId, bgMid);
         setColour(juce::TextButton::textColourOffId, label);
-        setColour(juce::TextButton::textColourOnId, label);
+        setColour(juce::TextButton::textColourOnId, bg);
         setColour(juce::ComboBox::backgroundColourId, bgDark);
         setColour(juce::ComboBox::textColourId, label);
         setColour(juce::ComboBox::arrowColourId, fg);
