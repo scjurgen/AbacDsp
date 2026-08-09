@@ -13,10 +13,16 @@ class StatusBar final : public juce::Component, private juce::Timer
     // setLabelText() call from the generator; this bar has no separate title of its own.
     void setLabelText(const juce::String& /*label*/) noexcept {}
 
-    void showMessage(const juce::String& message)
+    // persistent messages skip the auto-fade timer entirely - they stay until the next
+    // showMessage() call of either kind replaces them.
+    void showMessage(const juce::String& message, bool persistent = false)
     {
         m_message = message;
-        startTimer(60000);
+        stopTimer();
+        if (!persistent)
+        {
+            startTimer(60000);
+        }
         repaint();
     }
 

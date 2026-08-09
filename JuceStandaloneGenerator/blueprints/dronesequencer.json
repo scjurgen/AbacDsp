@@ -63,7 +63,8 @@
     "if (processorRef.isHostSynced()) { bpmDial.setValue(processorRef.getCurrentBpm()); }",
     "playStopSwitch.setEnabled(!processorRef.isHostSynced());",
     "if (processorRef.isHostSynced()) { playStopSwitch.setToggleState(processorRef.getIsEffectivelyPlaying(), juce::dontSendNotification); }",
-    "pollScriptError();"
+    "pollScriptError();",
+    "pollLlmAssistWatcher();"
   ],
   "processor_forwards": [
     {"name": "getCurrentBpm", "call": "currentBpm", "type": "float", "default": "120.f"},

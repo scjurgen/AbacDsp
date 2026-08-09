@@ -44,3 +44,7 @@ package_add_test(DroneScriptEngineTests
 package_add_test(DroneSequencerTests
         DroneSequencer_tests.cpp
 )
+
+package_add_test(LlmAssistWatcherCoreTests
+        LlmAssistWatcherCore_tests.cpp
+)

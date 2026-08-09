@@ -30,6 +30,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(m_menuBar);
         addAndMakeVisible(m_statusBar);
         initWidgets();
+        /*START_SCRIPTBROWSER*/
+        initLlmAssist();
+        /*END_SCRIPTBROWSER*/
         setResizable(true, true);
         setResizeLimits(GuiConstants::instance().init.WindowWidth, GuiConstants::instance().init.WindowHeight, 4000,
                         3000);
@@ -748,6 +751,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     // helper pulled out of its guard.
     void openScriptEditor()
     {
+        // Blocked while watching so a manual edit can't race with (and silently lose
+        // to) a script the watcher just applied from the folder.
+        if (m_llmAssistActive)
+        {
+            m_statusBar.showMessage("Disable LLM-Assist to edit the script manually");
+            return;
+        }
         auto* editorComponent = new ScriptEditorWindow();
         editorComponent->setScriptText(processorRef.getScriptText());
         editorComponent->onApply = [this](const juce::String& text) -> juce::String
@@ -807,12 +817,30 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         scripts.addItem(kScriptSaveAsId, "Save As...");
         scripts.addSubMenu("Delete", deleteMenu, !m_scriptMenuNames.empty());
         scripts.addSubMenu("Rename", renameMenu, !m_scriptMenuNames.empty());
+        scripts.addSeparator();
+        scripts.addSubMenu("LLM-Assist", buildLlmAssistMenu());
         return scripts;
+    }
+
+    juce::PopupMenu buildLlmAssistMenu()
+    {
+        juce::PopupMenu menu;
+        menu.addItem(kLlmAssistToggleId, m_llmAssistActive ? "Disable" : "Enable", true, m_llmAssistActive);
+        menu.addItem(kLlmAssistChooseFolderId, "Choose Folder...");
+        return menu;
     }
 
     void handleScriptMenuSelection(int menuItemID)
     {
-        if (menuItemID == kScriptSaveAsId)
+        if (menuItemID == kLlmAssistToggleId)
+        {
+            toggleLlmAssist();
+        }
+        else if (menuItemID == kLlmAssistChooseFolderId)
+        {
+            chooseLlmAssistFolder(false);
+        }
+        else if (menuItemID == kScriptSaveAsId)
         {
             promptSaveScriptAs();
         }
@@ -940,6 +968,78 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                               }
                                           });
     }
+
+    void initLlmAssist()
+    {
+        m_llmAssistWatcher.applyScriptText = [this](const juce::String& text)
+        { return processorRef.applyScriptText(text); };
+        m_llmAssistWatcher.scriptErrorMessage = [this] { return juce::String(processorRef.scriptErrorMessage()); };
+        m_llmAssistWatcher.currentPatchName = [this] { return processorRef.getCurrentPatchName(); };
+    }
+
+    void toggleLlmAssist()
+    {
+        if (m_llmAssistActive)
+        {
+            m_llmAssistActive = false;
+            m_statusBar.showMessage("LLM-Assist disabled");
+            return;
+        }
+        if (m_llmAssistFolder.isEmpty())
+        {
+            chooseLlmAssistFolder(true);
+            return;
+        }
+        m_llmAssistActive = true;
+        m_statusBar.showMessage("LLM-Assist watching " + m_llmAssistFolder);
+    }
+
+    void chooseLlmAssistFolder(bool activateOnPick)
+    {
+        m_llmAssistFolderChooser =
+            std::make_unique<juce::FileChooser>("Choose LLM-Assist Folder", juce::File(m_llmAssistFolder));
+        m_llmAssistFolderChooser->launchAsync(juce::FileBrowserComponent::openMode |
+                                                  juce::FileBrowserComponent::canSelectDirectories,
+                                              [this, activateOnPick](const juce::FileChooser& fc)
+                                              {
+                                                  const auto result = fc.getResult();
+                                                  if (!result.isDirectory())
+                                                  {
+                                                      return;
+                                                  }
+                                                  m_llmAssistFolder = result.getFullPathName();
+                                                  AppSettings::saveLlmAssistFolder(m_llmAssistFolder);
+                                                  m_llmAssistActive = m_llmAssistActive || activateOnPick;
+                                                  m_statusBar.showMessage("LLM-Assist folder: " + m_llmAssistFolder);
+                                              });
+    }
+
+    // Runs at a fraction of the timer rate (see kLlmAssistPollEveryNTicks) - a folder
+    // scan every tick is unnecessary for a workflow driven by an LLM/human editing text.
+    void pollLlmAssistWatcher()
+    {
+        if (!m_llmAssistActive)
+        {
+            return;
+        }
+        if (++m_llmAssistPollCounter % kLlmAssistPollEveryNTicks != 0)
+        {
+            return;
+        }
+        const auto result = m_llmAssistWatcher.poll(juce::File(m_llmAssistFolder));
+        if (!result)
+        {
+            return;
+        }
+        if (result->compiled)
+        {
+            m_statusBar.showMessage("LLM-Assist applied '" + result->scriptName + "'", true);
+        }
+        else
+        {
+            m_statusBar.showMessage("LLM-Assist error in '" + result->scriptName + "': " + result->error, true);
+        }
+    }
     /*END_SCRIPTBROWSER*/
 
     /*EXTRA_PRIVATE_METHODS*/
@@ -990,6 +1090,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AlertWindow> m_scriptNameDialog;
     std::vector<juce::String> m_scriptMenuNames;
     juce::String m_lastScriptErrorShown;
+    static constexpr int kLlmAssistToggleId = 15000;
+    static constexpr int kLlmAssistChooseFolderId = 15001;
+    static constexpr int kLlmAssistPollEveryNTicks = 15;
+    bool m_llmAssistActive{false};
+    int m_llmAssistPollCounter{0};
+    juce::String m_llmAssistFolder{AppSettings::loadLlmAssistFolder()};
+    LlmAssistWatcher m_llmAssistWatcher;
+    std::unique_ptr<juce::FileChooser> m_llmAssistFolderChooser;
     /*END_SCRIPTBROWSER*/
 
     /*WIDGETS_DECL*/

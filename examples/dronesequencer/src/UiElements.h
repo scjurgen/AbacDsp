@@ -15,6 +15,8 @@
 #include "inc/GenericMeter.h"
 #include "inc/StatusBar.h"
 #include "inc/ScriptEditorWindow.h"
+#include "inc/LlmAssistWatcherCore.h"
+#include "inc/LlmAssistWatcher.h"
 #include "inc/AboutWindow.h"
 #include "inc/SpectrogramDisplay.h"
 #include "inc/VuMeter.h"
