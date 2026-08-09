@@ -38,7 +38,7 @@ class KarplusStrongVoice
         , m_filterEnvelope(sampleRate)
         , m_filterLfo(sampleRate)
     {
-        m_string.setDamperCutoff(22000);
+        m_string.setDamperCutoff(24000);
         m_vcf.setFilterCoefficients({0.f, 0.f, 0.f, 0.f, 1.f}); // Lp24: pass the last stage only
         m_vcf.setParameterSmoothTimeMs(kVcfSmoothingMs);
         m_filterLfo.setModulationDepth(1.f);

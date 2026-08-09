@@ -33,10 +33,6 @@ class StubImpl final : public EffectBase
     {
         m_detune = value;
     }
-    void setVoices(const float value)
-    {
-        m_voices = value;
-    }
     void setReverbDry(const float value)
     {
         m_reverbDry = std::pow(10.f, value / 20.f);
@@ -97,6 +93,10 @@ class StubImpl final : public EffectBase
     {
         m_decayOctave = value;
     }
+    void setDamper(const float value)
+    {
+        m_damper = value;
+    }
     void setLevelSustain(const float value)
     {
         m_levelSustain = value;
@@ -156,7 +156,6 @@ class StubImpl final : public EffectBase
     float m_tuning{};
     float m_transpose{};
     float m_detune{};
-    float m_voices{};
     float m_reverbDry{};
     float m_reverbWet{};
     float m_reverbSize{};
@@ -172,6 +171,7 @@ class StubImpl final : public EffectBase
     float m_attack{};
     float m_decay{};
     float m_decayOctave{};
+    float m_damper{};
     float m_levelSustain{};
     float m_sustainHumanize{};
     float m_lfoDepth{};

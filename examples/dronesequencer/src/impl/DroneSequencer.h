@@ -43,11 +43,6 @@ class DroneSequencer
         m_detuneCents[voiceIndex] = cents;
     }
 
-    void setVoices(const size_t count) noexcept
-    {
-        m_activeVoices = std::clamp(count, size_t{1}, kMaxVoices);
-    }
-
     void setIntervalMs(const float ms) noexcept
     {
         m_intervalMs = ms;
@@ -119,7 +114,7 @@ class DroneSequencer
 
     [[nodiscard]] size_t clampedVoiceIndex(const size_t channel) const noexcept
     {
-        return std::min(channel, m_activeVoices - 1);
+        return std::min(channel, MaxVoices - 1);
     }
 
     [[nodiscard]] float rollPluckGain(const float baseVelocity) noexcept
@@ -259,7 +254,6 @@ class DroneSequencer
     float m_humanizeTimingPercent{0.f};
     float m_humanizeLevelPercent{0.f};
     std::array<float, kMaxVoices> m_detuneCents{};
-    size_t m_activeVoices{kMaxVoices};
     bool m_playing{false};
 
     size_t m_samplesUntilNextRequest{0};

@@ -12,7 +12,6 @@
     {"short": "TUNE", "type": "dial", "display": "Tuning", "symbol": "tuning", "default": 440, "range": [400, 800, 0.1, 1, false], "precision": 1, "unit": "Hz"},
     {"short": "TRAN", "type": "dial", "display": "Transpose", "symbol": "transpose", "default": 0, "range": [-24, 24, 1, 1, false], "precision": 0, "unit": "st"},
     {"short": "DET", "type": "dial", "display": "Detune", "symbol": "detune", "default": 5, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "ct"},
-    {"short": "VOIC", "type": "dial", "display": "Voices", "symbol": "voices", "default": 4, "range": [1, 8, 1, 1, false], "precision": 0, "unit": ""},
 
     {"short": "SCPT", "type": "script", "display": "Script", "symbol": "script"},
 
@@ -34,6 +33,7 @@
     {"short": "ATK", "type": "dial", "display": "Attack", "symbol": "attack", "default": 10, "range": [1, 3000, 0.1, 0.35, false], "precision": 1, "unit": "ms"},
     {"short": "DCY", "type": "dial", "display": "Decay", "symbol": "decay", "default": 30000, "range": [1, 100000, 1, 0.25, false], "precision": 1, "unit": "ms"},
     {"short": "DCYO", "type": "dial", "display": "Decay Octave", "symbol": "decayOctave", "default": 1, "range": [0, 2, 0.01, 1, false], "precision": 2, "unit": ""},
+    {"short": "DAMP", "type": "dial", "display": "Damper", "symbol": "damper", "default": 0, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
     {"short": "SUS", "type": "dial", "display": "Sustain", "symbol": "levelSustain", "default": 0.2, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
     {"short": "SUSH", "type": "dial", "display": "Sustain Humanize", "symbol": "sustainHumanize", "default": 0, "range": [0, 100, 1, 1, false], "precision": 0, "unit": "%"},
     {"short": "LFOD", "type": "dial", "display": "Filter LFO Depth", "symbol": "lfoDepth", "default": 0.5, "range": [0, 2, 0.01, 1, false], "precision": 2, "unit": ""},
@@ -45,17 +45,18 @@
     {"short": "SUSF", "type": "dial", "display": "Filter Sustain", "symbol": "levelSustainFilter", "default": 0, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
     {"short": "CUTF", "type": "dial", "display": "Filter Cutoff", "symbol": "filterCutoff", "default": 0, "range": [-60, 48, 0.1, 1, false], "precision": 1, "unit": "st"},
     {"short": "RESF", "type": "dial", "display": "Filter Resonance", "symbol": "filterResonance", "default": 0.1, "range": [0, 2, 0.01, 1, false], "precision": 2, "unit": ""},
-    {"short": "CONTF", "type": "dial", "display": "Contour F", "symbol": "contourFilter", "default": 0, "range": [-4, 4, 0.01, 1, false], "precision": 2, "unit": "oct"}
+    {"short": "CONTF", "type": "dial", "display": "Contour F", "symbol": "contourFilter", "default": 0, "range": [-4, 4, 0.01, 1, false], "precision": 2, "unit": "oct"},
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"}
   ],
   "layout": {
     "WINDOW_WIDTH": "1400",
     "WINDOW_HEIGHT": "800",
     "type": "=5",
-    "composition": "R=(1:1:1:1:1) A1=(VOL,TUNE,TRAN,DET,VOIC,SCPT) A2=(PLAY,BPM,SYNC,DIV,HTIM,HLVL) A3=(ATK,DCY,DCYO,SUS,SUSH,LFOD,LFOS,LFOV) A4=(ATKF,DCYF,SUSF,CUTF,RESF,CONTF) A5=(RDRY,RWET,RSZ,RDEC,RSLO,RSHI)"
+    "composition": "R=(1:1:1:1:1) A1=(VOL,TUNE,TRAN,DET,SCPT) A2=(PLAY,BPM,SYNC,DIV,HTIM,HLVL) A3=(ATK,DCY,DCYO,DAMP,SUS,SUSH,LFOD,LFOS,LFOV) A4=(ATKF,DCYF,SUSF,CUTF,RESF,CONTF) A5=(RDRY,RWET,RSZ,RDEC,RSLO,RSHI)"
   },
   "performance-page": {
-    "type": "-",
-    "composition": "A1=(BPM,VOL,SCPT,RDRY,RWET,RSZ,RDEC)"
+    "type": "=3",
+    "composition": "R=(1:1:2) A1=(PLAY,BPM,VOL,SCPT) A2=(RDRY,RWET,RSZ,RDEC) A3=(FFT)"
   },
   "extra_timer_callbacks": [
     "bpmDial.setEnabled(!processorRef.isHostSynced());",

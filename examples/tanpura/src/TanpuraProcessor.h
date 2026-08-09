@@ -60,6 +60,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("attack", this);
         m_parameters.addParameterListener("decay", this);
         m_parameters.addParameterListener("decayOctave", this);
+        m_parameters.addParameterListener("damper", this);
         m_parameters.addParameterListener("levelSustain", this);
         m_parameters.addParameterListener("sustainHumanize", this);
         m_parameters.addParameterListener("lfoDepth", this);
@@ -101,6 +102,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("attack", this);
         m_parameters.removeParameterListener("decay", this);
         m_parameters.removeParameterListener("decayOctave", this);
+        m_parameters.removeParameterListener("damper", this);
         m_parameters.removeParameterListener("levelSustain", this);
         m_parameters.removeParameterListener("sustainHumanize", this);
         m_parameters.removeParameterListener("lfoDepth", this);
@@ -450,6 +452,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("damper", 1), juce::String::fromUTF8("Damper"),
+            juce::NormalisableRange<float>(0, 1, 0.01, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("levelSustain", 1), juce::String::fromUTF8("Sustain"),
             juce::NormalisableRange<float>(0, 1, 0.01, 1, false), 0.2,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
@@ -667,6 +674,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setDecayOctave(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::decayOctave, v);
+             }},
+            {"damper",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setDamper(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::damper, v);
              }},
             {"levelSustain",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -911,6 +924,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("decayOctave");
             float normalized = range.convertTo0to1(params.decayOctave);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("damper"))
+        {
+            const auto& range = m_parameters.getParameterRange("damper");
+            float normalized = range.convertTo0to1(params.damper);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("levelSustain"))

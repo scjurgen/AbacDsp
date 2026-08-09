@@ -194,6 +194,11 @@ class TanpuraImpl final : public EffectBase
         forEachVoice([value](auto& voice) { voice.setDecayOctaveFactor(value); });
     }
 
+    void setDamper(const float value)
+    {
+        forEachVoice([value](auto& voice) { voice.setDamper(value); });
+    }
+
     void setLevelSustain(const float value) noexcept
     {
         m_levelSustainBase = value;

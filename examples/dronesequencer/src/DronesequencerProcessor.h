@@ -32,13 +32,13 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 #endif
                              )
         , m_parameters(*this, nullptr, "PARAMETERS", createParameterLayout())
+        , m_spectrogram{}
         , m_patchIndex(0, 0)
     {
         m_parameters.addParameterListener("level", this);
         m_parameters.addParameterListener("tuning", this);
         m_parameters.addParameterListener("transpose", this);
         m_parameters.addParameterListener("detune", this);
-        m_parameters.addParameterListener("voices", this);
         m_parameters.addParameterListener("reverbDry", this);
         m_parameters.addParameterListener("reverbWet", this);
         m_parameters.addParameterListener("reverbSize", this);
@@ -54,6 +54,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("attack", this);
         m_parameters.addParameterListener("decay", this);
         m_parameters.addParameterListener("decayOctave", this);
+        m_parameters.addParameterListener("damper", this);
         m_parameters.addParameterListener("levelSustain", this);
         m_parameters.addParameterListener("sustainHumanize", this);
         m_parameters.addParameterListener("lfoDepth", this);
@@ -74,7 +75,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("tuning", this);
         m_parameters.removeParameterListener("transpose", this);
         m_parameters.removeParameterListener("detune", this);
-        m_parameters.removeParameterListener("voices", this);
         m_parameters.removeParameterListener("reverbDry", this);
         m_parameters.removeParameterListener("reverbWet", this);
         m_parameters.removeParameterListener("reverbSize", this);
@@ -90,6 +90,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("attack", this);
         m_parameters.removeParameterListener("decay", this);
         m_parameters.removeParameterListener("decayOctave", this);
+        m_parameters.removeParameterListener("damper", this);
         m_parameters.removeParameterListener("levelSustain", this);
         m_parameters.removeParameterListener("sustainHumanize", this);
         m_parameters.removeParameterListener("lfoDepth", this);
@@ -298,11 +299,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("ct").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 0) + " ct"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("voices", 1), juce::String::fromUTF8("Voices"),
-            juce::NormalisableRange<float>(1, 8, 1, 1, false), 4,
-            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " "; })));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("reverbDry", 1), juce::String::fromUTF8("Reverb Dry"),
             juce::NormalisableRange<float>(-100, 12, 0.1, 1, false), 0,
             juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
@@ -373,6 +369,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("decayOctave", 1), juce::String::fromUTF8("Decay Octave"),
             juce::NormalisableRange<float>(0, 2, 0.01, 1, false), 1,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("damper", 1), juce::String::fromUTF8("Damper"),
+            juce::NormalisableRange<float>(0, 1, 0.01, 1, false), 0,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -468,12 +469,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                  p.pluginRunner->setDetune(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::detune, v);
              }},
-            {"voices",
-             [](AudioPluginAudioProcessor& p, const float v)
-             {
-                 p.pluginRunner->setVoices(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::voices, v);
-             }},
             {"reverbDry",
              [](AudioPluginAudioProcessor& p, const float v)
              {
@@ -563,6 +558,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setDecayOctave(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::decayOctave, v);
+             }},
+            {"damper",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setDamper(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::damper, v);
              }},
             {"levelSustain",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -683,12 +684,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             float normalized = range.convertTo0to1(params.detune);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("voices"))
-        {
-            const auto& range = m_parameters.getParameterRange("voices");
-            float normalized = range.convertTo0to1(params.voices);
-            p->setValueNotifyingHost(normalized);
-        }
         if (auto* p = m_parameters.getParameter("reverbDry"))
         {
             const auto& range = m_parameters.getParameterRange("reverbDry");
@@ -777,6 +772,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("decayOctave");
             float normalized = range.convertTo0to1(params.decayOctave);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("damper"))
+        {
+            const auto& range = m_parameters.getParameterRange("damper");
+            float normalized = range.convertTo0to1(params.damper);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("levelSustain"))
@@ -1013,6 +1014,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             fixedRunner->processBlock(buffer);
         }
+        m_spectrogram.processBlock(std::span{buffer.getReadPointer(0), static_cast<size_t>(buffer.getNumSamples())});
     }
 
 #pragma GCC diagnostic pop
@@ -1043,6 +1045,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         return pluginRunner ? pluginRunner->scriptSkeleton() : std::string{};
     }
 
+    [[nodiscard]] AbacDsp::SpectrumImageSet getSpectrogram() const
+    {
+        return m_spectrogram.getImageSet();
+    }
 
     [[nodiscard]] bool hasRunner() const
     {
@@ -1064,6 +1070,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     std::unique_ptr<DroneSequencerImpl<NumSamplesPerBlock>> pluginRunner;
 
     juce::AudioProcessorValueTreeState m_parameters;
+    AbacDsp::SimpleSpectrogram m_spectrogram;
     std::vector<int> m_patchIndex;
     FileIo m_fileIo;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessor)

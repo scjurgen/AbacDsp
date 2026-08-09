@@ -152,8 +152,11 @@ class KarplusStrongString
         }
         setSizeByNote(note, orchestraTuning);
         m_dcFilter.reset();
-        m_damper.setCutoff(computeDamperCutoff(m_baseFrequency, m_damperFactor, 2.f, 0.25f));
-        m_damper.reset();
+        {
+            auto cutoff = computeDamperCutoff(m_baseFrequency, m_damperFactor, 2.f, 0.25f);
+            m_damper.setCutoff(cutoff);
+            m_damper.reset();
+        }
         m_initFilter.setCutoffFrequency(m_baseFrequency * m_transientFactor);
         m_initFilter.reset();
         std::ranges::fill(m_dynamicWaveTableBuffer, 0.f);
@@ -273,6 +276,10 @@ class KarplusStrongString
         return buffer;
     }
 
+    // m_damper is stepped once per oversampled loop tap (m_oversampleFactor times per audio
+    // sample) but its coefficient is computed against m_sampleRate, so a cutoff c here behaves
+    // like c * m_oversampleFactor in real audio terms; sampleRate/4 is the top of that range
+    // that stays under OnePoleFilter's own sampleRate/2 bypass clamp.
     [[nodiscard]] float computeDamperCutoff(const float baseFrequency, const float damperFactor, const float midFactor,
                                             const float lowFactor) const noexcept
     {
@@ -427,7 +434,7 @@ class KarplusStrongString
     size_t m_activePluck{0U};
     size_t m_pluckOffset{0};
     float m_currentPitchBend{1.0f};
-    float m_damperFactor{0.5f};
+    float m_damperFactor{0.f};
     float m_transientFactor{4.f};
     Phase m_phase{Phase::Stopped};
     float m_attackTimeSamples{0.f};

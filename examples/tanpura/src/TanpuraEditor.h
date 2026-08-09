@@ -214,6 +214,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.items.add(juce::FlexItem(attackDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(decayDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(decayOctaveDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(damperDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(levelSustainDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(sustainHumanizeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(lfoDepthDial).withFlex(1).withMargin(knobMarginSmall));
@@ -355,6 +356,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(decayOctaveDial);
         decayOctaveDial.reset(valueTreeState, "decayOctave");
         decayOctaveDial.setLabelText(juce::String::fromUTF8("Decay Octave"));
+        addAndMakeVisible(damperDial);
+        damperDial.reset(valueTreeState, "damper");
+        damperDial.setLabelText(juce::String::fromUTF8("Damper"));
         addAndMakeVisible(levelSustainDial);
         levelSustainDial.reset(valueTreeState, "levelSustain");
         levelSustainDial.setLabelText(juce::String::fromUTF8("Sustain"));
@@ -436,6 +440,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             attackDial.setVisible(false);
             decayDial.setVisible(false);
             decayOctaveDial.setVisible(false);
+            damperDial.setVisible(false);
             levelSustainDial.setVisible(false);
             sustainHumanizeDial.setVisible(false);
             lfoDepthDial.setVisible(true);
@@ -476,6 +481,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             attackDial.setVisible(true);
             decayDial.setVisible(true);
             decayOctaveDial.setVisible(true);
+            damperDial.setVisible(true);
             levelSustainDial.setVisible(true);
             sustainHumanizeDial.setVisible(true);
             lfoDepthDial.setVisible(true);
@@ -905,6 +911,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial attackDial{this};
     CustomRotaryDial decayDial{this};
     CustomRotaryDial decayOctaveDial{this};
+    CustomRotaryDial damperDial{this};
     CustomRotaryDial levelSustainDial{this};
     CustomRotaryDial sustainHumanizeDial{this};
     CustomRotaryDial lfoDepthDial{this};

@@ -17,7 +17,6 @@ struct PatchParameters
         tuning            , // dial
         transpose         , // dial
         detune            , // dial
-        voices            , // dial
         script            , // script
         reverbDry         , // dial
         reverbWet         , // dial
@@ -34,6 +33,7 @@ struct PatchParameters
         attack            , // dial
         decay             , // dial
         decayOctave       , // dial
+        damper            , // dial
         levelSustain      , // dial
         sustainHumanize   , // dial
         lfoDepth          , // dial
@@ -50,7 +50,6 @@ float level{0.0f};
 float tuning{440.0f};
 float transpose{0.0f};
 float detune{5.0f};
-float voices{4.0f};
 std::string script{};
 float reverbDry{0.0f};
 float reverbWet{-100.0f};
@@ -67,6 +66,7 @@ size_t division{4};
 float attack{10.0f};
 float decay{30000.0f};
 float decayOctave{1.0f};
+float damper{0.0f};
 float levelSustain{0.2f};
 float sustainHumanize{0.0f};
 float lfoDepth{0.5f};
@@ -85,7 +85,6 @@ float contourFilter{0.0f};
 "tuning",
 "transpose",
 "detune",
-"voices",
 "reverbDry",
 "reverbWet",
 "reverbSize",
@@ -101,6 +100,7 @@ float contourFilter{0.0f};
 "attack",
 "decay",
 "decayOctave",
+"damper",
 "levelSustain",
 "sustainHumanize",
 "lfoDepth",
@@ -134,7 +134,6 @@ float contourFilter{0.0f};
         else if constexpr (ParamId == Id::tuning) return tuning;
         else if constexpr (ParamId == Id::transpose) return transpose;
         else if constexpr (ParamId == Id::detune) return detune;
-        else if constexpr (ParamId == Id::voices) return voices;
         else if constexpr (ParamId == Id::script) return script;
         else if constexpr (ParamId == Id::reverbDry) return reverbDry;
         else if constexpr (ParamId == Id::reverbWet) return reverbWet;
@@ -151,6 +150,7 @@ float contourFilter{0.0f};
         else if constexpr (ParamId == Id::attack) return attack;
         else if constexpr (ParamId == Id::decay) return decay;
         else if constexpr (ParamId == Id::decayOctave) return decayOctave;
+        else if constexpr (ParamId == Id::damper) return damper;
         else if constexpr (ParamId == Id::levelSustain) return levelSustain;
         else if constexpr (ParamId == Id::sustainHumanize) return sustainHumanize;
         else if constexpr (ParamId == Id::lfoDepth) return lfoDepth;
@@ -182,8 +182,6 @@ break;
 break;
  case Id::detune: if (!isEqual(get<Id::detune>(), value)) {get<Id::detune>() = value;m_modified = true;}
 break;
- case Id::voices: if (!isEqual(get<Id::voices>(), value)) {get<Id::voices>() = value;m_modified = true;}
-break;
  case Id::script: break;
  case Id::reverbDry: if (!isEqual(get<Id::reverbDry>(), value)) {get<Id::reverbDry>() = value;m_modified = true;}
 break;
@@ -214,6 +212,8 @@ break;
  case Id::decay: if (!isEqual(get<Id::decay>(), value)) {get<Id::decay>() = value;m_modified = true;}
 break;
  case Id::decayOctave: if (!isEqual(get<Id::decayOctave>(), value)) {get<Id::decayOctave>() = value;m_modified = true;}
+break;
+ case Id::damper: if (!isEqual(get<Id::damper>(), value)) {get<Id::damper>() = value;m_modified = true;}
 break;
  case Id::levelSustain: if (!isEqual(get<Id::levelSustain>(), value)) {get<Id::levelSustain>() = value;m_modified = true;}
 break;
@@ -282,7 +282,6 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         tuning            , // dial
         transpose         , // dial
         detune            , // dial
-        voices            , // dial
         script            , // script
         reverbDry         , // dial
         reverbWet         , // dial
@@ -299,6 +298,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         attack            , // dial
         decay             , // dial
         decayOctave       , // dial
+        damper            , // dial
         levelSustain      , // dial
         sustainHumanize   , // dial
         lfoDepth          , // dial

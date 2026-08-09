@@ -22,7 +22,7 @@ template <size_t BlockSize>
 class DroneSequencerImpl final : public EffectBase
 {
   public:
-    static constexpr size_t kMaxVoices{8};
+    static constexpr size_t kMaxVoices{16};
 
     explicit DroneSequencerImpl(const float sampleRate)
         : EffectBase(sampleRate)
@@ -64,11 +64,6 @@ class DroneSequencerImpl final : public EffectBase
         {
             m_sequencer.setDetuneCents(i, kDetuneFactors[i] * value);
         }
-    }
-
-    void setVoices(const float count)
-    {
-        m_sequencer.setVoices(static_cast<size_t>(count));
     }
 
     void setReverbDry(const float valueDb)
@@ -234,6 +229,11 @@ class DroneSequencerImpl final : public EffectBase
     void setDecayOctave(const float value)
     {
         forEachVoice([value](auto& voice) { voice.setDecayOctaveFactor(value); });
+    }
+
+    void setDamper(const float value)
+    {
+        forEachVoice([value](auto& voice) { voice.setDamper(value); });
     }
 
     void setLevelSustain(const float value) noexcept
