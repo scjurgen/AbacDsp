@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <numbers>
 #include <random>
 #include <vector>
 
@@ -128,8 +129,9 @@ class KarplusStrongString
     void setSizeByNote(const float note, const float orchestraTuning = 440.f) noexcept
     {
         setFrequency(Convert::noteToFrequency(note - 12.f, orchestraTuning));
+        m_damper.setCutoff(computeDamperCutoff(m_baseFrequency, m_damperFactor, 2.f, 0.25f));
         auto idealSize = m_oversampleFactor * m_sampleRate / Convert::noteToFrequency(note, orchestraTuning);
-        idealSize -= m_damperFactor * m_oversampleFactor;
+        idealSize = correctForDamperPhaseDelay(idealSize);
         m_pitchRatioBaseValue = m_oversampleFactor * static_cast<float>(m_currentBufferSize) / idealSize;
     }
 
@@ -152,11 +154,7 @@ class KarplusStrongString
         }
         setSizeByNote(note, orchestraTuning);
         m_dcFilter.reset();
-        {
-            auto cutoff = computeDamperCutoff(m_baseFrequency, m_damperFactor, 2.f, 0.25f);
-            m_damper.setCutoff(cutoff);
-            m_damper.reset();
-        }
+        m_damper.reset();
         m_initFilter.setCutoffFrequency(m_baseFrequency * m_transientFactor);
         m_initFilter.reset();
         std::ranges::fill(m_dynamicWaveTableBuffer, 0.f);
@@ -289,6 +287,18 @@ class KarplusStrongString
         const float lowFreq = baseFrequency * lowFactor;
         return damperFactor < halfPoint ? nyquist2 * std::pow(midFreq / nyquist2, 2.0f * damperFactor)
                                         : midFreq * std::pow(lowFreq / midFreq, 2.0f * (damperFactor - halfPoint));
+    }
+
+    // The damper sits inside the feedback loop, so its phase lag at the loop's own resonant
+    // frequency (2*pi/currentBufferSize radians per tap) adds to the effective loop period;
+    // this scales idealSize down by that same ratio so the resulting pitch stays on target.
+    [[nodiscard]] float correctForDamperPhaseDelay(const float idealSize) const noexcept
+    {
+        const auto bufferSize = static_cast<float>(m_currentBufferSize);
+        const auto omega = 2.f * std::numbers::pi_v<float> / bufferSize;
+        const auto p = m_damper.feedback();
+        const auto delayTaps = std::atan2(p * std::sin(omega), 1.f - p * std::cos(omega)) / omega;
+        return idealSize * bufferSize / (bufferSize + delayTaps);
     }
 
     void computeDecay() noexcept

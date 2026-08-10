@@ -41,6 +41,64 @@ using TestString = KarplusStrongString<10000>;
     return pitches[pitches.size() / 2];
 }
 
+struct AutocorrelationResult
+{
+    float frequency;
+    float peakCorrelation;
+};
+
+// Compares a 2-period window against the next at lags near the known-good expected period,
+// refined to sub-sample precision by parabolic interpolation - sidesteps the octave/harmonic
+// confusion a wide-range or zero-crossing search would hit on this wave's rich harmonics.
+[[nodiscard]] AutocorrelationResult measureFrequencyByAutocorrelation(const std::vector<float>& signal,
+                                                                      const float sampleRate,
+                                                                      const float expectedFrequency)
+{
+    const float expectedPeriod = sampleRate / expectedFrequency;
+    const auto windowLength = static_cast<size_t>(std::lround(2.f * expectedPeriod));
+    const auto baseLag = static_cast<size_t>(std::lround(expectedPeriod));
+    const auto searchRadius = std::max<size_t>(2, static_cast<size_t>(std::lround(0.1f * expectedPeriod)));
+    // Skip past the initial-fill transient (the loop isn't truly recursing until its first
+    // full traversal) so the waveform has settled before the windows are compared.
+    const size_t referenceStart = 6 * static_cast<size_t>(std::lround(expectedPeriod));
+
+    const auto correlationAt = [&](const size_t lag) noexcept
+    {
+        float dot = 0.f;
+        float refEnergy = 0.f;
+        float cmpEnergy = 0.f;
+        for (size_t i = 0; i < windowLength; ++i)
+        {
+            const float a = signal[referenceStart + i];
+            const float b = signal[referenceStart + lag + i];
+            dot += a * b;
+            refEnergy += a * a;
+            cmpEnergy += b * b;
+        }
+        return dot / std::sqrt(refEnergy * cmpEnergy + 1e-12f);
+    };
+
+    size_t bestLag = baseLag - searchRadius;
+    float bestCorrelation = correlationAt(bestLag);
+    for (size_t lag = baseLag - searchRadius + 1; lag <= baseLag + searchRadius; ++lag)
+    {
+        const float correlation = correlationAt(lag);
+        if (correlation > bestCorrelation)
+        {
+            bestCorrelation = correlation;
+            bestLag = lag;
+        }
+    }
+
+    const float y1 = correlationAt(bestLag - 1);
+    const float y2 = bestCorrelation;
+    const float y3 = correlationAt(bestLag + 1);
+    const float denom = y1 - 2.f * y2 + y3;
+    const float offset = std::abs(denom) < 1e-9f ? 0.f : 0.5f * (y1 - y3) / denom;
+    const float refinedLag = static_cast<float>(bestLag) + offset;
+    return {sampleRate / refinedLag, bestCorrelation};
+}
+
 // dB drop from the pluck's initial peak to the peak elapsedSeconds later, with the damper
 // bypassed so only setDecayByTime()/setDecayOctaveFactor() are under test.
 [[nodiscard]] float measureDecayDb(const float note, const float decayMs, const float octaveFactor,
@@ -228,6 +286,28 @@ TEST(KarplusStrongString, frequencyMatchesTargetNote)
         const float targetFrequency = Convert::noteToFrequency(note);
         const float detected = detectMedianPitch(rendered, targetFrequency * 0.5f, targetFrequency * 2.f);
         EXPECT_NEAR(detected, targetFrequency, targetFrequency * 0.03f) << "note " << note;
+    }
+}
+
+TEST(KarplusStrongString, frequencyStaysOnPitchAcrossDamperRange)
+{
+    constexpr float note = 60.f;
+    const float targetFrequency = Convert::noteToFrequency(note);
+
+    for (const float damper : {0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.f})
+    {
+        TestString sut{kSampleRate};
+        sut.setPluckType(PluckType::WhiteStatic);
+        sut.setDecayByTime(5000.f);
+        sut.setDamper(damper);
+        sut.trigger(note, 1.f);
+
+        std::vector<float> rendered(2500);
+        std::ranges::generate(rendered, [&sut] { return sut.step(); });
+
+        const auto result = measureFrequencyByAutocorrelation(rendered, kSampleRate, targetFrequency);
+        ASSERT_GT(result.peakCorrelation, 0.9f) << "damper " << damper;
+        EXPECT_NEAR(result.frequency, targetFrequency, targetFrequency * 0.005f) << "damper " << damper;
     }
 }
 

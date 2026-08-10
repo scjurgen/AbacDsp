@@ -74,6 +74,11 @@ class OnePoleBase
         m_fdbk = value;
     }
 
+    [[nodiscard]] float feedback() const noexcept
+    {
+        return m_fdbk;
+    }
+
     // fraction: -20dB=0.1, -40dB=0.01, -60dB=0.001
     void setDecayTime(const float timeInSeconds, const float fraction = 0.1f) noexcept
     {
