@@ -14,7 +14,7 @@
 #include <string_view>
 #include <vector>
 
-#include "LuaScriptMemoryPool.h"
+#include "../inc/LuaScriptMemoryPool.h"
 
 struct DroneNote
 {

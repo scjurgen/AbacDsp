@@ -68,26 +68,28 @@ ROOT_CMAKE_LISTS = "../CMakeLists.txt"
 CPP_LOOK_AND_FEEL = "inc/LookAndFeel.h"
 
 CPP_SOURCE_FILES_FIXED = [
-    "inc/GuiConstants.h",
-    "inc/ThemeOrbit.h",
+    "impl/EffectBase.h",
+    "inc/AboutWindow.h",
+    "inc/AppSettings.h",
+    "inc/CircularBarDisplay.h",
     "inc/CpuMeter.h",
     "inc/CustomRotaryDial.h",
-    "inc/MomentaryToggleButton.h",
     "inc/GenericMeter.h",
-    "inc/StatusBar.h",
-    "inc/ScriptEditorWindow.h",
-    "inc/LlmAssistWatcherCore.h",
+    "inc/GuiConstants.h",
     "inc/LlmAssistWatcher.h",
-    "inc/AboutWindow.h",
+    "inc/LlmAssistWatcherCore.h",
+    "inc/LuaControlArea.h",
+    "inc/LuaScriptMemoryPool.h",
+    "inc/MomentaryToggleButton.h",
+    "inc/ScriptEditorWindow.h",
+    "inc/SliceWaveDisplay.h",
     "inc/SpectrogramDisplay.h",
+    "inc/StatusBar.h",
+    "inc/ThemeOrbit.h",
     "inc/VuMeter.h",
     "inc/WaveformMeter.h",
-    "inc/SliceWaveDisplay.h",
-    "inc/CircularBarDisplay.h",
-    "inc/LuaControlArea.h",
-    "inc/AppSettings.h",
-    "impl/EffectBase.h",
 ]
+
 CPP_SOURCE_FILES_3RDPARTY = [
     "3rdparty/CMakeLists.txt",
 ]
