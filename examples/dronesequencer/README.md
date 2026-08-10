@@ -136,6 +136,42 @@ function NextNotes()
 end
 ```
 
+## Dynamic UI Parameters
+
+A script can declare its own knobs/dropdowns/switches, shown in the Performance page's
+"Lua Controls" area, and get called back when the user (or host automation/CC) changes one.
+Call this once, typically at the top level of the script (not inside `NextNotes()`):
+
+```lua
+UICreateParameterSet({
+    { id = "depth", name = "Depth", type = "knob", range = { min = 0, max = 1, step = 0, skew = 1 }, default = 0.5 },
+    { id = "mode", name = "Mode", type = "drop", items = { "A", "B", "C" }, default = 0 },
+    { id = "enabled", name = "Enabled", type = "switch", default = 0 },
+})
+
+function OnDepthChanged(value) end  -- value is already mapped through the declared range
+function OnModeChanged(value) end   -- value is the selected item's index, 0-based
+function OnEnabledChanged(value) end -- value is 0 or 1
+```
+
+| Field | Meaning |
+|---|---|
+| `id` | Must start with a letter, contain only letters/digits/underscores. Builds the callback name: `id`'s first letter capitalized, wrapped as `On<Id>Changed`. |
+| `name` | Display label; defaults to `id` if omitted. |
+| `type` | `"knob"`, `"drop"`, or `"switch"`. |
+| `range` | Required for `"knob"` only: `{ min, max, step, skew }`. `step = 0` means continuous; `skew` follows the usual JUCE convention (`1` = linear). |
+| `items` | Required for `"drop"` only: an array of label strings: the callback value is the selected index, `0`..`#items - 1`. |
+| `unit` | Optional display unit string. Accepted and stored, but not yet surfaced in the UI. |
+| `description` | Optional; used for the widget's accessibility description. Falls back to `name` if omitted. |
+| `default` | Required; must fall within the resolved range (your declared `range` for a knob, or `0..#items - 1`/`0..1` for a drop/switch). |
+
+Calling `UICreateParameterSet` again on a script reload replaces the previous set entirely -
+a parameter not re-declared is unclaimed and disappears from the UI. There are only
+`kMaxLuaParams` (8) slots in the underlying pool shared by every script; requesting more than
+that, a duplicate `id`, or a malformed descriptor rejects the whole script at Apply time with
+an error, the same as any other script error - the previously running script keeps playing
+underneath.
+
 ## Available functions
 
 Only Lua's `base`, `math`, `table`, and `string` standard libraries are loaded - there is no
