@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <cmath>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -8,6 +9,7 @@
 #include <vector>
 
 #include "GuiConstants.h"
+#include "LuaParamRangeMath.h"
 
 // Fixed, always-copied shared component (CPP_SOURCE_FILES_FIXED) - must stay JUCE+std
 // only, no reaching into one example's impl/, or an unrelated blueprint's regeneration
@@ -44,13 +46,12 @@ struct LuaControlDescriptor
 };
 
 // Renders a script-driven parameter set: one child widget per descriptor, auto-arranged
-// in a row, none for parameters the caller doesn't currently claim. Each widget's raw
-// APVTS parameter is assumed normalized 0..1; it's converted to/from the descriptor's
-// declared display range via juce::NormalisableRange - the same range-mapping math the
-// generator's own dial codegen does at compile time, done here at runtime instead.
-// refresh() is driven by the Editor's own timer; it rebuilds child widgets only when the
-// descriptor list actually changes, and otherwise just pushes each parameter's current
-// value into its widget (skipped while the user is actively interacting with it).
+// in a row, none for parameters the caller doesn't currently claim. Each widget owns a
+// juce::ParameterAttachment bound to its raw [0,1] pool parameter, mapped to/from the
+// descriptor's declared display range via LuaParamRangeMath (the same math the engine
+// uses audio-thread-side) - push-driven by the parameter's own change notifications, not
+// polled. refresh() is driven by the Editor's own timer only to detect when the claimed
+// set itself changes and needs rebuilding; per-widget value sync needs no timer at all.
 class LuaControlArea : public juce::Component
 {
   public:
@@ -62,10 +63,6 @@ class LuaControlArea : public juce::Component
         {
             rebuild(controls, valueTreeState);
             m_lastBuiltControls = controls;
-        }
-        for (auto& widget : m_widgets)
-        {
-            widget->syncFromParameter();
         }
     }
 
@@ -90,8 +87,8 @@ class LuaControlArea : public juce::Component
       public:
         ParamWidget(const LuaControlDescriptor& descriptor, juce::AudioProcessorValueTreeState& valueTreeState)
             : m_descriptor(descriptor)
-            , m_valueTreeState(valueTreeState)
-            , m_paramId(descriptor.parameterId)
+            , m_attachment(*requireParameter(valueTreeState, descriptor.parameterId),
+                           [this](const float normalized) { applyNormalizedValue(normalized); })
         {
             m_label.setText(juce::String(descriptor.name), juce::dontSendNotification);
             m_label.setJustificationType(juce::Justification::centred);
@@ -109,7 +106,7 @@ class LuaControlArea : public juce::Component
                     buildSwitch();
                     break;
             }
-            syncFromParameter();
+            m_attachment.sendInitialUpdate();
         }
 
         void resized() override
@@ -132,35 +129,17 @@ class LuaControlArea : public juce::Component
             }
         }
 
-        // Pushes the parameter's current value into the control, unless the user is
-        // mid-interaction (would otherwise fight a live drag/host automation echo).
-        void syncFromParameter()
+      private:
+        // The fixed pool always has all kMaxLuaParams parameters created up front, so a
+        // claimed descriptor's parameterId is always resolvable.
+        [[nodiscard]] static juce::RangedAudioParameter* requireParameter(
+            juce::AudioProcessorValueTreeState& valueTreeState, const std::string& parameterId)
         {
-            if (m_interacting)
-            {
-                return;
-            }
-            const auto* raw = m_valueTreeState.getRawParameterValue(m_paramId);
-            if (raw == nullptr)
-            {
-                return;
-            }
-            const float display = normalizedToDisplay(raw->load());
-            if (m_slider != nullptr)
-            {
-                m_slider->setValue(display, juce::dontSendNotification);
-            }
-            else if (m_combo != nullptr)
-            {
-                syncCombo(display);
-            }
-            else if (m_toggle != nullptr)
-            {
-                m_toggle->setToggleState(display >= 0.5f, juce::dontSendNotification);
-            }
+            auto* param = valueTreeState.getParameter(parameterId);
+            assert(param != nullptr);
+            return param;
         }
 
-      private:
         void buildKnob()
         {
             m_slider = std::make_unique<juce::Slider>(juce::Slider::SliderStyle::RotaryHorizontalVerticalDrag,
@@ -169,9 +148,9 @@ class LuaControlArea : public juce::Component
                                static_cast<double>(m_descriptor.rangeStep));
             m_slider->setSkewFactor(static_cast<double>(m_descriptor.rangeSkew));
             m_slider->setDescription(accessibilityDescription());
-            m_slider->onDragStart = [this] { beginInteraction(); };
-            m_slider->onDragEnd = [this] { endInteraction(); };
-            m_slider->onValueChange = [this] { pushValue(static_cast<float>(m_slider->getValue())); };
+            m_slider->onDragStart = [this] { m_attachment.beginGesture(); };
+            m_slider->onDragEnd = [this] { m_attachment.endGesture(); };
+            m_slider->onValueChange = [this] { pushDisplayValue(static_cast<float>(m_slider->getValue()), false); };
             addAndMakeVisible(*m_slider);
         }
 
@@ -183,12 +162,7 @@ class LuaControlArea : public juce::Component
                 m_combo->addItem(juce::String(m_descriptor.items[i]), static_cast<int>(i) + 1);
             }
             m_combo->setDescription(accessibilityDescription());
-            m_combo->onChange = [this]
-            {
-                beginInteraction();
-                pushValue(static_cast<float>(m_combo->getSelectedId() - 1));
-                endInteraction();
-            };
+            m_combo->onChange = [this] { pushDisplayValue(static_cast<float>(m_combo->getSelectedId() - 1), true); };
             addAndMakeVisible(*m_combo);
         }
 
@@ -196,38 +170,52 @@ class LuaControlArea : public juce::Component
         {
             m_toggle = std::make_unique<juce::ToggleButton>();
             m_toggle->setDescription(accessibilityDescription());
-            m_toggle->onClick = [this]
-            {
-                beginInteraction();
-                pushValue(m_toggle->getToggleState() ? 1.f : 0.f);
-                endInteraction();
-            };
+            m_toggle->onClick = [this] { pushDisplayValue(m_toggle->getToggleState() ? 1.f : 0.f, true); };
             addAndMakeVisible(*m_toggle);
         }
 
-        // juce::ComboBox commits selections asynchronously (AsyncUpdater) - isPopupActive()
-        // already goes false before that fires, so a poll landing in that gap can silently
-        // overwrite a pending click. This grace period covers it without hooking the dispatch.
-        static constexpr int kComboSyncGraceTicks{5};
-
-        void syncCombo(const float display)
+        // Pushes a widget-driven display value to the underlying pool parameter.
+        // completeGesture is a one-shot change (combo/toggle click) vs. part of an
+        // already-bracketed drag (slider, begin/endGesture wrap the whole drag).
+        void pushDisplayValue(const float display, const bool completeGesture)
         {
-            if (m_combo->isPopupActive())
+            if (m_ignoreCallbacks)
             {
-                m_comboJustClosed = true;
                 return;
             }
-            if (m_comboJustClosed)
+            const float normalized = luaParamDisplayToNormalized(m_descriptor.rangeMin, m_descriptor.rangeMax,
+                                                                 m_descriptor.rangeSkew, display);
+            if (completeGesture)
             {
-                m_comboJustClosed = false;
-                m_comboSyncGraceTicksLeft = kComboSyncGraceTicks;
+                m_attachment.setValueAsCompleteGesture(normalized);
             }
-            if (m_comboSyncGraceTicksLeft > 0)
+            else
             {
-                --m_comboSyncGraceTicksLeft;
-                return;
+                m_attachment.setValueAsPartOfGesture(normalized);
             }
-            m_combo->setSelectedId(static_cast<int>(std::lround(display)) + 1, juce::dontSendNotification);
+        }
+
+        // Called on the message thread whenever the pool parameter actually changes,
+        // including echoing our own pushDisplayValue() above - m_ignoreCallbacks skips
+        // reacting to that echo, matching juce::SliderParameterAttachment's own idiom.
+        void applyNormalizedValue(const float normalized)
+        {
+            const juce::ScopedValueSetter<bool> ignoreScope(m_ignoreCallbacks, true);
+            const float display =
+                luaParamNormalizedToDisplay(m_descriptor.rangeMin, m_descriptor.rangeMax, m_descriptor.rangeStep,
+                                            m_descriptor.rangeSkew, normalized);
+            if (m_slider != nullptr)
+            {
+                m_slider->setValue(display, juce::dontSendNotification);
+            }
+            else if (m_combo != nullptr)
+            {
+                m_combo->setSelectedId(static_cast<int>(std::lround(display)) + 1, juce::dontSendNotification);
+            }
+            else if (m_toggle != nullptr)
+            {
+                m_toggle->setToggleState(display >= 0.5f, juce::dontSendNotification);
+            }
         }
 
         [[nodiscard]] juce::String accessibilityDescription() const
@@ -235,53 +223,13 @@ class LuaControlArea : public juce::Component
             return juce::String(m_descriptor.description.empty() ? m_descriptor.name : m_descriptor.description);
         }
 
-        [[nodiscard]] juce::NormalisableRange<float> displayRange() const
-        {
-            return {m_descriptor.rangeMin, m_descriptor.rangeMax,
-                    m_descriptor.rangeStep > 0.f ? m_descriptor.rangeStep : 0.f, m_descriptor.rangeSkew};
-        }
-
-        [[nodiscard]] float normalizedToDisplay(const float normalized) const
-        {
-            return displayRange().convertFrom0to1(normalized);
-        }
-
-        void pushValue(const float display) const
-        {
-            if (auto* param = m_valueTreeState.getParameter(m_paramId))
-            {
-                param->setValueNotifyingHost(displayRange().convertTo0to1(display));
-            }
-        }
-
-        void beginInteraction()
-        {
-            m_interacting = true;
-            if (auto* param = m_valueTreeState.getParameter(m_paramId))
-            {
-                param->beginChangeGesture();
-            }
-        }
-
-        void endInteraction()
-        {
-            if (auto* param = m_valueTreeState.getParameter(m_paramId))
-            {
-                param->endChangeGesture();
-            }
-            m_interacting = false;
-        }
-
         LuaControlDescriptor m_descriptor;
-        juce::AudioProcessorValueTreeState& m_valueTreeState;
-        juce::String m_paramId;
+        juce::ParameterAttachment m_attachment;
+        bool m_ignoreCallbacks{false};
         juce::Label m_label;
         std::unique_ptr<juce::Slider> m_slider;
         std::unique_ptr<juce::ComboBox> m_combo;
         std::unique_ptr<juce::ToggleButton> m_toggle;
-        bool m_interacting{false};
-        bool m_comboJustClosed{false};
-        int m_comboSyncGraceTicksLeft{0};
     };
 
     void rebuild(const std::vector<LuaControlDescriptor>& controls, juce::AudioProcessorValueTreeState& valueTreeState)

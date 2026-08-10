@@ -501,6 +501,28 @@ TEST(DroneScriptEngine, NotifyUiParameterChangedMapsThroughDeclaredRange)
     EXPECT_FLOAT_EQ(result.notes[0].velocity, 1.f);
 }
 
+TEST(DroneScriptEngine, NotifyUiParameterChangedMapsThroughSkewedRange)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        UICreateParameterSet({
+            { id = "depth", type = "knob", range = { min = 0, max = 100, step = 0, skew = 2 }, default = 0 },
+        })
+        LastDepth = -1000
+        function OnDepthChanged(value) LastDepth = value end
+        function NextNotes()
+            return { { note = LastDepth, velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+
+    // skew = 2: display = span * normalized^(1/skew), matching juce::NormalisableRange's
+    // convertFrom0to1 - not normalized^skew, which was the bug this test guards against.
+    engine.notifyUiParameterChanged(0, 0.25f); // -> 100 * sqrt(0.25) = 50
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 50.f);
+}
+
 TEST(DroneScriptEngine, NotifyUiParameterChangedOnUnclaimedOrOutOfRangeSlotIsIgnored)
 {
     DroneScriptEngine engine;

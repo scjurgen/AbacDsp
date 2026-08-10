@@ -41,6 +41,10 @@ package_add_test(DroneScriptEngineTests
         DroneScriptEngine_tests.cpp
 )
 
+package_add_test(LuaParamRangeMathTests
+        LuaParamRangeMath_tests.cpp
+)
+
 package_add_test(DroneSequencerTests
         DroneSequencer_tests.cpp
 )

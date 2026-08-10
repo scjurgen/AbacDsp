@@ -6,7 +6,6 @@
 #include <array>
 #include <cassert>
 #include <cctype>
-#include <cmath>
 #include <cstddef>
 #include <memory>
 #include <sol/sol.hpp>
@@ -14,6 +13,7 @@
 #include <string_view>
 #include <vector>
 
+#include "LuaParamRangeMath.h"
 #include "LuaScriptMemoryPool.h"
 
 // Fixed, always-copied shared component (CPP_SOURCE_FILES_FIXED) - must stay JUCE-free
@@ -377,18 +377,9 @@ void LuaScriptEngineBase<Derived>::notifyUiParameterChanged(const size_t slot, c
 }
 
 template <typename Derived>
-float LuaScriptEngineBase<Derived>::mapNormalizedToDisplay(const LuaUiParamSlot& slot, float normalized) noexcept
+float LuaScriptEngineBase<Derived>::mapNormalizedToDisplay(const LuaUiParamSlot& slot, const float normalized) noexcept
 {
-    normalized = std::clamp(normalized, 0.f, 1.f);
-    const float span = slot.rangeMax - slot.rangeMin;
-    float display = slot.rangeSkew > 0.f && slot.rangeSkew != 1.f
-                        ? slot.rangeMin + span * std::pow(normalized, slot.rangeSkew)
-                        : slot.rangeMin + span * normalized;
-    if (slot.rangeStep > 0.f)
-    {
-        display = slot.rangeMin + std::round((display - slot.rangeMin) / slot.rangeStep) * slot.rangeStep;
-    }
-    return display;
+    return luaParamNormalizedToDisplay(slot.rangeMin, slot.rangeMax, slot.rangeStep, slot.rangeSkew, normalized);
 }
 
 template <typename Derived>
