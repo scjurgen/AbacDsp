@@ -79,6 +79,7 @@ CPP_SOURCE_FILES_FIXED = [
     "inc/LlmAssistWatcher.h",
     "inc/LlmAssistWatcherCore.h",
     "inc/LuaControlArea.h",
+    "inc/LuaScriptEngineBase.h",
     "inc/LuaScriptMemoryPool.h",
     "inc/MomentaryToggleButton.h",
     "inc/ScriptEditorWindow.h",
