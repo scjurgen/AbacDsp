@@ -14,16 +14,16 @@
  * deallocate calls are noexcept and return nullptr on exhaustion rather than throwing, since
  * they run on the audio thread; the arena itself is allocated once, at construction time.
  */
-class DroneScriptMemoryPool
+class LuaScriptMemoryPool
 {
   public:
-    explicit DroneScriptMemoryPool(size_t arenaBytes);
+    explicit LuaScriptMemoryPool(size_t arenaBytes);
 
-    DroneScriptMemoryPool(const DroneScriptMemoryPool&) = delete;
-    DroneScriptMemoryPool& operator=(const DroneScriptMemoryPool&) = delete;
-    DroneScriptMemoryPool(DroneScriptMemoryPool&&) = delete;
-    DroneScriptMemoryPool& operator=(DroneScriptMemoryPool&&) = delete;
-    ~DroneScriptMemoryPool() = default;
+    LuaScriptMemoryPool(const LuaScriptMemoryPool&) = delete;
+    LuaScriptMemoryPool& operator=(const LuaScriptMemoryPool&) = delete;
+    LuaScriptMemoryPool(LuaScriptMemoryPool&&) = delete;
+    LuaScriptMemoryPool& operator=(LuaScriptMemoryPool&&) = delete;
+    ~LuaScriptMemoryPool() = default;
 
     [[nodiscard]] void* allocate(size_t bytes) noexcept;
     [[nodiscard]] void* reallocate(void* ptr, size_t oldBytes, size_t newBytes) noexcept;
@@ -82,7 +82,7 @@ class DroneScriptMemoryPool
     BlockHeader* m_freeListHead{nullptr};
 };
 
-inline DroneScriptMemoryPool::DroneScriptMemoryPool(const size_t arenaBytes)
+inline LuaScriptMemoryPool::LuaScriptMemoryPool(const size_t arenaBytes)
     : m_arena(std::make_unique<std::byte[]>(roundUp(arenaBytes, kAlignment)))
     , m_arenaBytes(roundUp(arenaBytes, kAlignment))
 {
@@ -92,7 +92,7 @@ inline DroneScriptMemoryPool::DroneScriptMemoryPool(const size_t arenaBytes)
     pushFreeList(root);
 }
 
-inline void DroneScriptMemoryPool::pushFreeList(BlockHeader* block) noexcept
+inline void LuaScriptMemoryPool::pushFreeList(BlockHeader* block) noexcept
 {
     block->freePrev = nullptr;
     block->freeNext = m_freeListHead;
@@ -103,7 +103,7 @@ inline void DroneScriptMemoryPool::pushFreeList(BlockHeader* block) noexcept
     m_freeListHead = block;
 }
 
-inline void DroneScriptMemoryPool::removeFromFreeList(BlockHeader* block) noexcept
+inline void LuaScriptMemoryPool::removeFromFreeList(BlockHeader* block) noexcept
 {
     if (block->freePrev != nullptr)
     {
@@ -121,7 +121,7 @@ inline void DroneScriptMemoryPool::removeFromFreeList(BlockHeader* block) noexce
     block->freeNext = nullptr;
 }
 
-inline void DroneScriptMemoryPool::trySplit(BlockHeader* block, const size_t payloadNeeded) noexcept
+inline void LuaScriptMemoryPool::trySplit(BlockHeader* block, const size_t payloadNeeded) noexcept
 {
     if (block->payloadSize < payloadNeeded + kHeaderSize + kMinSplitPayload)
     {
@@ -141,7 +141,7 @@ inline void DroneScriptMemoryPool::trySplit(BlockHeader* block, const size_t pay
     pushFreeList(remainder);
 }
 
-inline void* DroneScriptMemoryPool::allocate(const size_t bytes) noexcept
+inline void* LuaScriptMemoryPool::allocate(const size_t bytes) noexcept
 {
     const size_t payloadNeeded = roundUp(bytes == 0 ? 1 : bytes, kAlignment);
     BlockHeader* candidate = m_freeListHead;
@@ -160,7 +160,7 @@ inline void* DroneScriptMemoryPool::allocate(const size_t bytes) noexcept
     return payloadOf(candidate);
 }
 
-inline void* DroneScriptMemoryPool::reallocate(void* ptr, const size_t oldBytes, const size_t newBytes) noexcept
+inline void* LuaScriptMemoryPool::reallocate(void* ptr, const size_t oldBytes, const size_t newBytes) noexcept
 {
     if (ptr == nullptr)
     {
@@ -182,7 +182,7 @@ inline void* DroneScriptMemoryPool::reallocate(void* ptr, const size_t oldBytes,
     return newPtr;
 }
 
-inline void DroneScriptMemoryPool::deallocate(void* ptr) noexcept
+inline void LuaScriptMemoryPool::deallocate(void* ptr) noexcept
 {
     if (ptr == nullptr)
     {
@@ -218,9 +218,9 @@ inline void DroneScriptMemoryPool::deallocate(void* ptr) noexcept
     pushFreeList(block);
 }
 
-inline void* DroneScriptMemoryPool::luaAlloc(void* ud, void* ptr, const size_t osize, const size_t nsize) noexcept
+inline void* LuaScriptMemoryPool::luaAlloc(void* ud, void* ptr, const size_t osize, const size_t nsize) noexcept
 {
-    auto* self = static_cast<DroneScriptMemoryPool*>(ud);
+    auto* self = static_cast<LuaScriptMemoryPool*>(ud);
     if (nsize == 0)
     {
         self->deallocate(ptr);

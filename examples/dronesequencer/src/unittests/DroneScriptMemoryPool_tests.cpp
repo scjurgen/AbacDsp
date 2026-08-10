@@ -2,20 +2,20 @@
 #include <gtest/gtest.h>
 #include <vector>
 
-#include "impl/DroneScriptMemoryPool.h"
+#include "impl/LuaScriptMemoryPool.h"
 
-TEST(DroneScriptMemoryPool, AllocateReturnsWritableMemory)
+TEST(LuaScriptMemoryPool, AllocateReturnsWritableMemory)
 {
-    DroneScriptMemoryPool pool(4096);
+    LuaScriptMemoryPool pool(4096);
     void* p = pool.allocate(64);
     ASSERT_NE(p, nullptr);
     std::memset(p, 0xAB, 64);
     EXPECT_EQ(pool.bytesInUse(), 64u);
 }
 
-TEST(DroneScriptMemoryPool, DeallocateReturnsBytesToZero)
+TEST(LuaScriptMemoryPool, DeallocateReturnsBytesToZero)
 {
-    DroneScriptMemoryPool pool(4096);
+    LuaScriptMemoryPool pool(4096);
     void* a = pool.allocate(100);
     void* b = pool.allocate(200);
     ASSERT_NE(a, nullptr);
@@ -25,9 +25,9 @@ TEST(DroneScriptMemoryPool, DeallocateReturnsBytesToZero)
     EXPECT_EQ(pool.bytesInUse(), 0u);
 }
 
-TEST(DroneScriptMemoryPool, CoalescesAdjacentFreeBlocksAfterManyRounds)
+TEST(LuaScriptMemoryPool, CoalescesAdjacentFreeBlocksAfterManyRounds)
 {
-    DroneScriptMemoryPool pool(64 * 1024);
+    LuaScriptMemoryPool pool(64 * 1024);
     std::vector<void*> live;
     for (int round = 0; round < 500; ++round)
     {
@@ -46,9 +46,9 @@ TEST(DroneScriptMemoryPool, CoalescesAdjacentFreeBlocksAfterManyRounds)
     }
 }
 
-TEST(DroneScriptMemoryPool, AllocateReturnsNullptrWhenExhausted)
+TEST(LuaScriptMemoryPool, AllocateReturnsNullptrWhenExhausted)
 {
-    DroneScriptMemoryPool pool(256);
+    LuaScriptMemoryPool pool(256);
     void* first = pool.allocate(64);
     ASSERT_NE(first, nullptr);
     void* huge = pool.allocate(1'000'000);
@@ -56,9 +56,9 @@ TEST(DroneScriptMemoryPool, AllocateReturnsNullptrWhenExhausted)
     EXPECT_NE(pool.bytesInUse(), 0u); // the earlier successful allocation must be untouched
 }
 
-TEST(DroneScriptMemoryPool, ReallocateGrowPreservesContent)
+TEST(LuaScriptMemoryPool, ReallocateGrowPreservesContent)
 {
-    DroneScriptMemoryPool pool(4096);
+    LuaScriptMemoryPool pool(4096);
     auto* p = static_cast<char*>(pool.allocate(16));
     ASSERT_NE(p, nullptr);
     std::memcpy(p, "hello world!", 13);
@@ -68,27 +68,27 @@ TEST(DroneScriptMemoryPool, ReallocateGrowPreservesContent)
     EXPECT_STREQ(grown, "hello world!");
 }
 
-TEST(DroneScriptMemoryPool, ReallocateShrinkKeepsSamePointer)
+TEST(LuaScriptMemoryPool, ReallocateShrinkKeepsSamePointer)
 {
-    DroneScriptMemoryPool pool(4096);
+    LuaScriptMemoryPool pool(4096);
     void* p = pool.allocate(128);
     ASSERT_NE(p, nullptr);
     void* shrunk = pool.reallocate(p, 128, 8);
     EXPECT_EQ(shrunk, p);
 }
 
-TEST(DroneScriptMemoryPool, LuaAllocDispatchesAllocFreeAndRealloc)
+TEST(LuaScriptMemoryPool, LuaAllocDispatchesAllocFreeAndRealloc)
 {
-    DroneScriptMemoryPool pool(4096);
+    LuaScriptMemoryPool pool(4096);
 
-    void* allocated = DroneScriptMemoryPool::luaAlloc(&pool, nullptr, 0, 64);
+    void* allocated = LuaScriptMemoryPool::luaAlloc(&pool, nullptr, 0, 64);
     ASSERT_NE(allocated, nullptr);
     EXPECT_EQ(pool.bytesInUse(), 64u);
 
-    void* grown = DroneScriptMemoryPool::luaAlloc(&pool, allocated, 64, 256);
+    void* grown = LuaScriptMemoryPool::luaAlloc(&pool, allocated, 64, 256);
     ASSERT_NE(grown, nullptr);
 
-    void* freed = DroneScriptMemoryPool::luaAlloc(&pool, grown, 256, 0);
+    void* freed = LuaScriptMemoryPool::luaAlloc(&pool, grown, 256, 0);
     EXPECT_EQ(freed, nullptr);
     EXPECT_EQ(pool.bytesInUse(), 0u);
 }

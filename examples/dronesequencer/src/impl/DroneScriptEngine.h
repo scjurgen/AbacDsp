@@ -14,7 +14,7 @@
 #include <string_view>
 #include <vector>
 
-#include "DroneScriptMemoryPool.h"
+#include "LuaScriptMemoryPool.h"
 
 struct DroneNote
 {
@@ -256,7 +256,7 @@ class DroneScriptEngine
         }
     }
 
-    DroneScriptMemoryPool m_pool;
+    LuaScriptMemoryPool m_pool;
     std::unique_ptr<lua_State, LuaStateDeleter> m_state;
     sol::state_view m_lua;
     sol::protected_function m_nextNotesFn;
@@ -279,7 +279,7 @@ class DroneScriptEngine
 
 inline DroneScriptEngine::DroneScriptEngine(const size_t poolBytes)
     : m_pool(poolBytes)
-    , m_state(lua_newstate(&DroneScriptMemoryPool::luaAlloc, &m_pool))
+    , m_state(lua_newstate(&LuaScriptMemoryPool::luaAlloc, &m_pool))
     , m_lua(m_state.get())
 {
     assert(m_state != nullptr);
