@@ -62,6 +62,30 @@ def drop_choices(item: dict[str, Any]) -> list[str]:
         return list(item['listitems'])
     return [str(item['listitems']).format(i + 1) for i in range(item.get('count', 0))]
 
+def luacontrolarea_pool_ports(item: dict[str, Any]) -> list[dict[str, Any]]:
+    """The hidden APVTS-backed pool a LuaControlArea widget draws its dynamic
+    knobs/dropdowns/switches from - not shown in any composition, so it never gets a
+    generator-owned widget of its own. count/ccbase default to 8 pool slots starting
+    at CC16, matching DroneScriptEngine::kMaxLuaParams; keep both in sync by hand if
+    either changes."""
+    count = item.get('count', 8)
+    cc_base = item.get('ccbase', 16)
+    return [
+        {
+            'short': f'LP{idx + 1}',
+            'type': 'dial',
+            'display': f'Lua Param {idx + 1}',
+            'symbol': f'luaParam{idx + 1}',
+            'default': 0,
+            'range': [0, 1, 0, 1, False],
+            'precision': 2,
+            'unit': '',
+            'cc': {'controller': cc_base + idx},
+        }
+        for idx in range(count)
+    ]
+
+
 def enrich(blueprint: Blueprint) -> None:
     items_to_remove = []
     for item in blueprint['ports-control']:
@@ -78,6 +102,8 @@ def enrich(blueprint: Blueprint) -> None:
                 }
                 blueprint['ports-control'].append(new_item)
             items_to_remove.append(item)
+        elif item['type'] == 'luacontrolarea':
+            blueprint['ports-control'].extend(luacontrolarea_pool_ports(item))
 
     for item in items_to_remove:
         blueprint['ports-control'].remove(item)

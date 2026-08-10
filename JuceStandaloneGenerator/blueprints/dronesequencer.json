@@ -46,7 +46,10 @@
     {"short": "CUTF", "type": "dial", "display": "Filter Cutoff", "symbol": "filterCutoff", "default": 0, "range": [-60, 48, 0.1, 1, false], "precision": 1, "unit": "st"},
     {"short": "RESF", "type": "dial", "display": "Filter Resonance", "symbol": "filterResonance", "default": 0.1, "range": [0, 2, 0.01, 1, false], "precision": 2, "unit": ""},
     {"short": "CONTF", "type": "dial", "display": "Contour F", "symbol": "contourFilter", "default": 0, "range": [-4, 4, 0.01, 1, false], "precision": 2, "unit": "oct"},
-    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"}
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"},
+    {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+
+    {"short": "LUACTL", "type": "luacontrolarea", "display": "Lua Controls", "symbol": "luaControls"}
   ],
   "layout": {
     "WINDOW_WIDTH": "1400",
@@ -56,7 +59,7 @@
   },
   "performance-page": {
     "type": "=3",
-    "composition": "R=(1:1:2) A1=(PLAY,BPM,VOL,SCPT) A2=(RDRY,RWET,RSZ,RDEC) A3=(FFT)"
+    "composition": "R=(1:1:2) A1=(PLAY,BPM,VOL,SCPT,CPU) A2=(RDRY,RWET,RSZ,RDEC) A3=(LUACTL,FFT)"
   },
   "extra_timer_callbacks": [
     "bpmDial.setEnabled(!processorRef.isHostSynced());",
@@ -64,7 +67,8 @@
     "playStopSwitch.setEnabled(!processorRef.isHostSynced());",
     "if (processorRef.isHostSynced()) { playStopSwitch.setToggleState(processorRef.getIsEffectivelyPlaying(), juce::dontSendNotification); }",
     "pollScriptError();",
-    "pollLlmAssistWatcher();"
+    "pollLlmAssistWatcher();",
+    "if (processorRef.hasRunner()) { luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()), valueTreeState); }"
   ],
   "processor_forwards": [
     {"name": "getCurrentBpm", "call": "currentBpm", "type": "float", "default": "120.f"},
@@ -72,8 +76,10 @@
     {"name": "getIsEffectivelyPlaying", "call": "effectivePlaying", "type": "bool"},
     {"name": "hasScriptError", "type": "bool"},
     {"name": "scriptErrorMessage", "call": "scriptError", "type": "std::string"},
-    {"name": "getScriptSkeleton", "call": "scriptSkeleton", "type": "std::string"}
+    {"name": "getScriptSkeleton", "call": "scriptSkeleton", "type": "std::string"},
+    {"name": "getLuaUiParamSlots", "call": "uiParamSlots", "type": "DroneScriptEngine::UiParamSlots"}
   ],
+  "extra_ui_includes": ["impl/LuaControlBridge.h"],
   "host_transport": true,
   "CPP":
   {

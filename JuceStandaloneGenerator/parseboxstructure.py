@@ -115,9 +115,15 @@ def construct_boxes(m: dict, section: str = 'layout'):
 
         for item in areas[idx]:
             p = findShortEntry(item["symbol"])
-            # "script" is the one type whose widget suffix ("Button") isn't just its own
-            # capitalized name - every other type's suffix happens to equal that already.
-            widget_suffix = "Button" if p['type'] == 'script' else p['type'].capitalize()
+            # "script"/"luacontrolarea" are the two types whose widget suffix isn't just
+            # their own capitalized name - every other type's suffix happens to equal
+            # that already.
+            if p['type'] == 'script':
+                widget_suffix = "Button"
+            elif p['type'] == 'luacontrolarea':
+                widget_suffix = "LuaControlArea"
+            else:
+                widget_suffix = p['type'].capitalize()
             var = f"""{p["symbol"]}{widget_suffix}"""
             flex_line = f"""box.items.add(juce::FlexItem({var})"""
             match p['type']:
@@ -130,7 +136,7 @@ def construct_boxes(m: dict, section: str = 'layout'):
                         flex_line += f".withFlex(0).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::stretch)"
                     else:
                         flex_line += f".withFlex(1).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
-                case 'gauge':
+                case 'gauge' | 'luacontrolarea':
                     if item['flex'] == 'abs':
                         flex_line += f""".{withDirection}({item["size"]})"""
                     else:

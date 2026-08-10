@@ -107,6 +107,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::center)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(cpuGauge).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[0].toFloat());
             }
             {
@@ -125,6 +126,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
                 box.flexDirection = juce::FlexBox::Direction::row;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(luaControlsLuaControlArea).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(spectrogramGauge).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[2].toFloat());
             }
@@ -234,6 +236,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         if (processorRef.hasRunner())
         {
             spectrogramGauge.update(processorRef.getSpectrogram());
+            cpuGauge.update(processorRef.getCpuLoad());
 
             bpmDial.setEnabled(!processorRef.isHostSynced());
             if (processorRef.isHostSynced())
@@ -247,6 +250,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             }
             pollScriptError();
             pollLlmAssistWatcher();
+            if (processorRef.hasRunner())
+            {
+                luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()),
+                                                  valueTreeState);
+            }
+            processorRef.consumeLastLearnedCc();
         }
     }
 
@@ -352,6 +361,81 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         contourFilterDial.setLabelText(juce::String::fromUTF8("Contour F"));
         addAndMakeVisible(spectrogramGauge);
         spectrogramGauge.setLabelText(juce::String::fromUTF8("Spectrogram"));
+        addAndMakeVisible(cpuGauge);
+        cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
+        addAndMakeVisible(luaControlsLuaControlArea);
+        addAndMakeVisible(luaParam1Dial);
+        luaParam1Dial.reset(valueTreeState, "luaParam1");
+        luaParam1Dial.setLabelText(juce::String::fromUTF8("Lua Param 1"));
+        luaParam1Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam1); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam1); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam1, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam1); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam1); }});
+        addAndMakeVisible(luaParam2Dial);
+        luaParam2Dial.reset(valueTreeState, "luaParam2");
+        luaParam2Dial.setLabelText(juce::String::fromUTF8("Lua Param 2"));
+        luaParam2Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam2); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam2); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam2, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam2); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam2); }});
+        addAndMakeVisible(luaParam3Dial);
+        luaParam3Dial.reset(valueTreeState, "luaParam3");
+        luaParam3Dial.setLabelText(juce::String::fromUTF8("Lua Param 3"));
+        luaParam3Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam3); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam3); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam3, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam3); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam3); }});
+        addAndMakeVisible(luaParam4Dial);
+        luaParam4Dial.reset(valueTreeState, "luaParam4");
+        luaParam4Dial.setLabelText(juce::String::fromUTF8("Lua Param 4"));
+        luaParam4Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam4); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam4); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam4, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam4); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam4); }});
+        addAndMakeVisible(luaParam5Dial);
+        luaParam5Dial.reset(valueTreeState, "luaParam5");
+        luaParam5Dial.setLabelText(juce::String::fromUTF8("Lua Param 5"));
+        luaParam5Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam5); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam5); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam5, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam5); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam5); }});
+        addAndMakeVisible(luaParam6Dial);
+        luaParam6Dial.reset(valueTreeState, "luaParam6");
+        luaParam6Dial.setLabelText(juce::String::fromUTF8("Lua Param 6"));
+        luaParam6Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam6); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam6); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam6, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam6); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam6); }});
+        addAndMakeVisible(luaParam7Dial);
+        luaParam7Dial.reset(valueTreeState, "luaParam7");
+        luaParam7Dial.setLabelText(juce::String::fromUTF8("Lua Param 7"));
+        luaParam7Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam7); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam7); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam7, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam7); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam7); }});
+        addAndMakeVisible(luaParam8Dial);
+        luaParam8Dial.reset(valueTreeState, "luaParam8");
+        luaParam8Dial.setLabelText(juce::String::fromUTF8("Lua Param 8"));
+        luaParam8Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam8); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam8); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam8, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam8); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam8); }});
 
         addAndMakeVisible(m_pagePerformanceButton);
         addAndMakeVisible(m_pageSettingsButton);
@@ -406,6 +490,16 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             filterResonanceDial.setVisible(false);
             contourFilterDial.setVisible(false);
             spectrogramGauge.setVisible(true);
+            cpuGauge.setVisible(true);
+            luaControlsLuaControlArea.setVisible(true);
+            luaParam1Dial.setVisible(false);
+            luaParam2Dial.setVisible(false);
+            luaParam3Dial.setVisible(false);
+            luaParam4Dial.setVisible(false);
+            luaParam5Dial.setVisible(false);
+            luaParam6Dial.setVisible(false);
+            luaParam7Dial.setVisible(false);
+            luaParam8Dial.setVisible(false);
         }
         else
         {
@@ -442,6 +536,16 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             filterResonanceDial.setVisible(true);
             contourFilterDial.setVisible(true);
             spectrogramGauge.setVisible(false);
+            cpuGauge.setVisible(false);
+            luaControlsLuaControlArea.setVisible(false);
+            luaParam1Dial.setVisible(false);
+            luaParam2Dial.setVisible(false);
+            luaParam3Dial.setVisible(false);
+            luaParam4Dial.setVisible(false);
+            luaParam5Dial.setVisible(false);
+            luaParam6Dial.setVisible(false);
+            luaParam7Dial.setVisible(false);
+            luaParam8Dial.setVisible(false);
         }
         resized();
     }
@@ -607,6 +711,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         juce::LookAndFeel::setDefaultLookAndFeel(m_laf.get());
         backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
         spectrogramGauge.setGradientPreset(preset);
+        cpuGauge.updateColors();
 
         repaint();
     }
@@ -1222,6 +1327,16 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial filterResonanceDial{this};
     CustomRotaryDial contourFilterDial{this};
     SpectrogramDisplay spectrogramGauge{AppSettings::loadTheme()};
+    CpuGauge cpuGauge{};
+    LuaControlArea luaControlsLuaControlArea{};
+    CustomRotaryDial luaParam1Dial{this};
+    CustomRotaryDial luaParam2Dial{this};
+    CustomRotaryDial luaParam3Dial{this};
+    CustomRotaryDial luaParam4Dial{this};
+    CustomRotaryDial luaParam5Dial{this};
+    CustomRotaryDial luaParam6Dial{this};
+    CustomRotaryDial luaParam7Dial{this};
+    CustomRotaryDial luaParam8Dial{this};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
 };

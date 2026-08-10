@@ -331,6 +331,229 @@ TEST(DroneScriptEngine, NoteFieldsRoundTripThroughLua)
     EXPECT_FLOAT_EQ(note.delayMs, -15.f);
 }
 
+TEST(DroneScriptEngine, UiParametersStartUnclaimed)
+{
+    DroneScriptEngine engine;
+    for (const auto& slot : engine.uiParamSlots())
+    {
+        EXPECT_FALSE(slot.claimed);
+    }
+}
+
+TEST(DroneScriptEngine, RegisteringOneKnobParameterClaimsSlotZero)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        UICreateParameterSet({
+            { id = "cutoff", name = "Cutoff", type = "knob",
+              range = { min = 200, max = 8000, step = 1, skew = 0.3 },
+              default = 1000, unit = "Hz", description = "Filter cutoff" },
+        })
+        function NextNotes() return {} end
+    )"));
+    const auto& slot = engine.uiParamSlots()[0];
+    EXPECT_TRUE(slot.claimed);
+    EXPECT_EQ(slot.id, "cutoff");
+    EXPECT_EQ(slot.name, "Cutoff");
+    EXPECT_EQ(slot.type, LuaUiParamType::Knob);
+    EXPECT_FLOAT_EQ(slot.rangeMin, 200.f);
+    EXPECT_FLOAT_EQ(slot.rangeMax, 8000.f);
+    EXPECT_FLOAT_EQ(slot.rangeSkew, 0.3f);
+    EXPECT_FLOAT_EQ(slot.defaultValue, 1000.f);
+    EXPECT_EQ(slot.unit, "Hz");
+    EXPECT_EQ(slot.description, "Filter cutoff");
+    for (size_t i = 1; i < DroneScriptEngine::kMaxLuaParams; ++i)
+    {
+        EXPECT_FALSE(engine.uiParamSlots()[i].claimed);
+    }
+}
+
+TEST(DroneScriptEngine, RegisteringSwitchAndDropParameters)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        UICreateParameterSet({
+            { id = "sync", name = "Sync", type = "switch", default = 1 },
+            { id = "wave", name = "Waveform", type = "drop",
+              items = { "Sine", "Saw", "Square" }, default = 2 },
+        })
+        function NextNotes() return {} end
+    )"));
+    const auto& sync = engine.uiParamSlots()[0];
+    EXPECT_EQ(sync.type, LuaUiParamType::Switch);
+    EXPECT_FLOAT_EQ(sync.rangeMin, 0.f);
+    EXPECT_FLOAT_EQ(sync.rangeMax, 1.f);
+    EXPECT_FLOAT_EQ(sync.defaultValue, 1.f);
+
+    const auto& wave = engine.uiParamSlots()[1];
+    EXPECT_EQ(wave.type, LuaUiParamType::Drop);
+    ASSERT_EQ(wave.items.size(), 3u);
+    EXPECT_EQ(wave.items[0], "Sine");
+    EXPECT_EQ(wave.items[2], "Square");
+    EXPECT_FLOAT_EQ(wave.rangeMin, 0.f);
+    EXPECT_FLOAT_EQ(wave.rangeMax, 2.f);
+    EXPECT_FLOAT_EQ(wave.defaultValue, 2.f);
+}
+
+TEST(DroneScriptEngine, OverflowingParameterPoolFailsScriptLoad)
+{
+    DroneScriptEngine engine;
+    std::string script = "UICreateParameterSet({\n";
+    for (size_t i = 0; i < DroneScriptEngine::kMaxLuaParams + 1; ++i)
+    {
+        script += "{ id = \"p" + std::to_string(i) + "\", type = \"switch\" },\n";
+    }
+    script += "})\nfunction NextNotes() return {} end\n";
+
+    EXPECT_FALSE(engine.loadScript(script));
+    EXPECT_TRUE(engine.hasError());
+    for (const auto& slot : engine.uiParamSlots())
+    {
+        EXPECT_FALSE(slot.claimed) << "stub script's empty parameter set should still be live";
+    }
+}
+
+TEST(DroneScriptEngine, DuplicateParameterIdsFailScriptLoad)
+{
+    DroneScriptEngine engine;
+    EXPECT_FALSE(engine.loadScript(R"(
+        UICreateParameterSet({
+            { id = "gain", type = "switch" },
+            { id = "gain", type = "switch" },
+        })
+        function NextNotes() return {} end
+    )"));
+    EXPECT_TRUE(engine.hasError());
+}
+
+TEST(DroneScriptEngine, ReloadingWithoutUICreateParameterSetClearsPreviousParameters)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        UICreateParameterSet({ { id = "gain", type = "switch" } })
+        function NextNotes() return {} end
+    )"));
+    ASSERT_TRUE(engine.uiParamSlots()[0].claimed);
+
+    ASSERT_TRUE(engine.loadScript("function NextNotes() return {} end"));
+    for (const auto& slot : engine.uiParamSlots())
+    {
+        EXPECT_FALSE(slot.claimed);
+    }
+}
+
+TEST(DroneScriptEngine, FailedReloadKeepsPreviousParameterSet)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        UICreateParameterSet({ { id = "gain", type = "switch" } })
+        function NextNotes() return {} end
+    )"));
+    ASSERT_TRUE(engine.uiParamSlots()[0].claimed);
+
+    EXPECT_FALSE(engine.loadScript("function NextNotes( this is not lua"));
+    EXPECT_TRUE(engine.uiParamSlots()[0].claimed) << "previous parameter set should still be live";
+    EXPECT_EQ(engine.uiParamSlots()[0].id, "gain");
+}
+
+TEST(DroneScriptEngine, NotifyUiParameterChangedDispatchesToNamedCallback)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        UICreateParameterSet({
+            { id = "cutoff", type = "knob", range = { min = 0, max = 1, step = 0, skew = 1 }, default = 0 },
+        })
+        LastCutoff = -1
+        function OnCutoffChanged(value) LastCutoff = value end
+        function NextNotes() return { { note = LastCutoff, velocity = 0, channel = 0, length = 0, delay = 0 } } end
+    )"));
+    engine.notifyUiParameterChanged(0, 0.75f);
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 0.75f);
+}
+
+// Regression: the notify value must be mapped through the slot's declared display
+// range, not handed through raw - invisible for a [0,1] range (test above), but breaks
+// anything else, e.g. a "drop" slot's discrete index comparisons.
+TEST(DroneScriptEngine, NotifyUiParameterChangedMapsThroughDeclaredRange)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        UICreateParameterSet({
+            { id = "pitch", type = "knob", range = { min = -12, max = 12, step = 1, skew = 1 }, default = 0 },
+            { id = "pattern", type = "drop", items = { "Up", "Down", "Random" }, default = 0 },
+        })
+        LastPitch = -1000
+        LastPattern = -1
+        function OnPitchChanged(value) LastPitch = value end
+        function OnPatternChanged(value) LastPattern = value end
+        function NextNotes()
+            return { { note = LastPitch, velocity = LastPattern, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+
+    engine.notifyUiParameterChanged(0, 0.75f); // pitch: -12..12, raw 0.75 -> display 6
+    engine.notifyUiParameterChanged(1, 0.5f);  // pattern: 0..2 (3 items), raw 0.5 -> display 1 ("Down")
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 6.f);
+    EXPECT_FLOAT_EQ(result.notes[0].velocity, 1.f);
+}
+
+TEST(DroneScriptEngine, NotifyUiParameterChangedOnUnclaimedOrOutOfRangeSlotIsIgnored)
+{
+    DroneScriptEngine engine;
+    engine.notifyUiParameterChanged(0, 1.f);
+    engine.notifyUiParameterChanged(DroneScriptEngine::kMaxLuaParams, 1.f);
+    engine.notifyUiParameterChanged(DroneScriptEngine::kMaxLuaParams + 100, 1.f);
+    EXPECT_FALSE(engine.hasError());
+}
+
+TEST(DroneScriptEngine, InvalidParameterIdIsRejected)
+{
+    DroneScriptEngine engine;
+    EXPECT_FALSE(engine.loadScript(R"(
+        UICreateParameterSet({ { id = "1bad", type = "switch" } })
+        function NextNotes() return {} end
+    )"));
+    EXPECT_TRUE(engine.hasError());
+}
+
+TEST(DroneScriptEngine, MissingRequiredFieldIsRejected)
+{
+    DroneScriptEngine engine;
+    EXPECT_FALSE(engine.loadScript(R"(
+        UICreateParameterSet({ { id = "noType" } })
+        function NextNotes() return {} end
+    )"));
+    EXPECT_TRUE(engine.hasError());
+}
+
+TEST(DroneScriptEngine, KnobRangeMustBeNonInverted)
+{
+    DroneScriptEngine engine;
+    EXPECT_FALSE(engine.loadScript(R"(
+        UICreateParameterSet({
+            { id = "bad", type = "knob", range = { min = 5, max = 5, step = 1, skew = 1 } },
+        })
+        function NextNotes() return {} end
+    )"));
+    EXPECT_TRUE(engine.hasError());
+}
+
+TEST(DroneScriptEngine, DefaultValueOutsideRangeIsRejected)
+{
+    DroneScriptEngine engine;
+    EXPECT_FALSE(engine.loadScript(R"(
+        UICreateParameterSet({
+            { id = "bad", type = "knob", range = { min = 0, max = 1, step = 0, skew = 1 }, default = 5 },
+        })
+        function NextNotes() return {} end
+    )"));
+    EXPECT_TRUE(engine.hasError());
+}
+
 TEST(DroneScriptEngine, RepeatedCallsDoNotGrowPoolUsageUnbounded)
 {
     DroneScriptEngine engine;

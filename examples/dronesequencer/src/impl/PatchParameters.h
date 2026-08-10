@@ -44,7 +44,15 @@ struct PatchParameters
         levelSustainFilter, // dial
         filterCutoff      , // dial
         filterResonance   , // dial
-        contourFilter      // dial
+        contourFilter     , // dial
+        luaParam1         , // dial
+        luaParam2         , // dial
+        luaParam3         , // dial
+        luaParam4         , // dial
+        luaParam5         , // dial
+        luaParam6         , // dial
+        luaParam7         , // dial
+        luaParam8          // dial
     };
 float level{0.0f};
 float tuning{440.0f};
@@ -78,6 +86,14 @@ float levelSustainFilter{0.0f};
 float filterCutoff{0.0f};
 float filterResonance{0.1f};
 float contourFilter{0.0f};
+float luaParam1{0.0f};
+float luaParam2{0.0f};
+float luaParam3{0.0f};
+float luaParam4{0.0f};
+float luaParam5{0.0f};
+float luaParam6{0.0f};
+float luaParam7{0.0f};
+float luaParam8{0.0f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
@@ -111,7 +127,15 @@ float contourFilter{0.0f};
 "levelSustainFilter",
 "filterCutoff",
 "filterResonance",
-"contourFilter"
+"contourFilter",
+"luaParam1",
+"luaParam2",
+"luaParam3",
+"luaParam4",
+"luaParam5",
+"luaParam6",
+"luaParam7",
+"luaParam8"
     });
 //        "onOff", "patch", "input", "modulationDepth", "mix", "density", "threshold", "knee"});
 
@@ -162,6 +186,14 @@ float contourFilter{0.0f};
         else if constexpr (ParamId == Id::filterCutoff) return filterCutoff;
         else if constexpr (ParamId == Id::filterResonance) return filterResonance;
         else if constexpr (ParamId == Id::contourFilter) return contourFilter;
+        else if constexpr (ParamId == Id::luaParam1) return luaParam1;
+        else if constexpr (ParamId == Id::luaParam2) return luaParam2;
+        else if constexpr (ParamId == Id::luaParam3) return luaParam3;
+        else if constexpr (ParamId == Id::luaParam4) return luaParam4;
+        else if constexpr (ParamId == Id::luaParam5) return luaParam5;
+        else if constexpr (ParamId == Id::luaParam6) return luaParam6;
+        else if constexpr (ParamId == Id::luaParam7) return luaParam7;
+        else if constexpr (ParamId == Id::luaParam8) return luaParam8;
 
     }
 
@@ -237,6 +269,22 @@ break;
 break;
  case Id::contourFilter: if (!isEqual(get<Id::contourFilter>(), value)) {get<Id::contourFilter>() = value;m_modified = true;}
 break;
+ case Id::luaParam1: if (!isEqual(get<Id::luaParam1>(), value)) {get<Id::luaParam1>() = value;m_modified = true;}
+break;
+ case Id::luaParam2: if (!isEqual(get<Id::luaParam2>(), value)) {get<Id::luaParam2>() = value;m_modified = true;}
+break;
+ case Id::luaParam3: if (!isEqual(get<Id::luaParam3>(), value)) {get<Id::luaParam3>() = value;m_modified = true;}
+break;
+ case Id::luaParam4: if (!isEqual(get<Id::luaParam4>(), value)) {get<Id::luaParam4>() = value;m_modified = true;}
+break;
+ case Id::luaParam5: if (!isEqual(get<Id::luaParam5>(), value)) {get<Id::luaParam5>() = value;m_modified = true;}
+break;
+ case Id::luaParam6: if (!isEqual(get<Id::luaParam6>(), value)) {get<Id::luaParam6>() = value;m_modified = true;}
+break;
+ case Id::luaParam7: if (!isEqual(get<Id::luaParam7>(), value)) {get<Id::luaParam7>() = value;m_modified = true;}
+break;
+ case Id::luaParam8: if (!isEqual(get<Id::luaParam8>(), value)) {get<Id::luaParam8>() = value;m_modified = true;}
+break;
 
             default:
                 break;
@@ -309,5 +357,13 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         levelSustainFilter, // dial
         filterCutoff      , // dial
         filterResonance   , // dial
-        contourFilter      // dial
+        contourFilter     , // dial
+        luaParam1         , // dial
+        luaParam2         , // dial
+        luaParam3         , // dial
+        luaParam4         , // dial
+        luaParam5         , // dial
+        luaParam6         , // dial
+        luaParam7         , // dial
+        luaParam8          // dial
 )

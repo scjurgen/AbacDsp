@@ -84,6 +84,7 @@ CPP_SOURCE_FILES_FIXED = [
     "inc/WaveformMeter.h",
     "inc/SliceWaveDisplay.h",
     "inc/CircularBarDisplay.h",
+    "inc/LuaControlArea.h",
     "inc/AppSettings.h",
     "impl/EffectBase.h",
 ]

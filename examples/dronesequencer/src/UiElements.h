@@ -23,7 +23,9 @@
 #include "inc/WaveformMeter.h"
 #include "inc/SliceWaveDisplay.h"
 #include "inc/CircularBarDisplay.h"
+#include "inc/LuaControlArea.h"
 #include "inc/AppSettings.h"
 #include "impl/EffectBase.h"
+#include "impl/LuaControlBridge.h"
 
 #include "inc/LookAndFeel.h"

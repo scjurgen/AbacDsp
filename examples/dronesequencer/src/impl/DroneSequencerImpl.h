@@ -123,9 +123,16 @@ class DroneSequencerImpl final : public EffectBase
         m_divisionIndex = clampDivisionIndex(index);
     }
 
+    // A reload resets the script's Lua globals, so resendUiParameters() re-syncs it to
+    // each claimed slot's current value - otherwise it stays believing coded defaults.
     bool setScript(const std::string_view source)
     {
-        return m_scriptEngine.loadScript(source);
+        const bool ok = m_scriptEngine.loadScript(source);
+        if (ok)
+        {
+            resendUiParameters();
+        }
+        return ok;
     }
 
     [[nodiscard]] bool hasScriptError() const noexcept
@@ -142,6 +149,51 @@ class DroneSequencerImpl final : public EffectBase
     [[nodiscard]] static std::string scriptSkeleton()
     {
         return std::string(DroneScriptEngine::kFullSkeletonScript);
+    }
+
+    [[nodiscard]] const DroneScriptEngine::UiParamSlots& uiParamSlots() const noexcept
+    {
+        return m_scriptEngine.uiParamSlots();
+    }
+
+    void setLuaParam1(const float value) noexcept
+    {
+        m_luaParamValues[0] = value;
+    }
+
+    void setLuaParam2(const float value) noexcept
+    {
+        m_luaParamValues[1] = value;
+    }
+
+    void setLuaParam3(const float value) noexcept
+    {
+        m_luaParamValues[2] = value;
+    }
+
+    void setLuaParam4(const float value) noexcept
+    {
+        m_luaParamValues[3] = value;
+    }
+
+    void setLuaParam5(const float value) noexcept
+    {
+        m_luaParamValues[4] = value;
+    }
+
+    void setLuaParam6(const float value) noexcept
+    {
+        m_luaParamValues[5] = value;
+    }
+
+    void setLuaParam7(const float value) noexcept
+    {
+        m_luaParamValues[6] = value;
+    }
+
+    void setLuaParam8(const float value) noexcept
+    {
+        m_luaParamValues[7] = value;
     }
 
     // Channel Voice messages only (status 0x80-0xEF): their length is fully determined
@@ -315,18 +367,17 @@ class DroneSequencerImpl final : public EffectBase
             dry[i] = m_ensemble.step();
         }
 
-        std::array<float, BlockSize> wetLeft{};
-        std::array<float, BlockSize> wetRight{};
-        m_fdn.processBlockSplit(dry.data(), wetLeft.data(), wetRight.data());
-        m_reverbShelfLow[0].processBlock(wetLeft.data(), wetLeft.data(), BlockSize);
-        m_reverbShelfLow[1].processBlock(wetRight.data(), wetRight.data(), BlockSize);
-        m_reverbShelfHigh[0].processBlock(wetLeft.data(), wetLeft.data(), BlockSize);
-        m_reverbShelfHigh[1].processBlock(wetRight.data(), wetRight.data(), BlockSize);
-
-        for (size_t i = 0; i < BlockSize; ++i)
+        std::array<std::array<float, BlockSize>, 2> wet{};
+        m_fdn.processBlockSplit(dry.data(), wet[0].data(), wet[1].data());
+        for (size_t c = 0; c < 2; ++c)
         {
-            out(i, 0) = (dry[i] * m_reverbDryGain + wetLeft[i] * m_reverbWetGain) * m_level;
-            out(i, 1) = (dry[i] * m_reverbDryGain + wetRight[i] * m_reverbWetGain) * m_level;
+            m_reverbShelfLow[c].processBlock(wet[c].data(), wet[c].data(), BlockSize);
+            m_reverbShelfHigh[c].processBlock(wet[c].data(), wet[c].data(), BlockSize);
+
+            for (size_t i = 0; i < BlockSize; ++i)
+            {
+                out(i, c) = (dry[i] * m_reverbDryGain + wet[c][i] * m_reverbWetGain) * m_level;
+            }
         }
     }
 
@@ -405,6 +456,35 @@ class DroneSequencerImpl final : public EffectBase
     }
 #pragma GCC diagnostic pop
 
+    // Same exact-equality reasoning as notifyTimingIfChanged(). Notifying a claimed and
+    // an unclaimed slot are equally cheap - DroneScriptEngine no-ops for an unclaimed one.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+    void notifyUiParametersIfChanged() noexcept
+    {
+        for (size_t i = 0; i < DroneScriptEngine::kMaxLuaParams; ++i)
+        {
+            if (m_luaParamValues[i] == m_lastNotifiedLuaParamValues[i])
+            {
+                continue;
+            }
+            m_scriptEngine.notifyUiParameterChanged(i, m_luaParamValues[i]);
+            m_lastNotifiedLuaParamValues[i] = m_luaParamValues[i];
+        }
+    }
+#pragma GCC diagnostic pop
+
+    // Notifies every slot's current value unconditionally, unlike
+    // notifyUiParametersIfChanged() - see setScript()'s comment for why.
+    void resendUiParameters() noexcept
+    {
+        for (size_t i = 0; i < DroneScriptEngine::kMaxLuaParams; ++i)
+        {
+            m_scriptEngine.notifyUiParameterChanged(i, m_luaParamValues[i]);
+            m_lastNotifiedLuaParamValues[i] = m_luaParamValues[i];
+        }
+    }
+
     // OnStart()/OnStop() fire on any effective start/stop transition - the manual Play
     // switch toggling in manual mode, or the host transport's play state when Host Sync
     // is on - so a script can reset its own counters/state. JUCE's transport only
@@ -436,6 +516,7 @@ class DroneSequencerImpl final : public EffectBase
         m_sequencer.setPlaying(effectivePlaying());
         notifyTransportIfChanged();
         notifyTimingIfChanged(bpm);
+        notifyUiParametersIfChanged();
         updateLfoSpeeds();
         updateSustainFeed();
     }
@@ -502,4 +583,8 @@ class DroneSequencerImpl final : public EffectBase
     float m_attackFilterMsecs{10.f};
     float m_decayFilterMsecs{10.f};
     float m_levelSustainFilter{0.f};
+
+    std::array<float, DroneScriptEngine::kMaxLuaParams> m_luaParamValues{};
+    std::array<float, DroneScriptEngine::kMaxLuaParams> m_lastNotifiedLuaParamValues{-1.f, -1.f, -1.f, -1.f,
+                                                                                     -1.f, -1.f, -1.f, -1.f};
 };

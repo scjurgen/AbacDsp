@@ -78,7 +78,6 @@ TEST(DroneSequencer, NegativeDelayFiresEarlierThanZeroDelayInTheSameRequest)
             }
         end
     )"));
-    seq.setVoices(2);
     seq.setIntervalMs(200.f);
     seq.setPlaying(true);
 
@@ -111,7 +110,6 @@ TEST(DroneSequencer, OutOfRangeChannelClampsToLastActiveVoiceInsteadOfCrashing)
             return { { note = 60, velocity = 0.8, channel = 99, length = 0, delay = 0 } }
         end
     )"));
-    seq.setVoices(2);
     seq.setIntervalMs(50.f);
     seq.setPlaying(true);
 
@@ -119,11 +117,11 @@ TEST(DroneSequencer, OutOfRangeChannelClampsToLastActiveVoiceInsteadOfCrashing)
     {
         seq.step(ensemble, script);
     }
-    EXPECT_TRUE(ensemble.voice(1).isActive()) << "channel 99 should clamp to the last active voice (index 1)";
-    for (size_t v = 2; v < kMaxVoices; ++v)
+    for (size_t v = 0; v < kMaxVoices - 1; ++v)
     {
-        EXPECT_FALSE(ensemble.voice(v).isActive()) << "voices beyond setVoices() must never be touched";
+        EXPECT_FALSE(ensemble.voice(v).isActive()) << "voices beyond setVoices() must never be touched: " << v;
     }
+    EXPECT_TRUE(ensemble.voice(kMaxVoices - 1).isActive());
 }
 
 TEST(DroneSequencer, AllNotesInOneRequestGetScheduled)
@@ -141,7 +139,6 @@ TEST(DroneSequencer, AllNotesInOneRequestGetScheduled)
             }
         end
     )"));
-    seq.setVoices(kMaxVoices);
     seq.setIntervalMs(50.f);
     seq.setPlaying(true);
 
@@ -164,7 +161,6 @@ TEST(DroneSequencer, TransposeAndDetuneDoNotBreakTriggeringPipeline)
     TestSequencer seq(kSampleRate);
     TestEnsemble ensemble(kSampleRate);
     DroneScriptEngine script;
-    seq.setVoices(1);
     seq.setIntervalMs(50.f);
     seq.setTranspose(12.f);
     seq.setDetuneCents(0, 25.f);
@@ -187,7 +183,6 @@ TEST(DroneSequencer, PositiveLengthRunsWithoutFaultsAcrossManyTicks)
             return { { note = 60, velocity = 0.6, channel = 0, length = 15, delay = 0 } }
         end
     )"));
-    seq.setVoices(1);
     seq.setIntervalMs(20.f);
     seq.setPlaying(true);
 

@@ -2,13 +2,17 @@
 
 #define SOL_USING_CXX_LUA 1
 
+#include <algorithm>
 #include <array>
 #include <cassert>
+#include <cctype>
+#include <cmath>
 #include <cstddef>
 #include <memory>
 #include <sol/sol.hpp>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "DroneScriptMemoryPool.h"
 
@@ -21,18 +25,56 @@ struct DroneNote
     float delayMs{0.f};
 };
 
+enum class LuaUiParamType
+{
+    Knob,
+    Drop,
+    Switch
+};
+
+// One slot in the fixed UI-parameter pool a script can claim via UICreateParameterSet().
+// Unclaimed (claimed == false) slots are not shown; range/items/etc. are only meaningful
+// once claimed. "id" builds the script's per-parameter callback name (On<Id>Changed);
+// "name" is the display label.
+struct LuaUiParamSlot
+{
+    bool claimed{false};
+    std::string id;
+    std::string name;
+    LuaUiParamType type{LuaUiParamType::Knob};
+    float rangeMin{0.f};
+    float rangeMax{1.f};
+    float rangeStep{0.f};
+    float rangeSkew{1.f};
+    float defaultValue{0.f};
+    std::string unit;
+    std::string description;
+    std::vector<std::string> items;
+
+    // Detects "did the script's declared parameter set change since the last rebuild"
+    // (LuaControlArea); exact float equality is intentional, not a tolerance check.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+    bool operator==(const LuaUiParamSlot&) const = default;
+#pragma GCC diagnostic pop
+};
+
 /**
  * Owns a pool-allocated Lua state and the sol2 bindings for a drone-sequencer script.
  * nextNotes() and notifyTiming() are the audio-thread-safe entry points: they read only
  * numeric fields out of Lua tables and never throw, so nothing beyond the fixed script
  * arena allocates. loadScript() recompiles the script in place and is not real-time
  * safe (it may touch the process heap) - callers apply a pending script off the audio
- * thread, or accept the one-off cost of doing so on it.
+ * thread, or accept the one-off cost of doing so on it. notifyUiParameterChanged() is
+ * likewise audio-thread-safe; a script claims UI parameter slots via the Lua-side
+ * UICreateParameterSet() during loadScript(), not from the audio thread.
  */
 class DroneScriptEngine
 {
   public:
     static constexpr size_t kMaxNotesPerRequest{8};
+    static constexpr size_t kMaxLuaParams{8};
+    using UiParamSlots = std::array<LuaUiParamSlot, kMaxLuaParams>;
 
     // clang-format off
     static constexpr std::string_view kStubScript =
@@ -134,6 +176,15 @@ class DroneScriptEngine
     };
     [[nodiscard]] NextNotesResult nextNotes() noexcept;
 
+    [[nodiscard]] const UiParamSlots& uiParamSlots() const noexcept
+    {
+        return m_uiParamSlots;
+    }
+
+    // Realtime-safe: dispatches to the cached On<Id>Changed handler for this slot, if
+    // the script defined one. Silently ignored for an unclaimed or out-of-range slot.
+    void notifyUiParameterChanged(size_t slot, float value) noexcept;
+
     [[nodiscard]] bool hasError() const noexcept
     {
         return !m_lastError.empty();
@@ -170,6 +221,13 @@ class DroneScriptEngine
     };
 
     void bindFunctions();
+    void bindApiFunctions();
+    void registerUiParameterSet(const sol::table& descriptors);
+    [[nodiscard]] static LuaUiParamSlot parseUiParamSlot(const sol::table& entry, size_t index);
+    [[nodiscard]] static std::string capitalizeFirst(std::string_view text);
+    // Maps raw 0..1 through a slot's display range (mirrors LuaControlArea.h's
+    // juce::NormalisableRange use, reimplemented here since this file stays JUCE-free).
+    [[nodiscard]] static float mapNormalizedToDisplay(const LuaUiParamSlot& slot, float normalized) noexcept;
 
     // Shared body for every optional-handler dispatch (notifyTiming and all the MIDI
     // notify*() methods): no-op if the script didn't define this handler, catches
@@ -213,6 +271,10 @@ class DroneScriptEngine
     sol::protected_function m_onStartFn;
     sol::protected_function m_onStopFn;
     std::string m_lastError;
+
+    UiParamSlots m_uiParamSlots{};
+    UiParamSlots m_pendingUiParamSlots{};
+    std::array<sol::protected_function, kMaxLuaParams> m_uiParamChangedFns{};
 };
 
 inline DroneScriptEngine::DroneScriptEngine(const size_t poolBytes)
@@ -222,7 +284,13 @@ inline DroneScriptEngine::DroneScriptEngine(const size_t poolBytes)
 {
     assert(m_state != nullptr);
     m_lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::table, sol::lib::string);
+    bindApiFunctions();
     loadScript(kStubScript);
+}
+
+inline void DroneScriptEngine::bindApiFunctions()
+{
+    m_lua.set_function("UICreateParameterSet", &DroneScriptEngine::registerUiParameterSet, this);
 }
 
 inline void DroneScriptEngine::bindFunctions()
@@ -238,10 +306,22 @@ inline void DroneScriptEngine::bindFunctions()
     m_onPitchBendFn = m_lua["OnPitchBend"];
     m_onStartFn = m_lua["OnStart"];
     m_onStopFn = m_lua["OnStop"];
+
+    m_uiParamSlots = m_pendingUiParamSlots;
+    for (size_t i = 0; i < kMaxLuaParams; ++i)
+    {
+        if (!m_uiParamSlots[i].claimed)
+        {
+            m_uiParamChangedFns[i] = sol::protected_function{};
+            continue;
+        }
+        m_uiParamChangedFns[i] = m_lua["On" + capitalizeFirst(m_uiParamSlots[i].id) + "Changed"];
+    }
 }
 
 inline bool DroneScriptEngine::loadScript(const std::string_view source)
 {
+    m_pendingUiParamSlots = UiParamSlots{};
     try
     {
         sol::protected_function_result result = m_lua.safe_script(source, sol::script_pass_on_error);
@@ -357,4 +437,157 @@ inline DroneScriptEngine::NextNotesResult DroneScriptEngine::nextNotes() noexcep
         return NextNotesResult{};
     }
     return out;
+}
+
+inline void DroneScriptEngine::notifyUiParameterChanged(const size_t slot, const float value) noexcept
+{
+    if (slot >= kMaxLuaParams)
+    {
+        return;
+    }
+    callHandler(m_uiParamChangedFns[slot], mapNormalizedToDisplay(m_uiParamSlots[slot], value));
+}
+
+inline float DroneScriptEngine::mapNormalizedToDisplay(const LuaUiParamSlot& slot, float normalized) noexcept
+{
+    normalized = std::clamp(normalized, 0.f, 1.f);
+    const float span = slot.rangeMax - slot.rangeMin;
+    float display = slot.rangeSkew > 0.f && slot.rangeSkew != 1.f
+                        ? slot.rangeMin + span * std::pow(normalized, slot.rangeSkew)
+                        : slot.rangeMin + span * normalized;
+    if (slot.rangeStep > 0.f)
+    {
+        display = slot.rangeMin + std::round((display - slot.rangeMin) / slot.rangeStep) * slot.rangeStep;
+    }
+    return display;
+}
+
+inline std::string DroneScriptEngine::capitalizeFirst(const std::string_view text)
+{
+    std::string result{text};
+    if (!result.empty())
+    {
+        result.front() = static_cast<char>(std::toupper(static_cast<unsigned char>(result.front())));
+    }
+    return result;
+}
+
+inline void DroneScriptEngine::registerUiParameterSet(const sol::table& descriptors)
+{
+    const size_t count = descriptors.size();
+    if (count > kMaxLuaParams)
+    {
+        throw sol::error("UICreateParameterSet: " + std::to_string(count) + " parameters requested, only " +
+                         std::to_string(kMaxLuaParams) + " slots available");
+    }
+
+    UiParamSlots fresh{};
+    for (size_t i = 1; i <= count; ++i)
+    {
+        const sol::optional<sol::table> entry = descriptors[i];
+        if (!entry)
+        {
+            throw sol::error("UICreateParameterSet: parameter " + std::to_string(i) + " is not a table");
+        }
+        fresh[i - 1] = parseUiParamSlot(*entry, i);
+        for (size_t j = 0; j + 1 < i; ++j)
+        {
+            if (fresh[j].id == fresh[i - 1].id)
+            {
+                throw sol::error("UICreateParameterSet: duplicate parameter id \"" + fresh[i - 1].id + "\"");
+            }
+        }
+    }
+    m_pendingUiParamSlots = std::move(fresh);
+}
+
+inline LuaUiParamSlot DroneScriptEngine::parseUiParamSlot(const sol::table& entry, const size_t index)
+{
+    const auto requireString = [&](const char* key) -> std::string
+    {
+        const sol::optional<std::string> value = entry[key];
+        if (!value)
+        {
+            throw sol::error("UICreateParameterSet: parameter " + std::to_string(index) + " missing \"" + key + "\"");
+        }
+        return *value;
+    };
+
+    LuaUiParamSlot slot{};
+    slot.id = requireString("id");
+    const bool validId = !slot.id.empty() && (std::isalpha(static_cast<unsigned char>(slot.id.front())) != 0) &&
+                         std::ranges::all_of(slot.id, [](const char c)
+                                             { return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_'; });
+    if (!validId)
+    {
+        throw sol::error("UICreateParameterSet: parameter " + std::to_string(index) + " has an invalid id \"" +
+                         slot.id + "\" - must start with a letter and contain only letters, digits, underscores");
+    }
+    slot.name = entry.get_or("name", slot.id);
+
+    const std::string typeStr = requireString("type");
+    if (typeStr == "knob")
+    {
+        slot.type = LuaUiParamType::Knob;
+    }
+    else if (typeStr == "drop")
+    {
+        slot.type = LuaUiParamType::Drop;
+    }
+    else if (typeStr == "switch")
+    {
+        slot.type = LuaUiParamType::Switch;
+    }
+    else
+    {
+        throw sol::error("UICreateParameterSet: parameter \"" + slot.id + "\" has unknown type \"" + typeStr + "\"");
+    }
+
+    slot.unit = entry.get_or("unit", std::string{});
+    slot.description = entry.get_or("description", std::string{});
+
+    const sol::optional<sol::table> itemsOpt = entry["items"];
+    if (slot.type == LuaUiParamType::Switch)
+    {
+        slot.rangeMin = 0.f;
+        slot.rangeMax = 1.f;
+        slot.rangeStep = 1.f;
+        slot.rangeSkew = 1.f;
+    }
+    else if (slot.type == LuaUiParamType::Drop && itemsOpt)
+    {
+        for (size_t i = 1; i <= itemsOpt->size(); ++i)
+        {
+            const sol::optional<std::string> item = (*itemsOpt)[i];
+            slot.items.push_back(item.value_or(std::string{}));
+        }
+        slot.rangeMin = 0.f;
+        slot.rangeMax = static_cast<float>(slot.items.size()) - 1.f;
+        slot.rangeStep = 1.f;
+        slot.rangeSkew = 1.f;
+    }
+    else
+    {
+        const sol::optional<sol::table> rangeOpt = entry["range"];
+        if (!rangeOpt)
+        {
+            throw sol::error("UICreateParameterSet: parameter \"" + slot.id + "\" missing \"range\"");
+        }
+        slot.rangeMin = rangeOpt->get_or("min", 0.f);
+        slot.rangeMax = rangeOpt->get_or("max", 1.f);
+        slot.rangeStep = rangeOpt->get_or("step", 0.f);
+        slot.rangeSkew = rangeOpt->get_or("skew", 1.f);
+        if (!(slot.rangeMax > slot.rangeMin))
+        {
+            throw sol::error("UICreateParameterSet: parameter \"" + slot.id + "\" has an empty or inverted range");
+        }
+    }
+
+    slot.defaultValue = entry.get_or("default", slot.rangeMin);
+    if (slot.defaultValue < slot.rangeMin || slot.defaultValue > slot.rangeMax)
+    {
+        throw sol::error("UICreateParameterSet: parameter \"" + slot.id + "\" default value is outside its range");
+    }
+    slot.claimed = true;
+    return slot;
 }
