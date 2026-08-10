@@ -33,6 +33,7 @@ class DroneSequencerImpl final : public EffectBase
         , m_sustainWander(AbacDsp::constructArray<AbacDsp::OrnsteinUhlenbeckProcess, kMaxVoices>(
               sampleRate / static_cast<float>(BlockSize)))
     {
+        m_scriptEngine.setSampleRate(sampleRate);
         m_fdn.setModulation(kReverbModulationDepth, kReverbModulationSpeedHz);
         std::mt19937 rng{std::random_device{}()};
         std::uniform_real_distribution<float> dist{-1.f, 1.f};
@@ -359,6 +360,7 @@ class DroneSequencerImpl final : public EffectBase
                       AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
         updateTiming();
+        m_scriptEngine.tickBlock(BlockSize);
         std::array<float, BlockSize> dry{};
         for (size_t i = 0; i < BlockSize; ++i)
         {
@@ -508,6 +510,19 @@ class DroneSequencerImpl final : public EffectBase
         }
     }
 
+    // Forwards the host's raw playhead (Transport.* in Lua) every block; the engine itself
+    // only fires OnTempoChanged/OnTimeSignatureChanged/OnPlayingStart/OnPlayingStop for
+    // whichever fields actually changed, so there is no separate "if changed" gate here -
+    // unlike notifyTransportIfChanged() above, which is a different concept (the plugin's
+    // *effective* play state, not the host's own).
+    void updateScriptTransportSnapshot() noexcept
+    {
+        const auto& transport = hostTransport();
+        m_scriptEngine.notifyTransportSnapshot(transport.bpm, transport.ppqPosition, transport.timeInSeconds,
+                                               static_cast<int>(transport.beatsPerBar), transport.timeSigDenominator,
+                                               transport.isPlaying, transport.isLooping, transport.isRecording);
+    }
+
     void updateTiming() noexcept
     {
         const float bpm = currentBpm();
@@ -516,6 +531,7 @@ class DroneSequencerImpl final : public EffectBase
         notifyTransportIfChanged();
         notifyTimingIfChanged(bpm);
         notifyUiParametersIfChanged();
+        updateScriptTransportSnapshot();
         updateLfoSpeeds();
         updateSustainFeed();
     }

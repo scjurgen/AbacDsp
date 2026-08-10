@@ -5,10 +5,13 @@ Drop folder for the DroneSequencer example's "LLM-Assist" watched-folder mode. W
 to a running DroneSequencer instance without going through its in-app popup editor. See
 `README.md` for the folder layout.
 
-Full Lua scripting API (hooks, note-table fields, sandboxed stdlib, worked examples) is
-documented in `examples/dronesequencer/README.md` under "Scripting" - read that before
-writing a script, it is the authoritative reference. This file only covers the
-watched-folder protocol itself.
+Full Lua scripting API is documented in two places: the engine API shared by any Lua-scripted
+example (MIDI handlers, `OnStart`/`OnStop`, dynamic UI parameters, the `Music`/`Vel`/`Rr`/
+`Rhythm` helper library, `Timer`, `Transport`, sandboxed stdlib) in root `LUA.md`, and
+DroneSequencer's own `NextNotes`/`OnTiming` contract and note-table fields in
+`examples/dronesequencer/README.md` under "Scripting" - read both before writing a script,
+they are the authoritative reference. This file only covers the watched-folder protocol
+itself.
 
 ## Precondition
 
@@ -67,5 +70,6 @@ end
 - Only `base`, `math`, `table`, `string` are loaded - no `io`, `os`, `require`. No wall
   clock; use a `local` counter across calls instead.
 
-See `examples/dronesequencer/README.md` for the full hook list (`OnStart`/`OnStop`,
-incoming-MIDI handlers), the division-index meaning, and worked examples.
+See root `LUA.md` for the full shared hook list (`OnStart`/`OnStop`, incoming-MIDI handlers,
+`Music`/`Timer`/`Transport`), and `examples/dronesequencer/README.md` for the division-index
+meaning and worked examples.

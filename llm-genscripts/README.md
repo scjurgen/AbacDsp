@@ -12,5 +12,5 @@ Exchange point between a Claude Code session and a running DroneSequencer instan
   transient/generated; safe to clear out periodically.
 
 The Lua scripting API itself (hooks, note-table fields, sandboxed stdlib, worked examples)
-is documented in `examples/dronesequencer/README.md` under "Scripting", not duplicated
-here.
+is documented in root `LUA.md` and `examples/dronesequencer/README.md` under "Scripting",
+not duplicated here.

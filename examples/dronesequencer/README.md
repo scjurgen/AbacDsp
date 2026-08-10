@@ -32,6 +32,12 @@ patches, including whichever script is currently applied.
 
 ## Scripting
 
+This section covers what's specific to DroneSequencer: the `OnTiming`/`NextNotes` contract and
+the note-table shape. For everything shared with any other Lua-scripted example - MIDI
+handlers, `OnStart`/`OnStop`, dynamic UI parameters, the `Music`/`Vel`/`Rr`/`Rhythm` helper
+library, `Timer`, `Transport`, the available stdlib functions, and sandbox/error-handling
+notes - see `../../LUA.md`.
+
 The script controls two things: what happens when the clock's BPM/division changes, and what to
 play on each beat.
 
@@ -63,43 +69,17 @@ Each note is a table with:
 | `length` | ms until the string is muted; 0 lets it ring out via Attack/Decay/Sustain instead of being cut off. |
 | `delay` | ms offset from the nominal beat; may be negative to fire early. The sequencer always asks a short lookahead before the beat, so a small negative `delay` is normal, not a bug. |
 
-## Transport
+`NextNotes()` returning more than 8 notes in one call has the extras dropped. Not yet
+implemented: pitch bends - the note struct is deliberately built so a `bend = {interval, time,
+curve}` field can be added later without reshaping what's already there.
 
-```lua
-function OnStart() end  -- fires on any effective start
-function OnStop() end   -- fires on any effective stop
-```
-
-These fire on a start/stop transition of the clock: the manual Play switch toggling, or the
-host transport's play state when Host Sync is on - whichever one is actually driving playback.
-Useful for resetting your own counters/state (e.g. the `step` variable in the arpeggio example
-below) so a script restarts from a known point every time, rather than wherever it happened to
-be left. There's no separate "paused" callback: the host doesn't reliably report pause as
-distinct from stop, and the sequencer's own clock always resets on any stop-to-start
-transition rather than resuming, so there's nothing paused to report either.
-
-## Incoming MIDI
-
-If the host sends the plugin MIDI, each event calls an optional handler - define whichever
-ones your script needs; an undefined handler is simply never called, same as `OnTiming`. None
-of these are required to make sound (that's `NextNotes()`'s job) - they're for reacting to a
-controller, DAW automation lane, or another track's MIDI, e.g. to change what `NextNotes()`
-does next by setting a global.
-
-```lua
-function OnNoteOn(channel, note, velocity) end     -- velocity 1..127 (0 arrives as OnNoteOff instead)
-function OnNoteOff(channel, note, velocity) end    -- velocity 0..127 (release velocity, often 0)
-function OnCC(channel, ccNumber, value) end        -- ccNumber and value 0..127
-function OnProgramChange(channel, program) end     -- program 0..127
-function OnAftertouch(channel, value) end          -- channel pressure, value 0..127
-function OnPolyPressure(channel, note, value) end  -- per-note pressure, value 0..127
-function OnPitchBend(channel, bendValue) end       -- 14-bit, -8192..8191, center 0
-```
-
-`channel` is 0-based (0..15), matching `channel` in the note table above - it is the MIDI
-channel the event arrived on, unrelated to which string gets plucked. A Note On with velocity
-0 is normalized to a Note Off before your script ever sees it, per standard MIDI convention;
-you don't need to check for that case yourself in `OnNoteOn`.
+`OnStart`/`OnStop` (see `../../LUA.md`) fire on a start/stop transition of the clock here
+specifically: the manual Play switch toggling, or the host transport's play state when Host
+Sync is on - whichever one is actually driving playback. Useful for resetting your own
+counters/state (e.g. the `step` variable in the example below) so a script restarts from a
+known point every time. There's no separate "paused" callback: the host doesn't reliably
+report pause as distinct from stop, and the sequencer's own clock always resets on any
+stop-to-start transition rather than resuming, so there's nothing paused to report either.
 
 ### Example: a 4-step arpeggio across three strings
 
@@ -135,96 +115,3 @@ function NextNotes()
     }
 end
 ```
-
-## Dynamic UI Parameters
-
-A script can declare its own knobs/dropdowns/switches, shown in the Performance page's
-"Lua Controls" area, and get called back when the user (or host automation/CC) changes one.
-Call this once, typically at the top level of the script (not inside `NextNotes()`):
-
-```lua
-UICreateParameterSet({
-    { id = "depth", name = "Depth", type = "knob", range = { min = 0, max = 1, step = 0, skew = 1 }, default = 0.5 },
-    { id = "mode", name = "Mode", type = "drop", items = { "A", "B", "C" }, default = 0 },
-    { id = "enabled", name = "Enabled", type = "switch", default = 0 },
-})
-
-function OnDepthChanged(value) end  -- value is already mapped through the declared range
-function OnModeChanged(value) end   -- value is the selected item's index, 0-based
-function OnEnabledChanged(value) end -- value is 0 or 1
-```
-
-| Field | Meaning |
-|---|---|
-| `id` | Must start with a letter, contain only letters/digits/underscores. Builds the callback name: `id`'s first letter capitalized, wrapped as `On<Id>Changed`. |
-| `name` | Display label; defaults to `id` if omitted. |
-| `type` | `"knob"`, `"drop"`, or `"switch"`. |
-| `range` | Required for `"knob"` only: `{ min, max, step, skew }`. `step = 0` means continuous; `skew` follows the usual JUCE convention (`1` = linear). |
-| `items` | Required for `"drop"` only: an array of label strings: the callback value is the selected index, `0`..`#items - 1`. |
-| `unit` | Optional display unit string. Accepted and stored, but not yet surfaced in the UI. |
-| `description` | Optional; used for the widget's accessibility description. Falls back to `name` if omitted. |
-| `default` | Required; must fall within the resolved range (your declared `range` for a knob, or `0..#items - 1`/`0..1` for a drop/switch). |
-
-Calling `UICreateParameterSet` again on a script reload replaces the previous set entirely -
-a parameter not re-declared is unclaimed and disappears from the UI. There are only
-`kMaxLuaParams` (8) slots in the underlying pool shared by every script; requesting more than
-that, a duplicate `id`, or a malformed descriptor rejects the whole script at Apply time with
-an error, the same as any other script error - the previously running script keeps playing
-underneath.
-
-## Available functions
-
-Only Lua's `base`, `math`, `table`, and `string` standard libraries are loaded - there is no
-`io`, `os`, or `require`. Notably, **there is no bare `rand()`** (that's a C function, not
-Lua) - use `math.random()`.
-
-| Call | Returns |
-|---|---|
-| `math.random()` | float in `[0, 1)` |
-| `math.random(m)` | integer in `[1, m]` |
-| `math.random(m, n)` | integer in `[m, n]` |
-| `math.randomseed(x)` | reseeds the generator (scripts don't need this; each load starts freshly seeded) |
-| `math.floor(x)`, `math.ceil(x)` | round down/up to an integer (as a float) |
-| `math.abs(x)`, `math.max(a, b, ...)`, `math.min(a, b, ...)` | |
-| `math.sin(x)`, `math.cos(x)`, `math.tan(x)` | radians, e.g. for LFO-style modulation of `note`/`delay` over successive calls |
-| `math.sqrt(x)`, `math.exp(x)`, `math.log(x)`, `math.log(x, base)` | |
-| `math.fmod(x, y)` | floating-point remainder |
-| `math.pi`, `math.huge` | constants |
-| `x ^ y` | power (there is no `math.pow` in this Lua version - use the `^` operator) |
-| `#t` | length of table/array `t` |
-| `table.insert(t, v)`, `table.remove(t)`, `table.concat(t, sep)`, `table.sort(t)` | |
-| `string.format(fmt, ...)`, `string.sub`, `string.len`, `#s` | mainly useful for building error messages, not note data |
-| `tostring(x)`, `tonumber(x)`, `type(x)` | |
-
-Example using `math.random` for a wandering pitch, and `math.sin` for a slow vibrato-like
-drift applied via `delay`:
-
-```lua
-function NextNotes()
-    local jitterSemitones = math.random(-2, 2)
-    local wobbleMs = 8 * math.sin(os_time and os_time() or 0) -- os is not available; see below
-    return {
-        { note = 60 + jitterSemitones, velocity = 0.8, channel = 0, length = 0, delay = 0 },
-    }
-end
-```
-
-(That `os_time` reference is deliberately left broken above as a reminder: `os` is not
-loaded, so keep any notion of "elapsed time" in your own counter - e.g. a `local step`
-incremented once per `NextNotes()` call, as in the arpeggio example - rather than reaching
-for a wall-clock function.)
-
-## Notes on the sandbox
-
-- A script that fails to *compile* (a syntax error, or an error in code that runs
-  immediately when the script loads) is rejected at Apply time; the popup shows the error
-  inline and stays open so you can fix it without losing your edit.
-- A script that compiles fine but errors *when actually called* later (inside `NextNotes()`
-  or `OnTiming()`, once real playback reaches that code path) can't be caught at Apply time -
-  Lua doesn't know that in advance. That kind of error shows up in the status bar instead,
-  the first time it happens, and playback silently produces no notes until it's fixed.
-- Either way, whatever script was running before (the stub, on a fresh patch) keeps playing
-  underneath a rejected Apply - a bad script never leaves you with nothing.
-- `NextNotes()` returning more than 8 notes in one call has the extras dropped.
-- Not yet implemented: pitch bends. The note struct is deliberately built so a `bend =
-  {interval, time, curve}` field can be added later without reshaping what's already there.

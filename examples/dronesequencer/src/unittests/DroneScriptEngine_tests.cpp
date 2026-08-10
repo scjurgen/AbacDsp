@@ -310,6 +310,8 @@ TEST(DroneScriptEngine, FullSkeletonScriptLoadsCleanlyAndDefinesEveryHandler)
     engine.notifyAftertouch(0, 1);
     engine.notifyPolyPressure(0, 60, 1);
     engine.notifyPitchBend(0, 0);
+    engine.notifyTransportSnapshot(140.0, 1.0, 1.0, 3, 8, true, true, true);
+    engine.tickBlock(64);
     EXPECT_FALSE(engine.hasError());
 }
 
@@ -602,4 +604,196 @@ TEST(DroneScriptEngine, RepeatedCallsDoNotGrowPoolUsageUnbounded)
     EXPECT_EQ(engine.poolBytesInUse(), warmedUp)
         << "after a full GC cycle, live pool usage should be identical regardless of "
            "how many NextNotes() calls happened in between - anything else is a leak";
+}
+
+TEST(DroneScriptEngine, TimerAfterFiresOnceWhenDue)
+{
+    DroneScriptEngine engine;
+    engine.setSampleRate(1000.f);
+    ASSERT_TRUE(engine.loadScript(R"(
+        Fired = 0
+        Timer.After(10, function() Fired = Fired + 1 end)
+        function NextNotes()
+            return { { note = Fired, velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+    engine.tickBlock(5);
+    EXPECT_FLOAT_EQ(engine.nextNotes().notes[0].noteHeight, 0.f) << "not due yet";
+    engine.tickBlock(10);
+    EXPECT_FLOAT_EQ(engine.nextNotes().notes[0].noteHeight, 1.f) << "fired once when due";
+    engine.tickBlock(100);
+    EXPECT_FLOAT_EQ(engine.nextNotes().notes[0].noteHeight, 1.f) << "Timer.After is one-shot";
+}
+
+TEST(DroneScriptEngine, TimerEveryFiresRepeatedly)
+{
+    DroneScriptEngine engine;
+    engine.setSampleRate(1000.f);
+    ASSERT_TRUE(engine.loadScript(R"(
+        Fired = 0
+        Timer.Every(10, function() Fired = Fired + 1 end)
+        function NextNotes()
+            return { { note = Fired, velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+    engine.tickBlock(10);
+    engine.tickBlock(10);
+    engine.tickBlock(10);
+    EXPECT_FLOAT_EQ(engine.nextNotes().notes[0].noteHeight, 3.f);
+}
+
+TEST(DroneScriptEngine, TimerCancelStopsFutureFiring)
+{
+    DroneScriptEngine engine;
+    engine.setSampleRate(1000.f);
+    ASSERT_TRUE(engine.loadScript(R"(
+        Fired = 0
+        local id = Timer.Every(10, function() Fired = Fired + 1 end)
+        Timer.Cancel(id)
+        function NextNotes()
+            return { { note = Fired, velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+    engine.tickBlock(100);
+    EXPECT_FLOAT_EQ(engine.nextNotes().notes[0].noteHeight, 0.f);
+}
+
+TEST(DroneScriptEngine, TimerPoolExhaustionReturnsZero)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        Ids = {}
+        for i = 1, 9 do
+            Ids[i] = Timer.After(10000, function() end)
+        end
+        function NextNotes()
+            return { { note = Ids[9], velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+    EXPECT_FLOAT_EQ(engine.nextNotes().notes[0].noteHeight, 0.f) << "only 8 timer slots are available";
+}
+
+TEST(DroneScriptEngine, TimerSlotsAreClearedOnScriptReload)
+{
+    DroneScriptEngine engine;
+    engine.setSampleRate(1000.f);
+    ASSERT_TRUE(engine.loadScript(R"(
+        Fired = false
+        Timer.After(10, function() Fired = true end)
+        function NextNotes()
+            return { { note = Fired and 1 or 0, velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+    ASSERT_TRUE(engine.loadScript(R"(
+        Fired = false
+        function NextNotes()
+            return { { note = Fired and 1 or 0, velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+    engine.tickBlock(100);
+    EXPECT_FLOAT_EQ(engine.nextNotes().notes[0].noteHeight, 0.f)
+        << "the first script's timer callback must not survive a reload";
+}
+
+TEST(DroneScriptEngine, TransportDefaultsMatchDocumentedDefaults)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        function NextNotes()
+            local n, d = Transport.TimeSignature()
+            return { { note = Transport.Tempo(), velocity = n / 100, channel = d,
+                       length = Transport.PlayingState() and 1 or 0, delay = Transport.TimeInSeconds() } }
+        end
+    )"));
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 120.f) << "default tempo is 120 bpm";
+    EXPECT_FLOAT_EQ(result.notes[0].velocity, 0.04f) << "default time signature is 4/4";
+    EXPECT_EQ(result.notes[0].channel, 4u) << "default time signature is 4/4";
+    EXPECT_FLOAT_EQ(result.notes[0].lengthMs, 0.f) << "default playing state is false";
+    EXPECT_FLOAT_EQ(result.notes[0].delayMs, 0.f) << "default time in seconds is 0";
+}
+
+TEST(DroneScriptEngine, TransportQueryFunctionsReflectLastSnapshot)
+{
+    DroneScriptEngine engine;
+    engine.notifyTransportSnapshot(133.0, 12.5, 6.25, 7, 8, true, true, true);
+    ASSERT_TRUE(engine.loadScript(R"(
+        function NextNotes()
+            local n, d = Transport.TimeSignature()
+            return { { note = Transport.Tempo(), velocity = Transport.TimeInQuarterNotes() / 100,
+                       channel = n, length = d, delay = Transport.TimeInSeconds() } }
+        end
+    )"));
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 133.f);
+    EXPECT_NEAR(result.notes[0].velocity, 0.125f, 1e-5f);
+    EXPECT_EQ(result.notes[0].channel, 7u);
+    EXPECT_FLOAT_EQ(result.notes[0].lengthMs, 8.f);
+    EXPECT_FLOAT_EQ(result.notes[0].delayMs, 6.25f);
+}
+
+TEST(DroneScriptEngine, TransportLoopingAndRecordingStateReflectSnapshot)
+{
+    DroneScriptEngine engine;
+    engine.notifyTransportSnapshot(120.0, 0.0, 0.0, 4, 4, false, true, true);
+    ASSERT_TRUE(engine.loadScript(R"(
+        function NextNotes()
+            return { { note = Transport.LoopingState() and 1 or 0, velocity = Transport.RecordingState() and 1 or 0,
+                       channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 1.f);
+    EXPECT_FLOAT_EQ(result.notes[0].velocity, 1.f);
+}
+
+TEST(DroneScriptEngine, NotifyTransportSnapshotFiresChangeHandlersOnlyOnActualChange)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        TempoChanges = 0
+        TimeSigChanges = 0
+        Starts = 0
+        Stops = 0
+        function OnTempoChanged(bpm) TempoChanges = TempoChanges + 1 end
+        function OnTimeSignatureChanged(n, d) TimeSigChanges = TimeSigChanges + 1 end
+        function OnPlayingStart() Starts = Starts + 1 end
+        function OnPlayingStop() Stops = Stops + 1 end
+        function NextNotes()
+            return { { note = TempoChanges, velocity = TimeSigChanges, channel = Starts, length = Stops, delay = 0 } }
+        end
+    )"));
+
+    // Defaults are 120 bpm / 4:4 / not playing; a first snapshot matching those should
+    // not fire anything.
+    engine.notifyTransportSnapshot(120.0, 0.0, 0.0, 4, 4, false, false, false);
+    auto result = engine.nextNotes();
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 0.f) << "tempo unchanged from default";
+    EXPECT_FLOAT_EQ(result.notes[0].velocity, 0.f) << "time signature unchanged from default";
+    EXPECT_EQ(result.notes[0].channel, 0u) << "still not playing";
+
+    engine.notifyTransportSnapshot(140.0, 1.0, 1.0, 3, 4, true, false, false);
+    result = engine.nextNotes();
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 1.f) << "tempo changed";
+    EXPECT_FLOAT_EQ(result.notes[0].velocity, 1.f) << "time signature changed";
+    EXPECT_EQ(result.notes[0].channel, 1u) << "playing started";
+    EXPECT_FLOAT_EQ(result.notes[0].lengthMs, 0.f) << "not stopped yet";
+
+    engine.notifyTransportSnapshot(140.0, 2.0, 2.0, 3, 4, false, false, false);
+    result = engine.nextNotes();
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 1.f) << "tempo unchanged since last snapshot";
+    EXPECT_EQ(result.notes[0].channel, 1u) << "OnPlayingStart should not fire again";
+    EXPECT_FLOAT_EQ(result.notes[0].lengthMs, 1.f) << "playing stopped";
+}
+
+TEST(DroneScriptEngine, MissingTransportHandlersAreSilentlyIgnored)
+{
+    DroneScriptEngine engine;
+    engine.notifyTransportSnapshot(140.0, 1.0, 1.0, 3, 8, true, true, true);
+    EXPECT_FALSE(engine.hasError());
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u) << "stub script's NextNotes should be unaffected";
 }

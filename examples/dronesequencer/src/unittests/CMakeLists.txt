@@ -45,6 +45,10 @@ package_add_test(LuaParamRangeMathTests
         LuaParamRangeMath_tests.cpp
 )
 
+package_add_test(LuaMusicMathLibTests
+        LuaMusicMathLib_tests.cpp
+)
+
 package_add_test(DroneSequencerTests
         DroneSequencer_tests.cpp
 )

@@ -18,8 +18,8 @@ Examples are designed to:
 - focus on accessibility (screen readers, parameter labeling, color contrast)
 - focus on interactive performance using various interface methods (including multiple
   performance-page layouts)
-- explore extended capabilities through embedded scripting (dronesequencer's Lua engine),
-  leaving room for LLM-assisted behavior in the future
+- explore extended capabilities through embedded scripting (dronesequencer's Lua engine; see
+  `LUA.md` for the scripting API), leaving room for LLM-assisted behavior in the future
 
 ### Submodules used
 - googletest
@@ -75,7 +75,8 @@ JUCE-based plugins under `examples/` (built with `-DBUILD_FULL_PROJECT=ON`, see 
   (plucked-string tanpura simulation)
 
 See `examples/README.md` for a description of each one, and how the generated JUCE
-plumbing relates to each example's hand-written DSP.
+plumbing relates to each example's hand-written DSP. See `LUA.md` for the Lua scripting API
+shared by any script-driven example (currently `dronesequencer`).
 
 ## Building
 

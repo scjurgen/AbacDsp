@@ -11,8 +11,10 @@
 #include <sol/sol.hpp>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
+#include "LuaMusicMathLib.h"
 #include "LuaParamRangeMath.h"
 #include "LuaScriptMemoryPool.h"
 
@@ -92,6 +94,11 @@ class LuaScriptEngineBase
 "-- function OnDepthChanged(value)\n"
 "-- end\n"
 "\n"
+"-- Timer.After(ms, fn) fires fn once; Timer.Every(ms, fn) repeats. Both return an id you\n"
+"-- can pass to Timer.Cancel(id). Uncomment to try it:\n"
+"-- Timer.Every(500, function()\n"
+"-- end)\n"
+"\n"
 "-- Fires on any start/stop transition: the manual Play switch toggling, or the host\n"
 "-- transport's play state when Host Sync is on. Useful for resetting your own state.\n"
 "function OnStart()\n"
@@ -119,6 +126,21 @@ class LuaScriptEngineBase
 "end\n"
 "\n"
 "function OnPitchBend(channel, bendValue)\n"
+"end\n"
+"\n"
+"-- Fire on a change in the host's own playhead/transport (Transport.* below), independent\n"
+"-- of OnStart/OnStop above - which follow the plugin's Play switch or Host Sync setting,\n"
+"-- not the host's raw transport state.\n"
+"function OnTempoChanged(bpm)\n"
+"end\n"
+"\n"
+"function OnTimeSignatureChanged(numerator, denominator)\n"
+"end\n"
+"\n"
+"function OnPlayingStart()\n"
+"end\n"
+"\n"
+"function OnPlayingStop()\n"
 "end\n";
     // clang-format on
 
@@ -151,6 +173,26 @@ class LuaScriptEngineBase
     // Realtime-safe: dispatches to the cached On<Id>Changed handler for this slot, if
     // the script defined one. Silently ignored for an unclaimed or out-of-range slot.
     void notifyUiParameterChanged(size_t slot, float value) noexcept;
+
+    // Used by Timer.After/Timer.Every's ms-to-samples conversion; call once after
+    // construction (and again if the sample rate changes). Defaults to 44100 so a script
+    // exercised without a host (e.g. in a test) still gets sane timer behavior.
+    void setSampleRate(const float sampleRate) noexcept
+    {
+        m_sampleRate = sampleRate;
+    }
+
+    // Advances every active Timer.After/Timer.Every slot by numSamples and fires any that
+    // come due, through the same callHandler() path as every other script callback -
+    // realtime-safe, no allocation. Call once per audio block.
+    void tickBlock(size_t numSamples) noexcept;
+
+    // Updates the Transport.* snapshot and fires OnTempoChanged/OnTimeSignatureChanged/
+    // OnPlayingStart/OnPlayingStop for whichever of these actually changed since the last
+    // call. Realtime-safe, no allocation - intended to be called once per audio block from
+    // the same place a host's playhead position is read.
+    void notifyTransportSnapshot(double bpm, double timeInQuarterNotes, double timeInSeconds, int timeSigNumerator,
+                                 int timeSigDenominator, bool isPlaying, bool isLooping, bool isRecording) noexcept;
 
     [[nodiscard]] bool hasError() const noexcept
     {
@@ -220,14 +262,51 @@ class LuaScriptEngineBase
     std::string m_lastError;
 
   private:
+    static constexpr size_t kMaxLuaTimers{8};
+
+    // One Timer.After/Timer.Every slot. callback is a closure the script itself passed in
+    // (unlike every other handler here, which is looked up by name), so it is cleared on
+    // every loadScript() rather than surviving a reload.
+    struct LuaTimerSlot
+    {
+        sol::protected_function callback;
+        size_t periodSamples{0};
+        size_t remainingSamples{0};
+        bool repeating{false};
+        bool active{false};
+    };
+
+    struct LuaTransportSnapshot
+    {
+        double bpm{120.0};
+        double timeInQuarterNotes{0.0};
+        double timeInSeconds{0.0};
+        int timeSigNumerator{4};
+        int timeSigDenominator{4};
+        bool isPlaying{false};
+        bool isLooping{false};
+        bool isRecording{false};
+    };
+
     void bindFunctions();
     void bindApiFunctions();
+    void bindMusicMathLibrary();
+    void bindTimerApi();
+    void bindTransportApi();
     void registerUiParameterSet(const sol::table& descriptors);
     [[nodiscard]] static LuaUiParamSlot parseUiParamSlot(const sol::table& entry, size_t index);
     [[nodiscard]] static std::string capitalizeFirst(std::string_view text);
     // Maps raw 0..1 through a slot's display range (mirrors LuaControlArea.h's
     // juce::NormalisableRange use, reimplemented here since this file stays JUCE-free).
     [[nodiscard]] static float mapNormalizedToDisplay(const LuaUiParamSlot& slot, float normalized) noexcept;
+
+    // Claims a free timer slot for Timer.After/Timer.Every; returns a 1-based id for
+    // Timer.Cancel, or 0 if every slot is already in use. Not noexcept: called only from a
+    // sol2-bound Lua function, which already catches and converts any C++ exception into a
+    // Lua error, the same as registerUiParameterSet() above.
+    [[nodiscard]] int scheduleTimer(double ms, sol::protected_function callback, bool repeating);
+    void cancelTimer(int id) noexcept;
+    [[nodiscard]] size_t msToSamples(double ms) const noexcept;
 
     sol::protected_function m_onNoteOnFn;
     sol::protected_function m_onNoteOffFn;
@@ -238,10 +317,18 @@ class LuaScriptEngineBase
     sol::protected_function m_onPitchBendFn;
     sol::protected_function m_onStartFn;
     sol::protected_function m_onStopFn;
+    sol::protected_function m_onTempoChangedFn;
+    sol::protected_function m_onTimeSignatureChangedFn;
+    sol::protected_function m_onPlayingStartFn;
+    sol::protected_function m_onPlayingStopFn;
 
     UiParamSlots m_uiParamSlots{};
     UiParamSlots m_pendingUiParamSlots{};
     std::array<sol::protected_function, kMaxLuaParams> m_uiParamChangedFns{};
+
+    float m_sampleRate{44100.f};
+    std::array<LuaTimerSlot, kMaxLuaTimers> m_timerSlots{};
+    LuaTransportSnapshot m_transport{};
 };
 
 template <typename Derived>
@@ -259,6 +346,197 @@ template <typename Derived>
 void LuaScriptEngineBase<Derived>::bindApiFunctions()
 {
     m_lua.set_function("UICreateParameterSet", &LuaScriptEngineBase::registerUiParameterSet, this);
+    bindMusicMathLibrary();
+    bindTimerApi();
+    bindTransportApi();
+}
+
+template <typename Derived>
+void LuaScriptEngineBase<Derived>::bindMusicMathLibrary()
+{
+    sol::table music = m_lua.create_table();
+    music.set_function("NoteToHz", sol::overload([](const float note) { return LuaMusicMath::noteToHz(note); },
+                                                 [](const float note, const float tuning)
+                                                 { return LuaMusicMath::noteToHz(note, tuning); }));
+    music.set_function("HzToNote", sol::overload([](const float hz) { return LuaMusicMath::hzToNote(hz); },
+                                                 [](const float hz, const float tuning)
+                                                 { return LuaMusicMath::hzToNote(hz, tuning); }));
+    music.set_function("IntervalToRatio", &LuaMusicMath::intervalToRatio);
+    music.set_function("RatioToInterval", &LuaMusicMath::ratioToInterval);
+
+    const auto intervalsToLuaTable = [this](const std::span<const int> intervals)
+    {
+        sol::table table = m_lua.create_table(static_cast<int>(intervals.size()), 0);
+        for (size_t i = 0; i < intervals.size(); ++i)
+        {
+            table[i + 1] = intervals[i];
+        }
+        return table;
+    };
+
+    sol::table scales = m_lua.create_table();
+    for (const auto& entry : LuaMusicMath::kScales)
+    {
+        scales[entry.name] = intervalsToLuaTable(entry.intervals);
+    }
+    music["Scales"] = scales;
+
+    sol::table chords = m_lua.create_table();
+    for (const auto& entry : LuaMusicMath::kChords)
+    {
+        chords[entry.name] = intervalsToLuaTable(entry.intervals);
+    }
+    music["Chords"] = chords;
+    m_lua["Music"] = music;
+
+    sol::table vel = m_lua.create_table();
+    vel.set_function("Exponential",
+                     sol::overload([](const float v) { return LuaMusicMath::velocityToGainExponential(v); },
+                                   [](const float v, const float curve)
+                                   { return LuaMusicMath::velocityToGainExponential(v, curve); }));
+    vel.set_function("Cubic", &LuaMusicMath::velocityToGainCubic);
+    m_lua["Vel"] = vel;
+
+    sol::table rr = m_lua.create_table();
+    rr.set_function("Next", &LuaMusicMath::toroidIncrement);
+    rr.set_function("Advance", &LuaMusicMath::toroidAdvance);
+    m_lua["Rr"] = rr;
+
+    sol::table rhythm = m_lua.create_table();
+    sol::table noteValues = m_lua.create_table();
+    for (const auto& entry : LuaMusicMath::kNoteValues)
+    {
+        noteValues[entry.name] = entry.beats;
+    }
+    rhythm["NoteValues"] = noteValues;
+    rhythm.set_function("BeatsToMs", &LuaMusicMath::beatsToMs);
+    m_lua["Rhythm"] = rhythm;
+}
+
+template <typename Derived>
+void LuaScriptEngineBase<Derived>::bindTimerApi()
+{
+    sol::table timer = m_lua.create_table();
+    timer.set_function("After", [this](const double ms, sol::protected_function callback)
+                       { return scheduleTimer(ms, std::move(callback), false); });
+    timer.set_function("Every", [this](const double ms, sol::protected_function callback)
+                       { return scheduleTimer(ms, std::move(callback), true); });
+    timer.set_function("Cancel", [this](const int id) { cancelTimer(id); });
+    m_lua["Timer"] = timer;
+}
+
+template <typename Derived>
+void LuaScriptEngineBase<Derived>::bindTransportApi()
+{
+    sol::table transport = m_lua.create_table();
+    transport.set_function("TimeInSeconds", [this] { return m_transport.timeInSeconds; });
+    transport.set_function("TimeInQuarterNotes", [this] { return m_transport.timeInQuarterNotes; });
+    transport.set_function("Tempo", [this] { return m_transport.bpm; });
+    transport.set_function("TimeSignature", [this]
+                           { return std::make_tuple(m_transport.timeSigNumerator, m_transport.timeSigDenominator); });
+    transport.set_function("PlayingState", [this] { return m_transport.isPlaying; });
+    transport.set_function("LoopingState", [this] { return m_transport.isLooping; });
+    transport.set_function("RecordingState", [this] { return m_transport.isRecording; });
+    m_lua["Transport"] = transport;
+}
+
+template <typename Derived>
+int LuaScriptEngineBase<Derived>::scheduleTimer(const double ms, sol::protected_function callback, const bool repeating)
+{
+    for (size_t i = 0; i < kMaxLuaTimers; ++i)
+    {
+        if (m_timerSlots[i].active)
+        {
+            continue;
+        }
+        const size_t period = msToSamples(ms);
+        m_timerSlots[i] = LuaTimerSlot{std::move(callback), period, period, repeating, true};
+        return static_cast<int>(i) + 1;
+    }
+    return 0;
+}
+
+template <typename Derived>
+void LuaScriptEngineBase<Derived>::cancelTimer(const int id) noexcept
+{
+    if (id < 1 || static_cast<size_t>(id) > kMaxLuaTimers)
+    {
+        return;
+    }
+    m_timerSlots[static_cast<size_t>(id) - 1].active = false;
+}
+
+template <typename Derived>
+size_t LuaScriptEngineBase<Derived>::msToSamples(const double ms) const noexcept
+{
+    return std::max<size_t>(1, static_cast<size_t>(ms * static_cast<double>(m_sampleRate) * 0.001));
+}
+
+template <typename Derived>
+void LuaScriptEngineBase<Derived>::tickBlock(const size_t numSamples) noexcept
+{
+    for (auto& slot : m_timerSlots)
+    {
+        if (!slot.active)
+        {
+            continue;
+        }
+        if (slot.remainingSamples > numSamples)
+        {
+            slot.remainingSamples -= numSamples;
+            continue;
+        }
+        callHandler(slot.callback);
+        if (slot.repeating)
+        {
+            slot.remainingSamples = slot.periodSamples;
+        }
+        else
+        {
+            slot.active = false;
+        }
+    }
+}
+
+template <typename Derived>
+void LuaScriptEngineBase<Derived>::notifyTransportSnapshot(const double bpm, const double timeInQuarterNotes,
+                                                           const double timeInSeconds, const int timeSigNumerator,
+                                                           const int timeSigDenominator, const bool isPlaying,
+                                                           const bool isLooping, const bool isRecording) noexcept
+{
+    m_transport.timeInQuarterNotes = timeInQuarterNotes;
+    m_transport.timeInSeconds = timeInSeconds;
+    m_transport.isLooping = isLooping;
+    m_transport.isRecording = isRecording;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+    if (bpm != m_transport.bpm)
+    {
+        m_transport.bpm = bpm;
+        callHandler(m_onTempoChangedFn, bpm);
+    }
+#pragma GCC diagnostic pop
+
+    if (timeSigNumerator != m_transport.timeSigNumerator || timeSigDenominator != m_transport.timeSigDenominator)
+    {
+        m_transport.timeSigNumerator = timeSigNumerator;
+        m_transport.timeSigDenominator = timeSigDenominator;
+        callHandler(m_onTimeSignatureChangedFn, timeSigNumerator, timeSigDenominator);
+    }
+
+    if (isPlaying != m_transport.isPlaying)
+    {
+        m_transport.isPlaying = isPlaying;
+        if (isPlaying)
+        {
+            callHandler(m_onPlayingStartFn);
+        }
+        else
+        {
+            callHandler(m_onPlayingStopFn);
+        }
+    }
 }
 
 template <typename Derived>
@@ -273,6 +551,10 @@ void LuaScriptEngineBase<Derived>::bindFunctions()
     m_onPitchBendFn = m_lua["OnPitchBend"];
     m_onStartFn = m_lua["OnStart"];
     m_onStopFn = m_lua["OnStop"];
+    m_onTempoChangedFn = m_lua["OnTempoChanged"];
+    m_onTimeSignatureChangedFn = m_lua["OnTimeSignatureChanged"];
+    m_onPlayingStartFn = m_lua["OnPlayingStart"];
+    m_onPlayingStopFn = m_lua["OnPlayingStop"];
 
     m_uiParamSlots = m_pendingUiParamSlots;
     for (size_t i = 0; i < kMaxLuaParams; ++i)
@@ -292,6 +574,10 @@ template <typename Derived>
 bool LuaScriptEngineBase<Derived>::loadScript(const std::string_view source)
 {
     m_pendingUiParamSlots = UiParamSlots{};
+    // Timer callbacks are closures over the outgoing script's environment (unlike the
+    // named On* handlers, which bindFunctions() below simply re-looks-up) - they must not
+    // keep firing into a script that no longer exists.
+    m_timerSlots = std::array<LuaTimerSlot, kMaxLuaTimers>{};
     try
     {
         sol::protected_function_result result = m_lua.safe_script(source, sol::script_pass_on_error);
