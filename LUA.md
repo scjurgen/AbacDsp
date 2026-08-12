@@ -135,7 +135,7 @@ function OnEnabledChanged(value) end -- value is 0 or 1
 | `type` | `"knob"`, `"drop"`, or `"switch"`. |
 | `range` | Required for `"knob"` only: `{ min, max, step, skew }`. `step = 0` means continuous; `skew` follows the usual JUCE convention (`1` = linear). |
 | `items` | Required for `"drop"` only: an array of label strings: the callback value is the selected index, `0`..`#items - 1`. |
-| `unit` | Optional display unit string. Accepted and stored, but not yet surfaced in the UI. |
+| `unit` | Optional display unit string, e.g. `"Hz"`. Shown as a suffix on a knob's value text box; not shown for a drop/switch. |
 | `description` | Optional; used for the widget's accessibility description. Falls back to `name` if omitted. |
 | `default` | Required; must fall within the resolved range (your declared `range` for a knob, or `0..#items - 1`/`0..1` for a drop/switch). |
 

@@ -43,6 +43,7 @@
         descriptor.rangeStep = slot.rangeStep;
         descriptor.rangeSkew = slot.rangeSkew;
         descriptor.description = slot.description;
+        descriptor.unit = slot.unit;
         descriptor.items = slot.items;
         result.push_back(std::move(descriptor));
     }

@@ -35,6 +35,7 @@ struct LuaControlDescriptor
     float rangeStep{0.f};
     float rangeSkew{1.f};
     std::string description;
+    std::string unit;
     std::vector<std::string> items;
 
     // Detects "did the caller's descriptor list change since the last rebuild"; exact
@@ -147,6 +148,10 @@ class LuaControlArea : public juce::Component
             m_slider->setRange(static_cast<double>(m_descriptor.rangeMin), static_cast<double>(m_descriptor.rangeMax),
                                static_cast<double>(m_descriptor.rangeStep));
             m_slider->setSkewFactor(static_cast<double>(m_descriptor.rangeSkew));
+            if (!m_descriptor.unit.empty())
+            {
+                m_slider->setTextValueSuffix(" " + juce::String(m_descriptor.unit));
+            }
             m_slider->setDescription(accessibilityDescription());
             m_slider->setTooltip(accessibilityDescription());
             m_slider->onDragStart = [this] { m_attachment.beginGesture(); };

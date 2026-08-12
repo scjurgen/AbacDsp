@@ -992,6 +992,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             m_statusBar.showMessage("Disable LLM-Assist to edit the script manually");
             return;
         }
+        // Non-modal (see ScriptEditorDialogWindow), so this can already be open - just
+        // bring it forward rather than spawning a second editor.
+        if (m_scriptEditorWindow != nullptr)
+        {
+            m_scriptEditorWindow->toFront(true);
+            return;
+        }
+
         auto* editorComponent = new ScriptEditorWindow();
         editorComponent->setScriptText(processorRef.getScriptText());
         editorComponent->onApply = [this](const juce::String& text) -> juce::String
@@ -1005,14 +1013,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         };
         editorComponent->onReset = [this] { return juce::String(processorRef.getScriptSkeleton()); };
 
-        juce::DialogWindow::LaunchOptions options;
-        options.content.setOwned(editorComponent);
-        options.dialogTitle = "Edit Script";
-        options.dialogBackgroundColour = juce::Colour(GuiConstants::instance().colors.background);
-        options.escapeKeyTriggersCloseButton = true;
-        options.useNativeTitleBar = true;
-        options.resizable = true;
-        options.launchAsync();
+        auto* dialogWindow =
+            new ScriptEditorDialogWindow("Edit Script", juce::Colour(GuiConstants::instance().colors.background));
+        dialogWindow->setContentOwned(editorComponent, true);
+        dialogWindow->setUsingNativeTitleBar(true);
+        dialogWindow->setResizable(true, false);
+        dialogWindow->centreAroundComponent(nullptr, dialogWindow->getWidth(), dialogWindow->getHeight());
+        dialogWindow->setVisible(true);
+        m_scriptEditorWindow = dialogWindow;
     }
 
     // Apply-time only catches errors the script hits while its top-level chunk runs
@@ -1317,6 +1325,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AlertWindow> m_scriptNameDialog;
     std::vector<juce::String> m_scriptMenuNames;
     juce::String m_lastScriptErrorShown;
+    // Non-modal; deletes itself on close (see ScriptEditorDialogWindow), hence SafePointer
+    // rather than an owning pointer here.
+    juce::Component::SafePointer<ScriptEditorDialogWindow> m_scriptEditorWindow;
     static constexpr int kLlmAssistToggleId = 15000;
     static constexpr int kLlmAssistChooseFolderId = 15001;
     static constexpr int kLlmAssistPollEveryNTicks = 15;

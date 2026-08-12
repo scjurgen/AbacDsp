@@ -3,18 +3,19 @@
 #include <functional>
 #include <juce_gui_basics/juce_gui_basics.h>
 
-// Modal popup for editing a script's plain text (no syntax highlighting). Launched via
-// juce::DialogWindow::LaunchOptions, which owns this component and destroys it when the
-// dialog closes. Apply calls onApply and, only on success (empty returned string), closes
-// the dialog itself; a non-empty return is shown inline and the dialog stays open so the
-// user can fix a compile error without losing their edits. Cancel always just closes.
-// Reset replaces the editor's text with onReset()'s skeleton but does not apply or close -
-// it's still just an edit, undoable by Cancel, until Apply is clicked.
+// Non-modal popup for editing a script's plain text (no syntax highlighting), hosted by
+// ScriptEditorDialogWindow below rather than juce::DialogWindow::LaunchOptions, so the
+// main plugin window stays interactive while this is open. Apply calls onApply and never
+// closes the window itself, so the user can keep iterating; a non-empty return is shown
+// inline, an empty one clears any prior error. Cancel always closes (via the parent
+// window's closeButtonPressed()), discarding whatever is unapplied. Reset replaces the
+// editor's text with onReset()'s skeleton but does not apply or close - it's still just an
+// edit, undoable by Cancel, until Apply is clicked.
 class ScriptEditorWindow final : public juce::Component
 {
   public:
-    // Returns an error message to display (and keep the dialog open), or an empty
-    // string on success (closes the dialog).
+    // Returns an error message to display, or an empty string on success; either way the
+    // dialog stays open.
     std::function<juce::String(const juce::String&)> onApply;
     // Returns the skeleton text to load into the editor.
     std::function<juce::String()> onReset;
@@ -73,14 +74,7 @@ class ScriptEditorWindow final : public juce::Component
             return;
         }
         const auto error = onApply(m_editor.getText());
-        if (error.isEmpty())
-        {
-            closeParentDialog();
-        }
-        else
-        {
-            m_errorLabel.setText(error, juce::dontSendNotification);
-        }
+        m_errorLabel.setText(error, juce::dontSendNotification);
     }
 
     void reset()
@@ -97,7 +91,7 @@ class ScriptEditorWindow final : public juce::Component
     {
         if (auto* dw = findParentComponentOfClass<juce::DialogWindow>())
         {
-            dw->exitModalState(0);
+            dw->closeButtonPressed();
         }
     }
 
@@ -106,4 +100,24 @@ class ScriptEditorWindow final : public juce::Component
     juce::TextButton m_resetButton;
     juce::TextButton m_applyButton;
     juce::TextButton m_cancelButton;
+};
+
+// Non-modal host window for ScriptEditorWindow: setVisible(true) instead of
+// enterModalState(), so the main plugin window - in particular any Lua-declared knobs the
+// script just applied - stays interactive while this is open. Deletes itself on close (X
+// button, Escape, or Cancel/Apply via ScriptEditorWindow::closeParentDialog() above),
+// deferred via callAsync so it's safe even when triggered from a child button's own click
+// handler mid-dispatch.
+class ScriptEditorDialogWindow final : public juce::DialogWindow
+{
+  public:
+    ScriptEditorDialogWindow(const juce::String& title, const juce::Colour& backgroundColour)
+        : juce::DialogWindow(title, backgroundColour, true)
+    {
+    }
+
+    void closeButtonPressed() override
+    {
+        juce::MessageManager::callAsync([this] { delete this; });
+    }
 };
