@@ -190,6 +190,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(bpmDial);
         bpmDial.reset(valueTreeState, "bpm");
         bpmDial.setLabelText(juce::String::fromUTF8("BPM"));
+        bpmDial.setTooltip(juce::String::fromUTF8("BPM (40 to 250 BPM)"));
         bpmDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::bpm); },
                                      [this] { return processorRef.getCcRange(CcTarget::bpm); },
                                      [this](float lo, float hi) { processorRef.setCcRange(CcTarget::bpm, lo, hi); },
@@ -199,9 +200,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         dropBarsDrop.addItemList(valueTreeState.getParameter("dropBars")->getAllValueStrings(), 1);
         dropBarsDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "dropBars", dropBarsDrop);
+        dropBarsDrop.setTooltip(juce::String::fromUTF8(
+            "Drop Bars (Drop none, Play 1 Drop 1, Play 3 Drop 1, Play 2 Drop 2, Play 1 Drop 3)"));
         addAndMakeVisible(metroVolumeDial);
         metroVolumeDial.reset(valueTreeState, "metroVolume");
         metroVolumeDial.setLabelText(juce::String::fromUTF8("Metro Volume"));
+        metroVolumeDial.setTooltip(juce::String::fromUTF8("Metro Volume (-60 to 0 dB)"));
         metroVolumeDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::metroVolume); },
                                              [this] { return processorRef.getCcRange(CcTarget::metroVolume); },
                                              [this](float lo, float hi)
@@ -211,6 +215,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(inputVolumeDial);
         inputVolumeDial.reset(valueTreeState, "inputVolume");
         inputVolumeDial.setLabelText(juce::String::fromUTF8("Input Volume"));
+        inputVolumeDial.setTooltip(juce::String::fromUTF8("Input Volume (-60 to 12 dB)"));
         inputVolumeDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::inputVolume); },
                                              [this] { return processorRef.getCcRange(CcTarget::inputVolume); },
                                              [this](float lo, float hi)
@@ -220,6 +225,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(subVolumeDial);
         subVolumeDial.reset(valueTreeState, "subVolume");
         subVolumeDial.setLabelText(juce::String::fromUTF8("Sub Volume"));
+        subVolumeDial.setTooltip(juce::String::fromUTF8("Sub Volume (-60 to 0 dB)"));
         subVolumeDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::subVolume); },
                                            [this] { return processorRef.getCcRange(CcTarget::subVolume); },
                                            [this](float lo, float hi)
@@ -229,20 +235,28 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(onOffSwitch);
         onOffSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "onOff", onOffSwitch);
+        onOffSwitch.setTooltip(juce::String::fromUTF8("Start"));
 
         addAndMakeVisible(hostSyncSwitch);
         hostSyncSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "hostSync", hostSyncSwitch);
+        hostSyncSwitch.setTooltip(juce::String::fromUTF8("Host Sync"));
 
         addAndMakeVisible(presetDrop);
         presetDrop.addItemList(valueTreeState.getParameter("preset")->getAllValueStrings(), 1);
         presetDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "preset", presetDrop);
+        presetDrop.setTooltip(
+            juce::String::fromUTF8("Preset (3/4, 3/4 8th, 3/4 16th, 3/4 shuffle, 3/4 triplet, 4/4, 4/4 8th, 4/4 16th, "
+                                   "4/4 shuffle, 4/4 triplet, 4/4 swing, 5/4 (3+2), 5/4 8th (3+2), 5/4 (2+3), 5/4 8th "
+                                   "(2+3), 6/8 in-2, 6/8 in-6, 7/8 (2+2+3), 7/8 (2+3+2), 7/8 (3+2+2), 9/8 in-3, 9/8 "
+                                   "in-9, 11/8 (3+3+3+2), 11/8 (3+3+2+3), 13/8 (3+3+3+2+2), 13/8 (3+4+3+3))"));
         presetDrop.onChange = [this] { updateSwingRatioVisibility(); };
         updateSwingRatioVisibility();
         addChildComponent(swingRatioDial);
         swingRatioDial.reset(valueTreeState, "swingRatio");
         swingRatioDial.setLabelText(juce::String::fromUTF8("Swing"));
+        swingRatioDial.setTooltip(juce::String::fromUTF8("Swing (1.0 to 2.0)"));
         swingRatioDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::swingRatio); },
                                             [this] { return processorRef.getCcRange(CcTarget::swingRatio); },
                                             [this](float lo, float hi)
@@ -710,6 +724,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Colour backgroundApp;
     juce::MenuBarComponent m_menuBar;
     StatusBar m_statusBar;
+    juce::TooltipWindow m_tooltipWindow{this};
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};

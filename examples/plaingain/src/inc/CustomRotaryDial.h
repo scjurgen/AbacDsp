@@ -243,6 +243,14 @@ class CustomRotaryDial : public juce::Component
         m_slider.setCcMappable(mappable, std::move(callbacks));
     }
 
+    // JUCE's TooltipWindow only checks the exact component under the mouse
+    // (no parent-chain walk), so both hoverable children need the text set.
+    void setTooltip(const juce::String& text)
+    {
+        m_slider.setTooltip(text);
+        m_label.setTooltip(text);
+    }
+
   private:
     ModRotaryDial m_slider;
     juce::Label m_label;

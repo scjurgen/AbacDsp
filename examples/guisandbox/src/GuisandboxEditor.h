@@ -180,37 +180,50 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(onOffSwitch);
         onOffSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "onOff", onOffSwitch);
+        onOffSwitch.setTooltip(juce::String::fromUTF8("Power"));
 
         addAndMakeVisible(inputDial);
         inputDial.reset(valueTreeState, "input");
         inputDial.setLabelText(juce::String::fromUTF8("Input"));
+        inputDial.setTooltip(juce::String::fromUTF8("Input (0 to 50 dB)"));
         addAndMakeVisible(modulationDepthDial);
         modulationDepthDial.reset(valueTreeState, "modulationDepth");
         modulationDepthDial.setLabelText(juce::String::fromUTF8("Depth"));
+        modulationDepthDial.setTooltip(juce::String::fromUTF8("Depth (1 to 50 ms)"));
         addAndMakeVisible(mixDial);
         mixDial.reset(valueTreeState, "mix");
         mixDial.setLabelText(juce::String::fromUTF8("Mix"));
+        mixDial.setTooltip(juce::String::fromUTF8("Mix (-100 to 100)"));
         addAndMakeVisible(densityDial);
         densityDial.reset(valueTreeState, "density");
         densityDial.setLabelText(juce::String::fromUTF8("Density"));
+        densityDial.setTooltip(juce::String::fromUTF8("Density (1 to 12)"));
         addAndMakeVisible(thresholdDial);
         thresholdDial.reset(valueTreeState, "threshold");
         thresholdDial.setLabelText(juce::String::fromUTF8("Threshold"));
+        thresholdDial.setTooltip(juce::String::fromUTF8("Threshold (1 to 12)"));
         addAndMakeVisible(kneeDial);
         kneeDial.reset(valueTreeState, "knee");
         kneeDial.setLabelText(juce::String::fromUTF8("Knee"));
+        kneeDial.setTooltip(juce::String::fromUTF8("Knee (1 to 12 dB)"));
         addAndMakeVisible(div1Label);
         div1Label.setText(juce::String::fromUTF8("-- drop this too ----"), juce::dontSendNotification);
+        div1Label.setTooltip(juce::String::fromUTF8("-- drop this too ----"));
         addAndMakeVisible(div2Label);
         div2Label.setText(juce::String::fromUTF8("DropIt!"), juce::dontSendNotification);
+        div2Label.setTooltip(juce::String::fromUTF8("DropIt!"));
         addAndMakeVisible(cpuGauge);
         cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
+        cpuGauge.setTooltip(juce::String::fromUTF8("CPU (0 to 100 %)"));
         addAndMakeVisible(levelGauge);
         levelGauge.setLabelText(juce::String::fromUTF8("Level"));
+        levelGauge.setTooltip(juce::String::fromUTF8("Level (0 to 100 %)"));
         addAndMakeVisible(spectrogramGauge);
         spectrogramGauge.setLabelText(juce::String::fromUTF8("Spectrogram"));
+        spectrogramGauge.setTooltip(juce::String::fromUTF8("Spectrogram"));
         addAndMakeVisible(signalGauge);
         signalGauge.setLabelText(juce::String::fromUTF8("Beat"));
+        signalGauge.setTooltip(juce::String::fromUTF8("Beat"));
 
         addAndMakeVisible(m_pagePerformanceButton);
         addAndMakeVisible(m_pageSettingsButton);
@@ -669,6 +682,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Colour backgroundApp;
     juce::MenuBarComponent m_menuBar;
     StatusBar m_statusBar;
+    juce::TooltipWindow m_tooltipWindow{this};
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};

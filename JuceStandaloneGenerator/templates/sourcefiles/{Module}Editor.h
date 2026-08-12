@@ -813,6 +813,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         auto renameMenu = buildGroupedMenu(m_scriptMenuNames, kScriptRenameIdBase);
 
         juce::PopupMenu scripts;
+        scripts.addItem(kScriptEditId, "Edit...");
         scripts.addSubMenu("Load", loadMenu, !m_scriptMenuNames.empty());
         scripts.addItem(kScriptSaveAsId, "Save As...");
         scripts.addSubMenu("Delete", deleteMenu, !m_scriptMenuNames.empty());
@@ -839,6 +840,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         else if (menuItemID == kLlmAssistChooseFolderId)
         {
             chooseLlmAssistFolder(false);
+        }
+        else if (menuItemID == kScriptEditId)
+        {
+            openScriptEditor();
         }
         else if (menuItemID == kScriptSaveAsId)
         {
@@ -1050,6 +1055,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Colour backgroundApp;
     juce::MenuBarComponent m_menuBar;
     StatusBar m_statusBar;
+    juce::TooltipWindow m_tooltipWindow{this};
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};
@@ -1083,6 +1089,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     /*END_LOOPBROWSER*/
 
     /*START_SCRIPTBROWSER*/
+    static constexpr int kScriptEditId = 9004;
     static constexpr int kScriptSaveAsId = 10000;
     static constexpr int kScriptLoadIdBase = 11000;
     static constexpr int kScriptDeleteIdBase = 12000;

@@ -148,6 +148,7 @@ class LuaControlArea : public juce::Component
                                static_cast<double>(m_descriptor.rangeStep));
             m_slider->setSkewFactor(static_cast<double>(m_descriptor.rangeSkew));
             m_slider->setDescription(accessibilityDescription());
+            m_slider->setTooltip(accessibilityDescription());
             m_slider->onDragStart = [this] { m_attachment.beginGesture(); };
             m_slider->onDragEnd = [this] { m_attachment.endGesture(); };
             m_slider->onValueChange = [this] { pushDisplayValue(static_cast<float>(m_slider->getValue()), false); };
@@ -162,6 +163,7 @@ class LuaControlArea : public juce::Component
                 m_combo->addItem(juce::String(m_descriptor.items[i]), static_cast<int>(i) + 1);
             }
             m_combo->setDescription(accessibilityDescription());
+            m_combo->setTooltip(accessibilityDescription());
             m_combo->onChange = [this] { pushDisplayValue(static_cast<float>(m_combo->getSelectedId() - 1), true); };
             addAndMakeVisible(*m_combo);
         }
@@ -170,6 +172,7 @@ class LuaControlArea : public juce::Component
         {
             m_toggle = std::make_unique<juce::ToggleButton>();
             m_toggle->setDescription(accessibilityDescription());
+            m_toggle->setTooltip(accessibilityDescription());
             m_toggle->onClick = [this] { pushDisplayValue(m_toggle->getToggleState() ? 1.f : 0.f, true); };
             addAndMakeVisible(*m_toggle);
         }

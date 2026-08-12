@@ -179,49 +179,66 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(gainDial);
         gainDial.reset(valueTreeState, "gain");
         gainDial.setLabelText(juce::String::fromUTF8("Gain"));
+        gainDial.setTooltip(juce::String::fromUTF8("Gain (-60 to 60 dB)"));
         addAndMakeVisible(dryDial);
         dryDial.reset(valueTreeState, "dry");
         dryDial.setLabelText(juce::String::fromUTF8("Dry"));
+        dryDial.setTooltip(juce::String::fromUTF8("Dry (-100 to 12 dB)"));
         addAndMakeVisible(wetDial);
         wetDial.reset(valueTreeState, "wet");
         wetDial.setLabelText(juce::String::fromUTF8("Wet"));
+        wetDial.setTooltip(juce::String::fromUTF8("Wet (-100 to 12 dB)"));
         addAndMakeVisible(timeInMsDial);
         timeInMsDial.reset(valueTreeState, "timeInMs");
         timeInMsDial.setLabelText(juce::String::fromUTF8("Time"));
+        timeInMsDial.setTooltip(juce::String::fromUTF8("Time (1 to 10000 ms)"));
         addAndMakeVisible(hostSyncSwitch);
         hostSyncSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "hostSync", hostSyncSwitch);
+        hostSyncSwitch.setTooltip(juce::String::fromUTF8("Host Sync"));
 
         addAndMakeVisible(syncDivisionDrop);
         syncDivisionDrop.addItemList(valueTreeState.getParameter("syncDivision")->getAllValueStrings(), 1);
         syncDivisionDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "syncDivision", syncDivisionDrop);
+        syncDivisionDrop.setTooltip(juce::String::fromUTF8(
+            "Sync Division (1/1, 1/2, 1/2., 1/2T, 1/4, 1/4., 1/4T, 1/8, 1/8., 1/8T, 1/16, 1/16., 1/16T)"));
         addAndMakeVisible(feedbackDial);
         feedbackDial.reset(valueTreeState, "feedback");
         feedbackDial.setLabelText(juce::String::fromUTF8("Feedback"));
+        feedbackDial.setTooltip(juce::String::fromUTF8("Feedback (-100 to 100 %)"));
         addAndMakeVisible(lowPassDial);
         lowPassDial.reset(valueTreeState, "lowPass");
         lowPassDial.setLabelText(juce::String::fromUTF8("Low pass cutoff"));
+        lowPassDial.setTooltip(juce::String::fromUTF8("Low pass cutoff (100 to 20000 Hz)"));
         addAndMakeVisible(highPassDial);
         highPassDial.reset(valueTreeState, "highPass");
         highPassDial.setLabelText(juce::String::fromUTF8("High pass cutoff"));
+        highPassDial.setTooltip(juce::String::fromUTF8("High pass cutoff (20 to 20000 Hz)"));
         addAndMakeVisible(allPassDial);
         allPassDial.reset(valueTreeState, "allPass");
         allPassDial.setLabelText(juce::String::fromUTF8("All pass cutoff"));
+        allPassDial.setTooltip(juce::String::fromUTF8("All pass cutoff (100 to 20000 Hz)"));
         addAndMakeVisible(modDepthDial);
         modDepthDial.reset(valueTreeState, "modDepth");
         modDepthDial.setLabelText(juce::String::fromUTF8("Modulation depth"));
+        modDepthDial.setTooltip(juce::String::fromUTF8("Modulation depth (0 to 100 %)"));
         addAndMakeVisible(modSpeedDial);
         modSpeedDial.reset(valueTreeState, "modSpeed");
         modSpeedDial.setLabelText(juce::String::fromUTF8("Modulation speed"));
+        modSpeedDial.setTooltip(juce::String::fromUTF8("Modulation speed (0.05 to 20 Hz)"));
         addAndMakeVisible(cpuGauge);
         cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
+        cpuGauge.setTooltip(juce::String::fromUTF8("CPU"));
         addAndMakeVisible(levelGauge);
         levelGauge.setLabelText(juce::String::fromUTF8("Level"));
+        levelGauge.setTooltip(juce::String::fromUTF8("Level (0 to 100 %)"));
         addAndMakeVisible(spectrogramGauge);
         spectrogramGauge.setLabelText(juce::String::fromUTF8("Spectrogram"));
+        spectrogramGauge.setTooltip(juce::String::fromUTF8("Spectrogram"));
         addAndMakeVisible(signalGauge);
         signalGauge.setLabelText(juce::String::fromUTF8("Signal"));
+        signalGauge.setTooltip(juce::String::fromUTF8("Signal"));
 
         addAndMakeVisible(m_pagePerformanceButton);
         addAndMakeVisible(m_pageSettingsButton);
@@ -686,6 +703,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Colour backgroundApp;
     juce::MenuBarComponent m_menuBar;
     StatusBar m_statusBar;
+    juce::TooltipWindow m_tooltipWindow{this};
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};

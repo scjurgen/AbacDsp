@@ -16,8 +16,12 @@ class EffectBase
     {
         double bpm{120.0};
         double ppqPosition{0.0}; // quarter notes since session start
-        float beatsPerBar{4.f};  // host time-signature numerator
+        double timeInSeconds{0.0};
+        float beatsPerBar{4.f};    // host time-signature numerator
+        int timeSigDenominator{4}; // host time-signature denominator
         bool isPlaying{false};
+        bool isLooping{false};
+        bool isRecording{false};
         // Bumped once per host processBlock(), not per internal sub-block;
         // consumers use it to detect a fresh transport sample.
         uint64_t updateCount{0};

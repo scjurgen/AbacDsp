@@ -340,66 +340,84 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         addAndMakeVisible(divoLabel);
         divoLabel.setText(juce::String::fromUTF8("—— Overdub ——"), juce::dontSendNotification);
+        divoLabel.setTooltip(juce::String::fromUTF8("—— Overdub ——"));
         addAndMakeVisible(divsLabel);
         divsLabel.setText(juce::String::fromUTF8("—— Sequencer ——"), juce::dontSendNotification);
+        divsLabel.setTooltip(juce::String::fromUTF8("—— Sequencer ——"));
         addAndMakeVisible(recordSwitch);
         recordSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "record", recordSwitch);
+        recordSwitch.setTooltip(juce::String::fromUTF8("Record"));
 
         addAndMakeVisible(playSwitch);
         playSwitchAttachment =
             std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(valueTreeState, "play", playSwitch);
+        playSwitch.setTooltip(juce::String::fromUTF8("Play"));
 
         addAndMakeVisible(overdubSwitch);
         overdubSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "overdub", overdubSwitch);
+        overdubSwitch.setTooltip(juce::String::fromUTF8("Overdub"));
 
         addAndMakeVisible(undoSwitch);
         undoSwitchAttachment =
             std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(valueTreeState, "undo", undoSwitch);
+        undoSwitch.setTooltip(juce::String::fromUTF8("Undo"));
 
         addAndMakeVisible(mixDownSwitch);
         mixDownSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "mixDown", mixDownSwitch);
+        mixDownSwitch.setTooltip(juce::String::fromUTF8("Mix Down"));
 
         addAndMakeVisible(clearSwitch);
         clearSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "clear", clearSwitch);
+        clearSwitch.setTooltip(juce::String::fromUTF8("Clear"));
 
         addAndMakeVisible(threshRecSwitch);
         threshRecSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "threshRec", threshRecSwitch);
+        threshRecSwitch.setTooltip(juce::String::fromUTF8("Thresh Rec"));
 
         addAndMakeVisible(hostSyncSwitch);
         hostSyncSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "hostSync", hostSyncSwitch);
+        hostSyncSwitch.setTooltip(juce::String::fromUTF8("Host Sync"));
 
         addAndMakeVisible(freeRecordSwitch);
         freeRecordSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "freeRecord", freeRecordSwitch);
+        freeRecordSwitch.setTooltip(juce::String::fromUTF8("Free Record"));
 
         addAndMakeVisible(countInBarsDrop);
         countInBarsDrop.addItemList(valueTreeState.getParameter("countInBars")->getAllValueStrings(), 1);
         countInBarsDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "countInBars", countInBarsDrop);
+        countInBarsDrop.setTooltip(juce::String::fromUTF8("Count-In (Off, 1 Bar, 2 Bars)"));
         addAndMakeVisible(timeSignatureDrop);
         timeSignatureDrop.addItemList(valueTreeState.getParameter("timeSignature")->getAllValueStrings(), 1);
         timeSignatureDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "timeSignature", timeSignatureDrop);
+        timeSignatureDrop.setTooltip(
+            juce::String::fromUTF8("Time Sig (2/4, 3/4, 4/4, 5/4, 6/4, 7/4, 5/8, 6/8, 7/8, 9/8, 11/8, 13/8, 15/8)"));
         addAndMakeVisible(autoStopSwitch);
         autoStopSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "autoStop", autoStopSwitch);
+        autoStopSwitch.setTooltip(juce::String::fromUTF8("Auto Stop"));
 
         addAndMakeVisible(recordBarsDial);
         recordBarsDial.reset(valueTreeState, "recordBars");
         recordBarsDial.setLabelText(juce::String::fromUTF8("Record Bars"));
+        recordBarsDial.setTooltip(juce::String::fromUTF8("Record Bars (1 to 32 bars)"));
         addAndMakeVisible(sliceDivisionDrop);
         sliceDivisionDrop.addItemList(valueTreeState.getParameter("sliceDivision")->getAllValueStrings(), 1);
         sliceDivisionDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "sliceDivision", sliceDivisionDrop);
+        sliceDivisionDrop.setTooltip(juce::String::fromUTF8("Division (1/4, 1/8, 1/16, 1/32)"));
         addAndMakeVisible(bpmDial);
         bpmDial.reset(valueTreeState, "bpm");
         bpmDial.setLabelText(juce::String::fromUTF8("BPM"));
+        bpmDial.setTooltip(juce::String::fromUTF8("BPM (50 to 250 BPM)"));
         bpmDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::bpm); },
                                      [this] { return processorRef.getCcRange(CcTarget::bpm); },
                                      [this](float lo, float hi) { processorRef.setCcRange(CcTarget::bpm, lo, hi); },
@@ -408,6 +426,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(clickVolumeDial);
         clickVolumeDial.reset(valueTreeState, "clickVolume");
         clickVolumeDial.setLabelText(juce::String::fromUTF8("Click Volume"));
+        clickVolumeDial.setTooltip(juce::String::fromUTF8("Click Volume (-60 to 0 dB)"));
         clickVolumeDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::clickVolume); },
                                              [this] { return processorRef.getCcRange(CcTarget::clickVolume); },
                                              [this](float lo, float hi)
@@ -417,6 +436,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(clickRecordVolumeDial);
         clickRecordVolumeDial.reset(valueTreeState, "clickRecordVolume");
         clickRecordVolumeDial.setLabelText(juce::String::fromUTF8("Click->Track"));
+        clickRecordVolumeDial.setTooltip(juce::String::fromUTF8("Click->Track (-60 to 0 dB)"));
         clickRecordVolumeDial.setCcMappable(
             true, {[this] { processorRef.beginCcLearn(CcTarget::clickRecordVolume); },
                    [this] { return processorRef.getCcRange(CcTarget::clickRecordVolume); },
@@ -426,6 +446,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(loopVolumeDial);
         loopVolumeDial.reset(valueTreeState, "loopVolume");
         loopVolumeDial.setLabelText(juce::String::fromUTF8("Loop Volume"));
+        loopVolumeDial.setTooltip(juce::String::fromUTF8("Loop Volume (-60 to 12 dB)"));
         loopVolumeDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::loopVolume); },
                                             [this] { return processorRef.getCcRange(CcTarget::loopVolume); },
                                             [this](float lo, float hi)
@@ -435,6 +456,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(recThresholdDial);
         recThresholdDial.reset(valueTreeState, "recThreshold");
         recThresholdDial.setLabelText(juce::String::fromUTF8("Rec Threshold"));
+        recThresholdDial.setTooltip(juce::String::fromUTF8("Rec Threshold (-60 to 0 dB)"));
         recThresholdDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::recThreshold); },
                                               [this] { return processorRef.getCcRange(CcTarget::recThreshold); },
                                               [this](float lo, float hi)
@@ -444,14 +466,17 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(freezeSwitch);
         freezeSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "freeze", freezeSwitch);
+        freezeSwitch.setTooltip(juce::String::fromUTF8("Freeze"));
 
         addAndMakeVisible(seqPlaySwitch);
         seqPlaySwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "seqPlay", seqPlaySwitch);
+        seqPlaySwitch.setTooltip(juce::String::fromUTF8("Seq Play"));
 
         addAndMakeVisible(clearSeqSwitch);
         clearSeqSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "clearSeq", clearSeqSwitch);
+        clearSeqSwitch.setTooltip(juce::String::fromUTF8("Clear Seq"));
 
         addAndMakeVisible(beatGauge);
         beatGauge.setLabelText(juce::String::fromUTF8("Bar"));
@@ -1129,6 +1154,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Colour backgroundApp;
     juce::MenuBarComponent m_menuBar;
     StatusBar m_statusBar;
+    juce::TooltipWindow m_tooltipWindow{this};
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};

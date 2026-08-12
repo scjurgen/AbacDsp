@@ -149,22 +149,29 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(volDial);
         volDial.reset(valueTreeState, "vol");
         volDial.setLabelText(juce::String::fromUTF8("Vol"));
+        volDial.setTooltip(juce::String::fromUTF8("Vol (-100 to 12 dB)"));
         addAndMakeVisible(typeDrop);
         typeDrop.addItemList(valueTreeState.getParameter("type")->getAllValueStrings(), 1);
         typeDropAttachment =
             std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(valueTreeState, "type", typeDrop);
+        typeDrop.setTooltip(juce::String::fromUTF8("Sample (Sample1, Sample2, Sample3, Sample4)"));
         addAndMakeVisible(positionDial);
         positionDial.reset(valueTreeState, "position");
         positionDial.setLabelText(juce::String::fromUTF8("Position"));
+        positionDial.setTooltip(juce::String::fromUTF8("Position (0 to 100 %)"));
         addAndMakeVisible(advanceDial);
         advanceDial.reset(valueTreeState, "advance");
         advanceDial.setLabelText(juce::String::fromUTF8("Advance"));
+        advanceDial.setTooltip(juce::String::fromUTF8("Advance (0.1 to 10 x)"));
         addAndMakeVisible(cpuGauge);
         cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
+        cpuGauge.setTooltip(juce::String::fromUTF8("CPU (0 to 100 %)"));
         addAndMakeVisible(levelGauge);
         levelGauge.setLabelText(juce::String::fromUTF8("Level"));
+        levelGauge.setTooltip(juce::String::fromUTF8("Level (0 to 100 %)"));
         addAndMakeVisible(spectrogramGauge);
         spectrogramGauge.setLabelText(juce::String::fromUTF8("Spectrogram"));
+        spectrogramGauge.setTooltip(juce::String::fromUTF8("Spectrogram"));
 
         addAndMakeVisible(m_pagePerformanceButton);
         addAndMakeVisible(m_pageSettingsButton);
@@ -610,6 +617,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Colour backgroundApp;
     juce::MenuBarComponent m_menuBar;
     StatusBar m_statusBar;
+    juce::TooltipWindow m_tooltipWindow{this};
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};

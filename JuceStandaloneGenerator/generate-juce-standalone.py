@@ -33,7 +33,7 @@ from codegen_processor import (
     create_patch_parameters_script_methods, create_load_script_calls,
     create_fileio_script_methods, create_fileio_script_private,
     create_fileio_script_members, create_processor_script_methods,
-    has_script_port, create_about_text,
+    uses_lua, create_about_text,
 )
 from codegen_widgets import (
     gauge_present, create_gauge_callbacks, create_theme_callbacks,
@@ -76,6 +76,18 @@ CPP_SOURCE_FILES_FIXED = [
     "inc/CustomRotaryDial.h",
     "inc/GenericMeter.h",
     "inc/GuiConstants.h",
+    "inc/MomentaryToggleButton.h",
+    "inc/SliceWaveDisplay.h",
+    "inc/SpectrogramDisplay.h",
+    "inc/StatusBar.h",
+    "inc/ThemeOrbit.h",
+    "inc/VuMeter.h",
+    "inc/WaveformMeter.h",
+]
+
+# Only copied/included for blueprints with "use-lua": true - these need sol2, which is
+# only wired into a blueprint's own (protected, hand-maintained) CMakeLists.txt.
+CPP_SOURCE_FILES_LUA = [
     "inc/LlmAssistWatcher.h",
     "inc/LlmAssistWatcherCore.h",
     "inc/LuaControlArea.h",
@@ -83,14 +95,7 @@ CPP_SOURCE_FILES_FIXED = [
     "inc/LuaParamRangeMath.h",
     "inc/LuaScriptEngineBase.h",
     "inc/LuaScriptMemoryPool.h",
-    "inc/MomentaryToggleButton.h",
     "inc/ScriptEditorWindow.h",
-    "inc/SliceWaveDisplay.h",
-    "inc/SpectrogramDisplay.h",
-    "inc/StatusBar.h",
-    "inc/ThemeOrbit.h",
-    "inc/VuMeter.h",
-    "inc/WaveformMeter.h",
 ]
 
 CPP_SOURCE_FILES_3RDPARTY = [
@@ -339,12 +344,15 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
         blueprint["CPP"]["GAUGES"].append("PRESETBROWSER")
     if blueprint.get("loops", False):
         blueprint["CPP"]["GAUGES"].append("LOOPBROWSER")
-    if has_script_port(blueprint):
+    if uses_lua(blueprint):
         blueprint["CPP"]["GAUGES"].append("SCRIPTBROWSER")
     if blueprint.get("host_transport", False):
         blueprint["CPP"]["GAUGES"].append("HOSTTRANSPORT")
     if has_performance_page:
         blueprint["CPP"]["GAUGES"].append("PERFORMANCEPAGE")
+
+    if any(item["type"] == "luacontrolarea" for item in blueprint["ports-control"]) and not uses_lua(blueprint):
+        raise GeneratorError(f"{blueprint['module']}: a luacontrolarea port requires \"use-lua\": true")
 
     for file_field in [CPP_JUCE_FILE, CPP_JUCE_FILE_IMPLEMENT, CPP_SOURCE_FILES_IMPL,
                         CPP_SOURCE_FILES_IMPL_FILE_IO, CPP_PATCH_PARAMETERS, CPP_CC_MAPPING,
@@ -397,6 +405,9 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
         shutil.copyfile(f"{TEMPLATE_FILES}/init-project.sh", f"{module_dir}/init-project.sh")
     for file_name in CPP_SOURCE_FILES_FIXED:
         shutil.copyfile(f"{SOURCE_FILES}/{file_name}", f"{module_dir}/src/{file_name}")
+    if uses_lua(blueprint):
+        for file_name in CPP_SOURCE_FILES_LUA:
+            shutil.copyfile(f"{SOURCE_FILES}/{file_name}", f"{module_dir}/src/{file_name}")
     shutil.copytree(f"{SOURCE_FILES}/inc/themes", f"{module_dir}/src/inc/themes", dirs_exist_ok=True)
     if stand_alone:
         for file_name in CPP_SOURCE_FILES_3RDPARTY:
@@ -409,6 +420,9 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
         f.write(f"""#include "{blueprint["Module"]}Constants.h"\n\n""")
         for file_name in CPP_SOURCE_FILES_FIXED:
             f.write(f"""#include "{file_name}"\n""")
+        if uses_lua(blueprint):
+            for file_name in CPP_SOURCE_FILES_LUA:
+                f.write(f"""#include "{file_name}"\n""")
         for extra in blueprint.get("extra_ui_includes", []):
             f.write(f"""#include "{extra}"\n""")
         f.write(f"""\n#include "{CPP_LOOK_AND_FEEL}"\n""")

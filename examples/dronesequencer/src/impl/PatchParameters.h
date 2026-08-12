@@ -17,7 +17,6 @@ struct PatchParameters
         tuning            , // dial
         transpose         , // dial
         detune            , // dial
-        script            , // script
         reverbDry         , // dial
         reverbWet         , // dial
         reverbSize        , // dial
@@ -52,13 +51,13 @@ struct PatchParameters
         luaParam5         , // dial
         luaParam6         , // dial
         luaParam7         , // dial
-        luaParam8          // dial
+        luaParam8         , // dial
+        script             // script
     };
 float level{0.0f};
 float tuning{440.0f};
 float transpose{0.0f};
 float detune{5.0f};
-std::string script{};
 float reverbDry{0.0f};
 float reverbWet{-100.0f};
 float reverbSize{30.0f};
@@ -94,6 +93,7 @@ float luaParam5{0.0f};
 float luaParam6{0.0f};
 float luaParam7{0.0f};
 float luaParam8{0.0f};
+std::string script{};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
@@ -158,7 +158,6 @@ float luaParam8{0.0f};
         else if constexpr (ParamId == Id::tuning) return tuning;
         else if constexpr (ParamId == Id::transpose) return transpose;
         else if constexpr (ParamId == Id::detune) return detune;
-        else if constexpr (ParamId == Id::script) return script;
         else if constexpr (ParamId == Id::reverbDry) return reverbDry;
         else if constexpr (ParamId == Id::reverbWet) return reverbWet;
         else if constexpr (ParamId == Id::reverbSize) return reverbSize;
@@ -194,6 +193,7 @@ float luaParam8{0.0f};
         else if constexpr (ParamId == Id::luaParam6) return luaParam6;
         else if constexpr (ParamId == Id::luaParam7) return luaParam7;
         else if constexpr (ParamId == Id::luaParam8) return luaParam8;
+        else if constexpr (ParamId == Id::script) return script;
 
     }
 
@@ -214,7 +214,6 @@ break;
 break;
  case Id::detune: if (!isEqual(get<Id::detune>(), value)) {get<Id::detune>() = value;m_modified = true;}
 break;
- case Id::script: break;
  case Id::reverbDry: if (!isEqual(get<Id::reverbDry>(), value)) {get<Id::reverbDry>() = value;m_modified = true;}
 break;
  case Id::reverbWet: if (!isEqual(get<Id::reverbWet>(), value)) {get<Id::reverbWet>() = value;m_modified = true;}
@@ -285,6 +284,7 @@ break;
 break;
  case Id::luaParam8: if (!isEqual(get<Id::luaParam8>(), value)) {get<Id::luaParam8>() = value;m_modified = true;}
 break;
+ case Id::script: break;
 
             default:
                 break;
@@ -330,7 +330,6 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         tuning            , // dial
         transpose         , // dial
         detune            , // dial
-        script            , // script
         reverbDry         , // dial
         reverbWet         , // dial
         reverbSize        , // dial
@@ -365,5 +364,6 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         luaParam5         , // dial
         luaParam6         , // dial
         luaParam7         , // dial
-        luaParam8          // dial
+        luaParam8         , // dial
+        script             // script
 )

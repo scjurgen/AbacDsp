@@ -233,6 +233,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(dryDial);
         dryDial.reset(valueTreeState, "dry");
         dryDial.setLabelText(juce::String::fromUTF8("Dry"));
+        dryDial.setTooltip(juce::String::fromUTF8("Dry (-100 to 12 dB)"));
         dryDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::dry); },
                                      [this] { return processorRef.getCcRange(CcTarget::dry); },
                                      [this](float lo, float hi) { processorRef.setCcRange(CcTarget::dry, lo, hi); },
@@ -241,6 +242,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(wetDial);
         wetDial.reset(valueTreeState, "wet");
         wetDial.setLabelText(juce::String::fromUTF8("Wet"));
+        wetDial.setTooltip(juce::String::fromUTF8("Wet (-100 to 12 dB)"));
         wetDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::wet); },
                                      [this] { return processorRef.getCcRange(CcTarget::wet); },
                                      [this](float lo, float hi) { processorRef.setCcRange(CcTarget::wet, lo, hi); },
@@ -249,6 +251,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(preDelayDial);
         preDelayDial.reset(valueTreeState, "preDelay");
         preDelayDial.setLabelText(juce::String::fromUTF8("Pre Delay"));
+        preDelayDial.setTooltip(juce::String::fromUTF8("Pre Delay (0 to 1000 ms)"));
         preDelayDial.setCcMappable(true,
                                    {[this] { processorRef.beginCcLearn(CcTarget::preDelay); },
                                     [this] { return processorRef.getCcRange(CcTarget::preDelay); },
@@ -258,6 +261,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(elementsDial);
         elementsDial.reset(valueTreeState, "elements");
         elementsDial.setLabelText(juce::String::fromUTF8("Elements"));
+        elementsDial.setTooltip(juce::String::fromUTF8("Elements (0 to 100)"));
         elementsDial.setCcMappable(true,
                                    {[this] { processorRef.beginCcLearn(CcTarget::elements); },
                                     [this] { return processorRef.getCcRange(CcTarget::elements); },
@@ -267,6 +271,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(tapSpanDial);
         tapSpanDial.reset(valueTreeState, "tapSpan");
         tapSpanDial.setLabelText(juce::String::fromUTF8("Tap Span"));
+        tapSpanDial.setTooltip(juce::String::fromUTF8("Tap Span (0 to 100 %)"));
         tapSpanDial.setCcMappable(true,
                                   {[this] { processorRef.beginCcLearn(CcTarget::tapSpan); },
                                    [this] { return processorRef.getCcRange(CcTarget::tapSpan); },
@@ -276,6 +281,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(feedbackDial);
         feedbackDial.reset(valueTreeState, "feedback");
         feedbackDial.setLabelText(juce::String::fromUTF8("Diffusion"));
+        feedbackDial.setTooltip(juce::String::fromUTF8("Diffusion (-100 to 100 %)"));
         feedbackDial.setCcMappable(true,
                                    {[this] { processorRef.beginCcLearn(CcTarget::feedback); },
                                     [this] { return processorRef.getCcRange(CcTarget::feedback); },
@@ -285,6 +291,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(bulgeDial);
         bulgeDial.reset(valueTreeState, "bulge");
         bulgeDial.setLabelText(juce::String::fromUTF8("Bulge"));
+        bulgeDial.setTooltip(juce::String::fromUTF8("Bulge (-1 to 1)"));
         bulgeDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::bulge); },
                                        [this] { return processorRef.getCcRange(CcTarget::bulge); },
                                        [this](float lo, float hi) { processorRef.setCcRange(CcTarget::bulge, lo, hi); },
@@ -293,6 +300,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(bottomSizeDial);
         bottomSizeDial.reset(valueTreeState, "bottomSize");
         bottomSizeDial.setLabelText(juce::String::fromUTF8("Early Size"));
+        bottomSizeDial.setTooltip(juce::String::fromUTF8("Early Size (0.5 to 100.0 m)"));
         bottomSizeDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::bottomSize); },
                                             [this] { return processorRef.getCcRange(CcTarget::bottomSize); },
                                             [this](float lo, float hi)
@@ -302,6 +310,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(topSizeDial);
         topSizeDial.reset(valueTreeState, "topSize");
         topSizeDial.setLabelText(juce::String::fromUTF8("Late Size"));
+        topSizeDial.setTooltip(juce::String::fromUTF8("Late Size (0.5 to 100.0 m)"));
         topSizeDial.setCcMappable(true,
                                   {[this] { processorRef.beginCcLearn(CcTarget::topSize); },
                                    [this] { return processorRef.getCcRange(CcTarget::topSize); },
@@ -311,6 +320,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(sizeSpreadDial);
         sizeSpreadDial.reset(valueTreeState, "sizeSpread");
         sizeSpreadDial.setLabelText(juce::String::fromUTF8("Size Spread"));
+        sizeSpreadDial.setTooltip(juce::String::fromUTF8("Size Spread (0 to 10 m)"));
         sizeSpreadDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::sizeSpread); },
                                             [this] { return processorRef.getCcRange(CcTarget::sizeSpread); },
                                             [this](float lo, float hi)
@@ -320,6 +330,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(modulationDepthDial);
         modulationDepthDial.reset(valueTreeState, "modulationDepth");
         modulationDepthDial.setLabelText(juce::String::fromUTF8("Mod Depth"));
+        modulationDepthDial.setTooltip(juce::String::fromUTF8("Mod Depth (0 to 1)"));
         modulationDepthDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::modulationDepth); },
                                                  [this] { return processorRef.getCcRange(CcTarget::modulationDepth); },
                                                  [this](float lo, float hi)
@@ -329,6 +340,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(modulationSpeedDial);
         modulationSpeedDial.reset(valueTreeState, "modulationSpeed");
         modulationSpeedDial.setLabelText(juce::String::fromUTF8("Mod Speed"));
+        modulationSpeedDial.setTooltip(juce::String::fromUTF8("Mod Speed (0.01 to 5 Hz)"));
         modulationSpeedDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::modulationSpeed); },
                                                  [this] { return processorRef.getCcRange(CcTarget::modulationSpeed); },
                                                  [this](float lo, float hi)
@@ -338,6 +350,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(lowPassDial);
         lowPassDial.reset(valueTreeState, "lowPass");
         lowPassDial.setLabelText(juce::String::fromUTF8("Low Pass"));
+        lowPassDial.setTooltip(juce::String::fromUTF8("Low Pass (20 to 20000 Hz)"));
         lowPassDial.setCcMappable(true,
                                   {[this] { processorRef.beginCcLearn(CcTarget::lowPass); },
                                    [this] { return processorRef.getCcRange(CcTarget::lowPass); },
@@ -347,6 +360,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(mixDial);
         mixDial.reset(valueTreeState, "mix");
         mixDial.setLabelText(juce::String::fromUTF8("Pitch Mix"));
+        mixDial.setTooltip(juce::String::fromUTF8("Pitch Mix (0 to 100 %)"));
         mixDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::mix); },
                                      [this] { return processorRef.getCcRange(CcTarget::mix); },
                                      [this](float lo, float hi) { processorRef.setCcRange(CcTarget::mix, lo, hi); },
@@ -355,6 +369,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(pitchDial);
         pitchDial.reset(valueTreeState, "pitch");
         pitchDial.setLabelText(juce::String::fromUTF8("Pitch"));
+        pitchDial.setTooltip(juce::String::fromUTF8("Pitch (-24 to 24 st)"));
         pitchDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::pitch); },
                                        [this] { return processorRef.getCcRange(CcTarget::pitch); },
                                        [this](float lo, float hi) { processorRef.setCcRange(CcTarget::pitch, lo, hi); },
@@ -363,6 +378,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(pitchDelayDial);
         pitchDelayDial.reset(valueTreeState, "pitchDelay");
         pitchDelayDial.setLabelText(juce::String::fromUTF8("Pitch Delay"));
+        pitchDelayDial.setTooltip(juce::String::fromUTF8("Pitch Delay (0 to 1000 ms)"));
         pitchDelayDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::pitchDelay); },
                                             [this] { return processorRef.getCcRange(CcTarget::pitchDelay); },
                                             [this](float lo, float hi)
@@ -372,6 +388,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(pitch2Dial);
         pitch2Dial.reset(valueTreeState, "pitch2");
         pitch2Dial.setLabelText(juce::String::fromUTF8("Pitch 2"));
+        pitch2Dial.setTooltip(juce::String::fromUTF8("Pitch 2 (-24 to 24 st)"));
         pitch2Dial.setCcMappable(true,
                                  {[this] { processorRef.beginCcLearn(CcTarget::pitch2); },
                                   [this] { return processorRef.getCcRange(CcTarget::pitch2); },
@@ -381,6 +398,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(pitch2DelayDial);
         pitch2DelayDial.reset(valueTreeState, "pitch2Delay");
         pitch2DelayDial.setLabelText(juce::String::fromUTF8("Pitch 2 Delay"));
+        pitch2DelayDial.setTooltip(juce::String::fromUTF8("Pitch 2 Delay (0 to 1000 ms)"));
         pitch2DelayDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::pitch2Delay); },
                                              [this] { return processorRef.getCcRange(CcTarget::pitch2Delay); },
                                              [this](float lo, float hi)
@@ -391,9 +409,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         pitchModeDrop.addItemList(valueTreeState.getParameter("pitchMode")->getAllValueStrings(), 1);
         pitchModeDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "pitchMode", pitchModeDrop);
+        pitchModeDrop.setTooltip(juce::String::fromUTF8("Pitch Mode (Drift, Sync, Vocoder)"));
         addAndMakeVisible(fdnMixDial);
         fdnMixDial.reset(valueTreeState, "fdnMix");
         fdnMixDial.setLabelText(juce::String::fromUTF8("Reverb Mix"));
+        fdnMixDial.setTooltip(juce::String::fromUTF8("Reverb Mix (-100 to 12 dB)"));
         fdnMixDial.setCcMappable(true,
                                  {[this] { processorRef.beginCcLearn(CcTarget::fdnMix); },
                                   [this] { return processorRef.getCcRange(CcTarget::fdnMix); },
@@ -403,6 +423,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(fdnSizeDial);
         fdnSizeDial.reset(valueTreeState, "fdnSize");
         fdnSizeDial.setLabelText(juce::String::fromUTF8("Reverb Size"));
+        fdnSizeDial.setTooltip(juce::String::fromUTF8("Reverb Size (1 to 330 m)"));
         fdnSizeDial.setCcMappable(true,
                                   {[this] { processorRef.beginCcLearn(CcTarget::fdnSize); },
                                    [this] { return processorRef.getCcRange(CcTarget::fdnSize); },
@@ -412,6 +433,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(fdnDecayDial);
         fdnDecayDial.reset(valueTreeState, "fdnDecay");
         fdnDecayDial.setLabelText(juce::String::fromUTF8("Reverb Decay"));
+        fdnDecayDial.setTooltip(juce::String::fromUTF8("Reverb Decay (1 to 100000 ms)"));
         fdnDecayDial.setCcMappable(true,
                                    {[this] { processorRef.beginCcLearn(CcTarget::fdnDecay); },
                                     [this] { return processorRef.getCcRange(CcTarget::fdnDecay); },
@@ -421,6 +443,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(driveDial);
         driveDial.reset(valueTreeState, "drive");
         driveDial.setLabelText(juce::String::fromUTF8("Drive"));
+        driveDial.setTooltip(juce::String::fromUTF8("Drive (0 to 100 %)"));
         driveDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::drive); },
                                        [this] { return processorRef.getCcRange(CcTarget::drive); },
                                        [this](float lo, float hi) { processorRef.setCcRange(CcTarget::drive, lo, hi); },
@@ -429,6 +452,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(eqInLowDial);
         eqInLowDial.reset(valueTreeState, "eqInLow");
         eqInLowDial.setLabelText(juce::String::fromUTF8("EQ In Low"));
+        eqInLowDial.setTooltip(juce::String::fromUTF8("EQ In Low (-18 to 18 dB)"));
         eqInLowDial.setCcMappable(true,
                                   {[this] { processorRef.beginCcLearn(CcTarget::eqInLow); },
                                    [this] { return processorRef.getCcRange(CcTarget::eqInLow); },
@@ -438,6 +462,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(eqInMidDial);
         eqInMidDial.reset(valueTreeState, "eqInMid");
         eqInMidDial.setLabelText(juce::String::fromUTF8("EQ In Mid"));
+        eqInMidDial.setTooltip(juce::String::fromUTF8("EQ In Mid (-18 to 18 dB)"));
         eqInMidDial.setCcMappable(true,
                                   {[this] { processorRef.beginCcLearn(CcTarget::eqInMid); },
                                    [this] { return processorRef.getCcRange(CcTarget::eqInMid); },
@@ -447,6 +472,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(eqInHighDial);
         eqInHighDial.reset(valueTreeState, "eqInHigh");
         eqInHighDial.setLabelText(juce::String::fromUTF8("EQ In High"));
+        eqInHighDial.setTooltip(juce::String::fromUTF8("EQ In High (-18 to 18 dB)"));
         eqInHighDial.setCcMappable(true,
                                    {[this] { processorRef.beginCcLearn(CcTarget::eqInHigh); },
                                     [this] { return processorRef.getCcRange(CcTarget::eqInHigh); },
@@ -456,6 +482,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(eqOutLowDial);
         eqOutLowDial.reset(valueTreeState, "eqOutLow");
         eqOutLowDial.setLabelText(juce::String::fromUTF8("EQ Out Low"));
+        eqOutLowDial.setTooltip(juce::String::fromUTF8("EQ Out Low (-18 to 18 dB)"));
         eqOutLowDial.setCcMappable(true,
                                    {[this] { processorRef.beginCcLearn(CcTarget::eqOutLow); },
                                     [this] { return processorRef.getCcRange(CcTarget::eqOutLow); },
@@ -465,6 +492,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(eqOutMidDial);
         eqOutMidDial.reset(valueTreeState, "eqOutMid");
         eqOutMidDial.setLabelText(juce::String::fromUTF8("EQ Out Mid"));
+        eqOutMidDial.setTooltip(juce::String::fromUTF8("EQ Out Mid (-18 to 18 dB)"));
         eqOutMidDial.setCcMappable(true,
                                    {[this] { processorRef.beginCcLearn(CcTarget::eqOutMid); },
                                     [this] { return processorRef.getCcRange(CcTarget::eqOutMid); },
@@ -474,6 +502,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(eqOutHighDial);
         eqOutHighDial.reset(valueTreeState, "eqOutHigh");
         eqOutHighDial.setLabelText(juce::String::fromUTF8("EQ Out High"));
+        eqOutHighDial.setTooltip(juce::String::fromUTF8("EQ Out High (-18 to 18 dB)"));
         eqOutHighDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::eqOutHigh); },
                                            [this] { return processorRef.getCcRange(CcTarget::eqOutHigh); },
                                            [this](float lo, float hi)
@@ -483,6 +512,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(levelDial);
         levelDial.reset(valueTreeState, "level");
         levelDial.setLabelText(juce::String::fromUTF8("Level"));
+        levelDial.setTooltip(juce::String::fromUTF8("Level (-24 to 12 dB)"));
         levelDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::level); },
                                        [this] { return processorRef.getCcRange(CcTarget::level); },
                                        [this](float lo, float hi) { processorRef.setCcRange(CcTarget::level, lo, hi); },
@@ -491,6 +521,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(pitcherShelfLowDial);
         pitcherShelfLowDial.reset(valueTreeState, "pitcherShelfLow");
         pitcherShelfLowDial.setLabelText(juce::String::fromUTF8("Pitcher Shelf Low"));
+        pitcherShelfLowDial.setTooltip(juce::String::fromUTF8("Pitcher Shelf Low (-18 to 18 dB)"));
         pitcherShelfLowDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::pitcherShelfLow); },
                                                  [this] { return processorRef.getCcRange(CcTarget::pitcherShelfLow); },
                                                  [this](float lo, float hi)
@@ -500,6 +531,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(pitcherShelfHighDial);
         pitcherShelfHighDial.reset(valueTreeState, "pitcherShelfHigh");
         pitcherShelfHighDial.setLabelText(juce::String::fromUTF8("Pitcher Shelf High"));
+        pitcherShelfHighDial.setTooltip(juce::String::fromUTF8("Pitcher Shelf High (-18 to 18 dB)"));
         pitcherShelfHighDial.setCcMappable(
             true, {[this] { processorRef.beginCcLearn(CcTarget::pitcherShelfHigh); },
                    [this] { return processorRef.getCcRange(CcTarget::pitcherShelfHigh); },
@@ -509,10 +541,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(extremeStereoTapSwitch);
         extremeStereoTapSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "extremeStereoTap", extremeStereoTapSwitch);
+        extremeStereoTapSwitch.setTooltip(juce::String::fromUTF8("Extreme Stereo Tap"));
 
         addAndMakeVisible(wideDial);
         wideDial.reset(valueTreeState, "wide");
         wideDial.setLabelText(juce::String::fromUTF8("Wide"));
+        wideDial.setTooltip(juce::String::fromUTF8("Wide (-100 to 100 %)"));
         wideDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::wide); },
                                       [this] { return processorRef.getCcRange(CcTarget::wide); },
                                       [this](float lo, float hi) { processorRef.setCcRange(CcTarget::wide, lo, hi); },
@@ -521,6 +555,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(reverbShelfLowDial);
         reverbShelfLowDial.reset(valueTreeState, "reverbShelfLow");
         reverbShelfLowDial.setLabelText(juce::String::fromUTF8("Reverb Shelf Low"));
+        reverbShelfLowDial.setTooltip(juce::String::fromUTF8("Reverb Shelf Low (-18 to 18 dB)"));
         reverbShelfLowDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::reverbShelfLow); },
                                                 [this] { return processorRef.getCcRange(CcTarget::reverbShelfLow); },
                                                 [this](float lo, float hi)
@@ -530,6 +565,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(reverbShelfHighDial);
         reverbShelfHighDial.reset(valueTreeState, "reverbShelfHigh");
         reverbShelfHighDial.setLabelText(juce::String::fromUTF8("Reverb Shelf High"));
+        reverbShelfHighDial.setTooltip(juce::String::fromUTF8("Reverb Shelf High (-18 to 18 dB)"));
         reverbShelfHighDial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::reverbShelfHigh); },
                                                  [this] { return processorRef.getCcRange(CcTarget::reverbShelfHigh); },
                                                  [this](float lo, float hi)
@@ -1047,6 +1083,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Colour backgroundApp;
     juce::MenuBarComponent m_menuBar;
     StatusBar m_statusBar;
+    juce::TooltipWindow m_tooltipWindow{this};
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};

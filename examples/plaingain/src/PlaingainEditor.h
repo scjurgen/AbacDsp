@@ -153,21 +153,28 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(gainDial);
         gainDial.reset(valueTreeState, "gain");
         gainDial.setLabelText(juce::String::fromUTF8("Gain"));
+        gainDial.setTooltip(juce::String::fromUTF8("Gain (-60 to 60 dB)"));
         addAndMakeVisible(lowShelvingDial);
         lowShelvingDial.reset(valueTreeState, "lowShelving");
         lowShelvingDial.setLabelText(juce::String::fromUTF8("Low"));
+        lowShelvingDial.setTooltip(juce::String::fromUTF8("Low (-24 to 24 dB)"));
         addAndMakeVisible(highShelvingDial);
         highShelvingDial.reset(valueTreeState, "highShelving");
         highShelvingDial.setLabelText(juce::String::fromUTF8("High"));
+        highShelvingDial.setTooltip(juce::String::fromUTF8("High (-24 to 24 dB)"));
         addAndMakeVisible(latencyDial);
         latencyDial.reset(valueTreeState, "latency");
         latencyDial.setLabelText(juce::String::fromUTF8("Latency"));
+        latencyDial.setTooltip(juce::String::fromUTF8("Latency (0 to 100 ms)"));
         addAndMakeVisible(levelGauge);
         levelGauge.setLabelText(juce::String::fromUTF8("Level"));
+        levelGauge.setTooltip(juce::String::fromUTF8("Level (0 to 100 %)"));
         addAndMakeVisible(spectrogramGauge);
         spectrogramGauge.setLabelText(juce::String::fromUTF8("Spectrogram"));
+        spectrogramGauge.setTooltip(juce::String::fromUTF8("Spectrogram"));
         addAndMakeVisible(signalGauge);
         signalGauge.setLabelText(juce::String::fromUTF8("Signal"));
+        signalGauge.setTooltip(juce::String::fromUTF8("Signal"));
 
         addAndMakeVisible(m_pagePerformanceButton);
         addAndMakeVisible(m_pageSettingsButton);
@@ -613,6 +620,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Colour backgroundApp;
     juce::MenuBarComponent m_menuBar;
     StatusBar m_statusBar;
+    juce::TooltipWindow m_tooltipWindow{this};
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};

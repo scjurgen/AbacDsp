@@ -4,8 +4,8 @@ from typing import Any
 from blueprint import Blueprint
 
 
-def has_script_port(blueprint: Blueprint) -> bool:
-    return any(item['type'] == 'script' for item in blueprint["ports-control"])
+def uses_lua(blueprint: Blueprint) -> bool:
+    return blueprint.get("use-lua", False)
 
 # Body text for the Settings > About > License Info dialog, shared verbatim by every
 # blueprint. \n\n here is a literal two-character escape landing inside a C++ string
@@ -20,7 +20,7 @@ def create_about_text(blueprint: Blueprint) -> str:
     lines = [description] if description else []
     lines.append("Part of the AbacDsp project - core DSP library is MIT licensed.")
     lines.append("Built with JUCE, licensed under AGPLv3 (or a commercial JUCE licence).")
-    if has_script_port(blueprint):
+    if uses_lua(blueprint):
         lines.append("Scripting powered by Lua and sol2 (both MIT licensed).")
     lines.append("Full third-party license details: THIRD-PARTY-LICENSES.md in the AbacDsp repository.")
     return "\\n\\n".join(lines)
@@ -83,19 +83,21 @@ def update_param_by_id(blueprint: Blueprint) -> str:
                     cast_value = f"""static_cast<size_t>(value) """
             if cast_value is not None:
                 result += f""" case Id::{param_id}: if (!isEqual(get<Id::{param_id}>(), value)) {{get<Id::{param_id}>() = {cast_value};m_modified = true;}}\nbreak;\n"""
-            elif item['type'] == 'script':
-                # No float-keyed update path for a string field (see update{Symbol}()
-                # instead) - explicit no-op case rather than relying on the switch's
-                # default:, since -Wswitch-enum flags any Id left unhandled either way.
-                result += f""" case Id::{param_id}: break;\n"""
+    if uses_lua(blueprint):
+        # No float-keyed update path for a string field (see updateScript() instead) -
+        # explicit no-op case since -Wswitch-enum flags any Id left unhandled either way.
+        result += """ case Id::script: break;\n"""
     return result
 
-# "script" is included here (unlike the dial/switch/drop-only helpers below) because
-# this same generated list feeds both the "enum class Id" body and, verbatim, the
-# nlohmann serialization macro's field list further down in the template - leaving it
-# out would silently drop script text from patch JSON entirely.
+# The synthetic "script" entry (when use-lua) is included here (unlike the
+# dial/switch/drop-only helpers below) because this same generated list feeds both the
+# "enum class Id" body and, verbatim, the nlohmann serialization macro's field list
+# further down in the template - leaving it out would silently drop script text from
+# patch JSON entirely.
 def id_list(blueprint: Blueprint) -> str:
-    items = [item for item in blueprint["ports-control"] if 'patch' not in item and item['type'] in ["dial", "switch", "drop", "script"]]
+    items = [item for item in blueprint["ports-control"] if 'patch' not in item and item['type'] in ["dial", "switch", "drop"]]
+    if uses_lua(blueprint):
+        items.append({'symbol': 'script', 'type': 'script'})
     if not items:
         return ""
 
@@ -117,8 +119,10 @@ def param_const_expr_list(blueprint: Blueprint) -> str:
     items= []
     for item in blueprint["ports-control"]:
         if 'patch' not in item:
-            if item['type'] in ["dial","switch","drop","script"]:
+            if item['type'] in ["dial","switch","drop"]:
                 items.append(f"""if constexpr (ParamId == Id::{item['symbol']}) return {item['symbol']};\n""")
+    if uses_lua(blueprint):
+        items.append("""if constexpr (ParamId == Id::script) return script;\n""")
     return "        else ".join(items)
 
 def load_patches(blueprint: Blueprint) -> str:
@@ -166,24 +170,20 @@ def create_struct_variables_implementation(blueprint: Blueprint) -> str:
                     result += f"bool {symbol}{{{'true' if default else 'false'}}};\n"
                 case "drop":
                     result += f"size_t {symbol}{{{default}}};\n"
-                case "script":
-                    # Empty by default (rather than duplicating the engine's stub script text
-                    # here) - a never-saved patch leaves whatever the DSP impl already loaded
-                    # at construction untouched; see create_load_script_calls().
-                    result += f'std::string {symbol}{{}};\n'
+    if uses_lua(blueprint):
+        # Empty by default (rather than duplicating the engine's stub script text here) -
+        # a never-saved patch leaves whatever the DSP impl already loaded at construction
+        # untouched; see create_load_script_calls().
+        result += 'std::string script{};\n'
     return result
 
-# Per-symbol "script" update methods for PatchParameters, bypassing the float-keyed
-# updateById() switch entirely - there's no APVTS parameter for a text blob to drive it.
+# Script update method for PatchParameters, bypassing the float-keyed updateById()
+# switch entirely - there's no APVTS parameter for a text blob to drive it.
 def create_patch_parameters_script_methods(blueprint: Blueprint) -> str:
-    result = ""
-    for item in blueprint["ports-control"]:
-        if item['type'] == 'script':
-            symbol = item['symbol']
-            upper = symbol[0].upper() + symbol[1:]
-            result += (f"""void update{upper}(const std::string& value) {{ """
-                       f"""if ({symbol} != value) {{ {symbol} = value; m_modified = true; }} }}\n""")
-    return result
+    if not uses_lua(blueprint):
+        return ""
+    return ("""void updateScript(const std::string& value) { """
+            """if (script != value) { script = value; m_modified = true; } }\n""")
 
 # Pushed into applyLoadedParametersToHost() after a patch load: an empty stored script
 # means "this patch never touched it", so the engine's own already-loaded script (its
@@ -191,14 +191,10 @@ def create_patch_parameters_script_methods(blueprint: Blueprint) -> str:
 # pluginRunner since a named-patch load (unlike the numbered-slot path, which only runs
 # from parameterChanged() after pluginRunner already exists) can run before prepareToPlay().
 def create_load_script_calls(blueprint: Blueprint) -> str:
-    result = ""
-    for item in blueprint["ports-control"]:
-        if item['type'] == 'script':
-            symbol = item['symbol']
-            upper = symbol[0].upper() + symbol[1:]
-            result += (f"""if (pluginRunner != nullptr && !params.{symbol}.empty()) """
-                       f"""{{ pluginRunner->set{upper}(params.{symbol}); }}\n""")
-    return result
+    if not uses_lua(blueprint):
+        return ""
+    return ("""if (pluginRunner != nullptr && !params.script.empty()) """
+            """{ pluginRunner->setScript(params.script); }\n""")
 
 # Pushed into prepareToPlay() right after pluginRunner is (re)constructed: without this,
 # a freshly built pluginRunner starts with the DSP impl's own default script rather than
@@ -206,27 +202,21 @@ def create_load_script_calls(blueprint: Blueprint) -> str:
 # script-editor Apply overwrites it. Mirrors create_load_script_calls() above, sourced
 # from FileIo directly since there is no local "params" at this point.
 def create_prepare_script_calls(blueprint: Blueprint) -> str:
-    result = ""
-    for item in blueprint["ports-control"]:
-        if item['type'] == 'script':
-            symbol = item['symbol']
-            upper = symbol[0].upper() + symbol[1:]
-            result += (f"""if (!m_fileIo.current{upper}().empty()) """
-                       f"""{{ pluginRunner->set{upper}(m_fileIo.current{upper}()); }}\n""")
-    return result
+    if not uses_lua(blueprint):
+        return ""
+    return ("""if (!m_fileIo.currentScript().empty()) """
+            """{ pluginRunner->setScript(m_fileIo.currentScript()); }\n""")
 
-# FileIo public API for a "script"-type port: update/current mirror updateParameter()'s
+# FileIo public API for the Lua script: update/current mirror updateParameter()'s
 # shape but for the string field directly; the rest is a named-item pool (list/save/
 # load/delete/rename) structurally identical to the named-patch pool above it, just
 # storing plain-text .lua files instead of JSON patch snapshots.
 def create_fileio_script_methods(blueprint: Blueprint) -> str:
-    result = ""
-    for item in blueprint["ports-control"]:
-        if item['type'] != 'script':
-            continue
-        symbol = item['symbol']
-        upper = symbol[0].upper() + symbol[1:]
-        result += f"""
+    if not uses_lua(blueprint):
+        return ""
+    symbol = "script"
+    upper = "Script"
+    return f"""
     void update{upper}(const std::string& value)
     {{
         if (!m_isInitialized)
@@ -326,24 +316,20 @@ def create_fileio_script_methods(blueprint: Blueprint) -> str:
         return true;
     }}
 """
-    return result
 
 # Private helpers backing create_fileio_script_methods() above: the on-disk pool
 # directory (a "<symbol>Scripts" sibling of the patch directory) and its filename
 # sanitizing/subfolder logic, copied from getPatchDirectory()/getNamedPatchFilename().
 def create_fileio_script_private(blueprint: Blueprint) -> str:
-    result = ""
+    if not uses_lua(blueprint):
+        return ""
     module_upper = blueprint["CPP"]["MODULE_UPPER"]
-    for item in blueprint["ports-control"]:
-        if item['type'] != 'script':
-            continue
-        symbol = item['symbol']
-        upper = symbol[0].upper() + symbol[1:]
-        # Not embedding "/*MODULE_UPPER*/" here for the templating engine to resolve:
-        # substitution runs once, in CPP_JUCE_FILE_VARS order, and MODULE_UPPER (near
-        # the top of that list) would run before FileIoScriptPrivate (appended at the
-        # end) has even inserted this text into the document - so it would never see it.
-        result += f"""
+    upper = "Script"
+    # Not embedding "/*MODULE_UPPER*/" here for the templating engine to resolve:
+    # substitution runs once, in CPP_JUCE_FILE_VARS order, and MODULE_UPPER (near
+    # the top of that list) would run before FileIoScriptPrivate (appended at the
+    # end) has even inserted this text into the document - so it would never see it.
+    return f"""
     static juce::File get{upper}Directory()
     {{
         auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
@@ -384,28 +370,21 @@ def create_fileio_script_private(blueprint: Blueprint) -> str:
         return dir.getChildFile(fileName + ".lua").getFullPathName().toStdString();
     }}
 """
-    return result
 
 def create_fileio_script_members(blueprint: Blueprint) -> str:
-    result = ""
-    for item in blueprint["ports-control"]:
-        if item['type'] == 'script':
-            upper = item['symbol'][0].upper() + item['symbol'][1:]
-            result += f"std::string m_current{upper}Name;\n"
-    return result
+    if not uses_lua(blueprint):
+        return ""
+    return "std::string m_currentScriptName;\n"
 
 # Fixed-name convenience wrappers (getScriptText, applyScriptText, listScriptNames, ...)
-# around the per-symbol FileIo/DSP methods above, so the Editor's popup/menu code (also
-# fixed-name, mirroring buildPatchesMenu()'s static shape) doesn't need to know the
-# port's actual symbol. Only the first "script"-type port gets this treatment - one
+# around the FileIo/DSP methods above, so the Editor's popup/menu code (also fixed-name,
+# mirroring buildPatchesMenu()'s static shape) doesn't need to know anything else. One
 # script pool per instrument is the only case any blueprint so far needs; a blueprint
 # wanting more would still have working per-symbol FileIo methods to build on directly.
 def create_processor_script_methods(blueprint: Blueprint) -> str:
-    script_items = [item for item in blueprint["ports-control"] if item['type'] == 'script']
-    if not script_items:
+    if not uses_lua(blueprint):
         return ""
-    symbol = script_items[0]['symbol']
-    upper = symbol[0].upper() + symbol[1:]
+    upper = "Script"
     return f"""
     [[nodiscard]] juce::String getScriptText() const
     {{

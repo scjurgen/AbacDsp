@@ -277,123 +277,170 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         keyDrop.addItemList(valueTreeState.getParameter("key")->getAllValueStrings(), 1);
         keyDropAttachment =
             std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(valueTreeState, "key", keyDrop);
+        keyDrop.setTooltip(juce::String::fromUTF8(
+            "Key (C0, C#/Db0, D0, D#/Eb0, E0, F0, F#/Gb0, G0, G#/Ab0, A0, Bb0, B0, C1, C#/Db1, D1, D#/Eb1, E1, F1, "
+            "F#/Gb1, G1, G#/Ab1, A1, Bb1, B1, C2, C#/Db2, D2, D#/Eb2, E2, F2, F#/Gb2, G2, G#/Ab2, A2, Bb2, B2, C3)"));
         addAndMakeVisible(levelDial);
         levelDial.reset(valueTreeState, "level");
         levelDial.setLabelText(juce::String::fromUTF8("Level"));
+        levelDial.setTooltip(juce::String::fromUTF8("Level (-80 to 0 dB)"));
         addAndMakeVisible(tuningDial);
         tuningDial.reset(valueTreeState, "tuning");
         tuningDial.setLabelText(juce::String::fromUTF8("Tuning"));
+        tuningDial.setTooltip(juce::String::fromUTF8("Tuning (400 to 800 Hz)"));
         addAndMakeVisible(detuneDial);
         detuneDial.reset(valueTreeState, "detune");
         detuneDial.setLabelText(juce::String::fromUTF8("Detune"));
+        detuneDial.setTooltip(juce::String::fromUTF8("Detune (0 to 100 ct)"));
         addAndMakeVisible(reverbDryDial);
         reverbDryDial.reset(valueTreeState, "reverbDry");
         reverbDryDial.setLabelText(juce::String::fromUTF8("Reverb Dry"));
+        reverbDryDial.setTooltip(juce::String::fromUTF8("Reverb Dry (-100 to 12 dB)"));
         addAndMakeVisible(reverbWetDial);
         reverbWetDial.reset(valueTreeState, "reverbWet");
         reverbWetDial.setLabelText(juce::String::fromUTF8("Reverb Wet"));
+        reverbWetDial.setTooltip(juce::String::fromUTF8("Reverb Wet (-100 to 12 dB)"));
         addAndMakeVisible(reverbSizeDial);
         reverbSizeDial.reset(valueTreeState, "reverbSize");
         reverbSizeDial.setLabelText(juce::String::fromUTF8("Reverb Size"));
+        reverbSizeDial.setTooltip(juce::String::fromUTF8("Reverb Size (1 to 330 m)"));
         addAndMakeVisible(reverbDecayDial);
         reverbDecayDial.reset(valueTreeState, "reverbDecay");
         reverbDecayDial.setLabelText(juce::String::fromUTF8("Reverb Decay"));
+        reverbDecayDial.setTooltip(juce::String::fromUTF8("Reverb Decay (1 to 100000 ms)"));
         addAndMakeVisible(reverbShelfLowDial);
         reverbShelfLowDial.reset(valueTreeState, "reverbShelfLow");
         reverbShelfLowDial.setLabelText(juce::String::fromUTF8("Reverb Shelf Low"));
+        reverbShelfLowDial.setTooltip(juce::String::fromUTF8("Reverb Shelf Low (-18 to 18 dB)"));
         addAndMakeVisible(reverbShelfHighDial);
         reverbShelfHighDial.reset(valueTreeState, "reverbShelfHigh");
         reverbShelfHighDial.setLabelText(juce::String::fromUTF8("Reverb Shelf High"));
+        reverbShelfHighDial.setTooltip(juce::String::fromUTF8("Reverb Shelf High (-18 to 18 dB)"));
         addAndMakeVisible(patternDrop);
         patternDrop.addItemList(valueTreeState.getParameter("pattern")->getAllValueStrings(), 1);
         patternDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "pattern", patternDrop);
+        patternDrop.setTooltip(
+            juce::String::fromUTF8("Pattern (H1 H2 1 -, H1 H2 8 1 -, H1 H2 8 8 1 -, H1 H2 - 8 8 1 -)"));
         addAndMakeVisible(slideDial);
         slideDial.reset(valueTreeState, "slide");
         slideDial.setLabelText(juce::String::fromUTF8("Slide"));
+        slideDial.setTooltip(juce::String::fromUTF8("Slide (0 to 100 %)"));
         addAndMakeVisible(slideTimeDial);
         slideTimeDial.reset(valueTreeState, "slideTime");
         slideTimeDial.setLabelText(juce::String::fromUTF8("Slide Time"));
+        slideTimeDial.setTooltip(juce::String::fromUTF8("Slide Time (1 to 3000 ms)"));
         addAndMakeVisible(harmonicFirstDrop);
         harmonicFirstDrop.addItemList(valueTreeState.getParameter("harmonicFirst")->getAllValueStrings(), 1);
         harmonicFirstDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "harmonicFirst", harmonicFirstDrop);
+        harmonicFirstDrop.setTooltip(juce::String::fromUTF8(
+            "Set Harmonic 1 (-12 sā सा, -11, -10 re र, -9, -8 ga ग, -7 ma म, -6, -5 pa प, -4, -3 dha ध, -2, -1 ni नी, "
+            "0 Sā सा, 1, 2 re र, 3, 4 ga ग, 5 ma म, 6, 7 pa प, 8, 9 dha ध, 10, 11 ni नी, 12 Sā सा)"));
         addAndMakeVisible(harmonicSecondDrop);
         harmonicSecondDrop.addItemList(valueTreeState.getParameter("harmonicSecond")->getAllValueStrings(), 1);
         harmonicSecondDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "harmonicSecond", harmonicSecondDrop);
+        harmonicSecondDrop.setTooltip(juce::String::fromUTF8(
+            "Set Harmonic 2 (-12 sā सा, -11, -10 re र, -9, -8 ga ग, -7 ma म, -6, -5 pa प, -4, -3 dha ध, -2, -1 ni नी, "
+            "0 Sā सा, 1, 2 re र, 3, 4 ga ग, 5 ma म, 6, 7 pa प, 8, 9 dha ध, 10, 11 ni नी, 12 Sā सा)"));
         addAndMakeVisible(playStopSwitch);
         playStopSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "playStop", playStopSwitch);
+        playStopSwitch.setTooltip(juce::String::fromUTF8("Play"));
 
         addAndMakeVisible(humanizeTimingDial);
         humanizeTimingDial.reset(valueTreeState, "humanizeTiming");
         humanizeTimingDial.setLabelText(juce::String::fromUTF8("Humanize Timing"));
+        humanizeTimingDial.setTooltip(juce::String::fromUTF8("Humanize Timing (0 to 100 %)"));
         addAndMakeVisible(humanizeLevelDial);
         humanizeLevelDial.reset(valueTreeState, "humanizeLevel");
         humanizeLevelDial.setLabelText(juce::String::fromUTF8("Humanize Level"));
+        humanizeLevelDial.setTooltip(juce::String::fromUTF8("Humanize Level (0 to 100 %)"));
         addAndMakeVisible(bpmDial);
         bpmDial.reset(valueTreeState, "bpm");
         bpmDial.setLabelText(juce::String::fromUTF8("BPM"));
+        bpmDial.setTooltip(juce::String::fromUTF8("BPM (40 to 250 BPM)"));
         addAndMakeVisible(hostSyncSwitch);
         hostSyncSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "hostSync", hostSyncSwitch);
+        hostSyncSwitch.setTooltip(juce::String::fromUTF8("Host Sync"));
 
         addAndMakeVisible(pluckDivisionDrop);
         pluckDivisionDrop.addItemList(valueTreeState.getParameter("pluckDivision")->getAllValueStrings(), 1);
         pluckDivisionDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "pluckDivision", pluckDivisionDrop);
+        pluckDivisionDrop.setTooltip(juce::String::fromUTF8(
+            "Pluck Division (1/1, 1/2, 1/2., 1/2T, 1/4, 1/4., 1/4T, 1/8, 1/8., 1/8T, 1/16, 1/16., 1/16T)"));
         addAndMakeVisible(pauseDivisionDrop);
         pauseDivisionDrop.addItemList(valueTreeState.getParameter("pauseDivision")->getAllValueStrings(), 1);
         pauseDivisionDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "pauseDivision", pauseDivisionDrop);
+        pauseDivisionDrop.setTooltip(juce::String::fromUTF8(
+            "Pause Division (1/1, 1/2, 1/2., 1/2T, 1/4, 1/4., 1/4T, 1/8, 1/8., 1/8T, 1/16, 1/16., 1/16T)"));
         addAndMakeVisible(attackDial);
         attackDial.reset(valueTreeState, "attack");
         attackDial.setLabelText(juce::String::fromUTF8("Attack"));
+        attackDial.setTooltip(juce::String::fromUTF8("Attack (1 to 3000 ms)"));
         addAndMakeVisible(decayDial);
         decayDial.reset(valueTreeState, "decay");
         decayDial.setLabelText(juce::String::fromUTF8("Decay"));
+        decayDial.setTooltip(juce::String::fromUTF8("Decay (1 to 100000 ms)"));
         addAndMakeVisible(decayOctaveDial);
         decayOctaveDial.reset(valueTreeState, "decayOctave");
         decayOctaveDial.setLabelText(juce::String::fromUTF8("Decay Octave"));
+        decayOctaveDial.setTooltip(juce::String::fromUTF8("Decay Octave (0 to 2)"));
         addAndMakeVisible(damperDial);
         damperDial.reset(valueTreeState, "damper");
         damperDial.setLabelText(juce::String::fromUTF8("Damper"));
+        damperDial.setTooltip(juce::String::fromUTF8("Damper (0 to 1)"));
         addAndMakeVisible(levelSustainDial);
         levelSustainDial.reset(valueTreeState, "levelSustain");
         levelSustainDial.setLabelText(juce::String::fromUTF8("Sustain"));
+        levelSustainDial.setTooltip(juce::String::fromUTF8("Sustain (0 to 1)"));
         addAndMakeVisible(sustainHumanizeDial);
         sustainHumanizeDial.reset(valueTreeState, "sustainHumanize");
         sustainHumanizeDial.setLabelText(juce::String::fromUTF8("Sustain Humanize"));
+        sustainHumanizeDial.setTooltip(juce::String::fromUTF8("Sustain Humanize (0 to 100 %)"));
         addAndMakeVisible(lfoDepthDial);
         lfoDepthDial.reset(valueTreeState, "lfoDepth");
         lfoDepthDial.setLabelText(juce::String::fromUTF8("Filter LFO Depth"));
+        lfoDepthDial.setTooltip(juce::String::fromUTF8("Filter LFO Depth (0 to 2)"));
         addAndMakeVisible(lfoSpeedDial);
         lfoSpeedDial.reset(valueTreeState, "lfoSpeed");
         lfoSpeedDial.setLabelText(juce::String::fromUTF8("Filter LFO Speed"));
+        lfoSpeedDial.setTooltip(juce::String::fromUTF8("Filter LFO Speed (0.01 to 20 Hz)"));
         addAndMakeVisible(lfoSpeedVariationDial);
         lfoSpeedVariationDial.reset(valueTreeState, "lfoSpeedVariation");
         lfoSpeedVariationDial.setLabelText(juce::String::fromUTF8("Filter LFO Variation"));
+        lfoSpeedVariationDial.setTooltip(juce::String::fromUTF8("Filter LFO Variation (0 to 100 %)"));
         addAndMakeVisible(attackFilterDial);
         attackFilterDial.reset(valueTreeState, "attackFilter");
         attackFilterDial.setLabelText(juce::String::fromUTF8("Filter Attack"));
+        attackFilterDial.setTooltip(juce::String::fromUTF8("Filter Attack (1 to 3000 ms)"));
         addAndMakeVisible(decayFilterDial);
         decayFilterDial.reset(valueTreeState, "decayFilter");
         decayFilterDial.setLabelText(juce::String::fromUTF8("Filter Decay"));
+        decayFilterDial.setTooltip(juce::String::fromUTF8("Filter Decay (1 to 30000 ms)"));
         addAndMakeVisible(levelSustainFilterDial);
         levelSustainFilterDial.reset(valueTreeState, "levelSustainFilter");
         levelSustainFilterDial.setLabelText(juce::String::fromUTF8("Filter Sustain"));
+        levelSustainFilterDial.setTooltip(juce::String::fromUTF8("Filter Sustain (0 to 1)"));
         addAndMakeVisible(filterCutoffDial);
         filterCutoffDial.reset(valueTreeState, "filterCutoff");
         filterCutoffDial.setLabelText(juce::String::fromUTF8("Filter Cutoff"));
+        filterCutoffDial.setTooltip(juce::String::fromUTF8("Filter Cutoff (-60 to 48 st)"));
         addAndMakeVisible(filterResonanceDial);
         filterResonanceDial.reset(valueTreeState, "filterResonance");
         filterResonanceDial.setLabelText(juce::String::fromUTF8("Filter Resonance"));
+        filterResonanceDial.setTooltip(juce::String::fromUTF8("Filter Resonance (0 to 2)"));
         addAndMakeVisible(contourFilterDial);
         contourFilterDial.reset(valueTreeState, "contourFilter");
         contourFilterDial.setLabelText(juce::String::fromUTF8("Contour F"));
+        contourFilterDial.setTooltip(juce::String::fromUTF8("Contour F (-4 to 4 oct)"));
         addAndMakeVisible(spectrogramGauge);
         spectrogramGauge.setLabelText(juce::String::fromUTF8("Spectrogram"));
+        spectrogramGauge.setTooltip(juce::String::fromUTF8("Spectrogram"));
 
         addAndMakeVisible(m_pagePerformanceButton);
         addAndMakeVisible(m_pageSettingsButton);
@@ -899,6 +946,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Colour backgroundApp;
     juce::MenuBarComponent m_menuBar;
     StatusBar m_statusBar;
+    juce::TooltipWindow m_tooltipWindow{this};
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};

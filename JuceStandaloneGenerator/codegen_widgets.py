@@ -8,13 +8,24 @@ _WIDGET_SUFFIX = {
     "drop": "Drop",
     "gauge": "Gauge",
     "label": "Label",
-    "script": "Button",
     "luacontrolarea": "LuaControlArea",
 }
 
 
 def widget_varname(item: dict) -> str:
     return f"{item['symbol']}{_WIDGET_SUFFIX[item['type']]}"
+
+
+def tooltip_text_for(item: dict) -> str:
+    text = item.get("description", item["display"])
+    if "range" in item:
+        lo, hi = item["range"][0], item["range"][1]
+        unit = item.get("unit", "")
+        range_text = f"{lo} to {hi} {unit}".strip()
+        return f"{text} ({range_text})"
+    if isinstance(item.get("listitems"), list):
+        return f"{text} ({', '.join(str(choice) for choice in item['listitems'])})"
+    return text
 
 
 def gauge_present(blueprint: Blueprint) -> list[str]:
@@ -130,9 +141,6 @@ def create_widgets_decl(blueprint: Blueprint) -> str:
             case "label":
                 varname = f"{symbol}Label"
                 result += f"juce::Label {varname}{{}};\n"
-            case "script":
-                varname = f"{symbol}Button"
-                result += f"""juce::TextButton {varname}{{juce::String::fromUTF8("{item['display']}")}};\n"""
             case "luacontrolarea":
                 varname = f"{symbol}LuaControlArea"
                 result += f"LuaControlArea {varname}{{}};\n"
@@ -156,7 +164,8 @@ def create_init_widgets(blueprint: Blueprint) -> str:
                 varname += "Dial"
                 result += f"""{add_fn}({varname});
                 {varname}.reset(valueTreeState, "{item['symbol']}");
-                {varname}.setLabelText(juce::String::fromUTF8("{item['display']}"));\n"""
+                {varname}.setLabelText(juce::String::fromUTF8("{item['display']}"));
+                {varname}.setTooltip(juce::String::fromUTF8("{tooltip_text_for(item)}"));\n"""
                 if item['type'] == 'dial' and 'cc' in item:
                     symbol = item['symbol']
                     result += f"""{varname}.setCcMappable(true, {{
@@ -171,13 +180,15 @@ def create_init_widgets(blueprint: Blueprint) -> str:
                 result += f"""{add_fn}({varname});
                 {varname}Attachment = std::make_unique < juce::AudioProcessorValueTreeState::ButtonAttachment > (
                 valueTreeState, "{item['symbol']}", {varname});
+                {varname}.setTooltip(juce::String::fromUTF8("{tooltip_text_for(item)}"));
                 \n"""
             case "drop":
                 varname += "Drop"
                 result += f"""{add_fn}({varname});
                 {varname}.addItemList(valueTreeState.getParameter("{item['symbol']}")->getAllValueStrings(), 1);
                 {varname}Attachment = std::make_unique < juce::AudioProcessorValueTreeState::ComboBoxAttachment > (
-                valueTreeState, "{item['symbol']}", {varname});\n"""
+                valueTreeState, "{item['symbol']}", {varname});
+                {varname}.setTooltip(juce::String::fromUTF8("{tooltip_text_for(item)}"));\n"""
                 # Inject onChange handler for any dependents
                 if item['symbol'] in dependents:
                     callbacks = " ".join(
@@ -191,14 +202,12 @@ def create_init_widgets(blueprint: Blueprint) -> str:
             case "gauge":
                 varname += "Gauge"
                 result += f"""{add_fn}({varname}); {varname}.setLabelText(juce::String::fromUTF8("{item['display']}"));\n"""
+                if "customtype" not in item:
+                    result += f"""{varname}.setTooltip(juce::String::fromUTF8("{tooltip_text_for(item)}"));\n"""
             case "label":
                 varname += "Label"
-                result += f"""{add_fn}({varname}); {varname}.setText(juce::String::fromUTF8("{item['display']}"), juce::dontSendNotification);\n"""
-            case "script":
-                varname += "Button"
-                # Fixed name, not per-symbol: mirrors ProcessorScriptMethods only
-                # supporting the first "script"-type port (see its docstring).
-                result += f"""{add_fn}({varname}); {varname}.onClick = [this] {{ openScriptEditor(); }};\n"""
+                result += f"""{add_fn}({varname}); {varname}.setText(juce::String::fromUTF8("{item['display']}"), juce::dontSendNotification);
+                {varname}.setTooltip(juce::String::fromUTF8("{tooltip_text_for(item)}"));\n"""
             case "luacontrolarea":
                 varname += "LuaControlArea"
                 result += f"""{add_fn}({varname});\n"""

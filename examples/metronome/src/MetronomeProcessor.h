@@ -556,6 +556,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                 auto transport = pluginRunner->hostTransport();
                 ++transport.updateCount;
                 transport.isPlaying = position->getIsPlaying();
+                transport.isLooping = position->getIsLooping();
+                transport.isRecording = position->getIsRecording();
                 if (const auto bpm = position->getBpm())
                 {
                     transport.bpm = *bpm;
@@ -564,9 +566,14 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                 {
                     transport.ppqPosition = *ppq;
                 }
+                if (const auto timeInSeconds = position->getTimeInSeconds())
+                {
+                    transport.timeInSeconds = *timeInSeconds;
+                }
                 if (const auto timeSig = position->getTimeSignature())
                 {
                     transport.beatsPerBar = static_cast<float>(timeSig->numerator);
+                    transport.timeSigDenominator = timeSig->denominator;
                 }
                 pluginRunner->setHostTransport(transport);
             }

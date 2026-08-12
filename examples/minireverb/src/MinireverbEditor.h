@@ -217,76 +217,100 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         orderDrop.addItemList(valueTreeState.getParameter("order")->getAllValueStrings(), 1);
         orderDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "order", orderDrop);
+        orderDrop.setTooltip(juce::String::fromUTF8("Order (4, 8, 12, 16, 20, 24, 32, 48, 64)"));
         addAndMakeVisible(dryDial);
         dryDial.reset(valueTreeState, "dry");
         dryDial.setLabelText(juce::String::fromUTF8("Dry"));
+        dryDial.setTooltip(juce::String::fromUTF8("Dry (-100 to 12 dB)"));
         addAndMakeVisible(wetDial);
         wetDial.reset(valueTreeState, "wet");
         wetDial.setLabelText(juce::String::fromUTF8("Wet"));
+        wetDial.setTooltip(juce::String::fromUTF8("Wet (-100 to 12 dB)"));
         addAndMakeVisible(stereoWidthDial);
         stereoWidthDial.reset(valueTreeState, "stereoWidth");
         stereoWidthDial.setLabelText(juce::String::fromUTF8("Stereo Width"));
+        stereoWidthDial.setTooltip(juce::String::fromUTF8("Stereo Width (0 to 100)"));
         addAndMakeVisible(baseSizeDial);
         baseSizeDial.reset(valueTreeState, "baseSize");
         baseSizeDial.setLabelText(juce::String::fromUTF8("Base size"));
+        baseSizeDial.setTooltip(juce::String::fromUTF8("Base size (1.0 to 600 m)"));
         addAndMakeVisible(sizeFactorDial);
         sizeFactorDial.reset(valueTreeState, "sizeFactor");
         sizeFactorDial.setLabelText(juce::String::fromUTF8("Size Factor"));
+        sizeFactorDial.setTooltip(juce::String::fromUTF8("Size Factor (1.0 to 20 x)"));
         addAndMakeVisible(bulgeDial);
         bulgeDial.reset(valueTreeState, "bulge");
         bulgeDial.setLabelText(juce::String::fromUTF8("Bulge"));
+        bulgeDial.setTooltip(juce::String::fromUTF8("Bulge (-1 to 1)"));
         addAndMakeVisible(uniqueDelaySwitch);
         uniqueDelaySwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "uniqueDelay", uniqueDelaySwitch);
+        uniqueDelaySwitch.setTooltip(juce::String::fromUTF8("Unique delay"));
 
         addAndMakeVisible(decayDial);
         decayDial.reset(valueTreeState, "decay");
         decayDial.setLabelText(juce::String::fromUTF8("Decay Low"));
+        decayDial.setTooltip(juce::String::fromUTF8("Decay Low (0 to 100000 ms)"));
         addAndMakeVisible(allPassUpDial);
         allPassUpDial.reset(valueTreeState, "allPassUp");
         allPassUpDial.setLabelText(juce::String::fromUTF8("All pass First"));
+        allPassUpDial.setTooltip(juce::String::fromUTF8("All pass First (20 to 20000 Hz)"));
         addAndMakeVisible(allPassDownDial);
         allPassDownDial.reset(valueTreeState, "allPassDown");
         allPassDownDial.setLabelText(juce::String::fromUTF8("All pass Last"));
+        allPassDownDial.setTooltip(juce::String::fromUTF8("All pass Last (20 to 20000 Hz)"));
         addAndMakeVisible(lowPassDial);
         lowPassDial.reset(valueTreeState, "lowPass");
         lowPassDial.setLabelText(juce::String::fromUTF8("Low pass"));
+        lowPassDial.setTooltip(juce::String::fromUTF8("Low pass (20 to 20000 Hz)"));
         addAndMakeVisible(lowPassCountDrop);
         lowPassCountDrop.addItemList(valueTreeState.getParameter("lowPassCount")->getAllValueStrings(), 1);
         lowPassCountDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "lowPassCount", lowPassCountDrop);
+        lowPassCountDrop.setTooltip(juce::String::fromUTF8("Low pass count (none, one, two, 1/4, 1/2, 3/4, All)"));
         addAndMakeVisible(highPassDial);
         highPassDial.reset(valueTreeState, "highPass");
         highPassDial.setLabelText(juce::String::fromUTF8("High pass"));
+        highPassDial.setTooltip(juce::String::fromUTF8("High pass (20 to 20000 Hz)"));
         addAndMakeVisible(highPassCountDrop);
         highPassCountDrop.addItemList(valueTreeState.getParameter("highPassCount")->getAllValueStrings(), 1);
         highPassCountDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "highPassCount", highPassCountDrop);
+        highPassCountDrop.setTooltip(juce::String::fromUTF8("High pass count (none, one, two, 1/4, 1/2, 3/4, All)"));
         addAndMakeVisible(modulationDepthDial);
         modulationDepthDial.reset(valueTreeState, "modulationDepth");
         modulationDepthDial.setLabelText(juce::String::fromUTF8("Mod depth"));
+        modulationDepthDial.setTooltip(juce::String::fromUTF8("Mod depth (0 to 1)"));
         addAndMakeVisible(modulationSpeedDial);
         modulationSpeedDial.reset(valueTreeState, "modulationSpeed");
         modulationSpeedDial.setLabelText(juce::String::fromUTF8("Mod speed"));
+        modulationSpeedDial.setTooltip(juce::String::fromUTF8("Mod speed (0.01 to 5 Hz)"));
         addAndMakeVisible(reversePitchSwitch);
         reversePitchSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "reversePitch", reversePitchSwitch);
+        reversePitchSwitch.setTooltip(juce::String::fromUTF8("Reverse pitch"));
 
         addAndMakeVisible(pitchStrengthDial);
         pitchStrengthDial.reset(valueTreeState, "pitchStrength");
         pitchStrengthDial.setLabelText(juce::String::fromUTF8("Pitch Strength"));
+        pitchStrengthDial.setTooltip(juce::String::fromUTF8("Pitch Strength (0.0 to 1.0)"));
         addAndMakeVisible(pitch1InplaceDial);
         pitch1InplaceDial.reset(valueTreeState, "pitch1Inplace");
         pitch1InplaceDial.setLabelText(juce::String::fromUTF8("Pitch 1 inplace"));
+        pitch1InplaceDial.setTooltip(juce::String::fromUTF8("Pitch 1 inplace (-12 to 12 st)"));
         addAndMakeVisible(pitch2InplaceDial);
         pitch2InplaceDial.reset(valueTreeState, "pitch2Inplace");
         pitch2InplaceDial.setLabelText(juce::String::fromUTF8("Pitch 2 inplace"));
+        pitch2InplaceDial.setTooltip(juce::String::fromUTF8("Pitch 2 inplace (-12 to 12 st)"));
         addAndMakeVisible(cpuGauge);
         cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
+        cpuGauge.setTooltip(juce::String::fromUTF8("CPU (0 to 100 %)"));
         addAndMakeVisible(levelGauge);
         levelGauge.setLabelText(juce::String::fromUTF8("Level"));
+        levelGauge.setTooltip(juce::String::fromUTF8("Level (0 to 100 %)"));
         addAndMakeVisible(spectrogramGauge);
         spectrogramGauge.setLabelText(juce::String::fromUTF8("Spectrogram"));
+        spectrogramGauge.setTooltip(juce::String::fromUTF8("Spectrogram"));
 
         addAndMakeVisible(m_pagePerformanceButton);
         addAndMakeVisible(m_pageSettingsButton);
@@ -766,6 +790,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Colour backgroundApp;
     juce::MenuBarComponent m_menuBar;
     StatusBar m_statusBar;
+    juce::TooltipWindow m_tooltipWindow{this};
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};

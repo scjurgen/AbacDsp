@@ -102,11 +102,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(levelDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(scriptButton)
-                                  .withWidth(Constants::Text::labelWidth)
-                                  .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
-                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(cpuGauge).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[0].toFloat());
             }
@@ -153,11 +148,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.items.add(juce::FlexItem(tuningDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(transposeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(detuneDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(scriptButton)
-                                  .withWidth(Constants::Text::labelWidth)
-                                  .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
-                                  .withMargin(knobMarginSmall));
                 box.performLayout(areas[0].toFloat());
             }
             {
@@ -264,109 +254,142 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(levelDial);
         levelDial.reset(valueTreeState, "level");
         levelDial.setLabelText(juce::String::fromUTF8("Level"));
+        levelDial.setTooltip(juce::String::fromUTF8("Level (-80 to 0 dB)"));
         addAndMakeVisible(tuningDial);
         tuningDial.reset(valueTreeState, "tuning");
         tuningDial.setLabelText(juce::String::fromUTF8("Tuning"));
+        tuningDial.setTooltip(juce::String::fromUTF8("Tuning (400 to 800 Hz)"));
         addAndMakeVisible(transposeDial);
         transposeDial.reset(valueTreeState, "transpose");
         transposeDial.setLabelText(juce::String::fromUTF8("Transpose"));
+        transposeDial.setTooltip(juce::String::fromUTF8("Transpose (-24 to 24 st)"));
         addAndMakeVisible(detuneDial);
         detuneDial.reset(valueTreeState, "detune");
         detuneDial.setLabelText(juce::String::fromUTF8("Detune"));
-        addAndMakeVisible(scriptButton);
-        scriptButton.onClick = [this] { openScriptEditor(); };
+        detuneDial.setTooltip(juce::String::fromUTF8("Detune (0 to 100 ct)"));
         addAndMakeVisible(reverbDryDial);
         reverbDryDial.reset(valueTreeState, "reverbDry");
         reverbDryDial.setLabelText(juce::String::fromUTF8("Reverb Dry"));
+        reverbDryDial.setTooltip(juce::String::fromUTF8("Reverb Dry (-100 to 12 dB)"));
         addAndMakeVisible(reverbWetDial);
         reverbWetDial.reset(valueTreeState, "reverbWet");
         reverbWetDial.setLabelText(juce::String::fromUTF8("Reverb Wet"));
+        reverbWetDial.setTooltip(juce::String::fromUTF8("Reverb Wet (-100 to 12 dB)"));
         addAndMakeVisible(reverbSizeDial);
         reverbSizeDial.reset(valueTreeState, "reverbSize");
         reverbSizeDial.setLabelText(juce::String::fromUTF8("Reverb Size"));
+        reverbSizeDial.setTooltip(juce::String::fromUTF8("Reverb Size (1 to 330 m)"));
         addAndMakeVisible(reverbDecayDial);
         reverbDecayDial.reset(valueTreeState, "reverbDecay");
         reverbDecayDial.setLabelText(juce::String::fromUTF8("Reverb Decay"));
+        reverbDecayDial.setTooltip(juce::String::fromUTF8("Reverb Decay (1 to 100000 ms)"));
         addAndMakeVisible(reverbShelfLowDial);
         reverbShelfLowDial.reset(valueTreeState, "reverbShelfLow");
         reverbShelfLowDial.setLabelText(juce::String::fromUTF8("Reverb Shelf Low"));
+        reverbShelfLowDial.setTooltip(juce::String::fromUTF8("Reverb Shelf Low (-18 to 18 dB)"));
         addAndMakeVisible(reverbShelfHighDial);
         reverbShelfHighDial.reset(valueTreeState, "reverbShelfHigh");
         reverbShelfHighDial.setLabelText(juce::String::fromUTF8("Reverb Shelf High"));
+        reverbShelfHighDial.setTooltip(juce::String::fromUTF8("Reverb Shelf High (-18 to 18 dB)"));
         addAndMakeVisible(playStopSwitch);
         playStopSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "playStop", playStopSwitch);
+        playStopSwitch.setTooltip(juce::String::fromUTF8("Play"));
 
         addAndMakeVisible(humanizeTimingDial);
         humanizeTimingDial.reset(valueTreeState, "humanizeTiming");
         humanizeTimingDial.setLabelText(juce::String::fromUTF8("Humanize Timing"));
+        humanizeTimingDial.setTooltip(juce::String::fromUTF8("Humanize Timing (0 to 100 %)"));
         addAndMakeVisible(humanizeLevelDial);
         humanizeLevelDial.reset(valueTreeState, "humanizeLevel");
         humanizeLevelDial.setLabelText(juce::String::fromUTF8("Humanize Level"));
+        humanizeLevelDial.setTooltip(juce::String::fromUTF8("Humanize Level (0 to 100 %)"));
         addAndMakeVisible(bpmDial);
         bpmDial.reset(valueTreeState, "bpm");
         bpmDial.setLabelText(juce::String::fromUTF8("BPM"));
+        bpmDial.setTooltip(juce::String::fromUTF8("BPM (40 to 250 BPM)"));
         addAndMakeVisible(hostSyncSwitch);
         hostSyncSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "hostSync", hostSyncSwitch);
+        hostSyncSwitch.setTooltip(juce::String::fromUTF8("Host Sync"));
 
         addAndMakeVisible(divisionDrop);
         divisionDrop.addItemList(valueTreeState.getParameter("division")->getAllValueStrings(), 1);
         divisionDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "division", divisionDrop);
+        divisionDrop.setTooltip(juce::String::fromUTF8(
+            "Division (1/1, 1/2, 1/2., 1/2T, 1/4, 1/4., 1/4T, 1/8, 1/8., 1/8T, 1/16, 1/16., 1/16T)"));
         addAndMakeVisible(attackDial);
         attackDial.reset(valueTreeState, "attack");
         attackDial.setLabelText(juce::String::fromUTF8("Attack"));
+        attackDial.setTooltip(juce::String::fromUTF8("Attack (1 to 3000 ms)"));
         addAndMakeVisible(decayDial);
         decayDial.reset(valueTreeState, "decay");
         decayDial.setLabelText(juce::String::fromUTF8("Decay"));
+        decayDial.setTooltip(juce::String::fromUTF8("Decay (1 to 100000 ms)"));
         addAndMakeVisible(decayOctaveDial);
         decayOctaveDial.reset(valueTreeState, "decayOctave");
         decayOctaveDial.setLabelText(juce::String::fromUTF8("Decay Octave"));
+        decayOctaveDial.setTooltip(juce::String::fromUTF8("Decay Octave (0 to 2)"));
         addAndMakeVisible(damperDial);
         damperDial.reset(valueTreeState, "damper");
         damperDial.setLabelText(juce::String::fromUTF8("Damper"));
+        damperDial.setTooltip(juce::String::fromUTF8("Damper (0 to 1)"));
         addAndMakeVisible(levelSustainDial);
         levelSustainDial.reset(valueTreeState, "levelSustain");
         levelSustainDial.setLabelText(juce::String::fromUTF8("Sustain"));
+        levelSustainDial.setTooltip(juce::String::fromUTF8("Sustain (0 to 1)"));
         addAndMakeVisible(sustainHumanizeDial);
         sustainHumanizeDial.reset(valueTreeState, "sustainHumanize");
         sustainHumanizeDial.setLabelText(juce::String::fromUTF8("Sustain Humanize"));
+        sustainHumanizeDial.setTooltip(juce::String::fromUTF8("Sustain Humanize (0 to 100 %)"));
         addAndMakeVisible(lfoDepthDial);
         lfoDepthDial.reset(valueTreeState, "lfoDepth");
         lfoDepthDial.setLabelText(juce::String::fromUTF8("Filter LFO Depth"));
+        lfoDepthDial.setTooltip(juce::String::fromUTF8("Filter LFO Depth (0 to 2)"));
         addAndMakeVisible(lfoSpeedDial);
         lfoSpeedDial.reset(valueTreeState, "lfoSpeed");
         lfoSpeedDial.setLabelText(juce::String::fromUTF8("Filter LFO Speed"));
+        lfoSpeedDial.setTooltip(juce::String::fromUTF8("Filter LFO Speed (0.01 to 20 Hz)"));
         addAndMakeVisible(lfoSpeedVariationDial);
         lfoSpeedVariationDial.reset(valueTreeState, "lfoSpeedVariation");
         lfoSpeedVariationDial.setLabelText(juce::String::fromUTF8("Filter LFO Variation"));
+        lfoSpeedVariationDial.setTooltip(juce::String::fromUTF8("Filter LFO Variation (0 to 100 %)"));
         addAndMakeVisible(attackFilterDial);
         attackFilterDial.reset(valueTreeState, "attackFilter");
         attackFilterDial.setLabelText(juce::String::fromUTF8("Filter Attack"));
+        attackFilterDial.setTooltip(juce::String::fromUTF8("Filter Attack (1 to 3000 ms)"));
         addAndMakeVisible(decayFilterDial);
         decayFilterDial.reset(valueTreeState, "decayFilter");
         decayFilterDial.setLabelText(juce::String::fromUTF8("Filter Decay"));
+        decayFilterDial.setTooltip(juce::String::fromUTF8("Filter Decay (1 to 30000 ms)"));
         addAndMakeVisible(levelSustainFilterDial);
         levelSustainFilterDial.reset(valueTreeState, "levelSustainFilter");
         levelSustainFilterDial.setLabelText(juce::String::fromUTF8("Filter Sustain"));
+        levelSustainFilterDial.setTooltip(juce::String::fromUTF8("Filter Sustain (0 to 1)"));
         addAndMakeVisible(filterCutoffDial);
         filterCutoffDial.reset(valueTreeState, "filterCutoff");
         filterCutoffDial.setLabelText(juce::String::fromUTF8("Filter Cutoff"));
+        filterCutoffDial.setTooltip(juce::String::fromUTF8("Filter Cutoff (-60 to 48 st)"));
         addAndMakeVisible(filterResonanceDial);
         filterResonanceDial.reset(valueTreeState, "filterResonance");
         filterResonanceDial.setLabelText(juce::String::fromUTF8("Filter Resonance"));
+        filterResonanceDial.setTooltip(juce::String::fromUTF8("Filter Resonance (0 to 2)"));
         addAndMakeVisible(contourFilterDial);
         contourFilterDial.reset(valueTreeState, "contourFilter");
         contourFilterDial.setLabelText(juce::String::fromUTF8("Contour F"));
+        contourFilterDial.setTooltip(juce::String::fromUTF8("Contour F (-4 to 4 oct)"));
         addAndMakeVisible(spectrogramGauge);
         spectrogramGauge.setLabelText(juce::String::fromUTF8("Spectrogram"));
+        spectrogramGauge.setTooltip(juce::String::fromUTF8("Spectrogram"));
         addAndMakeVisible(cpuGauge);
         cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
+        cpuGauge.setTooltip(juce::String::fromUTF8("CPU (0 to 100 %)"));
         addAndMakeVisible(luaControlsLuaControlArea);
         addAndMakeVisible(luaParam1Dial);
         luaParam1Dial.reset(valueTreeState, "luaParam1");
         luaParam1Dial.setLabelText(juce::String::fromUTF8("Lua Param 1"));
+        luaParam1Dial.setTooltip(juce::String::fromUTF8("Lua Param 1 (0 to 1)"));
         luaParam1Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam1); },
                                            [this] { return processorRef.getCcRange(CcTarget::luaParam1); },
                                            [this](float lo, float hi)
@@ -376,6 +399,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(luaParam2Dial);
         luaParam2Dial.reset(valueTreeState, "luaParam2");
         luaParam2Dial.setLabelText(juce::String::fromUTF8("Lua Param 2"));
+        luaParam2Dial.setTooltip(juce::String::fromUTF8("Lua Param 2 (0 to 1)"));
         luaParam2Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam2); },
                                            [this] { return processorRef.getCcRange(CcTarget::luaParam2); },
                                            [this](float lo, float hi)
@@ -385,6 +409,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(luaParam3Dial);
         luaParam3Dial.reset(valueTreeState, "luaParam3");
         luaParam3Dial.setLabelText(juce::String::fromUTF8("Lua Param 3"));
+        luaParam3Dial.setTooltip(juce::String::fromUTF8("Lua Param 3 (0 to 1)"));
         luaParam3Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam3); },
                                            [this] { return processorRef.getCcRange(CcTarget::luaParam3); },
                                            [this](float lo, float hi)
@@ -394,6 +419,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(luaParam4Dial);
         luaParam4Dial.reset(valueTreeState, "luaParam4");
         luaParam4Dial.setLabelText(juce::String::fromUTF8("Lua Param 4"));
+        luaParam4Dial.setTooltip(juce::String::fromUTF8("Lua Param 4 (0 to 1)"));
         luaParam4Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam4); },
                                            [this] { return processorRef.getCcRange(CcTarget::luaParam4); },
                                            [this](float lo, float hi)
@@ -403,6 +429,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(luaParam5Dial);
         luaParam5Dial.reset(valueTreeState, "luaParam5");
         luaParam5Dial.setLabelText(juce::String::fromUTF8("Lua Param 5"));
+        luaParam5Dial.setTooltip(juce::String::fromUTF8("Lua Param 5 (0 to 1)"));
         luaParam5Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam5); },
                                            [this] { return processorRef.getCcRange(CcTarget::luaParam5); },
                                            [this](float lo, float hi)
@@ -412,6 +439,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(luaParam6Dial);
         luaParam6Dial.reset(valueTreeState, "luaParam6");
         luaParam6Dial.setLabelText(juce::String::fromUTF8("Lua Param 6"));
+        luaParam6Dial.setTooltip(juce::String::fromUTF8("Lua Param 6 (0 to 1)"));
         luaParam6Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam6); },
                                            [this] { return processorRef.getCcRange(CcTarget::luaParam6); },
                                            [this](float lo, float hi)
@@ -421,6 +449,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(luaParam7Dial);
         luaParam7Dial.reset(valueTreeState, "luaParam7");
         luaParam7Dial.setLabelText(juce::String::fromUTF8("Lua Param 7"));
+        luaParam7Dial.setTooltip(juce::String::fromUTF8("Lua Param 7 (0 to 1)"));
         luaParam7Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam7); },
                                            [this] { return processorRef.getCcRange(CcTarget::luaParam7); },
                                            [this](float lo, float hi)
@@ -430,6 +459,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(luaParam8Dial);
         luaParam8Dial.reset(valueTreeState, "luaParam8");
         luaParam8Dial.setLabelText(juce::String::fromUTF8("Lua Param 8"));
+        luaParam8Dial.setTooltip(juce::String::fromUTF8("Lua Param 8 (0 to 1)"));
         luaParam8Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam8); },
                                            [this] { return processorRef.getCcRange(CcTarget::luaParam8); },
                                            [this](float lo, float hi)
@@ -461,7 +491,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             tuningDial.setVisible(false);
             transposeDial.setVisible(false);
             detuneDial.setVisible(false);
-            scriptButton.setVisible(true);
             reverbDryDial.setVisible(true);
             reverbWetDial.setVisible(true);
             reverbSizeDial.setVisible(true);
@@ -507,7 +536,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             tuningDial.setVisible(true);
             transposeDial.setVisible(true);
             detuneDial.setVisible(true);
-            scriptButton.setVisible(true);
             reverbDryDial.setVisible(true);
             reverbWetDial.setVisible(true);
             reverbSizeDial.setVisible(true);
@@ -1019,6 +1047,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         auto renameMenu = buildGroupedMenu(m_scriptMenuNames, kScriptRenameIdBase);
 
         juce::PopupMenu scripts;
+        scripts.addItem(kScriptEditId, "Edit...");
         scripts.addSubMenu("Load", loadMenu, !m_scriptMenuNames.empty());
         scripts.addItem(kScriptSaveAsId, "Save As...");
         scripts.addSubMenu("Delete", deleteMenu, !m_scriptMenuNames.empty());
@@ -1045,6 +1074,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         else if (menuItemID == kLlmAssistChooseFolderId)
         {
             chooseLlmAssistFolder(false);
+        }
+        else if (menuItemID == kScriptEditId)
+        {
+            openScriptEditor();
         }
         else if (menuItemID == kScriptSaveAsId)
         {
@@ -1255,6 +1288,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Colour backgroundApp;
     juce::MenuBarComponent m_menuBar;
     StatusBar m_statusBar;
+    juce::TooltipWindow m_tooltipWindow{this};
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};
@@ -1275,6 +1309,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::vector<juce::String> m_patchMenuNames;
 
 
+    static constexpr int kScriptEditId = 9004;
     static constexpr int kScriptSaveAsId = 10000;
     static constexpr int kScriptLoadIdBase = 11000;
     static constexpr int kScriptDeleteIdBase = 12000;
@@ -1295,7 +1330,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial tuningDial{this};
     CustomRotaryDial transposeDial{this};
     CustomRotaryDial detuneDial{this};
-    juce::TextButton scriptButton{juce::String::fromUTF8("Script")};
     CustomRotaryDial reverbDryDial{this};
     CustomRotaryDial reverbWetDial{this};
     CustomRotaryDial reverbSizeDial{this};

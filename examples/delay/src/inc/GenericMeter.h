@@ -11,6 +11,7 @@ class GaugeBackground : public juce::Component
     {
         backgroundApp = juce::Colour(GuiConstants::instance().colors.backgroundComponent);
         setBufferedToImage(true);
+        setInterceptsMouseClicks(false, false);
     }
 
     void paint(juce::Graphics& g) override
@@ -40,7 +41,10 @@ class GaugeBackground : public juce::Component
 class GaugeValue : public juce::Component
 {
   public:
-    GaugeValue() {}
+    GaugeValue()
+    {
+        setInterceptsMouseClicks(false, false);
+    }
 
     void paint(juce::Graphics& g) override
     {
@@ -144,7 +148,7 @@ class GaugeIndicators : public juce::Component
     juce::Colour lineIndicatorColor;
 };
 
-class Gauge : public juce::Component
+class Gauge : public juce::Component, public juce::SettableTooltipClient
 {
   public:
     Gauge()

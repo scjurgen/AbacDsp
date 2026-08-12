@@ -115,12 +115,9 @@ def construct_boxes(m: dict, section: str = 'layout'):
 
         for item in areas[idx]:
             p = findShortEntry(item["symbol"])
-            # "script"/"luacontrolarea" are the two types whose widget suffix isn't just
-            # their own capitalized name - every other type's suffix happens to equal
-            # that already.
-            if p['type'] == 'script':
-                widget_suffix = "Button"
-            elif p['type'] == 'luacontrolarea':
+            # "luacontrolarea" is the one type whose widget suffix isn't just its own
+            # capitalized name - every other type's suffix happens to equal that already.
+            if p['type'] == 'luacontrolarea':
                 widget_suffix = "LuaControlArea"
             else:
                 widget_suffix = p['type'].capitalize()
@@ -147,11 +144,6 @@ def construct_boxes(m: dict, section: str = 'layout'):
                     else:
                         flex_line += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
                 case 'label':
-                    if isColumn:
-                        flex_line += ".withFlex(0).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::stretch)"
-                    else:
-                        flex_line += ".withWidth(Constants::Text::labelWidth).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::center)"
-                case 'script':
                     if isColumn:
                         flex_line += ".withFlex(0).withHeight(Constants::Text::labelHeight).withAlignSelf(juce::FlexItem::AlignSelf::stretch)"
                     else:

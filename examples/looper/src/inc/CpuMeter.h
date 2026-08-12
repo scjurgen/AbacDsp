@@ -8,7 +8,10 @@
 class CpuValue : public juce::Component
 {
   public:
-    CpuValue() = default;
+    CpuValue()
+    {
+        setInterceptsMouseClicks(false, false);
+    }
 
     void paint(juce::Graphics& g) override
     {
@@ -58,7 +61,7 @@ class CpuValue : public juce::Component
 };
 
 
-class CpuGauge : public juce::Component
+class CpuGauge : public juce::Component, public juce::SettableTooltipClient
 {
   public:
     CpuGauge()

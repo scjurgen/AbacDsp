@@ -9,7 +9,10 @@
 class WaveformShow : public juce::Component
 {
   public:
-    WaveformShow() = default;
+    WaveformShow()
+    {
+        setInterceptsMouseClicks(false, false);
+    }
 
     void paint(juce::Graphics& g) override
     {
@@ -83,7 +86,7 @@ class WaveformShow : public juce::Component
 };
 
 
-class WaveformGauge : public juce::Component
+class WaveformGauge : public juce::Component, public juce::SettableTooltipClient
 {
   public:
     WaveformGauge()

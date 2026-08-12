@@ -20,6 +20,7 @@ class SpectrogramBackground : public juce::Component
     {
         backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
         setBufferedToImage(true);
+        setInterceptsMouseClicks(false, false);
     }
 
     void paint(juce::Graphics& g) override
@@ -49,6 +50,7 @@ class SpectrogramValue : public juce::Component
     SpectrogramValue(const GuiConstants::GradientPreset lutPreset)
     {
         GuiConstants::buildLut(lutPreset, m_lut);
+        setInterceptsMouseClicks(false, false);
     }
 
     void paint(juce::Graphics& g) override
@@ -210,7 +212,7 @@ class SpectrogramOverlay : public juce::Component
     juce::Colour labelBgColour;
 };
 
-class SpectrogramDisplay : public juce::Component
+class SpectrogramDisplay : public juce::Component, public juce::SettableTooltipClient
 {
   public:
     SpectrogramDisplay(GuiConstants::GradientPreset lutPreset)
