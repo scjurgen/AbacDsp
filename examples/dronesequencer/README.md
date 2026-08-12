@@ -30,6 +30,13 @@ asked to keep up with.
 separate from the script embedded in the current patch. **Settings > Patches** saves/loads full
 patches, including whichever script is currently applied.
 
+A script can also pull in a shared library script with `import "name"` (see `../../LUA.md`) -
+useful for boilerplate reused across several patches. Built-in libraries live in this repo's
+`base-scripts/` folder and are synced to disk on every launch; your own go alongside them in
+`Library/User/`, under the same per-app data directory as the Scripts pool above. There is no
+in-app browser for these in this version - add, edit, or remove them as plain `.lua` files, and
+type the `import` line yourself.
+
 ## Scripting
 
 This section covers what's specific to DroneSequencer: the `OnTiming`/`NextNotes` contract and

@@ -5,10 +5,13 @@
 #include <functional>
 #include <iostream>
 #include <juce_core/juce_core.h>
+#include <optional>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
+#include "../inc/LuaScriptEngineBase.h"
 #include "PatchParameters.h"
 
 class FileIo
@@ -24,6 +27,7 @@ class FileIo
     void initialize(const std::vector<int>& patchIndex)
     {
         m_currentPatch = patchIndex;
+        syncBaseLibraryScripts();
         loadPatch(patchIndex);
         m_currentParams.clearModified();
         m_isInitialized = true;
@@ -312,6 +316,45 @@ class FileIo
         return true;
     }
 
+    // Resolves an `import "name"` library lookup: the user's own Library/User/ directory
+    // takes precedence over the repo-synced Library/Base/ one, so a user copy of the same
+    // name overrides the built-in. On failure, notFoundDetail lists the full paths checked.
+    [[nodiscard]] static ImportLookup resolveLibraryScript(const std::string_view name)
+    {
+        const juce::String sanitized = juce::String(std::string(name)).removeCharacters("\\/:*?\"<>|");
+        if (sanitized.isEmpty())
+        {
+            return {std::nullopt, "\"" + std::string(name) + "\" is not a valid library file name"};
+        }
+        juce::StringArray checkedPaths;
+        for (const auto& dir : {getLibraryUserDirectory(), getLibraryBaseDirectory()})
+        {
+            const juce::File file = dir.getChildFile(sanitized + ".lua");
+            if (file.existsAsFile())
+            {
+                return {file.loadFileAsString().toStdString(), {}};
+            }
+            checkedPaths.add(file.getFullPathName());
+        }
+        return {std::nullopt, "looked in " + checkedPaths.joinIntoString("; ").toStdString()};
+    }
+
+    // Repo-synced (see syncBaseLibraryScripts()) - not meant to be hand-edited by users.
+    static juce::File getLibraryBaseDirectory()
+    {
+        const auto dir = getLibraryDirectory().getChildFile("Base");
+        dir.createDirectory();
+        return dir;
+    }
+
+    // The user's own import-able library scripts; never touched by syncBaseLibraryScripts().
+    static juce::File getLibraryUserDirectory()
+    {
+        const auto dir = getLibraryDirectory().getChildFile("User");
+        dir.createDirectory();
+        return dir;
+    }
+
 
   private:
     // JUCE's userApplicationDataDirectory is bare "~/Library" on macOS; the
@@ -403,6 +446,36 @@ class FileIo
         const auto dir = base.getChildFile("AbacDsp").getChildFile("Dronesequencer").getChildFile("Scripts");
         dir.createDirectory();
         return dir;
+    }
+
+    static juce::File getLibraryDirectory()
+    {
+        auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
+#if JUCE_MAC
+        base = base.getChildFile("Application Support");
+#endif
+        const auto dir = base.getChildFile("AbacDsp").getChildFile("Dronesequencer").getChildFile("Library");
+        dir.createDirectory();
+        return dir;
+    }
+
+    // Refreshes Library/Base/ from the repo's base-scripts/ directory (only available in a
+    // dev build from a real checkout - DRONESEQUENCER_BASE_SCRIPTS_DIR is undefined
+    // otherwise, in which case this is a no-op and whatever is already on disk is used).
+    static void syncBaseLibraryScripts()
+    {
+#ifdef DRONESEQUENCER_BASE_SCRIPTS_DIR
+        const juce::File repoDir(DRONESEQUENCER_BASE_SCRIPTS_DIR);
+        if (!repoDir.isDirectory())
+        {
+            return;
+        }
+        const juce::File targetDir = getLibraryBaseDirectory();
+        for (const auto& source : repoDir.findChildFiles(juce::File::findFiles, false, "*.lua"))
+        {
+            source.copyFileTo(targetDir.getChildFile(source.getFileName()));
+        }
+#endif
     }
 
     static std::string getScriptFilename(const std::string& name)

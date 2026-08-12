@@ -1,7 +1,9 @@
 #include <cassert>
 #include <gtest/gtest.h>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <tuple>
 
 #include "impl/DroneScriptEngine.h"
@@ -796,4 +798,170 @@ TEST(DroneScriptEngine, MissingTransportHandlersAreSilentlyIgnored)
     EXPECT_FALSE(engine.hasError());
     const auto result = engine.nextNotes();
     ASSERT_EQ(result.count, 1u) << "stub script's NextNotes should be unaffected";
+}
+
+TEST(DroneScriptEngine, ImportSplicesLibrarySourceBeforeScript)
+{
+    DroneScriptEngine engine;
+    engine.setImportResolver(
+        [](const std::string_view name) -> ImportLookup
+        {
+            if (name == "helpers")
+            {
+                return {std::string("function Helper() return 42 end"), {}};
+            }
+            return {std::nullopt, "not found"};
+        });
+    ASSERT_TRUE(engine.loadScript(R"(
+        import "helpers"
+        function NextNotes()
+            return { { note = Helper(), velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 42.f);
+}
+
+TEST(DroneScriptEngine, ImportAcceptsExplicitLuaSuffix)
+{
+    // "import \"helpers.lua\"" must resolve the same library as "import \"helpers\"" -
+    // this is exactly the natural spelling a user reaches for first.
+    DroneScriptEngine engine;
+    engine.setImportResolver(
+        [](const std::string_view name) -> ImportLookup
+        {
+            if (name == "helpers")
+            {
+                return {std::string("function Helper() return 42 end"), {}};
+            }
+            return {std::nullopt, "not found"};
+        });
+    ASSERT_TRUE(engine.loadScript(R"(
+        import "helpers.lua"
+        function NextNotes()
+            return { { note = Helper(), velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 42.f);
+}
+
+TEST(DroneScriptEngine, ImportWithInvalidNameFailsWithClearMessageRatherThanFallingThrough)
+{
+    // Before this fix, a name character parseImportLine didn't accept made the whole line
+    // fall through as literal Lua, producing Lua's own confusing "nil value" error instead.
+    DroneScriptEngine engine;
+    EXPECT_FALSE(engine.loadScript(R"(
+        import "bad name!"
+        function NextNotes() return {} end
+    )"));
+    EXPECT_TRUE(engine.hasError());
+    EXPECT_NE(engine.lastError().find("invalid library name"), std::string::npos) << engine.lastError();
+}
+
+TEST(DroneScriptEngine, MultipleImportsConcatenateInWrittenOrder)
+{
+    DroneScriptEngine engine;
+    engine.setImportResolver(
+        [](const std::string_view name) -> ImportLookup
+        {
+            if (name == "a")
+            {
+                return {std::string("Value = 1"), {}};
+            }
+            if (name == "b")
+            {
+                return {std::string("Value = Value + 1"), {}};
+            }
+            return {std::nullopt, "not found"};
+        });
+    ASSERT_TRUE(engine.loadScript(R"(
+        import "a"
+        import "b"
+        function NextNotes()
+            return { { note = Value, velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 2.f) << "\"a\" then \"b\" must run in that order";
+}
+
+TEST(DroneScriptEngine, UnresolvedImportFailsLoadAndKeepsPreviousScriptRunning)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript("function NextNotes() return { { note = 61 } } end"));
+
+    engine.setImportResolver([](std::string_view) -> ImportLookup
+                             { return {std::nullopt, "looked in /fake/User/missing.lua; /fake/Base/missing.lua"}; });
+    EXPECT_FALSE(engine.loadScript(R"(
+        import "missing"
+        function NextNotes() return { { note = 1 } } end
+    )"));
+    EXPECT_TRUE(engine.hasError());
+    EXPECT_NE(engine.lastError().find("missing"), std::string::npos);
+    EXPECT_NE(engine.lastError().find("/fake/User/missing.lua"), std::string::npos)
+        << "resolver's notFoundDetail should be folded into the error: " << engine.lastError();
+
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 61.f);
+}
+
+TEST(DroneScriptEngine, ImportWithNoResolverConfiguredFails)
+{
+    DroneScriptEngine engine;
+    EXPECT_FALSE(engine.loadScript(R"(
+        import "anything"
+        function NextNotes() return {} end
+    )"));
+    EXPECT_TRUE(engine.hasError());
+}
+
+TEST(DroneScriptEngine, ImportLineIsOnlyRecognizedAtTheTopOfTheScript)
+{
+    DroneScriptEngine engine;
+    engine.setImportResolver(
+        [](const std::string_view name) -> ImportLookup
+        {
+            if (name == "helpers")
+            {
+                return {std::string("function Helper() return 42 end"), {}};
+            }
+            return {std::nullopt, "not found"};
+        });
+    // A later import line is left as literal, non-Lua text and fails to parse - it must
+    // not be treated as a directive once the header block has already ended.
+    EXPECT_FALSE(engine.loadScript(R"(
+        function NextNotes() return {} end
+        import "helpers"
+    )"));
+    EXPECT_TRUE(engine.hasError());
+}
+
+TEST(DroneScriptEngine, ImportHeaderSkipsBlankLinesAndComments)
+{
+    DroneScriptEngine engine;
+    engine.setImportResolver(
+        [](const std::string_view name) -> ImportLookup
+        {
+            if (name == "helpers")
+            {
+                return {std::string("function Helper() return 7 end"), {}};
+            }
+            return {std::nullopt, "not found"};
+        });
+    ASSERT_TRUE(engine.loadScript(R"(
+        -- a leading comment
+
+        import "helpers"
+        function NextNotes()
+            return { { note = Helper(), velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 7.f);
 }

@@ -5,6 +5,7 @@
 #include <random>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "Audio/AudioBuffer.h"
 #include "DroneScriptEngine.h"
@@ -133,6 +134,11 @@ class DroneSequencerImpl final : public EffectBase
             resendUiParameters();
         }
         return ok;
+    }
+
+    void setImportResolver(DroneScriptEngine::ImportResolver resolver)
+    {
+        m_scriptEngine.setImportResolver(std::move(resolver));
     }
 
     [[nodiscard]] bool hasScriptError() const noexcept

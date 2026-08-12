@@ -120,6 +120,10 @@ list(FILTER SourceFiles EXCLUDE REGEX ".*StubImpl\\.h$")
 target_include_directories("${PROJECT_NAME}" PUBLIC ../../src/includes)
 target_include_directories("${PROJECT_NAME}" SYSTEM PRIVATE ${SOL2_DIR}/include)
 target_compile_definitions("${PROJECT_NAME}" PRIVATE SOL_USING_CXX_LUA=1)
+target_compile_definitions(
+    "${PROJECT_NAME}"
+    PRIVATE DRONESEQUENCER_BASE_SCRIPTS_DIR="${DRONESEQUENCER_DIR}/base-scripts"
+)
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
 

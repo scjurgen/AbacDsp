@@ -35,6 +35,49 @@ Since `os` is not loaded, there is no wall clock: keep any notion of "elapsed ti
 own counter (a `local step` incremented once per call), or use `Timer.After`/`Timer.Every`
 below for a millisecond-scale notion of elapsed time instead.
 
+## Importing shared library scripts
+
+Since there is no `require` (see Sandbox above), a script pulls in a shared library script
+with its own `import` line instead:
+
+```lua
+import "sequencer"
+import "scales.lua"  -- a trailing .lua is accepted and stripped, same library as "scales"
+```
+
+Import lines are only recognized in the script's leading header: starting from the top,
+each line must be blank, a `--` comment, or an `import "name"` line for the header to keep
+growing; the first line matching none of those ends it - from there on, `import` is just
+inert script text (it isn't a real Lua function, so a later one fails to parse rather than
+doing anything). Within the header, though, any line shaped like `import "..."` is treated
+as a real import attempt: `name` may end in `.lua` (stripped before lookup), but what's left
+must be letters, digits, `_`, or `-` - anything else rejects the script with a clear "invalid
+library name" error rather than silently falling through to a confusing Lua error.
+
+Each resolved library's source is spliced in, in the order written, ahead of the rest of
+the script, then the whole thing is compiled as one chunk - so a library's top-level code
+(typically function/table definitions) becomes directly available to the rest of the
+script. A library is not itself scanned for further `import` lines - nested imports are not
+supported; import each one directly from the patch script instead.
+
+Library scripts are plain `.lua` files on disk, in one of two places, checked in this
+order:
+
+| Location | Purpose |
+|---|---|
+| `Library/User/<name>.lua` | Your own scripts. Never touched automatically - add, edit, or remove them yourself. |
+| `Library/Base/<name>.lua` | Synced from this repo's `base-scripts/` folder each time the app starts. Not meant to be hand-edited - a `User` script of the same name overrides it instead. |
+
+Both live under the same per-app data directory as the existing named Scripts pool (see
+`Settings > Scripts` in an example's own README), e.g.
+`~/Library/Application Support/AbacDsp/<Example>/Library/` on macOS.
+
+An `import` naming a library neither directory has fails `loadScript()` immediately, before
+anything is compiled - the same "rejected at Apply time, previous script keeps playing
+underneath" behavior as any other compile failure. The error names both full paths that
+were checked, and is also printed to the console, so a missing/misspelled library is easy
+to track down even without the in-app error display visible.
+
 ## Incoming MIDI
 
 If the host sends the plugin MIDI, each event calls an optional handler - define whichever

@@ -60,3 +60,13 @@ package_add_test(DroneSequencerImplTests
 package_add_test(LlmAssistWatcherCoreTests
         LlmAssistWatcherCore_tests.cpp
 )
+
+package_add_test(FileIoTests
+        FileIo_tests.cpp
+)
+target_link_libraries(FileIoTests juce::juce_core nlohmann_json::nlohmann_json)
+target_compile_definitions(
+    FileIoTests
+    PRIVATE
+        DRONESEQUENCER_BASE_SCRIPTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/base-scripts-fixture"
+)

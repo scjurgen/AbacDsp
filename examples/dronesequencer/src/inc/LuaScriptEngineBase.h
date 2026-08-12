@@ -7,7 +7,10 @@
 #include <cassert>
 #include <cctype>
 #include <cstddef>
+#include <functional>
+#include <iostream>
 #include <memory>
+#include <optional>
 #include <sol/sol.hpp>
 #include <string>
 #include <string_view>
@@ -55,6 +58,16 @@ struct LuaUiParamSlot
 #pragma GCC diagnostic pop
 };
 
+// Result of resolving one `import "name"` line. On failure, notFoundDetail is a
+// human-readable description of where the resolver looked (e.g. the paths it checked),
+// folded into the resulting compile error - free-standing (not nested in the template)
+// so callers can name it without a template argument.
+struct ImportLookup
+{
+    std::optional<std::string> source;
+    std::string notFoundDetail;
+};
+
 /**
  * Owns a pool-allocated Lua state and the sol2 bindings shared by every Lua-scripted
  * example: MIDI/start-stop handler dispatch and the UI-parameter-slot system. notify*()
@@ -75,6 +88,11 @@ class LuaScriptEngineBase
   public:
     static constexpr size_t kMaxLuaParams{8};
     using UiParamSlots = std::array<LuaUiParamSlot, kMaxLuaParams>;
+
+    // Resolves an `import "name"` line (see loadScript()) to that library's Lua source.
+    // Left unset, every import fails to resolve - a Derived that never wires one up
+    // simply never supports imports.
+    using ImportResolver = std::function<ImportLookup(std::string_view)>;
 
     // The handler stubs shared by every Lua-scripted engine, meant to be concatenated
     // with a derived engine's own hooks (e.g. a sequencer's OnTiming/NextNotes) into that
@@ -146,6 +164,14 @@ class LuaScriptEngineBase
 
     explicit LuaScriptEngineBase(size_t poolBytes);
 
+    void setImportResolver(ImportResolver resolver)
+    {
+        m_importResolver = std::move(resolver);
+    }
+
+    // Splices any leading `import "name"` lines (see LUA.md) into `source` via the
+    // configured ImportResolver before compiling. An unresolvable import rejects the
+    // whole script, the same as any other compile failure.
     bool loadScript(std::string_view source);
 
     // Fires on any effective start/stop transition (manual toggle, or host transport
@@ -293,6 +319,17 @@ class LuaScriptEngineBase
     void bindMusicMathLibrary();
     void bindTimerApi();
     void bindTransportApi();
+    // Returns the spliced script ready to compile, or nullopt (with m_lastError set and
+    // logged to std::cerr) if a leading import line names a library that fails to resolve.
+    [[nodiscard]] std::optional<std::string> resolveImports(std::string_view source);
+    // Extracts the quoted name from an already-trimmed `import "..."` line; nullopt if
+    // the line isn't shaped like an import directive at all (left as literal script text).
+    [[nodiscard]] static std::optional<std::string_view> extractImportDirectiveName(
+        std::string_view trimmedLine) noexcept;
+    // Strips an optional trailing ".lua" and validates what remains; nullopt if the
+    // resulting identifier is empty or contains anything but letters/digits/'_'/'-'.
+    [[nodiscard]] static std::optional<std::string> normalizeImportName(std::string_view rawName);
+    [[nodiscard]] static std::string_view trimmed(std::string_view text) noexcept;
     void registerUiParameterSet(const sol::table& descriptors);
     [[nodiscard]] static LuaUiParamSlot parseUiParamSlot(const sol::table& entry, size_t index);
     [[nodiscard]] static std::string capitalizeFirst(std::string_view text);
@@ -329,6 +366,7 @@ class LuaScriptEngineBase
     float m_sampleRate{44100.f};
     std::array<LuaTimerSlot, kMaxLuaTimers> m_timerSlots{};
     LuaTransportSnapshot m_transport{};
+    ImportResolver m_importResolver;
 };
 
 template <typename Derived>
@@ -578,9 +616,16 @@ bool LuaScriptEngineBase<Derived>::loadScript(const std::string_view source)
     // named On* handlers, which bindFunctions() below simply re-looks-up) - they must not
     // keep firing into a script that no longer exists.
     m_timerSlots = std::array<LuaTimerSlot, kMaxLuaTimers>{};
+
+    const std::optional<std::string> resolvedSource = resolveImports(source);
+    if (!resolvedSource)
+    {
+        return false;
+    }
+
     try
     {
-        sol::protected_function_result result = m_lua.safe_script(source, sol::script_pass_on_error);
+        sol::protected_function_result result = m_lua.safe_script(*resolvedSource, sol::script_pass_on_error);
         if (!result.valid())
         {
             const sol::error err = result;
@@ -596,6 +641,104 @@ bool LuaScriptEngineBase<Derived>::loadScript(const std::string_view source)
     m_lastError.clear();
     bindFunctions();
     return true;
+}
+
+template <typename Derived>
+std::optional<std::string> LuaScriptEngineBase<Derived>::resolveImports(const std::string_view source)
+{
+    const auto fail = [this](std::string message) -> std::optional<std::string>
+    {
+        m_lastError = std::move(message);
+        std::cerr << "LuaScriptEngine: ERROR - " << m_lastError << std::endl;
+        return std::nullopt;
+    };
+
+    std::string spliced;
+    size_t headerEnd = 0;
+    while (headerEnd < source.size())
+    {
+        const size_t newline = source.find('\n', headerEnd);
+        const size_t lineEnd = (newline == std::string_view::npos) ? source.size() : newline;
+        const std::string_view line = trimmed(source.substr(headerEnd, lineEnd - headerEnd));
+        const size_t nextHeaderEnd = (newline == std::string_view::npos) ? source.size() : newline + 1;
+
+        if (line.empty() || line.starts_with("--"))
+        {
+            headerEnd = nextHeaderEnd;
+            continue;
+        }
+
+        const std::optional<std::string_view> rawName = extractImportDirectiveName(line);
+        if (!rawName)
+        {
+            break;
+        }
+        const std::optional<std::string> name = normalizeImportName(*rawName);
+        if (!name)
+        {
+            return fail("import \"" + std::string(*rawName) +
+                        "\": invalid library name - use letters, digits, '_' or '-', "
+                        "optionally with a trailing .lua");
+        }
+
+        const ImportLookup lookup = m_importResolver ? m_importResolver(*name) : ImportLookup{};
+        if (!lookup.source)
+        {
+            std::string message = "import \"" + *name + "\": library script not found";
+            if (!lookup.notFoundDetail.empty())
+            {
+                message += " (" + lookup.notFoundDetail + ")";
+            }
+            return fail(std::move(message));
+        }
+        spliced += *lookup.source;
+        spliced += '\n';
+        headerEnd = nextHeaderEnd;
+    }
+    spliced += source.substr(headerEnd);
+    return spliced;
+}
+
+template <typename Derived>
+std::optional<std::string_view> LuaScriptEngineBase<Derived>::extractImportDirectiveName(
+    const std::string_view trimmedLine) noexcept
+{
+    constexpr std::string_view kPrefix = "import \"";
+    if (!trimmedLine.starts_with(kPrefix) || !trimmedLine.ends_with('"') || trimmedLine.size() <= kPrefix.size())
+    {
+        return std::nullopt;
+    }
+    return trimmedLine.substr(kPrefix.size(), trimmedLine.size() - kPrefix.size() - 1);
+}
+
+template <typename Derived>
+std::optional<std::string> LuaScriptEngineBase<Derived>::normalizeImportName(std::string_view rawName)
+{
+    constexpr std::string_view kLuaSuffix = ".lua";
+    if (rawName.ends_with(kLuaSuffix))
+    {
+        rawName.remove_suffix(kLuaSuffix.size());
+    }
+    const bool validName =
+        !rawName.empty() &&
+        std::ranges::all_of(rawName, [](const char c)
+                            { return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_' || c == '-'; });
+    return validName ? std::optional{std::string(rawName)} : std::nullopt;
+}
+
+template <typename Derived>
+std::string_view LuaScriptEngineBase<Derived>::trimmed(std::string_view text) noexcept
+{
+    const auto isSpace = [](const char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; };
+    while (!text.empty() && isSpace(text.front()))
+    {
+        text.remove_prefix(1);
+    }
+    while (!text.empty() && isSpace(text.back()))
+    {
+        text.remove_suffix(1);
+    }
+    return text;
 }
 
 template <typename Derived>
