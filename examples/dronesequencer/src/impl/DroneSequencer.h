@@ -7,15 +7,18 @@
 #include <random>
 
 #include "DroneScriptEngine.h"
+#include "Generators/AdsEnvelope.h"
 #include "Generators/KarplusStrongEnsemble.h"
 
 /**
  * Lookahead-driven sequencer for the drone sequencer's N-string ensemble: at a fixed
  * BPM/division interval, asks a DroneScriptEngine for the next notes a fixed lookahead
- * ahead of the nominal beat, then schedules each returned note sample-accurately
- * (trigger, plus an optional stop at note.lengthMs later). Transpose, detune/tuning,
- * and humanize timing/level are applied on top of whatever the script returns; pattern,
- * harmonics, and slide are the script's concern now, not the sequencer's.
+ * ahead of the nominal beat, then schedules each returned note sample-accurately -
+ * trigger, an optional stop at note.lengthMs, and an optional pitch slide-in over
+ * note.slideTimeMs if the script asked for one (reuses EnvelopeShaper/bendInCents the
+ * same way Tanpura's PluckSequencer does). Transpose, detune/tuning, and humanize
+ * timing/level are applied on top of whatever the script returns; which notes slide, by
+ * how much, and for how long remain the script's decision, not the sequencer's.
  */
 template <size_t MaxLength, size_t MaxVoices>
 class DroneSequencer
@@ -69,6 +72,7 @@ class DroneSequencer
 
     void step(AbacDsp::KarplusStrongEnsemble<kMaxVoices, MaxLength>& ensemble, DroneScriptEngine& script) noexcept
     {
+        updateSlides(ensemble);
         firePendingEvents(ensemble);
         if (!m_playing)
         {
@@ -87,6 +91,11 @@ class DroneSequencer
         return m_nominalPositionSamples;
     }
 
+    [[nodiscard]] bool isSliding(const size_t voiceIndex) const noexcept
+    {
+        return m_sliding[voiceIndex];
+    }
+
   private:
     static constexpr float kLookaheadMs{30.f};
     static constexpr size_t kMaxPendingEvents{DroneScriptEngine::kMaxNotesPerRequest * 4};
@@ -98,6 +107,8 @@ class DroneSequencer
         float note{0.f};
         float gain{0.f};
         float tuning{440.f};
+        float slideCents{0.f};      // 0 = no slide, straight pluck
+        size_t slideTimeSamples{0}; // only meaningful when slideCents != 0
         bool isStop{false};
         bool active{false};
     };
@@ -177,6 +188,8 @@ class DroneSequencer
         slot->note = note.noteHeight + m_transposeSemitones;
         slot->gain = rollPluckGain(note.velocity);
         slot->tuning = m_tuning;
+        slot->slideCents = note.slideSemitones * 100.f;
+        slot->slideTimeSamples = msToSamples(note.slideTimeMs);
     }
 
     void enqueueStop(const int64_t samplesUntil, const size_t voiceIndex) noexcept
@@ -241,9 +254,38 @@ class DroneSequencer
             else
             {
                 voice.trigger(event.note, event.gain, event.tuning);
-                voice.bendInCents(m_detuneCents[event.voiceIndex]);
+                if (event.slideCents != 0.f)
+                {
+                    m_slideShapers[event.voiceIndex].reset(event.slideCents);
+                    m_slideShapers[event.voiceIndex].setNewFramesAndTarget(event.slideTimeSamples, 0.f, 0.f);
+                    m_sliding[event.voiceIndex] = true;
+                }
+                else
+                {
+                    voice.bendInCents(m_detuneCents[event.voiceIndex]);
+                    // Cancel a still-ramping slide from this voice's previous note - this
+                    // pluck didn't ask for one, so nothing should keep bending it further.
+                    m_sliding[event.voiceIndex] = false;
+                }
             }
             event.active = false;
+        }
+    }
+
+    // Steps every voice's slide ramp, additively on top of its static detune, so the
+    // effective bend converges to exactly that detune once the ramp finishes. Called once
+    // per sample, before firePendingEvents(), so a slide started this sample only begins
+    // audibly ramping next sample - matches Tanpura's PluckSequencer::step() ordering.
+    void updateSlides(AbacDsp::KarplusStrongEnsemble<kMaxVoices, MaxLength>& ensemble) noexcept
+    {
+        for (size_t i = 0; i < kMaxVoices; ++i)
+        {
+            if (!m_sliding[i])
+            {
+                continue;
+            }
+            ensemble.voice(i).bendInCents(m_detuneCents[i] + m_slideShapers[i].step());
+            m_sliding[i] = !m_slideShapers[i].isDone();
         }
     }
 
@@ -260,6 +302,9 @@ class DroneSequencer
     int64_t m_nominalPositionSamples{0};
     int64_t m_actualPositionSamples{0};
     std::array<PendingEvent, kMaxPendingEvents> m_pending{};
+
+    std::array<AbacDsp::EnvelopeShaper, kMaxVoices> m_slideShapers{};
+    std::array<bool, kMaxVoices> m_sliding{};
 
     std::mt19937 m_rng{std::random_device{}()};
     std::uniform_real_distribution<float> m_uniformDist{0.f, 100.f};

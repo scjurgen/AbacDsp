@@ -192,3 +192,118 @@ TEST(DroneSequencer, PositiveLengthRunsWithoutFaultsAcrossManyTicks)
     }
     SUCCEED();
 }
+
+TEST(DroneSequencer, ScriptWithoutSlideFieldNeverSlides)
+{
+    TestSequencer seq(kSampleRate);
+    TestEnsemble ensemble(kSampleRate);
+    DroneScriptEngine script;
+    ASSERT_TRUE(script.loadScript(R"(
+        function NextNotes()
+            return { { note = 60, velocity = 0.8, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+    seq.setIntervalMs(50.f);
+    seq.setPlaying(true);
+
+    for (int i = 0; i < static_cast<int>(msToSamples(50.f)); ++i)
+    {
+        seq.step(ensemble, script);
+        EXPECT_FALSE(seq.isSliding(0));
+    }
+    EXPECT_TRUE(ensemble.voice(0).isActive()) << "sanity: the note itself still fired";
+}
+
+TEST(DroneSequencer, NonzeroSlideSetsIsSlidingRightAfterTrigger)
+{
+    TestSequencer seq(kSampleRate);
+    TestEnsemble ensemble(kSampleRate);
+    DroneScriptEngine script;
+    ASSERT_TRUE(script.loadScript(R"(
+        function NextNotes()
+            return { { note = 60, velocity = 0.8, channel = 0, length = 0, delay = 0, slide = 7, slideTime = 50 } }
+        end
+    )"));
+    seq.setIntervalMs(200.f);
+    seq.setPlaying(true);
+
+    bool sawSliding = false;
+    for (int i = 0; i < static_cast<int>(msToSamples(200.f)); ++i)
+    {
+        seq.step(ensemble, script);
+        sawSliding = sawSliding || seq.isSliding(0);
+    }
+    EXPECT_TRUE(sawSliding);
+}
+
+TEST(DroneSequencer, SlideFlagClearsOnceSlideTimeElapses)
+{
+    TestSequencer seq(kSampleRate);
+    TestEnsemble ensemble(kSampleRate);
+    DroneScriptEngine script;
+    ASSERT_TRUE(script.loadScript(R"(
+        function NextNotes()
+            return { { note = 60, velocity = 0.8, channel = 0, length = 0, delay = 0, slide = 7, slideTime = 20 } }
+        end
+    )"));
+    seq.setIntervalMs(500.f); // long enough that only the initial trigger fires in this window
+    seq.setPlaying(true);
+
+    // Past the trigger's fixed lookahead (30ms) plus the 20ms slide, comfortably short of
+    // the next 500ms interval tick.
+    for (int i = 0; i < static_cast<int>(msToSamples(100.f)); ++i)
+    {
+        seq.step(ensemble, script);
+    }
+    EXPECT_TRUE(ensemble.voice(0).isActive()) << "sanity: the note fired";
+    EXPECT_FALSE(seq.isSliding(0)) << "slide should have resolved to the target pitch by now";
+}
+
+TEST(DroneSequencer, TwoChannelsSlideIndependently)
+{
+    TestSequencer seq(kSampleRate);
+    TestEnsemble ensemble(kSampleRate);
+    DroneScriptEngine script;
+    ASSERT_TRUE(script.loadScript(R"(
+        function NextNotes()
+            return {
+                { note = 60, velocity = 0.8, channel = 0, length = 0, delay = 0, slide = 7, slideTime = 50 },
+                { note = 64, velocity = 0.8, channel = 1, length = 0, delay = 0 },
+            }
+        end
+    )"));
+    seq.setIntervalMs(200.f);
+    seq.setPlaying(true);
+
+    bool sawChannel0Sliding = false;
+    bool sawChannel1Sliding = false;
+    for (int i = 0; i < static_cast<int>(msToSamples(200.f)); ++i)
+    {
+        seq.step(ensemble, script);
+        sawChannel0Sliding = sawChannel0Sliding || seq.isSliding(0);
+        sawChannel1Sliding = sawChannel1Sliding || seq.isSliding(1);
+    }
+    EXPECT_TRUE(sawChannel0Sliding);
+    EXPECT_FALSE(sawChannel1Sliding);
+}
+
+TEST(DroneSequencer, ZeroSlideTimeSnapsInsteadOfStickingSliding)
+{
+    TestSequencer seq(kSampleRate);
+    TestEnsemble ensemble(kSampleRate);
+    DroneScriptEngine script;
+    ASSERT_TRUE(script.loadScript(R"(
+        function NextNotes()
+            return { { note = 60, velocity = 0.8, channel = 0, length = 0, delay = 0, slide = 5, slideTime = 0 } }
+        end
+    )"));
+    seq.setIntervalMs(500.f);
+    seq.setPlaying(true);
+
+    for (int i = 0; i < static_cast<int>(msToSamples(100.f)); ++i)
+    {
+        seq.step(ensemble, script);
+    }
+    EXPECT_TRUE(ensemble.voice(0).isActive());
+    EXPECT_FALSE(seq.isSliding(0)) << "slideTime=0 should snap instantly, not stay stuck sliding";
+}

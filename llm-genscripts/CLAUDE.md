@@ -108,6 +108,9 @@ end
 - `note`: MIDI-style note number, 60 = middle C. `velocity`: 0..1. `channel`: 0-based
   string index, clamped to however many Voices the patch has (1-8). `length`: ms before
   mute, 0 = ring out naturally. `delay`: ms offset from the beat, may be negative.
+- `slide` (optional, default 0): semitones the note bends in from, signed - positive starts
+  above and descends in, negative starts below and rises in. `slideTime` (optional, default
+  0): ms for the bend to resolve; only meaningful when `slide` is nonzero.
 - Only `base`, `math`, `table`, `string` are loaded - no `io`, `os`, `require`. No wall
   clock; use a `local` counter across calls instead.
 

@@ -75,10 +75,10 @@ Each note is a table with:
 | `channel` | Which string to pluck (0-based). Clamped to `[0, Voices)`. |
 | `length` | ms until the string is muted; 0 lets it ring out via Attack/Decay/Sustain instead of being cut off. |
 | `delay` | ms offset from the nominal beat; may be negative to fire early. The sequencer always asks a short lookahead before the beat, so a small negative `delay` is normal, not a bug. |
+| `slide` | Semitones the note bends in *from*, signed. `0` (default) = straight pluck. Positive starts above the target pitch and descends in; negative starts below and rises in. |
+| `slideTime` | ms for the bend to resolve to the target pitch. Only meaningful when `slide` is nonzero; `0` snaps to pitch instantly. |
 
-`NextNotes()` returning more than 8 notes in one call has the extras dropped. Not yet
-implemented: pitch bends - the note struct is deliberately built so a `bend = {interval, time,
-curve}` field can be added later without reshaping what's already there.
+`NextNotes()` returning more than 8 notes in one call has the extras dropped.
 
 `OnStart`/`OnStop` (see `../../LUA.md`) fire on a start/stop transition of the clock here
 specifically: the manual Play switch toggling, or the host transport's play state when Host

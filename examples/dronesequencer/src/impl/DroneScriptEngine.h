@@ -14,6 +14,8 @@ struct DroneNote
     size_t channel{0};
     float lengthMs{0.f};
     float delayMs{0.f};
+    float slideSemitones{0.f}; // signed; 0 = straight pluck, unchanged from today
+    float slideTimeMs{0.f};    // only meaningful when slideSemitones != 0
 };
 
 /**
@@ -145,6 +147,8 @@ inline DroneScriptEngine::NextNotesResult DroneScriptEngine::nextNotes() noexcep
             note.channel = static_cast<size_t>(entry->get_or("channel", 0.f));
             note.lengthMs = entry->get_or("length", 0.f);
             note.delayMs = entry->get_or("delay", 0.f);
+            note.slideSemitones = entry->get_or("slide", 0.f);
+            note.slideTimeMs = entry->get_or("slideTime", 0.f);
             ++out.count;
         }
         m_lastError.clear();
