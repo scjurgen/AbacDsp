@@ -1152,6 +1152,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         return m_fileIo.renameScriptNamed(oldName.toStdString(), newName.toStdString());
     }
 
+    bool saveUserLibraryScript(const juce::String& name, const juce::String& content)
+    {
+        return FileIo::saveUserLibraryScript(name.toStdString(), content.toStdString());
+    }
+
 
     void computeCpuLoad(std::chrono::nanoseconds elapsed, size_t numSamples)
     {

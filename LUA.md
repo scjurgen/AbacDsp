@@ -12,7 +12,7 @@ format, see `examples/dronesequencer/README.md`.
 Only Lua's `base`, `math`, `table`, and `string` standard libraries are loaded - there is no
 `io`, `os`, or `require`. Notably, **there is no bare `rand()`** (that's a C function, not
 Lua) - use `math.random()`.
-
+ lu
 | Call | Returns |
 |---|---|
 | `math.random()` | float in `[0, 1)` |
@@ -70,7 +70,9 @@ order:
 
 Both live under the same per-app data directory as the existing named Scripts pool (see
 `Settings > Scripts` in an example's own README), e.g.
-`~/Library/Application Support/AbacDsp/<Example>/Library/` on macOS.
+`~/Library/Application Support/AbacDsp/<Example>/Library/` on macOS. For dronesequencer,
+a `Library/User/` script can also be pushed via the `llm-genscripts/generated/libraries/`
+watched-folder workflow instead of editing the file by hand - see `llm-genscripts/CLAUDE.md`.
 
 An `import` naming a library neither directory has fails `loadScript()` immediately, before
 anything is compiled - the same "rejected at Apply time, previous script keeps playing

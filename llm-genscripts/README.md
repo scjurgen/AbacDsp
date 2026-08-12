@@ -10,6 +10,8 @@ Exchange point between a Claude Code session and a running DroneSequencer instan
   scripts written for the app to pick up, the `pulled-*.lua` files it renames them to once
   applied, and the `state-*.json` compile-result reports it writes back. Contents are
   transient/generated; safe to clear out periodically.
+- `generated/libraries/` - same pull/pulled-/state- protocol, but for shared `import`-able
+  library scripts instead of full patch scripts; see `CLAUDE.md`.
 
 The Lua scripting API itself (hooks, note-table fields, sandboxed stdlib, worked examples)
 is documented in root `LUA.md` and `examples/dronesequencer/README.md` under "Scripting",

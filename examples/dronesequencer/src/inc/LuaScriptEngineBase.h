@@ -68,6 +68,25 @@ struct ImportLookup
     std::string notFoundDetail;
 };
 
+// Strips an optional trailing ".lua" and validates what remains; nullopt if the resulting
+// identifier is empty or contains anything but letters/digits/'_'/'-'. Free-standing (not
+// a template member, even though it originates from import-line parsing) so any caller
+// that needs "is this a legal library name" - e.g. FileIo's write path - can reuse the
+// exact same rule import resolution itself uses, rather than drifting from a duplicate.
+[[nodiscard]] inline std::optional<std::string> normalizeImportName(std::string_view rawName)
+{
+    constexpr std::string_view kLuaSuffix = ".lua";
+    if (rawName.ends_with(kLuaSuffix))
+    {
+        rawName.remove_suffix(kLuaSuffix.size());
+    }
+    const bool validName =
+        !rawName.empty() &&
+        std::ranges::all_of(rawName, [](const char c)
+                            { return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_' || c == '-'; });
+    return validName ? std::optional{std::string(rawName)} : std::nullopt;
+}
+
 /**
  * Owns a pool-allocated Lua state and the sol2 bindings shared by every Lua-scripted
  * example: MIDI/start-stop handler dispatch and the UI-parameter-slot system. notify*()
@@ -326,9 +345,6 @@ class LuaScriptEngineBase
     // the line isn't shaped like an import directive at all (left as literal script text).
     [[nodiscard]] static std::optional<std::string_view> extractImportDirectiveName(
         std::string_view trimmedLine) noexcept;
-    // Strips an optional trailing ".lua" and validates what remains; nullopt if the
-    // resulting identifier is empty or contains anything but letters/digits/'_'/'-'.
-    [[nodiscard]] static std::optional<std::string> normalizeImportName(std::string_view rawName);
     [[nodiscard]] static std::string_view trimmed(std::string_view text) noexcept;
     void registerUiParameterSet(const sol::table& descriptors);
     [[nodiscard]] static LuaUiParamSlot parseUiParamSlot(const sol::table& entry, size_t index);
@@ -709,21 +725,6 @@ std::optional<std::string_view> LuaScriptEngineBase<Derived>::extractImportDirec
         return std::nullopt;
     }
     return trimmedLine.substr(kPrefix.size(), trimmedLine.size() - kPrefix.size() - 1);
-}
-
-template <typename Derived>
-std::optional<std::string> LuaScriptEngineBase<Derived>::normalizeImportName(std::string_view rawName)
-{
-    constexpr std::string_view kLuaSuffix = ".lua";
-    if (rawName.ends_with(kLuaSuffix))
-    {
-        rawName.remove_suffix(kLuaSuffix.size());
-    }
-    const bool validName =
-        !rawName.empty() &&
-        std::ranges::all_of(rawName, [](const char c)
-                            { return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_' || c == '-'; });
-    return validName ? std::optional{std::string(rawName)} : std::nullopt;
 }
 
 template <typename Derived>

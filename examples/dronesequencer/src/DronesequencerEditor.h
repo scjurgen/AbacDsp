@@ -1222,6 +1222,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         { return processorRef.applyScriptText(text); };
         m_llmAssistWatcher.scriptErrorMessage = [this] { return juce::String(processorRef.scriptErrorMessage()); };
         m_llmAssistWatcher.currentPatchName = [this] { return processorRef.getCurrentPatchName(); };
+        m_llmAssistWatcher.currentScriptText = [this] { return processorRef.getScriptText(); };
+        m_llmAssistWatcher.saveUserLibraryScript = [this](const juce::String& name, const juce::String& content)
+        { return processorRef.saveUserLibraryScript(name, content); };
     }
 
     void toggleLlmAssist()
@@ -1278,7 +1281,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         {
             return;
         }
-        if (result->compiled)
+        if (result->kind == LlmAssistResultKind::Library)
+        {
+            m_statusBar.showMessage(result->compiled
+                                        ? "LLM-Assist library '" + result->scriptName + "' saved, current script OK"
+                                        : "LLM-Assist library '" + result->scriptName +
+                                              "' saved, current script error: " + result->error,
+                                    true);
+        }
+        else if (result->compiled)
         {
             m_statusBar.showMessage("LLM-Assist applied '" + result->scriptName + "'", true);
         }

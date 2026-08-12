@@ -42,15 +42,56 @@ LLM-Assist enabled (Scripts menu) and pointed at `llm-genscripts/generated/`. If
 ## state-<name>.json schema
 
 ```json
-{"compiled": true, "error": "", "patchName": "", "scriptName": "cmaj9-arpeggio"}
+{"compiled": true, "error": "", "patchName": "", "scriptName": "cmaj9-arpeggio", "kind": "script"}
 ```
 
 `error` is the Lua compile error message when `compiled` is `false`, empty otherwise.
-`patchName` is whatever patch was active in the app at the time (often empty). Note: this
-only catches *compile*-time errors (syntax errors, code that runs at load). A script that
-compiles but throws inside `NextNotes()`/`OnTiming()` later reports `compiled: true` here
-and only fails when the app actually calls it - there is no file-based signal for that
+`patchName` is whatever patch was active in the app at the time (often empty). `kind` is
+`"script"` for a normal patch-script pull as above, or `"library"` for a library-script
+pull - see the next section, since `compiled`/`error` mean something different there. Note:
+this only catches *compile*-time errors (syntax errors, code that runs at load). A script
+that compiles but throws inside `NextNotes()`/`OnTiming()` later reports `compiled: true`
+here and only fails when the app actually calls it - there is no file-based signal for that
 class of error, only the app's own status bar.
+
+## Library scripts (generated/libraries/)
+
+A script can `import "name"` a shared library instead of duplicating boilerplate (see root
+`LUA.md`, "Importing shared library scripts"). To push a library update through this same
+watched-folder workflow rather than editing it by hand:
+
+1. Write `generated/libraries/<name>.lua` - same naming rule as `import "name"` itself:
+   letters, digits, `_`, `-` (an accidental trailing `.lua` in the name is fine, it's
+   stripped the same way `import` strips it). This is a plain library file - helper
+   function/table definitions, not `NextNotes()`/`OnTiming()`.
+2. The app saves it to `Library/User/<name>.lua`, then **automatically re-applies whatever
+   patch script is currently active** - the same Apply path as a manual edit - so if that
+   script has `import "<name>"`, the new content is picked up and genuinely validated, not
+   just syntax-checked in isolation.
+3. Wait for `generated/libraries/state-<name>.json`, same schema as above but with
+   `"kind": "library"`. Importantly, `compiled`/`error` here describe **the current patch
+   script's** recompile outcome after the library update, not the library file by itself -
+   if the current script doesn't actually import this library, `compiled: true` just means
+   "saved, and whatever was already running still compiles," not "this library is correct."
+4. After processing, the source is renamed to `generated/libraries/pulled-<name>-<epoch-ms>.lua`,
+   exactly like a patch-script pull - same "never reapplied, don't re-edit in place" rule.
+
+**Ordering matters if a patch you're about to push imports a library you're also pushing:**
+a pending `generated/` patch-script candidate is always processed before a pending
+`generated/libraries/` one on every poll. Push the library first and wait for its own
+`generated/libraries/state-<name>.json` to confirm it, *then* push the patch. Pushing both
+at once risks the patch being applied (and permanently pulled) against a library that
+doesn't exist yet - it fails with an `import "...": library script not found` error and,
+per step 4 above, can't be retried under that same filename; you'd have to push it again
+under a new name once the library is actually installed.
+
+This always writes to `Library/User/`, never `Library/Base/` (the repo-synced tier, see
+`LUA.md`) - there is no watched-folder path into `Base/` by design. Once a `Library/User/`
+script is proven out and you want it to ship with the app for every patch (not just as a
+personal addition), the way to "promote" it is a plain repo change: copy it into
+`examples/dronesequencer/base-scripts/<name>.lua` and commit - ask Claude Code to do this
+as a normal follow-up once you're happy with a library, rather than trying to push it there
+through `generated/`.
 
 ## Quick script contract recap
 

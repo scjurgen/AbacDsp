@@ -70,3 +70,8 @@ target_compile_definitions(
     PRIVATE
         DRONESEQUENCER_BASE_SCRIPTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/base-scripts-fixture"
 )
+
+package_add_test(LlmAssistWatcherTests
+        LlmAssistWatcher_tests.cpp
+)
+target_link_libraries(LlmAssistWatcherTests juce::juce_core)

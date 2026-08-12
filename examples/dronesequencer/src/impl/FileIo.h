@@ -339,6 +339,20 @@ class FileIo
         return {std::nullopt, "looked in " + checkedPaths.joinIntoString("; ").toStdString()};
     }
 
+    // Writes/overwrites a Library/User/ script, e.g. from the LLM-Assist watched-folder
+    // workflow. Rejects a name normalizeImportName() would itself reject, so nothing is
+    // ever written here that could never actually be import "..."-ed back out.
+    [[nodiscard]] static bool saveUserLibraryScript(const std::string_view name, const std::string_view content)
+    {
+        const std::optional<std::string> normalized = normalizeImportName(name);
+        if (!normalized)
+        {
+            return false;
+        }
+        const juce::File file = getLibraryUserDirectory().getChildFile(juce::String(*normalized) + ".lua");
+        return file.replaceWithText(juce::String(std::string(content)));
+    }
+
     // Repo-synced (see syncBaseLibraryScripts()) - not meant to be hand-edited by users.
     static juce::File getLibraryBaseDirectory()
     {

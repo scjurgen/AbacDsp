@@ -61,6 +61,30 @@ TEST(FileIo, UserDirectoryOverridesBaseDirectoryForSameName)
     EXPECT_EQ(*lookup.source, "UserVersion");
 }
 
+TEST(FileIo, SaveUserLibraryScriptWritesReadableFile)
+{
+    const ScopedLibraryFile guard(FileIo::getLibraryUserDirectory(), "zz_fileio_test_save", "");
+    ASSERT_TRUE(FileIo::saveUserLibraryScript("zz_fileio_test_save", "function Foo() end"));
+    const auto lookup = FileIo::resolveLibraryScript("zz_fileio_test_save");
+    ASSERT_TRUE(lookup.source.has_value());
+    EXPECT_EQ(*lookup.source, "function Foo() end");
+}
+
+TEST(FileIo, SaveUserLibraryScriptOverwritesExistingContent)
+{
+    const ScopedLibraryFile guard(FileIo::getLibraryUserDirectory(), "zz_fileio_test_overwrite", "old");
+    ASSERT_TRUE(FileIo::saveUserLibraryScript("zz_fileio_test_overwrite", "new"));
+    const auto lookup = FileIo::resolveLibraryScript("zz_fileio_test_overwrite");
+    ASSERT_TRUE(lookup.source.has_value());
+    EXPECT_EQ(*lookup.source, "new");
+}
+
+TEST(FileIo, SaveUserLibraryScriptRejectsInvalidName)
+{
+    EXPECT_FALSE(FileIo::saveUserLibraryScript("bad name!", "function Foo() end"));
+    EXPECT_FALSE(FileIo::saveUserLibraryScript("", "function Foo() end"));
+}
+
 // Integration-style: DRONESEQUENCER_BASE_SCRIPTS_DIR (set for this test target only, see
 // CMakeLists.txt) points at fixtures/base-scripts-fixture/, and initialize() really does
 // sync it into the real per-user Library/Base/ directory - there is no seam to fake that.
