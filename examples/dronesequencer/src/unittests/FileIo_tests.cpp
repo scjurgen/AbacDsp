@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <gtest/gtest.h>
 #include <juce_core/juce_core.h>
 #include <string>
@@ -83,6 +84,23 @@ TEST(FileIo, SaveUserLibraryScriptRejectsInvalidName)
 {
     EXPECT_FALSE(FileIo::saveUserLibraryScript("bad name!", "function Foo() end"));
     EXPECT_FALSE(FileIo::saveUserLibraryScript("", "function Foo() end"));
+}
+
+TEST(FileIo, ListLibraryScriptNamesIncludesBothTiers)
+{
+    const ScopedLibraryFile userFile(FileIo::getLibraryUserDirectory(), "zz_fileio_test_list_user", "x");
+    const ScopedLibraryFile baseFile(FileIo::getLibraryBaseDirectory(), "zz_fileio_test_list_base", "x");
+    const auto names = FileIo::listLibraryScriptNames();
+    EXPECT_NE(std::find(names.begin(), names.end(), "zz_fileio_test_list_user"), names.end());
+    EXPECT_NE(std::find(names.begin(), names.end(), "zz_fileio_test_list_base"), names.end());
+}
+
+TEST(FileIo, ListLibraryScriptNamesListsANameInBothTiersOnce)
+{
+    const ScopedLibraryFile userFile(FileIo::getLibraryUserDirectory(), "zz_fileio_test_list_both", "user");
+    const ScopedLibraryFile baseFile(FileIo::getLibraryBaseDirectory(), "zz_fileio_test_list_both", "base");
+    const auto names = FileIo::listLibraryScriptNames();
+    EXPECT_EQ(std::count(names.begin(), names.end(), "zz_fileio_test_list_both"), 1);
 }
 
 // Integration-style: DRONESEQUENCER_BASE_SCRIPTS_DIR (set for this test target only, see

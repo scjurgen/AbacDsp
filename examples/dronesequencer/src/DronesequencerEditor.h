@@ -985,13 +985,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     // helper pulled out of its guard.
     void openScriptEditor()
     {
-        // Blocked while watching so a manual edit can't race with (and silently lose
-        // to) a script the watcher just applied from the folder.
-        if (m_llmAssistActive)
-        {
-            m_statusBar.showMessage("Disable LLM-Assist to edit the script manually");
-            return;
-        }
         // Non-modal (see ScriptEditorDialogWindow), so this can already be open - just
         // bring it forward rather than spawning a second editor.
         if (m_scriptEditorWindow != nullptr)
@@ -1000,8 +993,19 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             return;
         }
 
+        juce::StringArray libraryScriptNames;
+        for (const auto& n : processorRef.getLibraryScriptNames())
+        {
+            libraryScriptNames.add(n);
+        }
+
         auto* editorComponent = new ScriptEditorWindow();
         editorComponent->setScriptText(processorRef.getScriptText());
+        // While LLM-Assist is active, a manual edit could race with (and silently lose
+        // to) a script the watcher applies from the folder - view-only instead of blocked.
+        editorComponent->setReadOnly(m_llmAssistActive);
+        editorComponent->setLibraryScripts(libraryScriptNames, [this](const juce::String& name)
+                                           { return processorRef.getLibraryScriptText(name); });
         editorComponent->onApply = [this](const juce::String& text) -> juce::String
         {
             if (processorRef.applyScriptText(text))
@@ -1021,6 +1025,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         dialogWindow->centreAroundComponent(nullptr, dialogWindow->getWidth(), dialogWindow->getHeight());
         dialogWindow->setVisible(true);
         m_scriptEditorWindow = dialogWindow;
+        m_scriptEditorContent = editorComponent;
     }
 
     // Apply-time only catches errors the script hits while its top-level chunk runs
@@ -1233,6 +1238,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         {
             m_llmAssistActive = false;
             m_statusBar.showMessage("LLM-Assist disabled");
+            updateScriptEditorReadOnlyState();
             return;
         }
         if (m_llmAssistFolder.isEmpty())
@@ -1242,6 +1248,17 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         }
         m_llmAssistActive = true;
         m_statusBar.showMessage("LLM-Assist watching " + m_llmAssistFolder);
+        updateScriptEditorReadOnlyState();
+    }
+
+    // Pushed into an already-open editor whenever LLM-Assist toggles, so its read-only
+    // state always reflects whether a watched-folder pull could currently race an edit.
+    void updateScriptEditorReadOnlyState()
+    {
+        if (m_scriptEditorContent != nullptr)
+        {
+            m_scriptEditorContent->setReadOnly(m_llmAssistActive);
+        }
     }
 
     void chooseLlmAssistFolder(bool activateOnPick)
@@ -1261,6 +1278,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                   AppSettings::saveLlmAssistFolder(m_llmAssistFolder);
                                                   m_llmAssistActive = m_llmAssistActive || activateOnPick;
                                                   m_statusBar.showMessage("LLM-Assist folder: " + m_llmAssistFolder);
+                                                  updateScriptEditorReadOnlyState();
                                               });
     }
 
@@ -1292,6 +1310,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         else if (result->compiled)
         {
             m_statusBar.showMessage("LLM-Assist applied '" + result->scriptName + "'", true);
+            if (m_scriptEditorContent != nullptr)
+            {
+                m_scriptEditorContent->setScriptText(processorRef.getScriptText());
+            }
         }
         else
         {
@@ -1339,6 +1361,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     // Non-modal; deletes itself on close (see ScriptEditorDialogWindow), hence SafePointer
     // rather than an owning pointer here.
     juce::Component::SafePointer<ScriptEditorDialogWindow> m_scriptEditorWindow;
+    // Points at the window's content component, so pollLlmAssistWatcher()/toggleLlmAssist()
+    // can push a refresh/read-only update without reaching into ScriptEditorDialogWindow.
+    juce::Component::SafePointer<ScriptEditorWindow> m_scriptEditorContent;
     static constexpr int kLlmAssistToggleId = 15000;
     static constexpr int kLlmAssistChooseFolderId = 15001;
     static constexpr int kLlmAssistPollEveryNTicks = 15;

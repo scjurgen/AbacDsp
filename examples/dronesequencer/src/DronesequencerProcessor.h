@@ -1128,6 +1128,22 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         return juce::String(m_fileIo.currentScriptName());
     }
 
+    [[nodiscard]] std::vector<juce::String> getLibraryScriptNames() const
+    {
+        std::vector<juce::String> result;
+        for (const auto& n : FileIo::listLibraryScriptNames())
+        {
+            result.push_back(juce::String(n));
+        }
+        return result;
+    }
+
+    [[nodiscard]] juce::String getLibraryScriptText(const juce::String& name) const
+    {
+        const auto lookup = FileIo::resolveLibraryScript(name.toStdString());
+        return lookup.source ? juce::String(*lookup.source) : "-- not found: " + name;
+    }
+
     bool requestLoadScript(const juce::String& name)
     {
         if (!m_fileIo.loadScriptNamed(name.toStdString()))

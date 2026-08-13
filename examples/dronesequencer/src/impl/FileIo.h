@@ -353,6 +353,23 @@ class FileIo
         return file.replaceWithText(juce::String(std::string(content)));
     }
 
+    // Every installed library name, User and Base combined - a name in both is listed
+    // once, matching resolveLibraryScript()'s own "User overrides Base" resolution.
+    [[nodiscard]] static std::vector<std::string> listLibraryScriptNames()
+    {
+        std::vector<std::string> names;
+        for (const auto& dir : {getLibraryUserDirectory(), getLibraryBaseDirectory()})
+        {
+            for (const auto& f : dir.findChildFiles(juce::File::findFiles, false, "*.lua"))
+            {
+                names.push_back(f.getFileNameWithoutExtension().toStdString());
+            }
+        }
+        std::sort(names.begin(), names.end());
+        names.erase(std::unique(names.begin(), names.end()), names.end());
+        return names;
+    }
+
     // Repo-synced (see syncBaseLibraryScripts()) - not meant to be hand-edited by users.
     static juce::File getLibraryBaseDirectory()
     {

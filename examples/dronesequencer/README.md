@@ -14,7 +14,7 @@ asked to keep up with.
 | Transpose | -24 - +24 st | Added to every note height the script returns |
 | Detune | 0 - 100 ct | Per-string detune spread (scales a fixed per-voice pattern) |
 | Voices | 1 - 8 | How many strings are triggerable; `channel` values beyond this clamp to the last one |
-| Script | (button) | Opens the popup editor for the current patch's script. The editor's own Reset button replaces the text with a full skeleton (every available hook, stubbed out) - Cancel discards it, Apply commits it. |
+| Script | (button) | Opens the popup editor for the current patch's script. While LLM-Assist is active it opens read-only instead (Apply/Reset disabled) so a manual edit can't race a watched-folder pull, and its text stays live-updated as pulls happen. The editor's own Reset button replaces the text with a full skeleton (every available hook, stubbed out) - Cancel discards it, Apply commits it. A dropdown in the editor also lets you view any installed library script, always read-only. |
 | BPM | 40 - 250 | Tempo |
 | Host Sync | on/off | Follow the host transport's BPM/play state instead of BPM/Play |
 | Division | 1/1 - 1/16T | Clock division the script is asked for notes at |
@@ -33,9 +33,11 @@ patches, including whichever script is currently applied.
 A script can also pull in a shared library script with `import "name"` (see `../../LUA.md`) -
 useful for boilerplate reused across several patches. Built-in libraries live in this repo's
 `base-scripts/` folder and are synced to disk on every launch; your own go alongside them in
-`Library/User/`, under the same per-app data directory as the Scripts pool above. There is no
-in-app browser for these in this version - add, edit, or remove them as plain `.lua` files, and
-type the `import` line yourself.
+`Library/User/`, under the same per-app data directory as the Scripts pool above. The script
+editor's dropdown (see the Script control above) lets you view any of them read-only; there's
+still no way to create/edit/remove a library script directly from the UI in this version - do
+that as plain `.lua` files (or via LLM-Assist's `generated/libraries/`, see
+`../../llm-genscripts/CLAUDE.md`), and type the `import` line into your patch yourself.
 
 ## Scripting
 

@@ -3,14 +3,16 @@
 #include <functional>
 #include <juce_gui_basics/juce_gui_basics.h>
 
-// Non-modal popup for editing a script's plain text (no syntax highlighting), hosted by
-// ScriptEditorDialogWindow below rather than juce::DialogWindow::LaunchOptions, so the
-// main plugin window stays interactive while this is open. Apply calls onApply and never
-// closes the window itself, so the user can keep iterating; a non-empty return is shown
-// inline, an empty one clears any prior error. Cancel always closes (via the parent
-// window's closeButtonPressed()), discarding whatever is unapplied. Reset replaces the
-// editor's text with onReset()'s skeleton but does not apply or close - it's still just an
-// edit, undoable by Cancel, until Apply is clicked.
+// Non-modal popup for viewing/editing a script's plain text (no syntax highlighting),
+// hosted by ScriptEditorDialogWindow below rather than juce::DialogWindow::LaunchOptions,
+// so the main plugin window stays interactive while this is open. The dropdown picks
+// between the current patch script and any installed library script - a library is always
+// shown read-only; the patch script's own read-only state is pushed in via setReadOnly()
+// (true while LLM-Assist is active, so a live refresh from a watched-folder pull can never
+// clobber an in-progress edit). Apply calls onApply and never closes the window itself, so
+// the user can keep iterating; a non-empty return is shown inline, an empty one clears any
+// prior error. Cancel always closes (via the parent window's closeButtonPressed()). Reset
+// replaces the editor's text with onReset()'s skeleton but does not apply or close.
 class ScriptEditorWindow final : public juce::Component
 {
   public:
@@ -22,6 +24,11 @@ class ScriptEditorWindow final : public juce::Component
 
     ScriptEditorWindow()
     {
+        m_sourceCombo.addItem(kPatchScriptLabel, 1);
+        m_sourceCombo.setSelectedId(1, juce::dontSendNotification);
+        m_sourceCombo.onChange = [this] { sourceSelectionChanged(); };
+        addAndMakeVisible(m_sourceCombo);
+
         m_editor.setMultiLine(true, false);
         m_editor.setReturnKeyStartsNewLine(true);
         m_editor.setTabKeyUsedAsCharacter(true);
@@ -47,9 +54,41 @@ class ScriptEditorWindow final : public juce::Component
         setSize(800, 600);
     }
 
+    // Caches `text` as the patch script's content; only visibly updates the editor if
+    // "Patch Script" is the active dropdown selection, so a live refresh (e.g. from an
+    // LLM-Assist pull) never pulls the view away from a library script being inspected.
     void setScriptText(const juce::String& text)
     {
-        m_editor.setText(text, juce::dontSendNotification);
+        m_patchScriptText = text;
+        if (isShowingPatchScript())
+        {
+            m_editor.setText(text, juce::dontSendNotification);
+        }
+    }
+
+    // Remembered as the state to apply whenever "Patch Script" is selected; a library
+    // selection is always read-only regardless of this flag.
+    void setReadOnly(const bool readOnly)
+    {
+        m_patchReadOnly = readOnly;
+        if (isShowingPatchScript())
+        {
+            applyReadOnlyState(readOnly);
+        }
+    }
+
+    // Populates the dropdown with "Patch Script" plus each of `names`; textForName is
+    // called lazily, only once a name is actually selected, not all fetched up front.
+    void setLibraryScripts(const juce::StringArray& names, std::function<juce::String(const juce::String&)> textForName)
+    {
+        m_libraryScriptText = std::move(textForName);
+        m_sourceCombo.clear(juce::dontSendNotification);
+        m_sourceCombo.addItem(kPatchScriptLabel, 1);
+        for (int i = 0; i < names.size(); ++i)
+        {
+            m_sourceCombo.addItem(names[i], i + 2);
+        }
+        m_sourceCombo.setSelectedId(1, juce::dontSendNotification);
     }
 
     void resized() override
@@ -63,10 +102,40 @@ class ScriptEditorWindow final : public juce::Component
         area.removeFromBottom(4);
         m_errorLabel.setBounds(area.removeFromBottom(20));
         area.removeFromBottom(4);
+        m_sourceCombo.setBounds(area.removeFromTop(24));
+        area.removeFromTop(4);
         m_editor.setBounds(area);
     }
 
   private:
+    static constexpr auto kPatchScriptLabel = "Patch Script";
+
+    [[nodiscard]] bool isShowingPatchScript() const
+    {
+        return m_sourceCombo.getSelectedId() == 1;
+    }
+
+    void applyReadOnlyState(const bool readOnly)
+    {
+        m_editor.setReadOnly(readOnly);
+        m_applyButton.setEnabled(!readOnly);
+        m_resetButton.setEnabled(!readOnly);
+    }
+
+    void sourceSelectionChanged()
+    {
+        m_errorLabel.setText({}, juce::dontSendNotification);
+        if (isShowingPatchScript())
+        {
+            m_editor.setText(m_patchScriptText, juce::dontSendNotification);
+            applyReadOnlyState(m_patchReadOnly);
+            return;
+        }
+        const auto text = m_libraryScriptText ? m_libraryScriptText(m_sourceCombo.getText()) : juce::String{};
+        m_editor.setText(text, juce::dontSendNotification);
+        applyReadOnlyState(true);
+    }
+
     void apply()
     {
         if (!onApply)
@@ -95,11 +164,16 @@ class ScriptEditorWindow final : public juce::Component
         }
     }
 
+    juce::ComboBox m_sourceCombo;
     juce::TextEditor m_editor;
     juce::Label m_errorLabel;
     juce::TextButton m_resetButton;
     juce::TextButton m_applyButton;
     juce::TextButton m_cancelButton;
+
+    juce::String m_patchScriptText;
+    bool m_patchReadOnly{false};
+    std::function<juce::String(const juce::String&)> m_libraryScriptText;
 };
 
 // Non-modal host window for ScriptEditorWindow: setVisible(true) instead of
