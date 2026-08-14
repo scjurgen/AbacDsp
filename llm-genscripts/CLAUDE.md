@@ -114,6 +114,36 @@ end
 - Only `base`, `math`, `table`, `string` are loaded - no `io`, `os`, `require`. No wall
   clock; use a `local` counter across calls instead.
 
+### Excitation techniques
+
+`Excite(channel, params)` fires an abstract playing technique on a string, independent of
+`NextNotes()`'s own note table - callable from any script context, at any time, including
+mid-sustain. It runs to completion on its own once called.
+
+```lua
+Excite(0, { type = "bow", start = 0, ["end"] = 2000, strength = 0.5 })
+```
+
+`params`: `type` (see below), `start` (ms before it begins), `["end"]` (ms, meaning depends
+on `type`; must be bracketed since `end` is a Lua keyword), `strength` (0..1), `harmonic`
+(`"sympathetic"` only, 1 = fundamental). A string runs one technique at a time; calling
+`Excite()` again queues the new call right after the current one ends (a third call replaces
+the queued one).
+
+| `type` | `end` means | Behavior |
+|---|---|---|
+| `pluck` | unused | Fresh pluck, `strength` is gain. |
+| `strike` | unused | Like `pluck`, brighter/shorter attack. |
+| `mute` | fade-out duration | Fades to silence over `end` ms instead of cutting off. |
+| `palmmute` | window end | Raises the damper for `[start, end]`, then restores it. |
+| `bow` | window end | Continuous excitation for `[start, end]`; wakes a stopped string. |
+| `sympathetic` | window end | Like `bow`, excites the `harmonic`-th harmonic directly. |
+| `wind` | window end | Like `bow`, slow wide random level fluctuation (gusting). |
+| `rub` | window end | Like `bow`, fast tight random level fluctuation (scraping). |
+
+See `examples/dronesequencer/README.md` under "Excitation techniques" for the full
+description and `base-scripts/excitation-techniques-demo.lua` for a live example.
+
 See root `LUA.md` for the full shared hook list (`OnStart`/`OnStop`, incoming-MIDI handlers,
 `Music`/`Timer`/`Transport`), and `examples/dronesequencer/README.md` for the division-index
 meaning and worked examples.
