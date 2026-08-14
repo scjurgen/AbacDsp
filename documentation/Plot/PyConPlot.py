@@ -152,7 +152,7 @@ def create_plots(data_plots: List[Tuple[Dict[str, Dict[str, List[float]]], Dict[
         fig, ax = plt.subplots(figsize=(args.width/100, args.height/100))
         axes = [ax]
     else:
-        cols = int(np.ceil(np.sqrt(n_plots)))
+        cols = args.cols if args.cols > 0 else int(np.ceil(np.sqrt(n_plots)))
         rows = int(np.ceil(n_plots / cols))
         fig, axes = plt.subplots(rows, cols, figsize=(args.width/100 * cols, args.height/100 * rows))
         axes = axes.flatten() if hasattr(axes, 'flatten') else axes
@@ -182,6 +182,7 @@ def create_plots(data_plots: List[Tuple[Dict[str, Dict[str, List[float]]], Dict[
             ax.set_xscale('log')
         if effective_options.get('logy', False):
             ax.set_yscale('log')
+        ax.set_aspect(effective_options.get('aspect', args.aspect))
         setup_grid(ax, args, plot_options)
         labelx = effective_options.get('labelx', args.labelx)
         labely = effective_options.get('labely', args.labely)
@@ -245,6 +246,7 @@ Plot-specific options (use in @New plot lines):
 - grid: enable grid (true/false)
 - grid_major: enable major grid (true/false)
 - grid_minor: enable minor grid (true/false)
+- aspect: 'auto' or 'equal'
 """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -262,6 +264,8 @@ Plot-specific options (use in @New plot lines):
     parser.add_argument('--maxy', type=float, help='Maximum y-axis value (default: auto)')
     parser.add_argument('--logx', action='store_true', help='Use logarithmic scale for x-axis')
     parser.add_argument('--logy', action='store_true', help='Use logarithmic scale for y-axis')
+    parser.add_argument('--aspect', default='auto', choices=['auto', 'equal'], help="Axes aspect ratio: 'equal' keeps x/y units the same size, e.g. for orbit/phase-plane plots (default: 'auto')")
+    parser.add_argument('--cols', type=int, default=0, help='Force this many columns when there are multiple @New plot sections, e.g. --cols 1 to stack them vertically (default: 0, auto square-ish grid)')
     parser.add_argument('--grid', action='store_true', help='Enable grid (same as --grid-major)')
     parser.add_argument('--grid-major', action='store_true', default=True, help='Enable major grid lines (default: True)')
     parser.add_argument('--grid-minor', action='store_true', help='Enable minor grid lines (default: False)')
