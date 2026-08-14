@@ -40,6 +40,14 @@ class ModulationDelayNoFeedback
     /// Samples kept between the modulated read head and the write head, so modulation cannot overtake it.
     static constexpr float modulationSafetyMargin{8.f};
 
+    /// Target duration of a PITCH glide, independent of how large the resize is.
+    static constexpr float kGlideDurationSeconds{0.25f};
+    /// Upper bound on the net per-sample catch-up rate a glide can reach for a very large
+    /// resize (keeps m_advance within (0.1, 1.9), away from 0 or negative - see
+    /// adjustBufferByPitching()) - such a resize just takes longer than kGlideDurationSeconds
+    /// instead of ever destabilizing the read head.
+    static constexpr float kMaxNetGlideRate{0.9f};
+
     explicit ModulationDelayNoFeedback()
     {
         m_buffer.resize(MAXSIZE + 6, 0.f);
@@ -74,6 +82,11 @@ class ModulationDelayNoFeedback
         }
     }
 
+    // Glide rate scales with the size of the change, targeting kGlideDurationSeconds
+    // regardless of delta - a fixed rate (as this used to be) means settle time grows with
+    // the delta, which for a resize spanning tens of thousands of samples (e.g. FdnTankGlide's
+    // "Size" knob at ~144 samples/meter, see ModulationDelayNoFeedback_test.cpp) took multiple
+    // seconds instead of a bounded, musically brief glide.
     void adjustBufferByPitching(const size_t newSize)
     {
         m_newDelayWidth = newSize;
@@ -84,7 +97,7 @@ class ModulationDelayNoFeedback
                 return;
             }
             m_advanceSteps = true;
-            m_advance = 0.80f;
+            m_advance = 1.f - computeNetGlideRate(newSize - m_currentDelayWidth);
         }
         else
         {
@@ -93,7 +106,7 @@ class ModulationDelayNoFeedback
                 return;
             }
             m_advanceSteps = true;
-            m_advance = 1.25f;
+            m_advance = 1.f + computeNetGlideRate(m_currentDelayWidth - newSize);
         }
     }
 
@@ -357,6 +370,16 @@ class ModulationDelayNoFeedback
     }
 
   private:
+    // Net gap-change-per-sample needed to close `delta` samples in kGlideDurationSeconds,
+    // clamped away from kMaxNetGlideRate so adjustBufferByPitching() never lets m_advance
+    // reach 0 (frozen read head) or go negative (read head moving backwards - out of bounds
+    // once cast to size_t in nextHeadRead()).
+    [[nodiscard]] float computeNetGlideRate(const size_t delta) const noexcept
+    {
+        const auto glideDurationSamples = kGlideDurationSeconds * m_sampleRate;
+        return std::clamp(static_cast<float>(delta) / glideDurationSamples, 0.f, kMaxNetGlideRate);
+    }
+
     ChangeSizeMode m_changeSizeMode{ChangeSizeMode::FADE};
 
     float m_sampleRate{48000.0f}; // samplerate is needed for setting MAXSIZE in seconds

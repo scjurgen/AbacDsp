@@ -129,6 +129,30 @@ TEST(ModulationDelayNoFeedback, pitchModeConvergesDelayWidthUpThenDown)
     EXPECT_TRUE(std::isfinite(out));
 }
 
+// Reported bug (DroneSequencer's FDN reverb): growing the "Size" knob while a note was held
+// made its pitch drift for several seconds instead of settling quickly. FdnTankGlide's size
+// range (1-330m) converts to samples at ~144 samples/meter (48kHz - see Convert::
+// metersToSamples), so a realistic resize needs the delay width to grow by tens of thousands
+// of samples. The old glide used a fixed 0.2-samples-per-sample net rate regardless of delta
+// size, so settle time scaled with the delta and reached multiple seconds for a
+// realistically large resize instead of staying bounded.
+TEST(ModulationDelayNoFeedback, pitchGlideSettlesQuicklyForALargeRealisticResize)
+{
+    constexpr size_t maxSize{200000};
+    ModulationDelayNoFeedback<maxSize> delay(48000.f);
+    delay.setChangeSizeMode(ChangeSizeMode::HARDSWITCH);
+    delay.setSize(5000);
+    delay.setChangeSizeMode(ChangeSizeMode::PITCH);
+
+    delay.setSize(45000);           // a ~40000-sample jump, well within DroneSequencer's realistic range
+    for (int i = 0; i < 48000; ++i) // 1s at 48kHz: a musically reasonable settle budget
+    {
+        static_cast<void>(delay.step(1.0f));
+    }
+    EXPECT_NEAR(static_cast<float>(delay.size()), 45000.f, 4.f)
+        << "resize should settle within a bounded, musically reasonable time regardless of delta size";
+}
+
 TEST(ModulationDelayNoFeedback, fadeModeSchedulesSecondResizeMidFade)
 {
     ModulationDelayNoFeedback<8192> delay(48000.f); // default FADE mode, initial width 1024
