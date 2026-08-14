@@ -311,6 +311,122 @@ TEST(KarplusStrongString, frequencyStaysOnPitchAcrossDamperRange)
     }
 }
 
+TEST(KarplusStrongString, wakeSustainResumesFrozenBufferAfterMute)
+{
+    TestString sut{kSampleRate};
+    sut.setPluckType(PluckType::WhiteStatic);
+    sut.setDecayByTime(50000.f);
+    sut.trigger(60.f, 1.f);
+    for (int i = 0; i < 2000; ++i)
+    {
+        std::ignore = sut.step();
+    }
+    sut.muteString();
+    ASSERT_FALSE(sut.isActive());
+
+    sut.wakeSustain(1.f);
+    ASSERT_TRUE(sut.isActive());
+    // muteString() freezes the buffer instead of clearing it (step() skips computeNext()
+    // entirely while Stopped), so waking resumes the still-resonating content immediately.
+    EXPECT_NE(sut.step(), 0.f);
+}
+
+TEST(KarplusStrongString, wakeSustainDoesNotOverrideAnAlreadyActiveGain)
+{
+    TestString sut{kSampleRate};
+    sut.setPluckType(PluckType::WhiteStatic);
+    sut.setDecayByTime(50000.f);
+    sut.trigger(60.f, 1.f);
+    for (int i = 0; i < 2000; ++i)
+    {
+        std::ignore = sut.step();
+    }
+
+    float peakBefore = 0.f;
+    for (int i = 0; i < 1000; ++i)
+    {
+        peakBefore = std::max(peakBefore, std::abs(sut.step()));
+    }
+
+    sut.wakeSustain(0.01f); // no-op: already active, must not clobber the running gain
+
+    float peakAfter = 0.f;
+    for (int i = 0; i < 1000; ++i)
+    {
+        peakAfter = std::max(peakAfter, std::abs(sut.step()));
+    }
+    EXPECT_GT(peakAfter, peakBefore * 0.5f);
+}
+
+TEST(KarplusStrongString, muteWithFadeEndsAfterRequestedDuration)
+{
+    TestString sut{kSampleRate};
+    sut.trigger(60.f, 1.f);
+    constexpr size_t fadeSamples = 480;
+    sut.muteWithFade(fadeSamples);
+
+    size_t stepsTaken = 0;
+    while (sut.isActive() && stepsTaken < fadeSamples * 2)
+    {
+        std::ignore = sut.step();
+        ++stepsTaken;
+    }
+    EXPECT_FALSE(sut.isActive());
+    EXPECT_NEAR(static_cast<float>(stepsTaken), static_cast<float>(fadeSamples), 2.f);
+}
+
+TEST(KarplusStrongString, muteWithFadeFloorsZeroDurationToAvoidAClick)
+{
+    TestString sut{kSampleRate};
+    sut.trigger(60.f, 1.f);
+    sut.muteWithFade(0);
+
+    size_t stepsTaken = 0;
+    while (sut.isActive() && stepsTaken < 1000)
+    {
+        std::ignore = sut.step();
+        ++stepsTaken;
+    }
+    EXPECT_FALSE(sut.isActive());
+    EXPECT_GT(stepsTaken, 10U); // floored to a few ms, not an instant same-sample cut
+}
+
+TEST(KarplusStrongString, muteWithFadeIsNoOpWhenAlreadyStopped)
+{
+    TestString sut{kSampleRate};
+    EXPECT_FALSE(sut.isActive());
+    sut.muteWithFade(480);
+    EXPECT_FALSE(sut.isActive());
+    EXPECT_EQ(sut.step(), 0.f);
+}
+
+TEST(KarplusStrongString, liveDamperChangeDoesNotShiftPitch)
+{
+    constexpr float note = 60.f;
+    const float targetFrequency = Convert::noteToFrequency(note);
+
+    TestString sut{kSampleRate};
+    sut.setPluckType(PluckType::WhiteStatic);
+    sut.setDecayByTime(10000.f);
+    sut.setDamper(0.2f);
+    sut.trigger(note, 1.f);
+
+    // Settle past the initial transient, then change the damper live - mid-note, not via a
+    // fresh trigger() - and confirm pitch does not drift as a result.
+    for (int i = 0; i < 5000; ++i)
+    {
+        std::ignore = sut.step();
+    }
+    sut.setDamper(0.8f);
+
+    std::vector<float> rendered(4000);
+    std::ranges::generate(rendered, [&sut] { return sut.step(); });
+
+    const auto result = measureFrequencyByAutocorrelation(rendered, kSampleRate, targetFrequency);
+    ASSERT_GT(result.peakCorrelation, 0.8f);
+    EXPECT_NEAR(result.frequency, targetFrequency, targetFrequency * 0.01f);
+}
+
 TEST(KarplusStrongString, pitchBendShiftsFrequencyUpward)
 {
     constexpr float note = 60.f;

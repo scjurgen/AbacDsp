@@ -128,16 +128,15 @@ class KarplusStrongString
 
     void setSizeByNote(const float note, const float orchestraTuning = 440.f) noexcept
     {
+        m_lastTriggeredNote = note;
+        m_lastTuning = orchestraTuning;
         setFrequency(Convert::noteToFrequency(note - 12.f, orchestraTuning));
         m_damper.setCutoff(computeDamperCutoff(m_baseFrequency, m_damperFactor, 2.f, 0.25f));
-        auto idealSize = m_oversampleFactor * m_sampleRate / Convert::noteToFrequency(note, orchestraTuning);
-        idealSize = correctForDamperPhaseDelay(idealSize);
-        m_pitchRatioBaseValue = m_oversampleFactor * static_cast<float>(m_currentBufferSize) / idealSize;
+        recomputePitchRatio();
     }
 
     void trigger(const float note, const float gain, const float orchestraTuning = 440.f) noexcept
     {
-        m_lastTriggeredNote = note;
         if (m_attackTimeSamples <= 1.f)
         {
             m_gainAdvance = 0.f;
@@ -169,6 +168,34 @@ class KarplusStrongString
     {
         m_phase = Phase::Stopped;
         m_currentGain = 0.f;
+        m_stepsForNextPhase = 0;
+    }
+
+    // Independent of the releaseTime() dial; fadeSamples is floored to kMinMuteFadeSamples
+    // to avoid a same-sample click. No-op if the string is already stopped.
+    void muteWithFade(const size_t fadeSamples) noexcept
+    {
+        if (m_phase == Phase::Stopped)
+        {
+            return;
+        }
+        const auto samples = std::max(fadeSamples, m_minMuteFadeSamples);
+        m_gainAdvance = -m_currentGain / static_cast<float>(samples);
+        m_phase = Phase::Release;
+        m_stepsForNextPhase = static_cast<int>(samples);
+    }
+
+    // Unlike trigger(), does not reset the buffer/pitch/decay state - lets a continuous
+    // excitation build on whatever is left in the loop. No-op if already active.
+    void wakeSustain(const float gain) noexcept
+    {
+        if (m_phase != Phase::Stopped)
+        {
+            return;
+        }
+        m_currentGain = gain;
+        m_gainAdvance = 0.f;
+        m_phase = Phase::Sustain;
         m_stepsForNextPhase = 0;
     }
 
@@ -225,15 +252,37 @@ class KarplusStrongString
         m_initFilter.setResonance(reso);
     }
 
+    [[nodiscard]] float initialFilterFactor() const noexcept
+    {
+        return m_transientFactor;
+    }
+
+    [[nodiscard]] float attackTimeMsecs() const noexcept
+    {
+        return m_attackTimeSamples / m_sampleRate * 1000.f;
+    }
+
+    // The damper cutoff feeds into the loop's own phase-delay pitch compensation (see
+    // correctForDamperPhaseDelay()), so a live change here recomputes it in place - without
+    // that, changing the damper while a note rings would audibly nudge its pitch.
     void setDamper(const float damperFactor) noexcept
     {
         m_damperFactor = damperFactor;
         m_damper.setCutoff(computeDamperCutoff(m_baseFrequency, m_damperFactor, 2.f, 0.25f));
+        recomputePitchRatio();
+        setRelativePitch(m_currentPitchBend);
     }
 
     void setDamperCutoff(const float cutoff) noexcept
     {
         m_damper.setCutoff(cutoff);
+        recomputePitchRatio();
+        setRelativePitch(m_currentPitchBend);
+    }
+
+    [[nodiscard]] float damperFactor() const noexcept
+    {
+        return m_damperFactor;
     }
 
     void setDecayOctaveFactor(const float factor) noexcept
@@ -242,6 +291,15 @@ class KarplusStrongString
         computeDecay();
     }
 
+    // While enabled, computeNext() injects a sine at harmonic * (loop's own tap rate) at the
+    // constFeed mixing point instead of noise - phase-locked to the loop's own period, not
+    // real time, so it tracks the loop's resonance without separate pitch bookkeeping.
+    void setSympatheticExcitation(const bool enabled, const float harmonic) noexcept
+    {
+        m_sympatheticActive = enabled;
+        m_sympatheticHarmonic = std::max(harmonic, 1.f);
+        m_sympatheticPhase = 0.f;
+    }
 
     [[nodiscard]] bool isActive() const noexcept
     {
@@ -262,6 +320,7 @@ class KarplusStrongString
     static constexpr float kReferenceNote{60.f}; // C4; setDecayByTime() is exact at this note
     static constexpr size_t kPluckNoiseSize{MaxLength * 16};
     static constexpr unsigned kPluckNoiseSeed{2};
+    static constexpr float kMinMuteFadeMs{2.f}; // floor for muteWithFade(), avoids a zero-duration click
 
     // Deterministic and per-instance (not a shared static) so two independently-constructed
     // voices read identical content in WhiteStatic mode without relying on hidden shared state.
@@ -274,10 +333,9 @@ class KarplusStrongString
         return buffer;
     }
 
-    // m_damper is stepped once per oversampled loop tap (m_oversampleFactor times per audio
-    // sample) but its coefficient is computed against m_sampleRate, so a cutoff c here behaves
-    // like c * m_oversampleFactor in real audio terms; sampleRate/4 is the top of that range
-    // that stays under OnePoleFilter's own sampleRate/2 bypass clamp.
+    // Stepped once per oversampled tap but computed against m_sampleRate, so a cutoff c here
+    // behaves like c * m_oversampleFactor in real audio terms; nyquist2 keeps the top of
+    // that range under OnePoleFilter's own sampleRate/2 bypass clamp.
     [[nodiscard]] float computeDamperCutoff(const float baseFrequency, const float damperFactor, const float midFactor,
                                             const float lowFactor) const noexcept
     {
@@ -299,6 +357,31 @@ class KarplusStrongString
         const auto p = m_damper.feedback();
         const auto delayTaps = std::atan2(p * std::sin(omega), 1.f - p * std::cos(omega)) / omega;
         return idealSize * bufferSize / (bufferSize + delayTaps);
+    }
+
+    // Shared by setSizeByNote() and the live setDamper()/setDamperCutoff() setters; callers
+    // still need setRelativePitch() afterward to refresh m_advancePhase.
+    void recomputePitchRatio() noexcept
+    {
+        auto idealSize =
+            m_oversampleFactor * m_sampleRate / Convert::noteToFrequency(m_lastTriggeredNote, m_lastTuning);
+        idealSize = correctForDamperPhaseDelay(idealSize);
+        m_pitchRatioBaseValue = m_oversampleFactor * static_cast<float>(m_currentBufferSize) / idealSize;
+    }
+
+    [[nodiscard]] float nextSympatheticSample() noexcept
+    {
+        m_sympatheticPhase += m_sympatheticHarmonic / static_cast<float>(m_currentBufferSize);
+        if (m_sympatheticPhase >= 1.f)
+        {
+            m_sympatheticPhase -= 1.f;
+        }
+        return std::sin(2.f * std::numbers::pi_v<float> * m_sympatheticPhase);
+    }
+
+    [[nodiscard]] float nextExcitationSample() noexcept
+    {
+        return m_sympatheticActive ? nextSympatheticSample() : nextPluckValue();
     }
 
     void computeDecay() noexcept
@@ -375,7 +458,7 @@ class KarplusStrongString
             {
                 m_pluckOffset = nextPluckOffset();
             }
-            const auto filtered = m_initFilter.step(nextPluckValue());
+            const auto filtered = m_initFilter.step(nextExcitationSample());
             if (useConstFeed)
             {
                 m_dynamicWaveTableBuffer[i] = std::clamp(
@@ -440,6 +523,7 @@ class KarplusStrongString
     float m_decayGain{0.99259f};
     float m_decayOctaveFactor{1.f};
     float m_lastTriggeredNote{kReferenceNote};
+    float m_lastTuning{440.f};
 
     size_t m_activePluck{0U};
     size_t m_pluckOffset{0};
@@ -453,6 +537,11 @@ class KarplusStrongString
     float m_currentGain{0.f};
     float m_gainAdvance{0.f};
     float m_constantFeed{0.f};
+    size_t m_minMuteFadeSamples{static_cast<size_t>(m_sampleRate * kMinMuteFadeMs * 0.001f)};
+
+    bool m_sympatheticActive{false};
+    float m_sympatheticHarmonic{1.f};
+    float m_sympatheticPhase{0.f};
 };
 
 }

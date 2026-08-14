@@ -367,6 +367,7 @@ class DroneSequencerImpl final : public EffectBase
     {
         updateTiming();
         m_scriptEngine.tickBlock(BlockSize);
+        forwardExcitations();
         std::array<float, BlockSize> dry{};
         for (size_t i = 0; i < BlockSize; ++i)
         {
@@ -431,6 +432,20 @@ class DroneSequencerImpl final : public EffectBase
         for (size_t i = 0; i < kMaxVoices; ++i)
         {
             fn(m_ensemble.voice(i));
+        }
+    }
+
+    // Excite() can be called from any script context, not just NextNotes()'s lookahead
+    // cycle, so its own pending queue is drained here once per block rather than folded
+    // into the sequencer's note-scheduling pipeline.
+    void forwardExcitations() noexcept
+    {
+        const auto pending = m_scriptEngine.drainExcitations();
+        for (size_t i = 0; i < pending.count; ++i)
+        {
+            const auto& excitation = pending.excitations[i];
+            const auto voiceIndex = std::min(excitation.channel, kMaxVoices - 1);
+            m_ensemble.voice(voiceIndex).scheduleExcitation(excitation.event);
         }
     }
 

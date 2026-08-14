@@ -1,3 +1,4 @@
+#include <array>
 #include <cassert>
 #include <gtest/gtest.h>
 #include <memory>
@@ -939,6 +940,117 @@ TEST(DroneScriptEngine, ImportLineIsOnlyRecognizedAtTheTopOfTheScript)
         import "helpers"
     )"));
     EXPECT_TRUE(engine.hasError());
+}
+
+TEST(DroneScriptEngine, ExciteFieldsRoundTripThroughLua)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        function NextNotes()
+            Excite(2, { type = "bow", start = 5, ["end"] = 100, strength = 0.75, harmonic = 3 })
+            return {}
+        end
+    )"));
+    std::ignore = engine.nextNotes();
+
+    const auto pending = engine.drainExcitations();
+    ASSERT_EQ(pending.count, 1u);
+    const auto& excitation = pending.excitations[0];
+    EXPECT_EQ(excitation.channel, 2u);
+    EXPECT_EQ(excitation.event.type, AbacDsp::ExcitationType::Bow);
+    EXPECT_FLOAT_EQ(excitation.event.startMs, 5.f);
+    EXPECT_FLOAT_EQ(excitation.event.endMs, 100.f);
+    EXPECT_FLOAT_EQ(excitation.event.strength, 0.75f);
+    ASSERT_TRUE(excitation.event.harmonic.has_value());
+    EXPECT_FLOAT_EQ(*excitation.event.harmonic, 3.f);
+}
+
+TEST(DroneScriptEngine, ExciteWithoutHarmonicLeavesItUnset)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        function NextNotes()
+            Excite(0, { type = "pluck", strength = 0.5 })
+            return {}
+        end
+    )"));
+    std::ignore = engine.nextNotes();
+
+    const auto pending = engine.drainExcitations();
+    ASSERT_EQ(pending.count, 1u);
+    EXPECT_FALSE(pending.excitations[0].event.harmonic.has_value());
+}
+
+TEST(DroneScriptEngine, ExciteParsesAllEightTypeStrings)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        function NextNotes()
+            Excite(0, { type = "pluck" })
+            Excite(0, { type = "strike" })
+            Excite(0, { type = "mute" })
+            Excite(0, { type = "palmmute" })
+            Excite(0, { type = "bow" })
+            Excite(0, { type = "sympathetic" })
+            Excite(0, { type = "wind" })
+            Excite(0, { type = "rub" })
+            return {}
+        end
+    )"));
+    std::ignore = engine.nextNotes();
+
+    const auto pending = engine.drainExcitations();
+    ASSERT_EQ(pending.count, 8u);
+    const std::array<AbacDsp::ExcitationType, 8> expected{
+        AbacDsp::ExcitationType::Pluck,    AbacDsp::ExcitationType::Strike, AbacDsp::ExcitationType::Mute,
+        AbacDsp::ExcitationType::PalmMute, AbacDsp::ExcitationType::Bow,    AbacDsp::ExcitationType::Sympathetic,
+        AbacDsp::ExcitationType::Wind,     AbacDsp::ExcitationType::Rub,
+    };
+    for (size_t i = 0; i < expected.size(); ++i)
+    {
+        EXPECT_EQ(pending.excitations[i].event.type, expected[i]) << "index " << i;
+    }
+}
+
+TEST(DroneScriptEngine, ExciteWithUnknownTypeIsIgnored)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        function NextNotes()
+            Excite(0, { type = "banana" })
+            return {}
+        end
+    )"));
+    std::ignore = engine.nextNotes();
+    EXPECT_EQ(engine.drainExcitations().count, 0u);
+}
+
+TEST(DroneScriptEngine, DrainExcitationsClearsThePendingQueue)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        function NextNotes()
+            Excite(0, { type = "pluck" })
+            return {}
+        end
+    )"));
+    std::ignore = engine.nextNotes();
+    ASSERT_EQ(engine.drainExcitations().count, 1u);
+    EXPECT_EQ(engine.drainExcitations().count, 0u) << "a second drain without a new Excite() call must be empty";
+}
+
+TEST(DroneScriptEngine, ExciteOverflowingPendingBufferDropsExtras)
+{
+    DroneScriptEngine engine;
+    std::string script = "function NextNotes()\n";
+    for (size_t i = 0; i < DroneScriptEngine::kMaxExcitationsPerRequest + 5; ++i)
+    {
+        script += "    Excite(0, { type = \"pluck\" })\n";
+    }
+    script += "    return {}\nend\n";
+    ASSERT_TRUE(engine.loadScript(script));
+    std::ignore = engine.nextNotes();
+    EXPECT_EQ(engine.drainExcitations().count, DroneScriptEngine::kMaxExcitationsPerRequest);
 }
 
 TEST(DroneScriptEngine, ImportHeaderSkipsBlankLinesAndComments)

@@ -90,6 +90,52 @@ known point every time. There's no separate "paused" callback: the host doesn't 
 report pause as distinct from stop, and the sequencer's own clock always resets on any
 stop-to-start transition rather than resuming, so there's nothing paused to report either.
 
+### Excitation techniques
+
+`Excite(channel, params)` fires an abstract playing technique on a string, independent of
+`NextNotes()`'s own note table: it can be called from any script context (inside
+`NextNotes()`, a MIDI handler, a `Timer.After` callback) and at any time, including
+mid-sustain on a string that is already ringing. Once called, the technique runs to
+completion on its own - no further per-block calls are needed to keep it going.
+
+```lua
+Excite(0, { type = "bow", start = 0, ["end"] = 2000, strength = 0.5 })
+```
+
+`params` is a table with:
+
+| Field | Meaning |
+|---|---|
+| `type` | One of the technique names below. |
+| `start` | ms before the technique begins, measured from this call. |
+| `end` | ms: meaning depends on `type` - see the table below. Note the brackets: `end` is a Lua keyword, so it must be written `["end"] = ...`, not `end = ...`. |
+| `strength` | 0..1. |
+| `harmonic` | `"sympathetic"` only: which harmonic of the string's own fundamental to excite (1 = the fundamental itself). |
+
+A string can only run one technique at a time. Calling `Excite()` again while one is still
+running (or still waiting on its own `start` delay) queues the new call to begin right after
+the current one ends, rather than cutting it off - a third call before that happens replaces
+the queued one, so at most one technique is ever waiting in line.
+
+| `type` | `end` means | Behavior |
+|---|---|---|
+| `pluck` | unused | A fresh pluck, same as a normal note-on. `strength` is the gain. |
+| `strike` | unused | Like `pluck`, but with a brighter, shorter attack transient - a harder onset. |
+| `mute` | fade-out duration | Fades the string to silence over `end` ms (floored to a couple of ms to avoid a click), rather than cutting it off instantly. |
+| `palmmute` | window end | Raises the string's damper for `[start, end]`, then restores it - a shortened, deadened decay without retriggering. |
+| `bow` | window end | Continuous excitation for `[start, end]`; wakes an already-stopped string instead of retriggering it. |
+| `sympathetic` | window end | Like `bow`, but excites the `harmonic`-th harmonic of the string's own fundamental directly, rather than noise - a quiet, tuned resonance. |
+| `wind` | window end | Like `bow`, with a slow, wide random fluctuation in level (gusting). |
+| `rub` | window end | Like `bow`, with a fast, tight random fluctuation in level (scraping). |
+
+`palmmute`'s damper change is compensated so the string's pitch shouldn't audibly drift while
+raised - this compensation is a new, not yet fully by-ear-verified mechanism (see
+`documentation/KarplusStrong/` at the repo root for the measurement plots); treat it as a
+good-faith first pass rather than a guaranteed-flat pitch.
+
+`base-scripts/excitation-techniques-demo.lua` cycles through all eight techniques, one per
+beat - load it directly as a patch script to hear each one.
+
 ### Example: a 4-step arpeggio across three strings
 
 Demonstrates stepping through a pattern, mixing short plucks with one longer sustained note,
