@@ -1,39 +1,53 @@
--- Demonstrates every Excite() technique, one per beat, on string 0. Load directly as a
--- patch script (Settings > Scripts) rather than importing it - set Division/BPM to taste
--- for a slower or faster walkthrough.
---
--- Pluck and Strike retrigger the string with fresh energy; Bow/Sympathetic/Wind/Rub then
--- keep it ringing continuously; PalmMute and Mute finally dampen/silence whatever is left
--- ringing from the earlier steps - the order is chosen to make each technique's effect on
--- an already-sounding string audible, not just its own isolated attack.
+-- Interactive Excite() demo: plays a steady pulse on string 0 every beat, and lets the
+-- "Excite" switch fire the selected technique on it live from the Lua Controls panel -
+-- flip it to apply "Type" with the given "End (ms)" window and "Harmonic" (Sympathetic
+-- only), then flip it again for the next one.
 
-local techniques = {
-    { type = "pluck", strength = 0.8 },
-    { type = "strike", strength = 0.9 },
-    { type = "bow", strength = 0.4, ["end"] = 1500 },
-    { type = "sympathetic", strength = 0.3, harmonic = 2, ["end"] = 1500 },
-    { type = "wind", strength = 0.35, ["end"] = 1500 },
-    { type = "rub", strength = 0.35, ["end"] = 1500 },
-    { type = "palmmute", strength = 0.6, ["end"] = 800 },
-    { type = "mute", ["end"] = 30 },
-}
-local index = 1
+UICreateParameterSet({
+    { id = "excite", name = "Excite", type = "switch", default = 0 },
+    { id = "type", name = "Type", type = "drop",
+      items = { "Pluck", "Strike", "Mute", "PalmMute", "Bow", "Sympathetic", "Wind", "Rub" }, default = 0 },
+    { id = "endMs", name = "End (ms)", type = "knob",
+      range = { min = 0, max = 3000, step = 1, skew = 1 }, default = 1000, unit = "ms" },
+    { id = "harmonic", name = "Harmonic", type = "knob",
+      range = { min = 1, max = 10, step = 1, skew = 1 }, default = 1 },
+    { id = "strength", name = "Strength", type = "knob",
+      range = { min = 0, max = 2, step = 0.1, skew = 1 }, default = 1, unit = "" },
+})
+
+local typeNames = { "pluck", "strike", "mute", "palmmute", "bow", "sympathetic", "wind", "rub" }
+local selectedType = typeNames[1]
+local endMs = 1000
+local harmonic = 1
+local strength = 0.8
+
+function OnTypeChanged(index)
+    selectedType = typeNames[index + 1]
+end
+
+function OnEndMsChanged(value)
+    endMs = value
+end
+
+function OnHarmonicChanged(value)
+    harmonic = value
+end
+
+function OnStrengthChanged(value)
+    strength = value
+end
+
+function OnExciteChanged(value)
+    if value == 1 then
+        Excite(0, { type = selectedType, start = 0, ["end"] = endMs, strength = strength, harmonic = harmonic })
+    end
+end
 
 function OnTiming(bpm, division)
     BPM = bpm
     DIVISION = division
 end
 
-function OnStart()
-    index = 1
-end
-
 function NextNotes()
-    local params = techniques[index]
-    index = index + 1
-    if index > #techniques then
-        index = 1
-    end
-    Excite(0, params)
-    return {}
+    return { { note = 60, velocity = 0.8, channel = 0, length = 0, delay = 0 } }
 end

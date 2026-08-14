@@ -133,8 +133,9 @@ raised - this compensation is a new, not yet fully by-ear-verified mechanism (se
 `documentation/KarplusStrong/` at the repo root for the measurement plots); treat it as a
 good-faith first pass rather than a guaranteed-flat pitch.
 
-`base-scripts/excitation-techniques-demo.lua` cycles through all eight techniques, one per
-beat - load it directly as a patch script to hear each one.
+`base-scripts/excitation-techniques-demo.lua` plays a steady pulse on string 0 and exposes
+`Excite`/`Type`/`End (ms)`/`Harmonic` as Lua Controls - load it directly as a patch script,
+pick a technique, and flip `Excite` to hear it live on the ringing string.
 
 ### Example: a 4-step arpeggio across three strings
 
