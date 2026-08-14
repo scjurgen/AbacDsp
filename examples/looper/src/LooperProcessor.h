@@ -826,6 +826,14 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner && pluginRunner->isHostSynced();
     }
+    [[nodiscard]] bool hasLoop() const noexcept
+    {
+        return pluginRunner && pluginRunner->hasLoop();
+    }
+    [[nodiscard]] bool hasSequence() const noexcept
+    {
+        return pluginRunner && pluginRunner->hasSequence();
+    }
     [[nodiscard]] bool isRecording() const noexcept
     {
         return pluginRunner && pluginRunner->isRecording();
@@ -930,6 +938,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     [[nodiscard]] bool isLoopLoadPending() const noexcept
     {
         return pluginRunner && pluginRunner->isLoopLoadPending();
+    }
+    [[nodiscard]] bool isHostPresent() const noexcept
+    {
+        return wrapperType != juce::AudioProcessor::wrapperType_Standalone;
     }
     [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
     {

@@ -197,6 +197,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(freeRecordSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(clickRecordVolumeDial).withFlex(1).withMargin(knobMarginSmall));
@@ -315,6 +320,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                                : juce::String::fromUTF8("Undo"));
             seqPlaySwitch.setButtonText(processorRef.isSequencerPlaying() ? juce::String::fromUTF8("Seq Stop")
                                                                           : juce::String::fromUTF8("Seq Play"));
+            playSwitch.setEnabled(processorRef.hasLoop());
+            overdubSwitch.setEnabled(processorRef.hasLoop());
+            undoSwitch.setEnabled(processorRef.hasLoop());
+            mixDownSwitch.setEnabled(processorRef.hasOverdub());
+            clearSwitch.setEnabled(processorRef.hasLoop());
+            hostSyncSwitch.setEnabled(processorRef.isHostPresent());
+            freeRecordSwitch.setEnabled(processorRef.hasLoop());
+            seqPlaySwitch.setEnabled(processorRef.hasSequence());
+            clearSeqSwitch.setEnabled(processorRef.hasSequence());
 
             recordSwitch.setButtonText(
                 processorRef.isRecording()
@@ -542,7 +556,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             clearSwitch.setVisible(true);
             threshRecSwitch.setVisible(true);
             hostSyncSwitch.setVisible(true);
-            freeRecordSwitch.setVisible(false);
+            freeRecordSwitch.setVisible(true);
             countInBarsDrop.setVisible(true);
             timeSignatureDrop.setVisible(true);
             autoStopSwitch.setVisible(true);

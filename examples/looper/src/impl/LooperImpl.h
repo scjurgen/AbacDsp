@@ -579,6 +579,14 @@ class LooperImpl final : public EffectBase
     {
         return m_recorder.hasOverdub();
     }
+    [[nodiscard]] bool hasLoop() const noexcept
+    {
+        return m_recorder.hasLoop();
+    }
+    [[nodiscard]] bool hasSequence() const noexcept
+    {
+        return m_pattern.eventCount() > 0;
+    }
     [[nodiscard]] bool isArmed() const noexcept
     {
         return m_armed;

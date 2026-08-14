@@ -71,6 +71,13 @@ def create_switch_label_swaps(blueprint: Blueprint) -> str:
                        f""": juce::String::fromUTF8("{state_label["off"]}"));\n""")
     return result
 
+def create_switch_enabled_updates(blueprint: Blueprint) -> str:
+    result = ""
+    for item in blueprint["ports-control"]:
+        if item["type"] == "switch" and "enabled_query" in item:
+            result += f"""{item["symbol"]}Switch.setEnabled(processorRef.{item["enabled_query"]}());\n"""
+    return result
+
 def create_gauge_callbacks(blueprint: Blueprint) -> str:
     result = ""
     for item in blueprint["ports-control"]:
@@ -87,6 +94,7 @@ def create_gauge_callbacks(blueprint: Blueprint) -> str:
     result += create_gauge_bindings(blueprint)
     result += create_momentary_flash_ticks(blueprint)
     result += create_switch_label_swaps(blueprint)
+    result += create_switch_enabled_updates(blueprint)
     extra = blueprint.get("extra_timer_callbacks", [])
     if extra:
         result += "\n" + "\n".join(extra) + "\n"
