@@ -9,6 +9,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
     const float fontHeight{GuiConstants::instance().text.fontHeight};
     juce::Colour backgroundDark, backgroundDarkDisabled;
     juce::Colour backgroundMid;
+    juce::Colour labelColour;
     juce::Colour statusOutline, statusOutlineDisabled;
     juce::Colour gradientDark, gradientDarkDisabled;
     juce::Colour knobGradientStart, knobGradientCenter, knobGradientEnd;
@@ -36,6 +37,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         const auto bgMid = juce::Colour(GuiConstants::instance().colors.backgroundMid);
         const auto fg = juce::Colour(GuiConstants::instance().colors.statusOutline);
         const auto label = juce::Colour(GuiConstants::instance().colors.labelColour);
+        labelColour = label;
 
         setColour(juce::ResizableWindow::backgroundColourId, bg);
         setColour(juce::DocumentWindow::backgroundColourId, bg);
@@ -370,6 +372,29 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
     juce::Font getMenuBarFont(juce::MenuBarComponent&, int, const juce::String&) override
     {
         return mainFontDefinition;
+    }
+
+    // LookAndFeel_V4's default reuses TextButton::buttonOnColourId/textColourOnId for the
+    // hover/open highlight - those are set here for actual toggle buttons, not the menu
+    // bar, so text swung all the way to the app's background colour. Keep text constant.
+    void drawMenuBarItem(juce::Graphics& g, int width, int height, int itemIndex, const juce::String& itemText,
+                         bool isMouseOverItem, bool isMenuOpen, bool /*isMouseOverBar*/,
+                         juce::MenuBarComponent& menuBar) override
+    {
+        if (!menuBar.isEnabled())
+        {
+            g.setColour(labelColour.withMultipliedAlpha(0.5f));
+        }
+        else
+        {
+            if (isMenuOpen || isMouseOverItem)
+            {
+                g.fillAll(backgroundMid.contrasting(0.2f));
+            }
+            g.setColour(labelColour);
+        }
+        g.setFont(getMenuBarFont(menuBar, itemIndex, itemText));
+        g.drawFittedText(itemText, 0, 0, width, height, juce::Justification::centred, 1);
     }
 
     int getDefaultMenuBarHeight() override
