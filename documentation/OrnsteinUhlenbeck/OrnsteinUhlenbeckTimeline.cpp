@@ -1,14 +1,15 @@
-// Generates two views of AbacDsp::OrnsteinUhlenbeckProcess at different "speeds" (sigma):
-// a time-series timeline, and its empirical autocorrelation against the process's known
-// theoretical decay exp(-theta*tau) - the latter is the actual quantitative check that the
-// "speed" differences are real, since amplitude and speed both scale with sigma and can look
-// deceptively similar on a per-plot auto-scaled timeline. Output is plain text in
-// documentation/Plot/PyConPlot.py's "#group name" / "x y" format; see README.md.
+// Generates three views of AbacDsp::OrnsteinUhlenbeckProcess at different "speeds" (sigma):
+// a time-series timeline, several independent runs' empirical autocorrelation overlaid
+// against the process's known theoretical decay exp(-theta*tau), and its stationary value
+// distribution against the theoretical Gaussian N(0, sigma^2/(2*theta)) the process should
+// settle into. Output is plain text in documentation/Plot/PyConPlot.py's "#group name" /
+// "x y" format; see README.md.
 
 #include <array>
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <numbers>
 #include <string>
 #include <vector>
 
@@ -25,13 +26,22 @@ constexpr size_t kNumSteps = 20000;
 // roughly 4x range of reversion rate - the "speeds" being checked.
 constexpr std::array<float, 4> kSigmas{0.02f, 0.05f, 0.1f, 0.2f};
 
-// Excluded from the mean/autocorrelation estimate below so the initial relaxation from
-// x(0) = 0 towards the stationary distribution doesn't bias them; ~3 time constants of the
-// slowest sigma here (theta ~= 1.4, so 1/theta ~= 0.7s).
+// Excluded from the mean/autocorrelation estimate so x(0)=0's relaxation toward the
+// stationary distribution doesn't bias them (~3 time constants of the slowest sigma).
 constexpr size_t kBurnInSteps = kNumSteps / 5;
 
 constexpr float kMaxLagSeconds = 3.f;
 constexpr size_t kLagStride = 10;
+// Independent runs overlaid in the autocorrelation plot, so its spread/consistency around
+// the theoretical curve is visible directly rather than judging one noisy realization.
+constexpr int kNumAutocorrRuns = 100;
+
+// A much longer, separate run: the timeline's 20000 samples are plenty to look at as a
+// trace but far too few to bin into a clean histogram.
+constexpr size_t kDistributionNumSteps = 10'000'000;
+constexpr size_t kDistributionBurnInSteps = kDistributionNumSteps / 20;
+constexpr int kNumBins = 61;
+constexpr float kBinRangeStdDevs = 5.f;
 
 // setSigma() also sets mu = sigma, so subtracting it centres the whole run on zero -
 // otherwise larger sigma would just shift the run up instead of visibly changing how much
@@ -58,10 +68,8 @@ void writeTimeline(std::ofstream& out, const std::vector<float>& deviations)
     }
 }
 
-// Normalized empirical autocorrelation (post burn-in, own sample mean removed) alongside
-// the process's theoretical exp(-theta*tau) decay, so a reader can see directly whether the
-// simulated "speed" matches theta rather than just eyeballing the raw timeline.
-void writeAutocorrelation(std::ofstream& out, const std::vector<float>& deviations, const float theta)
+// Normalized empirical autocorrelation (post burn-in, own sample mean removed) for one run.
+void writeOneAutocorrelationRun(std::ofstream& out, const std::vector<float>& deviations)
 {
     const std::vector<float> stationary(deviations.begin() + static_cast<std::ptrdiff_t>(kBurnInSteps),
                                         deviations.end());
@@ -91,12 +99,77 @@ void writeAutocorrelation(std::ofstream& out, const std::vector<float>& deviatio
         }
         out << (static_cast<float>(lag) / kStepRate) << " " << (covariance / variance) << "\n";
     }
+}
 
+// kNumAutocorrRuns independent runs, each its own "#empirical" section (PyConPlot.py
+// overlays repeated names, see its docs), then the theoretical curve written last so it
+// draws on top - the actual check that "speed" matches theta, not one noisy run's guess.
+void writeAutocorrelation(std::ofstream& out, const float sigma, const float theta, const unsigned baseSeed)
+{
+    for (int run = 0; run < kNumAutocorrRuns; ++run)
+    {
+        writeOneAutocorrelationRun(out, simulate(sigma, baseSeed + static_cast<unsigned>(run)));
+    }
+
+    const auto maxLag = static_cast<size_t>(kMaxLagSeconds * kStepRate);
     out << "#theoretical exp(-theta*tau)\n";
     for (size_t lag = 0; lag <= maxLag; lag += kLagStride)
     {
         const float tau = static_cast<float>(lag) / kStepRate;
         out << tau << " " << std::exp(-theta * tau) << "\n";
+    }
+}
+
+// Runs its own long, separate simulation (binned directly, not kept as a vector - far
+// longer than the timeline's) and writes the resulting density histogram alongside the
+// theoretical stationary Gaussian - the actual settle check, not just a visual impression.
+void writeDistribution(std::ofstream& out, const float sigma, const float theta, const unsigned seed)
+{
+    AbacDsp::OrnsteinUhlenbeckProcess process(kStepRate);
+    process.seed(seed);
+    process.setSigma(sigma);
+
+    // OrnsteinUhlenbeckProcess's driving noise is N(0, (1/2.33)^2), not unit variance (see
+    // m_normalDist) - textbook sigma^2/(2*theta) overstates this class's spread without it.
+    constexpr float kNoiseStdDevScale = 1.f / 2.33f;
+    const float stddev = sigma * kNoiseStdDevScale / std::sqrt(2.f * theta);
+    const float range = kBinRangeStdDevs * stddev;
+    const float binWidth = 2.f * range / static_cast<float>(kNumBins);
+
+    std::array<size_t, kNumBins> counts{};
+    size_t totalCounted = 0;
+    for (size_t i = 0; i < kDistributionNumSteps; ++i)
+    {
+        const float d = process.step() - sigma;
+        if (i < kDistributionBurnInSteps)
+        {
+            continue;
+        }
+        const auto bin = static_cast<int>((d + range) / binWidth);
+        if (bin >= 0 && bin < kNumBins)
+        {
+            ++counts[static_cast<size_t>(bin)];
+            ++totalCounted;
+        }
+    }
+
+    out << "#empirical\n";
+    for (int b = 0; b < kNumBins; ++b)
+    {
+        const float binCenter = -range + (static_cast<float>(b) + 0.5f) * binWidth;
+        const float density =
+            static_cast<float>(counts[static_cast<size_t>(b)]) / (static_cast<float>(totalCounted) * binWidth);
+        out << binCenter << " " << density << "\n";
+    }
+
+    out << "#theoretical Gaussian\n";
+    constexpr int kCurvePoints = 200;
+    for (int i = 0; i <= kCurvePoints; ++i)
+    {
+        const float x = -range + 2.f * range * static_cast<float>(i) / static_cast<float>(kCurvePoints);
+        const float density =
+            std::exp(-x * x / (2.f * stddev * stddev)) / (stddev * std::sqrt(2.f * std::numbers::pi_v<float>));
+        out << x << " " << density << "\n";
     }
 }
 }
@@ -105,9 +178,11 @@ int main(int argc, char* argv[])
 {
     const std::string timelinePath = argc > 1 ? argv[1] : "ou_timelines.txt";
     const std::string autocorrPath = argc > 2 ? argv[2] : "ou_autocorr.txt";
+    const std::string distributionPath = argc > 3 ? argv[3] : "ou_distribution.txt";
     std::ofstream timelineOut(timelinePath);
     std::ofstream autocorrOut(autocorrPath);
-    if (!timelineOut || !autocorrOut)
+    std::ofstream distributionOut(distributionPath);
+    if (!timelineOut || !autocorrOut || !distributionOut)
     {
         std::cerr << "OrnsteinUhlenbeckTimeline: ERROR - failed to open output files for writing" << std::endl;
         return 1;
@@ -123,8 +198,12 @@ int main(int argc, char* argv[])
         writeTimeline(timelineOut, deviations);
 
         autocorrOut << "@New plot: title=\"sigma=" << sigma << " (theta=" << theta << ")\"\n";
-        writeAutocorrelation(autocorrOut, deviations, theta);
+        writeAutocorrelation(autocorrOut, sigma, theta, static_cast<unsigned>(3000 + i * 100));
+
+        distributionOut << "@New plot: title=\"sigma=" << sigma << " (theta=" << theta << ")\"\n";
+        writeDistribution(distributionOut, sigma, theta, static_cast<unsigned>(2000 + i));
     }
-    std::cout << "OrnsteinUhlenbeckTimeline: wrote " << kSigmas.size() << " timelines to " << timelinePath << " and "
-              << kSigmas.size() << " autocorrelations to " << autocorrPath << std::endl;
+    std::cout << "OrnsteinUhlenbeckTimeline: wrote " << kSigmas.size() << " timelines to " << timelinePath << ", "
+              << kSigmas.size() << " autocorrelations to " << autocorrPath << ", and " << kSigmas.size()
+              << " distributions to " << distributionPath << std::endl;
 }

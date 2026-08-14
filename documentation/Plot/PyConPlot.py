@@ -93,29 +93,34 @@ def setup_grid(ax: plt.Axes, args: argparse.Namespace, plot_options: Optional[Di
         if grid_minor:
             ax.grid(True, which='minor', alpha=0.3, linewidth=0.5, linestyle=':')
 
-def normalize_data(data: Dict[str, Dict[str, List[float]]]) -> Dict[str, Dict[str, List[float]]]:
-    """Normalize data to range [0, 1]"""
-    normalized_data: Dict[str, Dict[str, List[float]]] = {}
-    for name, values in data.items():
-        x_vals = np.array(values['x'])
-        y_vals = np.array(values['y'])
-        if len(x_vals) > 1:
-            x_min, x_max = x_vals.min(), x_vals.max()
+def normalize_data(data: Dict[str, List[Dict[str, List[float]]]]) -> Dict[str, List[Dict[str, List[float]]]]:
+    """Normalize data to range [0, 1], sharing one x/y range across all of a name's runs"""
+    normalized_data: Dict[str, List[Dict[str, List[float]]]] = {}
+    for name, series_list in data.items():
+        all_x = np.array([v for s in series_list for v in s['x']])
+        all_y = np.array([v for s in series_list for v in s['y']])
+        x_min, x_max = (all_x.min(), all_x.max()) if len(all_x) > 1 else (0.0, 1.0)
+        y_min, y_max = (all_y.min(), all_y.max()) if len(all_y) > 1 else (0.0, 1.0)
+        new_series_list = []
+        for values in series_list:
+            x_vals = np.array(values['x'])
+            y_vals = np.array(values['y'])
             x_norm = (x_vals - x_min) / (x_max - x_min) if x_max != x_min else x_vals
-        else:
-            x_norm = x_vals
-        if len(y_vals) > 1:
-            y_min, y_max = y_vals.min(), y_vals.max()
             y_norm = (y_vals - y_min) / (y_max - y_min) if y_max != y_min else y_vals
-        else:
-            y_norm = y_vals
-        normalized_data[name] = {'x': x_norm.tolist(), 'y': y_norm.tolist()}
+            new_series_list.append({'x': x_norm.tolist(), 'y': y_norm.tolist()})
+        normalized_data[name] = new_series_list
     return normalized_data
 
-def parse_data_file(filename: str) -> List[Tuple[Dict[str, Dict[str, List[float]]], Dict[str, Any]]]:
-    """Parse the input txt file and return list of plot groups with their options"""
-    plots: List[Tuple[Dict[str, Dict[str, List[float]]], Dict[str, Any]]] = []
-    current_plot_data: Dict[str, Dict[str, List[float]]] = defaultdict(lambda: {'x': [], 'y': []})
+def parse_data_file(filename: str) -> List[Tuple[Dict[str, List[Dict[str, List[float]]]], Dict[str, Any]]]:
+    """Parse the input txt file and return list of plot groups with their options.
+
+    A #name seen again within the same plot (no intervening @New plot) starts a new,
+    separate run under that same name - overlaid as its own line sharing one colour and
+    legend entry, rather than concatenated onto the previous run's data (which would draw
+    one line zigzagging between the two runs' x-ranges).
+    """
+    plots: List[Tuple[Dict[str, List[Dict[str, List[float]]]], Dict[str, Any]]] = []
+    current_plot_data: Dict[str, List[Dict[str, List[float]]]] = {}
     current_plot_options: Dict[str, Any] = {}
     current_name: Optional[str] = None
     with open(filename, 'r') as f:
@@ -125,24 +130,25 @@ def parse_data_file(filename: str) -> List[Tuple[Dict[str, Dict[str, List[float]
                 continue
             if line.startswith('@New plot') or line.startswith('@new plot'):
                 if current_plot_data:
-                    plots.append((dict(current_plot_data), current_plot_options))
-                current_plot_data = defaultdict(lambda: {'x': [], 'y': []})
+                    plots.append((current_plot_data, current_plot_options))
+                current_plot_data = {}
                 current_plot_options = parse_plot_options(line)
                 continue
             if line.startswith('#'):
                 current_name = line[1:].strip()
+                current_plot_data.setdefault(current_name, []).append({'x': [], 'y': []})
             else:
                 if current_name is not None:
                     try:
                         x, y = map(float, line.split())
-                        current_plot_data[current_name]['x'].append(x)
-                        current_plot_data[current_name]['y'].append(y)
+                        current_plot_data[current_name][-1]['x'].append(x)
+                        current_plot_data[current_name][-1]['y'].append(y)
                     except ValueError:
                         print(f"Warning: Could not parse line: {line}")
                         continue
     if current_plot_data:
-        plots.append((dict(current_plot_data), current_plot_options))
-    return plots if plots else [(defaultdict(lambda: {'x': [], 'y': []}), {})]
+        plots.append((current_plot_data, current_plot_options))
+    return plots if plots else [({}, {})]
 
 def create_plots(data_plots: List[Tuple[Dict[str, Dict[str, List[float]]], Dict[str, Any]]], args: argparse.Namespace) -> None:
     """Create and save the plots"""
@@ -170,13 +176,28 @@ def create_plots(data_plots: List[Tuple[Dict[str, Dict[str, List[float]]], Dict[
             cmap = plt.get_cmap('Set1')
         if effective_options.get('normalize', False):
             data = normalize_data(data)
+        # Qualitative palettes (Set1 etc.) are a short, discrete colour list meant to be
+        # indexed by position - cmap(int) does that. Stretching a float 0..1 across the
+        # whole map instead (cmap(idx / (len(data)-1))) picks each colour's position along
+        # the *palette*, not its position in the list - for exactly 2 series that lands on
+        # index 0 and 1.0, i.e. the palette's first and *last* entries, which for Set1 is a
+        # washed-out grey rather than a second strong colour. Continuous colormaps (viridis
+        # etc.) still need the float form to spread smoothly across the gradient.
+        is_qualitative = isinstance(cmap, mcolors.ListedColormap)
         color_idx = 0
-        for name, values in data.items():
-            if not values['x'] or not values['y']:
+        for name, series_list in data.items():
+            non_empty = [s for s in series_list if s['x'] and s['y']]
+            if not non_empty:
                 continue
-            color = cmap(color_idx / max(1, len(data) - 1)) if len(data) > 1 else cmap(0)
+            if is_qualitative:
+                color = cmap(color_idx % cmap.N)
+            else:
+                color = cmap(color_idx / max(1, len(data) - 1)) if len(data) > 1 else cmap(0)
             linewidth = effective_options.get('linewidth', args.linewidth)
-            ax.plot(values['x'], values['y'], label=name, color=color, linewidth=linewidth)
+            # Repeated runs under the same name (see parse_data_file) share this one colour
+            # and get a single legend entry, on the first run only.
+            for i, values in enumerate(non_empty):
+                ax.plot(values['x'], values['y'], label=name if i == 0 else None, color=color, linewidth=linewidth)
             color_idx += 1
         if effective_options.get('logx', False):
             ax.set_xscale('log')
@@ -233,6 +254,20 @@ x4 y4
 @New plot: labelx="Frequency (Hz)" labely="Magnitude (dB)" title="Frequency Response" logx=true logy=false grid=true
 #group3
 x5 y5
+
+A #name repeated within the same plot starts a new, separate overlapping run under that
+name (its own line, not concatenated onto the previous run) - all runs share one colour
+and one legend entry. Useful for plotting several noisy trials of the same measurement
+together, e.g. drawn before a final theoretical/reference #name so it renders on top:
+#empirical
+0 0.1
+1 0.4
+#empirical
+0 -0.2
+1 0.5
+#theoretical
+0 0.0
+1 0.45
 
 Plot-specific options (use in @New plot lines):
 - labelx, labely: axis labels
