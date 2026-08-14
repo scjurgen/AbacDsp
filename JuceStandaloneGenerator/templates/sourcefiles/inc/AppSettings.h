@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_data_structures/juce_data_structures.h>
+#include <optional>
 
 #include "GuiConstants.h"
 
@@ -39,6 +40,33 @@ class AppSettings
         props->setValue("windowY", bounds.getY());
         props->setValue("windowWidth", bounds.getWidth());
         props->setValue("windowHeight", bounds.getHeight());
+        props->saveIfNeeded();
+    }
+
+    // nullopt means "never saved" - the caller centres the dialog on its default size
+    // instead of restoring a position, rather than us inventing one here.
+    [[nodiscard]] static std::optional<juce::Rectangle<int>> loadScriptEditorBounds()
+    {
+        const auto props = makePropsFile();
+        if (!props->containsKey("scriptEditorWidth"))
+        {
+            return std::nullopt;
+        }
+        return juce::Rectangle<int>{
+            props->getIntValue("scriptEditorX", 100),
+            props->getIntValue("scriptEditorY", 100),
+            props->getIntValue("scriptEditorWidth", 800),
+            props->getIntValue("scriptEditorHeight", 600),
+        };
+    }
+
+    static void saveScriptEditorBounds(juce::Rectangle<int> bounds)
+    {
+        const auto props = makePropsFile();
+        props->setValue("scriptEditorX", bounds.getX());
+        props->setValue("scriptEditorY", bounds.getY());
+        props->setValue("scriptEditorWidth", bounds.getWidth());
+        props->setValue("scriptEditorHeight", bounds.getHeight());
         props->saveIfNeeded();
     }
 

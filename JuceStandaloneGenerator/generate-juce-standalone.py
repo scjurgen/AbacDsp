@@ -32,7 +32,8 @@ from codegen_processor import (
     create_extra_set_state_calls, create_cc_mapping,
     create_patch_parameters_script_methods, create_load_script_calls,
     create_fileio_script_methods, create_fileio_script_private,
-    create_fileio_script_members, create_processor_script_methods,
+    create_fileio_script_members, create_fileio_script_includes,
+    create_fileio_script_initialize, create_processor_script_methods,
     uses_lua, create_about_text,
 )
 from codegen_widgets import (
@@ -165,6 +166,8 @@ CPP_JUCE_FILE_VARS = [
     "FileIoScriptMethods",
     "FileIoScriptPrivate",
     "FileIoScriptMembers",
+    "FileIoScriptIncludes",
+    "FileIoScriptInitialize",
     "ProcessorScriptMethods",
     "ABOUT_TEXT"
 ]
@@ -253,6 +256,8 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
     blueprint["CPP"]["FileIoScriptMethods"] = create_fileio_script_methods(blueprint)
     blueprint["CPP"]["FileIoScriptPrivate"] = create_fileio_script_private(blueprint)
     blueprint["CPP"]["FileIoScriptMembers"] = create_fileio_script_members(blueprint)
+    blueprint["CPP"]["FileIoScriptIncludes"] = create_fileio_script_includes(blueprint)
+    blueprint["CPP"]["FileIoScriptInitialize"] = create_fileio_script_initialize(blueprint)
     blueprint["CPP"]["ProcessorScriptMethods"] = create_processor_script_methods(blueprint)
 
     blueprint["CPP"]["INIT_WIDGETS"] = create_init_widgets(blueprint)

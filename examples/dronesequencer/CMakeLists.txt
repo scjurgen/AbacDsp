@@ -151,7 +151,7 @@ foreach(target ${FORMATS} "All")
     endif()
 endforeach()
 
-set(JUCE_DEPENDENCIES juce::juce_audio_utils)
+set(JUCE_DEPENDENCIES juce::juce_audio_utils juce::juce_gui_extra)
 
 target_compile_definitions(
     "${PROJECT_NAME}"

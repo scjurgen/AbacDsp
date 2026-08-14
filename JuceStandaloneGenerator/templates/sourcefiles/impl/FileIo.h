@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+/*FileIoScriptIncludes*/
 #include "PatchParameters.h"
 
 class FileIo
@@ -24,6 +25,7 @@ class FileIo
     void initialize(const std::vector<int>& patchIndex)
     {
         m_currentPatch = patchIndex;
+        /*FileIoScriptInitialize*/
         loadPatch(patchIndex);
         m_currentParams.clearModified();
         m_isInitialized = true;

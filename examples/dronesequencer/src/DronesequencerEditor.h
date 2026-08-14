@@ -1022,7 +1022,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         dialogWindow->setContentOwned(editorComponent, true);
         dialogWindow->setUsingNativeTitleBar(true);
         dialogWindow->setResizable(true, false);
-        dialogWindow->centreAroundComponent(nullptr, dialogWindow->getWidth(), dialogWindow->getHeight());
+        if (const auto savedBounds = AppSettings::loadScriptEditorBounds())
+        {
+            dialogWindow->setBounds(*savedBounds);
+        }
+        else
+        {
+            dialogWindow->centreAroundComponent(nullptr, dialogWindow->getWidth(), dialogWindow->getHeight());
+        }
         dialogWindow->setVisible(true);
         m_scriptEditorWindow = dialogWindow;
         m_scriptEditorContent = editorComponent;

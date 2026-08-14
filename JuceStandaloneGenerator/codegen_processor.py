@@ -201,10 +201,18 @@ def create_load_script_calls(blueprint: Blueprint) -> str:
 # whatever FileIo already loaded at construction, until the next patch load or manual
 # script-editor Apply overwrites it. Mirrors create_load_script_calls() above, sourced
 # from FileIo directly since there is no local "params" at this point.
+#
+# Also wires FileIo::resolveLibraryScript as the fresh pluginRunner's import resolver, so
+# `import "name"` works from the very first script load. This assumes the hand-written
+# Impl class exposes a setImportResolver(ScriptEngine::ImportResolver) forwarding to its
+# own LuaScriptEngineBase-derived member, the same contract setScript()/getScriptSkeleton()
+# already require of it - true for every use-lua blueprint so far.
 def create_prepare_script_calls(blueprint: Blueprint) -> str:
     if not uses_lua(blueprint):
         return ""
-    return ("""if (!m_fileIo.currentScript().empty()) """
+    return ("""pluginRunner->setImportResolver([](const std::string_view name) """
+            """{ return FileIo::resolveLibraryScript(name); });\n"""
+            """if (!m_fileIo.currentScript().empty()) """
             """{ pluginRunner->setScript(m_fileIo.currentScript()); }\n""")
 
 # FileIo public API for the Lua script: update/current mirror updateParameter()'s
@@ -315,6 +323,77 @@ def create_fileio_script_methods(blueprint: Blueprint) -> str:
         }}
         return true;
     }}
+
+    // Resolves an `import "name"` library lookup: the user's own Library/User/ directory
+    // takes precedence over the repo-synced Library/Base/ one, so a user copy of the same
+    // name overrides the built-in. On failure, notFoundDetail lists the full paths checked.
+    [[nodiscard]] static ImportLookup resolveLibraryScript(const std::string_view name)
+    {{
+        const juce::String sanitized = juce::String(std::string(name)).removeCharacters("\\\\/:*?\\"<>|");
+        if (sanitized.isEmpty())
+        {{
+            return {{std::nullopt, "\\"" + std::string(name) + "\\" is not a valid library file name"}};
+        }}
+        juce::StringArray checkedPaths;
+        for (const auto& dir : {{getLibraryUserDirectory(), getLibraryBaseDirectory()}})
+        {{
+            const juce::File file = dir.getChildFile(sanitized + ".lua");
+            if (file.existsAsFile())
+            {{
+                return {{file.loadFileAsString().toStdString(), {{}}}};
+            }}
+            checkedPaths.add(file.getFullPathName());
+        }}
+        return {{std::nullopt, "looked in " + checkedPaths.joinIntoString("; ").toStdString()}};
+    }}
+
+    // Writes/overwrites a Library/User/ script, e.g. from the LLM-Assist watched-folder
+    // workflow. Rejects a name normalizeImportName() would itself reject, so nothing is
+    // ever written here that could never actually be import "..."-ed back out.
+    [[nodiscard]] static bool saveUserLibraryScript(const std::string_view name, const std::string_view content)
+    {{
+        const std::optional<std::string> normalized = normalizeImportName(name);
+        if (!normalized)
+        {{
+            return false;
+        }}
+        const juce::File file = getLibraryUserDirectory().getChildFile(juce::String(*normalized) + ".lua");
+        return file.replaceWithText(juce::String(std::string(content)));
+    }}
+
+    // Every installed library name, User and Base combined - a name in both is listed
+    // once, matching resolveLibraryScript()'s own "User overrides Base" resolution.
+    [[nodiscard]] static std::vector<std::string> listLibraryScriptNames()
+    {{
+        std::vector<std::string> names;
+        for (const auto& dir : {{getLibraryUserDirectory(), getLibraryBaseDirectory()}})
+        {{
+            for (const auto& f : dir.findChildFiles(juce::File::findFiles, false, "*.lua"))
+            {{
+                names.push_back(f.getFileNameWithoutExtension().toStdString());
+            }}
+        }}
+        std::sort(names.begin(), names.end());
+        names.erase(std::unique(names.begin(), names.end()), names.end());
+        return names;
+    }}
+
+    // Repo-synced (see syncBaseLibraryScripts()) - not meant to be hand-edited by users.
+    static juce::File getLibraryBaseDirectory()
+    {{
+        const auto dir = getLibraryDirectory().getChildFile("Base");
+        dir.createDirectory();
+        return dir;
+    }}
+
+    // The user's own import-able library scripts; never touched by syncBaseLibraryScripts().
+    static juce::File getLibraryUserDirectory()
+    {{
+        const auto dir = getLibraryDirectory().getChildFile("User");
+        dir.createDirectory();
+        return dir;
+    }}
+
 """
 
 # Private helpers backing create_fileio_script_methods() above: the on-disk pool
@@ -324,6 +403,7 @@ def create_fileio_script_private(blueprint: Blueprint) -> str:
     if not uses_lua(blueprint):
         return ""
     module_upper = blueprint["CPP"]["MODULE_UPPER"]
+    module_macro = module_upper.upper()
     upper = "Script"
     # Not embedding "/*MODULE_UPPER*/" here for the templating engine to resolve:
     # substitution runs once, in CPP_JUCE_FILE_VARS order, and MODULE_UPPER (near
@@ -339,6 +419,36 @@ def create_fileio_script_private(blueprint: Blueprint) -> str:
         const auto dir = base.getChildFile("AbacDsp").getChildFile("{module_upper}").getChildFile("Scripts");
         dir.createDirectory();
         return dir;
+    }}
+
+    static juce::File getLibraryDirectory()
+    {{
+        auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
+#if JUCE_MAC
+        base = base.getChildFile("Application Support");
+#endif
+        const auto dir = base.getChildFile("AbacDsp").getChildFile("{module_upper}").getChildFile("Library");
+        dir.createDirectory();
+        return dir;
+    }}
+
+    // Refreshes Library/Base/ from the repo's base-scripts/ directory (only available in a
+    // dev build from a real checkout - {module_macro}_BASE_SCRIPTS_DIR is undefined
+    // otherwise, in which case this is a no-op and whatever is already on disk is used).
+    static void syncBaseLibraryScripts()
+    {{
+#ifdef {module_macro}_BASE_SCRIPTS_DIR
+        const juce::File repoDir({module_macro}_BASE_SCRIPTS_DIR);
+        if (!repoDir.isDirectory())
+        {{
+            return;
+        }}
+        const juce::File targetDir = getLibraryBaseDirectory();
+        for (const auto& source : repoDir.findChildFiles(juce::File::findFiles, false, "*.lua"))
+        {{
+            source.copyFileTo(targetDir.getChildFile(source.getFileName()));
+        }}
+#endif
     }}
 
     static std::string get{upper}Filename(const std::string& name)
@@ -375,6 +485,24 @@ def create_fileio_script_members(blueprint: Blueprint) -> str:
     if not uses_lua(blueprint):
         return ""
     return "std::string m_currentScriptName;\n"
+
+# Extra #include lines FileIo.h needs only when it carries the library-script methods
+# above (ImportLookup/normalizeImportName come from LuaScriptEngineBase.h).
+def create_fileio_script_includes(blueprint: Blueprint) -> str:
+    if not uses_lua(blueprint):
+        return ""
+    return ('#include <optional>\n'
+            '#include <string_view>\n\n'
+            '#include "../inc/LuaScriptEngineBase.h"\n')
+
+# Called from initialize() so Library/Base/ is refreshed from the repo's base-scripts/
+# on every launch, before anything might try to resolve an import against it. Placeholder
+# sits inline mid-statement (see template), so this deliberately carries neither its own
+# leading indent nor a trailing newline - both already come from that line in the template.
+def create_fileio_script_initialize(blueprint: Blueprint) -> str:
+    if not uses_lua(blueprint):
+        return ""
+    return "syncBaseLibraryScripts();"
 
 # Fixed-name convenience wrappers (getScriptText, applyScriptText, listScriptNames, ...)
 # around the FileIo/DSP methods above, so the Editor's popup/menu code (also fixed-name,
@@ -420,6 +548,22 @@ def create_processor_script_methods(blueprint: Blueprint) -> str:
         return juce::String(m_fileIo.current{upper}Name());
     }}
 
+    [[nodiscard]] std::vector<juce::String> getLibraryScriptNames() const
+    {{
+        std::vector<juce::String> result;
+        for (const auto& n : FileIo::listLibraryScriptNames())
+        {{
+            result.push_back(juce::String(n));
+        }}
+        return result;
+    }}
+
+    [[nodiscard]] juce::String getLibraryScriptText(const juce::String& name) const
+    {{
+        const auto lookup = FileIo::resolveLibraryScript(name.toStdString());
+        return lookup.source ? juce::String(*lookup.source) : "-- not found: " + name;
+    }}
+
     bool requestLoadScript(const juce::String& name)
     {{
         if (!m_fileIo.load{upper}Named(name.toStdString()))
@@ -442,6 +586,11 @@ def create_processor_script_methods(blueprint: Blueprint) -> str:
     bool renameScript(const juce::String& oldName, const juce::String& newName)
     {{
         return m_fileIo.rename{upper}Named(oldName.toStdString(), newName.toStdString());
+    }}
+
+    bool saveUserLibraryScript(const juce::String& name, const juce::String& content)
+    {{
+        return FileIo::saveUserLibraryScript(name.toStdString(), content.toStdString());
     }}
 """
 
