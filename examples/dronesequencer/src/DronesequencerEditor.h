@@ -1022,7 +1022,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         dialogWindow->setContentOwned(editorComponent, true);
         dialogWindow->setUsingNativeTitleBar(true);
         dialogWindow->setResizable(true, false);
-        if (const auto savedBounds = AppSettings::loadScriptEditorBounds())
+        const auto savedBounds = AppSettings::loadScriptEditorBounds();
+        if (savedBounds)
         {
             dialogWindow->setBounds(*savedBounds);
         }
@@ -1031,6 +1032,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             dialogWindow->centreAroundComponent(nullptr, dialogWindow->getWidth(), dialogWindow->getHeight());
         }
         dialogWindow->setVisible(true);
+        // setVisible() can itself shift the window once the OS actually places it on
+        // screen - reapply so it lands exactly where it was left, not off by that shift.
+        if (savedBounds)
+        {
+            dialogWindow->setBounds(*savedBounds);
+        }
+        dialogWindow->armBoundsPersistence();
         m_scriptEditorWindow = dialogWindow;
         m_scriptEditorContent = editorComponent;
     }

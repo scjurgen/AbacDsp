@@ -255,9 +255,24 @@ class ScriptEditorDialogWindow final : public juce::DialogWindow, private juce::
         juce::MessageManager::callAsync([this] { delete this; });
     }
 
+    // setContentOwned()'s auto-fit-to-content and setVisible()'s own on-screen settling
+    // both move/resize this window and would otherwise be saved as if the user had done
+    // it, clobbering the real last-dragged position before it's ever read back on the next
+    // open. Call once setup (including setVisible) is fully done.
+    void armBoundsPersistence()
+    {
+        m_persistBounds = true;
+    }
+
   private:
     void componentMovedOrResized(juce::Component&, bool, bool) override
     {
+        if (!m_persistBounds)
+        {
+            return;
+        }
         AppSettings::saveScriptEditorBounds(getBounds());
     }
+
+    bool m_persistBounds{false};
 };
