@@ -355,7 +355,9 @@ class DroneSequencerImpl final : public EffectBase
 
     void setFilterResonance(const float value)
     {
-        forEachVoice([value](auto& voice) { voice.setFilterResonance(value * 2.1f); });
+        // value is already normalized (1.0 = self-oscillation threshold); see
+        // Filter1Pole4StageSmooth::setResonance() in PoleMixingFilter.h.
+        forEachVoice([value](auto& voice) { voice.setFilterResonance(value); });
     }
 
     void setContourFilter(const float value)

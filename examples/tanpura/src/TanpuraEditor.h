@@ -433,7 +433,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(filterResonanceDial);
         filterResonanceDial.reset(valueTreeState, "filterResonance");
         filterResonanceDial.setLabelText(juce::String::fromUTF8("Filter Resonance"));
-        filterResonanceDial.setTooltip(juce::String::fromUTF8("Filter Resonance (0 to 2)"));
+        filterResonanceDial.setTooltip(juce::String::fromUTF8("Filter Resonance (0 to 1.2)"));
         addAndMakeVisible(contourFilterDial);
         contourFilterDial.reset(valueTreeState, "contourFilter");
         contourFilterDial.setLabelText(juce::String::fromUTF8("Contour F"));

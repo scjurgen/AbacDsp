@@ -466,7 +466,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                 [](float value, int) { return juce::String(value, 1) + " st"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("filterResonance", 1), juce::String::fromUTF8("Filter Resonance"),
-            juce::NormalisableRange<float>(0, 2, 0.01, 1, false), 0.1,
+            juce::NormalisableRange<float>(0, 1.2, 0.01, 1, false), 0.1,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(

@@ -43,7 +43,7 @@
     {"short": "DCYF", "type": "dial", "display": "Filter Decay", "symbol": "decayFilter", "default": 1000, "range": [1, 30000, 0.1, 0.25, false], "precision": 1, "unit": "ms"},
     {"short": "SUSF", "type": "dial", "display": "Filter Sustain", "symbol": "levelSustainFilter", "default": 0, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
     {"short": "CUTF", "type": "dial", "display": "Filter Cutoff", "symbol": "filterCutoff", "default": 0, "range": [-60, 48, 0.1, 1, false], "precision": 1, "unit": "st"},
-    {"short": "RESF", "type": "dial", "display": "Filter Resonance", "symbol": "filterResonance", "default": 0.1, "range": [0, 2, 0.01, 1, false], "precision": 2, "unit": ""},
+    {"short": "RESF", "type": "dial", "display": "Filter Resonance", "symbol": "filterResonance", "default": 0.1, "range": [0, 1.2, 0.01, 1, false], "precision": 2, "unit": ""},
     {"short": "CONTF", "type": "dial", "display": "Contour F", "symbol": "contourFilter", "default": 0, "range": [-4, 4, 0.01, 1, false], "precision": 2, "unit": "oct"},
     {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"},
     {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
