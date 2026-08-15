@@ -608,6 +608,10 @@ using Allpass18Lp6Smooth = FixedFourStageFilter<0, -1, 3, -6, 4>;
  *
  * Saturation is x/sqrt(1+x^2), chosen over tanh and atan for cost; see the
  * table in compress().
+ *
+ * Resonance is normalized: setResonance(1.0) is the measured self-oscillation threshold at
+ * the current cutoff, not a raw amount - see criticalResonanceForRawCutoff() and
+ * documentation/Filters/PoleMixing/README.md.
  */
 class Filter1Pole4StageSmooth
 {
@@ -630,9 +634,20 @@ class Filter1Pole4StageSmooth
         m_smoothingAlpha = 1.f - std::exp(-1.f / (T * m_sampleRate));
     }
 
+    /// @brief Normalized resonance: 0 is none, 1.0 is the measured self-oscillation threshold
+    /// at the current cutoff. Re-derived from this value whenever cutoff changes too.
     void setResonance(const float value) noexcept
     {
-        m_targetResonance = value;
+        m_normalizedResonance = value;
+        recomputeTargetResonance();
+    }
+
+    /// @brief Escape hatch for setResonance()'s normalization: sets the raw feedback amount
+    /// directly, bypassing criticalResonanceForRawCutoff(). Lets
+    /// documentation/Filters/PoleMixing remeasure it without being circular; not for normal use.
+    void setResonanceRaw(const float rawValue) noexcept
+    {
+        m_targetResonance = rawValue;
     }
 
     /// @brief Warps a requested cutoff onto the frequency the discrete cascade actually resonates at.
@@ -646,15 +661,18 @@ class Filter1Pole4StageSmooth
     void setCutoffFrequency(const float cutoffFrequency) noexcept
     {
         m_cutoff = cutoffFrequency;
-        const float x = adaptResonanceFrequency(cutoffFrequency);
-        m_targetPole = std::exp(-2.0f * std::numbers::pi_v<float> * x / m_sampleRate);
+        m_rawCutoff = adaptResonanceFrequency(cutoffFrequency);
+        m_targetPole = std::exp(-2.0f * std::numbers::pi_v<float> * m_rawCutoff / m_sampleRate);
+        recomputeTargetResonance();
     }
 
     /// @brief Sets the cutoff with no warp, placing the pole straight from the requested frequency.
     void setCutoffFrequencyClean(const float cutoffFrequency) noexcept
     {
         m_cutoff = cutoffFrequency;
+        m_rawCutoff = cutoffFrequency;
         m_targetPole = std::exp(-2.0f * std::numbers::pi_v<float> * cutoffFrequency / m_sampleRate);
+        recomputeTargetResonance();
     }
 
     [[nodiscard]] static float compress(const float in) noexcept
@@ -700,14 +718,21 @@ class Filter1Pole4StageSmooth
     }
 
   private:
+    void recomputeTargetResonance() noexcept
+    {
+        m_targetResonance = m_normalizedResonance * criticalResonanceForRawCutoff(m_rawCutoff);
+    }
+
     float m_sampleRate{48000.f};
     float m_cutoffFrequency{1000.f};
 
     float m_cutoff{0.f};
+    float m_rawCutoff{1000.f};
     float m_pole{0.883824884f};
     float m_targetPole{0.883824884f};
 
     float m_reso{0.f};
+    float m_normalizedResonance{0.f};
     float m_targetResonance{0.f};
 
     float m_smoothingAlpha{0.01f};

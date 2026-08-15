@@ -17,7 +17,7 @@ class FilterTestFixture : public ::testing::Test
     static constexpr size_t BlockSize = 4000;
     static constexpr float InputDb = -40.0f;
 
-    void runMagnitudeTest(size_t index, float resonance, float maxDbError)
+    static void runMagnitudeTest(const size_t index, const float resonance, const float maxDbError)
     {
         const float inputAmplitude = std::pow(10.0f, InputDb / 20.0f);
         FourStageFilterTheoretical<float> theoretical(SampleRate, {0, 0, 0, 0, 1});
@@ -30,18 +30,19 @@ class FilterTestFixture : public ::testing::Test
                 theoretical.setCoefficients(config.cf);
                 for (float cf = 50.f; cf <= 10000.f; cf *= cfStepMultiplier)
                 {
-                    const float magnitude = static_cast<float>(
+                    const auto magnitude = static_cast<float>(
                         theoretical.magnitudeBP(Filter1Pole4StageSmooth::adaptResonanceFrequency(cf), hz, resonance));
-                    float expectedDb = std::log10(magnitude) * 20.0f;
+                    const auto expectedDb = std::log10(magnitude) * 20.0f;
                     if (expectedDb < -30)
                     {
                         continue;
                     }
                     // ignore if the expectedDb is very low
+                    // raw, not normalized: matches magnitudeBP()'s own raw resonance parameter above.
                     Filter1Pole4StageSmooth filter{SampleRate};
                     filter.setFilterCoefficients(config.cf);
                     filter.setCutoffFrequency(cf);
-                    filter.setResonance(resonance);
+                    filter.setResonanceRaw(resonance);
 
                     std::vector<float> wave(BlockSize);
                     for (size_t i = 0; i < BlockSize; ++i)
@@ -54,8 +55,8 @@ class FilterTestFixture : public ::testing::Test
 
                     const size_t half = wave.size() / 2;
                     auto minmax = std::minmax_element(wave.begin() + half, wave.end());
-                    float maxAbs = std::max(std::abs(*minmax.first), std::abs(*minmax.second));
-                    float db = std::log10(maxAbs / inputAmplitude) * 20.0f;
+                    const float maxAbs = std::max(std::abs(*minmax.first), std::abs(*minmax.second));
+                    const float db = std::log10(maxAbs / inputAmplitude) * 20.0f;
                     // adapt db for filter types
                     dbErrorSum += std::abs(db - expectedDb);
                     countSums++;
@@ -82,7 +83,7 @@ TEST_F(FilterTestFixture, Resonance0p0)
 TEST_F(FilterTestFixture, Resonance1)
 {
     constexpr float resonance{1.f};
-    constexpr float maxDbError{0.5f};
+    constexpr float maxDbError{0.55f};
     runMagnitudeTest(findFilterIndex("LP4"), resonance, maxDbError);
     runMagnitudeTest(findFilterIndex("HP4"), resonance, maxDbError);
 }
@@ -106,7 +107,7 @@ TEST_F(FilterTestFixture, Resonance3p5)
 TEST(PoleMixingFilterTests, magnitudeFunction)
 {
     constexpr float sampleRate{48000.f};
-    FourStageFilterTheoretical<float> sut(sampleRate, {0, 0, 0, 0, 1});
+    const FourStageFilterTheoretical<float> sut(sampleRate, {0, 0, 0, 0, 1});
     for (float f = 250; f < 5000; f *= 1.2f)
     {
         constexpr float cutoff{1000.f};

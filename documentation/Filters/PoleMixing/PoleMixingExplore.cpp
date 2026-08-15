@@ -231,10 +231,10 @@ void writeResonanceSweep(std::ofstream& out, const std::string_view presetName)
         f.setResonance(resonance);
         return f;
     };
-    const float critical = findCriticalResonance(makeFilter);
-    for (const float fraction : {0.f, 0.5f, 0.8f, 0.95f})
+    // resonance is normalized (1.0 = measured critical), so these fractions are the
+    // resonance values directly - no separate critical-resonance lookup needed here.
+    for (const float resonance : {0.f, 0.5f, 0.8f, 0.95f})
     {
-        const float resonance = critical * fraction;
         auto filter = makeFilter(resonance);
         out << "#resonance=" << resonance << "\n";
         for (float hz = 30.f; hz <= kResponseFreqHi; hz *= 1.04f)
@@ -254,17 +254,11 @@ void writeResonance(std::ofstream& out)
 
     out << "@New plot: title=\"LP4 self-oscillation (single impulse, zero input after)\"\n#envelope\n";
     const auto& cf = AbacDsp::poleMixingList[AbacDsp::findFilterIndex("LP4")].cf;
-    const auto makeFilter = [&cf](const float resonance)
-    {
-        AbacDsp::Filter1Pole4StageSmooth f(kSampleRate);
-        f.setFilterCoefficients(cf);
-        f.setParameterSmoothTimeMs(2.f);
-        f.setCutoffFrequencyClean(kResponseCutoff);
-        f.setResonance(resonance);
-        return f;
-    };
-    const float critical = findCriticalResonance(makeFilter);
-    auto filter = makeFilter(critical * 1.05f);
+    AbacDsp::Filter1Pole4StageSmooth filter(kSampleRate);
+    filter.setFilterCoefficients(cf);
+    filter.setParameterSmoothTimeMs(2.f);
+    filter.setCutoffFrequencyClean(kResponseCutoff);
+    filter.setResonance(1.05f); // 5% past the normalized self-oscillation threshold
     writeEnvelope(out, static_cast<size_t>(1.5f * kSampleRate), 64,
                   [&filter](const size_t i) { return filter.step(i == 0 ? 0.02f : 0.f); });
 }
@@ -361,18 +355,14 @@ float measurePeakFrequencyClassic(const float requestedCutoff)
 
 float measurePeakFrequencyBandpass(const float requestedCutoff)
 {
+    // resonance is normalized (1.0 = critical), so 0.9f directly is "just below
+    // self-oscillation" - no separate critical-resonance search needed.
     const auto& cf = AbacDsp::poleMixingList[AbacDsp::findFilterIndex("LP4")].cf;
-    const auto makeFilter = [&cf, requestedCutoff](const float resonance)
-    {
-        AbacDsp::Filter1Pole4StageSmooth f(kSampleRate);
-        f.setFilterCoefficients(cf);
-        f.setParameterSmoothTimeMs(2.f);
-        f.setCutoffFrequency(requestedCutoff); // warped: this is the correction under test
-        f.setResonance(resonance);
-        return f;
-    };
-    const float critical = findCriticalResonance(makeFilter);
-    auto filter = makeFilter(critical * 0.9f);
+    AbacDsp::Filter1Pole4StageSmooth filter(kSampleRate);
+    filter.setFilterCoefficients(cf);
+    filter.setParameterSmoothTimeMs(2.f);
+    filter.setCutoffFrequency(requestedCutoff); // warped: this is the correction under test
+    filter.setResonance(0.9f);
     return findPeakFrequency(filter, 50.f, 20000.f);
 }
 
@@ -492,27 +482,19 @@ void writeResonanceJumpEnvelope(std::ofstream& out)
     }
     out << "#bandpass-tap (exponentially smoothed resonance)\n";
     {
-        const auto makeFilter = [&cf](const float resonance)
-        {
-            AbacDsp::Filter1Pole4StageSmooth f(kSampleRate);
-            f.setFilterCoefficients(cf);
-            f.setParameterSmoothTimeMs(2.f);
-            f.setCutoffFrequencyClean(kCutoff);
-            f.setResonance(resonance);
-            return f;
-        };
-        const float critical = findCriticalResonance(makeFilter);
+        // resonance is normalized (1.0 = critical): no separate critical-resonance search
+        // needed here, unlike the classic block above.
         AbacDsp::Filter1Pole4StageSmooth filter(kSampleRate);
         filter.setFilterCoefficients(cf);
         filter.setParameterSmoothTimeMs(10.f); // slower than the search's own probe: the glide should be visible
         filter.setCutoffFrequencyClean(kCutoff);
         filter.setResonance(0.f);
         writeEnvelope(out, kTotalSamples, kWindow,
-                      [&filter, critical](const size_t i)
+                      [&filter](const size_t i)
                       {
                           if (i == kJumpSample)
                           {
-                              filter.setResonance(critical * 0.9f);
+                              filter.setResonance(0.9f);
                           }
                           return filter.step(probeTone(kCutoff, i));
                       });
@@ -580,16 +562,13 @@ void writeTopologySelfOscillation(std::ofstream& out)
     }
     out << "#bandpass-tap\n";
     {
-        const auto makeFilter = [&cf](const float resonance)
-        {
-            AbacDsp::Filter1Pole4StageSmooth f(kSampleRate);
-            f.setFilterCoefficients(cf);
-            f.setParameterSmoothTimeMs(2.f);
-            f.setCutoffFrequencyClean(kResponseCutoff);
-            f.setResonance(resonance);
-            return f;
-        };
-        auto filter = makeFilter(findCriticalResonance(makeFilter) * 1.05f);
+        // resonance is normalized (1.0 = critical): no separate critical-resonance search
+        // needed here, unlike the classic block above.
+        AbacDsp::Filter1Pole4StageSmooth filter(kSampleRate);
+        filter.setFilterCoefficients(cf);
+        filter.setParameterSmoothTimeMs(2.f);
+        filter.setCutoffFrequencyClean(kResponseCutoff);
+        filter.setResonance(1.05f);
         writeEnvelope(out, kTotalSamples, kWindow,
                       [&filter](const size_t i) { return filter.step(i == 0 ? 0.02f : 0.f); });
     }
@@ -609,12 +588,14 @@ void writeTopology(std::ofstream& out)
     writeTopologyPairForPreset<AbacDsp::Bp24Smooth>(out, "BP4");
 }
 
-// ---- raw (uncorrected) cutoff/resonance data, for fitCutoffCorrection.py ----
+// ---- raw (uncorrected) cutoff/resonance data, for fitPoleMixingCorrections.py ----
 
 /// @brief Plain columns, not PyConPlot format: this feeds a curve-fitting script, not a plot.
-/// Swept against setCutoffFrequencyClean() - the raw pole parameter, with no correction
-/// applied - so the fit built from this data can never itself push a target past Nyquist,
-/// unlike the requested-cutoff-based sweep in pm_cutoff_accuracy.txt.
+/// Swept against setCutoffFrequencyClean() and setResonanceRaw() - the raw pole and feedback
+/// parameters, with no correction of either kind applied - so the fit built from this data
+/// can never be circular with the very corrections it produces (setResonance()'s
+/// normalization is itself built from criticalResonanceForRawCutoff(), which this function
+/// exists to (re)generate the input data for).
 void writeRawCorrectionData(std::ofstream& out)
 {
     const float thirdSemitone = std::pow(2.f, 1.f / 36.f);
@@ -629,7 +610,7 @@ void writeRawCorrectionData(std::ofstream& out)
             f.setFilterCoefficients(cf);
             f.setParameterSmoothTimeMs(2.f);
             f.setCutoffFrequencyClean(rawCutoff);
-            f.setResonance(resonance);
+            f.setResonanceRaw(resonance);
             return f;
         };
         const float critical = findCriticalResonance(makeFilter);

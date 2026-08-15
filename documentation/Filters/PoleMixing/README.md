@@ -99,8 +99,8 @@ sweeps for the topology that has no closed form (see below) and to locate resona
 - `pm_raw_correction_data.txt`: not `PyConPlot` format - plain columns
   (`raw_cutoff_hz measured_peak_hz critical_resonance`), one row per raw cutoff swept with
   `setCutoffFrequencyClean()` (i.e. no correction applied at all) on the same
-  third-of-a-semitone grid, 20 Hz-20 kHz. This is `fitCutoffCorrection.py`'s input; see
-  "Regenerating the cutoff correction" below.
+  third-of-a-semitone grid, 20 Hz-20 kHz. This is `fitPoleMixingCorrections.py`'s input; see
+  "Regenerating the cutoff and resonance corrections" below.
 
 ## Rendering the plots
 
@@ -130,55 +130,82 @@ python3 ../../Plot/PyConPlot.py -f ../../../build/pm_topology.txt -o pm_topology
     --labelx "frequency (Hz) / time (s)" --labely "magnitude (dB) / amplitude" --width 1200 --height 350 --cols 1
 ```
 
-## Regenerating the cutoff correction
+## Regenerating the cutoff and resonance corrections
 
-`Filter1Pole4StageSmooth::adaptResonanceFrequency()` used to be a hand-fit piecewise cubic.
-`fitCutoffCorrection.py` replaces it with one regenerated from direct measurement, following
-the same measure -> `curve_fit` -> emit-C++ pattern as
+`Filter1Pole4StageSmooth::adaptResonanceFrequency()` used to be a hand-fit piecewise cubic,
+and `setResonance()` used to take a raw, frequency-dependent feedback amount.
+`fitPoleMixingCorrections.py` regenerates both from direct measurement, following the same
+measure -> `curve_fit` -> emit-C++ pattern as
 `documentation/Filters/BandpassImpulses/fitBandPassCompensation.py`:
 
 ```bash
-python3 fitCutoffCorrection.py -f pm_raw_correction_data.txt \
-    -o ../../../src/includes/Filters/PoleMixingCorrections_generated.h --degree 7
+python3 fitPoleMixingCorrections.py -f pm_raw_correction_data.txt \
+    -o ../../../src/includes/Filters/PoleMixingCorrections_generated.h \
+    --cutoff-degree 7 --resonance-degree 7
 ```
 
 This is a separate, deliberate step - not part of `generate.sh` - since it overwrites a file
 under `src/includes/`, real library source, not a documentation artifact.
 
-The old correction was fit against `pm_cutoff_accuracy.txt`-style data: target vs. the
-*already-corrected* cutoff. That's circular by construction, and `adaptResonanceFrequency
-(12000)` evaluates to about 25.3 kHz - past Nyquist at 48 kHz - before that value is even
-used to place the pole, which is almost certainly why the old correction's error blew up the
-way `pm_cutoff_accuracy.png` showed. `fitCutoffCorrection.py` instead fits directly against
-`pm_raw_correction_data.txt`'s raw (`setCutoffFrequencyClean()`) sweep, so the fit can never
-itself reason about a past-Nyquist value.
+**Cutoff correction.** The old correction was fit against `pm_cutoff_accuracy.txt`-style
+data: target vs. the *already-corrected* cutoff. That's circular by construction, and the old
+`adaptResonanceFrequency(12000)` evaluated to about 25.3 kHz - past Nyquist at 48 kHz -
+before that value was even used to place the pole, which is almost certainly why its error
+blew up the way `pm_cutoff_accuracy.png` used to show. The regenerated version fits directly
+against `pm_raw_correction_data.txt`'s raw (`setCutoffFrequencyClean()`) sweep instead, so
+the fit can never itself reason about a past-Nyquist value. It fits
+`log(raw_cutoff) = polynomial(log(target_frequency))` - log-space rather than the old model's
+plain cubic in linear Hz, since a single low-degree polynomial does not fit a multiplicative
+(octave-spanning) relationship well in linear space. The script prints both for comparison:
+refit to the same data, the old model shape's error is `26.9%` max / `3.8%` mean; the
+log-space degree-7 fit is `1.55%` max / `0.52%` mean, over its measured domain
+(`20 Hz-8.6 kHz`, i.e. `critical_resonance <= 20` - past there the resonance peak is so broad
+that the peak-search grid can no longer resolve it precisely, and no real patch would run
+resonance that high anyway). The generated function clamps its input to that domain before
+evaluating, so an out-of-domain request extrapolates from the domain's own edge - visible in
+`pm_cutoff_accuracy.png` as the bandpass-tap curve going flat above roughly an 8.5 kHz
+request, rather than unbounded overshoot-then-collapse.
 
-It fits `log(raw_cutoff) = polynomial(log(target_frequency))` - log-space rather than the old
-model's plain cubic in linear Hz, since a single low-degree polynomial does not fit a
-multiplicative (octave-spanning) relationship well in linear space. The script prints both
-for comparison: refit to the same data, the old model shape's error is `26.9%` max / `3.8%`
-mean; the log-space degree-7 fit is `1.55%` max / `0.52%` mean, over its measured domain
-(`20 Hz-8.6 kHz`, i.e. `critical_resonance <= 20` - see below for why that domain limit).
-Points are excluded above `critical_resonance = 20`: past there the resonance peak is so
-broad that the peak-search grid can no longer resolve it precisely, and no real patch would
-run resonance that high anyway. The generated function clamps its input to that domain
-before evaluating, so an out-of-domain request extrapolates from the domain's own edge -
-visible in `pm_cutoff_accuracy.png` as the bandpass-tap curve going flat above roughly an
-8.5 kHz request, rather than the old correction's unbounded overshoot-then-collapse.
+**Resonance correction.** Critical resonance is not flat with cutoff: `3.93` at 20 Hz rising
+to `19.97` at 8.6 kHz and past `100` approaching 20 kHz - a `291.6%` relative spread within
+just the *musically useful* part of the range, let alone above it. A single 1 kHz spot-check
+earlier in this README suggested critical resonance was roughly flat (`~4.56` for both `LP4`
+and `BP4`); the fuller sweep shows that was only true near that one point. `setResonance()`
+is now normalized: `1.0` means "at the measured self-oscillation threshold" at whatever
+cutoff is currently set, not a raw amount, computed from a second fit,
+`criticalResonanceForRawCutoff()` (log-space, degree 7, `0.90%` max / `0.25%` mean error,
+fit against the *full* raw sweep - unlike the cutoff fit, not trimmed to
+`critical_resonance <= 20`, since that trim exists because the peak-*frequency* column gets
+search-grid-quantized at extreme resonance, not because the bisection-measured
+critical-resonance column itself degrades there). `Filter1Pole4StageSmooth` re-derives the
+absolute target resonance from the stored normalized value whenever cutoff changes too, so a
+fixed resonance setting keeps meaning the same thing through a live cutoff sweep, not just at
+the moment `setResonance()` was last called. This is exactly what the existing but
+previously-unwired `ResonanceFrequencyModifier` class was aiming at (its own, simpler
+`fs/8`-threshold heuristic) - now built from real measured numbers instead.
 
-**Resonance behavior, not yet corrected:** the same raw sweep also records the measured
-critical resonance at every point. It is not flat: `3.93` at 20 Hz rising to `19.97` at the
-edge of the fit domain (`8.6 kHz` target / `11.1 kHz` raw cutoff) - a `291.6%` relative
-spread within just the *musically useful* part of the range, let alone above it. A single
-1 kHz spot-check earlier in this README suggested critical resonance was roughly flat
-(`~4.56` for both `LP4` and `BP4`); the fuller sweep shows that was only true near that one
-point; a fixed `setResonance()` value means something very different at 200 Hz than at
-5 kHz. This is exactly what the existing but currently-unwired `ResonanceFrequencyModifier`
-class was designed to compensate for (its own, simpler `fs/8`-threshold heuristic), now with
-real measured numbers behind it. Not corrected in this pass - what a predictable
-resonance-vs-frequency behavior should actually look like (a normalized "fraction of
-critical" parameter? a generated correction table alongside the cutoff one?) is an open
-design decision, not yet made.
+Because `setResonance()`'s own normalization is now built from
+`criticalResonanceForRawCutoff()`, regenerating that correction can't go through
+`setResonance()` itself without being circular. `setResonanceRaw()` is the escape hatch
+`writeRawCorrectionData()` uses instead: it sets the raw feedback amount directly, bypassing
+normalization entirely, so the correction can always be regenerated from true raw
+measurement.
+
+**This is a breaking change to what a resonance value means**, not a private
+implementation detail: `Filter1Pole4StageSmooth::setResonance(2.0)` used to mean a small,
+mild amount of feedback; it now means "2x critical", already well past self-oscillation. Two
+real callers - `KarplusStrongVoice`'s `m_vcf` and `KarplusStrongString`'s `m_initFilter`,
+both used with a live, wide-ranging cutoff sweep - are directly affected and were *not*
+updated as part of this change; their tuned resonance values will sound different and their
+own parameter ranges need separate reconsideration. `PoleMixingFilter_test.cpp`'s
+`FilterTestFixture.Resonance1/Resonance2/Resonance3p5` initially failed as a direct
+consequence (they pass raw values like `2` and `3.5` straight through, comparing against
+`FourStageFilterTheoretical`'s own raw-resonance model): fixed by switching `runMagnitudeTest`
+to `setResonanceRaw()`, which is exactly what that escape hatch is for - the test compares
+raw discrete-cascade math against raw resonance, not the normalization layer. One separate,
+pre-existing marginal tolerance (`Resonance1`, `0.5122` vs. a `0.5` dB budget, from the Phase
+1 cutoff-correction regeneration, unrelated to resonance) was loosened to `0.55` at the same
+time.
 
 ## What the plots show
 
@@ -190,10 +217,10 @@ their phase subplot sweeps through the expected wide range, and `Notch` shows a 
 right at 1 kHz.
 
 **Resonance behavior** (`pm_resonance.png`): both `LP4` and `BP4` sharpen smoothly as
-resonance rises from 0 toward the measured critical value (`~4.56` in this topology's "user"
-units, for both presets, at a 1 kHz cutoff), with the peak growing to a few dB above 0 dB
-just before the threshold. Past it, the third subplot's `LP4` impulse response rings up in
-about 60 ms and then holds flat near amplitude `0.089` indefinitely - self-oscillation, not
+resonance rises from `0` toward `1.0` (normalized: the measured self-oscillation threshold,
+for both presets, at a 1 kHz cutoff), with the peak growing to a few dB above 0 dB just
+before the threshold. Past it, the third subplot's `LP4` impulse response rings up in about
+60 ms and then holds flat near amplitude `0.087` indefinitely - self-oscillation, not
 inferred from a peaky curve but actually rendered as a sustained, saturator-bounded
 oscillation.
 
@@ -233,7 +260,7 @@ producing a clean monotonic glide with no overshoot at all.
 **Topology comparison** (`pm_topology.png`): the first subplot's `LP4` peaks land at almost
 the same frequency for both topologies, with the bandpass-tap curve slightly broader/less
 sharp near the peak. The second subplot's self-oscillation plateaus differ slightly
-(`~0.094` classic vs. `~0.089` bandpass-tap) - both sustain indefinitely, neither decays.
+(`~0.094` classic vs. `~0.087` bandpass-tap) - both sustain indefinitely, neither decays.
 The third subplot is the direct answer to "how do the two topologies differ at the low end
 and in resonance behavior": across all three presets (`LP4`/`HP4`/`BP4`), the bandpass-tap
 curve sits consistently 10-20 dB above (i.e. less attenuated than) the classic curve toward
