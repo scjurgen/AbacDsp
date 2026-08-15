@@ -4,7 +4,8 @@ Dsp code for abacad projects
 ## Goals
 
 Have handy classes for various DSP tasks.
-No dependencies for the dsp code it self (examples and unit-test have submodules based code)
+No dependencies for the dsp code itself (examples and unit-test have submodules based code).
+Support organic interactivity by implementing various types of smoothing and special processes (e.g. OrnsteinUhlenbeck).
 
 ### Library
 

@@ -1,19 +1,10 @@
 # TODO
 
-## Abacdsp (general)
 
-### License compliance
-Check LGPL compliance of the pure library and the examples. Create relative documentation and compliance. Add license information in about boxes for examples.
+## script parameters
+not showing units
 
-### Project goals
-Add general goals of the project:
-
-Library: specialised versions that are typical for music/audio engineering with a balance of efficiency and originality (e.g. 4 pole filters, diffusers, resonance stuff, delays).
-
-Examples are designed to:
-- showcase the library and how to connect the various processing blocks
-- focus on accessibility (online readers, parameters, color contrast)
-- focus on interactive performance using various interface methods (add also multiple performance page options?)
+check the accessibility stuff
 
 ### Blockoperations
 Check if this can be done better (a global concept for multichannel processing).
@@ -27,7 +18,6 @@ Juce clap support: build and how to test?
 Explore a way to have custom performance pages.
 
 ## Maxdiffuser
-- up to 100 diffuser elements
 - random distribution add
 - pitch by relative scale
 - outputs with tuned ringmod reads
