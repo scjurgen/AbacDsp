@@ -79,4 +79,49 @@ TEST(BiquadResoBPTest, quickReleaseDamping)
     EXPECT_LT(currentMax, 1E-4f);
 }
 
+TEST(BiquadResoBPTest, triggeredForcesActiveWindowThenGoesInactive)
+{
+    constexpr float sampleRate{48000.f};
+    BiquadResoBP sut{sampleRate};
+    sut.setByDecay(0, 1000.f, 0.001f); // decayMax = sampleRate * 0.001 = 48 samples
+    sut.reset();
+    sut.triggered();
+
+    EXPECT_TRUE(sut.isActive()); // forced-active branch (m_decayCount > 0)
+
+    size_t activeCalls = 1;
+    while (sut.isActive())
+    {
+        ++activeCalls;
+        ASSERT_LT(activeCalls, 1000u); // must terminate well before this
+    }
+    EXPECT_FALSE(sut.isActive());
+    EXPECT_GE(activeCalls, 48u);
+}
+
+TEST(BiquadResoBPTest, setDecayTreatsArgumentAsMilliseconds)
+{
+    constexpr float sampleRate{48000.f};
+    constexpr float freq = 300.f;
+    constexpr float decayMs = 50.f;
+
+    BiquadResoBP sut{sampleRate};
+    sut.computeCoefficients(0, freq); // establishes K/kSquare at freq
+    sut.setDecay(0, decayMs);
+
+    float peak = 0.f;
+    for (int i = 0; i < 3; ++i)
+    {
+        peak = std::max(peak, sut.step(1024.f));
+    }
+
+    const auto samplesAfterFiveDecays = static_cast<size_t>(sampleRate * decayMs * 0.001f * 5.f);
+    float tail = 0.f;
+    for (size_t i = 0; i < samplesAfterFiveDecays; ++i)
+    {
+        tail = sut.step(0.f);
+    }
+    EXPECT_LT(std::abs(tail), peak * 0.01f);
+}
+
 }

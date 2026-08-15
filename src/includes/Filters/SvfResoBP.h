@@ -71,9 +71,9 @@ class ResonanceCompensation
     [[nodiscard]] static float compensate(const float index, const float time) noexcept
     {
         constexpr float logFirst = 10.f;
-        const auto col =
-            static_cast<size_t>(std::clamp(std::log2(time) + logFirst, 0.f, static_cast<float>(m_times.size() - 2)));
-        const auto col_frac = std::clamp((time - m_times[col]) / (m_times[col + 1] - m_times[col]), 0.0f, 1.0f);
+        const auto trueLogIndex = std::log2(time) + logFirst;
+        const auto col = static_cast<size_t>(std::clamp(trueLogIndex, 0.f, static_cast<float>(m_times.size() - 2)));
+        const auto col_frac = std::clamp(trueLogIndex - static_cast<float>(col), 0.0f, 1.0f);
 
         const auto row =
             static_cast<int>(std::clamp(std::floor(index / 12), 0.f, static_cast<float>(m_lut.size() - 2)));
@@ -144,21 +144,24 @@ class SvfResoBP
         computeCoefficients(index, frequency, Q);
     }
 
+    /// @brief t is milliseconds, unlike setByDecay()'s seconds; converted once and used consistently.
     void setDecay(const size_t index, const float t)
     {
-        m_decayT = t;
-        m_decayMax = static_cast<int>(m_sampleRate * t * 0.001f);
+        const float tSeconds = t * 0.001f;
+        m_decayT = tSeconds;
+        m_decayMax = static_cast<int>(m_sampleRate * tSeconds);
         constexpr auto k = 0.1447648273f;
-        const float Q = std::numbers::pi_v<float> * m_frequency * t * k;
+        const float Q = std::numbers::pi_v<float> * m_frequency * tSeconds * k;
         updateK(index, Q);
     }
 
-    /// @brief Retunes by cents, holding the decay time rather than Q: recomputeCoefficientsWithBend()
-    /// derives k from m_decayT at the bent frequency. Only the active set is updated.
+    /// @brief Retunes by cents, holding decay time rather than Q; updates both coefficient sets.
+    /// Assumes both sets share frequency/decay time (m_frequency/m_decayT are shared, not per-set).
     void pitchBendCents(const float cents) noexcept
     {
         m_pitchBend = cents;
-        recomputeCoefficientsWithBend(m_currentSet);
+        recomputeCoefficientsWithBend(0);
+        recomputeCoefficientsWithBend(1);
     }
 
     void computeCoefficients(const size_t index, const float frequency,
@@ -166,8 +169,8 @@ class SvfResoBP
     {
         m_frequency = frequency;
         m_pitchBend = 0.f;
-        const float k = 1.f / std::max(Q, 0.01f);
-        m_cf[index].k = k;
+        constexpr float decayConst = 0.1447648273f;
+        m_decayT = Q / (std::numbers::pi_v<float> * frequency * decayConst);
         recomputeCoefficientsWithBend(index);
     }
 

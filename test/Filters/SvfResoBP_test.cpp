@@ -289,6 +289,92 @@ TEST(SvfResoBPTest, pumpScalesStateAndResetClears)
     EXPECT_FLOAT_EQ(sut.currentMagnitude(), 0.f);
 }
 
+TEST(SvfResoBPTest, computeCoefficientsAppliesExplicitQ)
+{
+    constexpr float freq = 500.f;
+    constexpr float Q = 3.f;
+    constexpr auto decayConst = 0.1447648273f;
+    const float equivalentDecay = Q / (std::numbers::pi_v<float> * freq * decayConst);
+
+    SvfResoBP viaQ{sampleRate};
+    viaQ.computeCoefficients(0, freq, Q);
+
+    SvfResoBP viaDecay{sampleRate};
+    viaDecay.setByDecay(0, freq, equivalentDecay);
+
+    for (int i = 0; i < 64; ++i)
+    {
+        const float x = i == 0 ? 1024.f : 0.f;
+        EXPECT_FLOAT_EQ(viaQ.step(x), viaDecay.step(x)) << "at sample " << i;
+    }
+}
+
+TEST(SvfResoBPTest, setDecayTreatsArgumentAsMilliseconds)
+{
+    constexpr float freq = 300.f;
+    constexpr float decayMs = 50.f;
+
+    SvfResoBP sut{sampleRate};
+    sut.computeCoefficients(0, freq); // establishes g at freq
+    sut.setDecay(0, decayMs);
+
+    float peak = 0.f;
+    for (int i = 0; i < 3; ++i)
+    {
+        peak = std::max(peak, sut.step(1024.f));
+    }
+
+    const auto samplesAfterFiveDecays = static_cast<size_t>(sampleRate * decayMs * 0.001f * 5.f);
+    float tail = 0.f;
+    for (size_t i = 0; i < samplesAfterFiveDecays; ++i)
+    {
+        tail = sut.step(0.f);
+    }
+    EXPECT_LT(std::abs(tail), peak * 0.01f);
+}
+
+TEST(SvfResoBPTest, pitchBendSurvivesDampSwitch)
+{
+    constexpr float baseFreq = 440.f;
+    constexpr float decayTime = 2.f;
+    constexpr size_t stabilizeSamples = 480;
+    constexpr size_t measureSamples = 4800;
+
+    SvfResoBP sut{sampleRate};
+    sut.damp(false);
+    sut.setByDecay(0, baseFreq, decayTime);
+    sut.setByDecay(1, baseFreq, decayTime);
+    sut.pitchBendCents(1200.f);
+
+    for (size_t i = 0; i < stabilizeSamples; ++i)
+    {
+        (void) sut.step(i == 0 ? 1024.f : 0.f);
+    }
+    sut.damp(true); // switch to the set pitchBendCents() previously left unbent
+
+    std::vector<float> signal(measureSamples);
+    for (size_t i = 0; i < measureSamples; ++i)
+    {
+        signal[i] = sut.step(0.f);
+    }
+
+    const auto stats = calculateZeroCrossingStatistics(signal.data(), measureSamples, true);
+    const float measuredFreq = sampleRate / stats.meanPeriodLen;
+    const float expectedFreq = baseFreq * 2.f; // +1200 cents
+    const float errorPercent = std::abs(measuredFreq - expectedFreq) / expectedFreq * 100.f;
+    EXPECT_LT(errorPercent, 2.f) << "measured=" << measuredFreq << "Hz, expected=" << expectedFreq << "Hz";
+}
+
+TEST(SvfResoBPTest, resonanceCompensationClampsAtDomainEdges)
+{
+    const auto atEdge = ResonanceCompensation::compensate(60.f, 64.f);
+    const auto pastEdge = ResonanceCompensation::compensate(60.f, 128.f);
+    EXPECT_FLOAT_EQ(atEdge, pastEdge);
+
+    const auto belowEdge = ResonanceCompensation::compensate(60.f, 48.f);
+    EXPECT_GT(atEdge, belowEdge);
+}
+
 TEST(SvfResoBPTest, setSampleRateMatchesConstructionAtThatRate)
 {
     SvfResoBP constructed{44100.f};

@@ -201,10 +201,15 @@ class BiquadResoBPParallelSIMD
         m_z1[groupIndex][laneIndex] = v2;
     }
 
+    /// @brief Response of one element's coefficient set at hz against the object's own sample rate.
+    [[nodiscard]] float magnitude(const size_t mainIndex, const size_t subIndex, const float hz) const noexcept
+    {
+        return magnitude(mainIndex, subIndex, hz, m_sampleRate);
+    }
+
     /// @brief Response of one element's coefficient set at hz, returned in decibels despite the name.
-    /// Evaluated against the sampleRate argument, not the object's own, so the 48 kHz default can mislead.
     [[nodiscard]] float magnitude(const size_t mainIndex, const size_t subIndex, const float hz,
-                                  const float sampleRate = 48000.f) const noexcept
+                                  const float sampleRate) const noexcept
     {
         const auto b0 = static_cast<double>(m_cf[mainIndex][subIndex].b0);
         const auto a1 = static_cast<double>(m_cf[mainIndex][subIndex].a1);
@@ -222,10 +227,14 @@ class BiquadResoBPParallelSIMD
     }
 
     /// @brief Reports inactive after 32 consecutive calls with both state words under 1e-5.
-    /// Reads m_z, which the SIMD paths never write, so the answer only tracks reality in a scalar build.
+    /// Reads the lane-major state process() actually advances, not m_z, which only reset() writes.
     [[nodiscard]] bool isActive(const size_t mainIndex) noexcept
     {
-        if (std::abs(m_z[mainIndex][0]) > 1E-5f || std::abs(m_z[mainIndex][1]) > 1E-5f)
+        const size_t groupIndex = mainIndex / 4;
+        const size_t laneIndex = mainIndex % 4;
+        const float z0 = m_z0[groupIndex][laneIndex];
+        const float z1 = m_z1[groupIndex][laneIndex];
+        if (std::abs(z0) > 1E-5f || std::abs(z1) > 1E-5f)
         {
             m_inActiveCount[mainIndex] = 0;
         }

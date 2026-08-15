@@ -51,8 +51,6 @@ class BiquadResoBP
         m_sampleRate = sampleRate;
     }
 
-    float m_sampleRate{48000.f};
-
     void setByDecay(const size_t index, const float frequency, const float t)
     {
         m_decayMax = static_cast<int>(m_sampleRate * t);
@@ -61,13 +59,14 @@ class BiquadResoBP
         computeCoefficients(index, frequency, Q);
     }
 
-    /// @brief Sets Q from a decay time, reusing the K and kSquare left behind by the last
-    /// computeCoefficients() call. It therefore applies to that call's frequency, never a new one.
+    /// @brief t is milliseconds, converted to seconds before use. Reuses the K and kSquare left
+    /// behind by the last computeCoefficients() call, so it applies to that call's frequency only.
     void setDecay(const size_t index, const float t)
     {
-        m_decayMax = static_cast<int>(m_sampleRate * t * 0.001f);
+        const float tSeconds = t * 0.001f;
+        m_decayMax = static_cast<int>(m_sampleRate * tSeconds);
         constexpr auto k = 0.1447648273f; // 1.f / std::log(1000.f); //  1/6.9078f
-        const float Q = std::numbers::pi_v<float> * m_frequency * t * k;
+        const float Q = std::numbers::pi_v<float> * m_frequency * tSeconds * k;
         const auto kqCl = K / std::max(Q, 0.01f);
         const auto norm = 1.f / (1 + kqCl + kSquare);
         m_cf[index].b0 = kqCl * norm;
@@ -144,9 +143,14 @@ class BiquadResoBP
         return std::sqrt(currentMagnitudeSquared());
     }
 
+    /// @brief Response of coefficient set index at hz against the object's own sample rate, in decibels.
+    [[nodiscard]] float magnitude(const size_t index, const float hz) const noexcept
+    {
+        return magnitude(index, hz, m_sampleRate);
+    }
+
     /// @brief Response of coefficient set index at hz, returned in decibels despite the name.
-    /// Evaluated against the sampleRate argument, not the object's own, so the 48 kHz default can mislead.
-    [[nodiscard]] float magnitude(const size_t index, const float hz, const float sampleRate = 48000.f) const noexcept
+    [[nodiscard]] float magnitude(const size_t index, const float hz, const float sampleRate) const noexcept
     {
         const auto b0 = static_cast<double>(m_cf[index].b0);
         const auto a1 = static_cast<double>(m_cf[index].a1);
@@ -167,6 +171,7 @@ class BiquadResoBP
     {
         if (m_decayCount > 0)
         {
+            m_decayCount--;
             return true;
         }
         if (std::abs(m_z[0]) > 1E-6f || std::abs(m_z[1]) > 1E-6f)
@@ -186,6 +191,7 @@ class BiquadResoBP
     }
 
   private:
+    float m_sampleRate{48000.f};
     size_t m_currentSet{0};
     int m_decayCount{0};
     int m_decayMax{0};

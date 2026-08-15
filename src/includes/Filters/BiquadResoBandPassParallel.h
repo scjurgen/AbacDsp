@@ -44,8 +44,6 @@ class BiquadResoBandPassParallel
         m_sampleRate = sampleRate;
     }
 
-    float m_sampleRate{48000.f};
-
     void setByDecay(const size_t mainIndex, const size_t index, const float frequency, const float t)
     {
         constexpr auto k = 0.1447648273f; // 1.f / std::log(1000.f); //  1/6.9078f
@@ -108,10 +106,15 @@ class BiquadResoBandPassParallel
         m_z[mainIndex][1] = v2;
     }
 
+    /// @brief Response of one element's coefficient set at hz against the object's own sample rate.
+    [[nodiscard]] float magnitude(const size_t mainIndex, const size_t subIndex, const float hz) const noexcept
+    {
+        return magnitude(mainIndex, subIndex, hz, m_sampleRate);
+    }
+
     /// @brief Response of one element's coefficient set at hz, returned in decibels despite the name.
-    /// Evaluated against the sampleRate argument, not the object's own, so the 48 kHz default can mislead.
     [[nodiscard]] float magnitude(const size_t mainIndex, const size_t subIndex, const float hz,
-                                  const float sampleRate = 48000.f) const noexcept
+                                  const float sampleRate) const noexcept
     {
         const auto b0 = static_cast<double>(m_cf[mainIndex][subIndex].b0);
         const auto a1 = static_cast<double>(m_cf[mainIndex][subIndex].a1);
@@ -144,6 +147,7 @@ class BiquadResoBandPassParallel
     }
 
   private:
+    float m_sampleRate{48000.f};
     std::array<size_t, NumElements> m_currentSet{};
     std::array<int, NumElements> m_inActiveCount{};
     std::array<std::array<BandPassCoefficients, 2>, NumElements> m_cf{};
