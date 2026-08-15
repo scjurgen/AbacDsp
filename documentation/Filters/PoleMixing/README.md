@@ -9,6 +9,11 @@ change while the filter is running, and the difference between the two resonance
 still in the file: classic last-stage feedback (`FixedFourStageFilter`) and bandpass-tap
 feedback (`Filter1Pole4StageSmooth`).
 
+This folder is also where `src/includes/Filters/PoleMixingCorrections_generated.h` -
+`Filter1Pole4StageSmooth`'s cutoff correction - is regenerated from: measure the raw,
+uncorrected filter directly, fit a correction from that measurement, emit it as C++. See
+"Regenerating the cutoff correction" below.
+
 `pm_response.png`, `pm_resonance.png`, `pm_overdrive.png`, `pm_cutoff_accuracy.png`,
 `pm_realtime.png` and `pm_topology.png` in this folder are checked-in samples of all six
 plots, produced by the pipeline described here.
@@ -27,8 +32,9 @@ The C++ side only writes plain text; all plotting is done by the shared
 
 Build (enabled behind the `EXPLORE_STUFF` CMake option; no `dev-scripts/` wrapper covers
 this, so configure/build directly) and run it, from the repo root (optional arguments are
-the six output files, default `pm_response.txt` / `pm_resonance.txt` / `pm_overdrive.txt` /
-`pm_cutoff_accuracy.txt` / `pm_realtime.txt` / `pm_topology.txt`):
+the seven output files, default `pm_response.txt` / `pm_resonance.txt` / `pm_overdrive.txt` /
+`pm_cutoff_accuracy.txt` / `pm_realtime.txt` / `pm_topology.txt` /
+`pm_raw_correction_data.txt`):
 
 ```bash
 mkdir -p build && cd build
@@ -90,6 +96,11 @@ sweeps for the topology that has no closed form (see below) and to locate resona
   self-oscillation envelope (105% of critical, single impulse, `LP4`). The third is the
   comparison requested directly: `LP4`, `HP4` and `BP4`, each drawn twice (classic feedback
   vs. bandpass-tap feedback), six curves in one plot, all normalized to their own peak.
+- `pm_raw_correction_data.txt`: not `PyConPlot` format - plain columns
+  (`raw_cutoff_hz measured_peak_hz critical_resonance`), one row per raw cutoff swept with
+  `setCutoffFrequencyClean()` (i.e. no correction applied at all) on the same
+  third-of-a-semitone grid, 20 Hz-20 kHz. This is `fitCutoffCorrection.py`'s input; see
+  "Regenerating the cutoff correction" below.
 
 ## Rendering the plots
 
@@ -119,6 +130,56 @@ python3 ../../Plot/PyConPlot.py -f ../../../build/pm_topology.txt -o pm_topology
     --labelx "frequency (Hz) / time (s)" --labely "magnitude (dB) / amplitude" --width 1200 --height 350 --cols 1
 ```
 
+## Regenerating the cutoff correction
+
+`Filter1Pole4StageSmooth::adaptResonanceFrequency()` used to be a hand-fit piecewise cubic.
+`fitCutoffCorrection.py` replaces it with one regenerated from direct measurement, following
+the same measure -> `curve_fit` -> emit-C++ pattern as
+`documentation/Filters/BandpassImpulses/fitBandPassCompensation.py`:
+
+```bash
+python3 fitCutoffCorrection.py -f pm_raw_correction_data.txt \
+    -o ../../../src/includes/Filters/PoleMixingCorrections_generated.h --degree 7
+```
+
+This is a separate, deliberate step - not part of `generate.sh` - since it overwrites a file
+under `src/includes/`, real library source, not a documentation artifact.
+
+The old correction was fit against `pm_cutoff_accuracy.txt`-style data: target vs. the
+*already-corrected* cutoff. That's circular by construction, and `adaptResonanceFrequency
+(12000)` evaluates to about 25.3 kHz - past Nyquist at 48 kHz - before that value is even
+used to place the pole, which is almost certainly why the old correction's error blew up the
+way `pm_cutoff_accuracy.png` showed. `fitCutoffCorrection.py` instead fits directly against
+`pm_raw_correction_data.txt`'s raw (`setCutoffFrequencyClean()`) sweep, so the fit can never
+itself reason about a past-Nyquist value.
+
+It fits `log(raw_cutoff) = polynomial(log(target_frequency))` - log-space rather than the old
+model's plain cubic in linear Hz, since a single low-degree polynomial does not fit a
+multiplicative (octave-spanning) relationship well in linear space. The script prints both
+for comparison: refit to the same data, the old model shape's error is `26.9%` max / `3.8%`
+mean; the log-space degree-7 fit is `1.55%` max / `0.52%` mean, over its measured domain
+(`20 Hz-8.6 kHz`, i.e. `critical_resonance <= 20` - see below for why that domain limit).
+Points are excluded above `critical_resonance = 20`: past there the resonance peak is so
+broad that the peak-search grid can no longer resolve it precisely, and no real patch would
+run resonance that high anyway. The generated function clamps its input to that domain
+before evaluating, so an out-of-domain request extrapolates from the domain's own edge -
+visible in `pm_cutoff_accuracy.png` as the bandpass-tap curve going flat above roughly an
+8.5 kHz request, rather than the old correction's unbounded overshoot-then-collapse.
+
+**Resonance behavior, not yet corrected:** the same raw sweep also records the measured
+critical resonance at every point. It is not flat: `3.93` at 20 Hz rising to `19.97` at the
+edge of the fit domain (`8.6 kHz` target / `11.1 kHz` raw cutoff) - a `291.6%` relative
+spread within just the *musically useful* part of the range, let alone above it. A single
+1 kHz spot-check earlier in this README suggested critical resonance was roughly flat
+(`~4.56` for both `LP4` and `BP4`); the fuller sweep shows that was only true near that one
+point; a fixed `setResonance()` value means something very different at 200 Hz than at
+5 kHz. This is exactly what the existing but currently-unwired `ResonanceFrequencyModifier`
+class was designed to compensate for (its own, simpler `fs/8`-threshold heuristic), now with
+real measured numbers behind it. Not corrected in this pass - what a predictable
+resonance-vs-frequency behavior should actually look like (a normalized "fraction of
+critical" parameter? a generated correction table alongside the cutoff one?) is an open
+design decision, not yet made.
+
 ## What the plots show
 
 **Response curves** (`pm_response.png`) match every represented preset's own name: the `LPn`
@@ -145,26 +206,18 @@ point, and the harmonic ladder (300 Hz probe, harmonics stepping up through the 
 grows the same way with level in both. The two saturators' curves only pull apart
 noticeably at much larger `x`, outside what's driven here.
 
-**Cutoff-frequency correctness** (`pm_cutoff_accuracy.png`): both correction tables track the
-`y=x` line closely from 100 Hz up to almost exactly 2800 Hz - which is precisely
-`adaptResonanceFrequency()`'s own documented cubic break. Above that seam,
-`Filter1Pole4StageSmooth`'s correction overshoots hard: the error grows through the 3-9 kHz
-region and peaks around `+47%` near a 5 kHz request (measured peak ~7.3 kHz). Past that
-worst point the error shrinks again as the request climbs, the two topologies' curves
-actually cross near 10 kHz (both measuring ~10.7 kHz, ~+7% high), and then - the more
-interesting finding once the sweep was zoomed in - the bandpass-tap measured peak
-frequency stops climbing at all above roughly an 11 kHz request. It plateaus at
-`~11.4 kHz` and won't go any higher no matter how much higher the requested cutoff goes (up
-to the 12 kHz tested here); that reads as a real ceiling on how high this topology's
-resonant peak can sit at this sample rate, not merely a correction table drifting.
-`FixedFourStageFilter`'s `warpCutoffForSampleRate`, in contrast, tracks closely (within about
-4%, mostly undershooting) all the way to roughly 8-9 kHz - well past where the bandpass-tap
-correction has already failed badly - but then it, too, starts overshooting, and keeps
-growing: by a 12 kHz request it measures `~15.6 kHz`, a `+30%` error, worse in absolute terms
-at that specific point than the bandpass-tap topology's plateau-induced undershoot. Neither
-correction is simply "the accurate one": the classic table is far more trustworthy through
-the middle of the range, but the bandpass-tap topology's own physical ceiling means it can't
-overshoot without bound the way the classic one does at the very top.
+**Cutoff-frequency correctness** (`pm_cutoff_accuracy.png`): after regenerating
+`Filter1Pole4StageSmooth`'s correction from direct raw-filter measurement (see
+"Regenerating the cutoff correction" above), the bandpass-tap curve now tracks `y=x` closely
+across essentially the whole range that was previously broken - visually indistinguishable
+from the reference line from 100 Hz up to about 8.5 kHz, where the old correction's error had
+peaked near `+47%`. Above ~8.5 kHz the curve goes flat at its fit domain's own edge (by
+design - see above - rather than the old correction's unbounded overshoot). Note this domain
+limit is a property of the *correction*, regenerated to stay honest about how far its
+measurement covered, not evidence the underlying filter itself cannot resonate higher.
+`FixedFourStageFilter`'s `warpCutoffForSampleRate` is untouched by this work and shows the
+same behavior as before: tracks within about 4% up to roughly 8-9 kHz, then increasingly
+overshoots, reaching `+30%` (`~15.6 kHz` measured) by a 12 kHz request.
 
 **Real-time behavior** (`pm_realtime.png`): the cutoff jump shows the documented difference
 directly - `FixedFourStageFilter`'s linear ramp (driven through `processBlock()`, since

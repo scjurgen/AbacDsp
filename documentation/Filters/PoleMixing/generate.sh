@@ -13,7 +13,8 @@ cmake --build "$BUILD_DIR" --target PoleMixingExplore
 
 "$BUILD_DIR/documentation/Filters/PoleMixing/PoleMixingExplore" \
     "$SCRIPT_DIR/pm_response.txt" "$SCRIPT_DIR/pm_resonance.txt" "$SCRIPT_DIR/pm_overdrive.txt" \
-    "$SCRIPT_DIR/pm_cutoff_accuracy.txt" "$SCRIPT_DIR/pm_realtime.txt" "$SCRIPT_DIR/pm_topology.txt"
+    "$SCRIPT_DIR/pm_cutoff_accuracy.txt" "$SCRIPT_DIR/pm_realtime.txt" "$SCRIPT_DIR/pm_topology.txt" \
+    "$SCRIPT_DIR/pm_raw_correction_data.txt"
 
 if [ ! -d "$SCRIPT_DIR/.venv" ]; then
     python3 -m venv "$SCRIPT_DIR/.venv"

@@ -608,19 +608,50 @@ void writeTopology(std::ofstream& out)
     writeTopologyPairForPreset<AbacDsp::Hp24Smooth>(out, "HP4");
     writeTopologyPairForPreset<AbacDsp::Bp24Smooth>(out, "BP4");
 }
+
+// ---- raw (uncorrected) cutoff/resonance data, for fitCutoffCorrection.py ----
+
+/// @brief Plain columns, not PyConPlot format: this feeds a curve-fitting script, not a plot.
+/// Swept against setCutoffFrequencyClean() - the raw pole parameter, with no correction
+/// applied - so the fit built from this data can never itself push a target past Nyquist,
+/// unlike the requested-cutoff-based sweep in pm_cutoff_accuracy.txt.
+void writeRawCorrectionData(std::ofstream& out)
+{
+    const float thirdSemitone = std::pow(2.f, 1.f / 36.f);
+    const auto& cf = AbacDsp::poleMixingList[AbacDsp::findFilterIndex("LP4")].cf;
+
+    out << "# raw_cutoff_hz measured_peak_hz critical_resonance\n";
+    for (const float rawCutoff : geometricSweep(20.f, 20000.f, thirdSemitone))
+    {
+        const auto makeFilter = [&cf, rawCutoff](const float resonance)
+        {
+            AbacDsp::Filter1Pole4StageSmooth f(kSampleRate);
+            f.setFilterCoefficients(cf);
+            f.setParameterSmoothTimeMs(2.f);
+            f.setCutoffFrequencyClean(rawCutoff);
+            f.setResonance(resonance);
+            return f;
+        };
+        const float critical = findCriticalResonance(makeFilter);
+        auto filter = makeFilter(critical * 0.9f);
+        const float peak = findPeakFrequency(filter, 20.f, 22000.f);
+        out << rawCutoff << " " << peak << " " << critical << "\n";
+    }
+}
 }
 
 int main(int argc, char* argv[])
 {
-    const std::array<std::string, 6> defaultNames{"pm_response.txt",        "pm_resonance.txt", "pm_overdrive.txt",
-                                                  "pm_cutoff_accuracy.txt", "pm_realtime.txt",  "pm_topology.txt"};
-    std::array<std::string, 6> paths{};
+    const std::array<std::string, 7> defaultNames{"pm_response.txt",           "pm_resonance.txt", "pm_overdrive.txt",
+                                                  "pm_cutoff_accuracy.txt",    "pm_realtime.txt",  "pm_topology.txt",
+                                                  "pm_raw_correction_data.txt"};
+    std::array<std::string, 7> paths{};
     for (size_t i = 0; i < paths.size(); ++i)
     {
         paths[i] = (static_cast<int>(i) + 1 < argc) ? argv[i + 1] : defaultNames[i];
     }
 
-    std::array<std::ofstream, 6> outs{};
+    std::array<std::ofstream, 7> outs{};
     for (size_t i = 0; i < outs.size(); ++i)
     {
         outs[i].open(paths[i]);
@@ -631,12 +662,20 @@ int main(int argc, char* argv[])
         }
     }
 
+    std::cout << "response:" << std::endl;
     writeResponse(outs[0]);
+    std::cout << "resonance:" << std::endl;
     writeResonance(outs[1]);
+    std::cout << "overdrive:" << std::endl;
     writeOverdrive(outs[2]);
+    std::cout << "cutoff accuracy:" << std::endl;
     writeCutoffAccuracy(outs[3]);
+    std::cout << "real time:" << std::endl;
     writeRealtime(outs[4]);
+    std::cout << "topology:" << std::endl;
     writeTopology(outs[5]);
+    std::cout << "raw correction:" << std::endl;
+    writeRawCorrectionData(outs[6]);
 
     std::cout << "PoleMixingExplore: wrote";
     for (const auto& p : paths)

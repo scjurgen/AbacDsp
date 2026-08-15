@@ -11,6 +11,8 @@
 #include <string_view>
 #include <vector>
 
+#include "Filters/PoleMixingCorrections_generated.h"
+
 /**
  * @file
  * @ingroup filters
@@ -334,7 +336,6 @@ class FourStageFilterTheoretical
     constexpr std::array<std::complex<T>, 5> stage_outputs(T p, T w) const
     {
         // output of each stage for input 1 (not including numerator weights)
-        std::complex<T> z = std::polar(T(1), T(-w));
         std::array<std::complex<T>, 5> y{};
         y[0] = T(1.0); // Input
         for (size_t i = 1; i < 5; ++i)
@@ -635,16 +636,11 @@ class Filter1Pole4StageSmooth
     }
 
     /// @brief Warps a requested cutoff onto the frequency the discrete cascade actually resonates at.
-    /// Piecewise cubic fit with a break at 2800 Hz, cheaper than solving the pole placement directly.
+    /// Regenerated from direct measurement of the raw (uncorrected) filter; see
+    /// PoleMixingCorrections_generated.h and documentation/Filters/PoleMixing/README.md.
     [[nodiscard]] static float adaptResonanceFrequency(const float x) noexcept
     {
-        if (x > 2800.f)
-        {
-            return std::clamp(-11224.374f + 6.806917f * x - 7.332340e-4f * x * x + 3.496297e-8f * x * x * x, 10.f,
-                              22000.f);
-        }
-        return std::clamp(-0.03223791634f + 1.005588288f * x - 3.971210551e-06f * x * x + 3.645793593e-09f * x * x * x,
-                          10.f, 22000.f);
+        return correctedRawCutoffForTargetFrequency(x);
     }
 
     void setCutoffFrequency(const float cutoffFrequency) noexcept
