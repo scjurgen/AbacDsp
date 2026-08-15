@@ -335,7 +335,15 @@ void writeOverdrive(std::ofstream& out)
 
 // ---- cutoff-frequency correctness, just below self-oscillation ----
 
-constexpr std::array<float, 8> kCutoffSweep{100.f, 200.f, 400.f, 800.f, 1600.f, 3200.f, 6400.f, 10000.f};
+[[nodiscard]] std::vector<float> geometricSweep(const float loHz, const float hiHz, const float ratio)
+{
+    std::vector<float> hz;
+    for (float f = loHz; f <= hiHz; f *= ratio)
+    {
+        hz.push_back(f);
+    }
+    return hz;
+}
 
 float measurePeakFrequencyClassic(const float requestedCutoff)
 {
@@ -368,24 +376,34 @@ float measurePeakFrequencyBandpass(const float requestedCutoff)
     return findPeakFrequency(filter, 50.f, 20000.f);
 }
 
-void writeCutoffAccuracy(std::ofstream& out)
+void writeCutoffAccuracySweep(std::ofstream& out, const std::vector<float>& sweep)
 {
-    out << "@New plot: title=\"resonant-peak frequency vs. requested cutoff\" logx=true logy=true\n";
     out << "#y=x (requested)\n";
-    for (const float hz : kCutoffSweep)
+    for (const float hz : sweep)
     {
         out << hz << " " << hz << "\n";
     }
     out << "#classic (warpCutoffForSampleRate)\n";
-    for (const float requested : kCutoffSweep)
+    for (const float requested : sweep)
     {
         out << requested << " " << measurePeakFrequencyClassic(requested) << "\n";
     }
     out << "#bandpass-tap (adaptResonanceFrequency)\n";
-    for (const float requested : kCutoffSweep)
+    for (const float requested : sweep)
     {
         out << requested << " " << measurePeakFrequencyBandpass(requested) << "\n";
     }
+}
+
+void writeCutoffAccuracy(std::ofstream& out)
+{
+    const float thirdSemitone = std::pow(2.f, 1.f / 36.f); // 36 steps/octave: a musical, not arbitrary, grid
+
+    out << "@New plot: title=\"resonant-peak frequency vs. requested cutoff\" logx=true logy=true\n";
+    writeCutoffAccuracySweep(out, geometricSweep(100.f, 12000.f, thirdSemitone));
+
+    out << "@New plot: title=\"resonant-peak frequency vs. requested cutoff (zoom: 1000-12000 Hz)\"\n";
+    writeCutoffAccuracySweep(out, geometricSweep(1000.f, 12000.f, thirdSemitone));
 }
 
 // ---- real-time behavior when cutoff/resonance change while running ----

@@ -70,7 +70,13 @@ sweeps for the topology that has no closed form (see below) and to locate resona
   correction under test is exactly what might move the peak far from the request), at 90% of
   each topology's own critical resonance, for both `FixedFourStageFilter`
   (`warpCutoffForSampleRate` correction) and `Filter1Pole4StageSmooth`
-  (`adaptResonanceFrequency` correction).
+  (`adaptResonanceFrequency` correction). Two subplots: a 100 Hz-12 kHz overview (log-log)
+  and a 1000-12 kHz zoom (linear axes, so the divergence isn't visually compressed by the
+  log scale), both swept on a musical grid - a third of a semitone per step
+  (`2^(1/36)`) - rather than an arbitrary round-number step size. This is by far the most
+  expensive plot to generate (roughly 250 requested-cutoff points per topology, each one its
+  own critical-resonance bisection plus a full peak search): `generate.sh` takes on the order
+  of a minute or two because of it, not seconds.
 - `pm_realtime.txt`: two subplots, a 1500 Hz probe tone through an `LP4` filter with a
   cutoff jump (800 -> 4000 Hz) partway through, and a probe tone at cutoff through an `LP4`
   filter with a resonance jump (0 -> 90% of critical) partway through - each showing
@@ -140,17 +146,25 @@ grows the same way with level in both. The two saturators' curves only pull apar
 noticeably at much larger `x`, outside what's driven here.
 
 **Cutoff-frequency correctness** (`pm_cutoff_accuracy.png`): both correction tables track the
-`y=x` line closely from 100 Hz up to roughly 1.5-2 kHz. Above that they diverge differently.
-`FixedFourStageFilter`'s `warpCutoffForSampleRate` stays close throughout, landing about 4%
-under the request in the low-to-mid range and only overshooting (+7%) at the very top of
-the sweep (10 kHz requested -> ~10.7 kHz measured). `Filter1Pole4StageSmooth`'s
-`adaptResonanceFrequency` (which has its own cubic break at 2800 Hz) overshoots
-substantially in the region right above that break - at 6.4 kHz requested the measured peak
-is closer to 8.8 kHz, a `+37%` error - before both curves converge back close together near
-10 kHz. This is a genuine, reproducible measurement (confirmed by widening the peak search
-from a window around the request to a full 50 Hz-20 kHz sweep with no change in the result):
-the bandpass-tap correction's accuracy is noticeably worse than the classic one's in the
-upper-mid band, not just close-but-not-exact everywhere.
+`y=x` line closely from 100 Hz up to almost exactly 2800 Hz - which is precisely
+`adaptResonanceFrequency()`'s own documented cubic break. Above that seam,
+`Filter1Pole4StageSmooth`'s correction overshoots hard: the error grows through the 3-9 kHz
+region and peaks around `+47%` near a 5 kHz request (measured peak ~7.3 kHz). Past that
+worst point the error shrinks again as the request climbs, the two topologies' curves
+actually cross near 10 kHz (both measuring ~10.7 kHz, ~+7% high), and then - the more
+interesting finding once the sweep was zoomed in - the bandpass-tap measured peak
+frequency stops climbing at all above roughly an 11 kHz request. It plateaus at
+`~11.4 kHz` and won't go any higher no matter how much higher the requested cutoff goes (up
+to the 12 kHz tested here); that reads as a real ceiling on how high this topology's
+resonant peak can sit at this sample rate, not merely a correction table drifting.
+`FixedFourStageFilter`'s `warpCutoffForSampleRate`, in contrast, tracks closely (within about
+4%, mostly undershooting) all the way to roughly 8-9 kHz - well past where the bandpass-tap
+correction has already failed badly - but then it, too, starts overshooting, and keeps
+growing: by a 12 kHz request it measures `~15.6 kHz`, a `+30%` error, worse in absolute terms
+at that specific point than the bandpass-tap topology's plateau-induced undershoot. Neither
+correction is simply "the accurate one": the classic table is far more trustworthy through
+the middle of the range, but the bandpass-tap topology's own physical ceiling means it can't
+overshoot without bound the way the classic one does at the very top.
 
 **Real-time behavior** (`pm_realtime.png`): the cutoff jump shows the documented difference
 directly - `FixedFourStageFilter`'s linear ramp (driven through `processBlock()`, since
