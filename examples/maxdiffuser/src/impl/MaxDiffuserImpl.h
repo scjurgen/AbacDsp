@@ -16,6 +16,7 @@
 #include "Filters/Distortion.h"
 #include "Helpers/ConstructArray.h"
 #include "Numbers/Convert.h"
+#include "Parameters/SmoothingParameter.h"
 #include "Reverbs/FdnTankGlide.h"
 
 template <size_t BlockSize>
@@ -117,12 +118,12 @@ class MaxDiffuserImpl final : public EffectBase
 
     void setDry(const float value)
     {
-        m_dry = Convert::dbToGain(value);
+        m_dry.newTransition(Convert::dbToGain(value), kParamSmoothingSeconds, sampleRate());
     }
 
     void setWet(const float value)
     {
-        m_wet = Convert::dbToGain(value);
+        m_wet.newTransition(Convert::dbToGain(value), kParamSmoothingSeconds, sampleRate());
     }
 
     // Delays the unpitched signal fed into the diffuser chain (independent of the final
@@ -388,7 +389,7 @@ class MaxDiffuserImpl final : public EffectBase
 
     void setFdnMix(const float value)
     {
-        m_fdnMix = Convert::dbToGain(value);
+        m_fdnMix.newTransition(Convert::dbToGain(value), kParamSmoothingSeconds, sampleRate());
     }
 
     void setFdnSize(const float meters)
@@ -528,11 +529,21 @@ class MaxDiffuserImpl final : public EffectBase
             m_reverbShelfHigh[c].processBlock(fdnOut[c].data(), fdnOut[c].data(), BlockSize);
         }
 
+        std::array<float, BlockSize> dryBlock{};
+        std::array<float, BlockSize> wetBlock{};
+        std::array<float, BlockSize> fdnMixBlock{};
+        for (size_t i = 0; i < BlockSize; ++i)
+        {
+            dryBlock[i] = m_dry.getValue();
+            wetBlock[i] = m_wet.getValue();
+            fdnMixBlock[i] = m_fdnMix.getValue();
+        }
+
         for (size_t c = 0; c < 2; ++c)
         {
             for (size_t i = 0; i < BlockSize; ++i)
             {
-                out(i, c) = m_dry * in(i, c) + m_wet * wetData[c][i] + m_fdnMix * fdnOut[c][i];
+                out(i, c) = dryBlock[i] * in(i, c) + wetBlock[i] * wetData[c][i] + fdnMixBlock[i] * fdnOut[c][i];
             }
         }
     }
@@ -560,9 +571,10 @@ class MaxDiffuserImpl final : public EffectBase
 
     size_t m_elements{6};
     float m_bulge{0.46f};
-    float m_dry{1.f};
-    float m_wet{0.5f};
-    float m_fdnMix{0.f};
+    static constexpr float kParamSmoothingSeconds{0.01f};
+    AbacDsp::LinearSmoothing m_dry{1.f};
+    AbacDsp::LinearSmoothing m_wet{0.5f};
+    AbacDsp::LinearSmoothing m_fdnMix{0.f};
     float m_modulationDepth{0.f};
     float m_modulationSpeed{0.5f};
     std::array<Chain, 2> m_diffuser;

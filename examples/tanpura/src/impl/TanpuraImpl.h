@@ -13,6 +13,7 @@
 #include "Generators/OrnsteinUhlenbeckProcess.h"
 #include "Helpers/ConstructArray.h"
 #include "Numbers/Convert.h"
+#include "Parameters/SmoothingParameter.h"
 #include "PluckSequencer.h"
 #include "Reverbs/FdnTankGlide.h"
 
@@ -46,7 +47,7 @@ class TanpuraImpl final : public EffectBase
 
     void setLevel(const float value)
     {
-        m_level = Convert::dbToGain(value);
+        m_level.newTransition(Convert::dbToGain(value), kParamSmoothingSeconds, sampleRate());
     }
 
     void setTuning(const float value)
@@ -288,8 +289,9 @@ class TanpuraImpl final : public EffectBase
 
         for (size_t i = 0; i < BlockSize; ++i)
         {
-            out(i, 0) = (dry[i] * m_reverbDryGain + wetLeft[i] * m_reverbWetGain) * m_level;
-            out(i, 1) = (dry[i] * m_reverbDryGain + wetRight[i] * m_reverbWetGain) * m_level;
+            const float level = m_level.getValue();
+            out(i, 0) = (dry[i] * m_reverbDryGain + wetLeft[i] * m_reverbWetGain) * level;
+            out(i, 1) = (dry[i] * m_reverbDryGain + wetRight[i] * m_reverbWetGain) * level;
         }
     }
 
@@ -402,7 +404,8 @@ class TanpuraImpl final : public EffectBase
     std::array<float, kNumVoices> m_lastVoiceLfoSpeed{};
     std::array<float, kNumVoices> m_lastVoiceSustainFeed{};
 
-    float m_level{1.f};
+    static constexpr float kParamSmoothingSeconds{0.01f};
+    AbacDsp::LinearSmoothing m_level{1.f};
     float m_reverbDryGain{1.f};
     float m_reverbWetGain{0.f};
     float m_manualBpm{120.f};

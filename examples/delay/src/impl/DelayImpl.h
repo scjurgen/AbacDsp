@@ -9,6 +9,7 @@
 #include "EffectBase.h"
 #include "Filters/OnePoleFilter.h"
 #include "Helpers/ConstructArray.h"
+#include "Parameters/SmoothingParameter.h"
 
 template <size_t BlockSize>
 class DelayImpl final : public EffectBase
@@ -65,7 +66,7 @@ class DelayImpl final : public EffectBase
 
     void setDry(const float value)
     {
-        m_dryGain = std::pow(10.f, value / 20.f);
+        m_dryGain.newTransition(std::pow(10.f, value / 20.f), kParamSmoothingSeconds, sampleRate());
     }
 
     void setFeedback(const float valueInPercentage)
@@ -135,7 +136,7 @@ class DelayImpl final : public EffectBase
 
     void setWet(const float value)
     {
-        m_wetGain = std::pow(10.f, value / 20.f);
+        m_wetGain.newTransition(std::pow(10.f, value / 20.f), kParamSmoothingSeconds, sampleRate());
     }
 
     void setLowPassCutoff(const float cutoff)
@@ -168,6 +169,8 @@ class DelayImpl final : public EffectBase
 
         for (size_t i = 0; i < BlockSize; ++i)
         {
+            const float wetGain = m_wetGain.getValue();
+            const float dryGain = m_dryGain.getValue();
             for (size_t c = 0; c < 2; ++c)
             {
                 const float dry = in(i, c);
@@ -175,7 +178,7 @@ class DelayImpl final : public EffectBase
                     m_highPass[c].step(m_lowPass[c].step(dry * m_gain + m_feedBack * m_lastValue[c])));
                 const auto value = m_delay[c].step(filteredValue);
                 m_lastValue[c] = value;
-                out(i, c) = value * m_wetGain + m_dryGain * dry;
+                out(i, c) = value * wetGain + dryGain * dry;
             }
         }
         m_visualWavedata[m_currentSample] = out(0, 0);
@@ -209,8 +212,9 @@ class DelayImpl final : public EffectBase
     std::vector<float> m_visualWavedata;
     std::vector<float> m_preparedWavedata;
     size_t m_currentSample = 0;
-    float m_wetGain{0.2f};
-    float m_dryGain{1.f};
+    static constexpr float kParamSmoothingSeconds{0.01f};
+    AbacDsp::LinearSmoothing m_wetGain{0.2f};
+    AbacDsp::LinearSmoothing m_dryGain{1.f};
     float m_feedBack{0.f};
     bool m_hostSync{false};
     size_t m_syncDivisionIndex{4};

@@ -6,6 +6,7 @@
 #include "BlockProcessors/BlockProcPitch.h"
 #include "BlockProcessors/BlockProcVibrato.h"
 #include "EffectBase.h"
+#include "Parameters/SmoothingParameter.h"
 #include "Reverbs/FdnTankBlockDelayWalshSIMD.h"
 #include "Reverbs/FdnTankSpiced.h"
 #include "Reverbs/FdnTankSpicedBase.h"
@@ -66,12 +67,12 @@ class MiniReverbImpl final : public EffectBase
 
     void setDry(const float value)
     {
-        m_dry = std::pow(10.f, value / 20.f);
+        m_dry.newTransition(std::pow(10.f, value / 20.f), kParamSmoothingSeconds, sampleRate());
     }
 
     void setWet(const float value)
     {
-        m_wet = std::pow(10.f, value / 20.f);
+        m_wet.newTransition(std::pow(10.f, value / 20.f), kParamSmoothingSeconds, sampleRate());
     }
 
     void setStereoWidth(const float value)
@@ -191,17 +192,20 @@ class MiniReverbImpl final : public EffectBase
         m_fdnTank.processBlockSplit(inData.data(), res[0].data(), res[1].data());
         for (size_t i = 0; i < BlockSize; ++i)
         {
+            const float dry = m_dry.getValue();
+            const float wet = m_wet.getValue();
             for (size_t c = 0; c < 2; ++c)
             {
-                out(i, c) = m_dry * in(i, c) + m_wet * res[c][i];
+                out(i, c) = dry * in(i, c) + wet * res[c][i];
             }
         }
     }
 
   private:
+    static constexpr float kParamSmoothingSeconds{0.01f};
     bool m_order{};
-    float m_dry{};
-    float m_wet{};
+    AbacDsp::LinearSmoothing m_dry{0.f};
+    AbacDsp::LinearSmoothing m_wet{0.f};
     float m_baseSize{};
     float m_sizeFactor{};
     AbacDsp::FdnTankSpiced<100000, ORDER, BlockSize> m_fdnTank;

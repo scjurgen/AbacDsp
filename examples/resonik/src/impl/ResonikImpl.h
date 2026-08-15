@@ -9,6 +9,7 @@
 #include "EffectBase.h"
 #include "Filters/BiquadResoBP.h"
 #include "Filters/SvfResoBP.h"
+#include "Parameters/SmoothingParameter.h"
 
 template <size_t BlockSize>
 class ResonikImpl final : public EffectBase
@@ -51,13 +52,13 @@ class ResonikImpl final : public EffectBase
 
     void setDry(const float value)
     {
-        m_dry = std::pow(10.f, value / 20.f);
+        m_dry.newTransition(std::pow(10.f, value / 20.f), kParamSmoothingSeconds, sampleRate());
     }
 
     void setWet(const float value)
     {
         constexpr float kWetBoost = 10.f;
-        m_wet = std::pow(10.f, value / 20.f) * kWetBoost;
+        m_wet.newTransition(std::pow(10.f, value / 20.f) * kWetBoost, kParamSmoothingSeconds, sampleRate());
     }
 
     void setLowFreq(const float value)
@@ -143,9 +144,11 @@ class ResonikImpl final : public EffectBase
 
         for (size_t s = 0; s < BlockSize; ++s)
         {
+            const float dry = m_dry.getValue();
+            const float wet = m_wet.getValue();
             for (size_t c = 0; c < 2; ++c)
             {
-                out(s, c) = m_dry * in(s, c) + m_wet * wetSum[s];
+                out(s, c) = dry * in(s, c) + wet * wetSum[s];
             }
         }
     }
@@ -216,9 +219,10 @@ class ResonikImpl final : public EffectBase
         }
     }
 
+    static constexpr float kParamSmoothingSeconds{0.01f};
     size_t m_activeChains{48};
-    float m_dry{1.f};
-    float m_wet{1.f};
+    AbacDsp::LinearSmoothing m_dry{1.f};
+    AbacDsp::LinearSmoothing m_wet{1.f};
     float m_lowFreq{80.f};
     float m_highFreq{6000.f};
     size_t m_distribution{1};

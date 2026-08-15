@@ -16,6 +16,7 @@
 #include "Generators/OrnsteinUhlenbeckProcess.h"
 #include "Helpers/ConstructArray.h"
 #include "Numbers/Convert.h"
+#include "Parameters/SmoothingParameter.h"
 #include "Reverbs/FdnTankGlide.h"
 
 template <size_t BlockSize>
@@ -46,7 +47,7 @@ class DroneSequencerImpl final : public EffectBase
 
     void setLevel(const float value)
     {
-        m_level = Convert::dbToGain(value);
+        m_level.newTransition(Convert::dbToGain(value), kParamSmoothingSeconds, sampleRate());
     }
 
     void setTuning(const float value)
@@ -375,6 +376,12 @@ class DroneSequencerImpl final : public EffectBase
             dry[i] = m_ensemble.step();
         }
 
+        std::array<float, BlockSize> levelBlock{};
+        for (size_t i = 0; i < BlockSize; ++i)
+        {
+            levelBlock[i] = m_level.getValue();
+        }
+
         std::array<std::array<float, BlockSize>, 2> wet{};
         m_fdn.processBlockSplit(dry.data(), wet[0].data(), wet[1].data());
         for (size_t c = 0; c < 2; ++c)
@@ -384,7 +391,7 @@ class DroneSequencerImpl final : public EffectBase
 
             for (size_t i = 0; i < BlockSize; ++i)
             {
-                out(i, c) = (dry[i] * m_reverbDryGain + wet[c][i] * m_reverbWetGain) * m_level;
+                out(i, c) = (dry[i] * m_reverbDryGain + wet[c][i] * m_reverbWetGain) * levelBlock[i];
             }
         }
     }
@@ -602,7 +609,8 @@ class DroneSequencerImpl final : public EffectBase
     std::array<float, kMaxVoices> m_lastVoiceLfoSpeed{};
     std::array<float, kMaxVoices> m_lastVoiceSustainFeed{};
 
-    float m_level{1.f};
+    static constexpr float kParamSmoothingSeconds{0.01f};
+    AbacDsp::LinearSmoothing m_level{1.f};
     float m_reverbDryGain{1.f};
     float m_reverbWetGain{0.f};
     float m_manualBpm{120.f};
