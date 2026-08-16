@@ -4,9 +4,10 @@
 
 | Metric        | Coverage |
 |---------------|----------|
-| **Lines**     | 🟢 11891/12696 (93.7%) |
-| **Functions** | 🟢 2028/2073 (97.8%) |
-| **Branches**  | 🔴 4522/6835 (66.2%) |
+| **Lines**     | 🟢 12543/13393 (93.7%) |
+| **Functions** | 🟢 2154/2204 (97.7%) |
+| **Branches**  | 🔴 4689/7131 (65.8%) |
+| **Decisions** | 🟡 2144/2796 (76.7%) |
 
 ## 📄 File coverage
 
@@ -19,7 +20,7 @@
 | **`src/includes/Analysis/Slicer.h`** | 🟢 329/352 (93.5%) | 🟢 21/21 (100.0%) | 🔴 231/344 (67.2%) |
 | **`src/includes/Analysis/Spectrogram.h`** | 🟢 289/293 (98.6%) | 🟢 38/38 (100.0%) | 🟡 74/94 (78.7%) |
 | **`src/includes/Analysis/YinPitchDetector.h`** | 🟢 105/106 (99.1%) | 🟢 13/13 (100.0%) | 🟡 33/42 (78.6%) |
-| **`src/includes/Analysis/ZeroCrossings.h`** | 🟢 197/207 (95.2%) | 🟢 69/69 (100.0%) | 🔴 351/542 (64.8%) |
+| **`src/includes/Analysis/ZeroCrossings.h`** | 🟢 199/209 (95.2%) | 🟢 70/70 (100.0%) | 🔴 351/542 (64.8%) |
 | **`src/includes/Audio/AudioBuffer.h`** | 🟢 84/85 (98.8%) | 🟢 45/45 (100.0%) | 🔴 26/36 (72.2%) |
 | **`src/includes/Audio/Fader.h`** | 🟢 40/43 (93.0%) | 🟢 11/11 (100.0%) | 🔴 14/22 (63.6%) |
 | **`src/includes/Audio/FixedSizeProcessor.h`** | 🟢 61/61 (100.0%) | 🟢 10/10 (100.0%) | 🟢 24/26 (92.3%) |
@@ -47,11 +48,13 @@
 | **`src/includes/Filters/BiquadResoBandPassParallel.h`** | 🟢 37/37 (100.0%) | 🟢 4/4 (100.0%) | 🟡 7/8 (87.5%) |
 | **`src/includes/Filters/BiquadResoBP.h`** | 🟡 42/52 (80.8%) | 🟢 5/5 (100.0%) | 🔴 1/2 (50.0%) |
 | **`src/includes/Filters/BiquadResoBPParallelSIMD.h`** | 🟢 62/62 (100.0%) | 🟢 4/4 (100.0%) | 🟡 14/18 (77.8%) |
-| **`src/includes/Filters/OnePoleFilter.h`** | 🟢 242/248 (97.6%) | 🟢 130/130 (100.0%) | 🔴 153/226 (67.7%) |
+| **`src/includes/Filters/OnePoleFilter.h`** | 🟢 256/260 (98.5%) | 🟢 133/133 (100.0%) | 🔴 155/228 (68.0%) |
 | **`src/includes/Filters/PinkFilter.h`** | 🟢 10/10 (100.0%) | 🟢 4/4 (100.0%) | 🟢 8/8 (100.0%) |
-| **`src/includes/Filters/PoleMixingFilter.h`** | 🟢 302/304 (99.3%) | 🟢 59/60 (98.3%) | 🟡 51/62 (82.3%) |
+| **`src/includes/Filters/PoleMixingCorrections_generated.h`** | 🟢 8/8 (100.0%) | 🟢 2/2 (100.0%) | 🔴 3/6 (50.0%) |
+| **`src/includes/Filters/PoleMixingFilter.h`** | 🟢 308/310 (99.4%) | 🟢 61/62 (98.4%) | 🟡 45/52 (86.5%) |
 | **`src/includes/Filters/Sinc/SincFilter.h`** | 🟢 125/130 (96.2%) | 🟢 20/20 (100.0%) | 🔴 75/110 (68.2%) |
 | **`src/includes/Filters/SvfResoBP.h`** | 🟢 135/135 (100.0%) | 🟢 21/21 (100.0%) | 🔴 16/26 (61.5%) |
+| **`src/includes/Generators/AdsEnvelope.h`** | 🟢 141/152 (92.8%) | 🟢 22/22 (100.0%) | 🔴 25/40 (62.5%) |
 | **`src/includes/Generators/AttackRamp.h`** | 🟢 64/65 (98.5%) | 🟢 9/9 (100.0%) | 🟡 13/16 (81.2%) |
 | **`src/includes/Generators/BeatSequencer.h`** | 🟢 112/119 (94.1%) | 🟢 20/20 (100.0%) | 🔴 27/39 (69.2%) |
 | **`src/includes/Generators/ClickGenerator.h`** | 🟢 34/34 (100.0%) | 🟢 7/7 (100.0%) | 🟡 4/5 (80.0%) |
@@ -59,12 +62,15 @@
 | **`src/includes/Generators/FileIo/ReadResoVoice.h`** | 🟢 18/18 (100.0%) | 🟢 1/1 (100.0%) | 🔴 23/36 (63.9%) |
 | **`src/includes/Generators/HarmonicGenerator.h`** | 🟢 137/138 (99.3%) | 🟢 50/51 (98.0%) | 🔴 26/50 (52.0%) |
 | **`src/includes/Generators/JuliaWalk.h`** | 🟢 61/61 (100.0%) | 🟢 13/13 (100.0%) | 🟢 4/4 (100.0%) |
+| **`src/includes/Generators/KarplusStrongEnsemble.h`** | 🟢 15/15 (100.0%) | 🟢 7/7 (100.0%) | 🟡 3/4 (75.0%) |
+| **`src/includes/Generators/KarplusStrongString.h`** | 🟡 263/294 (89.5%) | 🟢 38/40 (95.0%) | 🔴 57/103 (55.3%) |
+| **`src/includes/Generators/KarplusStrongVoice.h`** | 🟢 196/196 (100.0%) | 🟢 31/31 (100.0%) | 🔴 44/61 (72.1%) |
 | **`src/includes/Generators/MeterTimeline.h`** | 🟢 54/56 (96.4%) | 🟢 11/11 (100.0%) | 🟡 24/28 (85.7%) |
-| **`src/includes/Generators/OrnsteinUhlenbeckProcess.h`** | 🟢 34/34 (100.0%) | 🟢 5/5 (100.0%) | 🔴 8/16 (50.0%) |
-| **`src/includes/Generators/RandomStyle/VelvetCrackle.h`** | 🟢 78/78 (100.0%) | 🟢 7/7 (100.0%) | 🔴 10/14 (71.4%) |
+| **`src/includes/Generators/OrnsteinUhlenbeckProcess.h`** | 🟡 29/34 (85.3%) | 🟢 5/5 (100.0%) | 🔴 6/16 (37.5%) |
+| **`src/includes/Generators/RandomStyle/VelvetCrackle.h`** | 🟢 78/78 (100.0%) | 🟢 7/7 (100.0%) | 🟡 11/14 (78.6%) |
 | **`src/includes/Generators/ResoGenerator.h`** | 🟢 86/87 (98.9%) | 🟢 11/11 (100.0%) | 🔴 58/88 (65.9%) |
 | **`src/includes/Generators/ResoParallelSIMD.h`** | 🟢 89/94 (94.7%) | 🟢 15/15 (100.0%) | 🔴 21/32 (65.6%) |
-| **`src/includes/Helpers/ConstructArray.h`** | 🟡 50/59 (84.7%) | 🟢 81/81 (100.0%) | 🔴 141/282 (50.0%) |
+| **`src/includes/Helpers/ConstructArray.h`** | 🟡 55/65 (84.6%) | 🟢 84/84 (100.0%) | 🔴 146/292 (50.0%) |
 | **`src/includes/Helpers/CreateExpectedSet.h`** | 🟡 61/69 (88.4%) | 🟢 3/3 (100.0%) | 🔴 37/62 (59.7%) |
 | **`src/includes/Modulation/Flutter.h`** | 🟢 43/45 (95.6%) | 🟢 7/7 (100.0%) | 🟢 9/10 (90.0%) |
 | **`src/includes/Modulation/Modulation.h`** | 🟢 52/52 (100.0%) | 🟢 6/6 (100.0%) | 🟡 14/16 (87.5%) |
@@ -93,7 +99,7 @@
 | **`src/includes/Reverbs/HadamardWalsh8.h`** | 🟢 52/52 (100.0%) | 🟢 4/4 (100.0%) | ⚫ 0/0 (0.0%) |
 | **`src/includes/Reverbs/HadamardWalsh16.h`** | 🟢 66/66 (100.0%) | 🟢 4/4 (100.0%) | 🟢 10/10 (100.0%) |
 | **`src/includes/Reverbs/HadamardWalsh32.h`** | 🟢 117/117 (100.0%) | 🟢 4/4 (100.0%) | 🟢 14/14 (100.0%) |
-| **`src/includes/Reverbs/ModulationDelayNoFeedback.h`** | 🟢 372/392 (94.9%) | 🟢 83/88 (94.3%) | 🔴 214/438 (48.9%) |
+| **`src/includes/Reverbs/ModulationDelayNoFeedback.h`** | 🟢 379/398 (95.2%) | 🟢 100/108 (92.6%) | 🔴 249/518 (48.1%) |
 | **`src/includes/Sampler/LoopFile.h`** | 🟢 29/30 (96.7%) | 🟢 6/6 (100.0%) | 🔴 19/34 (55.9%) |
 | **`src/includes/Sampler/LoopRecorder.h`** | 🟢 271/284 (95.4%) | 🟢 38/38 (100.0%) | 🔴 100/143 (69.9%) |
 | **`src/includes/Sampler/MidiFile.h`** | 🟢 159/169 (94.1%) | 🟢 21/21 (100.0%) | 🔴 69/122 (56.6%) |

@@ -1,21 +1,12 @@
 # TODO
 
-
-## script parameters
-not showing units
-
-check the accessibility stuff
+Readme documentation needs enhancements: add images from documentation, screenshots of examples, some mermaid
+diagrams for processing.
 
 ### Blockoperations
 Check if this can be done better (a global concept for multichannel processing).
 
 ## Examples
-
-### Clap
-Juce clap support: build and how to test?
-
-### Explore Performance
-Explore a way to have custom performance pages.
 
 ## Maxdiffuser
 - random distribution add
@@ -25,15 +16,7 @@ Explore a way to have custom performance pages.
 
 ## Looper
 
-### Modes and button states
-
-Button states depend on various modes
-1) Free, Overdub, Play, Undo, Clear should not be active as long as there is no loop
-2) Mix Down only active when an Overdub exists
-3) Host Sync only when we are in a host
-4) Seq Play and Clear Seq only when we have a sequence
-
-Missing buttons
+### Missing buttons
 - No click mode (only free run) -> Record bars click volume, click->track disabled.
 
 ### Host sync
@@ -49,16 +32,6 @@ the loaded loop and play it when the current loop is ending (with a fade in/out 
 - refactor switches and visualisations (red recording mode)
 
 ### Code quality
-
-#### Sanitizier
-
-- Tried wiring up ASan+UBSan via a CMake ENABLE_SANITIZERS option (2026-07-11):
-  AddressSanitizer's dynamic runtime hangs at process startup on this Mac
-  (Apple clang 17 / macOS 26.5.1) even for a trivial hello-world binary,
-  stuck in AsanInitFromRtl's shadow-memory init. UBSan alone works fine.
-  Sticking with Valgrind (docker-unit-tests) for now. Revisit ASan later,
-  either once Apple/LLVM fixes this, or by running it in the Linux Docker
-  container instead of natively.
 
 ### Part-based looping (new concept)
 Add one more concept: Part-based looping inside a loop slot.
@@ -210,25 +183,6 @@ standard and can break on another toolchain.
 
 ### Filters/BiquadResoBP.h
 
-#### isActive() never counts the decay down
-
-`isActive()` returns true unconditionally while `m_decayCount > 0`, but nothing
-in the class ever decrements it. `triggered()` sets it to `m_decayMax` and it
-stays there, so a triggered resonator reports active forever and the
-silence-detection branch below becomes unreachable.
-
-`SvfResoBP::isActive()` is the same function with `m_decayCount--` present
-(SvfResoBP.h:217), so this reads as an omission rather than a design choice.
-
-#### setDecay() mixes milliseconds and seconds
-
-`setByDecay()` takes `t` in seconds and uses it consistently for both
-`m_decayMax` and the Q formula.
-
-`setDecay()` treats `t` as milliseconds for `m_decayMax`
-(`m_sampleRate * t * 0.001f`) but then feeds the same unscaled value into
-`Q = pi * f * t * k`, which expects seconds. The resulting Q is 1000x too large.
-
 #### setDecay() silently reuses the previous frequency
 
 `setDecay()` reads the `K` and `kSquare` members cached by the last
@@ -236,31 +190,19 @@ silence-detection branch below becomes unreachable.
 new coefficients therefore belong to whatever frequency was set last, and the
 dependency is invisible at the call site. Documented as-is for now.
 
-#### magnitude() has a sample rate default that can disagree with the object
+#### magnitude() leaves the b1 = 0 / b2 = -b0 substitutions unsimplified
 
-`magnitude(index, hz, sampleRate = 48000.f)` evaluates against the argument
-while the object carries its own `m_sampleRate`. A caller who omits the argument
-at any other rate gets the wrong curve with no diagnostic.
-
-The b1 = 0 and b2 = -b0 substitutions are also left unsimplified in the
-expression: `std::pow((b0 + 0 + -b0), 2)` is identically zero.
-
-#### m_sampleRate is a public data member
-
-Declared public, mid-class, with the `m_` prefix, next to a `setSampleRate()`
-that does the same job.
+The expression carries terms like `std::pow((b0 + 0 + -b0), 2)`, identically
+zero given the bandpass design's own `b1 = 0`, `b2 = -b0`. Left as-is: nothing
+currently exercises this formula (grepped `test/`), so hand-simplifying it
+without a test to check against is its own risk.
 
 ### Filters/BiquadResoBandPassParallel.h
 
 #### Carries the same defects as BiquadResoBP, minus the unit bug
 
-Verified present here as well:
-
-- `magnitude()` returns dB despite the name, evaluates against a `sampleRate`
-  argument defaulting to 48000 rather than the object's own, and leaves the
-  `b1 = 0` / `b2 = -b0` substitutions unsimplified, including the identically
-  zero `std::pow((b0 + 0 + -b0), 2)`.
-- `m_sampleRate` is a public data member sitting next to its own setter.
+- `magnitude()` leaves the `b1 = 0` / `b2 = -b0` substitutions unsimplified,
+  including the identically zero `std::pow((b0 + 0 + -b0), 2)`.
 - `setDecay()` reuses the `K` / `kSquare` cached by the last
   `computeCoefficients()` on that `mainIndex`.
 
@@ -274,20 +216,6 @@ The 32-call hold-off is the same in both. No obvious reason for the difference.
 
 ### Filters/BiquadResoBPParallelSIMD.h
 
-#### isActive() reads state the SIMD paths never write
-
-`process()` advances `m_z0` / `m_z1` (the lane-major state) in both the
-`USE_SIMD_FRAMEWORK` and `USE_X86_INTRINSICS` paths. The per-element `m_z` array
-is only written by `reset()` and by the scalar `#else` fallback.
-
-`isActive()` and the `m_z` half of `reset()` therefore read stale data on every
-platform that actually takes a SIMD path, which is all of them in practice. A
-ringing element reports itself inactive after 32 calls because `m_z` is still
-zero from construction.
-
-Either `process()` should mirror the lane state back, or `isActive()` should read
-`m_z0` / `m_z1` and index by group and lane the way `reset()` already does.
-
 #### damp() is global here, per-element in the sibling
 
 `BiquadResoBpParallelSIMD::damp(bool)` switches a single `m_currentSet` for the
@@ -296,9 +224,7 @@ element. The banks are otherwise presented as interchangeable.
 
 #### magnitude() and setDecay() carry the same issues as the other two banks
 
-Same dB-despite-the-name return, same misleading `sampleRate = 48000.f`
-default, same unsimplified `(b0 + 0 + -b0)`, same cached-`K` dependency in
-`setDecay()`. `m_sampleRate` is correctly private here, unlike in the other two.
+Same unsimplified `(b0 + 0 + -b0)`, same cached-`K` dependency in `setDecay()`.
 
 #### Class name and file name disagree
 
@@ -306,45 +232,17 @@ File is `BiquadResoBPParallelSIMD.h`, class is `BiquadResoBpParallelSIMD`.
 
 ### Filters/SvfResoBP.h
 
-#### computeCoefficients() discards its Q argument
+#### ResonanceCompensation is measurably less accurate at very high Q
 
-```cpp
-const float k = 1.f / std::max(Q, 0.01f);
-m_cf[index].k = k;                      // set from the Q argument
-recomputeCoefficientsWithBend(index);   // immediately overwrites k from m_decayT
-```
-
-`recomputeCoefficientsWithBend()` recomputes `Q = pi * bendFrequency * m_decayT * decayConst`
-and assigns `m_cf[index].k` again, so the caller's `Q` never reaches the filter.
-
-This bites at construction: the constructor calls `computeCoefficients(0, 1000.f)`
-and `computeCoefficients(1, 1000.f)` while `m_decayT` is still 0, giving `Q = 0`,
-clamped to 0.01, so `k = 100`. A freshly constructed `SvfResoBP` is heavily
-damped rather than sitting at the documented default of `Q = 1/sqrt(2)`.
-
-#### m_decayT changes unit depending on which setter was used
-
-`setByDecay()` stores `m_decayT = t` with `t` in seconds
-(`m_decayMax = m_sampleRate * t`).
-
-`setDecay()` stores `m_decayT = t` with `t` in milliseconds
-(`m_decayMax = m_sampleRate * t * 0.001f`) but still feeds it to the seconds-based
-`Q = pi * f * t * k` formula, and leaves it in `m_decayT` for
-`recomputeCoefficientsWithBend()` to reuse later. Same millisecond/second
-confusion as `BiquadResoBP::setDecay()`.
-
-#### pitchBendCents() only updates the active coefficient set
-
-`recomputeCoefficientsWithBend(m_currentSet)` leaves the other set at the old
-pitch, so a later `damp()` switch jumps back to the unbent frequency.
-
-#### ResonanceCompensation interpolates linearly across a geometric axis
-
-The column index comes from `log2(time) + 10`, but `col_frac` is
-`(time - m_times[col]) / (m_times[col + 1] - m_times[col])`, a linear fraction
-between two points that are a factor of two apart. The comment above it says
-"Bilinear interpolation in log-space", which is true of the row axis and of the
-stored values, but not of this fraction.
+Found while building `documentation/Filters/BandpassImpulses/rb_compensation_accuracy.png`:
+across a dense decay sweep, compensation stays within a fraction of a dB of the 0 dB target
+almost everywhere, but drifts several dB or more at combinations of high note and long decay
+(high effective Q) - e.g. note 108 (~4.2 kHz) starts drifting from 0 dB by around a 0.6 s decay.
+This is independent of the linear-vs-log-space interpolation bug already fixed (see
+`documentation/Filters/BandpassImpulses/README.md`, "What the plots show"): it looks like the
+underlying per-cell LUT measurement/fit is itself less accurate in that corner, not an
+interpolation artifact. Worth a future re-fit or at least a note in the class doc; not
+addressed here.
 
 ### Filters/PoleMixingFilter.h
 
