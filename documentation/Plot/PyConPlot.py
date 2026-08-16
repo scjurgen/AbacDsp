@@ -52,12 +52,12 @@ def parse_plot_options(option_string: str) -> Dict[str, Any]:
             key, value = token.split('=', 1)
             key = key.strip()
             value = value.strip()
-            if key in ['logx', 'logy', 'normalize', 'grid', 'grid_major', 'grid_minor']:
+            if key in ['logx', 'logy', 'symlogy', 'normalize', 'grid', 'grid_major', 'grid_minor']:
                 try:
                     options[key] = str2bool(value)
                 except:
                     options[key] = value.lower() in ('true', '1', 'yes')
-            elif key in ['miny', 'maxy', 'linewidth']:
+            elif key in ['miny', 'maxy', 'linewidth', 'linthreshy']:
                 try:
                     options[key] = float(value)
                 except:
@@ -203,6 +203,9 @@ def create_plots(data_plots: List[Tuple[Dict[str, Dict[str, List[float]]], Dict[
             ax.set_xscale('log')
         if effective_options.get('logy', False):
             ax.set_yscale('log')
+        elif effective_options.get('symlogy', False):
+            linthreshy = effective_options.get('linthreshy', args.linthreshy)
+            ax.set_yscale('symlog', linthresh=linthreshy)
         ax.set_aspect(effective_options.get('aspect', args.aspect))
         setup_grid(ax, args, plot_options)
         labelx = effective_options.get('labelx', args.labelx)
@@ -273,6 +276,8 @@ Plot-specific options (use in @New plot lines):
 - labelx, labely: axis labels
 - title: plot title
 - logx, logy: logarithmic scales (true/false)
+- symlogy, linthreshy: symmetric-log y-axis (true/false) and its linear half-width around zero,
+  for data that crosses zero but spans orders of magnitude (ignored if logy is also set)
 - normalize: normalize data (true/false)
 - miny, maxy: y-axis limits (numbers)
 - linewidth: line width (number)
@@ -299,6 +304,8 @@ Plot-specific options (use in @New plot lines):
     parser.add_argument('--maxy', type=float, help='Maximum y-axis value (default: auto)')
     parser.add_argument('--logx', action='store_true', help='Use logarithmic scale for x-axis')
     parser.add_argument('--logy', action='store_true', help='Use logarithmic scale for y-axis')
+    parser.add_argument('--symlogy', action='store_true', help='Use symmetric-log scale for y-axis: linear near zero, logarithmic beyond --linthreshy. For data that crosses zero but spans orders of magnitude (ignored if --logy is also set)')
+    parser.add_argument('--linthreshy', type=float, default=1.0, help='Linear region half-width around zero for --symlogy (default: 1.0)')
     parser.add_argument('--aspect', default='auto', choices=['auto', 'equal'], help="Axes aspect ratio: 'equal' keeps x/y units the same size, e.g. for orbit/phase-plane plots (default: 'auto')")
     parser.add_argument('--cols', type=int, default=0, help='Force this many columns when there are multiple @New plot sections, e.g. --cols 1 to stack them vertically (default: 0, auto square-ish grid)')
     parser.add_argument('--grid', action='store_true', help='Enable grid (same as --grid-major)')
