@@ -6,6 +6,7 @@ Dsp code for abacad projects
 Have handy classes for various DSP tasks.
 No dependencies for the dsp code itself (examples and unit-test have submodules based code).
 Support organic interactivity by implementing various types of smoothing and special processes (e.g. OrnsteinUhlenbeck).
+Accessibility is a first-class goal, not an add-on: keyboard and screen-reader driven workflows should work as well as mouse-driven ones, in the library's example UIs and in any tooling built on it.
 
 ### Library
 
