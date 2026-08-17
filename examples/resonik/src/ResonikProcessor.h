@@ -43,17 +43,21 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("numChains", this);
         m_parameters.addParameterListener("dry", this);
         m_parameters.addParameterListener("wet", this);
-        m_parameters.addParameterListener("lowFreq", this);
-        m_parameters.addParameterListener("highFreq", this);
-        m_parameters.addParameterListener("distribution", this);
-        m_parameters.addParameterListener("decayMin", this);
-        m_parameters.addParameterListener("decayMax", this);
-        m_parameters.addParameterListener("gainMin", this);
-        m_parameters.addParameterListener("gainMax", this);
-        m_parameters.addParameterListener("delayMin", this);
-        m_parameters.addParameterListener("delayMax", this);
-        m_parameters.addParameterListener("q", this);
+        m_parameters.addParameterListener("luaParam1", this);
+        m_parameters.addParameterListener("luaParam2", this);
+        m_parameters.addParameterListener("luaParam3", this);
+        m_parameters.addParameterListener("luaParam4", this);
+        m_parameters.addParameterListener("luaParam5", this);
+        m_parameters.addParameterListener("luaParam6", this);
+        m_parameters.addParameterListener("luaParam7", this);
+        m_parameters.addParameterListener("luaParam8", this);
 
+        for (size_t i = 0; i < 8; ++i)
+        {
+            m_ccActive[i].controller.store(kDefaultCcMappings[i].controller, std::memory_order_relaxed);
+            m_ccActive[i].valueLow.store(kDefaultCcMappings[i].valueLow, std::memory_order_relaxed);
+            m_ccActive[i].valueHigh.store(kDefaultCcMappings[i].valueHigh, std::memory_order_relaxed);
+        }
         m_fileIo.initialize(m_patchIndex);
     }
     ~AudioPluginAudioProcessor() override
@@ -61,21 +65,24 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("numChains", this);
         m_parameters.removeParameterListener("dry", this);
         m_parameters.removeParameterListener("wet", this);
-        m_parameters.removeParameterListener("lowFreq", this);
-        m_parameters.removeParameterListener("highFreq", this);
-        m_parameters.removeParameterListener("distribution", this);
-        m_parameters.removeParameterListener("decayMin", this);
-        m_parameters.removeParameterListener("decayMax", this);
-        m_parameters.removeParameterListener("gainMin", this);
-        m_parameters.removeParameterListener("gainMax", this);
-        m_parameters.removeParameterListener("delayMin", this);
-        m_parameters.removeParameterListener("delayMax", this);
-        m_parameters.removeParameterListener("q", this);
+        m_parameters.removeParameterListener("luaParam1", this);
+        m_parameters.removeParameterListener("luaParam2", this);
+        m_parameters.removeParameterListener("luaParam3", this);
+        m_parameters.removeParameterListener("luaParam4", this);
+        m_parameters.removeParameterListener("luaParam5", this);
+        m_parameters.removeParameterListener("luaParam6", this);
+        m_parameters.removeParameterListener("luaParam7", this);
+        m_parameters.removeParameterListener("luaParam8", this);
     }
 
     void prepareToPlay(const double sampleRate, const int samplesPerBlock) override
     {
         pluginRunner = std::make_unique<ResonikImpl<NumSamplesPerBlock>>(RateNormalizer::kInternalSampleRate);
+        pluginRunner->setImportResolver([](const std::string_view name) { return FileIo::resolveLibraryScript(name); });
+        if (!m_fileIo.currentScript().empty())
+        {
+            pluginRunner->setScript(m_fileIo.currentScript());
+        }
 
         fixedRunner = std::make_unique<RateNormalizer>(static_cast<float>(sampleRate),
                                                        [this](const AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& input,
@@ -88,6 +95,19 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             {
                 // APVTS suppresses this as a no-change re-send, so call directly.
                 parameterChanged(p->paramID, p->convertFrom0to1(p->getValue()));
+            }
+        }
+        for (const auto& entry : CcSettings::load())
+        {
+            for (size_t i = 0; i < 8; ++i)
+            {
+                if (kCcTargetParamIds[i] != entry.paramId)
+                {
+                    continue;
+                }
+                m_ccActive[i].controller.store(entry.controller, std::memory_order_relaxed);
+                m_ccActive[i].valueLow.store(clampToParamRange(i, entry.valueLow), std::memory_order_relaxed);
+                m_ccActive[i].valueHigh.store(clampToParamRange(i, entry.valueHigh), std::memory_order_relaxed);
             }
         }
 
@@ -263,51 +283,43 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " dB"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("lowFreq", 1), juce::String::fromUTF8("Low Freq"),
-            juce::NormalisableRange<float>(20, 20000, 1, 0.5, false), 80,
-            juce::AudioParameterFloatAttributes{}.withLabel("Hz").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " Hz"; })));
+            juce::ParameterID("luaParam1", 1), juce::String::fromUTF8("Lua Param 1"),
+            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("highFreq", 1), juce::String::fromUTF8("High Freq"),
-            juce::NormalisableRange<float>(20, 20000, 1, 0.5, false), 6000,
-            juce::AudioParameterFloatAttributes{}.withLabel("Hz").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " Hz"; })));
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(
-            juce::ParameterID("distribution", 1), juce::String::fromUTF8("Distribution"),
-            juce::StringArray{juce::String::fromUTF8("Linear"), juce::String::fromUTF8("Logarithmic")}, 1));
+            juce::ParameterID("luaParam2", 1), juce::String::fromUTF8("Lua Param 2"),
+            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("decayMin", 1), juce::String::fromUTF8("Decay Min"),
-            juce::NormalisableRange<float>(0.01, 20, 0.001, 0.3, false), 0.3,
-            juce::AudioParameterFloatAttributes{}.withLabel("s").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 2) + " s"; })));
+            juce::ParameterID("luaParam3", 1), juce::String::fromUTF8("Lua Param 3"),
+            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("decayMax", 1), juce::String::fromUTF8("Decay Max"),
-            juce::NormalisableRange<float>(0.01, 20, 0.001, 0.3, false), 4.0,
-            juce::AudioParameterFloatAttributes{}.withLabel("s").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 2) + " s"; })));
+            juce::ParameterID("luaParam4", 1), juce::String::fromUTF8("Lua Param 4"),
+            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("gainMin", 1), juce::String::fromUTF8("Gain Min"),
-            juce::NormalisableRange<float>(-60, 12, 0.1, 1, false), -18,
-            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+            juce::ParameterID("luaParam5", 1), juce::String::fromUTF8("Lua Param 5"),
+            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("gainMax", 1), juce::String::fromUTF8("Gain Max"),
-            juce::NormalisableRange<float>(-60, 12, 0.1, 1, false), 0,
-            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+            juce::ParameterID("luaParam6", 1), juce::String::fromUTF8("Lua Param 6"),
+            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("delayMin", 1), juce::String::fromUTF8("Delay Min"),
-            juce::NormalisableRange<float>(0, 2000, 1, 0.4, false), 0,
-            juce::AudioParameterFloatAttributes{}.withLabel("ms").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " ms"; })));
+            juce::ParameterID("luaParam7", 1), juce::String::fromUTF8("Lua Param 7"),
+            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("delayMax", 1), juce::String::fromUTF8("Delay Max"),
-            juce::NormalisableRange<float>(0, 2000, 1, 0.4, false), 300,
-            juce::AudioParameterFloatAttributes{}.withLabel("ms").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " ms"; })));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("q", 1), juce::String::fromUTF8("Q"),
-            juce::NormalisableRange<float>(0.3, 50, 0.01, 0.35, false), 6,
+            juce::ParameterID("luaParam8", 1), juce::String::fromUTF8("Lua Param 8"),
+            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " "; })));
 
@@ -342,65 +354,53 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                  p.pluginRunner->setWet(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::wet, v);
              }},
-            {"lowFreq",
+            {"luaParam1",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setLowFreq(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::lowFreq, v);
+                 p.pluginRunner->setLuaParam1(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::luaParam1, v);
              }},
-            {"highFreq",
+            {"luaParam2",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setHighFreq(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::highFreq, v);
+                 p.pluginRunner->setLuaParam2(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::luaParam2, v);
              }},
-            {"distribution",
+            {"luaParam3",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setDistribution(static_cast<int>(v));
-                 p.m_fileIo.updateParameter(PatchParameters::Id::distribution, v);
+                 p.pluginRunner->setLuaParam3(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::luaParam3, v);
              }},
-            {"decayMin",
+            {"luaParam4",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setDecayMin(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::decayMin, v);
+                 p.pluginRunner->setLuaParam4(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::luaParam4, v);
              }},
-            {"decayMax",
+            {"luaParam5",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setDecayMax(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::decayMax, v);
+                 p.pluginRunner->setLuaParam5(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::luaParam5, v);
              }},
-            {"gainMin",
+            {"luaParam6",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setGainMin(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::gainMin, v);
+                 p.pluginRunner->setLuaParam6(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::luaParam6, v);
              }},
-            {"gainMax",
+            {"luaParam7",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setGainMax(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::gainMax, v);
+                 p.pluginRunner->setLuaParam7(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::luaParam7, v);
              }},
-            {"delayMin",
+            {"luaParam8",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setDelayMin(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::delayMin, v);
-             }},
-            {"delayMax",
-             [](AudioPluginAudioProcessor& p, const float v)
-             {
-                 p.pluginRunner->setDelayMax(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::delayMax, v);
-             }},
-            {"q",
-             [](AudioPluginAudioProcessor& p, const float v)
-             {
-                 p.pluginRunner->setQ(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::q, v);
+                 p.pluginRunner->setLuaParam8(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::luaParam8, v);
              }},
 
         };
@@ -449,65 +449,58 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             float normalized = range.convertTo0to1(params.wet);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("lowFreq"))
+        if (auto* p = m_parameters.getParameter("luaParam1"))
         {
-            const auto& range = m_parameters.getParameterRange("lowFreq");
-            float normalized = range.convertTo0to1(params.lowFreq);
+            const auto& range = m_parameters.getParameterRange("luaParam1");
+            float normalized = range.convertTo0to1(params.luaParam1);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("highFreq"))
+        if (auto* p = m_parameters.getParameter("luaParam2"))
         {
-            const auto& range = m_parameters.getParameterRange("highFreq");
-            float normalized = range.convertTo0to1(params.highFreq);
+            const auto& range = m_parameters.getParameterRange("luaParam2");
+            float normalized = range.convertTo0to1(params.luaParam2);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("distribution"))
+        if (auto* p = m_parameters.getParameter("luaParam3"))
         {
-            const auto& range = m_parameters.getParameterRange("distribution");
-            float normalized = range.convertTo0to1(params.distribution);
+            const auto& range = m_parameters.getParameterRange("luaParam3");
+            float normalized = range.convertTo0to1(params.luaParam3);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("decayMin"))
+        if (auto* p = m_parameters.getParameter("luaParam4"))
         {
-            const auto& range = m_parameters.getParameterRange("decayMin");
-            float normalized = range.convertTo0to1(params.decayMin);
+            const auto& range = m_parameters.getParameterRange("luaParam4");
+            float normalized = range.convertTo0to1(params.luaParam4);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("decayMax"))
+        if (auto* p = m_parameters.getParameter("luaParam5"))
         {
-            const auto& range = m_parameters.getParameterRange("decayMax");
-            float normalized = range.convertTo0to1(params.decayMax);
+            const auto& range = m_parameters.getParameterRange("luaParam5");
+            float normalized = range.convertTo0to1(params.luaParam5);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("gainMin"))
+        if (auto* p = m_parameters.getParameter("luaParam6"))
         {
-            const auto& range = m_parameters.getParameterRange("gainMin");
-            float normalized = range.convertTo0to1(params.gainMin);
+            const auto& range = m_parameters.getParameterRange("luaParam6");
+            float normalized = range.convertTo0to1(params.luaParam6);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("gainMax"))
+        if (auto* p = m_parameters.getParameter("luaParam7"))
         {
-            const auto& range = m_parameters.getParameterRange("gainMax");
-            float normalized = range.convertTo0to1(params.gainMax);
+            const auto& range = m_parameters.getParameterRange("luaParam7");
+            float normalized = range.convertTo0to1(params.luaParam7);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("delayMin"))
+        if (auto* p = m_parameters.getParameter("luaParam8"))
         {
-            const auto& range = m_parameters.getParameterRange("delayMin");
-            float normalized = range.convertTo0to1(params.delayMin);
+            const auto& range = m_parameters.getParameterRange("luaParam8");
+            float normalized = range.convertTo0to1(params.luaParam8);
             p->setValueNotifyingHost(normalized);
         }
-        if (auto* p = m_parameters.getParameter("delayMax"))
+
+        if (pluginRunner != nullptr && !params.script.empty())
         {
-            const auto& range = m_parameters.getParameterRange("delayMax");
-            float normalized = range.convertTo0to1(params.delayMax);
-            p->setValueNotifyingHost(normalized);
-        }
-        if (auto* p = m_parameters.getParameter("q"))
-        {
-            const auto& range = m_parameters.getParameterRange("q");
-            float normalized = range.convertTo0to1(params.q);
-            p->setValueNotifyingHost(normalized);
+            pluginRunner->setScript(params.script);
         }
     }
 
@@ -573,6 +566,86 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     }
 
 
+    [[nodiscard]] juce::String getScriptText() const
+    {
+        return juce::String(m_fileIo.currentScript());
+    }
+
+    bool applyScriptText(const juce::String& text)
+    {
+        if (pluginRunner == nullptr)
+        {
+            return false;
+        }
+        const bool ok = pluginRunner->setScript(text.toStdString());
+        if (ok)
+        {
+            m_fileIo.updateScript(text.toStdString());
+        }
+        return ok;
+    }
+
+    [[nodiscard]] std::vector<juce::String> listScriptNames() const
+    {
+        std::vector<juce::String> result;
+        for (const auto& n : m_fileIo.listScriptNames())
+        {
+            result.push_back(juce::String(n));
+        }
+        return result;
+    }
+
+    [[nodiscard]] juce::String getCurrentScriptName() const
+    {
+        return juce::String(m_fileIo.currentScriptName());
+    }
+
+    [[nodiscard]] std::vector<juce::String> getLibraryScriptNames() const
+    {
+        std::vector<juce::String> result;
+        for (const auto& n : FileIo::listLibraryScriptNames())
+        {
+            result.push_back(juce::String(n));
+        }
+        return result;
+    }
+
+    [[nodiscard]] juce::String getLibraryScriptText(const juce::String& name) const
+    {
+        const auto lookup = FileIo::resolveLibraryScript(name.toStdString());
+        return lookup.source ? juce::String(*lookup.source) : "-- not found: " + name;
+    }
+
+    bool requestLoadScript(const juce::String& name)
+    {
+        if (!m_fileIo.loadScriptNamed(name.toStdString()))
+        {
+            return false;
+        }
+        return applyScriptText(juce::String(m_fileIo.currentScript()));
+    }
+
+    bool saveCurrentScriptAs(const juce::String& name)
+    {
+        return m_fileIo.saveScriptNamed(name.toStdString());
+    }
+
+    bool deleteScriptNamed(const juce::String& name)
+    {
+        return m_fileIo.deleteScriptNamed(name.toStdString());
+    }
+
+    bool renameScript(const juce::String& oldName, const juce::String& newName)
+    {
+        return m_fileIo.renameScriptNamed(oldName.toStdString(), newName.toStdString());
+    }
+
+    bool saveUserLibraryScript(const juce::String& name, const juce::String& content)
+    {
+        return FileIo::saveUserLibraryScript(name.toStdString(), content.toStdString());
+    }
+
+
     void computeCpuLoad(std::chrono::nanoseconds elapsed, size_t numSamples)
     {
         samplesProcessed += numSamples;
@@ -605,6 +678,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             for (const auto& msg : midiMessages)
             {
                 pluginRunner->processMidi(msg.data);
+                if ((msg.data[0] & 0xF0) == 0xB0)
+                {
+                    handleMidiCc(msg.data[1], msg.data[2]);
+                }
             }
         }
         for (int c = 0; c < std::min(2, buffer.getNumChannels()); ++c)
@@ -634,6 +711,22 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         return m_cpuLoad.load();
     }
 
+    [[nodiscard]] bool hasScriptError() const noexcept
+    {
+        return pluginRunner && pluginRunner->hasScriptError();
+    }
+    [[nodiscard]] std::string scriptErrorMessage() const
+    {
+        return pluginRunner ? pluginRunner->scriptError() : std::string{};
+    }
+    [[nodiscard]] std::string getScriptSkeleton() const
+    {
+        return pluginRunner ? pluginRunner->scriptSkeleton() : std::string{};
+    }
+    [[nodiscard]] ResonikScriptEngine::UiParamSlots getLuaUiParamSlots() const
+    {
+        return pluginRunner ? pluginRunner->uiParamSlots() : ResonikScriptEngine::UiParamSlots{};
+    }
 
     [[nodiscard]] std::pair<float, float> getInputDbLoad() const
     {
@@ -653,6 +746,51 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner.get() != nullptr;
     }
+    void beginCcLearn(const CcTarget target) noexcept
+    {
+        m_learnTargetIndex.store(static_cast<int>(target), std::memory_order_relaxed);
+    }
+
+    [[nodiscard]] std::pair<float, float> getCcRange(const CcTarget target) const noexcept
+    {
+        const auto idx = static_cast<size_t>(target);
+        return {m_ccActive[idx].valueLow.load(std::memory_order_relaxed),
+                m_ccActive[idx].valueHigh.load(std::memory_order_relaxed)};
+    }
+
+    void setCcRange(const CcTarget target, const float lo, const float hi)
+    {
+        const auto idx = static_cast<size_t>(target);
+        m_ccActive[idx].valueLow.store(clampToParamRange(idx, lo), std::memory_order_relaxed);
+        m_ccActive[idx].valueHigh.store(clampToParamRange(idx, hi), std::memory_order_relaxed);
+        saveCcSettings();
+    }
+
+    void clearCcAssignment(const CcTarget target)
+    {
+        m_ccActive[static_cast<size_t>(target)].controller.store(-1, std::memory_order_relaxed);
+        saveCcSettings();
+    }
+
+    [[nodiscard]] int getCcController(const CcTarget target) const noexcept
+    {
+        return m_ccActive[static_cast<size_t>(target)].controller.load(std::memory_order_relaxed);
+    }
+
+    // Called from the message thread (Editor timer poll); safe to log/save here,
+    // unlike inside handleMidiCc which runs on the audio thread.
+    int consumeLastLearnedCc()
+    {
+        const auto idx = m_lastLearnedIndex.exchange(-1, std::memory_order_relaxed);
+        if (idx >= 0)
+        {
+            std::cout << "MIDI CC learn: cc"
+                      << m_ccActive[static_cast<size_t>(idx)].controller.load(std::memory_order_relaxed) << " -> "
+                      << kCcTargetParamIds[static_cast<size_t>(idx)] << std::endl;
+            saveCcSettings();
+        }
+        return idx;
+    }
     float m_maxValue{0.f};
     size_t elapsedTotalNanoSeconds{0};
     size_t samplesProcessed = 0;
@@ -671,6 +809,62 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     std::unique_ptr<ResonikImpl<NumSamplesPerBlock>> pluginRunner;
 
     juce::AudioProcessorValueTreeState m_parameters;
+    struct CcSlot
+    {
+        std::atomic<int> controller{-1};
+        std::atomic<float> valueLow{0.f};
+        std::atomic<float> valueHigh{0.f};
+    };
+    std::array<CcSlot, 8> m_ccActive{};
+    std::atomic<int> m_learnTargetIndex{-1};
+    std::atomic<int> m_lastLearnedIndex{-1};
+
+    [[nodiscard]] static float clampToParamRange(const size_t idx, const float value) noexcept
+    {
+        const auto& r = kCcTargetFullRange[idx];
+        return std::clamp(value, r.lo, r.hi);
+    }
+
+    void saveCcSettings() const
+    {
+        std::vector<CcMappingOverride> overrides;
+        overrides.reserve(8);
+        for (size_t i = 0; i < 8; ++i)
+        {
+            overrides.push_back({std::string(kCcTargetParamIds[i]),
+                                 m_ccActive[i].controller.load(std::memory_order_relaxed),
+                                 m_ccActive[i].valueLow.load(std::memory_order_relaxed),
+                                 m_ccActive[i].valueHigh.load(std::memory_order_relaxed)});
+        }
+        CcSettings::save(overrides);
+    }
+
+    void handleMidiCc(const uint8_t controller, const uint8_t value7bit)
+    {
+        const auto learnIndex = m_learnTargetIndex.load(std::memory_order_relaxed);
+        if (learnIndex >= 0)
+        {
+            m_ccActive[static_cast<size_t>(learnIndex)].controller.store(controller, std::memory_order_relaxed);
+            m_learnTargetIndex.store(-1, std::memory_order_relaxed);
+            m_lastLearnedIndex.store(learnIndex, std::memory_order_relaxed);
+            return;
+        }
+        for (size_t i = 0; i < 8; ++i)
+        {
+            if (m_ccActive[i].controller.load(std::memory_order_relaxed) != controller)
+            {
+                continue;
+            }
+            const auto lo = m_ccActive[i].valueLow.load(std::memory_order_relaxed);
+            const auto hi = m_ccActive[i].valueHigh.load(std::memory_order_relaxed);
+            const auto raw = lo + (hi - lo) * (static_cast<float>(value7bit) / 127.f);
+            if (auto* param =
+                    m_parameters.getParameter(juce::String(kCcTargetParamIds[i].data(), kCcTargetParamIds[i].size())))
+            {
+                param->setValueNotifyingHost(param->convertTo0to1(raw));
+            }
+        }
+    }
     // CPU-Load
     std::atomic<float> m_cpuLoad;
     std::vector<size_t> m_avgCpu;

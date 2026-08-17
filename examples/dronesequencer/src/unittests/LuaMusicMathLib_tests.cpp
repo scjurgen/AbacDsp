@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <gtest/gtest.h>
 
 #include "inc/LuaMusicMathLib.h"
@@ -74,4 +75,40 @@ TEST(LuaMusicMathLib, BeatsToMsMatchesKnownBpm)
 {
     EXPECT_FLOAT_EQ(LuaMusicMath::beatsToMs(1.f, 120.f), 500.f);
     EXPECT_FLOAT_EQ(LuaMusicMath::beatsToMs(0.5f, 120.f), 250.f);
+}
+
+TEST(LuaMusicMathLib, HarmonicSeriesIsIntegerMultiplesOfTheFundamental)
+{
+    std::array<float, 4> out{};
+    const size_t written = LuaMusicMath::harmonicSeries(110.f, 4, out);
+    ASSERT_EQ(written, 4u);
+    EXPECT_FLOAT_EQ(out[0], 110.f);
+    EXPECT_FLOAT_EQ(out[1], 220.f);
+    EXPECT_FLOAT_EQ(out[2], 330.f);
+    EXPECT_FLOAT_EQ(out[3], 440.f);
+}
+
+TEST(LuaMusicMathLib, HarmonicSeriesIsClampedToTheOutputSpan)
+{
+    std::array<float, 2> out{};
+    EXPECT_EQ(LuaMusicMath::harmonicSeries(100.f, 10, out), 2u);
+}
+
+TEST(LuaMusicMathLib, HarmonizeToScaleSnapsToNearestScaleDegree)
+{
+    // C major (root = 60): note 61 (C#) is 1 semitone from both 60 (C) and 62 (D) - the
+    // scan picks the first minimum, so it resolves to 60.
+    EXPECT_FLOAT_EQ(LuaMusicMath::harmonizeToScale(61.f, 60.f, LuaMusicMath::kScaleMajor), 60.f);
+    // note 63 (D#) is 1 semitone from 62 (D) and 2 from 64 (E) - snaps to 62.
+    EXPECT_FLOAT_EQ(LuaMusicMath::harmonizeToScale(63.f, 60.f, LuaMusicMath::kScaleMajor), 62.f);
+}
+
+TEST(LuaMusicMathLib, HarmonizeToScalePreservesOctave)
+{
+    EXPECT_FLOAT_EQ(LuaMusicMath::harmonizeToScale(73.f, 60.f, LuaMusicMath::kScaleMajor), 72.f);
+}
+
+TEST(LuaMusicMathLib, HarmonizeToScaleWithEmptyIntervalsReturnsNoteUnchanged)
+{
+    EXPECT_FLOAT_EQ(LuaMusicMath::harmonizeToScale(65.f, 60.f, {}), 65.f);
 }

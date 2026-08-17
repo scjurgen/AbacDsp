@@ -12,11 +12,13 @@
 #include <memory>
 #include <optional>
 #include <sol/sol.hpp>
+#include <span>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <vector>
 
+#include "Analysis/YinPitchDetector.h"
 #include "LuaMusicMathLib.h"
 #include "LuaParamRangeMath.h"
 #include "LuaScriptMemoryPool.h"
@@ -108,6 +110,10 @@ class LuaScriptEngineBase
     static constexpr size_t kMaxLuaParams{8};
     using UiParamSlots = std::array<LuaUiParamSlot, kMaxLuaParams>;
 
+    static constexpr float kDefaultPitchGranularityMs{100.f};
+    static constexpr float kMinPitchGranularityMs{5.f};
+    static constexpr float kMaxPitchGranularityMs{2000.f};
+
     // Resolves an `import "name"` line (see loadScript()) to that library's Lua source.
     // Left unset, every import fails to resolve - a Derived that never wires one up
     // simply never supports imports.
@@ -129,6 +135,13 @@ class LuaScriptEngineBase
 "-- })\n"
 "--\n"
 "-- function OnDepthChanged(value)\n"
+"-- end\n"
+"\n"
+"-- Feeds from your impl's feedPitchAnalysis() (YIN), firing every analysis hop - see\n"
+"-- setPitchAnalysisGranularity(), default 100 ms. confidence is 0..1 (0 = no reliable\n"
+"-- pitch). Pitch.Hz()/Pitch.Confidence() read the same values on demand. Uncomment to\n"
+"-- try it:\n"
+"-- function OnPitchDetected(hz, confidence)\n"
 "-- end\n"
 "\n"
 "-- Timer.After(ms, fn) fires fn once; Timer.Every(ms, fn) repeats. Both return an id you\n"
@@ -219,12 +232,36 @@ class LuaScriptEngineBase
     // the script defined one. Silently ignored for an unclaimed or out-of-range slot.
     void notifyUiParameterChanged(size_t slot, float value) noexcept;
 
-    // Used by Timer.After/Timer.Every's ms-to-samples conversion; call once after
-    // construction (and again if the sample rate changes). Defaults to 44100 so a script
-    // exercised without a host (e.g. in a test) still gets sane timer behavior.
-    void setSampleRate(const float sampleRate) noexcept
+    // Used by Timer.After/Timer.Every and to (re)build the pitch detector; call once after
+    // construction (and again if the sample rate changes). Not real-time safe - call
+    // during setup, never mid-stream.
+    void setSampleRate(const float sampleRate)
     {
         m_sampleRate = sampleRate;
+        rebuildPitchDetector();
+    }
+
+    // Not real-time safe, same reason as setSampleRate() above: rebuilds the detector.
+    // ms is clamped to [kMinPitchGranularityMs, kMaxPitchGranularityMs].
+    void setPitchAnalysisGranularity(const float granularityMs)
+    {
+        m_pitchGranularityMs = std::clamp(granularityMs, kMinPitchGranularityMs, kMaxPitchGranularityMs);
+        rebuildPitchDetector();
+    }
+
+    // Real-time safe: steps the YIN detector sample-by-sample and fires
+    // OnPitchDetected(hz, confidence) through callHandler() on every hop it completes. A
+    // no-op until setSampleRate() has run at least once.
+    void feedPitchAnalysis(std::span<const float> block) noexcept;
+
+    [[nodiscard]] float currentPitchHz() const noexcept
+    {
+        return m_currentPitchHz;
+    }
+
+    [[nodiscard]] float currentPitchConfidence() const noexcept
+    {
+        return m_currentPitchConfidence;
     }
 
     // Advances every active Timer.After/Timer.Every slot by numSamples and fires any that
@@ -338,6 +375,10 @@ class LuaScriptEngineBase
     void bindMusicMathLibrary();
     void bindTimerApi();
     void bindTransportApi();
+    void bindPitchApi();
+    // (Re)builds m_pitchDetector from the current sample rate and granularity; called by
+    // setSampleRate() and setPitchAnalysisGranularity(), both documented not real-time safe.
+    void rebuildPitchDetector();
     // Returns the spliced script ready to compile, or nullopt (with m_lastError set and
     // logged to std::cerr) if a leading import line names a library that fails to resolve.
     [[nodiscard]] std::optional<std::string> resolveImports(std::string_view source);
@@ -374,6 +415,7 @@ class LuaScriptEngineBase
     sol::protected_function m_onTimeSignatureChangedFn;
     sol::protected_function m_onPlayingStartFn;
     sol::protected_function m_onPlayingStopFn;
+    sol::protected_function m_onPitchDetectedFn;
 
     UiParamSlots m_uiParamSlots{};
     UiParamSlots m_pendingUiParamSlots{};
@@ -383,6 +425,15 @@ class LuaScriptEngineBase
     std::array<LuaTimerSlot, kMaxLuaTimers> m_timerSlots{};
     LuaTransportSnapshot m_transport{};
     ImportResolver m_importResolver;
+
+    // YinPitchDetector's own defaults - kept as named constants here since they bound
+    // what "pitch" means for every script (see class doc caveats).
+    static constexpr float kPitchMinFreqHz{80.f};
+    static constexpr float kPitchMaxFreqHz{1000.f};
+    float m_pitchGranularityMs{kDefaultPitchGranularityMs};
+    float m_currentPitchHz{0.f};
+    float m_currentPitchConfidence{0.f};
+    std::optional<AbacDsp::YinPitchDetector> m_pitchDetector;
 };
 
 template <typename Derived>
@@ -403,6 +454,7 @@ void LuaScriptEngineBase<Derived>::bindApiFunctions()
     bindMusicMathLibrary();
     bindTimerApi();
     bindTransportApi();
+    bindPitchApi();
 }
 
 template <typename Derived>
@@ -417,6 +469,34 @@ void LuaScriptEngineBase<Derived>::bindMusicMathLibrary()
                                                  { return LuaMusicMath::hzToNote(hz, tuning); }));
     music.set_function("IntervalToRatio", &LuaMusicMath::intervalToRatio);
     music.set_function("RatioToInterval", &LuaMusicMath::ratioToInterval);
+
+    music.set_function("Harmonics",
+                       [this](const float fundamentalHz, const size_t count)
+                       {
+                           std::array<float, LuaMusicMath::kMaxHarmonics> buffer{};
+                           const size_t written = LuaMusicMath::harmonicSeries(fundamentalHz, count, buffer);
+                           sol::table table = m_lua.create_table(static_cast<int>(written), 0);
+                           for (size_t i = 0; i < written; ++i)
+                           {
+                               table[i + 1] = buffer[i];
+                           }
+                           return table;
+                       });
+
+    // Linear scan over kScales (a handful of entries) is simpler than a name->index map
+    // for a function only ever called from script logic, not the audio-thread hot path.
+    music.set_function("HarmonizeToScale",
+                       [](const float note, const float root, const std::string& scaleName)
+                       {
+                           for (const auto& entry : LuaMusicMath::kScales)
+                           {
+                               if (entry.name == scaleName)
+                               {
+                                   return LuaMusicMath::harmonizeToScale(note, root, entry.intervals);
+                               }
+                           }
+                           return note;
+                       });
 
     const auto intervalsToLuaTable = [this](const std::span<const int> intervals)
     {
@@ -495,6 +575,21 @@ void LuaScriptEngineBase<Derived>::bindTransportApi()
 }
 
 template <typename Derived>
+void LuaScriptEngineBase<Derived>::bindPitchApi()
+{
+    sol::table pitch = m_lua.create_table();
+    pitch.set_function("Hz", [this] { return m_currentPitchHz; });
+    pitch.set_function("Confidence", [this] { return m_currentPitchConfidence; });
+    m_lua["Pitch"] = pitch;
+}
+
+template <typename Derived>
+void LuaScriptEngineBase<Derived>::rebuildPitchDetector()
+{
+    m_pitchDetector.emplace(m_sampleRate, kPitchMinFreqHz, kPitchMaxFreqHz, 1000.f / m_pitchGranularityMs);
+}
+
+template <typename Derived>
 int LuaScriptEngineBase<Derived>::scheduleTimer(const double ms, sol::protected_function callback, const bool repeating)
 {
     for (size_t i = 0; i < kMaxLuaTimers; ++i)
@@ -548,6 +643,25 @@ void LuaScriptEngineBase<Derived>::tickBlock(const size_t numSamples) noexcept
         else
         {
             slot.active = false;
+        }
+    }
+}
+
+template <typename Derived>
+void LuaScriptEngineBase<Derived>::feedPitchAnalysis(const std::span<const float> block) noexcept
+{
+    if (!m_pitchDetector)
+    {
+        return;
+    }
+    for (const float sample : block)
+    {
+        const float pitch = m_pitchDetector->step(sample);
+        if (m_pitchDetector->hasNewPitch())
+        {
+            m_currentPitchHz = pitch;
+            m_currentPitchConfidence = m_pitchDetector->getLastConfidence();
+            callHandler(m_onPitchDetectedFn, m_currentPitchHz, m_currentPitchConfidence);
         }
     }
 }
@@ -609,6 +723,7 @@ void LuaScriptEngineBase<Derived>::bindFunctions()
     m_onTimeSignatureChangedFn = m_lua["OnTimeSignatureChanged"];
     m_onPlayingStartFn = m_lua["OnPlayingStart"];
     m_onPlayingStopFn = m_lua["OnPlayingStop"];
+    m_onPitchDetectedFn = m_lua["OnPitchDetected"];
 
     m_uiParamSlots = m_pendingUiParamSlots;
     for (size_t i = 0; i < kMaxLuaParams; ++i)

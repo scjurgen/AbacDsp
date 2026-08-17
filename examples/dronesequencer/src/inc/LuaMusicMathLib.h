@@ -55,6 +55,48 @@ namespace LuaMusicMath
     return v * v * v;
 }
 
+inline constexpr size_t kMaxHarmonics{32};
+
+// Writes fundamental*1..fundamental*count into out (count clamped to out.size() and to
+// kMaxHarmonics); returns how many were written.
+inline size_t harmonicSeries(const float fundamentalHz, const size_t count, const std::span<float> out) noexcept
+{
+    const size_t written = std::min({count, out.size(), kMaxHarmonics});
+    for (size_t i = 0; i < written; ++i)
+    {
+        out[i] = fundamentalHz * static_cast<float>(i + 1);
+    }
+    return written;
+}
+
+// Snaps note's pitch class to the nearest degree of intervals (semitones from rootNote),
+// preserving note's octave and any fractional offset within the snap. Returns note
+// unchanged if intervals is empty.
+[[nodiscard]] inline float harmonizeToScale(const float note, const float rootNote,
+                                            const std::span<const int> intervals) noexcept
+{
+    if (intervals.empty())
+    {
+        return note;
+    }
+    const float relative = note - rootNote;
+    const float octave = std::floor(relative / 12.f);
+    const float pitchClass = relative - octave * 12.f;
+
+    float best = static_cast<float>(intervals[0]);
+    float bestDistance = std::abs(pitchClass - best);
+    for (const int interval : intervals)
+    {
+        const float distance = std::abs(pitchClass - static_cast<float>(interval));
+        if (distance < bestDistance)
+        {
+            bestDistance = distance;
+            best = static_cast<float>(interval);
+        }
+    }
+    return rootNote + octave * 12.f + best;
+}
+
 [[nodiscard]] inline size_t toroidIncrement(const size_t current, const size_t count) noexcept
 {
     return count == 0 ? 0 : (current + 1) % count;

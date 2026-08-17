@@ -1,13 +1,29 @@
 #include <array>
 #include <cassert>
+#include <cmath>
 #include <gtest/gtest.h>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <vector>
 
 #include "impl/DroneScriptEngine.h"
+
+namespace
+{
+std::vector<float> makeSineBlock(const float sampleRate, const float frequencyHz, const size_t numSamples)
+{
+    std::vector<float> block(numSamples);
+    for (size_t i = 0; i < numSamples; ++i)
+    {
+        block[i] = std::sin(2.f * std::numbers::pi_v<float> * frequencyHz * static_cast<float>(i) / sampleRate);
+    }
+    return block;
+}
+}
 
 TEST(DroneScriptEngine, StubScriptReturnsOneNote)
 {
@@ -1076,4 +1092,108 @@ TEST(DroneScriptEngine, ImportHeaderSkipsBlankLinesAndComments)
     const auto result = engine.nextNotes();
     ASSERT_EQ(result.count, 1u);
     EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 7.f);
+}
+
+TEST(DroneScriptEngine, PitchHzDefaultsToZeroBeforeAnyAudio)
+{
+    const DroneScriptEngine engine;
+    EXPECT_FLOAT_EQ(engine.currentPitchHz(), 0.f);
+    EXPECT_FLOAT_EQ(engine.currentPitchConfidence(), 0.f);
+}
+
+TEST(DroneScriptEngine, OnPitchDetectedReceivesConfidenceAsSecondArgument)
+{
+    DroneScriptEngine engine;
+    constexpr float kSampleRate = 44100.f;
+    engine.setSampleRate(kSampleRate);
+    engine.setPitchAnalysisGranularity(50.f);
+    ASSERT_TRUE(engine.loadScript(R"(
+        LastConfidence = -1
+        function OnPitchDetected(hz, confidence)
+            LastConfidence = confidence
+        end
+        function NextNotes()
+            return { { note = LastConfidence, velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+
+    engine.feedPitchAnalysis(makeSineBlock(kSampleRate, 220.f, 6000));
+
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_GT(result.notes[0].noteHeight, 0.9f);
+    EXPECT_FLOAT_EQ(engine.currentPitchConfidence(), result.notes[0].noteHeight);
+}
+
+TEST(DroneScriptEngine, FeedPitchAnalysisTracksSyntheticSineFrequency)
+{
+    DroneScriptEngine engine;
+    constexpr float kSampleRate = 44100.f;
+    engine.setSampleRate(kSampleRate);
+    engine.setPitchAnalysisGranularity(50.f);
+
+    engine.feedPitchAnalysis(makeSineBlock(kSampleRate, 220.f, 6000));
+
+    EXPECT_NEAR(engine.currentPitchHz(), 220.f, 3.f);
+}
+
+TEST(DroneScriptEngine, PitchHzLuaBindingReadsCurrentValue)
+{
+    DroneScriptEngine engine;
+    constexpr float kSampleRate = 44100.f;
+    engine.setSampleRate(kSampleRate);
+    engine.setPitchAnalysisGranularity(50.f);
+    ASSERT_TRUE(engine.loadScript(R"(
+        function NextNotes()
+            return { { note = Pitch.Hz(), velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+
+    engine.feedPitchAnalysis(makeSineBlock(kSampleRate, 220.f, 6000));
+
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_NEAR(result.notes[0].noteHeight, 220.f, 3.f);
+}
+
+TEST(DroneScriptEngine, OnPitchDetectedFiresOncePerAnalysisHop)
+{
+    DroneScriptEngine engine;
+    constexpr float kSampleRate = 44100.f;
+    engine.setSampleRate(kSampleRate);
+    engine.setPitchAnalysisGranularity(50.f); // hop = 2205 samples at 44100 Hz
+    ASSERT_TRUE(engine.loadScript(R"(
+        PitchCallbacks = 0
+        function OnPitchDetected(hz) PitchCallbacks = PitchCallbacks + 1 end
+        function NextNotes()
+            return { { note = PitchCallbacks, velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+
+    engine.feedPitchAnalysis(makeSineBlock(kSampleRate, 220.f, 2205 * 3));
+
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 3.f);
+}
+
+TEST(DroneScriptEngine, PitchAnalysisGranularityChangesHopCadence)
+{
+    DroneScriptEngine engine;
+    constexpr float kSampleRate = 44100.f;
+    engine.setSampleRate(kSampleRate);
+    engine.setPitchAnalysisGranularity(10.f); // hop = 441 samples at 44100 Hz
+    ASSERT_TRUE(engine.loadScript(R"(
+        PitchCallbacks = 0
+        function OnPitchDetected(hz) PitchCallbacks = PitchCallbacks + 1 end
+        function NextNotes()
+            return { { note = PitchCallbacks, velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+
+    engine.feedPitchAnalysis(makeSineBlock(kSampleRate, 220.f, 4410)); // 10 hops at 441 samples each
+
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 10.f);
 }

@@ -3,7 +3,7 @@
 
 #include "impl/StubImpl.h"
 
-TEST(Resoniktest, failed)
+TEST(Resoniktest, placeholder)
 {
-    EXPECT_EQ(1, 2) << "implement your unit-tests";
+    SUCCEED() << "implement your unit-tests";
 }

@@ -3,26 +3,31 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <string>
+#include <string_view>
+#include <utility>
 
 #include "Audio/AudioBuffer.h"
-#include "Delays/NaiveDelay.h"
+#include "Delays/MultiTapDelay.h"
 #include "EffectBase.h"
 #include "Filters/BiquadResoBP.h"
 #include "Filters/SvfResoBP.h"
 #include "Parameters/SmoothingParameter.h"
+#include "ResonikScriptEngine.h"
 
 template <size_t BlockSize>
 class ResonikImpl final : public EffectBase
 {
   public:
     static constexpr size_t kMaxChains{100};
-    // NaiveDelay allocates its full buffer per instance regardless of the delay currently in
-    // use, and we hold kMaxChains of them, so the max delay time is sized against the (now
-    // smaller) chain count to keep total buffer memory reasonable. Assumes the engine's fixed
-    // 48 kHz internal rate (RateNormalizer::kInternalSampleRate).
+    // One shared buffer sized for the max delay time, independent of kMaxChains. Assumes
+    // the engine's fixed 48 kHz internal rate (RateNormalizer::kInternalSampleRate).
     static constexpr float kMaxDelayMs{2000.f};
     static constexpr float kAssumedSampleRate{48000.f};
     static constexpr size_t kMaxDelaySamples{static_cast<size_t>(kAssumedSampleRate * kMaxDelayMs / 1000.f) + 4};
+    static constexpr float kPitchAnalysisGranularityMs{100.f};
+    static_assert(ResonikScriptEngine::kMaxBodies >= kMaxChains,
+                  "ResonikScriptEngine's body-override pool must cover every chain");
 
     explicit ResonikImpl(const float sampleRate)
         : EffectBase(sampleRate)
@@ -35,10 +40,91 @@ class ResonikImpl final : public EffectBase
         {
             svf.setSampleRate(sampleRate);
         }
+        m_chainQ.fill(m_q);
         recomputeFrequencies();
         recomputeDecay();
         recomputeGain();
         recomputeDelay();
+        m_scriptEngine.setSampleRate(sampleRate);
+        m_scriptEngine.setPitchAnalysisGranularity(kPitchAnalysisGranularityMs);
+    }
+
+    // A reload resets the script's Lua globals, so resendUiParameters() re-syncs it to
+    // each claimed slot's current value - otherwise it stays believing coded defaults.
+    bool setScript(const std::string_view source)
+    {
+        const bool ok = m_scriptEngine.loadScript(source);
+        if (ok)
+        {
+            resendUiParameters();
+        }
+        return ok;
+    }
+
+    void setImportResolver(ResonikScriptEngine::ImportResolver resolver)
+    {
+        m_scriptEngine.setImportResolver(std::move(resolver));
+    }
+
+    [[nodiscard]] bool hasScriptError() const noexcept
+    {
+        return m_scriptEngine.hasError();
+    }
+
+    [[nodiscard]] const std::string& scriptError() const noexcept
+    {
+        return m_scriptEngine.lastError();
+    }
+
+    // Shown by the popup editor's Reset button, not the engine's own default script.
+    [[nodiscard]] static std::string scriptSkeleton()
+    {
+        return std::string(ResonikScriptEngine::kFullSkeletonScript);
+    }
+
+    [[nodiscard]] const ResonikScriptEngine::UiParamSlots& uiParamSlots() const noexcept
+    {
+        return m_scriptEngine.uiParamSlots();
+    }
+
+    void setLuaParam1(const float value) noexcept
+    {
+        m_luaParamValues[0] = value;
+    }
+
+    void setLuaParam2(const float value) noexcept
+    {
+        m_luaParamValues[1] = value;
+    }
+
+    void setLuaParam3(const float value) noexcept
+    {
+        m_luaParamValues[2] = value;
+    }
+
+    void setLuaParam4(const float value) noexcept
+    {
+        m_luaParamValues[3] = value;
+    }
+
+    void setLuaParam5(const float value) noexcept
+    {
+        m_luaParamValues[4] = value;
+    }
+
+    void setLuaParam6(const float value) noexcept
+    {
+        m_luaParamValues[5] = value;
+    }
+
+    void setLuaParam7(const float value) noexcept
+    {
+        m_luaParamValues[6] = value;
+    }
+
+    void setLuaParam8(const float value) noexcept
+    {
+        m_luaParamValues[7] = value;
     }
 
     void setNumChains(const float value)
@@ -106,6 +192,10 @@ class ResonikImpl final : public EffectBase
     void setQ(const float value)
     {
         m_q = value;
+        for (size_t c = 0; c < m_activeChains; ++c)
+        {
+            m_chainQ[c] = value;
+        }
         recomputeBiquad();
     }
 
@@ -123,22 +213,26 @@ class ResonikImpl final : public EffectBase
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
+        m_scriptEngine.tickBlock(BlockSize);
+        notifyUiParametersIfChanged();
+
         std::array<float, BlockSize> monoIn{};
         for (size_t s = 0; s < BlockSize; ++s)
         {
             monoIn[s] = 0.5f * (in(s, 0) + in(s, 1));
         }
+        m_scriptEngine.feedPitchAnalysis(monoIn);
+        applyPendingResonanceCommands();
 
+        // Sample-major, not chain-major: every chain taps the same shared delay buffer, so
+        // it must be written exactly once per sample before any chain reads that sample.
         std::array<float, BlockSize> wetSum{};
-        for (size_t c = 0; c < m_activeChains; ++c)
+        for (size_t s = 0; s < BlockSize; ++s)
         {
-            auto& delay = m_delay[c];
-            auto& biquad = m_biquad[c];
-            auto& svf = m_svf[c];
-            const auto gain = m_gainLin[c];
-            for (size_t s = 0; s < BlockSize; ++s)
+            m_delay.write(monoIn[s]);
+            for (size_t c = 0; c < m_activeChains; ++c)
             {
-                wetSum[s] += svf.step(biquad.step(delay.step(monoIn[s]))) * gain;
+                wetSum[s] += m_svf[c].step(m_biquad[c].step(m_delay.readTap(c))) * m_gainLin[c];
             }
         }
 
@@ -154,6 +248,116 @@ class ResonikImpl final : public EffectBase
     }
 
   private:
+    // Same exact-equality reasoning as DroneScriptEngine's notifyTimingIfChanged(): a
+    // stored float either stays bit-identical or is genuinely a new host/UI value.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+    void notifyUiParametersIfChanged() noexcept
+    {
+        for (size_t i = 0; i < ResonikScriptEngine::kMaxLuaParams; ++i)
+        {
+            if (m_luaParamValues[i] == m_lastNotifiedLuaParamValues[i])
+            {
+                continue;
+            }
+            m_scriptEngine.notifyUiParameterChanged(i, m_luaParamValues[i]);
+            m_lastNotifiedLuaParamValues[i] = m_luaParamValues[i];
+        }
+    }
+#pragma GCC diagnostic pop
+
+    // Notifies every slot's current value unconditionally, unlike
+    // notifyUiParametersIfChanged() - see setScript()'s comment for why.
+    void resendUiParameters() noexcept
+    {
+        for (size_t i = 0; i < ResonikScriptEngine::kMaxLuaParams; ++i)
+        {
+            m_scriptEngine.notifyUiParameterChanged(i, m_luaParamValues[i]);
+            m_lastNotifiedLuaParamValues[i] = m_luaParamValues[i];
+        }
+    }
+
+    void applyPendingResonanceCommands()
+    {
+        if (const auto freq = m_scriptEngine.drainFreqRangeCommand())
+        {
+            setLowFreq(freq->low);
+            setHighFreq(freq->high);
+            if (freq->distribution)
+            {
+                setDistribution(*freq->distribution);
+            }
+        }
+        if (const auto decay = m_scriptEngine.drainDecayRangeCommand())
+        {
+            setDecayMin(decay->low);
+            setDecayMax(decay->high);
+        }
+        if (const auto gain = m_scriptEngine.drainGainRangeCommand())
+        {
+            setGainMin(gain->low);
+            setGainMax(gain->high);
+        }
+        if (const auto delay = m_scriptEngine.drainDelayRangeCommand())
+        {
+            setDelayMin(delay->low);
+            setDelayMax(delay->high);
+        }
+        if (const auto q = m_scriptEngine.drainQCommand())
+        {
+            setQ(*q);
+        }
+        applyResonanceBodyOverrides();
+    }
+
+    // Applied after every aggregate command above, every block, so a per-body override
+    // always wins for whichever fields it sets - see ResonikScriptEngine's class doc.
+    void applyResonanceBodyOverrides()
+    {
+        const auto& overrides = m_scriptEngine.bodyOverrides();
+        for (size_t c = 0; c < m_activeChains; ++c)
+        {
+            const auto& body = overrides[c];
+            if (!body)
+            {
+                continue;
+            }
+            bool freqOrQChanged = false;
+            if (body->freq)
+            {
+                m_chainFreq[c] = *body->freq;
+                freqOrQChanged = true;
+            }
+            if (body->q)
+            {
+                m_chainQ[c] = *body->q;
+                freqOrQChanged = true;
+            }
+            if (freqOrQChanged)
+            {
+                recomputeBiquadForChain(c);
+            }
+            if (body->freq || body->decay)
+            {
+                if (body->decay)
+                {
+                    m_chainDecay[c] = *body->decay;
+                }
+                recomputeSvfForChain(c);
+            }
+            if (body->gainDb)
+            {
+                m_gainLin[c] = std::pow(10.f, *body->gainDb / 20.f);
+            }
+            if (body->delayMs)
+            {
+                const auto delaySamples = static_cast<size_t>(
+                    std::clamp(*body->delayMs, 0.f, kMaxDelayMs) * 0.001f * kAssumedSampleRate + 0.5f);
+                m_delay.setTapDelay(c, delaySamples);
+            }
+        }
+    }
+
     [[nodiscard]] float chainFraction(const size_t index) const noexcept
     {
         return m_activeChains > 1 ? static_cast<float>(index) / static_cast<float>(m_activeChains - 1) : 0.f;
@@ -199,15 +403,25 @@ class ResonikImpl final : public EffectBase
             const auto delayMs = m_delayMinMs + fraction * (m_delayMaxMs - m_delayMinMs);
             const auto delaySamples =
                 static_cast<size_t>(std::clamp(delayMs, 0.f, kMaxDelayMs) * 0.001f * kAssumedSampleRate + 0.5f);
-            m_delay[c].setSize(delaySamples);
+            m_delay.setTapDelay(c, delaySamples);
         }
+    }
+
+    void recomputeBiquadForChain(const size_t c)
+    {
+        m_biquad[c].computeCoefficients(0, m_chainFreq[c], m_chainQ[c]);
+    }
+
+    void recomputeSvfForChain(const size_t c)
+    {
+        m_svf[c].setByDecay(0, m_chainFreq[c], m_chainDecay[c]);
     }
 
     void recomputeBiquad()
     {
         for (size_t c = 0; c < m_activeChains; ++c)
         {
-            m_biquad[c].computeCoefficients(0, m_chainFreq[c], m_q);
+            recomputeBiquadForChain(c);
         }
     }
 
@@ -215,7 +429,7 @@ class ResonikImpl final : public EffectBase
     {
         for (size_t c = 0; c < m_activeChains; ++c)
         {
-            m_svf[c].setByDecay(0, m_chainFreq[c], m_chainDecay[c]);
+            recomputeSvfForChain(c);
         }
     }
 
@@ -236,8 +450,14 @@ class ResonikImpl final : public EffectBase
 
     std::array<AbacDsp::BiquadResoBP, kMaxChains> m_biquad{};
     std::array<AbacDsp::SvfResoBP, kMaxChains> m_svf{};
-    std::array<AbacDsp::NaiveDelay<kMaxDelaySamples>, kMaxChains> m_delay{};
+    AbacDsp::MultiTapDelay<kMaxDelaySamples, kMaxChains> m_delay{};
     std::array<float, kMaxChains> m_chainFreq{};
     std::array<float, kMaxChains> m_chainDecay{};
+    std::array<float, kMaxChains> m_chainQ{};
     std::array<float, kMaxChains> m_gainLin{};
+
+    ResonikScriptEngine m_scriptEngine;
+    std::array<float, ResonikScriptEngine::kMaxLuaParams> m_luaParamValues{};
+    std::array<float, ResonikScriptEngine::kMaxLuaParams> m_lastNotifiedLuaParamValues{-1.f, -1.f, -1.f, -1.f,
+                                                                                       -1.f, -1.f, -1.f, -1.f};
 };

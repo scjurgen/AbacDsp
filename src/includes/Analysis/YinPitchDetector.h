@@ -77,6 +77,13 @@ class YinPitchDetector
         return m_currentPitch;
     }
 
+    // 1 - CMNDF at the winning lag: near 1 for a clean periodic signal, near 0 when
+    // nothing crossed threshold. 0 whenever getCurrentPitch() is 0 (silence/no pitch).
+    [[nodiscard]] float getLastConfidence() const noexcept
+    {
+        return m_lastConfidence;
+    }
+
     [[nodiscard]] size_t getBufferSize() const noexcept
     {
         return m_bufferSize;
@@ -105,6 +112,7 @@ class YinPitchDetector
     std::vector<float> m_cmndf;
     size_t m_writeIndex{0};
     float m_currentPitch{0.0f};
+    float m_lastConfidence{0.0f};
     size_t m_hopCounter{0};
     bool m_newPitch{false};
 
@@ -122,6 +130,7 @@ class YinPitchDetector
     {
         if (!hasEnoughEnergy())
         {
+            m_lastConfidence = 0.0f;
             return 0.0f;
         }
         computeDifferenceFunction();
@@ -129,8 +138,10 @@ class YinPitchDetector
         const auto tauOpt = findAbsoluteThreshold();
         if (!tauOpt.has_value())
         {
+            m_lastConfidence = 0.0f;
             return 0.0f;
         }
+        m_lastConfidence = std::clamp(1.0f - m_cmndf[tauOpt.value()], 0.0f, 1.0f);
         const float refinedTau = parabolicInterpolation(tauOpt.value());
         return m_sampleRate / refinedTau;
     }
@@ -230,7 +241,11 @@ class YinPitchDetector
             return static_cast<float>(tau);
         }
 
-        return static_cast<float>(tau) + (-b / (2.0f * a));
+        // Clamped to +/-0.5 samples - parabolic interpolation should only ever refine
+        // within the sample either side of the discrete minimum. A near-flat CMNDF curve
+        // around tau (small a, disproportionate b) would otherwise send the estimate wildly off tau.
+        const float correction = std::clamp(-b / (2.0f * a), -0.5f, 0.5f);
+        return static_cast<float>(tau) + correction;
     }
 };
 

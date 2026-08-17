@@ -29,45 +29,37 @@ class StubImpl final : public EffectBase
     {
         m_wet = std::pow(10.f, value / 20.f);
     }
-    void setLowFreq(const float value)
+    void setLuaParam1(const float value)
     {
-        m_lowFreq = value;
+        m_luaParam1 = value;
     }
-    void setHighFreq(const float value)
+    void setLuaParam2(const float value)
     {
-        m_highFreq = value;
+        m_luaParam2 = value;
     }
-    void setDistribution(const size_t value)
+    void setLuaParam3(const float value)
     {
-        m_distribution = value;
+        m_luaParam3 = value;
     }
-    void setDecayMin(const float value)
+    void setLuaParam4(const float value)
     {
-        m_decayMin = value;
+        m_luaParam4 = value;
     }
-    void setDecayMax(const float value)
+    void setLuaParam5(const float value)
     {
-        m_decayMax = value;
+        m_luaParam5 = value;
     }
-    void setGainMin(const float value)
+    void setLuaParam6(const float value)
     {
-        m_gainMin = std::pow(10.f, value / 20.f);
+        m_luaParam6 = value;
     }
-    void setGainMax(const float value)
+    void setLuaParam7(const float value)
     {
-        m_gainMax = std::pow(10.f, value / 20.f);
+        m_luaParam7 = value;
     }
-    void setDelayMin(const float value)
+    void setLuaParam8(const float value)
     {
-        m_delayMin = value;
-    }
-    void setDelayMax(const float value)
-    {
-        m_delayMax = value;
-    }
-    void setQ(const float value)
-    {
-        m_q = value;
+        m_luaParam8 = value;
     }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
@@ -83,14 +75,12 @@ class StubImpl final : public EffectBase
     float m_numChains{};
     float m_dry{};
     float m_wet{};
-    float m_lowFreq{};
-    float m_highFreq{};
-    size_t m_distribution{};
-    float m_decayMin{};
-    float m_decayMax{};
-    float m_gainMin{};
-    float m_gainMax{};
-    float m_delayMin{};
-    float m_delayMax{};
-    float m_q{};
+    float m_luaParam1{};
+    float m_luaParam2{};
+    float m_luaParam3{};
+    float m_luaParam4{};
+    float m_luaParam5{};
+    float m_luaParam6{};
+    float m_luaParam7{};
+    float m_luaParam8{};
 };

@@ -252,4 +252,59 @@ TEST_F(YinPitchDetectorTest, frequencyRange)
     }
 }
 
+TEST_F(YinPitchDetectorTest, getLastConfidenceIsHighForACleanSine)
+{
+    Generator<Wave::Sine> generator(kSampleRate, 220.0f);
+    for (size_t i = 0; i < 4096; ++i)
+    {
+        std::ignore = m_detector->step(generator.step());
+    }
+    EXPECT_GT(m_detector->getLastConfidence(), 0.9f);
+}
+
+TEST_F(YinPitchDetectorTest, getLastConfidenceIsZeroForSilence)
+{
+    for (size_t i = 0; i < 4096; ++i)
+    {
+        std::ignore = m_detector->step(0.0f);
+    }
+    EXPECT_FLOAT_EQ(m_detector->getLastConfidence(), 0.0f);
+}
+
+// Regression guard: an unclamped parabolic-interpolation correction had no bound, so a
+// near-flat CMNDF curve around an otherwise valid minimum could send the reported pitch
+// arbitrarily far off - swept across every waveform since sine alone didn't trigger it.
+TEST_F(YinPitchDetectorTest, DetectedPitchNeverEscapesTheConfiguredRange)
+{
+    const auto sweep = [this](auto& generator, const char* waveName)
+    {
+        for (size_t i = 0; i < 8000; ++i)
+        {
+            const float pitch = m_detector->step(generator.step());
+            if (m_detector->hasNewPitch() && pitch > 0.0f)
+            {
+                EXPECT_GE(pitch, 40.0f) << waveName;
+                EXPECT_LE(pitch, 2000.0f) << waveName;
+            }
+        }
+    };
+
+    for (float targetFreq = 80.0f; targetFreq <= 1000.0f; targetFreq += 23.7f)
+    {
+        SCOPED_TRACE("target " + std::to_string(targetFreq) + " Hz");
+        m_detector = std::make_unique<YinPitchDetector>(kSampleRate, 80.0f, 1000.0f, 50.f);
+        Generator<Wave::Sine> sine(kSampleRate, targetFreq);
+        sweep(sine, "sine");
+        m_detector = std::make_unique<YinPitchDetector>(kSampleRate, 80.0f, 1000.0f, 50.f);
+        Generator<Wave::Saw> saw(kSampleRate, targetFreq);
+        sweep(saw, "saw");
+        m_detector = std::make_unique<YinPitchDetector>(kSampleRate, 80.0f, 1000.0f, 50.f);
+        Generator<Wave::Square> square(kSampleRate, targetFreq);
+        sweep(square, "square");
+        m_detector = std::make_unique<YinPitchDetector>(kSampleRate, 80.0f, 1000.0f, 50.f);
+        Generator<Wave::Triangle> triangle(kSampleRate, targetFreq);
+        sweep(triangle, "triangle");
+    }
+}
+
 }

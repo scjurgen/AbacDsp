@@ -30,6 +30,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(m_menuBar);
         addAndMakeVisible(m_statusBar);
         initWidgets();
+        initLlmAssist();
         setResizable(true, true);
         setResizeLimits(GuiConstants::instance().init.WindowWidth, GuiConstants::instance().init.WindowHeight, 4000,
                         3000);
@@ -83,8 +84,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // auto generated
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-            std::vector<juce::Rectangle<int>> areas(1);
-            areas[0] = area.reduced(Constants::Margins::small);
+            std::vector<juce::Rectangle<int>> areas(2);
+            const auto rowHeight = area.getHeight() / 1;
+            areas[0] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[1] = area.reduced(Constants::Margins::small);
 
             {
                 juce::FlexBox box;
@@ -94,6 +97,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.items.add(juce::FlexItem(levelGauge).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[0].toFloat());
             }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(luaControlsLuaControlArea).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[1].toFloat());
+            }
         }
         else
         {
@@ -101,14 +112,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
 
-            std::vector<juce::Rectangle<int>> areas(5);
+            std::vector<juce::Rectangle<int>> areas(3);
             const auto colWidth = area.getWidth() / 13;
-            const auto rowHeight = area.getHeight() / 5;
+            const auto rowHeight = area.getHeight() / 2;
             areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-            areas[1] = area.removeFromTop(rowHeight * 2).reduced(Constants::Margins::small);
-            areas[2] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-            areas[3] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-            areas[4] = area.reduced(Constants::Margins::small);
+            areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[2] = area.reduced(Constants::Margins::small);
 
             {
                 juce::FlexBox box;
@@ -135,35 +144,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
                 box.flexDirection = juce::FlexBox::Direction::row;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(lowFreqDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(highFreqDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(distributionDrop)
-                                  .withFlex(1)
-                                  .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
-                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(luaControlsLuaControlArea).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[2].toFloat());
-            }
-            {
-                juce::FlexBox box;
-                box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::row;
-                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(decayMinDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(decayMaxDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(delayMinDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(delayMaxDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(qDial).withFlex(1).withMargin(knobMarginSmall));
-                box.performLayout(areas[3].toFloat());
-            }
-            {
-                juce::FlexBox box;
-                box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::row;
-                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(gainMinDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(gainMaxDial).withFlex(1).withMargin(knobMarginSmall));
-                box.performLayout(areas[4].toFloat());
             }
         }
     }
@@ -176,6 +158,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             cpuGauge.update(processorRef.getCpuLoad());
             levelGauge.update(processorRef.getInputDbLoad(), processorRef.getOutputDbLoad());
             spectrogramGauge.update(processorRef.getSpectrogram());
+
+            pollScriptError();
+            pollLlmAssistWatcher();
+            if (processorRef.hasRunner())
+            {
+                luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()),
+                                                  valueTreeState);
+            }
+            processorRef.consumeLastLearnedCc();
         }
     }
 
@@ -193,47 +184,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         wetDial.reset(valueTreeState, "wet");
         wetDial.setLabelText(juce::String::fromUTF8("Wet"));
         wetDial.setTooltip(juce::String::fromUTF8("Wet (-100 to 12 dB)"));
-        addAndMakeVisible(lowFreqDial);
-        lowFreqDial.reset(valueTreeState, "lowFreq");
-        lowFreqDial.setLabelText(juce::String::fromUTF8("Low Freq"));
-        lowFreqDial.setTooltip(juce::String::fromUTF8("Low Freq (20 to 20000 Hz)"));
-        addAndMakeVisible(highFreqDial);
-        highFreqDial.reset(valueTreeState, "highFreq");
-        highFreqDial.setLabelText(juce::String::fromUTF8("High Freq"));
-        highFreqDial.setTooltip(juce::String::fromUTF8("High Freq (20 to 20000 Hz)"));
-        addAndMakeVisible(distributionDrop);
-        distributionDrop.addItemList(valueTreeState.getParameter("distribution")->getAllValueStrings(), 1);
-        distributionDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-            valueTreeState, "distribution", distributionDrop);
-        distributionDrop.setTooltip(juce::String::fromUTF8("Distribution (Linear, Logarithmic)"));
-        addAndMakeVisible(decayMinDial);
-        decayMinDial.reset(valueTreeState, "decayMin");
-        decayMinDial.setLabelText(juce::String::fromUTF8("Decay Min"));
-        decayMinDial.setTooltip(juce::String::fromUTF8("Decay Min (0.01 to 20 s)"));
-        addAndMakeVisible(decayMaxDial);
-        decayMaxDial.reset(valueTreeState, "decayMax");
-        decayMaxDial.setLabelText(juce::String::fromUTF8("Decay Max"));
-        decayMaxDial.setTooltip(juce::String::fromUTF8("Decay Max (0.01 to 20 s)"));
-        addAndMakeVisible(gainMinDial);
-        gainMinDial.reset(valueTreeState, "gainMin");
-        gainMinDial.setLabelText(juce::String::fromUTF8("Gain Min"));
-        gainMinDial.setTooltip(juce::String::fromUTF8("Gain Min (-60 to 12 dB)"));
-        addAndMakeVisible(gainMaxDial);
-        gainMaxDial.reset(valueTreeState, "gainMax");
-        gainMaxDial.setLabelText(juce::String::fromUTF8("Gain Max"));
-        gainMaxDial.setTooltip(juce::String::fromUTF8("Gain Max (-60 to 12 dB)"));
-        addAndMakeVisible(delayMinDial);
-        delayMinDial.reset(valueTreeState, "delayMin");
-        delayMinDial.setLabelText(juce::String::fromUTF8("Delay Min"));
-        delayMinDial.setTooltip(juce::String::fromUTF8("Delay Min (0 to 2000 ms)"));
-        addAndMakeVisible(delayMaxDial);
-        delayMaxDial.reset(valueTreeState, "delayMax");
-        delayMaxDial.setLabelText(juce::String::fromUTF8("Delay Max"));
-        delayMaxDial.setTooltip(juce::String::fromUTF8("Delay Max (0 to 2000 ms)"));
-        addAndMakeVisible(qDial);
-        qDial.reset(valueTreeState, "q");
-        qDial.setLabelText(juce::String::fromUTF8("Q"));
-        qDial.setTooltip(juce::String::fromUTF8("Q (0.3 to 50)"));
         addAndMakeVisible(cpuGauge);
         cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
         cpuGauge.setTooltip(juce::String::fromUTF8("CPU (0 to 100 %)"));
@@ -243,6 +193,87 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(spectrogramGauge);
         spectrogramGauge.setLabelText(juce::String::fromUTF8("Spectrogram"));
         spectrogramGauge.setTooltip(juce::String::fromUTF8("Spectrogram"));
+        addAndMakeVisible(luaControlsLuaControlArea);
+        addAndMakeVisible(luaParam1Dial);
+        luaParam1Dial.reset(valueTreeState, "luaParam1");
+        luaParam1Dial.setLabelText(juce::String::fromUTF8("Lua Param 1"));
+        luaParam1Dial.setTooltip(juce::String::fromUTF8("Lua Param 1 (0 to 1)"));
+        luaParam1Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam1); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam1); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam1, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam1); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam1); }});
+        addAndMakeVisible(luaParam2Dial);
+        luaParam2Dial.reset(valueTreeState, "luaParam2");
+        luaParam2Dial.setLabelText(juce::String::fromUTF8("Lua Param 2"));
+        luaParam2Dial.setTooltip(juce::String::fromUTF8("Lua Param 2 (0 to 1)"));
+        luaParam2Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam2); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam2); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam2, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam2); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam2); }});
+        addAndMakeVisible(luaParam3Dial);
+        luaParam3Dial.reset(valueTreeState, "luaParam3");
+        luaParam3Dial.setLabelText(juce::String::fromUTF8("Lua Param 3"));
+        luaParam3Dial.setTooltip(juce::String::fromUTF8("Lua Param 3 (0 to 1)"));
+        luaParam3Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam3); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam3); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam3, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam3); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam3); }});
+        addAndMakeVisible(luaParam4Dial);
+        luaParam4Dial.reset(valueTreeState, "luaParam4");
+        luaParam4Dial.setLabelText(juce::String::fromUTF8("Lua Param 4"));
+        luaParam4Dial.setTooltip(juce::String::fromUTF8("Lua Param 4 (0 to 1)"));
+        luaParam4Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam4); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam4); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam4, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam4); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam4); }});
+        addAndMakeVisible(luaParam5Dial);
+        luaParam5Dial.reset(valueTreeState, "luaParam5");
+        luaParam5Dial.setLabelText(juce::String::fromUTF8("Lua Param 5"));
+        luaParam5Dial.setTooltip(juce::String::fromUTF8("Lua Param 5 (0 to 1)"));
+        luaParam5Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam5); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam5); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam5, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam5); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam5); }});
+        addAndMakeVisible(luaParam6Dial);
+        luaParam6Dial.reset(valueTreeState, "luaParam6");
+        luaParam6Dial.setLabelText(juce::String::fromUTF8("Lua Param 6"));
+        luaParam6Dial.setTooltip(juce::String::fromUTF8("Lua Param 6 (0 to 1)"));
+        luaParam6Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam6); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam6); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam6, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam6); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam6); }});
+        addAndMakeVisible(luaParam7Dial);
+        luaParam7Dial.reset(valueTreeState, "luaParam7");
+        luaParam7Dial.setLabelText(juce::String::fromUTF8("Lua Param 7"));
+        luaParam7Dial.setTooltip(juce::String::fromUTF8("Lua Param 7 (0 to 1)"));
+        luaParam7Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam7); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam7); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam7, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam7); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam7); }});
+        addAndMakeVisible(luaParam8Dial);
+        luaParam8Dial.reset(valueTreeState, "luaParam8");
+        luaParam8Dial.setLabelText(juce::String::fromUTF8("Lua Param 8"));
+        luaParam8Dial.setTooltip(juce::String::fromUTF8("Lua Param 8 (0 to 1)"));
+        luaParam8Dial.setCcMappable(true, {[this] { processorRef.beginCcLearn(CcTarget::luaParam8); },
+                                           [this] { return processorRef.getCcRange(CcTarget::luaParam8); },
+                                           [this](float lo, float hi)
+                                           { processorRef.setCcRange(CcTarget::luaParam8, lo, hi); },
+                                           [this] { processorRef.clearCcAssignment(CcTarget::luaParam8); },
+                                           [this] { return processorRef.getCcController(CcTarget::luaParam8); }});
 
         addAndMakeVisible(m_pagePerformanceButton);
         addAndMakeVisible(m_pageSettingsButton);
@@ -267,38 +298,36 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             numChainsDial.setVisible(false);
             dryDial.setVisible(false);
             wetDial.setVisible(false);
-            lowFreqDial.setVisible(false);
-            highFreqDial.setVisible(false);
-            distributionDrop.setVisible(false);
-            decayMinDial.setVisible(false);
-            decayMaxDial.setVisible(false);
-            gainMinDial.setVisible(false);
-            gainMaxDial.setVisible(false);
-            delayMinDial.setVisible(false);
-            delayMaxDial.setVisible(false);
-            qDial.setVisible(false);
             cpuGauge.setVisible(false);
             levelGauge.setVisible(true);
             spectrogramGauge.setVisible(false);
+            luaControlsLuaControlArea.setVisible(true);
+            luaParam1Dial.setVisible(false);
+            luaParam2Dial.setVisible(false);
+            luaParam3Dial.setVisible(false);
+            luaParam4Dial.setVisible(false);
+            luaParam5Dial.setVisible(false);
+            luaParam6Dial.setVisible(false);
+            luaParam7Dial.setVisible(false);
+            luaParam8Dial.setVisible(false);
         }
         else
         {
             numChainsDial.setVisible(true);
             dryDial.setVisible(true);
             wetDial.setVisible(true);
-            lowFreqDial.setVisible(true);
-            highFreqDial.setVisible(true);
-            distributionDrop.setVisible(true);
-            decayMinDial.setVisible(true);
-            decayMaxDial.setVisible(true);
-            gainMinDial.setVisible(true);
-            gainMaxDial.setVisible(true);
-            delayMinDial.setVisible(true);
-            delayMaxDial.setVisible(true);
-            qDial.setVisible(true);
             cpuGauge.setVisible(true);
             levelGauge.setVisible(true);
             spectrogramGauge.setVisible(true);
+            luaControlsLuaControlArea.setVisible(true);
+            luaParam1Dial.setVisible(false);
+            luaParam2Dial.setVisible(false);
+            luaParam3Dial.setVisible(false);
+            luaParam4Dial.setVisible(false);
+            luaParam5Dial.setVisible(false);
+            luaParam6Dial.setVisible(false);
+            luaParam7Dial.setVisible(false);
+            luaParam8Dial.setVisible(false);
         }
         resized();
     }
@@ -342,6 +371,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         juce::StringArray names{"Theme"};
         names.add("Patches");
+        names.add("Scripts");
         names.add("About");
         return names;
     }
@@ -355,6 +385,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         if (menuName == "Patches")
         {
             return buildPatchesMenu();
+        }
+        if (menuName == "Scripts")
+        {
+            return buildScriptsMenu();
         }
         if (menuName == "About")
         {
@@ -405,8 +439,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             "A bank of up to 100 parallel resonator chains, each a BiquadResoBP feeding an SvfResoBP, spread across a "
             "frequency range with distributed decay, gain and delay to turn audio into ringing, decaying "
             "tones.\n\nPart of the AbacDsp project - core DSP library is MIT licensed.\n\nBuilt with JUCE, licensed "
-            "under AGPLv3 (or a commercial JUCE licence).\n\nFull third-party license details: THIRD-PARTY-LICENSES.md "
-            "in the AbacDsp repository.";
+            "under AGPLv3 (or a commercial JUCE licence).\n\nScripting powered by Lua and sol2 (both MIT "
+            "licensed).\n\nFull third-party license details: THIRD-PARTY-LICENSES.md in the AbacDsp repository.";
 
         auto* aboutComponent = new AboutWindow();
         aboutComponent->setAboutText(body);
@@ -446,6 +480,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             return;
         }
         handlePatchMenuSelection(menuItemID);
+        handleScriptMenuSelection(menuItemID);
     }
 
     void applyTheme(GuiConstants::Theme preset)
@@ -701,6 +736,363 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     }
 
 
+    // Reuses buildGroupedMenu() from the PRESETBROWSER section above, same as
+    // LOOPBROWSER does - a blueprint with a script port but no patches would need that
+    // helper pulled out of its guard.
+    void openScriptEditor()
+    {
+        // Non-modal (see ScriptEditorDialogWindow), so this can already be open - just
+        // bring it forward rather than spawning a second editor.
+        if (m_scriptEditorWindow != nullptr)
+        {
+            m_scriptEditorWindow->toFront(true);
+            return;
+        }
+
+        juce::StringArray libraryScriptNames;
+        for (const auto& n : processorRef.getLibraryScriptNames())
+        {
+            libraryScriptNames.add(n);
+        }
+
+        auto* editorComponent = new ScriptEditorWindow();
+        editorComponent->setScriptText(processorRef.getScriptText());
+        // While LLM-Assist is active, a manual edit could race with (and silently lose
+        // to) a script the watcher applies from the folder - view-only instead of blocked.
+        editorComponent->setReadOnly(m_llmAssistActive);
+        editorComponent->setLibraryScripts(libraryScriptNames, [this](const juce::String& name)
+                                           { return processorRef.getLibraryScriptText(name); });
+        editorComponent->onApply = [this](const juce::String& text) -> juce::String
+        {
+            if (processorRef.applyScriptText(text))
+            {
+                m_statusBar.showMessage("Script applied");
+                return {};
+            }
+            return juce::String(processorRef.scriptErrorMessage());
+        };
+        editorComponent->onReset = [this] { return juce::String(processorRef.getScriptSkeleton()); };
+
+        auto* dialogWindow =
+            new ScriptEditorDialogWindow("Edit Script", juce::Colour(GuiConstants::instance().colors.background));
+        dialogWindow->setContentOwned(editorComponent, true);
+        dialogWindow->setUsingNativeTitleBar(true);
+        dialogWindow->setResizable(true, false);
+        const auto savedBounds = AppSettings::loadScriptEditorBounds();
+        if (savedBounds)
+        {
+            dialogWindow->setBounds(*savedBounds);
+        }
+        else
+        {
+            dialogWindow->centreAroundComponent(nullptr, dialogWindow->getWidth(), dialogWindow->getHeight());
+        }
+        dialogWindow->setVisible(true);
+        // setVisible() can itself shift the window once the OS actually places it on
+        // screen - reapply so it lands exactly where it was left, not off by that shift.
+        if (savedBounds)
+        {
+            dialogWindow->setBounds(*savedBounds);
+        }
+        dialogWindow->armBoundsPersistence();
+        m_scriptEditorWindow = dialogWindow;
+        m_scriptEditorContent = editorComponent;
+    }
+
+    // Apply-time only catches errors the script hits while its top-level chunk runs
+    // (i.e. at load); a script that compiles fine but errors when NextNotes()/OnTiming()
+    // are actually called later (on the audio thread, once real data flows through it)
+    // has nowhere else to surface that - poll for it instead. Called every timer tick
+    // (see extra_timer_callbacks); tracks the last-shown message so a persistent error
+    // doesn't keep resetting the status bar's fade timer forever.
+    void pollScriptError()
+    {
+        if (!processorRef.hasScriptError())
+        {
+            m_lastScriptErrorShown.clear();
+            return;
+        }
+        const auto message = juce::String(processorRef.scriptErrorMessage());
+        if (message == m_lastScriptErrorShown)
+        {
+            return;
+        }
+        m_lastScriptErrorShown = message;
+        m_statusBar.showMessage("Script error: " + message);
+    }
+
+    juce::PopupMenu buildScriptsMenu()
+    {
+        m_scriptMenuNames = processorRef.listScriptNames();
+        const auto currentName = processorRef.getCurrentScriptName();
+
+        auto loadMenu = buildGroupedMenu(m_scriptMenuNames, kScriptLoadIdBase, currentName);
+        auto deleteMenu = buildGroupedMenu(m_scriptMenuNames, kScriptDeleteIdBase);
+        auto renameMenu = buildGroupedMenu(m_scriptMenuNames, kScriptRenameIdBase);
+
+        juce::PopupMenu scripts;
+        scripts.addItem(kScriptEditId, "Edit...");
+        scripts.addSubMenu("Load", loadMenu, !m_scriptMenuNames.empty());
+        scripts.addItem(kScriptSaveAsId, "Save As...");
+        scripts.addSubMenu("Delete", deleteMenu, !m_scriptMenuNames.empty());
+        scripts.addSubMenu("Rename", renameMenu, !m_scriptMenuNames.empty());
+        scripts.addSeparator();
+        scripts.addSubMenu("LLM-Assist", buildLlmAssistMenu());
+        return scripts;
+    }
+
+    juce::PopupMenu buildLlmAssistMenu()
+    {
+        juce::PopupMenu menu;
+        menu.addItem(kLlmAssistToggleId, m_llmAssistActive ? "Disable" : "Enable", true, m_llmAssistActive);
+        menu.addItem(kLlmAssistChooseFolderId, "Choose Folder...");
+        return menu;
+    }
+
+    void handleScriptMenuSelection(int menuItemID)
+    {
+        if (menuItemID == kLlmAssistToggleId)
+        {
+            toggleLlmAssist();
+        }
+        else if (menuItemID == kLlmAssistChooseFolderId)
+        {
+            chooseLlmAssistFolder(false);
+        }
+        else if (menuItemID == kScriptEditId)
+        {
+            openScriptEditor();
+        }
+        else if (menuItemID == kScriptSaveAsId)
+        {
+            promptSaveScriptAs();
+        }
+        else if (menuItemID >= kScriptLoadIdBase &&
+                 menuItemID < kScriptLoadIdBase + static_cast<int>(m_scriptMenuNames.size()))
+        {
+            const auto& name = m_scriptMenuNames[static_cast<size_t>(menuItemID - kScriptLoadIdBase)];
+            if (processorRef.requestLoadScript(name))
+            {
+                m_statusBar.showMessage("Loaded '" + name + "'");
+            }
+            else
+            {
+                m_statusBar.showMessage("Load failed");
+            }
+        }
+        else if (menuItemID >= kScriptDeleteIdBase &&
+                 menuItemID < kScriptDeleteIdBase + static_cast<int>(m_scriptMenuNames.size()))
+        {
+            confirmAndDeleteScript(m_scriptMenuNames[static_cast<size_t>(menuItemID - kScriptDeleteIdBase)]);
+        }
+        else if (menuItemID >= kScriptRenameIdBase &&
+                 menuItemID < kScriptRenameIdBase + static_cast<int>(m_scriptMenuNames.size()))
+        {
+            promptRenameScript(m_scriptMenuNames[static_cast<size_t>(menuItemID - kScriptRenameIdBase)]);
+        }
+    }
+
+    void promptSaveScriptAs()
+    {
+        m_scriptNameDialog =
+            std::make_unique<juce::AlertWindow>("Save Script", juce::String(), juce::MessageBoxIconType::NoIcon);
+        m_scriptNameDialog->addTextEditor("folder", "", "Folder (optional):");
+        m_scriptNameDialog->addTextEditor("name", "", "Name:");
+        m_scriptNameDialog->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
+        m_scriptNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+        m_scriptNameDialog->enterModalState(true,
+                                            juce::ModalCallbackFunction::create(
+                                                [this](int result)
+                                                {
+                                                    const auto folderText =
+                                                        m_scriptNameDialog->getTextEditorContents("folder").trim();
+                                                    const auto nameText =
+                                                        m_scriptNameDialog->getTextEditorContents("name").trim();
+                                                    m_scriptNameDialog.reset();
+                                                    if (result != 1 || nameText.isEmpty())
+                                                    {
+                                                        return;
+                                                    }
+                                                    const auto fullName = combineFolderAndName(folderText, nameText);
+                                                    if (processorRef.saveCurrentScriptAs(fullName))
+                                                    {
+                                                        m_statusBar.showMessage("Saved '" + fullName + "'");
+                                                    }
+                                                    else
+                                                    {
+                                                        m_statusBar.showMessage("Save failed");
+                                                    }
+                                                }),
+                                            false);
+        focusNameEditor(*m_scriptNameDialog);
+    }
+
+    void promptRenameScript(const juce::String& oldName)
+    {
+        const auto [folder, name] = splitFolderAndName(oldName);
+        m_scriptNameDialog = std::make_unique<juce::AlertWindow>("Rename Script \"" + oldName + "\"", juce::String(),
+                                                                 juce::MessageBoxIconType::NoIcon);
+        m_scriptNameDialog->addTextEditor("folder", folder, "Folder (optional):");
+        m_scriptNameDialog->addTextEditor("name", name, "Name:");
+        m_scriptNameDialog->addButton("Rename", 1, juce::KeyPress(juce::KeyPress::returnKey));
+        m_scriptNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+        m_scriptNameDialog->enterModalState(true,
+                                            juce::ModalCallbackFunction::create(
+                                                [this, oldName](int result)
+                                                {
+                                                    const auto folderText =
+                                                        m_scriptNameDialog->getTextEditorContents("folder").trim();
+                                                    const auto nameText =
+                                                        m_scriptNameDialog->getTextEditorContents("name").trim();
+                                                    m_scriptNameDialog.reset();
+                                                    if (result != 1 || nameText.isEmpty())
+                                                    {
+                                                        return;
+                                                    }
+                                                    const auto newName = combineFolderAndName(folderText, nameText);
+                                                    if (newName == oldName)
+                                                    {
+                                                        return;
+                                                    }
+                                                    if (processorRef.renameScript(oldName, newName))
+                                                    {
+                                                        m_statusBar.showMessage("Renamed to '" + newName + "'");
+                                                    }
+                                                    else
+                                                    {
+                                                        m_statusBar.showMessage("Rename failed");
+                                                    }
+                                                }),
+                                            false);
+        focusNameEditor(*m_scriptNameDialog);
+    }
+
+    void confirmAndDeleteScript(const juce::String& name)
+    {
+        juce::NativeMessageBox::showAsync(juce::MessageBoxOptions()
+                                              .withIconType(juce::MessageBoxIconType::WarningIcon)
+                                              .withTitle("Delete Script")
+                                              .withMessage("Delete script \"" + name + "\"?")
+                                              .withButton("Yes")
+                                              .withButton("No"),
+                                          [this, name](int result)
+                                          {
+                                              if (result != 0)
+                                              {
+                                                  return;
+                                              }
+                                              if (processorRef.deleteScriptNamed(name))
+                                              {
+                                                  m_statusBar.showMessage("Deleted '" + name + "'");
+                                              }
+                                              else
+                                              {
+                                                  m_statusBar.showMessage("Delete failed");
+                                              }
+                                          });
+    }
+
+    void initLlmAssist()
+    {
+        m_llmAssistWatcher.applyScriptText = [this](const juce::String& text)
+        { return processorRef.applyScriptText(text); };
+        m_llmAssistWatcher.scriptErrorMessage = [this] { return juce::String(processorRef.scriptErrorMessage()); };
+        m_llmAssistWatcher.currentPatchName = [this] { return processorRef.getCurrentPatchName(); };
+        m_llmAssistWatcher.currentScriptText = [this] { return processorRef.getScriptText(); };
+        m_llmAssistWatcher.saveUserLibraryScript = [this](const juce::String& name, const juce::String& content)
+        { return processorRef.saveUserLibraryScript(name, content); };
+    }
+
+    void toggleLlmAssist()
+    {
+        if (m_llmAssistActive)
+        {
+            m_llmAssistActive = false;
+            m_statusBar.showMessage("LLM-Assist disabled");
+            updateScriptEditorReadOnlyState();
+            return;
+        }
+        if (m_llmAssistFolder.isEmpty())
+        {
+            chooseLlmAssistFolder(true);
+            return;
+        }
+        m_llmAssistActive = true;
+        m_statusBar.showMessage("LLM-Assist watching " + m_llmAssistFolder);
+        updateScriptEditorReadOnlyState();
+    }
+
+    // Pushed into an already-open editor whenever LLM-Assist toggles, so its read-only
+    // state always reflects whether a watched-folder pull could currently race an edit.
+    void updateScriptEditorReadOnlyState()
+    {
+        if (m_scriptEditorContent != nullptr)
+        {
+            m_scriptEditorContent->setReadOnly(m_llmAssistActive);
+        }
+    }
+
+    void chooseLlmAssistFolder(bool activateOnPick)
+    {
+        m_llmAssistFolderChooser =
+            std::make_unique<juce::FileChooser>("Choose LLM-Assist Folder", juce::File(m_llmAssistFolder));
+        m_llmAssistFolderChooser->launchAsync(juce::FileBrowserComponent::openMode |
+                                                  juce::FileBrowserComponent::canSelectDirectories,
+                                              [this, activateOnPick](const juce::FileChooser& fc)
+                                              {
+                                                  const auto result = fc.getResult();
+                                                  if (!result.isDirectory())
+                                                  {
+                                                      return;
+                                                  }
+                                                  m_llmAssistFolder = result.getFullPathName();
+                                                  AppSettings::saveLlmAssistFolder(m_llmAssistFolder);
+                                                  m_llmAssistActive = m_llmAssistActive || activateOnPick;
+                                                  m_statusBar.showMessage("LLM-Assist folder: " + m_llmAssistFolder);
+                                                  updateScriptEditorReadOnlyState();
+                                              });
+    }
+
+    // Runs at a fraction of the timer rate (see kLlmAssistPollEveryNTicks) - a folder
+    // scan every tick is unnecessary for a workflow driven by an LLM/human editing text.
+    void pollLlmAssistWatcher()
+    {
+        if (!m_llmAssistActive)
+        {
+            return;
+        }
+        if (++m_llmAssistPollCounter % kLlmAssistPollEveryNTicks != 0)
+        {
+            return;
+        }
+        const auto result = m_llmAssistWatcher.poll(juce::File(m_llmAssistFolder));
+        if (!result)
+        {
+            return;
+        }
+        if (result->kind == LlmAssistResultKind::Library)
+        {
+            m_statusBar.showMessage(result->compiled
+                                        ? "LLM-Assist library '" + result->scriptName + "' saved, current script OK"
+                                        : "LLM-Assist library '" + result->scriptName +
+                                              "' saved, current script error: " + result->error,
+                                    true);
+        }
+        else if (result->compiled)
+        {
+            m_statusBar.showMessage("LLM-Assist applied '" + result->scriptName + "'", true);
+            if (m_scriptEditorContent != nullptr)
+            {
+                m_scriptEditorContent->setScriptText(processorRef.getScriptText());
+            }
+        }
+        else
+        {
+            m_statusBar.showMessage("LLM-Assist error in '" + result->scriptName + "': " + result->error, true);
+        }
+    }
+
+
   private:
     AudioPluginAudioProcessor& processorRef;
     juce::AudioProcessorValueTreeState& valueTreeState;
@@ -729,23 +1121,44 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::vector<juce::String> m_patchMenuNames;
 
 
+    static constexpr int kScriptEditId = 9004;
+    static constexpr int kScriptSaveAsId = 10000;
+    static constexpr int kScriptLoadIdBase = 11000;
+    static constexpr int kScriptDeleteIdBase = 12000;
+    static constexpr int kScriptRenameIdBase = 13000;
+    std::unique_ptr<juce::AlertWindow> m_scriptNameDialog;
+    std::vector<juce::String> m_scriptMenuNames;
+    juce::String m_lastScriptErrorShown;
+    // Non-modal; deletes itself on close (see ScriptEditorDialogWindow), hence SafePointer
+    // rather than an owning pointer here.
+    juce::Component::SafePointer<ScriptEditorDialogWindow> m_scriptEditorWindow;
+    // Points at the window's content component, so pollLlmAssistWatcher()/toggleLlmAssist()
+    // can push a refresh/read-only update without reaching into ScriptEditorDialogWindow.
+    juce::Component::SafePointer<ScriptEditorWindow> m_scriptEditorContent;
+    static constexpr int kLlmAssistToggleId = 15000;
+    static constexpr int kLlmAssistChooseFolderId = 15001;
+    static constexpr int kLlmAssistPollEveryNTicks = 15;
+    bool m_llmAssistActive{false};
+    int m_llmAssistPollCounter{0};
+    juce::String m_llmAssistFolder{AppSettings::loadLlmAssistFolder()};
+    LlmAssistWatcher m_llmAssistWatcher;
+    std::unique_ptr<juce::FileChooser> m_llmAssistFolderChooser;
+
     CustomRotaryDial numChainsDial{this};
     CustomRotaryDial dryDial{this};
     CustomRotaryDial wetDial{this};
-    CustomRotaryDial lowFreqDial{this};
-    CustomRotaryDial highFreqDial{this};
-    juce::ComboBox distributionDrop{};
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> distributionDropAttachment;
-    CustomRotaryDial decayMinDial{this};
-    CustomRotaryDial decayMaxDial{this};
-    CustomRotaryDial gainMinDial{this};
-    CustomRotaryDial gainMaxDial{this};
-    CustomRotaryDial delayMinDial{this};
-    CustomRotaryDial delayMaxDial{this};
-    CustomRotaryDial qDial{this};
     CpuGauge cpuGauge{};
     Gauge levelGauge{};
     SpectrogramDisplay spectrogramGauge{AppSettings::loadTheme()};
+    LuaControlArea luaControlsLuaControlArea{};
+    CustomRotaryDial luaParam1Dial{this};
+    CustomRotaryDial luaParam2Dial{this};
+    CustomRotaryDial luaParam3Dial{this};
+    CustomRotaryDial luaParam4Dial{this};
+    CustomRotaryDial luaParam5Dial{this};
+    CustomRotaryDial luaParam6Dial{this};
+    CustomRotaryDial luaParam7Dial{this};
+    CustomRotaryDial luaParam8Dial{this};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
 };

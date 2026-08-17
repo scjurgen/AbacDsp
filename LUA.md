@@ -3,15 +3,16 @@
 This covers the Lua scripting API shared by every Lua-scripted JUCE example generated via
 `JuceStandaloneGenerator` - the machinery lives in `LuaScriptEngineBase.h` and
 `LuaMusicMathLib.h`, both fixed, always-copied components (`CPP_SOURCE_FILES_FIXED` in
-`generate-juce-standalone.py`) that any generated example can pull in. Today the only such
-example is `dronesequencer`; for its own additional hooks (`NextNotes`/`OnTiming`) and note
-format, see `examples/dronesequencer/README.md`.
+`generate-juce-standalone.py`) that any generated example can pull in. Two examples use it
+today: `dronesequencer` (its own additional hooks - `NextNotes`/`OnTiming` and note format -
+are in `examples/dronesequencer/README.md`) and `resonik` (its `SetFreqRange`/`SetDecayRange`/
+`SetGainRange`/`SetDelayRange`/`SetQ`/`SetResonanceBody` hooks are documented inline in its
+own script skeleton - see `examples/resonik/src/impl/ResonikScriptEngine.h`).
 
 ## Sandbox
 
 Only Lua's `base`, `math`, `table`, and `string` standard libraries are loaded - there is no
-`io`, `os`, or `require`. Notably, **there is no bare `rand()`** (that's a C function, not
-Lua) - use `math.random()`.
+`io`, `os`, or `require`. 
  lu
 | Call | Returns |
 |---|---|
@@ -162,6 +163,9 @@ Music.IntervalToRatio(12)      -- 2.0  (up an octave)
 Music.RatioToInterval(0.5)     -- -12.0 (down an octave)
 Music.Scales.Major             -- { 0, 2, 4, 5, 7, 9, 11 }
 Music.Chords.Minor7            -- { 0, 3, 7, 10 }
+Music.Harmonics(110, 4)        -- { 110, 220, 330, 440 } - fundamental*1..fundamental*count
+Music.HarmonizeToScale(61, 60, "Major")  -- 60.0 - snaps to the nearest note in the named
+                                          -- Music.Scales entry, relative to the given root
 
 Vel.Exponential(0.5)           -- exponential 0..1 -> 0..1 curve, default bend
 Vel.Exponential(0.5, 8)        -- steeper bend
@@ -179,6 +183,10 @@ pentatonics, blues, whole-tone, chromatic; major/minor/diminished/augmented tria
 7ths, sus2/sus4, add9, 9ths) - see `LuaMusicMathLib.h` for the full list of names. These
 tables are handed to you as regular, writable Lua tables (not read-only) purely for
 simplicity; treat them as constants rather than mutating them.
+
+`Music.Harmonics(fundamentalHz, count)` clamps `count` to 32. `Music.HarmonizeToScale`
+preserves the input note's octave; passing an unknown scale name returns the note
+unchanged.
 
 ## Timers
 
@@ -207,6 +215,27 @@ script's own state.
 Note: `Timer` schedules script-side callbacks only. It has no way to push a value back into
 one of the plugin's own host-automatable parameters - those still only flow host/UI -> script
 via `On<Id>Changed`, not the other way.
+
+## Pitch tracking
+
+An example that feeds its incoming audio into a YIN pitch tracker (currently `resonik`;
+opt-in per example on the C++ side via `feedPitchAnalysis()`) fires `OnPitchDetected` once
+per analysis hop and exposes the same values on demand through `Pitch.*`:
+
+```lua
+function OnPitchDetected(hz, confidence)
+    -- hz: detected frequency, or 0 if nothing pitched was found this hop.
+    -- confidence: 0..1, how periodic the signal looked - low near silence/noise/onsets.
+end
+
+Pitch.Hz()          -- the same hz as the last OnPitchDetected call
+Pitch.Confidence()  -- the same confidence as the last OnPitchDetected call
+```
+
+Both default to `0` before the first hop. The hop rate is set on the C++ side
+(`setPitchAnalysisGranularity()`, default 100 ms) - a script has no control over it.
+`Music.HzToNote`/`Music.HarmonizeToScale` (see Music helpers above) are the usual next step
+for turning `hz` into something musical.
 
 ## Playhead and transport
 

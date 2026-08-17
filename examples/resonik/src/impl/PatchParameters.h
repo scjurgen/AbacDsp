@@ -13,49 +13,45 @@ struct PatchParameters
 {
     enum class Id : int
     {
-        numChains   , // dial
-        dry         , // dial
-        wet         , // dial
-        lowFreq     , // dial
-        highFreq    , // dial
-        distribution, // drop
-        decayMin    , // dial
-        decayMax    , // dial
-        gainMin     , // dial
-        gainMax     , // dial
-        delayMin    , // dial
-        delayMax    , // dial
-        q            // dial
+        numChains, // dial
+        dry      , // dial
+        wet      , // dial
+        luaParam1, // dial
+        luaParam2, // dial
+        luaParam3, // dial
+        luaParam4, // dial
+        luaParam5, // dial
+        luaParam6, // dial
+        luaParam7, // dial
+        luaParam8, // dial
+        script    // script
     };
 float numChains{48.0f};
 float dry{0.0f};
 float wet{-6.0f};
-float lowFreq{80.0f};
-float highFreq{6000.0f};
-size_t distribution{1};
-float decayMin{0.3f};
-float decayMax{4.0f};
-float gainMin{-18.0f};
-float gainMax{0.0f};
-float delayMin{0.0f};
-float delayMax{300.0f};
-float q{6.0f};
+float luaParam1{0.0f};
+float luaParam2{0.0f};
+float luaParam3{0.0f};
+float luaParam4{0.0f};
+float luaParam5{0.0f};
+float luaParam6{0.0f};
+float luaParam7{0.0f};
+float luaParam8{0.0f};
+std::string script{};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
         "numChains",
 "dry",
 "wet",
-"lowFreq",
-"highFreq",
-"distribution",
-"decayMin",
-"decayMax",
-"gainMin",
-"gainMax",
-"delayMin",
-"delayMax",
-"q"
+"luaParam1",
+"luaParam2",
+"luaParam3",
+"luaParam4",
+"luaParam5",
+"luaParam6",
+"luaParam7",
+"luaParam8"
     });
 //        "onOff", "patch", "input", "modulationDepth", "mix", "density", "threshold", "knee"});
 
@@ -77,16 +73,15 @@ float q{6.0f};
         if constexpr (ParamId == Id::numChains) return numChains;
         else if constexpr (ParamId == Id::dry) return dry;
         else if constexpr (ParamId == Id::wet) return wet;
-        else if constexpr (ParamId == Id::lowFreq) return lowFreq;
-        else if constexpr (ParamId == Id::highFreq) return highFreq;
-        else if constexpr (ParamId == Id::distribution) return distribution;
-        else if constexpr (ParamId == Id::decayMin) return decayMin;
-        else if constexpr (ParamId == Id::decayMax) return decayMax;
-        else if constexpr (ParamId == Id::gainMin) return gainMin;
-        else if constexpr (ParamId == Id::gainMax) return gainMax;
-        else if constexpr (ParamId == Id::delayMin) return delayMin;
-        else if constexpr (ParamId == Id::delayMax) return delayMax;
-        else if constexpr (ParamId == Id::q) return q;
+        else if constexpr (ParamId == Id::luaParam1) return luaParam1;
+        else if constexpr (ParamId == Id::luaParam2) return luaParam2;
+        else if constexpr (ParamId == Id::luaParam3) return luaParam3;
+        else if constexpr (ParamId == Id::luaParam4) return luaParam4;
+        else if constexpr (ParamId == Id::luaParam5) return luaParam5;
+        else if constexpr (ParamId == Id::luaParam6) return luaParam6;
+        else if constexpr (ParamId == Id::luaParam7) return luaParam7;
+        else if constexpr (ParamId == Id::luaParam8) return luaParam8;
+        else if constexpr (ParamId == Id::script) return script;
 
     }
 
@@ -105,32 +100,30 @@ break;
 break;
  case Id::wet: if (!isEqual(get<Id::wet>(), value)) {get<Id::wet>() = value;m_modified = true;}
 break;
- case Id::lowFreq: if (!isEqual(get<Id::lowFreq>(), value)) {get<Id::lowFreq>() = value;m_modified = true;}
+ case Id::luaParam1: if (!isEqual(get<Id::luaParam1>(), value)) {get<Id::luaParam1>() = value;m_modified = true;}
 break;
- case Id::highFreq: if (!isEqual(get<Id::highFreq>(), value)) {get<Id::highFreq>() = value;m_modified = true;}
+ case Id::luaParam2: if (!isEqual(get<Id::luaParam2>(), value)) {get<Id::luaParam2>() = value;m_modified = true;}
 break;
- case Id::distribution: if (!isEqual(get<Id::distribution>(), value)) {get<Id::distribution>() = static_cast<size_t>(value) ;m_modified = true;}
+ case Id::luaParam3: if (!isEqual(get<Id::luaParam3>(), value)) {get<Id::luaParam3>() = value;m_modified = true;}
 break;
- case Id::decayMin: if (!isEqual(get<Id::decayMin>(), value)) {get<Id::decayMin>() = value;m_modified = true;}
+ case Id::luaParam4: if (!isEqual(get<Id::luaParam4>(), value)) {get<Id::luaParam4>() = value;m_modified = true;}
 break;
- case Id::decayMax: if (!isEqual(get<Id::decayMax>(), value)) {get<Id::decayMax>() = value;m_modified = true;}
+ case Id::luaParam5: if (!isEqual(get<Id::luaParam5>(), value)) {get<Id::luaParam5>() = value;m_modified = true;}
 break;
- case Id::gainMin: if (!isEqual(get<Id::gainMin>(), value)) {get<Id::gainMin>() = value;m_modified = true;}
+ case Id::luaParam6: if (!isEqual(get<Id::luaParam6>(), value)) {get<Id::luaParam6>() = value;m_modified = true;}
 break;
- case Id::gainMax: if (!isEqual(get<Id::gainMax>(), value)) {get<Id::gainMax>() = value;m_modified = true;}
+ case Id::luaParam7: if (!isEqual(get<Id::luaParam7>(), value)) {get<Id::luaParam7>() = value;m_modified = true;}
 break;
- case Id::delayMin: if (!isEqual(get<Id::delayMin>(), value)) {get<Id::delayMin>() = value;m_modified = true;}
+ case Id::luaParam8: if (!isEqual(get<Id::luaParam8>(), value)) {get<Id::luaParam8>() = value;m_modified = true;}
 break;
- case Id::delayMax: if (!isEqual(get<Id::delayMax>(), value)) {get<Id::delayMax>() = value;m_modified = true;}
-break;
- case Id::q: if (!isEqual(get<Id::q>(), value)) {get<Id::q>() = value;m_modified = true;}
-break;
+ case Id::script: break;
 
             default:
                 break;
         }
     }
 
+void updateScript(const std::string& value) { if (script != value) { script = value; m_modified = true; } }
 
 
     [[nodiscard]] bool isModified() const
@@ -165,17 +158,16 @@ private:
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     PatchParameters,
-        numChains   , // dial
-        dry         , // dial
-        wet         , // dial
-        lowFreq     , // dial
-        highFreq    , // dial
-        distribution, // drop
-        decayMin    , // dial
-        decayMax    , // dial
-        gainMin     , // dial
-        gainMax     , // dial
-        delayMin    , // dial
-        delayMax    , // dial
-        q            // dial
+        numChains, // dial
+        dry      , // dial
+        wet      , // dial
+        luaParam1, // dial
+        luaParam2, // dial
+        luaParam3, // dial
+        luaParam4, // dial
+        luaParam5, // dial
+        luaParam6, // dial
+        luaParam7, // dial
+        luaParam8, // dial
+        script    // script
 )
