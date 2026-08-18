@@ -177,3 +177,10 @@ See `.claude/rules/generated-files.md` (loads automatically when working under `
 ## Documentation
 - Check after a commit if the README.md needs to be updated.
 - Keep the documentation always concise and precise. Prefer usage of ASCII (except when using math formulas). Don't overuse bold, the reader should not be forced in a mental model that is driven by bold text.
+- Every Lua-scripted example (`"use-lua": true` in its blueprint) needs a `README.md` with a
+  "Scripting" section documenting its own custom Lua API (bound functions, hooks, table
+  shapes) - see `examples/dronesequencer/README.md`, `examples/resonik/README.md`, or
+  `examples/pingsynth/README.md` for the shape to follow. This is not optional polish: it is
+  the reference a human (or an LLM-assist session) needs to write a working script for that
+  example at all, and it belongs alongside root `LUA.md` (the API shared by every such
+  example) rather than only inline in the engine header's script-skeleton comments.

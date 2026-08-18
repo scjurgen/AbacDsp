@@ -3,11 +3,15 @@
 This covers the Lua scripting API shared by every Lua-scripted JUCE example generated via
 `JuceStandaloneGenerator` - the machinery lives in `LuaScriptEngineBase.h` and
 `LuaMusicMathLib.h`, both fixed, always-copied components (`CPP_SOURCE_FILES_FIXED` in
-`generate-juce-standalone.py`) that any generated example can pull in. Two examples use it
-today: `dronesequencer` (its own additional hooks - `NextNotes`/`OnTiming` and note format -
-are in `examples/dronesequencer/README.md`) and `resonik` (its `SetFreqRange`/`SetDecayRange`/
-`SetGainRange`/`SetDelayRange`/`SetQ`/`SetResonanceBody` hooks are documented inline in its
-own script skeleton - see `examples/resonik/src/impl/ResonikScriptEngine.h`).
+`generate-juce-standalone.py`) that any generated example can pull in. Three examples use it
+today - each one's own additional hooks are documented in its own README.md's "Scripting"
+section, not repeated here:
+
+| Example | README | Its own hooks |
+|---|---|---|
+| `dronesequencer` | `examples/dronesequencer/README.md` | `NextNotes`/`OnTiming`, note-table format, `Excite()` playing techniques |
+| `resonik` | `examples/resonik/README.md` | `SetFreqRange`/`SetDecayRange`/`SetGainRange`/`SetDelayRange`/`SetQ`/`SetResonanceBody` |
+| `pingsynth` | `examples/pingsynth/README.md` | `SetHarmonics`/`SetPitchBendRange`, `OnMpeModeChanged` |
 
 ## Sandbox
 
