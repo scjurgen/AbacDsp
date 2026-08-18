@@ -208,7 +208,7 @@ inline auto just_major_triad()
     return [](const int overtoneNum, float)
     {
         constexpr std::array<float, 3> ratios = {1.f, 5.f / 4.f, 3.f / 2.f};
-        return ratios[overtoneNum % 3] * static_cast<float>((overtoneNum / 3) + 1);
+        return ratios[static_cast<size_t>(overtoneNum % 3)] * static_cast<float>((overtoneNum / 3) + 1);
     };
 }
 
@@ -218,7 +218,7 @@ inline auto just_minor_triad()
     return [](const int overtoneNum, float)
     {
         constexpr std::array<float, 3> ratios = {1.f, 6.f / 5.f, 3.f / 2.f};
-        return ratios[overtoneNum % 3] * static_cast<float>((overtoneNum / 3) + 1);
+        return ratios[static_cast<size_t>(overtoneNum % 3)] * static_cast<float>((overtoneNum / 3) + 1);
     };
 }
 
@@ -251,7 +251,7 @@ inline auto bell_partials()
             3.f,   // Twelfth
             4.f    // Double octave
         };
-        return bell_ratios[overtoneNum % 8] * static_cast<float>((overtoneNum / 8) + 1);
+        return bell_ratios[static_cast<size_t>(overtoneNum % 8)] * static_cast<float>((overtoneNum / 8) + 1);
     };
 }
 
@@ -292,19 +292,19 @@ inline auto vowel_formants()
         const auto f3 = f3_range[0] + strength * (f3_range[1] - f3_range[0]);
 
         const std::array<float, 3> formants = {f1, f2, f3};
-        return formants[overtoneNum % 3];
+        return formants[static_cast<size_t>(overtoneNum % 3)];
     };
 }
 
 // Vocal tract length scaling (strength parameter scales VTL)
 inline auto formant_scaled(const float vtl)
 {
-    return [vtl](const int overtoneNum, float strength)
+    return [vtl](const int overtoneNum, float)
     {
         // Base formants for average male voice
         constexpr std::array<float, 4> base_formants = {.5f, 1.5f, 2.5f, 3.5f};
         const auto vtl_scale = 1.f / (1.f + vtl * 0.5f); // VTL scaling factor
-        return base_formants[overtoneNum % 4] * vtl_scale;
+        return base_formants[static_cast<size_t>(overtoneNum % 4)] * vtl_scale;
     };
 }
 
@@ -349,7 +349,7 @@ inline auto prime_harmonics()
                                        53,  59,  61,  67,  71,  73,  79,  83,  89,  97,  101, 103, 107, 109, 113,
                                        127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197,
                                        199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281};
-        return primes[overtoneNum % primes.size()];
+        return primes[static_cast<size_t>(overtoneNum) % primes.size()];
     };
 }
 }

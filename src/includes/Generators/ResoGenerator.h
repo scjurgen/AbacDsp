@@ -141,7 +141,7 @@ class ResoGenerator
                     }
                     else
                     {
-                        if (m_softExcitation)
+                        if (m_softExcitation > 0.f)
                         {
                             std::uniform_real_distribution uniform(-m_softExcitation, m_softExcitation);
 
