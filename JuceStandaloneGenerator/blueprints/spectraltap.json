@@ -1,0 +1,57 @@
+{
+  "name": "spectraltap",
+  "plugintype": "FilterPlugin",
+  "boxy": "boxy",
+  "plugintype-see-also": "http://lv2plug.in/ns/lv2core#FilterPlugin",
+  "description": ["A Lua-scripted multitap delay: each of up to 24 taps is a timed, panned, spectrally-shaped voice (bandpass/lowpass/highpass, notch, resonator, formant or comb resonator), fed off one shared delay buffer."],
+  "patches": true,
+  "use-lua": true,
+  "ports-control":
+  [
+    {"short": "DRY", "type": "dial", "display": "Dry", "symbol": "dry", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "WET", "type": "dial", "display": "Wet", "symbol": "wet", "default": -6, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "BPM", "type": "dial", "display": "BPM", "symbol": "bpm", "default": 120, "range": [40, 250, 0.1, 1, false], "precision": 1, "unit": "BPM"},
+    {"short": "SYNC", "type": "switch", "display": "Host Sync", "symbol": "hostSync", "default": 0},
+    {"short": "DIV", "type": "drop", "display": "Division", "symbol": "division", "default": 4,
+      "listitems": ["1/1", "1/2", "1/2.", "1/2T", "1/4", "1/4.", "1/4T", "1/8", "1/8.", "1/8T", "1/16", "1/16.", "1/16T"]},
+    {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"},
+    {"short": "LUACTL", "type": "luacontrolarea", "display": "Lua Controls", "symbol": "luaControls"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1200",
+    "WINDOW_HEIGHT": "800",
+    "type": "|=",
+    "composition": "C=(1:12) R=(1:1) A1=(CPU*200, LVL*500) A2=(DRY, WET, BPM, SYNC, DIV, FFT*600) A3=(LUACTL)"
+  },
+  "performance-page": {
+    "type": "=3",
+    "composition": "R=(1:1:1) A1=(FFT) A2=(BPM,DRY,WET) A3=(LUACTL)"
+  },
+  "processor_forwards": [
+    {"name": "hasScriptError", "type": "bool"},
+    {"name": "scriptErrorMessage", "call": "scriptError", "type": "std::string"},
+    {"name": "getScriptSkeleton", "call": "scriptSkeleton", "type": "std::string"},
+    {"name": "getLuaUiParamSlots", "call": "uiParamSlots", "type": "SpectraltapScriptEngine::UiParamSlots"},
+    {"name": "getCurrentBpm", "call": "currentBpm", "type": "float", "default": "120.f"},
+    {"name": "isHostSynced", "type": "bool"}
+  ],
+  "extra_timer_callbacks": [
+    "bpmDial.setEnabled(!processorRef.isHostSynced());",
+    "if (processorRef.isHostSynced()) { bpmDial.setValue(processorRef.getCurrentBpm()); }",
+    "pollScriptError();",
+    "pollLlmAssistWatcher();",
+    "if (processorRef.hasRunner()) { luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()), valueTreeState); }"
+  ],
+  "host_transport": true,
+  "extra_ui_includes": [
+    "impl/LuaControlBridge.h"
+  ],
+  "CPP":
+  {
+    "CLASS_NAME": "SpectraltapImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/SpectraltapImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

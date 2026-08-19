@@ -12,6 +12,7 @@ section, not repeated here:
 | `dronesequencer` | `examples/dronesequencer/README.md` | `NextNotes`/`OnTiming`, note-table format, `Excite()` playing techniques |
 | `resonik` | `examples/resonik/README.md` | `SetFreqRange`/`SetDecayRange`/`SetGainRange`/`SetDelayRange`/`SetQ`/`SetResonanceBody` |
 | `pingsynth` | `examples/pingsynth/README.md` | `SetHarmonics`/`SetPitchBendRange`, `OnMpeModeChanged` |
+| `spectraltap` | `examples/spectraltap/README.md` | `SetMaxTaps`/`SetTap`, `SetFrequency`/`SetResonance`/`SetFormant`/`SetPan`/`SetGain` |
 
 ## Sandbox
 
