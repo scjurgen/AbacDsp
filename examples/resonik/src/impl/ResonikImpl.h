@@ -22,7 +22,7 @@ class ResonikImpl final : public EffectBase
     static constexpr size_t kMaxChains{100};
     // One shared buffer sized for the max delay time, independent of kMaxChains. Assumes
     // the engine's fixed 48 kHz internal rate (RateNormalizer::kInternalSampleRate).
-    static constexpr float kMaxDelayMs{2000.f};
+    static constexpr float kMaxDelayMs{60000.f};
     static constexpr float kAssumedSampleRate{48000.f};
     static constexpr size_t kMaxDelaySamples{static_cast<size_t>(kAssumedSampleRate * kMaxDelayMs / 1000.f) + 4};
     static constexpr float kPitchAnalysisGranularityMs{100.f};
