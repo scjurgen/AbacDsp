@@ -13,26 +13,30 @@ struct PatchParameters
 {
     enum class Id : int
     {
-        dry      , // dial
-        wet      , // dial
-        bpm      , // dial
-        hostSync , // switch
-        division , // drop
-        luaParam1, // dial
-        luaParam2, // dial
-        luaParam3, // dial
-        luaParam4, // dial
-        luaParam5, // dial
-        luaParam6, // dial
-        luaParam7, // dial
-        luaParam8, // dial
-        script    // script
+        dry          , // dial
+        wet          , // dial
+        bpm          , // dial
+        hostSync     , // switch
+        division     , // drop
+        feedback     , // dial
+        feedbackBeats, // dial
+        luaParam1    , // dial
+        luaParam2    , // dial
+        luaParam3    , // dial
+        luaParam4    , // dial
+        luaParam5    , // dial
+        luaParam6    , // dial
+        luaParam7    , // dial
+        luaParam8    , // dial
+        script        // script
     };
 float dry{0.0f};
 float wet{-6.0f};
 float bpm{120.0f};
 bool hostSync{false};
 size_t division{4};
+float feedback{0.0f};
+float feedbackBeats{1.0f};
 float luaParam1{0.0f};
 float luaParam2{0.0f};
 float luaParam3{0.0f};
@@ -50,6 +54,8 @@ std::string script{};
 "bpm",
 "hostSync",
 "division",
+"feedback",
+"feedbackBeats",
 "luaParam1",
 "luaParam2",
 "luaParam3",
@@ -81,6 +87,8 @@ std::string script{};
         else if constexpr (ParamId == Id::bpm) return bpm;
         else if constexpr (ParamId == Id::hostSync) return hostSync;
         else if constexpr (ParamId == Id::division) return division;
+        else if constexpr (ParamId == Id::feedback) return feedback;
+        else if constexpr (ParamId == Id::feedbackBeats) return feedbackBeats;
         else if constexpr (ParamId == Id::luaParam1) return luaParam1;
         else if constexpr (ParamId == Id::luaParam2) return luaParam2;
         else if constexpr (ParamId == Id::luaParam3) return luaParam3;
@@ -111,6 +119,10 @@ break;
  case Id::hostSync: if (!isEqual(get<Id::hostSync>(), value)) {get<Id::hostSync>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::division: if (!isEqual(get<Id::division>(), value)) {get<Id::division>() = static_cast<size_t>(value) ;m_modified = true;}
+break;
+ case Id::feedback: if (!isEqual(get<Id::feedback>(), value)) {get<Id::feedback>() = value;m_modified = true;}
+break;
+ case Id::feedbackBeats: if (!isEqual(get<Id::feedbackBeats>(), value)) {get<Id::feedbackBeats>() = value;m_modified = true;}
 break;
  case Id::luaParam1: if (!isEqual(get<Id::luaParam1>(), value)) {get<Id::luaParam1>() = value;m_modified = true;}
 break;
@@ -170,18 +182,20 @@ private:
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     PatchParameters,
-        dry      , // dial
-        wet      , // dial
-        bpm      , // dial
-        hostSync , // switch
-        division , // drop
-        luaParam1, // dial
-        luaParam2, // dial
-        luaParam3, // dial
-        luaParam4, // dial
-        luaParam5, // dial
-        luaParam6, // dial
-        luaParam7, // dial
-        luaParam8, // dial
-        script    // script
+        dry          , // dial
+        wet          , // dial
+        bpm          , // dial
+        hostSync     , // switch
+        division     , // drop
+        feedback     , // dial
+        feedbackBeats, // dial
+        luaParam1    , // dial
+        luaParam2    , // dial
+        luaParam3    , // dial
+        luaParam4    , // dial
+        luaParam5    , // dial
+        luaParam6    , // dial
+        luaParam7    , // dial
+        luaParam8    , // dial
+        script        // script
 )

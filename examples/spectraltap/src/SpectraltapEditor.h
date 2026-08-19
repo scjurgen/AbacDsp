@@ -122,21 +122,19 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // auto generated
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-
-            std::vector<juce::Rectangle<int>> areas(3);
-            const auto colWidth = area.getWidth() / 13;
-            const auto rowHeight = area.getHeight() / 2;
-            areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-            areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-            areas[2] = area.reduced(Constants::Margins::small);
+            std::vector<juce::Rectangle<int>> areas(2);
+            const auto rowHeight = area.getHeight() / 4;
+            areas[0] = area.removeFromTop(rowHeight * 3).reduced(Constants::Margins::small);
+            areas[1] = area.reduced(Constants::Margins::small);
 
             {
                 juce::FlexBox box;
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::column;
+                box.flexDirection = juce::FlexBox::Direction::row;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(cpuGauge).withHeight(200).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(levelGauge).withHeight(500).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(cpuGauge).withWidth(200).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(levelGauge).withWidth(500).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(spectrogramGauge).withWidth(600).withMargin(knobMarginSmall));
                 box.performLayout(areas[0].toFloat());
             }
             {
@@ -157,16 +155,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::center)
                                   .withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(spectrogramGauge).withWidth(600).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(feedbackDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(feedbackBeatsDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[1].toFloat());
-            }
-            {
-                juce::FlexBox box;
-                box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::row;
-                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(luaControlsLuaControlArea).withFlex(1).withMargin(knobMarginSmall));
-                box.performLayout(areas[2].toFloat());
             }
         }
     }
@@ -221,6 +212,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             valueTreeState, "division", divisionDrop);
         divisionDrop.setTooltip(juce::String::fromUTF8(
             "Division (1/1, 1/2, 1/2., 1/2T, 1/4, 1/4., 1/4T, 1/8, 1/8., 1/8T, 1/16, 1/16., 1/16T)"));
+        addAndMakeVisible(feedbackDial);
+        feedbackDial.reset(valueTreeState, "feedback");
+        feedbackDial.setLabelText(juce::String::fromUTF8("Feedback"));
+        feedbackDial.setTooltip(juce::String::fromUTF8("Feedback (-100 to 100 %)"));
+        addAndMakeVisible(feedbackBeatsDial);
+        feedbackBeatsDial.reset(valueTreeState, "feedbackBeats");
+        feedbackBeatsDial.setLabelText(juce::String::fromUTF8("Feedback Time"));
+        feedbackBeatsDial.setTooltip(juce::String::fromUTF8("Feedback Time (1 to 32 beats)"));
         addAndMakeVisible(cpuGauge);
         cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
         cpuGauge.setTooltip(juce::String::fromUTF8("CPU (0 to 100 %)"));
@@ -337,6 +336,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             bpmDial.setVisible(true);
             hostSyncSwitch.setVisible(false);
             divisionDrop.setVisible(false);
+            feedbackDial.setVisible(false);
+            feedbackBeatsDial.setVisible(false);
             cpuGauge.setVisible(false);
             levelGauge.setVisible(false);
             spectrogramGauge.setVisible(true);
@@ -357,10 +358,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             bpmDial.setVisible(true);
             hostSyncSwitch.setVisible(true);
             divisionDrop.setVisible(true);
+            feedbackDial.setVisible(true);
+            feedbackBeatsDial.setVisible(true);
             cpuGauge.setVisible(true);
             levelGauge.setVisible(true);
             spectrogramGauge.setVisible(true);
-            luaControlsLuaControlArea.setVisible(true);
+            luaControlsLuaControlArea.setVisible(false);
             luaParam1Dial.setVisible(false);
             luaParam2Dial.setVisible(false);
             luaParam3Dial.setVisible(false);
@@ -1192,6 +1195,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> hostSyncSwitchAttachment;
     juce::ComboBox divisionDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> divisionDropAttachment;
+    CustomRotaryDial feedbackDial{this};
+    CustomRotaryDial feedbackBeatsDial{this};
     CpuGauge cpuGauge{};
     Gauge levelGauge{};
     SpectrogramDisplay spectrogramGauge{AppSettings::loadTheme()};

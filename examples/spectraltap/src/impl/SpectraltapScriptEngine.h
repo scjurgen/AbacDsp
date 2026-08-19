@@ -80,6 +80,8 @@ class SpectraltapScriptEngine : public LuaScriptEngineBase<SpectraltapScriptEngi
     static constexpr float kMaxPan{1.f};
     static constexpr float kMinDelayMs{0.f};
     static constexpr float kMaxDelayMs{4000.f};
+    static constexpr float kMinTapFeedback{-1.f};
+    static constexpr float kMaxTapFeedback{1.f};
 
     using TapCommands = std::array<std::optional<TapTopology>, kMaxTaps>;
     using FrequencyCommands = std::array<std::optional<float>, kMaxTaps>;
@@ -87,6 +89,7 @@ class SpectraltapScriptEngine : public LuaScriptEngineBase<SpectraltapScriptEngi
     using FormantCommands = std::array<std::optional<FormantTarget>, kMaxTaps>;
     using GainCommands = std::array<std::optional<float>, kMaxTaps>;
     using PanCommands = std::array<std::optional<float>, kMaxTaps>;
+    using TapFeedbackCommands = std::array<std::optional<float>, kMaxTaps>;
 
     // clang-format off
     static constexpr std::string_view kStubScript =
@@ -194,6 +197,14 @@ class SpectraltapScriptEngine : public LuaScriptEngineBase<SpectraltapScriptEngi
 "--                                                               F2=f2Factor*F0, linear gains\n"
 "--   SetPan(index, pan)                                         -1..1, constant-power\n"
 "--   SetGain(index, gain)                                       linear per-tap output gain\n"
+"--   SetTapFeedback(index, amount)                               -1..1, default 0; feeds\n"
+"--                                                               this tap's own output back\n"
+"--                                                               into the shared delay - not\n"
+"--                                                               clamped for stability, only\n"
+"--                                                               soft-limited against NaN/Inf\n"
+"\n"
+"-- Global Feedback/Feedback Div dials add a second, tempo-synced feedback loop reading\n"
+"-- back through the same shared delay - no Lua call for these, they're plain UI controls.\n"
 "\n";
     // clang-format on
 
@@ -214,6 +225,7 @@ class SpectraltapScriptEngine : public LuaScriptEngineBase<SpectraltapScriptEngi
     [[nodiscard]] std::optional<FormantTarget> drainFormantCommand(size_t index) noexcept;
     [[nodiscard]] std::optional<float> drainGainCommand(size_t index) noexcept;
     [[nodiscard]] std::optional<float> drainPanCommand(size_t index) noexcept;
+    [[nodiscard]] std::optional<float> drainTapFeedbackCommand(size_t index) noexcept;
 
   private:
     friend class LuaScriptEngineBase<SpectraltapScriptEngine>;
@@ -226,6 +238,7 @@ class SpectraltapScriptEngine : public LuaScriptEngineBase<SpectraltapScriptEngi
     void luaSetFormant(size_t index, float fHz, float f1Factor, float f1Gain, float f2Factor, float f2Gain) noexcept;
     void luaSetPan(size_t index, float pan) noexcept;
     void luaSetGain(size_t index, float gain) noexcept;
+    void luaSetTapFeedback(size_t index, float amount) noexcept;
 
     std::optional<size_t> m_pendingMaxTaps;
     TapCommands m_pendingTap{};
@@ -234,6 +247,7 @@ class SpectraltapScriptEngine : public LuaScriptEngineBase<SpectraltapScriptEngi
     FormantCommands m_pendingFormant{};
     GainCommands m_pendingGain{};
     PanCommands m_pendingPan{};
+    TapFeedbackCommands m_pendingTapFeedback{};
     sol::protected_function m_onTimingFn;
 };
 
@@ -260,6 +274,7 @@ inline void SpectraltapScriptEngine::bindScriptFunctions()
     m_lua.set_function("SetFormant", &SpectraltapScriptEngine::luaSetFormant, this);
     m_lua.set_function("SetPan", &SpectraltapScriptEngine::luaSetPan, this);
     m_lua.set_function("SetGain", &SpectraltapScriptEngine::luaSetGain, this);
+    m_lua.set_function("SetTapFeedback", &SpectraltapScriptEngine::luaSetTapFeedback, this);
     m_onTimingFn = m_lua["OnTiming"];
 }
 
@@ -347,6 +362,15 @@ inline void SpectraltapScriptEngine::luaSetGain(const size_t index, const float 
     m_pendingGain[index] = std::clamp(gain, kMinGain, kMaxGain);
 }
 
+inline void SpectraltapScriptEngine::luaSetTapFeedback(const size_t index, const float amount) noexcept
+{
+    if (index >= kMaxTaps || !std::isfinite(amount))
+    {
+        return;
+    }
+    m_pendingTapFeedback[index] = std::clamp(amount, kMinTapFeedback, kMaxTapFeedback);
+}
+
 inline std::optional<size_t> SpectraltapScriptEngine::drainMaxTapsCommand() noexcept
 {
     const auto result = m_pendingMaxTaps;
@@ -393,5 +417,12 @@ inline std::optional<float> SpectraltapScriptEngine::drainPanCommand(const size_
 {
     const auto result = m_pendingPan[index];
     m_pendingPan[index].reset();
+    return result;
+}
+
+inline std::optional<float> SpectraltapScriptEngine::drainTapFeedbackCommand(const size_t index) noexcept
+{
+    const auto result = m_pendingTapFeedback[index];
+    m_pendingTapFeedback[index].reset();
     return result;
 }

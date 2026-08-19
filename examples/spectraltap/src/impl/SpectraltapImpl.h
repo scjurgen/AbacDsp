@@ -87,7 +87,14 @@ class SpectraltapImpl final : public EffectBase
     // One shared buffer sized for the max delay time, independent of kMaxTaps. Assumes
     // the engine's fixed 48 kHz internal rate (RateNormalizer::kInternalSampleRate).
     static constexpr float kAssumedSampleRate{48000.f};
-    static constexpr size_t kMaxDelaySamples{static_cast<size_t>(kAssumedSampleRate * kMaxDelayMs / 1000.f) + 4};
+    static constexpr float kMinFeedbackBeats{1.f};
+    static constexpr float kMaxFeedbackBeats{32.f};
+    // The lowest tempo the feedback delay line is sized for; below this (only reachable
+    // via Host Sync) a long feedback time is capped by the buffer, not accommodated.
+    static constexpr float kMinFeedbackBpm{40.f};
+    static constexpr float kMaxFeedbackDelayMs{kMaxFeedbackBeats * 60000.f / kMinFeedbackBpm};
+    static constexpr size_t kMaxDelaySamples{
+        static_cast<size_t>(kAssumedSampleRate * std::max(kMaxDelayMs, kMaxFeedbackDelayMs) / 1000.f) + 4};
     static constexpr float kMaxTapFreqHz{SpectraltapScriptEngine::kMaxFreqHz};
     static constexpr float kCombMinFreqHz{20.f};
     static constexpr size_t kCombBufferSize{static_cast<size_t>(kAssumedSampleRate / kCombMinFreqHz) + 8};
@@ -105,6 +112,12 @@ class SpectraltapImpl final : public EffectBase
     // can crossfade a retune instead of resetting state in place.
     static constexpr size_t kMaxSlots{kMaxTaps * 2};
     static constexpr float kCrossfadeSeconds{0.03f};
+    // One more shared-buffer read position, beyond every tap's own two slots, for the
+    // global tempo-synced feedback loop.
+    static constexpr size_t kGlobalFeedbackSlot{kMaxSlots};
+    // Same headroom-scaled tanh limiter CombResonator uses (kLimiterHeadroom, same value):
+    // bounds the write signal, never clamps a user-facing parameter.
+    static constexpr float kFeedbackHeadroom{16.f};
 
     explicit SpectraltapImpl(const float sampleRate)
         : EffectBase(sampleRate)
@@ -218,6 +231,16 @@ class SpectraltapImpl final : public EffectBase
         m_divisionIndex = clampDivisionIndex(index);
     }
 
+    void setFeedback(const float value) noexcept
+    {
+        m_feedback.newTransition(value * 0.01f, kParamSmoothingSeconds, sampleRate());
+    }
+
+    void setFeedbackBeats(const float value) noexcept
+    {
+        m_feedbackBeats = std::clamp(value, kMinFeedbackBeats, kMaxFeedbackBeats);
+    }
+
     // The manual BPM dial while free-running, or the host's tempo while Host Sync is on -
     // what OnTiming() actually times taps against, distinct from the shared
     // Transport.Tempo() every Lua example gets (always the raw host tempo).
@@ -238,6 +261,7 @@ class SpectraltapImpl final : public EffectBase
         notifyTimingIfChanged(currentBpm());
         applyPendingCommands();
         updateTapCoefficients();
+        updateFeedbackDelay();
 
         std::array<float, BlockSize> monoIn{};
         for (size_t s = 0; s < BlockSize; ++s)
@@ -249,7 +273,11 @@ class SpectraltapImpl final : public EffectBase
         std::array<float, BlockSize> wetR{};
         for (size_t s = 0; s < BlockSize; ++s)
         {
-            m_delay.write(monoIn[s]);
+            // Feedback is staged one sample late (not read-before-write) so a delayMs = 0
+            // tap still reads exactly what this same sample just wrote.
+            const float combined = monoIn[s] + m_pendingFeedback;
+            m_delay.write(kFeedbackHeadroom * std::tanh(combined / kFeedbackHeadroom));
+            float sampleFeedback = 0.f;
             for (size_t t = 0; t < m_activeTaps; ++t)
             {
                 float tapOut = 0.f;
@@ -262,7 +290,10 @@ class SpectraltapImpl final : public EffectBase
                 const float gain = m_gain[t].getValue();
                 wetL[s] += tapOut * gain * m_panL[t].getValue();
                 wetR[s] += tapOut * gain * m_panR[t].getValue();
+                sampleFeedback += tapOut * m_tapFeedback[t].getValue();
             }
+            sampleFeedback += m_delay.readTap(kGlobalFeedbackSlot) * m_feedback.getValue();
+            m_pendingFeedback = sampleFeedback;
         }
 
         for (size_t s = 0; s < BlockSize; ++s)
@@ -341,6 +372,11 @@ class SpectraltapImpl final : public EffectBase
         return static_cast<size_t>(std::clamp(delayMs, 0.f, kMaxDelayMs) * 0.001f * kAssumedSampleRate + 0.5f);
     }
 
+    [[nodiscard]] size_t feedbackMsToDelaySamples(const float delayMs) const noexcept
+    {
+        return static_cast<size_t>(std::clamp(delayMs, 0.f, kMaxFeedbackDelayMs) * 0.001f * kAssumedSampleRate + 0.5f);
+    }
+
     // Frequency/decay/formant targets are smoothed once per block (not per sample) in log
     // domain, per SpectraltapScriptEngine's parameter-semantics contract - so this is the
     // "sample rate" getValue() advances against when called once per processBlock().
@@ -380,6 +416,10 @@ class SpectraltapImpl final : public EffectBase
             if (const auto pan = m_scriptEngine.drainPanCommand(i))
             {
                 applyPan(i, *pan);
+            }
+            if (const auto feedback = m_scriptEngine.drainTapFeedbackCommand(i))
+            {
+                m_tapFeedback[i].newTransition(*feedback, kParamSmoothingSeconds, sampleRate());
             }
         }
     }
@@ -545,6 +585,14 @@ class SpectraltapImpl final : public EffectBase
         }
     }
 
+    // Global feedback tap's read position, as a beat count converted from currentBpm() -
+    // native counterpart to Rhythm.BeatsToMs, since this dial isn't Lua-driven.
+    void updateFeedbackDelay() noexcept
+    {
+        const float delayMs = m_feedbackBeats * 60000.f / std::max(currentBpm(), 1.f);
+        m_delay.setTapDelay(kGlobalFeedbackSlot, feedbackMsToDelaySamples(delayMs));
+    }
+
     void updateFormantVoice(const size_t i, SpectraltapVoices::FormantVoice& voice) noexcept
     {
         const float f1 = std::min(std::exp2(m_formantF1Log2[i].getValue()), kMaxTapFreqHz);
@@ -617,6 +665,13 @@ class SpectraltapImpl final : public EffectBase
     size_t m_lastNotifiedDivisionIndex{static_cast<size_t>(-1)};
     AbacDsp::LinearSmoothing m_dry{1.f};
     AbacDsp::LinearSmoothing m_wet{1.f};
+    AbacDsp::LinearSmoothing m_feedback{0.f};
+    float m_feedbackBeats{1.f}; // matching the Feedback Time dial's default
+    // Carries this sample's tap/global feedback sum into the *next* sample's write, so a
+    // delayMs = 0 tap still reads exactly what its own sample just wrote.
+    float m_pendingFeedback{0.f};
+    std::array<AbacDsp::LinearSmoothing, kMaxTaps> m_tapFeedback{
+        AbacDsp::constructArray<AbacDsp::LinearSmoothing, kMaxTaps>(0.f)};
 
     // Per logical tap: which of its two slots (see slotIndex()) is currently live, and
     // whether it has ever been configured at all (a first-ever SetTap skips the fade).
@@ -630,7 +685,7 @@ class SpectraltapImpl final : public EffectBase
     std::array<AbacDsp::LinearSmoothing, kMaxTaps> m_slot1Gain{
         AbacDsp::constructArray<AbacDsp::LinearSmoothing, kMaxTaps>(0.f)};
 
-    AbacDsp::MultiTapDelay<kMaxDelaySamples, kMaxSlots> m_delay{};
+    AbacDsp::MultiTapDelay<kMaxDelaySamples, kMaxSlots + 1> m_delay{};
     std::array<SpectraltapVoices::TapVoice, kMaxSlots> m_voices{};
     // Constructed once (see the constructor's init list) and reused by index for the
     // plugin's lifetime - see SpectraltapVoices::CombVoice's class doc for why.

@@ -441,3 +441,98 @@ TEST(Spectraltap, ResonatorMatchesBandPassLoudnessAtSameFrequencyAndDecay)
     // within a small margin of each other rather than differing by an order of magnitude.
     EXPECT_NEAR(bandPassPeak, resonatorPeak, bandPassPeak * 0.25f);
 }
+
+TEST(Spectraltap, FeedbackHeadroomLimiterIsNearTransparentAtDefaultZeroFeedback)
+{
+    // Every write passes through the headroom limiter unconditionally, even with no
+    // feedback configured, so this checks near-transparency at normal levels, not exact
+    // equality to a pre-limiter reference.
+    Impl impl{kSampleRate};
+    ASSERT_TRUE(impl.setScript(std::string(kNoAutoTiming) + "SetMaxTaps(1)\nSetTap(0, 0, 0, 1.0, 0.0)"));
+    settle(impl, 50);
+
+    Buffer in{};
+    Buffer out{};
+    for (size_t s = 0; s < kBlockSize; ++s)
+    {
+        in(s, 0) = 0.6f;
+        in(s, 1) = -0.4f;
+    }
+    impl.processBlock(in, out);
+
+    const float monoIn = 0.5f * (0.6f - 0.4f);
+    const float panGain = std::cos(std::numbers::pi_v<float> / 4.f); // pan = 0.0
+    EXPECT_NEAR(out(0, 0), in(0, 0) + monoIn * panGain, 0.001f);
+}
+
+TEST(Spectraltap, GlobalFeedbackProducesATempoSyncedRepeat)
+{
+    Impl impl{kSampleRate};
+    impl.setBpm(120.f);
+    impl.setFeedbackBeats(1.f); // 1 beat -> 500 ms at 120 bpm -> 24000 samples at 48 kHz
+    impl.setFeedback(50.f);
+    ASSERT_TRUE(impl.setScript(std::string(kNoAutoTiming) + "SetMaxTaps(1)\nSetTap(0, 0, 0, 1.0, 0.0)"));
+    settle(impl, 50); // lets m_feedback's smoothing ramp onto its 50% target
+
+    Buffer in{};
+    Buffer out{};
+    in(0, 0) = 1.f;
+    in(0, 1) = 1.f;
+    impl.processBlock(in, out); // one-sample impulse at the very start of this block
+    in(0, 0) = 0.f;
+    in(0, 1) = 0.f;
+
+    constexpr size_t kExpectedRepeatSample = 24000;
+    const size_t targetBlock = kExpectedRepeatSample / kBlockSize;
+    float peakNearRepeat = 0.f;
+    for (size_t b = 1; b < targetBlock + 5; ++b)
+    {
+        impl.processBlock(in, out);
+        if (b + 2 >= targetBlock && b <= targetBlock + 2)
+        {
+            for (size_t s = 0; s < kBlockSize; ++s)
+            {
+                peakNearRepeat = std::max(peakNearRepeat, std::abs(out(s, 0)));
+            }
+        }
+    }
+    EXPECT_GT(peakNearRepeat, 0.05f); // a real echo, not just smoothing/limiter residue
+}
+
+TEST(Spectraltap, HeavyFeedbackStaysFiniteAndBounded)
+{
+    Impl impl{kSampleRate};
+    impl.setBpm(120.f);
+    impl.setFeedbackBeats(1.f); // shortest available repeat time
+    impl.setFeedback(95.f);
+    ASSERT_TRUE(impl.setScript(std::string(kNoAutoTiming) +
+                               "SetMaxTaps(4)\n"
+                               "SetTap(0, 5, 3, 1.0, -0.5)\nSetResonance(0, 300, 1.0)\nSetTapFeedback(0, 0.95)\n"
+                               "SetTap(1, 15, 3, 1.0, 0.5)\nSetResonance(1, 450, 1.0)\nSetTapFeedback(1, 0.95)\n"
+                               "SetTap(2, 25, 3, 1.0, -0.3)\nSetResonance(2, 600, 1.0)\nSetTapFeedback(2, 0.95)\n"
+                               "SetTap(3, 35, 3, 1.0, 0.3)\nSetResonance(3, 900, 1.0)\nSetTapFeedback(3, 0.95)"));
+    settle(impl, 100);
+
+    std::mt19937 rng{123};
+    std::uniform_real_distribution<float> dist{-1.f, 1.f};
+    Buffer in{};
+    Buffer out{};
+    for (size_t b = 0; b < 2000; ++b)
+    {
+        for (size_t s = 0; s < kBlockSize; ++s)
+        {
+            const float noise = dist(rng);
+            in(s, 0) = noise;
+            in(s, 1) = noise;
+        }
+        impl.processBlock(in, out);
+        ASSERT_TRUE(allFinite(out)) << "block " << b;
+        for (size_t s = 0; s < kBlockSize; ++s)
+        {
+            // Loose bound: the point is catching unbounded runaway growth, not pinning
+            // down the exact peak level of a deliberately near-unstable configuration.
+            EXPECT_LT(std::abs(out(s, 0)), 2000.f);
+            EXPECT_LT(std::abs(out(s, 1)), 2000.f);
+        }
+    }
+}

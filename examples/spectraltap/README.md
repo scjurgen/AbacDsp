@@ -16,6 +16,8 @@ mapping, smoothing, and DSP safety.
 | BPM | 40 - 250 | Manual tempo dial, disabled and forced to the host's own tempo while Host Sync is on. Feeds the script's `OnTiming` hook - see Scripting below. |
 | Host Sync | on/off | When on, `OnTiming`'s `bpm` follows the host's transport tempo instead of the BPM dial (which greys out and displays the host value). |
 | Division | 13 choices (1/1 .. 1/16T) | Passed to `OnTiming` as a 0-based index; the script owns interpreting it (see the stub's `kDivisionBeats` table below). |
+| Feedback | -100 - 100 % | Global feedback amount for the tempo-synced repeat below - not script-driven, and not clamped down for stability (see DSP architecture). |
+| Feedback Time | 1 - 32 beats | Repeat time for the global feedback loop, as a beat multiple of the current effective tempo (the same `bpm` `OnTiming` receives). Not crossfaded: changing it while feedback is active can click. |
 | Script | (button) | Opens the popup editor for the current patch's script. While LLM-Assist is active it opens read-only instead (Apply/Reset disabled) so a manual edit can't race a watched-folder pull, and its text stays live-updated as pulls happen. The editor's own Reset button replaces the text with a full skeleton (every available hook, stubbed out) - Cancel discards it, Apply commits it. A dropdown in the editor also lets you view any installed library script, always read-only. |
 
 **Settings > Scripts** manages a named pool of saved scripts (Load / Save As / Delete / Rename),
@@ -62,8 +64,22 @@ wet = sum(tapGain[i] * Pan[i](Voice[i](delayedInput[i])))
 out = dryGain * input + wetGain * wet
 ```
 
-There is no feedback between taps - every tap is a parallel, feed-forward voice off the
-one shared buffer. Dry stays centered regardless of any tap's pan.
+Every tap is still a parallel voice reading the one shared buffer - no tap reads another
+tap's output. What *is* fed back is each tap's own already-processed output (weighted by
+its own `SetTapFeedback` amount) plus a global, tempo-synced repeat (the Feedback/Feedback
+Div dials), both summed with the dry input and re-written into the same shared buffer one
+sample later:
+
+```
+combined = input + sum(tapFeedback[i] * tapOut[i]) + globalFeedback * delayedRepeat
+written  = headroom * tanh(combined / headroom)   -- headroom = 16
+```
+
+Nothing here clamps `Feedback`, `Feedback Time`, or `SetTapFeedback` themselves - a script
+or dial setting that would make the loop diverge (e.g. several taps near `SetTapFeedback`
+`1.0`) is left alone, on purpose: the `tanh` soft limiter only bounds the signal that
+actually gets written back, so an unstable configuration saturates into a loud, bounded
+drone instead of a NaN/overflow. Dry stays centered regardless of any tap's pan.
 
 ### Topology: `SetMaxTaps` / `SetTap`
 
@@ -113,6 +129,7 @@ SetResonance(index, fHz, decayTimeSeconds[, negative])        -- frequency + dec
 SetFormant(index, fHz, f1Factor, f1Gain, f2Factor, f2Gain)    -- Formant only
 SetPan(index, pan)                                             -- -1..1
 SetGain(index, gain)                                           -- linear
+SetTapFeedback(index, amount)                                  -- -1..1, this tap into the loop
 ```
 
 | Parameter | Unit / range | Notes |
@@ -124,6 +141,7 @@ SetGain(index, gain)                                           -- linear
 | `f1Gain`/`f2Gain` | linear, clamped `[0, 4]` | Not dB. `F0`'s own gain is a fixed unity; the three sections sum and normalize by `1 / (1 + f1Gain + f2Gain)` so overall loudness doesn't grow as gains change. |
 | `gain` | linear, clamped `[0, 4]` | Short linear smoothing. |
 | `pan` | clamped `[-1, 1]` | Constant-power: `gL = cos((pan+1)*pi/4)`, `gR = sin((pan+1)*pi/4)` - the two channel gains are what's smoothed, not the raw pan value, so a pan sweep never dips in level. |
+| `amount` (`SetTapFeedback`) | clamped `[-1, 1]`, default 0 | This tap's own (already slot-crossfaded, gain/pan-independent) output, weighted by `amount` and summed into the shared buffer's next write - see DSP architecture above for the full feedback path and its soft limiter. |
 
 Calling `SetFrequency`/`SetResonance`/`SetFormant`/`SetGain`/`SetPan` on a tap whose type
 doesn't use that parameter is harmless (e.g. `SetFormant` on a BandPass tap is simply never

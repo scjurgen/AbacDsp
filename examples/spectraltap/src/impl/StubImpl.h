@@ -37,6 +37,14 @@ class StubImpl final : public EffectBase
     {
         m_division = value;
     }
+    void setFeedback(const float value)
+    {
+        m_feedback = value;
+    }
+    void setFeedbackBeats(const float value)
+    {
+        m_feedbackBeats = value;
+    }
     void setLuaParam1(const float value)
     {
         m_luaParam1 = value;
@@ -85,6 +93,8 @@ class StubImpl final : public EffectBase
     float m_bpm{};
     bool m_hostSync{};
     size_t m_division{};
+    float m_feedback{};
+    float m_feedbackBeats{};
     float m_luaParam1{};
     float m_luaParam2{};
     float m_luaParam3{};

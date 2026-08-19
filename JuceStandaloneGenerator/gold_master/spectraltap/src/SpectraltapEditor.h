@@ -157,6 +157,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::center)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(feedbackDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(feedbackBeatsDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(spectrogramGauge).withWidth(600).withMargin(knobMarginSmall));
                 box.performLayout(areas[1].toFloat());
             }
@@ -221,6 +223,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             valueTreeState, "division", divisionDrop);
         divisionDrop.setTooltip(juce::String::fromUTF8(
             "Division (1/1, 1/2, 1/2., 1/2T, 1/4, 1/4., 1/4T, 1/8, 1/8., 1/8T, 1/16, 1/16., 1/16T)"));
+        addAndMakeVisible(feedbackDial);
+        feedbackDial.reset(valueTreeState, "feedback");
+        feedbackDial.setLabelText(juce::String::fromUTF8("Feedback"));
+        feedbackDial.setTooltip(juce::String::fromUTF8("Feedback (-100 to 100 %)"));
+        addAndMakeVisible(feedbackBeatsDial);
+        feedbackBeatsDial.reset(valueTreeState, "feedbackBeats");
+        feedbackBeatsDial.setLabelText(juce::String::fromUTF8("Feedback Time"));
+        feedbackBeatsDial.setTooltip(juce::String::fromUTF8("Feedback Time (1 to 32 beats)"));
         addAndMakeVisible(cpuGauge);
         cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
         cpuGauge.setTooltip(juce::String::fromUTF8("CPU (0 to 100 %)"));
@@ -337,6 +347,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             bpmDial.setVisible(true);
             hostSyncSwitch.setVisible(false);
             divisionDrop.setVisible(false);
+            feedbackDial.setVisible(false);
+            feedbackBeatsDial.setVisible(false);
             cpuGauge.setVisible(false);
             levelGauge.setVisible(false);
             spectrogramGauge.setVisible(true);
@@ -357,6 +369,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             bpmDial.setVisible(true);
             hostSyncSwitch.setVisible(true);
             divisionDrop.setVisible(true);
+            feedbackDial.setVisible(true);
+            feedbackBeatsDial.setVisible(true);
             cpuGauge.setVisible(true);
             levelGauge.setVisible(true);
             spectrogramGauge.setVisible(true);
@@ -1192,6 +1206,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> hostSyncSwitchAttachment;
     juce::ComboBox divisionDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> divisionDropAttachment;
+    CustomRotaryDial feedbackDial{this};
+    CustomRotaryDial feedbackBeatsDial{this};
     CpuGauge cpuGauge{};
     Gauge levelGauge{};
     SpectrogramDisplay spectrogramGauge{AppSettings::loadTheme()};

@@ -219,6 +219,16 @@ TEST(SpectraltapScriptEngine, SetGainIsDrainedOnceThenClearsAndClamps)
     EXPECT_FALSE(engine.drainGainCommand(0).has_value());
 }
 
+TEST(SpectraltapScriptEngine, SetTapFeedbackIsDrainedOnceThenClearsAndClamps)
+{
+    SpectraltapScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript("SetTapFeedback(0, -5)\nSetTapFeedback(1, 5)"));
+
+    EXPECT_FLOAT_EQ(*engine.drainTapFeedbackCommand(0), SpectraltapScriptEngine::kMinTapFeedback);
+    EXPECT_FLOAT_EQ(*engine.drainTapFeedbackCommand(1), SpectraltapScriptEngine::kMaxTapFeedback);
+    EXPECT_FALSE(engine.drainTapFeedbackCommand(0).has_value());
+}
+
 TEST(SpectraltapScriptEngine, StubScriptClaimsRootAndScaleLuaControls)
 {
     SpectraltapScriptEngine engine;

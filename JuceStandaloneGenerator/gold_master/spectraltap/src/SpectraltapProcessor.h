@@ -45,6 +45,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("bpm", this);
         m_parameters.addParameterListener("hostSync", this);
         m_parameters.addParameterListener("division", this);
+        m_parameters.addParameterListener("feedback", this);
+        m_parameters.addParameterListener("feedbackBeats", this);
         m_parameters.addParameterListener("luaParam1", this);
         m_parameters.addParameterListener("luaParam2", this);
         m_parameters.addParameterListener("luaParam3", this);
@@ -69,6 +71,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("bpm", this);
         m_parameters.removeParameterListener("hostSync", this);
         m_parameters.removeParameterListener("division", this);
+        m_parameters.removeParameterListener("feedback", this);
+        m_parameters.removeParameterListener("feedbackBeats", this);
         m_parameters.removeParameterListener("luaParam1", this);
         m_parameters.removeParameterListener("luaParam2", this);
         m_parameters.removeParameterListener("luaParam3", this);
@@ -298,6 +302,16 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                 juce::String::fromUTF8("1/16T")},
             4));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("feedback", 1), juce::String::fromUTF8("Feedback"),
+            juce::NormalisableRange<float>(-100, 100, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " %"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("feedbackBeats", 1), juce::String::fromUTF8("Feedback Time"),
+            juce::NormalisableRange<float>(1, 32, 0.01, 1, false), 1,
+            juce::AudioParameterFloatAttributes{}.withLabel("beats").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " beats"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("luaParam1", 1), juce::String::fromUTF8("Lua Param 1"),
             juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
@@ -380,6 +394,18 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setDivision(static_cast<int>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::division, v);
+             }},
+            {"feedback",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFeedback(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::feedback, v);
+             }},
+            {"feedbackBeats",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFeedbackBeats(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::feedbackBeats, v);
              }},
             {"luaParam1",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -486,6 +512,18 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("division");
             float normalized = range.convertTo0to1(params.division);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("feedback"))
+        {
+            const auto& range = m_parameters.getParameterRange("feedback");
+            float normalized = range.convertTo0to1(params.feedback);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("feedbackBeats"))
+        {
+            const auto& range = m_parameters.getParameterRange("feedbackBeats");
+            float normalized = range.convertTo0to1(params.feedbackBeats);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("luaParam1"))
