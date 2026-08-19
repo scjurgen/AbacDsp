@@ -71,6 +71,16 @@ TEST(SpectraltapScriptEngine, SetTapIsDrainedOnceThenClears)
     EXPECT_FALSE(engine.drainTapCommand(2).has_value());
 }
 
+TEST(SpectraltapScriptEngine, SetTapAcceptsRingModulatorType)
+{
+    SpectraltapScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript("SetTap(0, 0, 8, 1.0, 0.0)"));
+
+    const auto command = engine.drainTapCommand(0);
+    ASSERT_TRUE(command.has_value());
+    EXPECT_EQ(command->type, TapType::RingModulator);
+}
+
 TEST(SpectraltapScriptEngine, SetTapRejectsOutOfRangeIndex)
 {
     SpectraltapScriptEngine engine;
@@ -85,7 +95,7 @@ TEST(SpectraltapScriptEngine, SetTapRejectsOutOfRangeIndex)
 TEST(SpectraltapScriptEngine, SetTapRejectsUnknownType)
 {
     SpectraltapScriptEngine engine;
-    ASSERT_TRUE(engine.loadScript("SetTap(0, 100, 8, 1, 0)"));
+    ASSERT_TRUE(engine.loadScript("SetTap(0, 100, 9, 1, 0)"));
     EXPECT_FALSE(engine.drainTapCommand(0).has_value());
 }
 
@@ -144,7 +154,18 @@ TEST(SpectraltapScriptEngine, SetResonanceIsDrainedOnceThenClears)
     ASSERT_TRUE(command.has_value());
     EXPECT_FLOAT_EQ(command->freqHz, 220.f);
     EXPECT_FLOAT_EQ(command->decaySeconds, 2.5f);
+    EXPECT_FALSE(command->negative);
     EXPECT_FALSE(engine.drainResonanceCommand(0).has_value());
+}
+
+TEST(SpectraltapScriptEngine, SetResonanceAcceptsOptionalNegativeFlag)
+{
+    SpectraltapScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript("SetResonance(0, 220, 2.5, true)"));
+
+    const auto command = engine.drainResonanceCommand(0);
+    ASSERT_TRUE(command.has_value());
+    EXPECT_TRUE(command->negative);
 }
 
 TEST(SpectraltapScriptEngine, SetResonanceClampsDecay)
@@ -232,9 +253,8 @@ TEST(SpectraltapScriptEngine, RootChangeRetunesTapsUsingLastKnownTiming)
         std::ignore = engine.drainFormantCommand(i);
     }
 
-    // Slot 0 is "root" (declared first in kStubScript's UICreateParameterSet).
-    // notifyUiParameterChanged() takes a normalized 0..1 value, mapped through the slot's
-    // declared range before OnRootChanged sees it - 1.0 selects the drop's last item.
+    // Slot 0 is "root". notifyUiParameterChanged() takes a normalized 0..1 value, mapped
+    // through the slot's range before OnRootChanged sees it - 1.0 selects the last item.
     engine.notifyUiParameterChanged(0, 1.f);
 
     const auto tap0 = engine.drainTapCommand(0);

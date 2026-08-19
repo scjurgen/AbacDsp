@@ -41,9 +41,12 @@ struct FilterVoice
     TapType mode{TapType::BandPass};
 };
 
+/// @brief gainBoost cancels SvfResoBP::step()'s built-in 1/Q normalization (meant for
+/// impulse-triggered use elsewhere) so a continuously-driven Resonator peaks like BandPass.
 struct ResonatorVoice
 {
     AbacDsp::SvfResoBP svf{};
+    float gainBoost{1.f};
 };
 
 /// @brief F0/F1/F2 as three parallel SvfResoBP sections, summed and gain-normalized.
@@ -63,7 +66,15 @@ struct CombVoice
 {
 };
 
-using TapVoice = std::variant<BypassVoice, FilterVoice, ResonatorVoice, FormantVoice, CombVoice>;
+/// @brief Sine carrier at the tap's set frequency, ring-multiplied with the delayed input.
+/// No decay/Q - a bounded [-1,1] carrier can never amplify.
+struct RingModVoice
+{
+    float phase{0.f};
+    float phaseIncrement{0.f};
+};
+
+using TapVoice = std::variant<BypassVoice, FilterVoice, ResonatorVoice, FormantVoice, CombVoice, RingModVoice>;
 
 }
 
@@ -80,14 +91,18 @@ class SpectraltapImpl final : public EffectBase
     static constexpr float kMaxTapFreqHz{SpectraltapScriptEngine::kMaxFreqHz};
     static constexpr float kCombMinFreqHz{20.f};
     static constexpr size_t kCombBufferSize{static_cast<size_t>(kAssumedSampleRate / kCombMinFreqHz) + 8};
-    static constexpr float kFormantSectionDecaySeconds{0.05f};
-    // 1/1, 1/2, 1/2., 1/2T, 1/4, 1/4., 1/4T, 1/8, 1/8., 1/8T, 1/16, 1/16., 1/16T - matches
-    // the Division dropdown; the Lua script owns the actual beat-multiplier lookup (see
-    // SpectraltapScriptEngine::kStubScript), this only bounds the dropdown's index.
+    // Fixed, not decay-derived: formant sections are meant to be broad/vowel-like, not
+    // razor-sharp, independent of whatever "decay" a script requests for other taps.
+    static constexpr float kFormantSectionQ{10.f};
+    // Its own (much smaller) constant than SvfResoBP's native decay-to-Q relation, which
+    // is tuned for impulse ring-down time, not continuous drive - see filterQFromDecay().
+    static constexpr float kFilterDecayToQ{0.005f};
+    static constexpr float kMaxFilterQ{20.f};
+    // Matches the Division dropdown's 13 items (1/1..1/16T); the Lua script owns the
+    // actual beat-multiplier lookup (see kStubScript), this only bounds the dropdown's index.
     static constexpr size_t kNumDivisions{13};
-    // Each logical tap owns two physical slots (delay-read position + voice + comb) so a
-    // retune can crossfade the old slot out while the new one fades in - see
-    // applyTapTopology() - rather than resetting state in place, which used to click.
+    // Two physical slots per logical tap (delay-read + voice + comb) so applyTapTopology()
+    // can crossfade a retune instead of resetting state in place.
     static constexpr size_t kMaxSlots{kMaxTaps * 2};
     static constexpr float kCrossfadeSeconds{0.03f};
 
@@ -98,14 +113,16 @@ class SpectraltapImpl final : public EffectBase
         m_scriptEngine.setSampleRate(sampleRate);
     }
 
-    // A reload resets the script's Lua globals, so resendUiParameters() re-syncs it to
-    // each claimed slot's current value - otherwise it stays believing coded defaults.
+    // A reload resets the script's Lua globals, so resendUiParameters()/resendTiming()
+    // re-sync it to each claimed slot's value and the current bpm/division - otherwise a
+    // script whose topology is built entirely from OnTiming would never configure a tap.
     bool setScript(const std::string_view source)
     {
         const bool ok = m_scriptEngine.loadScript(source);
         if (ok)
         {
             resendUiParameters();
+            resendTiming();
         }
         return ok;
     }
@@ -201,10 +218,9 @@ class SpectraltapImpl final : public EffectBase
         m_divisionIndex = clampDivisionIndex(index);
     }
 
-    // The manual BPM dial while free-running, or the host's own tempo while Host Sync is
-    // on - what the Division dropdown actually times taps against via OnTiming(), distinct
-    // from the shared Transport.Tempo() every Lua example gets (always the raw host tempo,
-    // unaffected by this switch).
+    // The manual BPM dial while free-running, or the host's tempo while Host Sync is on -
+    // what OnTiming() actually times taps against, distinct from the shared
+    // Transport.Tempo() every Lua example gets (always the raw host tempo).
     [[nodiscard]] float currentBpm() const noexcept
     {
         return m_hostSync ? std::clamp(static_cast<float>(hostTransport().bpm), 20.f, 300.f) : m_manualBpm;
@@ -295,9 +311,7 @@ class SpectraltapImpl final : public EffectBase
 
     // OnTiming() is user Lua code, so it only runs when bpm/division actually change, not
     // every block - otherwise a host bpm-automation ramp would run it constantly. Exact
-    // equality is intentional: currentBpm() either returns the same stored float untouched
-    // or a genuinely new one, so bit-identity is exactly "unchanged" - same reasoning as
-    // notifyUiParametersIfChanged() above.
+    // equality is safe here: currentBpm() either repeats its last value bit-for-bit or not.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wfloat-equal"
     void notifyTimingIfChanged(const float bpm) noexcept
@@ -311,6 +325,16 @@ class SpectraltapImpl final : public EffectBase
         m_lastNotifiedDivisionIndex = m_divisionIndex;
     }
 #pragma GCC diagnostic pop
+
+    // Notifies the current bpm/division unconditionally, unlike notifyTimingIfChanged() -
+    // see setScript()'s comment for why.
+    void resendTiming() noexcept
+    {
+        const float bpm = currentBpm();
+        m_scriptEngine.notifyTiming(bpm, static_cast<int>(m_divisionIndex));
+        m_lastNotifiedBpm = bpm;
+        m_lastNotifiedDivisionIndex = m_divisionIndex;
+    }
 
     [[nodiscard]] size_t msToDelaySamples(const float delayMs) const noexcept
     {
@@ -370,11 +394,9 @@ class SpectraltapImpl final : public EffectBase
         return slot == 0 ? m_slot0Gain[tap] : m_slot1Gain[tap];
     }
 
-    // Topology tier: click-free retune. A tap's first-ever SetTap applies directly (slot 0,
-    // gain forced to 1 - nothing audible to fade from); every later call configures the
-    // currently-inactive slot fresh and crossfades it in over kCrossfadeSeconds while the
-    // previously-active slot fades out, rather than resetting delay position and
-    // filter/comb state in place.
+    // Topology tier, click-free: a tap's first-ever SetTap applies directly (slot 0, gain
+    // forced to 1). Every later call configures the inactive slot fresh and crossfades it
+    // in over kCrossfadeSeconds while the previously-active slot fades out.
     void applyTapTopology(const size_t i, const TapTopology& tap)
     {
         if (!m_tapConfigured[i])
@@ -445,6 +467,9 @@ class SpectraltapImpl final : public EffectBase
                 m_voices[idx] = CombVoice{};
                 m_combs[idx].reset();
                 break;
+            case TapType::RingModulator:
+                m_voices[idx] = RingModVoice{};
+                break;
         }
     }
 
@@ -469,6 +494,7 @@ class SpectraltapImpl final : public EffectBase
 
     void applyResonance(const size_t i, const ResonanceTarget& resonance) noexcept
     {
+        m_combNegative[i] = resonance.negative;
         m_freqLog2[i].newTransition(std::log2(resonance.freqHz), kBlockSmoothingSeconds, blockRate());
         m_decayLog2[i].newTransition(std::log2(resonance.decaySeconds), kBlockSmoothingSeconds, blockRate());
     }
@@ -485,6 +511,13 @@ class SpectraltapImpl final : public EffectBase
         m_formantF2Gain[i].newTransition(formant.f2Gain, kBlockSmoothingSeconds, blockRate());
     }
 
+    // Own, much smaller-scaled constant than SvfResoBP's native decay-to-Q relation
+    // (tuned for impulse ring-down time, not continuous drive) - see kFilterDecayToQ.
+    [[nodiscard]] static float filterQFromDecay(const float freqHz, const float decaySeconds) noexcept
+    {
+        return std::clamp(std::numbers::pi_v<float> * freqHz * decaySeconds * kFilterDecayToQ, 0.05f, kMaxFilterQ);
+    }
+
     // Recomputes every active tap's filter/comb coefficients from its (block-rate
     // smoothed) frequency/decay targets - once per block, per the same "static or slowly
     // changing parameters" allowance SpectraltapScriptEngine's class doc documents.
@@ -496,23 +529,20 @@ class SpectraltapImpl final : public EffectBase
             const size_t idx = slotIndex(i, m_activeSlot[i]);
             const float freqHz = std::min(std::exp2(m_freqLog2[i].getValue()), kMaxTapFreqHz);
             const float decaySeconds = std::exp2(m_decayLog2[i].getValue());
-            std::visit(Overloaded{[](BypassVoice&) {}, [&](FilterVoice& voice)
-                                  { updateFilterVoice(voice, freqHz, decaySeconds); }, [&](ResonatorVoice& voice)
-                                  { voice.svf.setByDecay(0, freqHz, std::max(decaySeconds, 0.01f)); },
+            std::visit(Overloaded{[&](BypassVoice&) {}, [&](FilterVoice& voice)
+                                  { voice.svf.computeCoefficients(freqHz, filterQFromDecay(freqHz, decaySeconds)); },
+                                  [&](ResonatorVoice& voice)
+                                  {
+                                      const float q = filterQFromDecay(freqHz, decaySeconds);
+                                      voice.svf.computeCoefficients(0, freqHz, q);
+                                      voice.gainBoost = q;
+                                  },
                                   [&](FormantVoice& voice) { updateFormantVoice(i, voice); },
-                                  [&](CombVoice&) { m_combs[idx].setByDecay(freqHz, decaySeconds); }},
+                                  [&](CombVoice&) { m_combs[idx].setByDecay(freqHz, decaySeconds, m_combNegative[i]); },
+                                  [&](RingModVoice& voice)
+                                  { voice.phaseIncrement = 2.f * std::numbers::pi_v<float> * freqHz / sampleRate(); }},
                        m_voices[idx]);
         }
-    }
-
-    static void updateFilterVoice(SpectraltapVoices::FilterVoice& voice, const float freqHz,
-                                  const float decaySeconds) noexcept
-    {
-        // Same decay-to-Q mapping SvfResoBP::setByDecay uses, so "decay" means the same
-        // thing across every resonant tap type.
-        constexpr float kDecayToQ{0.1447648273f};
-        const float q = std::clamp(std::numbers::pi_v<float> * freqHz * decaySeconds * kDecayToQ, 0.05f, 40.f);
-        voice.svf.computeCoefficients(freqHz, q);
     }
 
     void updateFormantVoice(const size_t i, SpectraltapVoices::FormantVoice& voice) noexcept
@@ -520,9 +550,9 @@ class SpectraltapImpl final : public EffectBase
         const float f1 = std::min(std::exp2(m_formantF1Log2[i].getValue()), kMaxTapFreqHz);
         const float f2 = std::min(std::exp2(m_formantF2Log2[i].getValue()), kMaxTapFreqHz);
         const float f0 = std::min(std::exp2(m_freqLog2[i].getValue()), kMaxTapFreqHz);
-        voice.sections[0].setByDecay(0, f0, kFormantSectionDecaySeconds);
-        voice.sections[1].setByDecay(0, f1, kFormantSectionDecaySeconds);
-        voice.sections[2].setByDecay(0, f2, kFormantSectionDecaySeconds);
+        voice.sections[0].computeCoefficients(0, f0, kFormantSectionQ);
+        voice.sections[1].computeCoefficients(0, f1, kFormantSectionQ);
+        voice.sections[2].computeCoefficients(0, f2, kFormantSectionQ);
         voice.f1Gain = m_formantF1Gain[i].getValue();
         voice.f2Gain = m_formantF2Gain[i].getValue();
     }
@@ -551,17 +581,28 @@ class SpectraltapImpl final : public EffectBase
                                          }
 #pragma GCC diagnostic pop
                                      },
-                                     [&](ResonatorVoice& voice) { return voice.svf.step(in); },
+                                     [&](ResonatorVoice& voice) { return voice.svf.step(in) * voice.gainBoost; },
                                      [&](FormantVoice& voice) -> float
                                      {
-                                         const float s0 = voice.sections[0].step(in);
-                                         const float s1 = voice.sections[1].step(in);
-                                         const float s2 = voice.sections[2].step(in);
+                                         const float s0 = voice.sections[0].step(in) * kFormantSectionQ;
+                                         const float s1 = voice.sections[1].step(in) * kFormantSectionQ;
+                                         const float s2 = voice.sections[2].step(in) * kFormantSectionQ;
                                          const float norm =
                                              1.f / (1.f + std::abs(voice.f1Gain) + std::abs(voice.f2Gain));
                                          return (s0 + s1 * voice.f1Gain + s2 * voice.f2Gain) * norm;
                                      },
-                                     [&](CombVoice&) { return m_combs[i].step(in); }},
+                                     [&](CombVoice&) { return m_combs[i].step(in); },
+                                     [&](RingModVoice& voice) -> float
+                                     {
+                                         const float carrier = std::sin(voice.phase);
+                                         voice.phase += voice.phaseIncrement;
+                                         constexpr float kTwoPi = 2.f * std::numbers::pi_v<float>;
+                                         if (voice.phase >= kTwoPi)
+                                         {
+                                             voice.phase -= kTwoPi;
+                                         }
+                                         return in * carrier;
+                                     }},
                           m_voices[i]);
     }
 
@@ -581,9 +622,9 @@ class SpectraltapImpl final : public EffectBase
     // whether it has ever been configured at all (a first-ever SetTap skips the fade).
     std::array<size_t, kMaxTaps> m_activeSlot{};
     std::array<bool, kMaxTaps> m_tapConfigured{};
-    // Both start silent (0) - an active-but-never-configured tap (SetMaxTaps raised before
-    // its own SetTap arrived) contributes nothing rather than double-counting a stray
-    // default-constructed voice on both slots.
+    std::array<bool, kMaxTaps> m_combNegative{}; // CombResonator only; SetResonance's negative
+    // Both start silent (0) so an active-but-never-configured tap (SetMaxTaps raised
+    // before its own SetTap arrived) contributes nothing instead of double-counting.
     std::array<AbacDsp::LinearSmoothing, kMaxTaps> m_slot0Gain{
         AbacDsp::constructArray<AbacDsp::LinearSmoothing, kMaxTaps>(0.f)};
     std::array<AbacDsp::LinearSmoothing, kMaxTaps> m_slot1Gain{
@@ -595,9 +636,8 @@ class SpectraltapImpl final : public EffectBase
     // plugin's lifetime - see SpectraltapVoices::CombVoice's class doc for why.
     std::array<AbacDsp::CombResonator<kCombBufferSize>, kMaxSlots> m_combs;
 
-    // LinearSmoothing's single-argument constructor is explicit, which trips up plain
-    // aggregate-init (std::array<LinearSmoothing, N>{}) on elements past the first -
-    // constructArray() direct-initializes every element instead.
+    // LinearSmoothing's ctor is explicit, which trips up aggregate-init on array elements
+    // past the first - constructArray() direct-initializes every element instead.
     std::array<AbacDsp::LinearSmoothing, kMaxTaps> m_gain{
         AbacDsp::constructArray<AbacDsp::LinearSmoothing, kMaxTaps>()};
     std::array<AbacDsp::LinearSmoothing, kMaxTaps> m_panL{

@@ -1,4 +1,5 @@
 #include <cmath>
+#include <numbers>
 #include <tuple>
 #include <vector>
 
@@ -32,10 +33,9 @@ TEST(CombResonatorTest, RingingPeriodMatchesRequestedFrequency)
 
 TEST(CombResonatorTest, ShorterDecayRingsDownFaster)
 {
-    // A comb fed a single impulse rings as a decaying *impulse train*, not a smooth tone -
-    // between spikes the output is near zero regardless of decay time - so the envelope at
-    // sampleIndex is the peak over one period's worth of samples around it, not one raw
-    // sample (which would just measure how close sampleIndex happens to land to a spike).
+    // A comb fed a single impulse rings as a decaying *impulse train*, near-zero between
+    // spikes - so the envelope is the peak over one period around sampleIndex, not one raw
+    // sample (which would just measure how close it lands to a spike).
     const auto envelopeAt = [](const float decaySeconds, const size_t sampleIndex)
     {
         CombResonator<maxSize> sut{sampleRate};
@@ -72,9 +72,54 @@ TEST(CombResonatorTest, StableUnderSustainedLoudExcitation)
         {
             const float out = sut.step(block % 8 == 0 ? 2.f : 0.f);
             ASSERT_TRUE(std::isfinite(out));
-            ASSERT_LT(std::abs(out), 10.f);
+            ASSERT_LT(std::abs(out), 20.f); // in (<=2) + the headroom-bounded feedback (<=16)
         }
     }
+}
+
+namespace
+{
+// Continuous sine drive, matching how SpectraltapImpl actually feeds a tap - steady-state
+// peak over the last 100 ms, same technique the SvfMultiMode tests use.
+float measureSteadyGain(const float toneFreq, const float tunedFreq, const float decaySeconds, const bool negative)
+{
+    CombResonator<2560> sut{sampleRate};
+    sut.setByDecay(tunedFreq, decaySeconds, negative);
+
+    constexpr size_t total = 96000;
+    float peak = 0.f;
+    for (size_t i = 0; i < total; ++i)
+    {
+        const float in = std::sin(2.f * std::numbers::pi_v<float> * toneFreq * static_cast<float>(i) / sampleRate);
+        const float out = sut.step(in);
+        if (i > total - 4800)
+        {
+            peak = std::max(peak, std::abs(out));
+        }
+    }
+    return peak;
+}
+}
+
+TEST(CombResonatorTest, PositiveFeedbackPeaksAtTunedFrequency)
+{
+    const float atFundamental = measureSteadyGain(440.f, 440.f, 1.2f, false);
+    const float offResonance = measureSteadyGain(300.f, 440.f, 1.2f, false);
+    EXPECT_GT(atFundamental, offResonance * 4.f);
+}
+
+TEST(CombResonatorTest, NegativeFeedbackShiftsPeakToOddHalfHarmonic)
+{
+    // Positive feedback peaks at 440 Hz and is weak at 220 Hz (an anti-resonance for it);
+    // negative feedback swaps that - peaks at odd harmonics of half the tuned frequency
+    // (220 Hz) and is weak at 440 Hz.
+    const float positiveAt440 = measureSteadyGain(440.f, 440.f, 1.2f, false);
+    const float positiveAt220 = measureSteadyGain(220.f, 440.f, 1.2f, false);
+    const float negativeAt440 = measureSteadyGain(440.f, 440.f, 1.2f, true);
+    const float negativeAt220 = measureSteadyGain(220.f, 440.f, 1.2f, true);
+
+    EXPECT_GT(positiveAt440, positiveAt220 * 4.f);
+    EXPECT_GT(negativeAt220, negativeAt440 * 4.f);
 }
 
 TEST(CombResonatorTest, ResetClearsState)

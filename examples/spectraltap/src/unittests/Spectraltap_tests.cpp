@@ -44,12 +44,8 @@ void settle(Impl& impl, const size_t numBlocks, const float value = 0.f)
     return true;
 }
 
-// Lua globals persist across setScript() reloads unless the new script redefines them
-// (see LuaScriptEngineBase::loadScript() - it recompiles in the same environment, it
-// doesn't reset it). Every custom test script below prepends this so the construction-time
-// kStubScript's still-live OnTiming/RetuneTaps globals can't silently fire (via
-// notifyTimingIfChanged() on the very first processBlock()) and overwrite the topology the
-// test is trying to set up.
+// Lua globals persist across setScript() reloads, so every custom script below prepends
+// this to stop kStubScript's still-live OnTiming from overwriting the test's own topology.
 constexpr std::string_view kNoAutoTiming = "function OnTiming() end\n";
 }
 
@@ -81,7 +77,7 @@ TEST(Spectraltap, MaxTapCountEveryTypeRunsWithoutNaN)
     script += "SetMaxTaps(24)\n";
     for (size_t i = 0; i < 24; ++i)
     {
-        const size_t type = i % 8;
+        const size_t type = i % 9;
         script += "SetTap(" + std::to_string(i) + ", " + std::to_string(1.f + static_cast<float>(i)) + ", " +
                   std::to_string(type) + ", 0.5, 0.0)\n";
         script += "SetResonance(" + std::to_string(i) + ", " + std::to_string(100.f + 50.f * static_cast<float>(i)) +
@@ -196,10 +192,8 @@ TEST(Spectraltap, FormantNearNyquistIsClamped)
 
 TEST(Spectraltap, InvalidTapDoesNotCorruptExistingTopology)
 {
-    // Two identically-configured instances so each keeps its own filter state history;
-    // only impl's script additionally attempts the two invalid SetTap calls (index 99 is
-    // out of range, type 12 is unknown) - if those are true no-ops, both instances stay in
-    // lockstep sample-for-sample, not just approximately.
+    // Two identically-configured instances; only impl's script also attempts the two
+    // invalid SetTap calls - if those are true no-ops, both stay in lockstep exactly.
     Impl impl{kSampleRate};
     Impl reference{kSampleRate};
     const std::string setup = std::string(kNoAutoTiming) + "SetMaxTaps(1)\nSetTap(0, 0, 3, 1.0, 0.0)\n"
@@ -326,10 +320,8 @@ TEST(Spectraltap, RetuneCrossfadesWithoutDiscontinuity)
         processAndTrackJump();
     }
 
-    // Retunes tap 0 from a 5 ms to a 50 ms delay while the tone keeps playing - a hard
-    // in-place reset would jump the delay-read position (and reset the Bypass voice)
-    // discontinuously right here; the crossfade should keep every sample-to-sample step
-    // small throughout, not just before/after.
+    // Retunes tap 0 from a 5 ms to a 50 ms delay mid-tone - a hard in-place reset would
+    // jump the read position and voice state discontinuously right here.
     ASSERT_TRUE(impl.setScript("SetTap(0, 50, 0, 1.0, 0.0)"));
 
     for (int b = 0; b < 200; ++b)
@@ -338,4 +330,114 @@ TEST(Spectraltap, RetuneCrossfadesWithoutDiscontinuity)
     }
 
     EXPECT_LT(maxJump, 0.5f);
+}
+
+TEST(Spectraltap, SetScriptReprimesTimingSoNewScriptConfiguresTaps)
+{
+    Impl impl{kSampleRate};
+    settle(impl, 5); // lets the stub's own initial OnTiming (fires on the first block) settle
+
+    // bpm/division haven't changed since that first notify, so without resendTiming() this
+    // new script's OnTiming would never fire, leaving tap 0 as the old script left it.
+    ASSERT_TRUE(impl.setScript("function OnTiming(bpm, divisionIndex)\n"
+                               "    SetMaxTaps(1)\n"
+                               "    SetTap(0, 0, 0, 1.0, 0.0)\n"
+                               "end\n"));
+    settle(impl, 100);
+
+    Buffer in{};
+    Buffer out{};
+    for (size_t s = 0; s < kBlockSize; ++s)
+    {
+        in(s, 0) = 0.5f;
+        in(s, 1) = 0.5f;
+    }
+    impl.processBlock(in, out);
+
+    // A Bypass tap passes this DC-ish input straight through, well above pure-dry (0.5); a
+    // stale BandPass tap from the old script would reject it and stay near 0.5 instead.
+    EXPECT_GT(out(0, 0), 0.5f);
+    EXPECT_GT(out(0, 1), 0.5f);
+}
+
+TEST(Spectraltap, RingModulatorMultipliesRatherThanPassingThrough)
+{
+    Impl impl{kSampleRate};
+    ASSERT_TRUE(
+        impl.setScript(std::string(kNoAutoTiming) + "SetMaxTaps(1)\nSetTap(0, 0, 8, 1.0, 0.0)\nSetFrequency(0, 1000)"));
+    settle(impl, 100);
+
+    // A constant input ring-modulated by a 1 kHz carrier should itself trace out that
+    // carrier - bounded by the input amplitude and clearly non-constant, unlike Bypass.
+    Buffer in{};
+    Buffer out{};
+    for (size_t s = 0; s < kBlockSize; ++s)
+    {
+        in(s, 0) = 1.f;
+        in(s, 1) = 1.f;
+    }
+    float minVal = 1e9f;
+    float maxVal = -1e9f;
+    for (int b = 0; b < 30; ++b)
+    {
+        impl.processBlock(in, out);
+        for (size_t s = 0; s < kBlockSize; ++s)
+        {
+            minVal = std::min(minVal, out(s, 0));
+            maxVal = std::max(maxVal, out(s, 0));
+        }
+    }
+    EXPECT_GT(maxVal - minVal, 0.5f); // clearly oscillating, not a flat passthrough
+    EXPECT_LE(maxVal, 2.1f);          // dry(1) + wet*carrier(<=1), never amplifies further
+}
+
+TEST(Spectraltap, ResonatorMatchesBandPassLoudnessAtSameFrequencyAndDecay)
+{
+    Impl impl{kSampleRate};
+    ASSERT_TRUE(impl.setScript(std::string(kNoAutoTiming) + "SetMaxTaps(2)\n"
+                                                            "SetTap(0, 0, 3, 1.0, 0.0)\nSetResonance(0, 440, 1.2)\n"
+                                                            "SetTap(1, 0, 5, 1.0, 0.0)\nSetResonance(1, 440, 1.2)"));
+    settle(impl, 200);
+
+    // Both taps are driven by the same signal (the shared mono downmix), so measuring the
+    // combined wet output at resonance isn't useful per-tap - instead disable one tap's
+    // gain at a time and compare the resulting peak levels.
+    const auto measurePeak = [&](const size_t activeTapIndex)
+    {
+        Impl solo{kSampleRate};
+        const std::string type = activeTapIndex == 0 ? "3" : "5";
+        EXPECT_TRUE(solo.setScript(std::string(kNoAutoTiming) + "SetMaxTaps(1)\nSetTap(0, 0, " + type +
+                                   ", 1.0, 0.0)\nSetResonance(0, 440, 1.2)"));
+        settle(solo, 200);
+
+        Buffer in{};
+        Buffer out{};
+        float peak = 0.f;
+        size_t sampleCounter = 0;
+        for (int b = 0; b < 100; ++b)
+        {
+            for (size_t s = 0; s < kBlockSize; ++s)
+            {
+                const float t = static_cast<float>(sampleCounter++) / kSampleRate;
+                const float v = std::sin(2.f * std::numbers::pi_v<float> * 440.f * t);
+                in(s, 0) = v;
+                in(s, 1) = v;
+            }
+            solo.processBlock(in, out);
+            if (b > 80) // steady state
+            {
+                for (size_t s = 0; s < kBlockSize; ++s)
+                {
+                    peak = std::max(peak, std::abs(out(s, 0)));
+                }
+            }
+        }
+        return peak;
+    };
+
+    const float bandPassPeak = measurePeak(0);
+    const float resonatorPeak = measurePeak(1);
+    // Same Q-from-decay formula and gain-boost cancellation for both, so they should land
+    // within a small margin of each other rather than differing by an order of magnitude.
+    EXPECT_NEAR(bandPassPeak, resonatorPeak, bandPassPeak * 0.25f);
 }

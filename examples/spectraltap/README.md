@@ -1,11 +1,11 @@
 # Spectraltap
 
 A Lua-scripted multitap delay: up to 24 taps share one delay buffer, each independently
-timed, panned, and shaped by one of seven spectral voice types (bandpass, lowpass,
-highpass, notch, resonator, formant, or comb resonator), plus a plain bypass tap. A
-patch's script owns topology (how many taps, where, what type) and every tap's
-frequency/resonance/formant/gain/pan target; the engine owns Hz-to-coefficient mapping,
-smoothing, and DSP safety.
+timed, panned, and shaped by one of eight spectral voice types (bandpass, lowpass,
+highpass, notch, resonator, formant, comb resonator, or ring modulator), plus a plain
+bypass tap. A patch's script owns topology (how many taps, where, what type) and every
+tap's frequency/resonance/formant/gain/pan target; the engine owns Hz-to-coefficient
+mapping, smoothing, and DSP safety.
 
 ## Controls
 
@@ -100,7 +100,8 @@ corrupts another tap's state.
 | 4 | Notch | `SetFrequency`/`SetResonance` |
 | 5 | Resonator | `SetFrequency`/`SetResonance` |
 | 6 | Formant | `SetFormant` |
-| 7 | CombResonator | `SetFrequency`/`SetResonance` |
+| 7 | CombResonator | `SetFrequency`/`SetResonance` (`negative` flag: see below) |
+| 8 | RingModulator | `SetFrequency` only - no decay/Q, output is `input * sin(carrier)` |
 
 ### Real-time per-tap setters
 
@@ -108,7 +109,7 @@ Safe to call every block: validated/clamped, smoothed, never allocate.
 
 ```lua
 SetFrequency(index, fHz)                                     -- centre/fundamental Hz
-SetResonance(index, fHz, decayTimeSeconds)                    -- frequency + decay time
+SetResonance(index, fHz, decayTimeSeconds[, negative])        -- frequency + decay time
 SetFormant(index, fHz, f1Factor, f1Gain, f2Factor, f2Gain)    -- Formant only
 SetPan(index, pan)                                             -- -1..1
 SetGain(index, gain)                                           -- linear
@@ -117,7 +118,8 @@ SetGain(index, gain)                                           -- linear
 | Parameter | Unit / range | Notes |
 |---|---|---|
 | `fHz` | Hz, clamped `[1, 20000]` | Smoothed in log2 space, once per block (not per sample) - so a frequency sweep never zippers, and coefficient recomputation stays cheap even with 24 taps active. |
-| `decayTimeSeconds` | seconds, clamped `[0.001, 20]` | Filter taps: maps to Q via the same `pi*f*decay*k` relation `SvfResoBP` uses elsewhere in this repo, so "decay" means the same thing on every resonant tap type; Q itself is clamped to `[0.05, 40]`. CombResonator: passed straight to `AbacDsp::CombResonator::setByDecay()` in `src/includes/Filters/CombResonator.h` - `feedback = exp(-D / (decay * sampleRate))`, `D` the loop delay in samples, feedback clamped below 1, with loop damping and a `tanh` soft limiter always active in the feedback path. |
+| `decayTimeSeconds` | seconds, clamped `[0.001, 20]` | LowPass/HighPass/BandPass/Notch/Resonator: maps to Q via `pi*f*decay*k` (its own small constant, tuned so ~1.2s at 440 Hz gives Q around 8 - not `SvfResoBP`'s own ring-down-time constant, which would pin Q at the ceiling almost immediately for continuous drive); Q clamped to `[0.05, 20]`. Resonator additionally cancels `SvfResoBP`'s built-in `1/Q` output normalization, so it peaks like BandPass instead of staying near unity. Formant's three sections use a fixed Q (10), independent of any `decayTimeSeconds`. CombResonator: passed to `AbacDsp::CombResonator::setByDecay()` - `feedback = exp(-D / (decay * sampleRate))`, `D` the loop delay in samples, feedback clamped below 1, with loop damping and a headroom-scaled soft limiter (compresses only genuine extremes, not ordinary resonant peaks) always active in the feedback path. |
+| `negative` | bool, default false, CombResonator only | Flips the feedback's sign - the resonant peaks move to odd harmonics of half `fHz` instead of `fHz` itself, a distinct timbral flavor. Silently unused by every other tap type. |
 | `f1Factor`/`f2Factor` | clamped `[0.1, 16]` | `F1 = f1Factor * F0`, `F2 = f2Factor * F0`; each derived frequency is independently log-smoothed and clamped to the same 20 kHz ceiling as `fHz`, so a factor that would push a section above Nyquist is safely capped rather than left to diverge. |
 | `f1Gain`/`f2Gain` | linear, clamped `[0, 4]` | Not dB. `F0`'s own gain is a fixed unity; the three sections sum and normalize by `1 / (1 + f1Gain + f2Gain)` so overall loudness doesn't grow as gains change. |
 | `gain` | linear, clamped `[0, 4]` | Short linear smoothing. |
@@ -208,3 +210,13 @@ The same script is also shipped as `base-scripts/scale-sequenced-multitap.lua`, 
 up as a regular file in the script editor's library dropdown and can be loaded directly via
 **Settings > Scripts** instead of only being the compiled-in default - handy as a starting
 point to copy and diverge from without losing the original.
+
+### Reference scripts
+
+`base-scripts/test-<type>.lua` - one per tap type (`test-bypass.lua`, `test-lowpass.lua`,
+`test-highpass.lua`, `test-bandpass.lua`, `test-notch.lua`, `test-resonator.lua`,
+`test-formant.lua`, `test-combresonator.lua`, `test-ringmodulator.lua`) - each sets up a
+single tap of that type at 440 Hz with zero delay, so loading one via **Settings > Scripts**
+gives an isolated, directly comparable reference for that voice alone. Each defines
+`OnTiming` as a no-op so the BPM dial/Host Sync/Division controls can't silently
+reconfigure the reference tap out from under you.

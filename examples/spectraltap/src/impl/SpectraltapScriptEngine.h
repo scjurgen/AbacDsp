@@ -22,6 +22,7 @@ enum class TapType : size_t
     Resonator = 5,
     Formant = 6,
     CombResonator = 7,
+    RingModulator = 8,
 };
 
 /// @brief SetTap's topology-tier payload: delay position, voice type, initial gain/pan.
@@ -34,11 +35,13 @@ struct TapTopology
 };
 
 /// @brief SetResonance's real-time payload: frequency plus the decay time that maps to
-/// Q (filter taps) or feedback gain (CombResonator).
+/// Q (filter taps) or feedback gain (CombResonator). negative only affects CombResonator
+/// (flips the feedback sign), silently unused by every other type.
 struct ResonanceTarget
 {
     float freqHz{0.f};
     float decaySeconds{0.f};
+    bool negative{false};
 };
 
 /// @brief SetFormant's real-time payload: base frequency plus two derived sections.
@@ -106,7 +109,7 @@ class SpectraltapScriptEngine : public LuaScriptEngineBase<SpectraltapScriptEngi
 "LastBpm = 120\n"
 "LastDivisionIndex = 4\n"
 "\n"
-"TapType = { Bypass = 0, LowPass = 1, HighPass = 2, BandPass = 3, Notch = 4, Resonator = 5, Formant = 6, CombResonator = 7 }\n"
+"TapType = { Bypass = 0, LowPass = 1, HighPass = 2, BandPass = 3, Notch = 4, Resonator = 5, Formant = 6, CombResonator = 7, RingModulator = 8 }\n"
 "\n"
 "-- Division dropdown index -> beats per quarter note; mirrors the plugin's own Division\n"
 "-- list (1/1 .. 1/16T), 0-based to match the index OnTiming() passes.\n"
@@ -176,12 +179,17 @@ class SpectraltapScriptEngine : public LuaScriptEngineBase<SpectraltapScriptEngi
 "--   SetTap(index, delayMs, type, level, pan)         0-based index; type: 0 Bypass,\n"
 "--                                                     1 LowPass, 2 HighPass, 3 BandPass,\n"
 "--                                                     4 Notch, 5 Resonator, 6 Formant,\n"
-"--                                                     7 CombResonator; level/pan are the\n"
-"--                                                     initial SetGain/SetPan targets\n"
+"--                                                     7 CombResonator, 8 RingModulator;\n"
+"--                                                     level/pan are the initial\n"
+"--                                                     SetGain/SetPan targets\n"
 "\n"
 "-- Real-time per-tap setters - safe to call every block, smoothed, never allocate:\n"
 "--   SetFrequency(index, fHz)                                   centre/fundamental Hz\n"
-"--   SetResonance(index, fHz, decayTimeSeconds)                 frequency + decay time\n"
+"--   SetResonance(index, fHz, decayTimeSeconds[, negative])      frequency + decay time;\n"
+"--                                                               negative (CombResonator\n"
+"--                                                               only) flips the feedback\n"
+"--                                                               sign - peaks move to odd\n"
+"--                                                               harmonics of half fHz\n"
 "--   SetFormant(index, fHz, f1Factor, f1Gain, f2Factor, f2Gain) F0=fHz, F1=f1Factor*F0,\n"
 "--                                                               F2=f2Factor*F0, linear gains\n"
 "--   SetPan(index, pan)                                         -1..1, constant-power\n"
@@ -189,9 +197,8 @@ class SpectraltapScriptEngine : public LuaScriptEngineBase<SpectraltapScriptEngi
 "\n";
     // clang-format on
 
-    // Shown by the popup editor's Reset button: kSpectraltapSkeletonHooks above followed by
-    // LuaScriptEngineBase::kCommonSkeletonScript, as opposed to kStubScript (deliberately
-    // minimal - what a fresh patch actually plays out of the box).
+    // Shown by the popup editor's Reset button: kSpectraltapSkeletonHooks above plus
+    // LuaScriptEngineBase::kCommonSkeletonScript, unlike kStubScript (deliberately minimal).
     static const std::string kFullSkeletonScript;
 
     explicit SpectraltapScriptEngine(size_t poolBytes = 512 * 1024);
@@ -215,7 +222,7 @@ class SpectraltapScriptEngine : public LuaScriptEngineBase<SpectraltapScriptEngi
     void luaSetMaxTaps(size_t n) noexcept;
     void luaSetTap(size_t index, float delayMs, size_t type, float level, float pan) noexcept;
     void luaSetFrequency(size_t index, float fHz) noexcept;
-    void luaSetResonance(size_t index, float fHz, float decaySeconds) noexcept;
+    void luaSetResonance(size_t index, float fHz, float decaySeconds, bool negative = false) noexcept;
     void luaSetFormant(size_t index, float fHz, float f1Factor, float f1Gain, float f2Factor, float f2Gain) noexcept;
     void luaSetPan(size_t index, float pan) noexcept;
     void luaSetGain(size_t index, float gain) noexcept;
@@ -244,7 +251,12 @@ inline void SpectraltapScriptEngine::bindScriptFunctions()
     m_lua.set_function("SetMaxTaps", &SpectraltapScriptEngine::luaSetMaxTaps, this);
     m_lua.set_function("SetTap", &SpectraltapScriptEngine::luaSetTap, this);
     m_lua.set_function("SetFrequency", &SpectraltapScriptEngine::luaSetFrequency, this);
-    m_lua.set_function("SetResonance", &SpectraltapScriptEngine::luaSetResonance, this);
+    m_lua.set_function(
+        "SetResonance",
+        sol::overload([this](const size_t index, const float fHz, const float decaySeconds)
+                      { luaSetResonance(index, fHz, decaySeconds); },
+                      [this](const size_t index, const float fHz, const float decaySeconds, const bool negative)
+                      { luaSetResonance(index, fHz, decaySeconds, negative); }));
     m_lua.set_function("SetFormant", &SpectraltapScriptEngine::luaSetFormant, this);
     m_lua.set_function("SetPan", &SpectraltapScriptEngine::luaSetPan, this);
     m_lua.set_function("SetGain", &SpectraltapScriptEngine::luaSetGain, this);
@@ -264,7 +276,7 @@ inline void SpectraltapScriptEngine::luaSetMaxTaps(const size_t n) noexcept
 inline void SpectraltapScriptEngine::luaSetTap(const size_t index, const float delayMs, const size_t type,
                                                const float level, const float pan) noexcept
 {
-    if (index >= kMaxTaps || type > static_cast<size_t>(TapType::CombResonator))
+    if (index >= kMaxTaps || type > static_cast<size_t>(TapType::RingModulator))
     {
         return;
     }
@@ -285,15 +297,15 @@ inline void SpectraltapScriptEngine::luaSetFrequency(const size_t index, const f
     m_pendingFrequency[index] = std::clamp(fHz, kMinFreqHz, kMaxFreqHz);
 }
 
-inline void SpectraltapScriptEngine::luaSetResonance(const size_t index, const float fHz,
-                                                     const float decaySeconds) noexcept
+inline void SpectraltapScriptEngine::luaSetResonance(const size_t index, const float fHz, const float decaySeconds,
+                                                     const bool negative) noexcept
 {
     if (index >= kMaxTaps || !std::isfinite(fHz) || !std::isfinite(decaySeconds))
     {
         return;
     }
     m_pendingResonance[index] = ResonanceTarget{std::clamp(fHz, kMinFreqHz, kMaxFreqHz),
-                                                std::clamp(decaySeconds, kMinDecaySeconds, kMaxDecaySeconds)};
+                                                std::clamp(decaySeconds, kMinDecaySeconds, kMaxDecaySeconds), negative};
 }
 
 inline void SpectraltapScriptEngine::luaSetFormant(const size_t index, const float fHz, const float f1Factor,
