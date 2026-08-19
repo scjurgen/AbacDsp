@@ -45,6 +45,18 @@ class StubImpl final : public EffectBase
     {
         m_feedbackBeats = value;
     }
+    void setReverbWet(const float value)
+    {
+        m_reverbWet = std::pow(10.f, value / 20.f);
+    }
+    void setReverbSize(const float value)
+    {
+        m_reverbSize = value;
+    }
+    void setReverbDecay(const float value)
+    {
+        m_reverbDecay = value;
+    }
     void setLuaParam1(const float value)
     {
         m_luaParam1 = value;
@@ -95,6 +107,9 @@ class StubImpl final : public EffectBase
     size_t m_division{};
     float m_feedback{};
     float m_feedbackBeats{};
+    float m_reverbWet{};
+    float m_reverbSize{};
+    float m_reverbDecay{};
     float m_luaParam1{};
     float m_luaParam2{};
     float m_luaParam3{};

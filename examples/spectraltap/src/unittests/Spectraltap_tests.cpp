@@ -536,3 +536,66 @@ TEST(Spectraltap, HeavyFeedbackStaysFiniteAndBounded)
         }
     }
 }
+
+TEST(Spectraltap, ReverbStaysSilentAtDefaultWetLevel)
+{
+    Impl impl{kSampleRate};
+    ASSERT_TRUE(impl.setScript(std::string(kNoAutoTiming) + "SetMaxTaps(1)\nSetTap(0, 0, 0, 1.0, 0.0)"));
+    settle(impl, 50);
+
+    Buffer in{};
+    Buffer out{};
+    for (size_t s = 0; s < kBlockSize; ++s)
+    {
+        in(s, 0) = 0.8f;
+        in(s, 1) = -0.6f;
+    }
+    for (int b = 0; b < 50; ++b)
+    {
+        impl.processBlock(in, out);
+    }
+
+    const float monoIn = 0.5f * (0.8f - 0.6f);
+    const float panGain = std::cos(std::numbers::pi_v<float> / 4.f); // pan = 0.0
+    const float expected = in(0, 0) + monoIn * panGain;              // dry(1) + wet(1)*tap
+    EXPECT_NEAR(out(0, 0), expected, 0.001f);
+}
+
+TEST(Spectraltap, ReverbProducesAudibleTailWhenTurnedUp)
+{
+    Impl impl{kSampleRate};
+    impl.setReverbWet(0.f); // unity
+    ASSERT_TRUE(impl.setScript(std::string(kNoAutoTiming) + "SetMaxTaps(1)\nSetTap(0, 0, 0, 1.0, 0.0)"));
+    settle(impl, 50);
+
+    std::mt19937 rng{7};
+    std::uniform_real_distribution<float> dist{-1.f, 1.f};
+    Buffer in{};
+    Buffer out{};
+    for (int b = 0; b < 50; ++b)
+    {
+        for (size_t s = 0; s < kBlockSize; ++s)
+        {
+            const float noise = dist(rng);
+            in(s, 0) = noise;
+            in(s, 1) = noise;
+        }
+        impl.processBlock(in, out);
+        ASSERT_TRUE(allFinite(out)) << "drive block " << b;
+    }
+
+    // A Bypass tap alone goes silent the instant input does; any energy that outlives it
+    // once input stops can only be the FDN's tail.
+    Buffer silence{};
+    float tailEnergy = 0.f;
+    for (int b = 0; b < 100; ++b)
+    {
+        impl.processBlock(silence, out);
+        ASSERT_TRUE(allFinite(out)) << "tail block " << b;
+        for (size_t s = 0; s < kBlockSize; ++s)
+        {
+            tailEnergy += out(s, 0) * out(s, 0) + out(s, 1) * out(s, 1);
+        }
+    }
+    EXPECT_GT(tailEnergy, 1e-6f);
+}

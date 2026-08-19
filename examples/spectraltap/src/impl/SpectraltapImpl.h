@@ -17,6 +17,7 @@
 #include "Filters/SvfResoBP.h"
 #include "Helpers/ConstructArray.h"
 #include "Parameters/SmoothingParameter.h"
+#include "Reverbs/FdnTankGlide.h"
 #include "SpectraltapScriptEngine.h"
 
 namespace SpectraltapVoices
@@ -118,12 +119,23 @@ class SpectraltapImpl final : public EffectBase
     // Same headroom-scaled tanh limiter CombResonator uses (kLimiterHeadroom, same value):
     // bounds the write signal, never clamps a user-facing parameter.
     static constexpr float kFeedbackHeadroom{16.f};
+    // Same tank maxdiffuser uses (order 32, for the closest sonic match); MaxSizePerElement
+    // sized for this class's own [1, 60] m Reverb Size range, not maxdiffuser's larger one.
+    static constexpr size_t kFdnOrder{32};
+    static constexpr size_t kFdnMaxSizePerElement{24000};
+    static constexpr float kFdnSizeSpread{2.3f};
+    static constexpr float kFdnPresetBulge{-0.4f};
+    using Fdn = AbacDsp::FdnTankGlide<kFdnMaxSizePerElement, kFdnOrder, BlockSize>;
 
     explicit SpectraltapImpl(const float sampleRate)
         : EffectBase(sampleRate)
         , m_combs(AbacDsp::constructArray<AbacDsp::CombResonator<kCombBufferSize>, kMaxSlots>(sampleRate))
+        , m_fdn{sampleRate}
     {
         m_scriptEngine.setSampleRate(sampleRate);
+        m_fdn.setSpreadBulge(kFdnPresetBulge);
+        setReverbSize(15.f);
+        setReverbDecay(2000.f);
     }
 
     // A reload resets the script's Lua globals, so resendUiParameters()/resendTiming()
@@ -241,6 +253,22 @@ class SpectraltapImpl final : public EffectBase
         m_feedbackBeats = std::clamp(value, kMinFeedbackBeats, kMaxFeedbackBeats);
     }
 
+    void setReverbWet(const float value)
+    {
+        m_reverbWet.newTransition(std::pow(10.f, value / 20.f), kParamSmoothingSeconds, sampleRate());
+    }
+
+    void setReverbSize(const float meters) noexcept
+    {
+        m_fdn.setMinSize(meters / kFdnSizeSpread);
+        m_fdn.setMaxSize(meters * kFdnSizeSpread);
+    }
+
+    void setReverbDecay(const float msecs) noexcept
+    {
+        m_fdn.setDecay(msecs);
+    }
+
     // The manual BPM dial while free-running, or the host's tempo while Host Sync is on -
     // what OnTiming() actually times taps against, distinct from the shared
     // Transport.Tempo() every Lua example gets (always the raw host tempo).
@@ -296,12 +324,27 @@ class SpectraltapImpl final : public EffectBase
             m_pendingFeedback = sampleFeedback;
         }
 
+        // The reverb tails the dry/wet mix the listener actually hears, not the tap
+        // bank's own output alone, so it picks up the dry signal too.
+        std::array<float, BlockSize> fdnIn{};
         for (size_t s = 0; s < BlockSize; ++s)
         {
             const float dry = m_dry.getValue();
             const float wet = m_wet.getValue();
             out(s, 0) = dry * in(s, 0) + wet * wetL[s];
             out(s, 1) = dry * in(s, 1) + wet * wetR[s];
+            fdnIn[s] = 0.5f * (out(s, 0) + out(s, 1));
+        }
+
+        std::array<float, BlockSize> reverbL{};
+        std::array<float, BlockSize> reverbR{};
+        m_fdn.processBlockSplit(fdnIn.data(), reverbL.data(), reverbR.data());
+
+        for (size_t s = 0; s < BlockSize; ++s)
+        {
+            const float reverbWet = m_reverbWet.getValue();
+            out(s, 0) += reverbWet * reverbL[s];
+            out(s, 1) += reverbWet * reverbR[s];
         }
     }
 
@@ -665,6 +708,7 @@ class SpectraltapImpl final : public EffectBase
     size_t m_lastNotifiedDivisionIndex{static_cast<size_t>(-1)};
     AbacDsp::LinearSmoothing m_dry{1.f};
     AbacDsp::LinearSmoothing m_wet{1.f};
+    AbacDsp::LinearSmoothing m_reverbWet{0.f};
     AbacDsp::LinearSmoothing m_feedback{0.f};
     float m_feedbackBeats{1.f}; // matching the Feedback Time dial's default
     // Carries this sample's tap/global feedback sum into the *next* sample's write, so a
@@ -690,6 +734,7 @@ class SpectraltapImpl final : public EffectBase
     // Constructed once (see the constructor's init list) and reused by index for the
     // plugin's lifetime - see SpectraltapVoices::CombVoice's class doc for why.
     std::array<AbacDsp::CombResonator<kCombBufferSize>, kMaxSlots> m_combs;
+    Fdn m_fdn;
 
     // LinearSmoothing's ctor is explicit, which trips up aggregate-init on array elements
     // past the first - constructArray() direct-initializes every element instead.

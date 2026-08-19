@@ -20,6 +20,9 @@ struct PatchParameters
         division     , // drop
         feedback     , // dial
         feedbackBeats, // dial
+        reverbWet    , // dial
+        reverbSize   , // dial
+        reverbDecay  , // dial
         luaParam1    , // dial
         luaParam2    , // dial
         luaParam3    , // dial
@@ -37,6 +40,9 @@ bool hostSync{false};
 size_t division{4};
 float feedback{0.0f};
 float feedbackBeats{1.0f};
+float reverbWet{-100.0f};
+float reverbSize{15.0f};
+float reverbDecay{2000.0f};
 float luaParam1{0.0f};
 float luaParam2{0.0f};
 float luaParam3{0.0f};
@@ -56,6 +62,9 @@ std::string script{};
 "division",
 "feedback",
 "feedbackBeats",
+"reverbWet",
+"reverbSize",
+"reverbDecay",
 "luaParam1",
 "luaParam2",
 "luaParam3",
@@ -89,6 +98,9 @@ std::string script{};
         else if constexpr (ParamId == Id::division) return division;
         else if constexpr (ParamId == Id::feedback) return feedback;
         else if constexpr (ParamId == Id::feedbackBeats) return feedbackBeats;
+        else if constexpr (ParamId == Id::reverbWet) return reverbWet;
+        else if constexpr (ParamId == Id::reverbSize) return reverbSize;
+        else if constexpr (ParamId == Id::reverbDecay) return reverbDecay;
         else if constexpr (ParamId == Id::luaParam1) return luaParam1;
         else if constexpr (ParamId == Id::luaParam2) return luaParam2;
         else if constexpr (ParamId == Id::luaParam3) return luaParam3;
@@ -123,6 +135,12 @@ break;
  case Id::feedback: if (!isEqual(get<Id::feedback>(), value)) {get<Id::feedback>() = value;m_modified = true;}
 break;
  case Id::feedbackBeats: if (!isEqual(get<Id::feedbackBeats>(), value)) {get<Id::feedbackBeats>() = value;m_modified = true;}
+break;
+ case Id::reverbWet: if (!isEqual(get<Id::reverbWet>(), value)) {get<Id::reverbWet>() = value;m_modified = true;}
+break;
+ case Id::reverbSize: if (!isEqual(get<Id::reverbSize>(), value)) {get<Id::reverbSize>() = value;m_modified = true;}
+break;
+ case Id::reverbDecay: if (!isEqual(get<Id::reverbDecay>(), value)) {get<Id::reverbDecay>() = value;m_modified = true;}
 break;
  case Id::luaParam1: if (!isEqual(get<Id::luaParam1>(), value)) {get<Id::luaParam1>() = value;m_modified = true;}
 break;
@@ -189,6 +207,9 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         division     , // drop
         feedback     , // dial
         feedbackBeats, // dial
+        reverbWet    , // dial
+        reverbSize   , // dial
+        reverbDecay  , // dial
         luaParam1    , // dial
         luaParam2    , // dial
         luaParam3    , // dial

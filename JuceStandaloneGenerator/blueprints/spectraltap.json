@@ -16,6 +16,9 @@
       "listitems": ["1/1", "1/2", "1/2.", "1/2T", "1/4", "1/4.", "1/4T", "1/8", "1/8.", "1/8T", "1/16", "1/16.", "1/16T"]},
     {"short": "FB", "type": "dial", "display": "Feedback", "symbol": "feedback", "default": 0, "range": [-100, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
     {"short": "FBBT", "type": "dial", "display": "Feedback Time", "symbol": "feedbackBeats", "default": 1, "range": [1, 32, 0.01, 1, false], "precision": 2, "unit": "beats"},
+    {"short": "RVWT", "type": "dial", "display": "Reverb Wet", "symbol": "reverbWet", "default": -100, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "RVSZ", "type": "dial", "display": "Reverb Size", "symbol": "reverbSize", "default": 15, "range": [1, 60, 0.1, 0.4, false], "precision": 1, "unit": "m"},
+    {"short": "RVDC", "type": "dial", "display": "Reverb Decay", "symbol": "reverbDecay", "default": 2000, "range": [50, 20000, 1, 0.2, false], "precision": 0, "unit": "ms"},
     {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
     {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
     {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"},
@@ -25,7 +28,7 @@
     "WINDOW_WIDTH": "1200",
     "WINDOW_HEIGHT": "800",
     "type": "=",
-    "composition": "R=(3:1) A1=(CPU*200, LVL*500, FFT*600) A2=(DRY, WET, BPM, SYNC, DIV, FB, FBBT)"
+    "composition": "R=(3:1) A1=(CPU*200, LVL*500, FFT*600) A2=(DRY, WET, BPM, SYNC, DIV, FB, FBBT, RVWT, RVSZ, RVDC)"
   },
   "performance-page": {
     "type": "=3",

@@ -122,21 +122,19 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // auto generated
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-
-            std::vector<juce::Rectangle<int>> areas(3);
-            const auto colWidth = area.getWidth() / 13;
-            const auto rowHeight = area.getHeight() / 2;
-            areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-            areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-            areas[2] = area.reduced(Constants::Margins::small);
+            std::vector<juce::Rectangle<int>> areas(2);
+            const auto rowHeight = area.getHeight() / 4;
+            areas[0] = area.removeFromTop(rowHeight * 3).reduced(Constants::Margins::small);
+            areas[1] = area.reduced(Constants::Margins::small);
 
             {
                 juce::FlexBox box;
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::column;
+                box.flexDirection = juce::FlexBox::Direction::row;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(cpuGauge).withHeight(200).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(levelGauge).withHeight(500).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(cpuGauge).withWidth(200).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(levelGauge).withWidth(500).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(spectrogramGauge).withWidth(600).withMargin(knobMarginSmall));
                 box.performLayout(areas[0].toFloat());
             }
             {
@@ -159,16 +157,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(feedbackDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(feedbackBeatsDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(spectrogramGauge).withWidth(600).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbWetDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbSizeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(reverbDecayDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[1].toFloat());
-            }
-            {
-                juce::FlexBox box;
-                box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::row;
-                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(luaControlsLuaControlArea).withFlex(1).withMargin(knobMarginSmall));
-                box.performLayout(areas[2].toFloat());
             }
         }
     }
@@ -231,6 +223,18 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         feedbackBeatsDial.reset(valueTreeState, "feedbackBeats");
         feedbackBeatsDial.setLabelText(juce::String::fromUTF8("Feedback Time"));
         feedbackBeatsDial.setTooltip(juce::String::fromUTF8("Feedback Time (1 to 32 beats)"));
+        addAndMakeVisible(reverbWetDial);
+        reverbWetDial.reset(valueTreeState, "reverbWet");
+        reverbWetDial.setLabelText(juce::String::fromUTF8("Reverb Wet"));
+        reverbWetDial.setTooltip(juce::String::fromUTF8("Reverb Wet (-100 to 12 dB)"));
+        addAndMakeVisible(reverbSizeDial);
+        reverbSizeDial.reset(valueTreeState, "reverbSize");
+        reverbSizeDial.setLabelText(juce::String::fromUTF8("Reverb Size"));
+        reverbSizeDial.setTooltip(juce::String::fromUTF8("Reverb Size (1 to 60 m)"));
+        addAndMakeVisible(reverbDecayDial);
+        reverbDecayDial.reset(valueTreeState, "reverbDecay");
+        reverbDecayDial.setLabelText(juce::String::fromUTF8("Reverb Decay"));
+        reverbDecayDial.setTooltip(juce::String::fromUTF8("Reverb Decay (50 to 20000 ms)"));
         addAndMakeVisible(cpuGauge);
         cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
         cpuGauge.setTooltip(juce::String::fromUTF8("CPU (0 to 100 %)"));
@@ -349,6 +353,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             divisionDrop.setVisible(false);
             feedbackDial.setVisible(false);
             feedbackBeatsDial.setVisible(false);
+            reverbWetDial.setVisible(false);
+            reverbSizeDial.setVisible(false);
+            reverbDecayDial.setVisible(false);
             cpuGauge.setVisible(false);
             levelGauge.setVisible(false);
             spectrogramGauge.setVisible(true);
@@ -371,10 +378,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             divisionDrop.setVisible(true);
             feedbackDial.setVisible(true);
             feedbackBeatsDial.setVisible(true);
+            reverbWetDial.setVisible(true);
+            reverbSizeDial.setVisible(true);
+            reverbDecayDial.setVisible(true);
             cpuGauge.setVisible(true);
             levelGauge.setVisible(true);
             spectrogramGauge.setVisible(true);
-            luaControlsLuaControlArea.setVisible(true);
+            luaControlsLuaControlArea.setVisible(false);
             luaParam1Dial.setVisible(false);
             luaParam2Dial.setVisible(false);
             luaParam3Dial.setVisible(false);
@@ -1208,6 +1218,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> divisionDropAttachment;
     CustomRotaryDial feedbackDial{this};
     CustomRotaryDial feedbackBeatsDial{this};
+    CustomRotaryDial reverbWetDial{this};
+    CustomRotaryDial reverbSizeDial{this};
+    CustomRotaryDial reverbDecayDial{this};
     CpuGauge cpuGauge{};
     Gauge levelGauge{};
     SpectrogramDisplay spectrogramGauge{AppSettings::loadTheme()};

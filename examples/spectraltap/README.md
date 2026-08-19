@@ -18,6 +18,9 @@ mapping, smoothing, and DSP safety.
 | Division | 13 choices (1/1 .. 1/16T) | Passed to `OnTiming` as a 0-based index; the script owns interpreting it (see the stub's `kDivisionBeats` table below). |
 | Feedback | -100 - 100 % | Global feedback amount for the tempo-synced repeat below - not script-driven, and not clamped down for stability (see DSP architecture). |
 | Feedback Time | 1 - 32 beats | Repeat time for the global feedback loop, as a beat multiple of the current effective tempo (the same `bpm` `OnTiming` receives). Not crossfaded: changing it while feedback is active can click. |
+| Reverb Wet | -100 - 12 dB | Level of the FDN reverb tail (see DSP architecture below); -100 dB is effectively off, the default. |
+| Reverb Size | 1 - 60 m | Room size fed to the reverb's delay-line network; larger values space out and lengthen the individual reflections. |
+| Reverb Decay | 50 - 20000 ms | RT60-style decay time of the reverb tail. |
 | Script | (button) | Opens the popup editor for the current patch's script. While LLM-Assist is active it opens read-only instead (Apply/Reset disabled) so a manual edit can't race a watched-folder pull, and its text stays live-updated as pulls happen. The editor's own Reset button replaces the text with a full skeleton (every available hook, stubbed out) - Cancel discards it, Apply commits it. A dropdown in the editor also lets you view any installed library script, always read-only. |
 
 **Settings > Scripts** manages a named pool of saved scripts (Load / Save As / Delete / Rename),
@@ -80,6 +83,15 @@ or dial setting that would make the loop diverge (e.g. several taps near `SetTap
 `1.0`) is left alone, on purpose: the `tanh` soft limiter only bounds the signal that
 actually gets written back, so an unstable configuration saturates into a loud, bounded
 drone instead of a NaN/overflow. Dry stays centered regardless of any tap's pan.
+
+A separate FDN reverb (`AbacDsp::FdnTankGlide`, 32 lines - the same tank maxdiffuser uses)
+tails the dry/wet mix, not the tap bank alone: it's fed the mono sum of `out` above (the
+same `dryGain * input + wetGain * wet` the listener already hears), and its stereo output
+is added on top as a further term, `reverbWetGain * fdnOut` - it never reads from or feeds
+into the tap delay/feedback network itself. Reverb Size and Reverb Decay are the only two
+knobs on the tank (`FdnTankGlide`'s damping/modulation are left at their own built-in
+defaults); Reverb Wet controls how much of its output is added in, same dB convention as
+Dry/Wet.
 
 ### Topology: `SetMaxTaps` / `SetTap`
 
