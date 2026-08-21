@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <format>
 #include <functional>
 #include <iostream>
 #include <mutex>
@@ -873,6 +874,16 @@ class LooperImpl final : public EffectBase
         applyPartSelectionRequest();
     }
 
+    // DIAG: temporary, for pinning down the Part-switch playback bug.
+    [[nodiscard]] std::string diagPrefix() const
+    {
+        const auto ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+                .count();
+        return std::format("[t={} bar={} beat={}] ", ms, m_timingController.diagBarIndex() + 1,
+                           m_timingController.diagBeatIndexInBar() + 1);
+    }
+
     // A part with content queues an immediate switch; an empty one is accepted
     // unconditionally as just the next Record press's redirect target. A
     // refusal leaves m_selectedPartIndex unchanged so the UI can snap back.
@@ -884,11 +895,18 @@ class LooperImpl final : public EffectBase
         {
             return;
         }
+        std::cout << diagPrefix() << "DIAG applyPartSelectionRequest: target=" << target
+                  << " selected=" << m_selectedPartIndex << " active=" << m_activePartIndex
+                  << " hasContent=" << m_bank.hasContent(target) << "\n";
         if (target != m_activePartIndex && m_bank.hasContent(target) && !m_partController.requestSwitch(target))
         {
+            std::cout << diagPrefix() << "DIAG applyPartSelectionRequest: refused, selectedPartIndex stays "
+                      << m_selectedPartIndex << "\n";
             return;
         }
         m_selectedPartIndex = target;
+        std::cout << diagPrefix() << "DIAG applyPartSelectionRequest: accepted, selectedPartIndex now "
+                  << m_selectedPartIndex << "\n";
     }
 
     // Called from toggleRecord()'s immediate-start branch: true means the
@@ -896,6 +914,9 @@ class LooperImpl final : public EffectBase
     // into a record-switch instead of starting fresh on the active part.
     [[nodiscard]] bool tryRedirectRecordIntoSelectedPart()
     {
+        std::cout << diagPrefix() << "DIAG tryRedirectRecordIntoSelectedPart: selected=" << m_selectedPartIndex
+                  << " active=" << m_activePartIndex << " hasContent=" << m_bank.hasContent(m_selectedPartIndex)
+                  << "\n";
         if (m_selectedPartIndex == m_activePartIndex || m_bank.hasContent(m_selectedPartIndex))
         {
             return false;
@@ -1228,6 +1249,18 @@ class LooperImpl final : public EffectBase
         {
             return;
         }
+        // A loaded loop is a fresh single-part session: every other part's
+        // stale content (and the active/selected part) resets, not just the
+        // one receiving the loaded audio.
+        for (size_t i = 0; i < AbacDsp::kMaxLoopParts; ++i)
+        {
+            m_bank.part(i).clear();
+            m_meterTimelines[i].clear();
+            m_finalizedBarCounts[i] = 0;
+        }
+        m_bank.setActiveIndex(0);
+        m_activePartIndex = 0;
+        m_selectedPartIndex = 0;
         m_bank.active().loadLoop(result->left, result->right);
         if (result->hasOverdub)
         {
@@ -1417,12 +1450,16 @@ class LooperImpl final : public EffectBase
                 // May change beatsPerBar/bpm for the bar about to start: read
                 // samplesPerBeat fresh below rather than caching it per block.
                 applyMeterAtBarBoundary();
-                // After, not before: a pending part switch must not preempt the
-                // just-ending bar's own meter-timeline handling above.
-                m_partController.onBarBoundary();
             }
             const size_t samplesPerBeat = m_seq.samplesPerBeat();
             m_barPos[i] = event.beatIndexInBar * samplesPerBeat + event.beatSamplePos;
+            if (event.beatStart)
+            {
+                std::cout << diagPrefix() << "DIAG beat: absPos=" << (m_absPos + i)
+                          << " suppressed=" << m_suppressNextClick << " isRecording=" << isRecording()
+                          << " isCountingIn=" << m_countingIn << " isPlaying=" << isPlaying()
+                          << " selectedPart=" << m_selectedPartIndex << " activePart=" << m_activePartIndex << "\n";
+            }
             if (active)
             {
                 if (event.beatStart && m_suppressNextClick)

@@ -279,9 +279,11 @@ TEST(LooperPartControllerTest, SwitchWhilePlayingQueuesUntilBarBoundary)
 
     EXPECT_TRUE(controller.requestSwitch(1));
     EXPECT_TRUE(controller.isSwitchPending());
-    EXPECT_EQ(fx.activePartIndex, 0u) << "must not switch before the bar boundary";
+    EXPECT_EQ(fx.activePartIndex, 0u) << "must not switch before part 0's own loop wraps";
 
-    controller.onBarBoundary();
+    Buffer in{};
+    Buffer out{};
+    controller.processBlock(in, out); // part 0's 1-block loop wraps within this call
     EXPECT_FALSE(controller.isSwitchPending());
     EXPECT_EQ(fx.activePartIndex, 1u);
     EXPECT_TRUE(controller.isCrossfading());
@@ -326,10 +328,14 @@ TEST(LooperPartControllerTest, CrossfadeRampsFromOutgoingToIncomingThenStopsOutg
     Controller controller(bank, fx.timing, tx.transport, fx.activePartIndex, kFade);
 
     ASSERT_TRUE(controller.requestSwitch(1));
-    controller.onBarBoundary();
+    Buffer in{};
+    Buffer discard{};
+    for (int i = 0; i < 4; ++i)
+    {
+        controller.processBlock(in, discard); // part 0's 4-block loop finishing its own cycle
+    }
     ASSERT_TRUE(controller.isCrossfading());
 
-    Buffer in{};
     Buffer first{};
     controller.processBlock(in, first);
     // Linear ramp over kFade samples: pure outgoing at 0, pure incoming by
@@ -364,7 +370,9 @@ TEST(LooperPartControllerTest, SwitchWhileOverdubbingEndsOverdubAndCrossfades)
     Controller controller(bank, fx.timing, tx.transport, fx.activePartIndex, 4);
 
     ASSERT_TRUE(controller.requestSwitch(1));
-    controller.onBarBoundary();
+    Buffer in{};
+    Buffer out{};
+    controller.processBlock(in, out); // part 0's 1-block loop wraps within this call
     EXPECT_TRUE(controller.isCrossfading());
     EXPECT_NE(bank.part(0).state(), AbacDsp::LooperState::Overdubbing);
 }
@@ -421,7 +429,11 @@ TEST(LooperPartControllerTest, RequestRecordSwitchWhilePlayingFadesToSilenceThen
 
     ASSERT_TRUE(controller.requestRecordSwitch(1));
     EXPECT_TRUE(controller.isSwitchPending());
-    controller.onBarBoundary();
+    Buffer discard{};
+    for (int i = 0; i < 4; ++i)
+    {
+        controller.processBlock(discard, discard); // part 0's 4-block loop finishing its own cycle
+    }
     ASSERT_TRUE(controller.isCrossfading());
     EXPECT_EQ(bank.part(1).state(), AbacDsp::LooperState::Empty) << "not triggered until the fade completes";
 

@@ -826,6 +826,53 @@ TEST(LooperLoopFile, SaveThenLoadRoundTripsAudioAndBpm)
     EXPECT_EQ(reader.getSamplesPerBar(), expectedSamplesPerBeat * reader.getBarBeats());
 }
 
+// Regression: loading only ever installed into the active part, leaving any
+// other part's stale content (and the selection) untouched - a loaded loop
+// is a fresh single-part session, so every other part must reset to empty.
+TEST(LooperLoopFile, LoadingALoopResetsAllOtherParts)
+{
+    const TempLoopsDir dir;
+
+    Looper writer(kLoopFileSampleRate);
+    writer.setLoopsDirectory(dir.path());
+    recordKnownLoop(writer);
+    writer.requestSaveLoopAs("myloop");
+    waitUntilLoopSaveDone(writer);
+
+    Looper reader(kLoopFileSampleRate);
+    reader.setLoopsDirectory(dir.path());
+    reader.setThreshRec(false);
+    reader.setFadeMs(0.f);
+
+    // Give part B stale content before loading (active part 0 is empty, so
+    // this commits immediately, no crossfade needed).
+    reader.setSelectedPart(1);
+    Buffer out{};
+    reader.processBlock(Buffer{}, out);
+    Buffer inB{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inB(i, 0) = 9.f;
+        inB(i, 1) = 9.f;
+    }
+    reader.setRecord(true);
+    reader.processBlock(inB, out);
+    reader.setRecord(true);
+    reader.processBlock(inB, out);
+    ASSERT_NE(reader.partStatusLabel(1), "Part B: free");
+
+    reader.requestLoadLoop("myloop");
+    const auto outcome = waitForLoopLoadOutcome(reader);
+    ASSERT_TRUE(outcome.success);
+    waitUntilLoopLoadInstalled(reader);
+
+    EXPECT_EQ(reader.currentSelectedPartIndex(), 0);
+    EXPECT_EQ(reader.partStatusLabel(1), "Part B: free");
+    EXPECT_EQ(reader.partStatusLabel(2), "Part C: free");
+    EXPECT_EQ(reader.partStatusLabel(3), "Part D: free");
+    EXPECT_TRUE(reader.isPlaying());
+}
+
 TEST(LooperLoopFile, LoadReportsConflictInsteadOfPickingSilently)
 {
     const TempLoopsDir dir;
@@ -1828,6 +1875,242 @@ TEST(PartSelection, RefusedSwitchLeavesSelectedPartIndexUnchanged)
     looper.setSelectedPart(0); // part 0 has content, but active part 1 is Recording -> refused
     looper.processBlock(inB, out);
     EXPECT_EQ(looper.currentSelectedPartIndex(), 1) << "a refused switch must not update the selected index";
+}
+
+// Regression: a part that was the *outgoing* side of an earlier switch is
+// left Stopped; re-selecting it must resume playback, checked against real
+// processBlock() output rather than rawLoopSample()'s raw stored buffer.
+TEST(PartSelection, SwitchingBackToAPreviouslyStoppedPartResumesItsPlayback)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFreeRecord(true);
+    looper.setFadeMs(0.f);
+    Buffer out{};
+    looper.setClickVolume(-60.f);
+    recordThenStopPlayback(looper, out, 1.f); // part 0: value 1, active=0, Stopped
+
+    looper.setSelectedPart(1);
+    looper.processBlock(Buffer{}, out);
+    recordThenStopPlayback(looper, out, 2.f); // redirected into part 1: value 2, active=1, Stopped
+
+    looper.setPlay(true);
+    looper.processBlock(Buffer{}, out); // part 1: Stopped -> Playing (audible)
+
+    looper.setSelectedPart(0); // part 0 has content, active(1) Playing -> queue+crossfade
+    looper.processBlock(Buffer{}, out);
+    ASSERT_EQ(looper.currentSelectedPartIndex(), 0);
+
+    for (int i = 0; i < 5000; ++i)
+    {
+        looper.processBlock(Buffer{}, out);
+    }
+    EXPECT_TRUE(looper.isPlaying()) << "part 0 must resume playback, not stay Stopped";
+    EXPECT_NEAR(out(kBlock - 1, 0), 1.f, 1e-3f) << "audible output must be part 0's own content";
+}
+
+// Regression: Count-In used to short-circuit toggleRecord() before the
+// redirect check ran, so it always re-recorded the active part instead.
+TEST(PartSelection, RedirectedRecordSkipsCountInWhenActivePartIsStopped)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFreeRecord(true);
+    looper.setFadeMs(0.f);
+    Buffer out{};
+    recordThenStopPlayback(looper, out, 1.f); // part 0: value 1, active=0, Stopped
+
+    looper.setCountInBars(2); // must not apply to the redirected take
+    looper.setSelectedPart(1);
+    looper.processBlock(Buffer{}, out);
+    ASSERT_EQ(looper.currentSelectedPartIndex(), 1);
+
+    Buffer inB{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inB(i, 0) = 2.f;
+        inB(i, 1) = 2.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(inB, out);
+    EXPECT_FALSE(looper.isCountingIn()) << "a redirected take must not count in again";
+    EXPECT_TRUE(looper.isRecording()) << "the redirected take must start immediately";
+}
+
+// Same gap, matching the actually-reported scenario: the active part is
+// still Playing when Record is pressed, so the redirect queues a crossfade.
+TEST(PartSelection, RedirectedRecordSkipsCountInWhenActivePartIsPlaying)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFreeRecord(true);
+    looper.setFadeMs(0.f);
+    Buffer out{};
+    Buffer inA{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inA(i, 0) = 1.f;
+        inA(i, 1) = 1.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(inA, out);
+    looper.setRecord(true);
+    looper.processBlock(inA, out); // part 0: value 1, finalizeFree() leaves it Playing (audible)
+    ASSERT_TRUE(looper.isPlaying());
+
+    looper.setCountInBars(2); // must not apply to the redirected take
+    looper.setSelectedPart(1);
+    looper.processBlock(Buffer{}, out);
+
+    Buffer inB{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inB(i, 0) = 2.f;
+        inB(i, 1) = 2.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(inB, out); // queued: A is audible, so this waits for a bar boundary
+    EXPECT_FALSE(looper.isCountingIn()) << "a redirected take must not count in, queued or not";
+
+    for (int i = 0; i < 5000 && !looper.isRecording(); ++i)
+    {
+        looper.processBlock(inB, out);
+        ASSERT_FALSE(looper.isCountingIn()) << "a redirected take must never count in, even after the crossfade";
+    }
+    EXPECT_TRUE(looper.isRecording()) << "the redirected take must start once the crossfade completes";
+}
+
+// Bar-locked, neither part explicitly stopped before switching: both the
+// A->B and B->A transitions go through the queued crossfade path, matching
+// the default UI's actual usage pattern (not the immediate-commit shortcut).
+TEST(PartSelection, BarLockedTwoQueuedCrossfadesInARowRestoresEachPartsOwnPlayback)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFadeMs(0.f);
+    looper.setClickVolume(-60.f);
+    Buffer out{};
+    Buffer inA{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inA(i, 0) = 1.f;
+        inA(i, 1) = 1.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(inA, out);
+    size_t elapsed = kBlock;
+    while (elapsed < kSamplesPerBar)
+    {
+        looper.processBlock(inA, out);
+        elapsed += kBlock;
+    }
+    looper.setRecord(true); // request bar-locked stop (async, quantized)
+    while (looper.isRecording())
+    {
+        looper.processBlock(inA, out);
+    }
+    ASSERT_TRUE(looper.isPlaying());
+
+    looper.setSelectedPart(1); // part 0 still Playing/audible -> no immediate action
+    looper.processBlock(Buffer{}, out);
+
+    Buffer inB{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inB(i, 0) = 2.f;
+        inB(i, 1) = 2.f;
+    }
+    looper.setRecord(true); // queued: waits for a bar boundary before starting
+    looper.processBlock(inB, out);
+    for (int i = 0; i < 5000 && !looper.isRecording(); ++i)
+    {
+        looper.processBlock(inB, out);
+    }
+    ASSERT_TRUE(looper.isRecording()) << "queued record-switch into part 1 never committed";
+
+    elapsed = kBlock;
+    while (elapsed < kSamplesPerBar)
+    {
+        looper.processBlock(inB, out);
+        elapsed += kBlock;
+    }
+    looper.setRecord(true); // request bar-locked stop for part 1
+    while (looper.isRecording())
+    {
+        looper.processBlock(inB, out);
+    }
+    ASSERT_TRUE(looper.isPlaying());
+
+    looper.setSelectedPart(0); // part 1 audible -> queues the switch back
+    looper.processBlock(Buffer{}, out);
+    ASSERT_EQ(looper.currentSelectedPartIndex(), 0);
+    for (int i = 0; i < 5000; ++i)
+    {
+        looper.processBlock(Buffer{}, out);
+    }
+    EXPECT_TRUE(looper.isPlaying()) << "part 0 must resume playback, not stay Stopped";
+    EXPECT_NEAR(out(kBlock - 1, 0), 1.f, 1e-3f) << "audible output must be part 0's own content again";
+}
+
+// Regression: a queued switch used to commit at the next global bar
+// instead of when the active part's own multi-bar loop actually wraps.
+// Part 0 is 8 bars; a switch requested partway through must wait it out.
+TEST(PartSelection, QueuedSwitchWaitsForActiveLoopsOwnLengthNotJustOneBar)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFadeMs(0.f);
+    looper.setAutoStop(true);
+    looper.setRecordBars(8);
+    Buffer out{};
+    Buffer inA{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inA(i, 0) = 1.f;
+        inA(i, 1) = 1.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(inA, out);
+    while (looper.isRecording())
+    {
+        looper.processBlock(inA, out);
+    }
+    ASSERT_TRUE(looper.isPlaying());
+    ASSERT_EQ(looper.rawLoopLengthFrames(), 8 * kSamplesPerBar);
+
+    // Run playback 2 bars into the loop, nowhere near a wrap.
+    for (size_t i = 0; i < 2 * kSamplesPerBar; i += kBlock)
+    {
+        looper.processBlock(Buffer{}, out);
+    }
+
+    looper.setSelectedPart(1);
+    looper.processBlock(Buffer{}, out);
+    Buffer inB{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inB(i, 0) = 2.f;
+        inB(i, 1) = 2.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(inB, out); // queued: part 0 is audible
+
+    for (size_t i = 0; i < kSamplesPerBar; i += kBlock)
+    {
+        looper.processBlock(inB, out);
+    }
+    EXPECT_FALSE(looper.isRecording()) << "must not commit at the next bar; 5+ bars remain in part 0's own loop";
+
+    for (size_t i = 0; i < 8 * kSamplesPerBar; i += kBlock)
+    {
+        looper.processBlock(inB, out);
+    }
+    EXPECT_TRUE(looper.isRecording()) << "must commit once part 0's own loop actually wraps";
 }
 
 TEST(PartSelection, PartStatusLabelReflectsContentAndEmptiness)

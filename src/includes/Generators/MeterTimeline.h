@@ -121,20 +121,19 @@ class MeterTimeline
         return m_cumulativeFrames[idx];
     }
 
-    // Derives how many complete bars fit in a known total frame length, walking
-    // the recorded segments forward from bar 0. Robust against how that frame
-    // length was arrived at (e.g. bar-lock stop/catch-up slop), since it doesn't
-    // depend on any live bar-wrap count, only on the segments and the length itself.
+    // Derives how many bars fit in totalFrames, rounding to the nearest whole
+    // bar (counted only once at least half of it lies within totalFrames) so
+    // bar-lock stop/catch-up slop past a boundary isn't a whole extra bar.
     [[nodiscard]] size_t barCountForFrames(const size_t totalFrames, const float samplesPerQuarterBeat) const noexcept
     {
         size_t bar = 0;
         size_t framesSoFar = 0;
-        while (framesSoFar < totalFrames)
+        while (true)
         {
             const MeterSegment& seg = segmentForBar(bar);
             const float samplesPerBeat = seg.eighthUnit ? samplesPerQuarterBeat * 0.5f : samplesPerQuarterBeat;
             const auto barFrames = static_cast<size_t>(samplesPerBeat * static_cast<float>(seg.beatsPerBar));
-            if (barFrames == 0)
+            if (barFrames == 0 || framesSoFar + barFrames / 2 >= totalFrames)
             {
                 break;
             }

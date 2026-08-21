@@ -1,9 +1,12 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <functional>
+#include <iostream>
 #include <span>
 
 #include "CaptureRing.h"
@@ -134,6 +137,16 @@ class LooperTransportController
         if (m_deps.pendingStop || m_deps.freezeService.isPending() || m_deps.loopStorage.isSavePending() ||
             m_deps.loopStorage.isLoadPending() || m_deps.resizeService.isPending())
         {
+            if (clearReq || recordReq || playReq || overdubReq || freezeReq)
+            {
+                std::cout << diagPrefix() << "DIAG handleTransportPulses: DROPPED clear=" << clearReq
+                          << " record=" << recordReq << " play=" << playReq << " overdub=" << overdubReq
+                          << " freeze=" << freezeReq << " pendingStop=" << m_deps.pendingStop
+                          << " freezePending=" << m_deps.freezeService.isPending()
+                          << " savePending=" << m_deps.loopStorage.isSavePending()
+                          << " loadPending=" << m_deps.loopStorage.isLoadPending()
+                          << " resizePending=" << m_deps.resizeService.isPending() << "\n";
+            }
             return;
         }
 
@@ -176,6 +189,9 @@ class LooperTransportController
         activeRecorder().snapshotForUndo();
         m_deps.timing.snapshotMeterForUndo();
         m_deps.barLockedTake = !m_deps.freeRecord;
+        std::cout << diagPrefix() << "DIAG startRecording: part=" << m_deps.bank.activeIndex()
+                  << " barLocked=" << m_deps.barLockedTake << " autoStop=" << m_deps.autoStopEnabled
+                  << " recordBars=" << m_deps.recordBars << "\n";
         if (m_deps.barLockedTake)
         {
             beginBarLockedRecord();
@@ -186,6 +202,9 @@ class LooperTransportController
             m_deps.timing.activeMeterTimeline().clear();
             m_deps.timing.activeFinalizedBarCount() = 0;
             activeRecorder().beginRecord();
+            std::cout << diagPrefix()
+                      << "DIAG startRecording: free record started on part=" << m_deps.bank.activeIndex()
+                      << " state=" << static_cast<int>(activeRecorder().state()) << "\n";
         }
     }
 
@@ -193,6 +212,8 @@ class LooperTransportController
     // in LooperImpl::processBlock() for how an ahead-of-us tick gets waited for.
     void requestStop()
     {
+        std::cout << diagPrefix() << "DIAG requestStop: part=" << m_deps.bank.activeIndex()
+                  << " barLockedTake=" << m_deps.barLockedTake << "\n";
         if (!m_deps.barLockedTake)
         {
             finishRecording();
@@ -203,6 +224,7 @@ class LooperTransportController
         if (stopTickAbs <= m_deps.tickAbs)
         {
             // Degenerate near-instant take: nothing sensible to fold.
+            std::cout << diagPrefix() << "DIAG requestStop: degenerate near-instant take, finishing now\n";
             m_deps.barLockedTake = false;
             finishRecording();
             return;
@@ -210,6 +232,8 @@ class LooperTransportController
         m_deps.pendingStop = true;
         m_deps.pendingStopLoopLength = static_cast<size_t>(stopTickAbs - m_deps.tickAbs);
         m_deps.pendingStopTickAbs = stopTickAbs;
+        std::cout << diagPrefix() << "DIAG requestStop: pendingStop armed, loopLength=" << m_deps.pendingStopLoopLength
+                  << "\n";
     }
 
     void commitPendingStop()
@@ -224,9 +248,23 @@ class LooperTransportController
         // stopRecordBarLocked() auto-transitions straight into playback (no
         // separate Play press): resync here too, not just in togglePlay().
         m_deps.timing.resyncTimekeeperToLoopStart();
+        std::cout << diagPrefix() << "DIAG commitPendingStop: part=" << m_deps.bank.activeIndex()
+                  << " loopLengthFrames=" << activeRecorder().loopLengthFrames()
+                  << " state=" << static_cast<int>(activeRecorder().state())
+                  << " finalizedBarCount=" << m_deps.timing.activeFinalizedBarCount() << "\n";
     }
 
   private:
+    // DIAG: temporary, for pinning down the Part-switch playback bug.
+    [[nodiscard]] std::string diagPrefix() const
+    {
+        const auto ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+                .count();
+        return std::format("[t={} bar={} beat={}] ", ms, m_deps.timing.diagBarIndex() + 1,
+                           m_deps.timing.diagBeatIndexInBar() + 1);
+    }
+
     [[nodiscard]] bool isRecording() const noexcept
     {
         return activeRecorder().state() == AbacDsp::LooperState::Recording;
@@ -296,6 +334,9 @@ class LooperTransportController
         const bool wasBarLocked = m_deps.barLockedTake;
         activeRecorder().stopRecordFree();
         m_deps.barLockedTake = false;
+        std::cout << diagPrefix() << "DIAG finishRecording: part=" << m_deps.bank.activeIndex()
+                  << " wasBarLocked=" << wasBarLocked << " loopLengthFrames=" << activeRecorder().loopLengthFrames()
+                  << " state=" << static_cast<int>(activeRecorder().state()) << "\n";
         if (wasBarLocked)
         {
             // A bar-locked take can also end up here (degenerate near-instant
@@ -312,6 +353,11 @@ class LooperTransportController
 
     void toggleRecord()
     {
+        std::cout << diagPrefix() << "DIAG toggleRecord: part=" << m_deps.bank.activeIndex()
+                  << " isRecording=" << isRecording() << " countingIn=" << m_deps.countingIn
+                  << " armed=" << m_deps.armed << " countInBars=" << m_deps.countInBars
+                  << " threshRec=" << m_deps.threshRecReq.load(std::memory_order_relaxed)
+                  << " freeRecord=" << m_deps.freeRecord << "\n";
         if (isRecording())
         {
             requestStop();
@@ -324,6 +370,13 @@ class LooperTransportController
         {
             m_deps.armed = false; // pressing Record again while armed disarms
         }
+        // Checked before Count-In/Threshold: a redirected take starts on an
+        // already-audible part, so it needs neither -- those only make sense
+        // for the very first take, with no existing tempo reference yet.
+        else if (m_deps.tryRedirectRecordIntoSelectedPart())
+        {
+            std::cout << diagPrefix() << "DIAG toggleRecord: redirected via tryRedirectRecordIntoSelectedPart\n";
+        }
         else if (m_deps.countInBars > 0)
         {
             m_deps.timing.resetTimekeeper(false); // count-in needs its beat 1 click to actually count something
@@ -334,7 +387,7 @@ class LooperTransportController
             m_deps.timing.resetTimekeeper(false); // the performer needs an audible downbeat while waiting to play in
             m_deps.armed = true;                  // wait for the input to cross the threshold
         }
-        else if (!m_deps.tryRedirectRecordIntoSelectedPart())
+        else
         {
             startFreshRecording();
         }
@@ -426,6 +479,12 @@ class LooperTransportController
         const size_t recordBars = m_deps.autoStopEnabled ? static_cast<size_t>(m_deps.recordBars) : 0;
         m_deps.autoStopArmed = recordBars > 0;
         m_deps.autoStopBarTarget = recordBars;
+        std::cout << diagPrefix() << "DIAG beginBarLockedRecord: part=" << m_deps.bank.activeIndex()
+                  << " beginRecord() called, autoStopArmed=" << m_deps.autoStopArmed
+                  << " autoStopBarTarget=" << m_deps.autoStopBarTarget
+                  << " pendingTimeSignature=" << m_deps.pendingTimeSignature
+                  << " appliedTimeSignature=" << m_deps.appliedTimeSignature << " sig0.beatsPerBar=" << sig0.beatsPerBar
+                  << "\n";
     }
 
     Deps m_deps;

@@ -1,7 +1,10 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
+#include <format>
+#include <iostream>
 
 #include "Audio/AudioBuffer.h"
 #include "LooperTimingController.h"
@@ -9,9 +12,9 @@
 #include "Sampler/LoopPartBank.h"
 #include "Sampler/LoopRecorder.h"
 
-// Queues a switch between parts, committed at the next bar boundary: a
-// crossfade into an already-recorded part, or -- muting the outgoing part
-// first -- a fresh take via LooperTransportController's record machinery.
+// Queues a switch between parts, committed when the active part's own loop
+// finishes its current cycle: a crossfade into an already-recorded part, or
+// -- muting the outgoing part first -- a fresh take via LooperTransportController.
 template <size_t BlockSize>
 class LooperPartController
 {
@@ -30,13 +33,18 @@ class LooperPartController
 
     // Refused (false) if target is invalid, already active, empty, recording,
     // or a switch is already pending/in progress; otherwise commits immediately
-    // (nothing playing to wait for) or queues for the next onBarBoundary().
+    // (nothing playing to wait for) or queues until the active loop wraps.
     bool requestSwitch(const size_t target) noexcept
     {
         if (!targetIsUsable(target) || !m_bank.hasContent(target))
         {
+            std::cout << diagPrefix() << "DIAG requestSwitch(" << target
+                      << ") REFUSED: usable=" << targetIsUsable(target) << " hasContent=" << m_bank.hasContent(target)
+                      << " active=" << m_activePartIndex << "\n";
             return false;
         }
+        std::cout << diagPrefix() << "DIAG requestSwitch(" << target << ") accepted, active=" << m_activePartIndex
+                  << "\n";
         queueOrCommit(target, false);
         return true;
     }
@@ -48,8 +56,12 @@ class LooperPartController
     {
         if (!targetIsUsable(target))
         {
+            std::cout << diagPrefix() << "DIAG requestRecordSwitch(" << target
+                      << ") REFUSED, active=" << m_activePartIndex << "\n";
             return false;
         }
+        std::cout << diagPrefix() << "DIAG requestRecordSwitch(" << target << ") accepted, active=" << m_activePartIndex
+                  << "\n";
         queueOrCommit(target, true);
         return true;
     }
@@ -64,25 +76,26 @@ class LooperPartController
         return m_crossfadeRemaining > 0;
     }
 
-    // Called once per bar boundary, same call site as
-    // LooperImpl::applyMeterAtBarBoundary(). Commits a pending switch, if any.
-    void onBarBoundary() noexcept
-    {
-        if (m_pending)
-        {
-            m_pending = false;
-            commitSwitch(m_pendingTarget, m_pendingIsRecord);
-        }
-    }
-
-    // Audio thread. Outside a crossfade, a plain pass-through; during one,
-    // mixes the outgoing part's tail against the incoming part's head (silence,
-    // for a record-target fade, since the target isn't triggered until it ends).
+    // Audio thread. Outside a crossfade, commits a pending switch once the
+    // active loop wraps back to its start; during one, mixes the outgoing
+    // part's tail against the incoming part's head (silence for a record fade).
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out) noexcept
     {
         if (!isCrossfading())
         {
+            // playPositionFrames() alone can't tell a wrap from "didn't
+            // move": a loop length that's an exact BlockSize multiple wraps
+            // back to the same 0 it started the block at.
+            const size_t posBefore = m_bank.active().playPositionFrames();
+            const size_t loopLength = m_bank.active().loopLengthFrames();
             m_bank.active().processBlock(in, out);
+            if (m_pending && loopLength > 0 && posBefore + BlockSize >= loopLength)
+            {
+                std::cout << diagPrefix() << "DIAG loop wrapped: committing pending target=" << m_pendingTarget
+                          << " isRecord=" << m_pendingIsRecord << "\n";
+                m_pending = false;
+                commitSwitch(m_pendingTarget, m_pendingIsRecord);
+            }
             return;
         }
         AbacDsp::AudioBuffer<2, BlockSize> outgoing{};
@@ -105,6 +118,10 @@ class LooperPartController
         if (!isCrossfading())
         {
             m_bank.part(m_outgoingIndex).stop();
+            std::cout << diagPrefix() << "DIAG crossfade complete: outgoing=" << m_outgoingIndex
+                      << " stopped, active=" << m_activePartIndex
+                      << " activeState=" << static_cast<int>(m_bank.active().state())
+                      << " fadeIsRecordTransition=" << m_fadeIsRecordTransition << "\n";
             if (m_fadeIsRecordTransition)
             {
                 m_fadeIsRecordTransition = false;
@@ -114,6 +131,16 @@ class LooperPartController
     }
 
   private:
+    // DIAG: temporary, for pinning down the Part-switch playback bug.
+    [[nodiscard]] std::string diagPrefix() const
+    {
+        const auto ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+                .count();
+        return std::format("[t={} bar={} beat={}] ", ms, m_timing.diagBarIndex() + 1,
+                           m_timing.diagBeatIndexInBar() + 1);
+    }
+
     [[nodiscard]] bool isActivePartAudible() const noexcept
     {
         const auto s = m_bank.active().state();
@@ -132,12 +159,15 @@ class LooperPartController
     {
         if (isActivePartAudible())
         {
+            std::cout << diagPrefix() << "DIAG queueOrCommit(" << target << "): QUEUED (active " << m_activePartIndex
+                      << " is audible)\n";
             m_pending = true;
             m_pendingIsRecord = isRecord;
             m_pendingTarget = target;
         }
         else
         {
+            std::cout << diagPrefix() << "DIAG queueOrCommit(" << target << "): committing immediately\n";
             commitSwitch(target, isRecord);
         }
     }
@@ -153,6 +183,9 @@ class LooperPartController
             m_bank.part(outgoing).endOverdub();
         }
         const bool wasAudible = m_bank.part(outgoing).state() == AbacDsp::LooperState::Playing;
+        std::cout << diagPrefix() << "DIAG commitSwitch: outgoing=" << outgoing << " target=" << target
+                  << " outgoingState=" << static_cast<int>(m_bank.part(outgoing).state())
+                  << " wasAudible=" << wasAudible << " isRecord=" << isRecord << "\n";
 
         m_activePartIndex = target;
         m_bank.setActiveIndex(target); // keeps LoopPartBank's own active() in sync
@@ -163,15 +196,25 @@ class LooperPartController
             m_outgoingIndex = outgoing;
             m_crossfadeRemaining = m_fadeFrames;
             m_fadeIsRecordTransition = isRecord;
+            // A Stopped target (e.g. an earlier switch's outgoing side) needs
+            // starting, or the crossfade mixes in silence forever.
+            if (!isRecord && m_bank.active().state() == AbacDsp::LooperState::Stopped)
+            {
+                m_bank.active().play();
+            }
+            std::cout << diagPrefix() << "DIAG commitSwitch: crossfading, fadeFrames=" << m_fadeFrames << "\n";
             return;
         }
         m_crossfadeRemaining = 0;
         if (isRecord)
         {
+            std::cout << diagPrefix() << "DIAG commitSwitch: not audible, starting fresh recording on target=" << target
+                      << "\n";
             m_transport.startFreshRecording();
         }
         else
         {
+            std::cout << diagPrefix() << "DIAG commitSwitch: not audible, playing target=" << target << " directly\n";
             m_bank.active().stop(); // guarantees playPos==0 regardless of where this part was left
             m_bank.active().play();
         }

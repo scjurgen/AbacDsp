@@ -167,6 +167,16 @@ class LooperTimingController
             absPos + static_cast<uint64_t>(off) + static_cast<uint64_t>(countInBars - 1) * samplesPerBar;
     }
 
+    // DIAG: temporary, for pinning down the Part-switch playback bug.
+    [[nodiscard]] size_t diagBarIndex() const noexcept
+    {
+        return m_seq.barIndex();
+    }
+    [[nodiscard]] size_t diagBeatIndexInBar() const noexcept
+    {
+        return m_seq.beatIndexInBar();
+    }
+
     // Resyncs the timekeeper to bar 1 beat 1 of the loop's own recorded meter
     // timeline (force-installing bar 0's meter regardless of whatever m_seq was
     // left at). Used both when Play explicitly (re)starts a stopped loop and

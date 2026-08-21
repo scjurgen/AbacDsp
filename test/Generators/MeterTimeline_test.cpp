@@ -130,6 +130,21 @@ TEST(MeterTimelineTest, BarCountForFramesMatchesConstantMeter)
     EXPECT_EQ(timeline.barCountForFrames(3 * kSamplesPerBar, kSamplesPerQuarterBeat), 3u);
 }
 
+// Regression: bar-lock stop/catch-up slop leaves totalFrames a few samples
+// past an exact bar boundary; that slop must round down, not count as a
+// whole extra bar (real bug: a 4-bar take was reported as 5 bars).
+TEST(MeterTimelineTest, BarCountForFramesRoundsDownSlopPastABoundary)
+{
+    MeterTimeline timeline;
+    timeline.addSegment(0, 4, false);
+    constexpr float kSamplesPerQuarterBeat = 1000.f;
+    constexpr size_t kSamplesPerBar = 4 * 1000;
+
+    EXPECT_EQ(timeline.barCountForFrames(4 * kSamplesPerBar + 1, kSamplesPerQuarterBeat), 4u);
+    EXPECT_EQ(timeline.barCountForFrames(4 * kSamplesPerBar + kSamplesPerBar / 4, kSamplesPerQuarterBeat), 4u);
+    EXPECT_EQ(timeline.barCountForFrames(4 * kSamplesPerBar + 3 * kSamplesPerBar / 4, kSamplesPerQuarterBeat), 5u);
+}
+
 TEST(MeterTimelineTest, BarCountForFramesHonorsMeterChangeMidTake)
 {
     MeterTimeline timeline;
