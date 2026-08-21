@@ -490,6 +490,38 @@ Test: not applicable until a repeated-instance blueprint exists; when one does, 
 keyboard/VoiceOver access to any specific instance's parameter takes selector-plus-per-
 instance-count steps, not total-instance-count-times-per-instance-count steps.
 
+**Finding 19 - A looper feature under design plans to surface task-relevant state only in a
+Strategy E (decorative) visualization (forward-looking, not yet built).**
+Files/methods: none in the current codebase yet. `examples/looper/src/impl/
+CircularLoopDisplay.h` (the looper's own merged variant of `CircularBarDisplay`, already
+Strategy E per Finding 4) is the surface named in an in-progress design for an "A/B/C/D
+parts" feature (plan doc: `.claude/looper-parts-and-undo.md` on `main`) for showing that a
+part switch, or a buffer resize/loaded-loop swap, has been queued and is waiting for the
+next loop boundary to commit.
+Problem: Finding 4 classified this component Strategy E specifically because its
+information is aesthetic, not task-relevant. The in-progress design reuses that same
+surface for something that *is* task-relevant: whether a queued action is pending, has just
+committed, or - for a buffer resize - has failed (out of memory). Putting task-relevant
+state into a `setAccessible(false)` component means a screen reader or keyboard-only user
+gets no indication anything is queued at all until it silently happens (or silently fails).
+Affected users/failure mode: a screen reader user who selects a different part while
+another is playing, or applies a Part Count/Capacity resize, has no way to confirm the
+action registered, distinguish "queued, waiting for the loop boundary" from "already
+committed," or learn that a resize failed - the only feedback is a purely visual change on
+a decorative-only surface.
+Required behavior: not decided here - flagged for a dedicated accessibility session rather
+than resolved in this note. At minimum needs a task-relevant channel independent of
+whatever `CircularLoopDisplay` does visually.
+Recommended mechanism: none proposed yet; the closest existing precedent is Finding 15's
+edge-triggered live-region pattern (announce state transitions - scheduled, committed,
+failed - not continuous state), mirroring how `StatusBar` (Finding 5) already handles
+save/load feedback. Needs its own pass once the feature's actual UI lands, not a
+speculative implementation now.
+Scope/dependencies: the looper feature itself is still in design, not yet implemented as of
+this note - flagged in advance so accessibility isn't retrofitted after the fact, matching
+Finding 18's own "flag before it's needed" approach.
+Test: not applicable until the feature exists.
+
 ### Medium
 
 **Finding 9 - `CustomRotaryDial`'s custom knob painting may visually obscure the default
@@ -976,3 +1008,7 @@ revisit this plan's test matrix if/when Windows support is added.
     `looper.json`'s existing pattern, but not every area in every blueprint has one today
     (most don't) - deciding this affects how much retrofitting existing blueprints need
     versus how much is free from Finding 17's mechanism alone.
+12. **How should the looper's in-progress part-switch/resize feature (Finding 19) announce
+    pending/committed/failed state once it's built?** Not decided here - flagged in advance;
+    likely candidate is Finding 15's edge-triggered live-region pattern, but this needs its
+    own design pass against the feature's actual UI once it exists.
