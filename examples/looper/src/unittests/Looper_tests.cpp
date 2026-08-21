@@ -1632,6 +1632,92 @@ TEST(RecordingModes, PlayStopsActiveRecording)
     EXPECT_TRUE(looper.isPlaying());
 }
 
+// Regression test: default Part Count/Capacity must already match what the
+// constructor built, so no resize is pending on the first block - an earlier
+// version's auto-resize silently dropped this exact first Record press.
+TEST(PartSettings, FreshInstanceRecordsImmediatelyNoStartupResizePending)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    ASSERT_TRUE(looper.canEditPartSettings());
+
+    Buffer in{};
+    Buffer out{};
+    looper.setRecord(true);
+    looper.processBlock(in, out);
+    EXPECT_TRUE(looper.isRecording());
+}
+
+TEST(PartSettings, CanEditPartSettingsIsFalseWhileRecording)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+
+    Buffer in{};
+    Buffer out{};
+    looper.setRecord(true);
+    looper.processBlock(in, out);
+    ASSERT_TRUE(looper.isRecording());
+    EXPECT_FALSE(looper.canEditPartSettings());
+}
+
+// A part-settings change requested mid-recording must not corrupt the take
+// in progress - canEditPartSettings() being false keeps it queued instead.
+TEST(PartSettings, PartSettingsChangeDuringRecordingDoesNotDisturbTheTake)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFreeRecord(true);
+    looper.setFadeMs(0.f);
+
+    Buffer in{};
+    Buffer out{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        in(i, 0) = 1.f;
+        in(i, 1) = 1.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(in, out);
+    ASSERT_TRUE(looper.isRecording());
+
+    looper.setPartCount(2.f); // refused while recording; must not disturb the take
+    for (int i = 0; i < 4; ++i)
+    {
+        looper.processBlock(in, out);
+    }
+    looper.setRecord(true);
+    looper.processBlock(in, out); // stop
+    ASSERT_FALSE(looper.isRecording());
+    EXPECT_NEAR(looper.rawLoopSample(0, 0), 1.f, 1e-3f);
+}
+
+// End-to-end: a live capacity change while empty actually reaches
+// PartBankResizeService and completes, and recording afterward still works.
+TEST(PartSettings, ChangingPartCapacityWhileEmptyResizesThenRecordingStillWorks)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    ASSERT_TRUE(looper.canEditPartSettings());
+
+    looper.setPartCapacityBars(4.f);
+    Buffer in{};
+    Buffer out{};
+    for (int guard = 0; guard < 200; ++guard)
+    {
+        looper.processBlock(in, out);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    looper.setRecord(true);
+    looper.processBlock(in, out);
+    EXPECT_TRUE(looper.isRecording());
+}
+
 TEST(SpectrogramWrap, IsWrappedOnlyOnceRecordingStops)
 {
     Looper looper(kSampleRate);

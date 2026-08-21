@@ -33,6 +33,10 @@
     {"short": "ASTP", "type": "switch", "display": "Auto Stop", "symbol": "autoStop", "default": 0},
     {"short": "RBAR", "type": "dial",   "display": "Record Bars", "symbol": "recordBars", "default": 4,
       "range": [1, 32, 1, 1, false], "precision": 0, "unit": "bars"},
+    {"short": "PCNT", "type": "dial",   "display": "Part Count", "symbol": "partCount", "default": 4,
+      "range": [1, 4, 1, 1, false], "precision": 0, "unit": "parts", "enabled_query": "canEditPartSettings"},
+    {"short": "PCAP", "type": "dial",   "display": "Part Capacity", "symbol": "partCapacityBars", "default": 16,
+      "range": [1, 256, 1, 1, false], "precision": 0, "unit": "bars", "enabled_query": "canEditPartSettings"},
     {"short": "DIV",  "type": "drop",   "display": "Division",   "symbol": "sliceDivision", "default": 1,
       "listitems": ["1/4", "1/8", "1/16", "1/32"]},
     {"short": "BPM",  "type": "dial",   "display": "BPM",         "symbol": "bpm",        "default": 120,
@@ -89,7 +93,7 @@
     "WINDOW_WIDTH": "1400",
     "WINDOW_HEIGHT": "800",
     "type": "||||",
-    "composition": "C=(1:1:1:1) A1=(SYNC, TSIG, CIN, BPM, DIV, RBAR, ASTP) A2=(REC, TREC, FREE, THR, CVOL, CTRK) A3=(PLAY, CLR, LVOL, FRZ) A4=(DIV-O, ODUB, UNDO, MIXD, DIV-S, SEQP, CLRS)"
+    "composition": "C=(1:1:1:1) A1=(SYNC, TSIG, CIN, BPM, DIV, RBAR, ASTP, PCNT, PCAP) A2=(REC, TREC, FREE, THR, CVOL, CTRK) A3=(PLAY, CLR, LVOL, FRZ) A4=(DIV-O, ODUB, UNDO, MIXD, DIV-S, SEQP, CLRS)"
   },
   "performance-page": {
     "type": "||",
@@ -103,6 +107,7 @@
     "recordSwitch.setButtonText(processorRef.isRecording() ? juce::String::fromUTF8(\"Recording\") : (processorRef.isArmed() ? juce::String::fromUTF8(\"Armed\") : juce::String::fromUTF8(\"Record\")));",
     "freezeSwitch.setButtonText(processorRef.isFreezePending() ? juce::String::fromUTF8(\"Freezing...\") : (juce::String::fromUTF8(\"Freeze (\") + juce::String(processorRef.getFrozenTrackCount()) + juce::String::fromUTF8(\" trk/\") + juce::String(processorRef.getFrozenSliceCount()) + juce::String::fromUTF8(\" sl)\")));",
     "if (const auto saved = processorRef.consumeLastSavedLoopName(); saved.isNotEmpty()) { m_statusBar.showMessage(juce::String::fromUTF8(\"Saved '\") + saved + \"'\"); }",
+    "if (const auto err = processorRef.consumeLastPartResizeError(); err.isNotEmpty()) { m_statusBar.showMessage(err); }",
     "handleLoopLoadOutcome();",
     "beatGauge.setRemainingRecordLabel(processorRef.getRemainingRecordLabel());"
   ],
@@ -135,7 +140,8 @@
     {"name": "getSequencerSliceBoundaries", "type": "std::vector<float>"},
     {"name": "getSequencerPlayheadNormalized", "type": "float"},
     {"name": "isLoopSavePending", "type": "bool"},
-    {"name": "isLoopLoadPending", "type": "bool"}
+    {"name": "isLoopLoadPending", "type": "bool"},
+    {"name": "canEditPartSettings", "type": "bool"}
   ],
   "extra_processor_methods": [
     "[[nodiscard]] bool isHostPresent() const noexcept { return wrapperType != juce::AudioProcessor::wrapperType_Standalone; }",
@@ -153,6 +159,7 @@
     "bool deleteLoopNamed(const juce::String& name) { return pluginRunner && pluginRunner->deleteLoopNamed(name.toStdString()); }",
     "bool renameLoop(const juce::String& oldName, const juce::String& newName) { return pluginRunner && pluginRunner->renameLoopNamed(oldName.toStdString(), newName.toStdString()); }",
     "[[nodiscard]] juce::String consumeLastSavedLoopName() const { return pluginRunner ? juce::String(pluginRunner->consumeLastSavedLoopName()) : juce::String(); }",
+    "[[nodiscard]] juce::String consumeLastPartResizeError() const { return pluginRunner ? juce::String(pluginRunner->consumeLastPartResizeError()) : juce::String(); }",
     "[[nodiscard]] LooperImpl<NumSamplesPerBlock>::LoopLoadOutcome consumeLoopLoadOutcome() const { return pluginRunner ? pluginRunner->consumeLoopLoadOutcome() : LooperImpl<NumSamplesPerBlock>::LoopLoadOutcome{}; }",
     "void resolveLoopLoadBpm(const float bpm) { if (pluginRunner) { pluginRunner->resolveLoopLoadBpm(bpm); } }"
   ],

@@ -77,6 +77,7 @@ struct adl_serializer<AbacDsp::SequencePattern>
 #include "LooperTimingController.h"
 #include "LooperTransportController.h"
 #include "LooperViewModel.h"
+#include "PartBankResizeService.h"
 #include "SequencerPatternBuilder.h"
 
 // Traditional-style slicing looper: captures audio, quantizes the loop to whole
@@ -99,12 +100,15 @@ class LooperImpl final : public EffectBase
     // Hop/fftLength ratio: high overlap for fine time resolution. Regen for the
     // longest loops still finishes in well under 20 ms, so there's ample headroom.
     static constexpr float kSpectrogramWindowForward = 1.f / 12.f;
-    // Startup capacity per part, before Part Count/Capacity controls exist to
-    // resize it via PartBankResizeService; matches today's single-loop default.
-    static constexpr float kInitialPartCapacitySeconds = 180.f;
     // Longer than the record-boundary click fade (kFadeMs default 5ms): a part
     // switch is a deliberate, audible transition, not just click suppression.
     static constexpr float kPartSwitchFadeMs = 20.f;
+    static constexpr int kDefaultPartCount = static_cast<int>(AbacDsp::kMaxLoopParts);
+    static constexpr float kDefaultPartCapacityBars = 16.f;
+    // Built into the bank directly at construction, not via an async resize
+    // request, so no startup window exists where a pending resize could drop
+    // the first transport pulse. kDefaultPartCapacityBars bars @ 120 BPM 4/4.
+    static constexpr float kInitialPartCapacitySeconds = kDefaultPartCapacityBars * 2.f;
 
     explicit LooperImpl(const float sampleRate)
         : EffectBase(sampleRate)
@@ -122,6 +126,7 @@ class LooperImpl final : public EffectBase
         , m_freezeService(m_bank)
         , m_loopStorage(m_bank, m_seq, m_sliceLibrary, m_pattern, m_meterTimelines, m_activePartIndex, m_appliedBpm,
                         m_eighthNoteUnit, sampleRate)
+        , m_resizeService(m_bank, sampleRate)
         , m_transportController(typename LooperTransportController<BlockSize>::Deps{
               .bank = m_bank,
               .seq = m_seq,
@@ -129,6 +134,7 @@ class LooperImpl final : public EffectBase
               .captureRing = m_captureRing,
               .freezeService = m_freezeService,
               .loopStorage = m_loopStorage,
+              .resizeService = m_resizeService,
               .sliceLibrary = m_sliceLibrary,
               .pattern = m_pattern,
               .sequencer = m_sequencer,
@@ -271,6 +277,16 @@ class LooperImpl final : public EffectBase
     {
         m_autoStopEnabledReq.store(value, std::memory_order_relaxed);
     }
+    // Both only take effect while canEditPartSettings() holds (whole bank
+    // empty, not recording/armed/counting-in); ignored otherwise until it does.
+    void setPartCount(const float value) noexcept
+    {
+        m_partCountReq.store(static_cast<int>(value), std::memory_order_relaxed);
+    }
+    void setPartCapacityBars(const float value) noexcept
+    {
+        m_partCapacityBarsReq.store(value, std::memory_order_relaxed);
+    }
     // Index into kTimeSignatures. Applies immediately while stopped/armed/counting
     // in; queues to apply at the next bar boundary while recording; ignored while
     // just playing back or overdubbing (the loop replays its own recorded meter
@@ -394,6 +410,12 @@ class LooperImpl final : public EffectBase
     [[nodiscard]] std::string consumeLastSavedLoopName()
     {
         return m_loopStorage.consumeLastSavedLoopName();
+    }
+
+    // One-shot; non-empty only after a failed Part Count/Capacity resize.
+    [[nodiscard]] std::string consumeLastPartResizeError()
+    {
+        return m_resizeService.consumeLastError();
     }
 
     // Reported back to the UI once a load has decoded and compared metadata.
@@ -596,6 +618,19 @@ class LooperImpl final : public EffectBase
     [[nodiscard]] bool hasSequence() const noexcept
     {
         return m_pattern.eventCount() > 0;
+    }
+    // Part Count/Capacity may only change while every part is empty and
+    // nothing is recording/armed/counting-in (2b's resize gate).
+    [[nodiscard]] bool canEditPartSettings() const noexcept
+    {
+        for (size_t i = 0; i < AbacDsp::kMaxLoopParts; ++i)
+        {
+            if (m_bank.hasContent(i))
+            {
+                return false;
+            }
+        }
+        return !isRecording() && !m_armed && !m_countingIn;
     }
     [[nodiscard]] bool isArmed() const noexcept
     {
@@ -815,6 +850,29 @@ class LooperImpl final : public EffectBase
             m_bank.active().setFadeFrames(static_cast<size_t>(fadeMs / 1000.f * sampleRate()));
             m_appliedFadeMs = fadeMs;
         }
+        applyPartSettingsRequest();
+    }
+
+    // Only takes effect while canEditPartSettings() holds; otherwise retried
+    // every block until it does (or the request reverts to match what's applied).
+    void applyPartSettingsRequest()
+    {
+        const int partCount =
+            std::clamp(m_partCountReq.load(std::memory_order_relaxed), 1, static_cast<int>(AbacDsp::kMaxLoopParts));
+        const float partCapacityBars = m_partCapacityBarsReq.load(std::memory_order_relaxed);
+        const bool changed =
+            partCount != m_appliedPartCount || std::not_equal_to<float>{}(partCapacityBars, m_appliedPartCapacityBars);
+        if (!changed || !canEditPartSettings())
+        {
+            return;
+        }
+        const size_t framesPerBar = m_seq.samplesPerBeat() * m_seq.beatsPerBar();
+        const auto capacityFrames = static_cast<size_t>(partCapacityBars) * framesPerBar;
+        if (m_resizeService.requestResize(static_cast<size_t>(partCount), capacityFrames))
+        {
+            m_appliedPartCount = partCount;
+            m_appliedPartCapacityBars = partCapacityBars;
+        }
     }
 
     void updateTiming()
@@ -935,6 +993,7 @@ class LooperImpl final : public EffectBase
         checkFreezeCompletion();
         m_loopStorage.checkSaveCompletion();
         checkLoopLoadCompletion();
+        m_resizeService.checkResizeCompletion();
     }
 
     // Dry input, loop, and sequencer all sum here. Toggling Seq Play mutes the
@@ -1405,6 +1464,8 @@ class LooperImpl final : public EffectBase
     // processBlock() so it can only ever suppress a wrap in that same block.
     bool m_suppressNextBarIndexIncrement{false};
     std::atomic<float> m_fadeMs{5.f};
+    std::atomic<int> m_partCountReq{kDefaultPartCount};
+    std::atomic<float> m_partCapacityBarsReq{kDefaultPartCapacityBars};
     float m_loopGain{1.f};
     float m_clickRecordGain{0.f};
     float m_recThresholdLinear{0.0158f};
@@ -1428,6 +1489,10 @@ class LooperImpl final : public EffectBase
     float m_appliedBpm{120.f};
     int m_appliedDivision{1};
     float m_appliedFadeMs{-1.f};
+    // Match what the ctor actually builds (kInitialPartCapacitySeconds is
+    // derived from these same defaults), so no resize is needed at startup.
+    int m_appliedPartCount{kDefaultPartCount};
+    float m_appliedPartCapacityBars{kDefaultPartCapacityBars};
     bool m_hostSync{false};
     bool m_suppressNextClick{false}; // set alongside every m_seq.reset() resync
     LooperTimingController m_timingController;
@@ -1451,6 +1516,8 @@ class LooperImpl final : public EffectBase
     // Named loop save/load ("Loops" menu); background WAV+JSON(+MIDI)
     // encode/decode, generation-counter handshake, and its own worker threads.
     LoopStorageService<BlockSize> m_loopStorage;
+
+    PartBankResizeService<BlockSize> m_resizeService;
 
     // Request/done gens: let getSpectrogramHeadFrames() report 0 until regen
     // catches up, and let a stale run notice it's superseded and bail out.

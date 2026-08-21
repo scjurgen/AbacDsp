@@ -11,6 +11,7 @@
 #include "Generators/BeatSequencer.h"
 #include "LoopStorageService.h"
 #include "LooperTimingController.h"
+#include "PartBankResizeService.h"
 #include "Sampler/LoopPartBank.h"
 #include "Sampler/LoopRecorder.h"
 #include "Sampler/SequencePattern.h"
@@ -38,6 +39,7 @@ class LooperTransportController
         CaptureRing<BlockSize>& captureRing;
         FreezeService<BlockSize>& freezeService;
         LoopStorageService<BlockSize>& loopStorage;
+        PartBankResizeService<BlockSize>& resizeService;
         AbacDsp::SliceLibrary& sliceLibrary;
         AbacDsp::SequencePattern& pattern;
         AbacDsp::SequencerEngine<>& sequencer;
@@ -124,10 +126,10 @@ class LooperTransportController
             m_deps.requestSpectrogramRegen();
         }
 
-        // A bar-locked stop, a freeze, or a loop save/load is waiting on its own
-        // async completion; drop pulses rather than race a conflicting action.
+        // A bar-locked stop, a freeze, a loop save/load, or a part resize is
+        // waiting on its own async completion; drop pulses rather than race it.
         if (m_deps.pendingStop || m_deps.freezeService.isPending() || m_deps.loopStorage.isSavePending() ||
-            m_deps.loopStorage.isLoadPending())
+            m_deps.loopStorage.isLoadPending() || m_deps.resizeService.isPending())
         {
             return;
         }

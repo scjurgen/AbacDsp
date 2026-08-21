@@ -70,6 +70,14 @@ class StubImpl final : public EffectBase
     {
         m_recordBars = value;
     }
+    void setPartCount(const float value)
+    {
+        m_partCount = value;
+    }
+    void setPartCapacityBars(const float value)
+    {
+        m_partCapacityBars = value;
+    }
     void setSliceDivision(const size_t value)
     {
         m_sliceDivision = value;
@@ -146,6 +154,8 @@ class StubImpl final : public EffectBase
     size_t m_timeSignature{};
     bool m_autoStop{};
     float m_recordBars{};
+    float m_partCount{};
+    float m_partCapacityBars{};
     size_t m_sliceDivision{};
     float m_bpm{};
     float m_clickVolume{};

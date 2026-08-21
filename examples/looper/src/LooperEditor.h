@@ -180,6 +180,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(partCountDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(partCapacityBarsDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[0].toFloat());
             }
             {
@@ -327,6 +329,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             clearSwitch.setEnabled(processorRef.hasLoop());
             hostSyncSwitch.setEnabled(processorRef.isHostPresent());
             freeRecordSwitch.setEnabled(processorRef.hasLoop());
+            partCountDial.setEnabled(processorRef.canEditPartSettings());
+            partCapacityBarsDial.setEnabled(processorRef.canEditPartSettings());
             seqPlaySwitch.setEnabled(processorRef.hasSequence());
             clearSeqSwitch.setEnabled(processorRef.hasSequence());
 
@@ -343,6 +347,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             if (const auto saved = processorRef.consumeLastSavedLoopName(); saved.isNotEmpty())
             {
                 m_statusBar.showMessage(juce::String::fromUTF8("Saved '") + saved + "'");
+            }
+            if (const auto err = processorRef.consumeLastPartResizeError(); err.isNotEmpty())
+            {
+                m_statusBar.showMessage(err);
             }
             handleLoopLoadOutcome();
             beatGauge.setRemainingRecordLabel(processorRef.getRemainingRecordLabel());
@@ -423,6 +431,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         recordBarsDial.reset(valueTreeState, "recordBars");
         recordBarsDial.setLabelText(juce::String::fromUTF8("Record Bars"));
         recordBarsDial.setTooltip(juce::String::fromUTF8("Record Bars (1 to 32 bars)"));
+        addAndMakeVisible(partCountDial);
+        partCountDial.reset(valueTreeState, "partCount");
+        partCountDial.setLabelText(juce::String::fromUTF8("Part Count"));
+        partCountDial.setTooltip(juce::String::fromUTF8("Part Count (1 to 4 parts)"));
+        addAndMakeVisible(partCapacityBarsDial);
+        partCapacityBarsDial.reset(valueTreeState, "partCapacityBars");
+        partCapacityBarsDial.setLabelText(juce::String::fromUTF8("Part Capacity"));
+        partCapacityBarsDial.setTooltip(juce::String::fromUTF8("Part Capacity (1 to 256 bars)"));
         addAndMakeVisible(sliceDivisionDrop);
         sliceDivisionDrop.addItemList(valueTreeState.getParameter("sliceDivision")->getAllValueStrings(), 1);
         sliceDivisionDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
@@ -532,6 +548,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             timeSignatureDrop.setVisible(false);
             autoStopSwitch.setVisible(false);
             recordBarsDial.setVisible(false);
+            partCountDial.setVisible(false);
+            partCapacityBarsDial.setVisible(false);
             sliceDivisionDrop.setVisible(false);
             bpmDial.setVisible(false);
             clickVolumeDial.setVisible(true);
@@ -561,6 +579,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             timeSignatureDrop.setVisible(true);
             autoStopSwitch.setVisible(true);
             recordBarsDial.setVisible(true);
+            partCountDial.setVisible(true);
+            partCapacityBarsDial.setVisible(true);
             sliceDivisionDrop.setVisible(true);
             bpmDial.setVisible(true);
             clickVolumeDial.setVisible(true);
@@ -1223,6 +1243,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::ToggleButton autoStopSwitch{juce::String::fromUTF8("Auto Stop")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> autoStopSwitchAttachment;
     CustomRotaryDial recordBarsDial{this};
+    CustomRotaryDial partCountDial{this};
+    CustomRotaryDial partCapacityBarsDial{this};
     juce::ComboBox sliceDivisionDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> sliceDivisionDropAttachment;
     CustomRotaryDial bpmDial{this};

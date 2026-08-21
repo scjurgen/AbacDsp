@@ -74,8 +74,8 @@ def create_switch_label_swaps(blueprint: Blueprint) -> str:
 def create_switch_enabled_updates(blueprint: Blueprint) -> str:
     result = ""
     for item in blueprint["ports-control"]:
-        if item["type"] == "switch" and "enabled_query" in item:
-            result += f"""{item["symbol"]}Switch.setEnabled(processorRef.{item["enabled_query"]}());\n"""
+        if item["type"] in ("switch", "dial", "drop") and "enabled_query" in item:
+            result += f"""{widget_varname(item)}.setEnabled(processorRef.{item["enabled_query"]}());\n"""
     return result
 
 def create_gauge_callbacks(blueprint: Blueprint) -> str:

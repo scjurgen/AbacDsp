@@ -26,6 +26,8 @@ struct PatchParameters
         timeSignature    , // drop
         autoStop         , // switch
         recordBars       , // dial
+        partCount        , // dial
+        partCapacityBars , // dial
         sliceDivision    , // drop
         bpm              , // dial
         clickVolume      , // dial
@@ -49,6 +51,8 @@ size_t countInBars{0};
 size_t timeSignature{2};
 bool autoStop{false};
 float recordBars{4.0f};
+float partCount{4.0f};
+float partCapacityBars{16.0f};
 size_t sliceDivision{1};
 float bpm{120.0f};
 float clickVolume{-12.0f};
@@ -74,6 +78,8 @@ bool clearSeq{false};
 "timeSignature",
 "autoStop",
 "recordBars",
+"partCount",
+"partCapacityBars",
 "sliceDivision",
 "bpm",
 "clickVolume",
@@ -114,6 +120,8 @@ bool clearSeq{false};
         else if constexpr (ParamId == Id::timeSignature) return timeSignature;
         else if constexpr (ParamId == Id::autoStop) return autoStop;
         else if constexpr (ParamId == Id::recordBars) return recordBars;
+        else if constexpr (ParamId == Id::partCount) return partCount;
+        else if constexpr (ParamId == Id::partCapacityBars) return partCapacityBars;
         else if constexpr (ParamId == Id::sliceDivision) return sliceDivision;
         else if constexpr (ParamId == Id::bpm) return bpm;
         else if constexpr (ParamId == Id::clickVolume) return clickVolume;
@@ -160,6 +168,10 @@ break;
  case Id::autoStop: if (!isEqual(get<Id::autoStop>(), value)) {get<Id::autoStop>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::recordBars: if (!isEqual(get<Id::recordBars>(), value)) {get<Id::recordBars>() = value;m_modified = true;}
+break;
+ case Id::partCount: if (!isEqual(get<Id::partCount>(), value)) {get<Id::partCount>() = value;m_modified = true;}
+break;
+ case Id::partCapacityBars: if (!isEqual(get<Id::partCapacityBars>(), value)) {get<Id::partCapacityBars>() = value;m_modified = true;}
 break;
  case Id::sliceDivision: if (!isEqual(get<Id::sliceDivision>(), value)) {get<Id::sliceDivision>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
@@ -232,6 +244,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         timeSignature    , // drop
         autoStop         , // switch
         recordBars       , // dial
+        partCount        , // dial
+        partCapacityBars , // dial
         sliceDivision    , // drop
         bpm              , // dial
         clickVolume      , // dial
