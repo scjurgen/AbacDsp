@@ -30,7 +30,7 @@ class LooperViewModel
 
     struct Deps
     {
-        const AbacDsp::LoopRecorder<BlockSize>& recorder;
+        const AbacDsp::LoopPartBank<BlockSize>& bank;
         const AbacDsp::BeatSequencer& seq;
         const std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts>& meterTimelines;
         const size_t& activePartIndex;
@@ -67,6 +67,11 @@ class LooperViewModel
         return m_deps.finalizedBarCounts[m_deps.activePartIndex];
     }
 
+    [[nodiscard]] const AbacDsp::LoopRecorder<BlockSize>& activeRecorder() const noexcept
+    {
+        return m_deps.bank.active();
+    }
+
     [[nodiscard]] const char* getStateLabel(const bool armed, const bool countingIn) const noexcept
     {
         if (armed)
@@ -77,7 +82,7 @@ class LooperViewModel
         {
             return "Counting in";
         }
-        switch (m_deps.recorder.state())
+        switch (activeRecorder().state())
         {
             case AbacDsp::LooperState::Empty:
                 return "Empty";
@@ -133,7 +138,7 @@ class LooperViewModel
             {
                 return static_cast<int>(fixedBars);
             }
-            return static_cast<int>(m_deps.recorder.recordedFrames() / spb) + 1;
+            return static_cast<int>(activeRecorder().recordedFrames() / spb) + 1;
         }
         // Prefer the finalized bar count over a live recompute: a mixed-meter
         // loop's live beatsPerBar changes bar-to-bar during playback replay
@@ -145,7 +150,7 @@ class LooperViewModel
         {
             return static_cast<int>(activeFinalizedBarCount());
         }
-        const size_t len = m_deps.recorder.loopLengthFrames();
+        const size_t len = activeRecorder().loopLengthFrames();
         return (len > 0) ? static_cast<int>(std::max<size_t>(1, len / spb)) : 1;
     }
 
@@ -191,7 +196,7 @@ class LooperViewModel
             if (barsInLoop == 0)
             {
                 const size_t spb = getSamplesPerBar();
-                barsInLoop = (spb > 0) ? m_deps.recorder.loopLengthFrames() / spb : 0;
+                barsInLoop = (spb > 0) ? activeRecorder().loopLengthFrames() / spb : 0;
             }
             if (barsInLoop > 0)
             {
@@ -207,12 +212,12 @@ class LooperViewModel
     // loop is finalized the buffer isn't being consumed anymore, so this is moot.
     [[nodiscard]] std::string getRemainingRecordLabel() const
     {
-        if (m_deps.recorder.hasLoop())
+        if (activeRecorder().hasLoop())
         {
             return {};
         }
         const size_t remainingFrames =
-            m_deps.recorder.maxFrames() - std::min(m_deps.recorder.maxFrames(), m_deps.recorder.recordedFrames());
+            activeRecorder().maxFrames() - std::min(activeRecorder().maxFrames(), activeRecorder().recordedFrames());
         const auto remainingSeconds = static_cast<int>(static_cast<float>(remainingFrames) / m_deps.sampleRate);
         return std::format("{}:{:02d}", remainingSeconds / 60, remainingSeconds % 60);
     }
@@ -235,14 +240,14 @@ class LooperViewModel
     {
         if (isRecording())
         {
-            return m_deps.recorder.recordedFrames();
+            return activeRecorder().recordedFrames();
         }
         if (m_deps.spectrogramRegenRequestGen.load(std::memory_order_acquire) !=
             m_deps.spectrogramRegenDoneGen.load(std::memory_order_acquire))
         {
             return 0;
         }
-        return m_deps.recorder.loopLengthFrames();
+        return activeRecorder().loopLengthFrames();
     }
 
     [[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept
@@ -252,8 +257,8 @@ class LooperViewModel
 
     [[nodiscard]] float getPlayheadNormalized() const noexcept
     {
-        const size_t len = m_deps.recorder.loopLengthFrames();
-        return (len == 0) ? 0.f : static_cast<float>(m_deps.recorder.playPositionFrames()) / static_cast<float>(len);
+        const size_t len = activeRecorder().loopLengthFrames();
+        return (len == 0) ? 0.f : static_cast<float>(activeRecorder().playPositionFrames()) / static_cast<float>(len);
     }
 
     // About the live loop's own display, not the frozen tracks below; no-op for now.
@@ -344,18 +349,18 @@ class LooperViewModel
     // beat-lock placement.
     [[nodiscard]] float rawLoopSample(const size_t frame, const size_t channel) const noexcept
     {
-        return m_deps.recorder.sample(frame, channel);
+        return activeRecorder().sample(frame, channel);
     }
 
     [[nodiscard]] size_t rawLoopLengthFrames() const noexcept
     {
-        return m_deps.recorder.loopLengthFrames();
+        return activeRecorder().loopLengthFrames();
     }
 
     [[nodiscard]] std::vector<float> getLoopWaveform() const
     {
         std::vector<float> peaks;
-        const size_t len = m_deps.recorder.loopLengthFrames();
+        const size_t len = activeRecorder().loopLengthFrames();
         if (len == 0)
         {
             return peaks;
@@ -369,7 +374,7 @@ class LooperViewModel
             float peak = 0.f;
             for (size_t f = begin; f < end; ++f)
             {
-                const float mono = 0.5f * (m_deps.recorder.sample(f, 0) + m_deps.recorder.sample(f, 1));
+                const float mono = 0.5f * (activeRecorder().sample(f, 0) + activeRecorder().sample(f, 1));
                 peak = std::max(peak, std::abs(mono));
             }
             peaks[p] = peak;
@@ -380,18 +385,18 @@ class LooperViewModel
   private:
     [[nodiscard]] bool isRecording() const noexcept
     {
-        return m_deps.recorder.state() == AbacDsp::LooperState::Recording;
+        return activeRecorder().state() == AbacDsp::LooperState::Recording;
     }
 
     [[nodiscard]] bool isPlaying() const noexcept
     {
-        const auto s = m_deps.recorder.state();
+        const auto s = activeRecorder().state();
         return s == AbacDsp::LooperState::Playing || s == AbacDsp::LooperState::Overdubbing;
     }
 
     [[nodiscard]] bool isOverdubbing() const noexcept
     {
-        return m_deps.recorder.state() == AbacDsp::LooperState::Overdubbing;
+        return activeRecorder().state() == AbacDsp::LooperState::Overdubbing;
     }
 
     Deps m_deps;

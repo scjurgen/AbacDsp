@@ -14,7 +14,7 @@
 
 #include "Analysis/FftMisc.h"
 #include "Analysis/Slicer.h"
-#include "Sampler/LoopRecorder.h"
+#include "Sampler/LoopPartBank.h"
 #include "Sampler/SliceLibrary.h"
 
 // Manual "freeze": slices the current loop into transient-aligned candidates
@@ -41,8 +41,8 @@ class FreezeService
         std::vector<float> thumbnails; // one kThumbFloats block per slice, same order
     };
 
-    explicit FreezeService(const AbacDsp::LoopRecorder<BlockSize>& recorder)
-        : m_recorder(recorder)
+    explicit FreezeService(const AbacDsp::LoopPartBank<BlockSize>& bank)
+        : m_bank(bank)
         , m_freezeFft(kThumbFftLength)
     {
         m_freezeThread = std::jthread(
@@ -104,8 +104,8 @@ class FreezeService
     // runs an STFT, never acceptable on the audio thread.
     void runFreezeAnalysis(const uint64_t gen)
     {
-        const auto loop = m_recorder.loopView();
-        const size_t loopLen = m_recorder.loopLengthFrames();
+        const auto loop = m_bank.active().loopView();
+        const size_t loopLen = m_bank.active().loopLengthFrames();
         if (loopLen == 0)
         {
             m_freezeResultSlices.clear();
@@ -153,7 +153,7 @@ class FreezeService
         }
     }
 
-    const AbacDsp::LoopRecorder<BlockSize>& m_recorder;
+    const AbacDsp::LoopPartBank<BlockSize>& m_bank;
     AbacDsp::HannWindowMagnitudesFft m_freezeFft; // worker-owned, see runFreezeAnalysis()
 
     bool m_freezePending{false};

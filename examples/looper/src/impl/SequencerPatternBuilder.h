@@ -4,7 +4,7 @@
 #include <cstddef>
 
 #include "Generators/BeatSequencer.h"
-#include "Sampler/LoopRecorder.h"
+#include "Sampler/LoopPartBank.h"
 #include "Sampler/SequencePattern.h"
 #include "Sampler/SliceLibrary.h"
 
@@ -14,10 +14,10 @@ template <size_t BlockSize>
 class SequencerPatternBuilder
 {
   public:
-    SequencerPatternBuilder(const AbacDsp::BeatSequencer& seq, const AbacDsp::LoopRecorder<BlockSize>& recorder,
+    SequencerPatternBuilder(const AbacDsp::BeatSequencer& seq, const AbacDsp::LoopPartBank<BlockSize>& bank,
                             const AbacDsp::SliceLibrary& sliceLibrary, AbacDsp::SequencePattern& pattern)
         : m_seq(seq)
-        , m_recorder(recorder)
+        , m_bank(bank)
         , m_sliceLibrary(sliceLibrary)
         , m_pattern(pattern)
     {
@@ -31,7 +31,7 @@ class SequencerPatternBuilder
     {
         const size_t spb = m_seq.samplesPerBeat();
         const size_t beatsPerBar = m_seq.beatsPerBar();
-        const size_t loopLen = m_recorder.loopLengthFrames();
+        const size_t loopLen = m_bank.active().loopLengthFrames();
         const size_t framesPerBar = spb * beatsPerBar;
         const size_t bars = (framesPerBar == 0) ? 1 : std::max<size_t>(1, loopLen / framesPerBar);
         m_pattern = AbacDsp::SequencePattern(bars, beatsPerBar, std::max<size_t>(1, spb));
@@ -57,7 +57,7 @@ class SequencerPatternBuilder
 
   private:
     const AbacDsp::BeatSequencer& m_seq;
-    const AbacDsp::LoopRecorder<BlockSize>& m_recorder;
+    const AbacDsp::LoopPartBank<BlockSize>& m_bank;
     const AbacDsp::SliceLibrary& m_sliceLibrary;
     AbacDsp::SequencePattern& m_pattern;
 };

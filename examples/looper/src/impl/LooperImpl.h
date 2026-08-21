@@ -73,6 +73,7 @@ struct adl_serializer<AbacDsp::SequencePattern>
 #include "CaptureRing.h"
 #include "FreezeService.h"
 #include "LoopStorageService.h"
+#include "LooperPartController.h"
 #include "LooperTimingController.h"
 #include "LooperTransportController.h"
 #include "LooperViewModel.h"
@@ -98,25 +99,31 @@ class LooperImpl final : public EffectBase
     // Hop/fftLength ratio: high overlap for fine time resolution. Regen for the
     // longest loops still finishes in well under 20 ms, so there's ample headroom.
     static constexpr float kSpectrogramWindowForward = 1.f / 12.f;
+    // Startup capacity per part, before Part Count/Capacity controls exist to
+    // resize it via PartBankResizeService; matches today's single-loop default.
+    static constexpr float kInitialPartCapacitySeconds = 180.f;
+    // Longer than the record-boundary click fade (kFadeMs default 5ms): a part
+    // switch is a deliberate, audible transition, not just click suppression.
+    static constexpr float kPartSwitchFadeMs = 20.f;
 
     explicit LooperImpl(const float sampleRate)
         : EffectBase(sampleRate)
-        , m_recorder(sampleRate)
+        , m_bank(sampleRate, kInitialPartCapacitySeconds)
         , m_seq(sampleRate)
         , m_click(sampleRate)
         , m_sliceLibrary(static_cast<size_t>(sampleRate * kSliceLibrarySeconds))
         , m_sequencer(sampleRate)
         , m_pattern(1, m_seq.beatsPerBar(), m_seq.samplesPerBeat())
-        , m_patternBuilder(m_seq, m_recorder, m_sliceLibrary, m_pattern)
+        , m_patternBuilder(m_seq, m_bank, m_sliceLibrary, m_pattern)
         , m_timingController(m_seq, m_meterTimelines, m_finalizedBarCounts, m_activePartIndex, m_appliedBpm,
                              m_eighthNoteUnit, m_appliedTimeSignature, m_countingIn, m_countInBarsOffset,
                              m_countInEndTickAbs, m_suppressNextClick, sampleRate)
         , m_captureRing(sampleRate)
-        , m_freezeService(m_recorder)
-        , m_loopStorage(m_recorder, m_seq, m_sliceLibrary, m_pattern, m_meterTimelines, m_activePartIndex, m_appliedBpm,
+        , m_freezeService(m_bank)
+        , m_loopStorage(m_bank, m_seq, m_sliceLibrary, m_pattern, m_meterTimelines, m_activePartIndex, m_appliedBpm,
                         m_eighthNoteUnit, sampleRate)
         , m_transportController(typename LooperTransportController<BlockSize>::Deps{
-              .recorder = m_recorder,
+              .bank = m_bank,
               .seq = m_seq,
               .timing = m_timingController,
               .captureRing = m_captureRing,
@@ -158,7 +165,7 @@ class LooperImpl final : public EffectBase
               .requestSpectrogramRegen = [this] { requestSpectrogramRegen(); },
           })
         , m_viewModel(typename LooperViewModel<BlockSize>::Deps{
-              .recorder = m_recorder,
+              .bank = m_bank,
               .seq = m_seq,
               .meterTimelines = m_meterTimelines,
               .activePartIndex = m_activePartIndex,
@@ -179,6 +186,8 @@ class LooperImpl final : public EffectBase
               .sequencerPlaying = m_sequencerPlaying,
               .sampleRate = sampleRate,
           })
+        , m_partController(m_bank, m_timingController, m_activePartIndex,
+                           static_cast<size_t>(kPartSwitchFadeMs / 1000.f * sampleRate))
     {
         m_seq.setBpm(m_appliedBpm);
         m_click.setVolumeDb(m_clickVol.load(std::memory_order_relaxed));
@@ -192,7 +201,7 @@ class LooperImpl final : public EffectBase
         m_recordSpectrogram.setWindowForward(kSpectrogramWindowForward);
         // Cover the whole recordable span so a long loop's ring is fully painted,
         // not just its tail. hop = fftLength * windowForwardRatio.
-        const auto decimatedMaxFrames = static_cast<float>(m_recorder.maxFrames()) / kSpectrogramDecimation;
+        const auto decimatedMaxFrames = static_cast<float>(m_bank.active().maxFrames()) / kSpectrogramDecimation;
         m_recordSpectrogram.setSlices(static_cast<size_t>(decimatedMaxFrames / (1024.f * kSpectrogramWindowForward)) +
                                       64);
         m_sequencer.setLibrary(&m_sliceLibrary);
@@ -370,7 +379,7 @@ class LooperImpl final : public EffectBase
     // on a background worker: file I/O is not RT-safe.
     void requestSaveLoopAs(const std::string& name, const std::string& patchParamsJson = {})
     {
-        if (isRecording() || isOverdubbing() || m_recorder.loopLengthFrames() == 0)
+        if (isRecording() || isOverdubbing() || m_bank.active().loopLengthFrames() == 0)
         {
             return;
         }
@@ -420,7 +429,7 @@ class LooperImpl final : public EffectBase
     // Frozen tracks/sequencer pattern are not included (out of scope for now).
     [[nodiscard]] std::vector<std::byte> captureExtraState() const
     {
-        const size_t loopLen = m_recorder.loopLengthFrames();
+        const size_t loopLen = m_bank.active().loopLengthFrames();
         if (isRecording() || isOverdubbing() || loopLen == 0)
         {
             return {};
@@ -439,7 +448,7 @@ class LooperImpl final : public EffectBase
         header.segmentCount = static_cast<uint32_t>(segments.size());
         header.loopLengthFrames = static_cast<uint64_t>(loopLen);
 
-        const bool hasOverdub = m_recorder.hasOverdub();
+        const bool hasOverdub = m_bank.active().hasOverdub();
         std::vector<std::byte> blob(sizeof(ExtraStateHeader) + segments.size() * sizeof(SerializedMeterSegment) +
                                     loopLen * 2 * sizeof(float) + sizeof(uint32_t) +
                                     (hasOverdub ? loopLen * 2 * sizeof(float) : 0));
@@ -453,16 +462,16 @@ class LooperImpl final : public EffectBase
         }
         for (size_t f = 0; f < loopLen; ++f)
         {
-            appendPod(blob, offset, m_recorder.sample(f, 0));
-            appendPod(blob, offset, m_recorder.sample(f, 1));
+            appendPod(blob, offset, m_bank.active().sample(f, 0));
+            appendPod(blob, offset, m_bank.active().sample(f, 1));
         }
         appendPod(blob, offset, static_cast<uint32_t>(hasOverdub ? 1 : 0));
         if (hasOverdub)
         {
             for (size_t f = 0; f < loopLen; ++f)
             {
-                appendPod(blob, offset, m_recorder.overdubSample(f, 0));
-                appendPod(blob, offset, m_recorder.overdubSample(f, 1));
+                appendPod(blob, offset, m_bank.active().overdubSample(f, 0));
+                appendPod(blob, offset, m_bank.active().overdubSample(f, 1));
             }
         }
         return blob;
@@ -565,24 +574,24 @@ class LooperImpl final : public EffectBase
     }
     [[nodiscard]] bool isRecording() const noexcept
     {
-        return m_recorder.state() == AbacDsp::LooperState::Recording;
+        return m_bank.active().state() == AbacDsp::LooperState::Recording;
     }
     [[nodiscard]] bool isPlaying() const noexcept
     {
-        const auto s = m_recorder.state();
+        const auto s = m_bank.active().state();
         return s == AbacDsp::LooperState::Playing || s == AbacDsp::LooperState::Overdubbing;
     }
     [[nodiscard]] bool isOverdubbing() const noexcept
     {
-        return m_recorder.state() == AbacDsp::LooperState::Overdubbing;
+        return m_bank.active().state() == AbacDsp::LooperState::Overdubbing;
     }
     [[nodiscard]] bool hasOverdub() const noexcept
     {
-        return m_recorder.hasOverdub();
+        return m_bank.active().hasOverdub();
     }
     [[nodiscard]] bool hasLoop() const noexcept
     {
-        return m_recorder.hasLoop();
+        return m_bank.active().hasLoop();
     }
     [[nodiscard]] bool hasSequence() const noexcept
     {
@@ -742,7 +751,7 @@ class LooperImpl final : public EffectBase
     }
     [[nodiscard]] float rawOverdubSample(const size_t frame, const size_t channel) const noexcept
     {
-        return m_recorder.overdubSample(frame, channel);
+        return m_bank.active().overdubSample(frame, channel);
     }
 
     [[nodiscard]] std::vector<float> getLoopWaveform() const
@@ -803,7 +812,7 @@ class LooperImpl final : public EffectBase
         const float fadeMs = m_fadeMs.load(std::memory_order_relaxed);
         if (std::not_equal_to<float>{}(fadeMs, m_appliedFadeMs))
         {
-            m_recorder.setFadeFrames(static_cast<size_t>(fadeMs / 1000.f * sampleRate()));
+            m_bank.active().setFadeFrames(static_cast<size_t>(fadeMs / 1000.f * sampleRate()));
             m_appliedFadeMs = fadeMs;
         }
     }
@@ -854,7 +863,7 @@ class LooperImpl final : public EffectBase
     void checkSpectrogramRegenOnRecordingStop()
     {
         const bool recording = isRecording();
-        if (m_spectrogramWasRecording && !recording && m_recorder.loopLengthFrames() > 0)
+        if (m_spectrogramWasRecording && !recording && m_bank.active().loopLengthFrames() > 0)
         {
             requestSpectrogramRegen();
         }
@@ -873,7 +882,7 @@ class LooperImpl final : public EffectBase
     // while isRecording(), so a fresh take's window is already warm at frame 0.
     void feedRecordSpectrogram(const AbacDsp::AudioBuffer<2, BlockSize>& in)
     {
-        if (!isRecording() && m_recorder.loopLengthFrames() > 0)
+        if (!isRecording() && m_bank.active().loopLengthFrames() > 0)
         {
             return;
         }
@@ -911,7 +920,7 @@ class LooperImpl final : public EffectBase
             recIn(i, 1) = in(i, 1) + printedClick;
         }
         AbacDsp::AudioBuffer<2, BlockSize> recorderOut{};
-        m_recorder.processBlock(recIn, recorderOut);
+        m_partController.processBlock(recIn, recorderOut);
         return recorderOut;
     }
 
@@ -1045,7 +1054,8 @@ class LooperImpl final : public EffectBase
         {
             return;
         }
-        const size_t track = m_sliceLibrary.extractTrack(m_recorder.loopView(), result->slices, result->thumbnails);
+        const size_t track =
+            m_sliceLibrary.extractTrack(m_bank.active().loopView(), result->slices, result->thumbnails);
         m_patternBuilder.rebuildForCurrentLoop();
         m_patternBuilder.populateFromTrack(track);
         // Re-prime the engine's own bar index for the new pattern, and
@@ -1109,10 +1119,10 @@ class LooperImpl final : public EffectBase
         {
             return;
         }
-        m_recorder.loadLoop(result->left, result->right);
+        m_bank.active().loadLoop(result->left, result->right);
         if (result->hasOverdub)
         {
-            m_recorder.loadOverdub(result->overdubLeft, result->overdubRight);
+            m_bank.active().loadOverdub(result->overdubLeft, result->overdubRight);
         }
         requestSpectrogramRegen();
         m_seq.setBpm(result->resolvedBpm);
@@ -1121,7 +1131,7 @@ class LooperImpl final : public EffectBase
         if (!result->meterTimeline.empty())
         {
             activeMeterTimeline() = std::move(result->meterTimeline);
-            m_timingController.finalizeMeterTimeline(m_recorder.loopLengthFrames());
+            m_timingController.finalizeMeterTimeline(m_bank.active().loopLengthFrames());
         }
         if (result->hasSequencerData)
         {
@@ -1148,15 +1158,15 @@ class LooperImpl final : public EffectBase
             std::cout << "LooperImpl: spectrogram regen " << outcome << " in " << ms << " ms" << std::endl;
         };
 
-        const size_t frames = m_recorder.loopLengthFrames();
+        const size_t frames = m_bank.active().loopLengthFrames();
         if (frames == 0)
         {
             m_spectrogramRegenDoneGen.store(gen, std::memory_order_release);
             logElapsed("skipped (empty loop)");
             return;
         }
-        const auto loop = m_recorder.loopView();
-        constexpr size_t kChannels = decltype(m_recorder)::kChannels;
+        const auto loop = m_bank.active().loopView();
+        constexpr size_t kChannels = AbacDsp::LoopRecorder<BlockSize>::kChannels;
 
         while (true)
         {
@@ -1298,6 +1308,9 @@ class LooperImpl final : public EffectBase
                 // May change beatsPerBar/bpm for the bar about to start: read
                 // samplesPerBeat fresh below rather than caching it per block.
                 applyMeterAtBarBoundary();
+                // After, not before: a pending part switch must not preempt the
+                // just-ending bar's own meter-timeline handling above.
+                m_partController.onBarBoundary();
             }
             const size_t samplesPerBeat = m_seq.samplesPerBeat();
             m_barPos[i] = event.beatIndexInBar * samplesPerBeat + event.beatSamplePos;
@@ -1338,7 +1351,7 @@ class LooperImpl final : public EffectBase
         }
     }
 
-    AbacDsp::LoopRecorder<BlockSize> m_recorder;
+    AbacDsp::LoopPartBank<BlockSize> m_bank;
     AbacDsp::BeatSequencer m_seq;
     AbacDsp::ClickGenerator m_click;
     AbacDsp::SimpleSpectrogram m_recordSpectrogram;
@@ -1458,4 +1471,5 @@ class LooperImpl final : public EffectBase
 
     LooperTransportController<BlockSize> m_transportController;
     LooperViewModel<BlockSize> m_viewModel;
+    LooperPartController<BlockSize> m_partController;
 };

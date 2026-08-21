@@ -23,7 +23,6 @@
 #include "Generators/MeterTimeline.h"
 #include "Sampler/LoopFile.h"
 #include "Sampler/LoopPartBank.h"
-#include "Sampler/LoopRecorder.h"
 #include "Sampler/MidiFile.h"
 #include "Sampler/SequencePattern.h"
 #include "Sampler/SliceLibrary.h"
@@ -76,12 +75,12 @@ class LoopStorageService
         std::vector<float> overdubRight;
     };
 
-    LoopStorageService(const AbacDsp::LoopRecorder<BlockSize>& recorder, const AbacDsp::BeatSequencer& seq,
+    LoopStorageService(const AbacDsp::LoopPartBank<BlockSize>& bank, const AbacDsp::BeatSequencer& seq,
                        const AbacDsp::SliceLibrary& sliceLibrary, const AbacDsp::SequencePattern& pattern,
                        const std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts>& meterTimelines,
                        const size_t& activePartIndex, const float& appliedBpm, const bool& eighthNoteUnit,
                        const float sampleRate)
-        : m_recorder(recorder)
+        : m_bank(bank)
         , m_seq(seq)
         , m_sliceLibrary(sliceLibrary)
         , m_pattern(pattern)
@@ -486,15 +485,15 @@ class LoopStorageService
     // if any tracks are frozen, also <name>_track<N>.wav per track.
     void runSaveLoopAs(const uint64_t gen)
     {
-        const size_t loopLen = m_recorder.loopLengthFrames();
+        const size_t loopLen = m_bank.active().loopLengthFrames();
         if (loopLen > 0)
         {
             std::vector<float> left(loopLen);
             std::vector<float> right(loopLen);
             for (size_t f = 0; f < loopLen; ++f)
             {
-                left[f] = m_recorder.sample(f, 0);
-                right[f] = m_recorder.sample(f, 1);
+                left[f] = m_bank.active().sample(f, 0);
+                right[f] = m_bank.active().sample(f, 1);
             }
             // Descriptive metadata only (the pattern's own serialized beatsPerBar is
             // authoritative on load); approximate using the loop's current meter,
@@ -563,14 +562,14 @@ class LoopStorageService
                 }
                 j["tracks"] = tracksJson;
             }
-            if (m_recorder.hasOverdub())
+            if (m_bank.active().hasOverdub())
             {
                 std::vector<float> overdubLeft(loopLen);
                 std::vector<float> overdubRight(loopLen);
                 for (size_t f = 0; f < loopLen; ++f)
                 {
-                    overdubLeft[f] = m_recorder.overdubSample(f, 0);
-                    overdubRight[f] = m_recorder.overdubSample(f, 1);
+                    overdubLeft[f] = m_bank.active().overdubSample(f, 0);
+                    overdubRight[f] = m_bank.active().overdubSample(f, 1);
                 }
                 const auto overdubPath = loopOverdubWavPath(m_loopSaveName).string();
                 AudioUtility::SaveWav::saveStereoAs(overdubPath, overdubLeft, overdubRight, m_sampleRate);
@@ -747,7 +746,7 @@ class LoopStorageService
         }
     }
 
-    const AbacDsp::LoopRecorder<BlockSize>& m_recorder;
+    const AbacDsp::LoopPartBank<BlockSize>& m_bank;
     const AbacDsp::BeatSequencer& m_seq;
     const AbacDsp::SliceLibrary& m_sliceLibrary;
     const AbacDsp::SequencePattern& m_pattern;

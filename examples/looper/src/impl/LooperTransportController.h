@@ -11,6 +11,7 @@
 #include "Generators/BeatSequencer.h"
 #include "LoopStorageService.h"
 #include "LooperTimingController.h"
+#include "Sampler/LoopPartBank.h"
 #include "Sampler/LoopRecorder.h"
 #include "Sampler/SequencePattern.h"
 #include "Sampler/SequencerEngine.h"
@@ -31,7 +32,7 @@ class LooperTransportController
   public:
     struct Deps
     {
-        AbacDsp::LoopRecorder<BlockSize>& recorder;
+        AbacDsp::LoopPartBank<BlockSize>& bank;
         AbacDsp::BeatSequencer& seq;
         LooperTimingController& timing;
         CaptureRing<BlockSize>& captureRing;
@@ -82,6 +83,15 @@ class LooperTransportController
     {
     }
 
+    [[nodiscard]] AbacDsp::LoopRecorder<BlockSize>& activeRecorder() noexcept
+    {
+        return m_deps.bank.active();
+    }
+    [[nodiscard]] const AbacDsp::LoopRecorder<BlockSize>& activeRecorder() const noexcept
+    {
+        return m_deps.bank.active();
+    }
+
     void handleTransportPulses()
     {
         const bool clearReq = m_deps.clearPulse.exchange(false, std::memory_order_relaxed);
@@ -110,7 +120,7 @@ class LooperTransportController
         }
         if (mixDownReq)
         {
-            m_deps.recorder.mixDownOverdub();
+            activeRecorder().mixDownOverdub();
             m_deps.requestSpectrogramRegen();
         }
 
@@ -149,7 +159,7 @@ class LooperTransportController
     // count-in elapsing), not just via toggleRecord().
     void startRecording()
     {
-        m_deps.recorder.snapshotForUndo();
+        activeRecorder().snapshotForUndo();
         m_deps.timing.snapshotMeterForUndo();
         m_deps.barLockedTake = !m_deps.freeRecord;
         if (m_deps.barLockedTake)
@@ -161,7 +171,7 @@ class LooperTransportController
             // Free Record is unquantized: no bar grid to hang a meter timeline on.
             m_deps.timing.activeMeterTimeline().clear();
             m_deps.timing.activeFinalizedBarCount() = 0;
-            m_deps.recorder.beginRecord();
+            activeRecorder().beginRecord();
         }
     }
 
@@ -194,7 +204,7 @@ class LooperTransportController
         const std::span<const float> preRoll = m_deps.captureRing.preRoll();
         // Block-boundary slop past the tick; playback resumes from here, not frame 0.
         const auto catchUpFrames = static_cast<size_t>(m_deps.absPos + BlockSize - m_deps.pendingStopTickAbs);
-        m_deps.recorder.stopRecordBarLocked(m_deps.pendingStopLoopLength, preRoll, m_deps.startOffset, catchUpFrames);
+        activeRecorder().stopRecordBarLocked(m_deps.pendingStopLoopLength, preRoll, m_deps.startOffset, catchUpFrames);
         m_deps.barLockedTake = false;
         m_deps.timing.finalizeMeterTimeline(m_deps.pendingStopLoopLength);
         // stopRecordBarLocked() auto-transitions straight into playback (no
@@ -205,18 +215,18 @@ class LooperTransportController
   private:
     [[nodiscard]] bool isRecording() const noexcept
     {
-        return m_deps.recorder.state() == AbacDsp::LooperState::Recording;
+        return activeRecorder().state() == AbacDsp::LooperState::Recording;
     }
 
     [[nodiscard]] bool isPlaying() const noexcept
     {
-        const auto s = m_deps.recorder.state();
+        const auto s = activeRecorder().state();
         return s == AbacDsp::LooperState::Playing || s == AbacDsp::LooperState::Overdubbing;
     }
 
     [[nodiscard]] bool isOverdubbing() const noexcept
     {
-        return m_deps.recorder.state() == AbacDsp::LooperState::Overdubbing;
+        return activeRecorder().state() == AbacDsp::LooperState::Overdubbing;
     }
 
     // Clears only the looper's own recording; the frozen slice library, the
@@ -229,7 +239,7 @@ class LooperTransportController
         m_deps.autoStopArmed = false;
         m_deps.pendingStop = false;
         m_deps.barLockedTake = false;
-        m_deps.recorder.clear();
+        activeRecorder().clear();
     }
 
     // Clears only the sequencer's own audio: every frozen track/slice in the
@@ -250,14 +260,14 @@ class LooperTransportController
     {
         if (isOverdubbing())
         {
-            m_deps.recorder.undoOverdub();
+            activeRecorder().undoOverdub();
             return;
         }
-        if (!m_deps.recorder.hasUndoSnapshot())
+        if (!activeRecorder().hasUndoSnapshot())
         {
             return;
         }
-        m_deps.recorder.undoRecord();
+        activeRecorder().undoRecord();
         m_deps.timing.restoreMeterFromUndo();
         m_deps.armed = false;
         m_deps.countingIn = false;
@@ -270,14 +280,14 @@ class LooperTransportController
     void finishRecording()
     {
         const bool wasBarLocked = m_deps.barLockedTake;
-        m_deps.recorder.stopRecordFree();
+        activeRecorder().stopRecordFree();
         m_deps.barLockedTake = false;
         if (wasBarLocked)
         {
             // A bar-locked take can also end up here (degenerate near-instant
             // stop in requestStop(), or punching straight into overdub): finalize
             // whatever meter timeline it accumulated instead of just discarding it.
-            m_deps.timing.finalizeMeterTimeline(m_deps.recorder.loopLengthFrames());
+            m_deps.timing.finalizeMeterTimeline(activeRecorder().loopLengthFrames());
         }
         else
         {
@@ -325,13 +335,13 @@ class LooperTransportController
         }
         else if (isPlaying())
         {
-            m_deps.recorder.stop();
+            activeRecorder().stop();
         }
-        else if (m_deps.recorder.hasLoop())
+        else if (activeRecorder().hasLoop())
         {
             // stop() rewound the loop to frame 0; resync the timekeeper to match.
             m_deps.timing.resyncTimekeeperToLoopStart();
-            m_deps.recorder.play();
+            activeRecorder().play();
         }
     }
 
@@ -344,15 +354,15 @@ class LooperTransportController
             // Not beat-locked (no time to wait for a post-roll anyway -- the
             // performer is already continuing straight into the overdub).
             finishRecording();
-            m_deps.recorder.beginOverdub();
+            activeRecorder().beginOverdub();
         }
         else if (isOverdubbing())
         {
-            m_deps.recorder.endOverdub();
+            activeRecorder().endOverdub();
         }
         else if (isPlaying())
         {
-            m_deps.recorder.beginOverdub();
+            activeRecorder().beginOverdub();
         }
     }
 
@@ -369,7 +379,7 @@ class LooperTransportController
     // just snapshots and bumps the request generation, the worker does the rest.
     void requestFreeze()
     {
-        if (isRecording() || isOverdubbing() || m_deps.recorder.loopLengthFrames() == 0)
+        if (isRecording() || isOverdubbing() || activeRecorder().loopLengthFrames() == 0)
         {
             return;
         }
@@ -395,7 +405,7 @@ class LooperTransportController
         m_deps.startOffset = off;
         m_deps.tickAbs = m_deps.absPos + static_cast<uint64_t>(off);
         m_deps.captureRing.snapshotPreRoll(m_deps.tickAbs, m_deps.absPos);
-        m_deps.recorder.beginRecord();
+        activeRecorder().beginRecord();
 
         // A live bar-wrap count (takeBarIndex), not a precomputed sample tick:
         // a precomputed tick would assume a constant bar length for the whole
