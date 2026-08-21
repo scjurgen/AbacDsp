@@ -65,6 +65,7 @@ class LoopStorageService
     {
         std::vector<float> left;
         std::vector<float> right;
+        float bpm{120.f}; // this part's own tempo, not the session-wide resolvedBpm below
         AbacDsp::MeterTimeline meterTimeline;
         bool hasOverdub{false};
         std::vector<float> overdubLeft;
@@ -91,7 +92,8 @@ class LoopStorageService
     LoopStorageService(const AbacDsp::LoopPartBank<BlockSize>& bank, const AbacDsp::BeatSequencer& seq,
                        const AbacDsp::SliceLibrary& sliceLibrary, const AbacDsp::SequencePattern& pattern,
                        const std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts>& meterTimelines,
-                       const float& appliedBpm, const bool& eighthNoteUnit, const float sampleRate)
+                       const std::array<float, AbacDsp::kMaxLoopParts>& appliedBpm, const bool& eighthNoteUnit,
+                       const float sampleRate)
         : m_bank(bank)
         , m_seq(seq)
         , m_sliceLibrary(sliceLibrary)
@@ -530,10 +532,11 @@ class LoopStorageService
         // Descriptive metadata only (the pattern's own serialized beatsPerBar is
         // authoritative on load); approximate using the loop's current meter,
         // which may not be exact for a take whose meter changed mid-recording.
-        const float samplesPerBeat = m_sampleRate * 60.f / m_appliedBpm;
+        const float partBpm = m_appliedBpm[index];
+        const float samplesPerBeat = m_sampleRate * 60.f / partBpm;
         const float beats = (samplesPerBeat > 0.f) ? static_cast<float>(loopLen) / samplesPerBeat : 0.f;
         const float bars = beats / static_cast<float>(m_seq.beatsPerBar());
-        const AbacDsp::LoopMetadata meta{1, m_appliedBpm, bars, beats};
+        const AbacDsp::LoopMetadata meta{1, partBpm, bars, beats};
         AbacDsp::LoopFile<nlohmann::json>::saveStereoWav(partWavPath(m_loopSaveName, index, true).string(), left, right,
                                                          m_sampleRate, meta);
 
@@ -541,7 +544,7 @@ class LoopStorageService
         // timeline; written unconditionally (a constant-meter take just gets
         // a single time-signature event) so loading only ever needs one path.
         AbacDsp::MidiFile midi;
-        midi.setTempoBpm(m_appliedBpm);
+        midi.setTempoBpm(partBpm);
         const auto& timeline = m_meterTimelines[index];
         const std::vector<AbacDsp::MeterSegment> segmentsToWrite =
             timeline.empty() ? std::vector<AbacDsp::MeterSegment>{{0, m_seq.beatsPerBar(), m_eighthNoteUnit}}
@@ -740,6 +743,7 @@ class LoopStorageService
         }
         m_loopLoadParts[index].left = loaded.left;
         m_loopLoadParts[index].right = loaded.right;
+        m_loopLoadParts[index].bpm = loaded.embeddedMetadata ? loaded.embeddedMetadata->bpm : 120.f;
         std::ifstream jsonIn(partJsonPath(m_loopLoadName, index));
         if (jsonIn)
         {
@@ -747,6 +751,7 @@ class LoopStorageService
             {
                 nlohmann::json j;
                 jsonIn >> j;
+                m_loopLoadParts[index].bpm = j.get<AbacDsp::LoopMetadata>().bpm;
                 if (j.contains("overdub"))
                 {
                     loadPartOverdub(j, loopDir, m_loopLoadParts[index]);
@@ -876,7 +881,7 @@ class LoopStorageService
     const AbacDsp::SliceLibrary& m_sliceLibrary;
     const AbacDsp::SequencePattern& m_pattern;
     const std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts>& m_meterTimelines;
-    const float& m_appliedBpm;
+    const std::array<float, AbacDsp::kMaxLoopParts>& m_appliedBpm;
     const bool& m_eighthNoteUnit;
     float m_sampleRate;
 

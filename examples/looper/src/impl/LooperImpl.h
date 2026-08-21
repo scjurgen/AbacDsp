@@ -197,7 +197,7 @@ class LooperImpl final : public EffectBase
         , m_partController(m_bank, m_timingController, m_transportController, m_activePartIndex,
                            static_cast<size_t>(kPartSwitchFadeMs / 1000.f * sampleRate))
     {
-        m_seq.setBpm(m_appliedBpm);
+        m_seq.setBpm(m_appliedBpm[m_activePartIndex]);
         m_click.setVolumeDb(m_clickVol.load(std::memory_order_relaxed));
         // One bar (4 beats) at the lowest tempo (50 BPM) is ~4.8 s; size generously.
         m_visualWave.assign(static_cast<size_t>(sampleRate * 5.f) + 16, 0.f);
@@ -474,7 +474,7 @@ class LooperImpl final : public EffectBase
         header.magic = kExtraStateMagic;
         header.version = kExtraStateVersion;
         header.sampleRate = sampleRate();
-        header.bpm = m_appliedBpm;
+        header.bpm = m_appliedBpm[m_activePartIndex];
         header.segmentCount = static_cast<uint32_t>(segments.size());
         header.loopLengthFrames = static_cast<uint64_t>(loopLen);
 
@@ -651,6 +651,11 @@ class LooperImpl final : public EffectBase
     [[nodiscard]] std::string partStatusLabel(const int index) const
     {
         return m_viewModel.partStatusLabel(static_cast<size_t>(index));
+    }
+    // The tempo actually in effect right now: the active part's own bpm.
+    [[nodiscard]] float currentAppliedBpm() const noexcept
+    {
+        return m_appliedBpm[m_activePartIndex];
     }
     [[nodiscard]] bool isArmed() const noexcept
     {
@@ -842,7 +847,7 @@ class LooperImpl final : public EffectBase
         if (!m_hostSync)
         {
             const float bpm = m_bpm.load(std::memory_order_relaxed);
-            if (std::not_equal_to<float>{}(bpm, m_appliedBpm))
+            if (std::not_equal_to<float>{}(bpm, m_appliedBpm[m_activePartIndex]))
             {
                 m_timingController.applyTimeSignatureAwareBpm(bpm);
             }
@@ -1065,6 +1070,14 @@ class LooperImpl final : public EffectBase
         m_loopStorage.checkSaveCompletion();
         checkLoopLoadCompletion();
         m_resizeService.checkResizeCompletion();
+        // A part switch (possibly just committed above, in processRecorder())
+        // must not let the dial's stale last-requested bpm clobber the newly
+        // active part's own tempo on the next block; see applyParameters().
+        if (m_activePartIndex != m_bpmSyncedPartIndex)
+        {
+            m_bpm.store(m_appliedBpm[m_activePartIndex], std::memory_order_relaxed);
+            m_bpmSyncedPartIndex = m_activePartIndex;
+        }
     }
 
     // Dry input, loop, and sequencer all sum here. Toggling Seq Play mutes the
@@ -1148,7 +1161,7 @@ class LooperImpl final : public EffectBase
                 {
                     m_seq.setBeatsPerBar(seg.beatsPerBar);
                     m_eighthNoteUnit = seg.eighthUnit;
-                    m_timingController.applyTimeSignatureAwareBpm(m_appliedBpm);
+                    m_timingController.applyTimeSignatureAwareBpm(m_appliedBpm[m_activePartIndex]);
                 }
             }
         }
@@ -1257,13 +1270,14 @@ class LooperImpl final : public EffectBase
             m_bank.part(i).clear();
             m_meterTimelines[i].clear();
             m_finalizedBarCounts[i] = 0;
+            m_appliedBpm[i] = 120.f;
         }
         m_bank.setActiveIndex(0);
         m_activePartIndex = 0;
         m_selectedPartIndex = 0;
         requestSpectrogramRegen();
         m_seq.setBpm(result->resolvedBpm);
-        m_appliedBpm = result->resolvedBpm;
+        m_appliedBpm[0] = result->resolvedBpm;
         m_bpm.store(result->resolvedBpm, std::memory_order_relaxed);
         if (result->hasSequencerData)
         {
@@ -1277,13 +1291,17 @@ class LooperImpl final : public EffectBase
         }
         for (size_t i = 0; i < AbacDsp::kMaxLoopParts; ++i)
         {
-            installLoadedPart(i, result->parts[i]);
+            // Part A's own tempo went through the iXML-vs-json conflict
+            // check above (result->resolvedBpm); other parts have no such
+            // conflict concept, so their own json's bpm is used directly.
+            installLoadedPart(i, result->parts[i], i == 0 ? result->resolvedBpm : result->parts[i].bpm);
         }
     }
 
     // Audio thread; installs one part's decoded audio/overdub/meter, if the
     // load actually carried content for it (parts[i].hasContent()).
-    void installLoadedPart(const size_t index, const LoopStorageService<BlockSize>::LoopLoadPartData& partData)
+    void installLoadedPart(const size_t index, const LoopStorageService<BlockSize>::LoopLoadPartData& partData,
+                           const float bpm)
     {
         if (!partData.hasContent())
         {
@@ -1294,9 +1312,10 @@ class LooperImpl final : public EffectBase
         {
             m_bank.part(index).loadOverdub(partData.overdubLeft, partData.overdubRight);
         }
+        m_appliedBpm[index] = bpm;
         if (!partData.meterTimeline.empty())
         {
-            const float samplesPerQuarterBeat = sampleRate() * 60.f / m_appliedBpm;
+            const float samplesPerQuarterBeat = sampleRate() * 60.f / bpm;
             m_meterTimelines[index] = partData.meterTimeline;
             m_finalizedBarCounts[index] =
                 m_meterTimelines[index].barCountForFrames(m_bank.part(index).loopLengthFrames(), samplesPerQuarterBeat);
@@ -1594,7 +1613,9 @@ class LooperImpl final : public EffectBase
     std::atomic<bool> m_mixDownPulse{false};
     std::atomic<bool> m_clearPulse{false};
 
-    float m_appliedBpm{120.f};
+    // Each part remembers its own tempo; see LooperTimingController::activeAppliedBpm().
+    std::array<float, AbacDsp::kMaxLoopParts> m_appliedBpm{120.f, 120.f, 120.f, 120.f};
+    size_t m_bpmSyncedPartIndex{0}; // last part m_bpm was resynced against, see applyParameters()
     int m_appliedDivision{1};
     float m_appliedFadeMs{-1.f};
     // Match what the ctor actually builds (kInitialPartCapacitySeconds is

@@ -34,7 +34,7 @@ class LooperViewModel
         const AbacDsp::BeatSequencer& seq;
         const std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts>& meterTimelines;
         const size_t& activePartIndex;
-        const float& appliedBpm;
+        const std::array<float, AbacDsp::kMaxLoopParts>& appliedBpm;
         const AbacDsp::SliceLibrary& sliceLibrary;
         const AbacDsp::SequencePattern& pattern;
         const AbacDsp::SequencerEngine<>& sequencer;
@@ -186,8 +186,8 @@ class LooperViewModel
             std::ranges::fill(lengths, static_cast<float>(getSamplesPerBar()));
             return lengths;
         }
-        const float samplesPerQuarterBeat =
-            (m_deps.appliedBpm > 0.f) ? m_deps.sampleRate * 60.f / m_deps.appliedBpm : 0.f;
+        const float activeBpm = m_deps.appliedBpm[m_deps.activePartIndex];
+        const float samplesPerQuarterBeat = (activeBpm > 0.f) ? m_deps.sampleRate * 60.f / activeBpm : 0.f;
         for (size_t bar = 0; bar < n; ++bar)
         {
             const auto& seg = activeMeterTimeline().segmentForBar(bar);

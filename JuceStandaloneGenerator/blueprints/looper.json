@@ -95,11 +95,11 @@
     "WINDOW_WIDTH": "1400",
     "WINDOW_HEIGHT": "800",
     "type": "||||",
-    "composition": "C=(1:1:1:1) A1=(SYNC, TSIG, CIN, BPM, DIV, RBAR, ASTP, PCNT, PCAP, PART) A2=(REC, TREC, FREE, THR, CVOL, CTRK) A3=(PLAY, CLR, LVOL, FRZ) A4=(DIV-O, ODUB, UNDO, MIXD, DIV-S, SEQP, CLRS)"
+    "composition": "C=(1:1:1:1) A1=(SYNC, TSIG, CIN, BPM, DIV, RBAR, PCNT, PCAP, PART) A2=(REC, ASTP, TREC, FREE, THR, CVOL, CTRK) A3=(PLAY, CLR, LVOL, FRZ) A4=(DIV-O, ODUB, UNDO, MIXD, DIV-S, SEQP, CLRS)"
   },
   "performance-page": {
     "type": "||",
-    "composition": "C=(3:1) A1=(BEAT) A2=(REC, PLAY, CLR, CVOL, LVOL, ODUB, UNDO, MIXD)"
+    "composition": "C=(3:1) A1=(BEAT) A2=(BPM, PCNT, PART, REC, ASTP, PLAY, CLR, CVOL, LVOL, ODUB, UNDO, MIXD)"
   },
   "extra_ui_includes": [
     "inc/SliceWaveDisplay.h",
@@ -112,6 +112,7 @@
     "if (const auto err = processorRef.consumeLastPartResizeError(); err.isNotEmpty()) { m_statusBar.showMessage(err); }",
     "for (int i = 0; i < 4; ++i) { selectedPartDrop.changeItemText(i + 1, processorRef.partStatusLabel(i)); selectedPartDrop.setItemEnabled(i + 1, i < processorRef.currentPartCount()); }",
     "if (auto* p = valueTreeState.getParameter(\"selectedPart\")) { const int wanted = processorRef.currentSelectedPartIndex(); if (juce::roundToInt(p->convertFrom0to1(p->getValue())) != wanted) { const auto& range = valueTreeState.getParameterRange(\"selectedPart\"); p->setValueNotifyingHost(range.convertTo0to1(static_cast<float>(wanted))); } }",
+    "if (auto* p = valueTreeState.getParameter(\"bpm\")) { const float wanted = processorRef.currentAppliedBpm(); const float diff = p->convertFrom0to1(p->getValue()) - wanted; if (diff > 0.05f || diff < -0.05f) { const auto& range = valueTreeState.getParameterRange(\"bpm\"); p->setValueNotifyingHost(range.convertTo0to1(wanted)); } }",
     "handleLoopLoadOutcome();",
     "beatGauge.setRemainingRecordLabel(processorRef.getRemainingRecordLabel());"
   ],
@@ -147,7 +148,8 @@
     {"name": "isLoopLoadPending", "type": "bool"},
     {"name": "canEditPartSettings", "type": "bool"},
     {"name": "currentPartCount", "type": "int"},
-    {"name": "currentSelectedPartIndex", "type": "int"}
+    {"name": "currentSelectedPartIndex", "type": "int"},
+    {"name": "currentAppliedBpm", "type": "float"}
   ],
   "extra_processor_methods": [
     "[[nodiscard]] bool isHostPresent() const noexcept { return wrapperType != juce::AudioProcessor::wrapperType_Standalone; }",

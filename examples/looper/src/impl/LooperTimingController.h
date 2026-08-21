@@ -51,8 +51,8 @@ class LooperTimingController
     LooperTimingController(AbacDsp::BeatSequencer& seq,
                            std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts>& meterTimelines,
                            std::array<size_t, AbacDsp::kMaxLoopParts>& finalizedBarCounts,
-                           const size_t& activePartIndex, float& appliedBpm, bool& eighthNoteUnit,
-                           int& appliedTimeSignature, bool& countingIn, int& countInBarsOffset,
+                           const size_t& activePartIndex, std::array<float, AbacDsp::kMaxLoopParts>& appliedBpm,
+                           bool& eighthNoteUnit, int& appliedTimeSignature, bool& countingIn, int& countInBarsOffset,
                            uint64_t& countInEndTickAbs, bool& suppressNextClick, const float sampleRate)
         : m_seq(seq)
         , m_meterTimelines(meterTimelines)
@@ -81,6 +81,11 @@ class LooperTimingController
         return m_finalizedBarCounts[m_activePartIndex];
     }
 
+    [[nodiscard]] float& activeAppliedBpm() noexcept
+    {
+        return m_appliedBpm[m_activePartIndex];
+    }
+
     void syncToHostTransport(const EffectBase::HostTransport& transport)
     {
         if (!transport.isPlaying || transport.updateCount == m_lastSyncedUpdateCount)
@@ -98,7 +103,7 @@ class LooperTimingController
     // clock so an eighth note stays half a quarter note's duration.
     void applyTimeSignatureAwareBpm(const float bpm) noexcept
     {
-        m_appliedBpm = bpm;
+        activeAppliedBpm() = bpm;
         m_seq.setBpm(m_eighthNoteUnit ? bpm * 2.f : bpm);
     }
 
@@ -108,7 +113,7 @@ class LooperTimingController
         const auto& sig = kTimeSignatures[static_cast<size_t>(index)];
         m_seq.setBeatsPerBar(sig.beatsPerBar);
         m_eighthNoteUnit = sig.eighthUnit;
-        applyTimeSignatureAwareBpm(m_appliedBpm);
+        applyTimeSignatureAwareBpm(activeAppliedBpm());
     }
 
     // Derives the take's final bar count from its known frame length by walking
@@ -116,7 +121,7 @@ class LooperTimingController
     // slop), then builds the frame map used to size the loop's outer ring.
     void finalizeMeterTimeline(const size_t loopLengthFrames)
     {
-        const float samplesPerQuarterBeat = m_sampleRate * 60.f / m_appliedBpm;
+        const float samplesPerQuarterBeat = m_sampleRate * 60.f / activeAppliedBpm();
         auto& barCount = activeFinalizedBarCount();
         barCount = activeMeterTimeline().barCountForFrames(loopLengthFrames, samplesPerQuarterBeat);
         activeMeterTimeline().buildFrameMap(barCount, samplesPerQuarterBeat);
@@ -189,8 +194,8 @@ class LooperTimingController
             const auto& seg0 = activeMeterTimeline().segmentForBar(0);
             m_seq.setBeatsPerBar(seg0.beatsPerBar);
             m_eighthNoteUnit = seg0.eighthUnit;
-            applyTimeSignatureAwareBpm(m_appliedBpm);
         }
+        applyTimeSignatureAwareBpm(activeAppliedBpm());
     }
 
   private:
@@ -198,7 +203,7 @@ class LooperTimingController
     std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts>& m_meterTimelines;
     std::array<size_t, AbacDsp::kMaxLoopParts>& m_finalizedBarCounts;
     const size_t& m_activePartIndex;
-    float& m_appliedBpm;
+    std::array<float, AbacDsp::kMaxLoopParts>& m_appliedBpm;
     bool& m_eighthNoteUnit;
     int& m_appliedTimeSignature;
     bool& m_countingIn;

@@ -101,7 +101,19 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
                 box.flexDirection = juce::FlexBox::Direction::column;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(partCountDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(selectedPartDrop)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(recordSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(autoStopSwitch)
                                   .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
@@ -175,11 +187,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(recordBarsDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(autoStopSwitch)
-                                  .withFlex(0)
-                                  .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
-                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(partCountDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(partCapacityBarsDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(selectedPartDrop)
@@ -195,6 +202,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.flexDirection = juce::FlexBox::Direction::column;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
                 box.items.add(juce::FlexItem(recordSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(autoStopSwitch)
                                   .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
@@ -369,6 +381,16 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 {
                     const auto& range = valueTreeState.getParameterRange("selectedPart");
                     p->setValueNotifyingHost(range.convertTo0to1(static_cast<float>(wanted)));
+                }
+            }
+            if (auto* p = valueTreeState.getParameter("bpm"))
+            {
+                const float wanted = processorRef.currentAppliedBpm();
+                const float diff = p->convertFrom0to1(p->getValue()) - wanted;
+                if (diff > 0.05f || diff < -0.05f)
+                {
+                    const auto& range = valueTreeState.getParameterRange("bpm");
+                    p->setValueNotifyingHost(range.convertTo0to1(wanted));
                 }
             }
             handleLoopLoadOutcome();
@@ -570,13 +592,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             freeRecordSwitch.setVisible(false);
             countInBarsDrop.setVisible(false);
             timeSignatureDrop.setVisible(false);
-            autoStopSwitch.setVisible(false);
+            autoStopSwitch.setVisible(true);
             recordBarsDial.setVisible(false);
-            partCountDial.setVisible(false);
+            partCountDial.setVisible(true);
             partCapacityBarsDial.setVisible(false);
-            selectedPartDrop.setVisible(false);
+            selectedPartDrop.setVisible(true);
             sliceDivisionDrop.setVisible(false);
-            bpmDial.setVisible(false);
+            bpmDial.setVisible(true);
             clickVolumeDial.setVisible(true);
             clickRecordVolumeDial.setVisible(false);
             loopVolumeDial.setVisible(true);

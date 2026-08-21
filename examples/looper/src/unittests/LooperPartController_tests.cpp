@@ -67,7 +67,7 @@ struct TimingFixture
     std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts> meterTimelines{};
     std::array<size_t, AbacDsp::kMaxLoopParts> finalizedBarCounts{};
     size_t activePartIndex{0};
-    float appliedBpm{120.f};
+    std::array<float, AbacDsp::kMaxLoopParts> appliedBpm{120.f, 120.f, 120.f, 120.f};
     bool eighthNoteUnit{false};
     int appliedTimeSignature{LooperTimingController::kDefaultTimeSignature};
     bool countingIn{false};
@@ -89,7 +89,7 @@ struct TimingFixture
 
     TimingFixture()
     {
-        seq.setBpm(appliedBpm);
+        seq.setBpm(appliedBpm[activePartIndex]);
     }
 };
 

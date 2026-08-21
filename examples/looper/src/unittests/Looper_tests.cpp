@@ -1174,10 +1174,10 @@ TEST(LooperLoopFile, CaptureExtraStateThenRestoreRoundTripsOverdubLayer)
     expectSameOverdubContent(writer, reader, originalLength);
 }
 
-// Regression: LoopStorageService used to save/load only the active part.
-// Part A keeps its unsuffixed <name>.wav/.json naming (backward compat);
-// Part B gets <name>_partB.wav/.json, listed in Part A's "parts" manifest.
-TEST(LooperLoopFile, SaveThenLoadRoundTripsAllPopulatedParts)
+// Regression: LoopStorageService used to save/load only the active part
+// and one bpm shared by all of them; each part's own audio and own bpm
+// now round-trip independently (Part B via <name>_partB.wav/.json).
+TEST(LooperLoopFile, SaveThenLoadRoundTripsAllPopulatedPartsAndTheirOwnBpm)
 {
     const TempLoopsDir dir;
 
@@ -1186,6 +1186,7 @@ TEST(LooperLoopFile, SaveThenLoadRoundTripsAllPopulatedParts)
     writer.setThreshRec(false);
     writer.setFadeMs(0.f);
     writer.setFreeRecord(true);
+    writer.setBpm(90.f);
     Buffer out{};
 
     Buffer inA{};
@@ -1217,6 +1218,7 @@ TEST(LooperLoopFile, SaveThenLoadRoundTripsAllPopulatedParts)
     writer.setRecord(true);
     writer.processBlock(inB, out);
     ASSERT_TRUE(writer.isRecording());
+    writer.setBpm(140.f);
     for (int b = 0; b < 3; ++b)
     {
         writer.processBlock(inB, out);
@@ -1240,6 +1242,7 @@ TEST(LooperLoopFile, SaveThenLoadRoundTripsAllPopulatedParts)
     EXPECT_EQ(reader.rawLoopLengthFrames(), lenA);
     EXPECT_NEAR(reader.rawLoopSample(kBlock / 2, 0), 0.3f, 1e-3f);
     EXPECT_NE(reader.partStatusLabel(1), "Part B: free");
+    EXPECT_NEAR(reader.currentAppliedBpm(), 90.f, 1e-3f);
 
     reader.setSelectedPart(1);
     for (int i = 0; i < 200; ++i)
@@ -1248,6 +1251,7 @@ TEST(LooperLoopFile, SaveThenLoadRoundTripsAllPopulatedParts)
     }
     EXPECT_TRUE(reader.isPlaying());
     EXPECT_NEAR(reader.rawLoopSample(kBlock / 2, 0), 0.6f, 1e-3f);
+    EXPECT_NEAR(reader.currentAppliedBpm(), 140.f, 1e-3f);
 }
 
 // Reuses kSampleRate/kBpm/kSamplesPerBar (5120 Hz, 120 BPM, 10240
@@ -2203,6 +2207,48 @@ TEST(PartSelection, PartStatusLabelReflectsContentAndEmptiness)
     Buffer out{};
     recordThenStopPlayback(looper, out, 1.f);
     EXPECT_NE(looper.partStatusLabel(0), "Part A: free");
+}
+
+// Regression: bpm used to be one value shared by the whole session; each
+// part now remembers and re-applies its own tempo across a switch.
+TEST(PartSelection, SwitchingPartsAppliesEachPartsOwnBpm)
+{
+    Looper looper(kSampleRate);
+    looper.setThreshRec(false);
+    looper.setFreeRecord(true);
+    looper.setFadeMs(0.f);
+
+    looper.setBpm(90.f);
+    Buffer out{};
+    recordThenStopPlayback(looper, out, 1.f); // part 0 recorded at 90 BPM
+    EXPECT_NEAR(looper.currentAppliedBpm(), 90.f, 1e-3f);
+
+    looper.setSelectedPart(1);
+    looper.processBlock(Buffer{}, out); // part 1 empty -> no immediate switch yet
+
+    Buffer inB{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inB(i, 0) = 2.f;
+        inB(i, 1) = 2.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(inB, out); // redirected: part 0 was Stopped, so this commits immediately
+    ASSERT_TRUE(looper.isRecording());
+
+    looper.setBpm(140.f); // dialed in while part 1 is the active part
+    looper.processBlock(inB, out);
+    looper.setRecord(true);
+    looper.processBlock(inB, out); // stop
+    EXPECT_NEAR(looper.currentAppliedBpm(), 140.f, 1e-3f);
+
+    looper.setSelectedPart(0); // part 0 has content, part 1 audible -> queues
+    looper.processBlock(Buffer{}, out);
+    for (int i = 0; i < 200; ++i)
+    {
+        looper.processBlock(Buffer{}, out);
+    }
+    EXPECT_NEAR(looper.currentAppliedBpm(), 90.f, 1e-3f) << "part 0's own tempo must come back, not part 1's";
 }
 
 TEST(SpectrogramWrap, IsWrappedOnlyOnceRecordingStops)
