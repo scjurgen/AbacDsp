@@ -8,6 +8,7 @@
 #include "EffectBase.h"
 #include "Generators/BeatSequencer.h"
 #include "Generators/MeterTimeline.h"
+#include "Sampler/LoopPartBank.h"
 
 // BPM application, host sync, time-signature installation, meter-timeline
 // finalization, and count-in/timekeeper reset: the parts of the transport
@@ -47,22 +48,37 @@ class LooperTimingController
     });
     static constexpr int kDefaultTimeSignature = 2; // index of 4/4
 
-    LooperTimingController(AbacDsp::BeatSequencer& seq, AbacDsp::MeterTimeline& meterTimeline, float& appliedBpm,
-                           bool& eighthNoteUnit, int& appliedTimeSignature, size_t& finalizedBarCount, bool& countingIn,
-                           int& countInBarsOffset, uint64_t& countInEndTickAbs, bool& suppressNextClick,
-                           const float sampleRate)
+    LooperTimingController(AbacDsp::BeatSequencer& seq,
+                           std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts>& meterTimelines,
+                           std::array<size_t, AbacDsp::kMaxLoopParts>& finalizedBarCounts,
+                           const size_t& activePartIndex, float& appliedBpm, bool& eighthNoteUnit,
+                           int& appliedTimeSignature, bool& countingIn, int& countInBarsOffset,
+                           uint64_t& countInEndTickAbs, bool& suppressNextClick, const float sampleRate)
         : m_seq(seq)
-        , m_meterTimeline(meterTimeline)
+        , m_meterTimelines(meterTimelines)
+        , m_finalizedBarCounts(finalizedBarCounts)
+        , m_activePartIndex(activePartIndex)
         , m_appliedBpm(appliedBpm)
         , m_eighthNoteUnit(eighthNoteUnit)
         , m_appliedTimeSignature(appliedTimeSignature)
-        , m_finalizedBarCount(finalizedBarCount)
         , m_countingIn(countingIn)
         , m_countInBarsOffset(countInBarsOffset)
         , m_countInEndTickAbs(countInEndTickAbs)
         , m_suppressNextClick(suppressNextClick)
         , m_sampleRate(sampleRate)
     {
+    }
+
+    // The part currently being recorded/played, per LoopPartBank::activeIndex();
+    // every other method below reads/writes whichever part this points at.
+    [[nodiscard]] AbacDsp::MeterTimeline& activeMeterTimeline() noexcept
+    {
+        return m_meterTimelines[m_activePartIndex];
+    }
+
+    [[nodiscard]] size_t& activeFinalizedBarCount() noexcept
+    {
+        return m_finalizedBarCounts[m_activePartIndex];
     }
 
     void syncToHostTransport(const EffectBase::HostTransport& transport)
@@ -101,8 +117,9 @@ class LooperTimingController
     void finalizeMeterTimeline(const size_t loopLengthFrames)
     {
         const float samplesPerQuarterBeat = m_sampleRate * 60.f / m_appliedBpm;
-        m_finalizedBarCount = m_meterTimeline.barCountForFrames(loopLengthFrames, samplesPerQuarterBeat);
-        m_meterTimeline.buildFrameMap(m_finalizedBarCount, samplesPerQuarterBeat);
+        auto& barCount = activeFinalizedBarCount();
+        barCount = activeMeterTimeline().barCountForFrames(loopLengthFrames, samplesPerQuarterBeat);
+        activeMeterTimeline().buildFrameMap(barCount, samplesPerQuarterBeat);
     }
 
     // Pairs with LoopRecorder::snapshotForUndo()/undoRecord(): a record-undo
@@ -110,14 +127,14 @@ class LooperTimingController
     // or the bar count/visualization would keep describing the aborted take.
     void snapshotMeterForUndo() noexcept
     {
-        m_undoMeterTimeline = m_meterTimeline;
-        m_undoFinalizedBarCount = m_finalizedBarCount;
+        m_undoMeterTimeline = activeMeterTimeline();
+        m_undoFinalizedBarCount = activeFinalizedBarCount();
     }
 
     void restoreMeterFromUndo() noexcept
     {
-        m_meterTimeline = m_undoMeterTimeline;
-        m_finalizedBarCount = m_undoFinalizedBarCount;
+        activeMeterTimeline() = m_undoMeterTimeline;
+        activeFinalizedBarCount() = m_undoFinalizedBarCount;
     }
 
     // Every fresh take starts at bar 1 beat 1. suppressFirstClick distinguishes
@@ -157,9 +174,9 @@ class LooperTimingController
     void resyncTimekeeperToLoopStart()
     {
         resetTimekeeper(true);
-        if (!m_meterTimeline.empty())
+        if (!activeMeterTimeline().empty())
         {
-            const auto& seg0 = m_meterTimeline.segmentForBar(0);
+            const auto& seg0 = activeMeterTimeline().segmentForBar(0);
             m_seq.setBeatsPerBar(seg0.beatsPerBar);
             m_eighthNoteUnit = seg0.eighthUnit;
             applyTimeSignatureAwareBpm(m_appliedBpm);
@@ -168,11 +185,12 @@ class LooperTimingController
 
   private:
     AbacDsp::BeatSequencer& m_seq;
-    AbacDsp::MeterTimeline& m_meterTimeline;
+    std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts>& m_meterTimelines;
+    std::array<size_t, AbacDsp::kMaxLoopParts>& m_finalizedBarCounts;
+    const size_t& m_activePartIndex;
     float& m_appliedBpm;
     bool& m_eighthNoteUnit;
     int& m_appliedTimeSignature;
-    size_t& m_finalizedBarCount;
     bool& m_countingIn;
     int& m_countInBarsOffset;
     uint64_t& m_countInEndTickAbs;

@@ -27,6 +27,7 @@
 #include "Generators/ClickGenerator.h"
 #include "Generators/MeterTimeline.h"
 #include "Sampler/LoopFile.h"
+#include "Sampler/LoopPartBank.h"
 #include "Sampler/LoopRecorder.h"
 #include "Sampler/SequencePattern.h"
 #include "Sampler/SequencerEngine.h"
@@ -107,18 +108,17 @@ class LooperImpl final : public EffectBase
         , m_sequencer(sampleRate)
         , m_pattern(1, m_seq.beatsPerBar(), m_seq.samplesPerBeat())
         , m_patternBuilder(m_seq, m_recorder, m_sliceLibrary, m_pattern)
-        , m_timingController(m_seq, m_meterTimeline, m_appliedBpm, m_eighthNoteUnit, m_appliedTimeSignature,
-                             m_finalizedBarCount, m_countingIn, m_countInBarsOffset, m_countInEndTickAbs,
-                             m_suppressNextClick, sampleRate)
+        , m_timingController(m_seq, m_meterTimelines, m_finalizedBarCounts, m_activePartIndex, m_appliedBpm,
+                             m_eighthNoteUnit, m_appliedTimeSignature, m_countingIn, m_countInBarsOffset,
+                             m_countInEndTickAbs, m_suppressNextClick, sampleRate)
         , m_captureRing(sampleRate)
         , m_freezeService(m_recorder)
-        , m_loopStorage(m_recorder, m_seq, m_sliceLibrary, m_pattern, m_meterTimeline, m_appliedBpm, m_eighthNoteUnit,
-                        sampleRate)
+        , m_loopStorage(m_recorder, m_seq, m_sliceLibrary, m_pattern, m_meterTimelines, m_activePartIndex, m_appliedBpm,
+                        m_eighthNoteUnit, sampleRate)
         , m_transportController(typename LooperTransportController<BlockSize>::Deps{
               .recorder = m_recorder,
               .seq = m_seq,
               .timing = m_timingController,
-              .meterTimeline = m_meterTimeline,
               .captureRing = m_captureRing,
               .freezeService = m_freezeService,
               .loopStorage = m_loopStorage,
@@ -140,7 +140,6 @@ class LooperImpl final : public EffectBase
               .sequencerPlaying = m_sequencerPlaying,
               .appliedTimeSignature = m_appliedTimeSignature,
               .pendingTimeSignature = m_pendingTimeSignature,
-              .finalizedBarCount = m_finalizedBarCount,
               .absPos = m_absPos,
               .freeRecord = m_freeRecord,
               .countInBars = m_countInBars,
@@ -161,7 +160,8 @@ class LooperImpl final : public EffectBase
         , m_viewModel(typename LooperViewModel<BlockSize>::Deps{
               .recorder = m_recorder,
               .seq = m_seq,
-              .meterTimeline = m_meterTimeline,
+              .meterTimelines = m_meterTimelines,
+              .activePartIndex = m_activePartIndex,
               .appliedBpm = m_appliedBpm,
               .sliceLibrary = m_sliceLibrary,
               .pattern = m_pattern,
@@ -174,7 +174,7 @@ class LooperImpl final : public EffectBase
               .spectrogramRegenDoneGen = m_spectrogramRegenDoneGen,
               .autoStopEnabled = m_autoStopEnabled,
               .recordBars = m_recordBars,
-              .finalizedBarCount = m_finalizedBarCount,
+              .finalizedBarCounts = m_finalizedBarCounts,
               .countInBarsOffset = m_countInBarsOffset,
               .sequencerPlaying = m_sequencerPlaying,
               .sampleRate = sampleRate,
@@ -427,8 +427,9 @@ class LooperImpl final : public EffectBase
         }
 
         const std::vector<AbacDsp::MeterSegment> segments =
-            m_meterTimeline.empty() ? std::vector<AbacDsp::MeterSegment>{{0, m_seq.beatsPerBar(), m_eighthNoteUnit}}
-                                    : m_meterTimeline.segments();
+            activeMeterTimeline().empty()
+                ? std::vector<AbacDsp::MeterSegment>{{0, m_seq.beatsPerBar(), m_eighthNoteUnit}}
+                : activeMeterTimeline().segments();
 
         ExtraStateHeader header{};
         header.magic = kExtraStateMagic;
@@ -980,18 +981,30 @@ class LooperImpl final : public EffectBase
         }
     }
 
-    // Runs once per bar boundary (renderClickAndSequencer, event.barWrapped).
-    // Recording: applies any pending time-signature change and logs it into the
-    // take's own meter timeline. Playing/Overdubbing: replays the take's recorded
-    // timeline instead of the live control, wrapping every m_finalizedBarCount bars.
+    [[nodiscard]] AbacDsp::MeterTimeline& activeMeterTimeline() noexcept
+    {
+        return m_meterTimelines[m_activePartIndex];
+    }
+    [[nodiscard]] const AbacDsp::MeterTimeline& activeMeterTimeline() const noexcept
+    {
+        return m_meterTimelines[m_activePartIndex];
+    }
+    [[nodiscard]] size_t& activeFinalizedBarCount() noexcept
+    {
+        return m_finalizedBarCounts[m_activePartIndex];
+    }
+
+    // Runs once per bar boundary. Recording: applies any pending time-signature
+    // change into the take's own meter timeline. Playing/Overdubbing: replays
+    // the recorded timeline instead, wrapping every activeFinalizedBarCount() bars.
     void applyMeterAtBarBoundary()
     {
         if (isPlaying() || isOverdubbing())
         {
-            if (m_finalizedBarCount > 0)
+            if (activeFinalizedBarCount() > 0)
             {
-                const size_t nextBar = m_seq.barIndex() % m_finalizedBarCount;
-                const auto& seg = m_meterTimeline.segmentForBar(nextBar);
+                const size_t nextBar = m_seq.barIndex() % activeFinalizedBarCount();
+                const auto& seg = activeMeterTimeline().segmentForBar(nextBar);
                 if (seg.beatsPerBar != m_seq.beatsPerBar() || seg.eighthUnit != m_eighthNoteUnit)
                 {
                     m_seq.setBeatsPerBar(seg.beatsPerBar);
@@ -1018,7 +1031,7 @@ class LooperImpl final : public EffectBase
             {
                 m_timingController.installTimeSignature(m_pendingTimeSignature);
                 const auto& sig = LooperTimingController::kTimeSignatures[static_cast<size_t>(m_appliedTimeSignature)];
-                m_meterTimeline.addSegment(m_takeBarIndex, sig.beatsPerBar, sig.eighthUnit);
+                activeMeterTimeline().addSegment(m_takeBarIndex, sig.beatsPerBar, sig.eighthUnit);
             }
         }
     }
@@ -1107,7 +1120,7 @@ class LooperImpl final : public EffectBase
         m_bpm.store(result->resolvedBpm, std::memory_order_relaxed);
         if (!result->meterTimeline.empty())
         {
-            m_meterTimeline = std::move(result->meterTimeline);
+            activeMeterTimeline() = std::move(result->meterTimeline);
             m_timingController.finalizeMeterTimeline(m_recorder.loopLengthFrames());
         }
         if (result->hasSequencerData)
@@ -1368,9 +1381,12 @@ class LooperImpl final : public EffectBase
     int m_pendingTimeSignature{LooperTimingController::kDefaultTimeSignature};
     int m_appliedTimeSignature{LooperTimingController::kDefaultTimeSignature};
     bool m_eighthNoteUnit{false};
-    AbacDsp::MeterTimeline m_meterTimeline;
-    size_t m_takeBarIndex{0};      // bars elapsed since this take's own start (beginBarLockedRecord)
-    size_t m_finalizedBarCount{0}; // total bars in the current loop, for playback timeline wraparound
+    // Indexed by m_activePartIndex; see activeMeterTimeline()/activeFinalizedBarCount().
+    // Fixed at 0 until LooperPartController (Phase 2d) starts moving it.
+    std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts> m_meterTimelines;
+    std::array<size_t, AbacDsp::kMaxLoopParts> m_finalizedBarCounts{};
+    size_t m_activePartIndex{0};
+    size_t m_takeBarIndex{0}; // bars elapsed since this take's own start (beginBarLockedRecord)
     // One-shot: set whenever a bar-locked take starts, consumed by the first bar
     // wrap applyMeterAtBarBoundary() sees, unconditionally cleared at the end of
     // processBlock() so it can only ever suppress a wrap in that same block.

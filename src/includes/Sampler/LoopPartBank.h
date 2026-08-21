@@ -8,6 +8,11 @@
 namespace AbacDsp
 {
 
+// Not BlockSize-dependent, so it lives outside the template: other
+// per-part-aware code (LooperTimingController etc.) can use the part count
+// without instantiating LoopPartBank itself.
+inline constexpr size_t kMaxLoopParts = 4;
+
 /**
  * @ingroup sampler
  * @brief Fixed bank of independent loop parts (A-D): storage only.
@@ -22,7 +27,7 @@ template <size_t BlockSize>
 class LoopPartBank
 {
   public:
-    static constexpr size_t kMaxParts = 4;
+    static constexpr size_t kMaxParts = kMaxLoopParts;
 
     LoopPartBank(const float sampleRate, const float maxSecondsPerPart)
         : m_parts{LoopRecorder<BlockSize>{sampleRate, maxSecondsPerPart},

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
@@ -21,6 +22,7 @@
 #include "Generators/BeatSequencer.h"
 #include "Generators/MeterTimeline.h"
 #include "Sampler/LoopFile.h"
+#include "Sampler/LoopPartBank.h"
 #include "Sampler/LoopRecorder.h"
 #include "Sampler/MidiFile.h"
 #include "Sampler/SequencePattern.h"
@@ -76,13 +78,15 @@ class LoopStorageService
 
     LoopStorageService(const AbacDsp::LoopRecorder<BlockSize>& recorder, const AbacDsp::BeatSequencer& seq,
                        const AbacDsp::SliceLibrary& sliceLibrary, const AbacDsp::SequencePattern& pattern,
-                       const AbacDsp::MeterTimeline& meterTimeline, const float& appliedBpm, const bool& eighthNoteUnit,
+                       const std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts>& meterTimelines,
+                       const size_t& activePartIndex, const float& appliedBpm, const bool& eighthNoteUnit,
                        const float sampleRate)
         : m_recorder(recorder)
         , m_seq(seq)
         , m_sliceLibrary(sliceLibrary)
         , m_pattern(pattern)
-        , m_meterTimeline(meterTimeline)
+        , m_meterTimelines(meterTimelines)
+        , m_activePartIndex(activePartIndex)
         , m_appliedBpm(appliedBpm)
         , m_eighthNoteUnit(eighthNoteUnit)
         , m_sampleRate(sampleRate)
@@ -444,6 +448,11 @@ class LoopStorageService
         return path;
     }
 
+    [[nodiscard]] const AbacDsp::MeterTimeline& activeMeterTimeline() const noexcept
+    {
+        return m_meterTimelines[m_activePartIndex];
+    }
+
     // MIDI ticks spanned by one bar of the given meter (denominator convention:
     // eighthUnit halves the quarter-note tick length, matching MidiFile's own
     // numerator/denominatorPower time-signature event fields).
@@ -503,8 +512,9 @@ class LoopStorageService
             AbacDsp::MidiFile midi;
             midi.setTempoBpm(m_appliedBpm);
             const std::vector<AbacDsp::MeterSegment> segmentsToWrite =
-                m_meterTimeline.empty() ? std::vector<AbacDsp::MeterSegment>{{0, m_seq.beatsPerBar(), m_eighthNoteUnit}}
-                                        : m_meterTimeline.segments();
+                activeMeterTimeline().empty()
+                    ? std::vector<AbacDsp::MeterSegment>{{0, m_seq.beatsPerBar(), m_eighthNoteUnit}}
+                    : activeMeterTimeline().segments();
             uint32_t midiTick = 0;
             for (size_t i = 0; i < segmentsToWrite.size(); ++i)
             {
@@ -546,6 +556,8 @@ class LoopStorageService
                     extractTrackAudioAndLengths(t, trackLeft, trackRight, sliceLengths);
                     const auto trackPath = loopTrackWavPath(m_loopSaveName, t).string();
                     AudioUtility::SaveWav::saveStereoAs(trackPath, trackLeft, trackRight, m_sampleRate);
+                    // Relative to m_loopsDirectory, not just the basename,
+                    // so a subfoldered loop name keeps its subfolder here too.
                     tracksJson.push_back({{"file", std::filesystem::path(trackPath).filename().string()},
                                           {"sliceLengths", sliceLengths}});
                 }
@@ -579,15 +591,16 @@ class LoopStorageService
         m_loopSaveDoneGen.store(gen, std::memory_order_release);
     }
 
-    // Worker thread only. Builds into locals first (throws on malformed data,
-    // caught by runLoadLoop()) so a partial failure leaves no scratch state.
-    void loadSequencerData(const nlohmann::json& j)
+    // Worker thread only, resolves file references against loopDir. Builds
+    // into locals first (throws on malformed data, caught by runLoadLoop())
+    // so a partial failure leaves no scratch state.
+    void loadSequencerData(const nlohmann::json& j, const std::filesystem::path& loopDir)
     {
         auto pattern = j.at("pattern").get<AbacDsp::SequencePattern>();
         std::vector<LoopLoadTrackData> tracks;
         for (const auto& trackJson : j.at("tracks"))
         {
-            const auto trackPath = std::filesystem::path(m_loopsDirectory) / trackJson.at("file").get<std::string>();
+            const auto trackPath = loopDir / trackJson.at("file").get<std::string>();
             const auto trackLoaded = AbacDsp::LoopFile<nlohmann::json>::loadStereoWav(trackPath.string());
             const auto sliceLengths = trackJson.at("sliceLengths").get<std::vector<size_t>>();
 
@@ -640,14 +653,15 @@ class LoopStorageService
                     {
                         outcome.patchParamsJson = j.at("patchParams").dump();
                     }
+                    const auto loopDir = loopBasePath(m_loopLoadName).parent_path();
                     if (j.contains("pattern") && j.contains("tracks"))
                     {
-                        loadSequencerData(j);
+                        loadSequencerData(j, loopDir);
                     }
                     if (j.contains("overdub"))
                     {
                         const auto overdubFile = j.at("overdub").at("file").get<std::string>();
-                        const auto overdubPath = std::filesystem::path(m_loopsDirectory) / overdubFile;
+                        const auto overdubPath = loopDir / overdubFile;
                         const auto overdubLoaded =
                             AbacDsp::LoopFile<nlohmann::json>::loadStereoWav(overdubPath.string());
                         if (!overdubLoaded.left.empty())
@@ -737,7 +751,8 @@ class LoopStorageService
     const AbacDsp::BeatSequencer& m_seq;
     const AbacDsp::SliceLibrary& m_sliceLibrary;
     const AbacDsp::SequencePattern& m_pattern;
-    const AbacDsp::MeterTimeline& m_meterTimeline;
+    const std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts>& m_meterTimelines;
+    const size_t& m_activePartIndex;
     const float& m_appliedBpm;
     const bool& m_eighthNoteUnit;
     float m_sampleRate;

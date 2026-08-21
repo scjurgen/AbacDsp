@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <format>
@@ -11,6 +12,7 @@
 #include "Analysis/Spectrogram.h"
 #include "Generators/BeatSequencer.h"
 #include "Generators/MeterTimeline.h"
+#include "Sampler/LoopPartBank.h"
 #include "Sampler/LoopRecorder.h"
 #include "Sampler/SequencePattern.h"
 #include "Sampler/SequencerEngine.h"
@@ -30,7 +32,8 @@ class LooperViewModel
     {
         const AbacDsp::LoopRecorder<BlockSize>& recorder;
         const AbacDsp::BeatSequencer& seq;
-        const AbacDsp::MeterTimeline& meterTimeline;
+        const std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts>& meterTimelines;
+        const size_t& activePartIndex;
         const float& appliedBpm;
         const AbacDsp::SliceLibrary& sliceLibrary;
         const AbacDsp::SequencePattern& pattern;
@@ -43,7 +46,7 @@ class LooperViewModel
         const std::atomic<uint64_t>& spectrogramRegenDoneGen;
         const bool& autoStopEnabled;
         const int& recordBars;
-        const size_t& finalizedBarCount;
+        const std::array<size_t, AbacDsp::kMaxLoopParts>& finalizedBarCounts;
         const int& countInBarsOffset;
         const bool& sequencerPlaying;
         float sampleRate;
@@ -52,6 +55,16 @@ class LooperViewModel
     explicit LooperViewModel(Deps deps)
         : m_deps(deps)
     {
+    }
+
+    [[nodiscard]] const AbacDsp::MeterTimeline& activeMeterTimeline() const noexcept
+    {
+        return m_deps.meterTimelines[m_deps.activePartIndex];
+    }
+
+    [[nodiscard]] size_t activeFinalizedBarCount() const noexcept
+    {
+        return m_deps.finalizedBarCounts[m_deps.activePartIndex];
     }
 
     [[nodiscard]] const char* getStateLabel(const bool armed, const bool countingIn) const noexcept
@@ -128,9 +141,9 @@ class LooperViewModel
         // len/spb drift as playback crosses each meter change. Free-record takes
         // never populate finalizedBarCount, so they keep the len/spb fallback
         // below unchanged.
-        if (m_deps.finalizedBarCount > 0)
+        if (activeFinalizedBarCount() > 0)
         {
-            return static_cast<int>(m_deps.finalizedBarCount);
+            return static_cast<int>(activeFinalizedBarCount());
         }
         const size_t len = m_deps.recorder.loopLengthFrames();
         return (len > 0) ? static_cast<int>(std::max<size_t>(1, len / spb)) : 1;
@@ -145,7 +158,7 @@ class LooperViewModel
     {
         const auto n = static_cast<size_t>(std::max(0, getOuterRingBars()));
         std::vector<float> lengths(n);
-        if (m_deps.meterTimeline.empty())
+        if (activeMeterTimeline().empty())
         {
             std::ranges::fill(lengths, static_cast<float>(getSamplesPerBar()));
             return lengths;
@@ -154,7 +167,7 @@ class LooperViewModel
             (m_deps.appliedBpm > 0.f) ? m_deps.sampleRate * 60.f / m_deps.appliedBpm : 0.f;
         for (size_t bar = 0; bar < n; ++bar)
         {
-            const auto& seg = m_deps.meterTimeline.segmentForBar(bar);
+            const auto& seg = activeMeterTimeline().segmentForBar(bar);
             const float samplesPerBeat = seg.eighthUnit ? samplesPerQuarterBeat * 0.5f : samplesPerQuarterBeat;
             lengths[bar] = samplesPerBeat * static_cast<float>(seg.beatsPerBar);
         }
@@ -174,7 +187,7 @@ class LooperViewModel
             // Prefer the finalized bar count over a live recompute: see the same
             // reasoning in getOuterRingBars() (a mixed-meter loop's live spb
             // changes bar-to-bar during playback replay).
-            size_t barsInLoop = m_deps.finalizedBarCount;
+            size_t barsInLoop = activeFinalizedBarCount();
             if (barsInLoop == 0)
             {
                 const size_t spb = getSamplesPerBar();

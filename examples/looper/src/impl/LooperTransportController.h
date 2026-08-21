@@ -9,7 +9,6 @@
 #include "CaptureRing.h"
 #include "FreezeService.h"
 #include "Generators/BeatSequencer.h"
-#include "Generators/MeterTimeline.h"
 #include "LoopStorageService.h"
 #include "LooperTimingController.h"
 #include "Sampler/LoopRecorder.h"
@@ -35,7 +34,6 @@ class LooperTransportController
         AbacDsp::LoopRecorder<BlockSize>& recorder;
         AbacDsp::BeatSequencer& seq;
         LooperTimingController& timing;
-        AbacDsp::MeterTimeline& meterTimeline;
         CaptureRing<BlockSize>& captureRing;
         FreezeService<BlockSize>& freezeService;
         LoopStorageService<BlockSize>& loopStorage;
@@ -58,7 +56,6 @@ class LooperTransportController
         bool& sequencerPlaying;
         int& appliedTimeSignature;
         int& pendingTimeSignature;
-        size_t& finalizedBarCount;
         uint64_t& absPos;
 
         bool& freeRecord;
@@ -97,10 +94,8 @@ class LooperTransportController
         const bool undoReq = m_deps.undoPulse.exchange(false, std::memory_order_relaxed);
         const bool mixDownReq = m_deps.mixDownPulse.exchange(false, std::memory_order_relaxed);
 
-        // The sequencer play/stop toggle, its own Clear, Undo, and Mix Down
-        // are exempt from the guard below. Undo in particular must still work
-        // while pendingStop is set: aborting an in-progress bar-locked take
-        // (see undo()) is exactly what it needs to do.
+        // seqPlay/clearSeq/undo/mixDown are exempt from the guard below;
+        // Undo must work even during pendingStop (aborts an in-progress take).
         if (seqPlayReq)
         {
             toggleSequencerPlayback();
@@ -164,8 +159,8 @@ class LooperTransportController
         else
         {
             // Free Record is unquantized: no bar grid to hang a meter timeline on.
-            m_deps.meterTimeline.clear();
-            m_deps.finalizedBarCount = 0;
+            m_deps.timing.activeMeterTimeline().clear();
+            m_deps.timing.activeFinalizedBarCount() = 0;
             m_deps.recorder.beginRecord();
         }
     }
@@ -286,8 +281,8 @@ class LooperTransportController
         }
         else
         {
-            m_deps.meterTimeline.clear();
-            m_deps.finalizedBarCount = 0;
+            m_deps.timing.activeMeterTimeline().clear();
+            m_deps.timing.activeFinalizedBarCount() = 0;
         }
     }
 
@@ -391,9 +386,9 @@ class LooperTransportController
         m_deps.timing.installTimeSignature(m_deps.pendingTimeSignature);
         m_deps.takeBarIndex = 0;
         m_deps.suppressNextBarIndexIncrement = true;
-        m_deps.meterTimeline.clear();
+        m_deps.timing.activeMeterTimeline().clear();
         const auto& sig0 = LooperTimingController::kTimeSignatures[static_cast<size_t>(m_deps.appliedTimeSignature)];
-        m_deps.meterTimeline.addSegment(0, sig0.beatsPerBar, sig0.eighthUnit);
+        m_deps.timing.activeMeterTimeline().addSegment(0, sig0.beatsPerBar, sig0.eighthUnit);
 
         const size_t spb = m_deps.seq.samplesPerBeat();
         const long off = (spb > 0) ? m_deps.seq.samplesToNearestBar() : 0;

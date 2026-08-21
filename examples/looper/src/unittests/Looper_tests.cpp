@@ -915,6 +915,50 @@ TEST(LooperLoopFile, SaveThenLoadRoundTripsFrozenTracksAndPattern)
     }
 }
 
+// Regression test, same root cause as SaveThenLoadRoundTripsOverdubLayer-
+// InSubfolder: a frozen track's JSON file reference lost its subfolder too.
+TEST(LooperLoopFile, SaveThenLoadRoundTripsFrozenTracksInSubfolder)
+{
+    const TempLoopsDir dir;
+
+    Looper writer(kLoopFileSampleRate);
+    writer.setLoopsDirectory(dir.path());
+    recordKnownLoop(writer);
+    ASSERT_TRUE(writer.isPlaying());
+
+    writer.setFreeze(true);
+    for (int guard = 0; guard < 2000 && (guard == 0 || writer.isFreezePending()); ++guard)
+    {
+        pump(writer, 1);
+    }
+    ASSERT_FALSE(writer.isFreezePending());
+    ASSERT_GT(writer.getFrozenTrackCount(), 0u);
+
+    const size_t originalTrackCount = writer.getFrozenTrackCount();
+    const size_t originalSliceCount = writer.getFrozenSliceCount();
+    const auto originalBoundaries = writer.getSequencerSliceBoundaries();
+    ASSERT_FALSE(originalBoundaries.empty());
+
+    writer.requestSaveLoopAs("MyFolder/frozenloop");
+    waitUntilLoopSaveDone(writer);
+
+    Looper reader(kLoopFileSampleRate);
+    reader.setLoopsDirectory(dir.path());
+    reader.requestLoadLoop("MyFolder/frozenloop");
+    const auto outcome = waitForLoopLoadOutcome(reader);
+    ASSERT_TRUE(outcome.success);
+    waitUntilLoopLoadInstalled(reader);
+
+    EXPECT_EQ(reader.getFrozenTrackCount(), originalTrackCount);
+    EXPECT_EQ(reader.getFrozenSliceCount(), originalSliceCount);
+    const auto reloadedBoundaries = reader.getSequencerSliceBoundaries();
+    ASSERT_EQ(reloadedBoundaries.size(), originalBoundaries.size());
+    for (size_t i = 0; i < originalBoundaries.size(); ++i)
+    {
+        EXPECT_NEAR(reloadedBoundaries[i], originalBoundaries[i], 1e-4f);
+    }
+}
+
 // Reuses kSampleRate/kBpm/kSamplesPerBeat (5120 Hz, 120 BPM) from
 // BeatLockMatrixTest above, so a mid-take meter change lands on clean block
 // boundaries; mirrors TimeSignatureChange.PlaybackReplaysRecordedMeterTimeline-
@@ -1015,6 +1059,39 @@ TEST(LooperLoopFile, SaveThenLoadRoundTripsOverdubLayer)
     Looper reader(kLoopFileSampleRate);
     reader.setLoopsDirectory(dir.path());
     reader.requestLoadLoop("overdubloop");
+    const auto outcome = waitForLoopLoadOutcome(reader);
+    ASSERT_TRUE(outcome.success);
+    waitUntilLoopLoadInstalled(reader);
+
+    ASSERT_TRUE(reader.isPlaying());
+    ASSERT_EQ(reader.rawLoopLengthFrames(), originalLength);
+    ASSERT_TRUE(reader.hasOverdub());
+    expectSameLoopContent(writer, reader, originalLength);
+    expectSameOverdubContent(writer, reader, originalLength);
+}
+
+// Regression test: a subfoldered loop name's overdub file reference lost
+// its subfolder on save (LoopStorageService::runSaveLoopAs()'s "overdub"
+// field), so load rejoined it against the flat loops directory.
+TEST(LooperLoopFile, SaveThenLoadRoundTripsOverdubLayerInSubfolder)
+{
+    const TempLoopsDir dir;
+
+    Looper writer(kLoopFileSampleRate);
+    writer.setLoopsDirectory(dir.path());
+    recordKnownLoop(writer);
+    ASSERT_TRUE(writer.isPlaying());
+    const size_t originalLength = writer.rawLoopLengthFrames();
+
+    addKnownOverdub(writer, 0.2f);
+    ASSERT_TRUE(writer.hasOverdub());
+
+    writer.requestSaveLoopAs("MyFolder/overdubloop");
+    waitUntilLoopSaveDone(writer);
+
+    Looper reader(kLoopFileSampleRate);
+    reader.setLoopsDirectory(dir.path());
+    reader.requestLoadLoop("MyFolder/overdubloop");
     const auto outcome = waitForLoopLoadOutcome(reader);
     ASSERT_TRUE(outcome.success);
     waitUntilLoopLoadInstalled(reader);
