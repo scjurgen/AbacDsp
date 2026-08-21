@@ -156,6 +156,15 @@ class LooperTransportController
         }
     }
 
+    // Beat 1 of a fresh take is a real downbeat, not a resync artifact, so
+    // this always resets the clock first -- used both by toggleRecord()'s own
+    // immediate-start branch and by a part-switch committing into a new take.
+    void startFreshRecording()
+    {
+        m_deps.timing.resetTimekeeper(false);
+        startRecording();
+    }
+
     // Remembers which path this take used, independent of later toggling.
     // Also reached directly from processBlock() (threshold-arm crossing,
     // count-in elapsing), not just via toggleRecord().
@@ -324,8 +333,7 @@ class LooperTransportController
         }
         else
         {
-            m_deps.timing.resetTimekeeper(false); // beat 1 of a fresh take is a real downbeat, not a resync artifact
-            startRecording();
+            startFreshRecording();
         }
     }
 

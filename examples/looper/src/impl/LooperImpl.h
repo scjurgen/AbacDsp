@@ -192,7 +192,7 @@ class LooperImpl final : public EffectBase
               .sequencerPlaying = m_sequencerPlaying,
               .sampleRate = sampleRate,
           })
-        , m_partController(m_bank, m_timingController, m_activePartIndex,
+        , m_partController(m_bank, m_timingController, m_transportController, m_activePartIndex,
                            static_cast<size_t>(kPartSwitchFadeMs / 1000.f * sampleRate))
     {
         m_seq.setBpm(m_appliedBpm);

@@ -5,21 +5,24 @@
 
 #include "Audio/AudioBuffer.h"
 #include "LooperTimingController.h"
+#include "LooperTransportController.h"
 #include "Sampler/LoopPartBank.h"
 #include "Sampler/LoopRecorder.h"
 
-// Queues a switch between two already-recorded parts and crossfades into it
-// at the next bar boundary. Record-target switching (queuing into an empty
-// part to record) is deferred to a later phase; see LooperTransportController.
+// Queues a switch between parts, committed at the next bar boundary: a
+// crossfade into an already-recorded part, or -- muting the outgoing part
+// first -- a fresh take via LooperTransportController's record machinery.
 template <size_t BlockSize>
 class LooperPartController
 {
   public:
     using Bank = AbacDsp::LoopPartBank<BlockSize>;
 
-    LooperPartController(Bank& bank, LooperTimingController& timing, size_t& activePartIndex, const size_t fadeFrames)
+    LooperPartController(Bank& bank, LooperTimingController& timing, LooperTransportController<BlockSize>& transport,
+                         size_t& activePartIndex, const size_t fadeFrames)
         : m_bank(bank)
         , m_timing(timing)
+        , m_transport(transport)
         , m_activePartIndex(activePartIndex)
         , m_fadeFrames(std::max<size_t>(1, fadeFrames))
     {
@@ -30,20 +33,24 @@ class LooperPartController
     // (nothing playing to wait for) or queues for the next onBarBoundary().
     bool requestSwitch(const size_t target) noexcept
     {
-        if (target >= Bank::kMaxParts || target == m_activePartIndex || !m_bank.hasContent(target) || m_pending ||
-            isCrossfading() || m_bank.active().state() == AbacDsp::LooperState::Recording)
+        if (!targetIsUsable(target) || !m_bank.hasContent(target))
         {
             return false;
         }
-        if (isActivePartAudible())
+        queueOrCommit(target, false);
+        return true;
+    }
+
+    // Queues a fresh take on target, muting the outgoing part first. Unlike
+    // requestSwitch(), target may already have content (overwritten, same as
+    // re-recording today) or be empty; same-as-active is refused (not a switch).
+    bool requestRecordSwitch(const size_t target) noexcept
+    {
+        if (!targetIsUsable(target))
         {
-            m_pending = true;
-            m_pendingTarget = target;
+            return false;
         }
-        else
-        {
-            commitSwitch(target);
-        }
+        queueOrCommit(target, true);
         return true;
     }
 
@@ -64,13 +71,13 @@ class LooperPartController
         if (m_pending)
         {
             m_pending = false;
-            commitSwitch(m_pendingTarget);
+            commitSwitch(m_pendingTarget, m_pendingIsRecord);
         }
     }
 
-    // Audio thread. Plain pass-through outside a crossfade; during one, mixes
-    // the outgoing part's tail (fading out) against the incoming part's head
-    // (fading in) -- both parts render, doubling cost only for the fade window.
+    // Audio thread. Outside a crossfade, a plain pass-through; during one,
+    // mixes the outgoing part's tail against the incoming part's head (silence,
+    // for a record-target fade, since the target isn't triggered until it ends).
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out) noexcept
     {
         if (!isCrossfading())
@@ -98,6 +105,11 @@ class LooperPartController
         if (!isCrossfading())
         {
             m_bank.part(m_outgoingIndex).stop();
+            if (m_fadeIsRecordTransition)
+            {
+                m_fadeIsRecordTransition = false;
+                m_transport.startFreshRecording();
+            }
         }
     }
 
@@ -108,10 +120,32 @@ class LooperPartController
         return s == AbacDsp::LooperState::Playing || s == AbacDsp::LooperState::Overdubbing;
     }
 
-    // Flips the active index, resyncs the shared clock to the new part's own
-    // meter timeline, and either starts a crossfade (the outgoing part was
-    // audible) or cuts over immediately (it wasn't).
-    void commitSwitch(const size_t target) noexcept
+    // Shared validity check for both request methods: in range, not the
+    // active part, and not mid-Recording (no stable audio to switch from yet).
+    [[nodiscard]] bool targetIsUsable(const size_t target) const noexcept
+    {
+        return target < Bank::kMaxParts && target != m_activePartIndex && !m_pending && !isCrossfading() &&
+               m_bank.active().state() != AbacDsp::LooperState::Recording;
+    }
+
+    void queueOrCommit(const size_t target, const bool isRecord) noexcept
+    {
+        if (isActivePartAudible())
+        {
+            m_pending = true;
+            m_pendingIsRecord = isRecord;
+            m_pendingTarget = target;
+        }
+        else
+        {
+            commitSwitch(target, isRecord);
+        }
+    }
+
+    // Flips the active index and resyncs the clock to the new part's own meter
+    // timeline; if the outgoing part was audible, crossfades into playback or
+    // silence-before-record, otherwise applies the target's start immediately.
+    void commitSwitch(const size_t target, const bool isRecord) noexcept
     {
         const size_t outgoing = m_activePartIndex;
         if (m_bank.part(outgoing).state() == AbacDsp::LooperState::Overdubbing)
@@ -123,26 +157,35 @@ class LooperPartController
         m_activePartIndex = target;
         m_bank.setActiveIndex(target); // keeps LoopPartBank's own active() in sync
         m_timing.resyncTimekeeperToLoopStart();
-        m_bank.active().stop(); // guarantees playPos==0 regardless of where this part was left
-        m_bank.active().play();
 
         if (wasAudible)
         {
             m_outgoingIndex = outgoing;
             m_crossfadeRemaining = m_fadeFrames;
+            m_fadeIsRecordTransition = isRecord;
+            return;
+        }
+        m_crossfadeRemaining = 0;
+        if (isRecord)
+        {
+            m_transport.startFreshRecording();
         }
         else
         {
-            m_crossfadeRemaining = 0;
+            m_bank.active().stop(); // guarantees playPos==0 regardless of where this part was left
+            m_bank.active().play();
         }
     }
 
     Bank& m_bank;
     LooperTimingController& m_timing;
+    LooperTransportController<BlockSize>& m_transport;
     size_t& m_activePartIndex;
     size_t m_fadeFrames;
     bool m_pending{false};
+    bool m_pendingIsRecord{false};
     size_t m_pendingTarget{0};
     size_t m_outgoingIndex{0};
     size_t m_crossfadeRemaining{0};
+    bool m_fadeIsRecordTransition{false};
 };
