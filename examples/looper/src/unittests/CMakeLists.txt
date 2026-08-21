@@ -37,4 +37,5 @@ mark_as_advanced(
 
 package_add_test(LooperPluginTests
         Looper_tests.cpp
+        PartBankResizeService_tests.cpp
 )

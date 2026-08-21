@@ -307,6 +307,15 @@ class LoopRecorder
         return m_maxFrames;
     }
 
+    // Total heap footprint of every preallocated buffer, for callers that
+    // need to report memory use (e.g. a capacity-resize log).
+    [[nodiscard]] size_t approxByteSize() const noexcept
+    {
+        return (m_buffer.size() + m_overdubBuffer.size() + m_postRollScratch.size() + m_frontScratch.size() +
+                m_undoBuffer.size() + m_undoOverdubBuffer.size()) *
+               sizeof(float);
+    }
+
     [[nodiscard]] float sample(const size_t frame, const size_t channel) const noexcept
     {
         return m_buffer[frame * kChannels + channel];
