@@ -1174,6 +1174,82 @@ TEST(LooperLoopFile, CaptureExtraStateThenRestoreRoundTripsOverdubLayer)
     expectSameOverdubContent(writer, reader, originalLength);
 }
 
+// Regression: LoopStorageService used to save/load only the active part.
+// Part A keeps its unsuffixed <name>.wav/.json naming (backward compat);
+// Part B gets <name>_partB.wav/.json, listed in Part A's "parts" manifest.
+TEST(LooperLoopFile, SaveThenLoadRoundTripsAllPopulatedParts)
+{
+    const TempLoopsDir dir;
+
+    Looper writer(kLoopFileSampleRate);
+    writer.setLoopsDirectory(dir.path());
+    writer.setThreshRec(false);
+    writer.setFadeMs(0.f);
+    writer.setFreeRecord(true);
+    Buffer out{};
+
+    Buffer inA{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inA(i, 0) = 0.3f;
+        inA(i, 1) = 0.3f;
+    }
+    writer.setRecord(true);
+    writer.processBlock(inA, out);
+    for (int b = 0; b < 3; ++b)
+    {
+        writer.processBlock(inA, out);
+    }
+    writer.setRecord(true);
+    writer.processBlock(inA, out);
+    ASSERT_TRUE(writer.isPlaying());
+    const size_t lenA = writer.rawLoopLengthFrames();
+    writer.setPlay(true); // -> Stopped, so the part-B redirect below is immediate
+
+    writer.setSelectedPart(1);
+    writer.processBlock(Buffer{}, out);
+    Buffer inB{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inB(i, 0) = 0.6f;
+        inB(i, 1) = 0.6f;
+    }
+    writer.setRecord(true);
+    writer.processBlock(inB, out);
+    ASSERT_TRUE(writer.isRecording());
+    for (int b = 0; b < 3; ++b)
+    {
+        writer.processBlock(inB, out);
+    }
+    writer.setRecord(true);
+    writer.processBlock(inB, out);
+    ASSERT_TRUE(writer.isPlaying());
+
+    writer.requestSaveLoopAs("multipart");
+    waitUntilLoopSaveDone(writer);
+
+    Looper reader(kLoopFileSampleRate);
+    reader.setLoopsDirectory(dir.path());
+    reader.requestLoadLoop("multipart");
+    const auto outcome = waitForLoopLoadOutcome(reader);
+    ASSERT_TRUE(outcome.success);
+    waitUntilLoopLoadInstalled(reader);
+
+    ASSERT_TRUE(reader.isPlaying());
+    EXPECT_EQ(reader.currentSelectedPartIndex(), 0);
+    EXPECT_EQ(reader.rawLoopLengthFrames(), lenA);
+    EXPECT_NEAR(reader.rawLoopSample(kBlock / 2, 0), 0.3f, 1e-3f);
+    EXPECT_NE(reader.partStatusLabel(1), "Part B: free");
+
+    reader.setSelectedPart(1);
+    for (int i = 0; i < 200; ++i)
+    {
+        reader.processBlock(Buffer{}, out);
+    }
+    EXPECT_TRUE(reader.isPlaying());
+    EXPECT_NEAR(reader.rawLoopSample(kBlock / 2, 0), 0.6f, 1e-3f);
+}
+
 // Reuses kSampleRate/kBpm/kSamplesPerBar (5120 Hz, 120 BPM, 10240
 // samples/bar) and the Looper/Buffer aliases from BeatLockMatrixTest above.
 TEST(RecordingModes, CountInPlaysClickThenStartsRecordingAfterNBars)

@@ -147,8 +147,8 @@ struct TransportFixture
         : bank(bankRef)
         , timing(fx.timing)
         , freezeService(bankRef)
-        , loopStorage(bankRef, fx.seq, sliceLibrary, pattern, fx.meterTimelines, fx.activePartIndex, fx.appliedBpm,
-                      fx.eighthNoteUnit, kSampleRate)
+        , loopStorage(bankRef, fx.seq, sliceLibrary, pattern, fx.meterTimelines, fx.appliedBpm, fx.eighthNoteUnit,
+                      kSampleRate)
         , resizeService(bankRef, kSampleRate)
         , transport(Transport::Deps{
               .bank = bankRef,

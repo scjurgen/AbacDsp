@@ -59,33 +59,44 @@ class LoopStorageService
         std::vector<AbacDsp::Slice> slices;
     };
 
-    // Decoded, ready-to-install payload handed back once pollLoadCompletion()
-    // confirms a load.
-    struct LoopLoadResult
+    // One part's decoded audio; hasContent() false means this part wasn't in
+    // the saved loop (or wasn't listed in its "parts" manifest) at all.
+    struct LoopLoadPartData
     {
         std::vector<float> left;
         std::vector<float> right;
-        float resolvedBpm{120.f};
         AbacDsp::MeterTimeline meterTimeline;
-        bool hasSequencerData{false};
-        std::vector<LoopLoadTrackData> tracks;
-        std::optional<AbacDsp::SequencePattern> pattern;
         bool hasOverdub{false};
         std::vector<float> overdubLeft;
         std::vector<float> overdubRight;
+
+        [[nodiscard]] bool hasContent() const noexcept
+        {
+            return !left.empty();
+        }
+    };
+
+    // Decoded, ready-to-install payload handed back once pollLoadCompletion()
+    // confirms a load. parts[0] is always Part A; parts[1..3] are populated
+    // only for the suffixes the save's "parts" manifest actually listed.
+    struct LoopLoadResult
+    {
+        std::array<LoopLoadPartData, AbacDsp::kMaxLoopParts> parts;
+        float resolvedBpm{120.f};
+        bool hasSequencerData{false};
+        std::vector<LoopLoadTrackData> tracks;
+        std::optional<AbacDsp::SequencePattern> pattern;
     };
 
     LoopStorageService(const AbacDsp::LoopPartBank<BlockSize>& bank, const AbacDsp::BeatSequencer& seq,
                        const AbacDsp::SliceLibrary& sliceLibrary, const AbacDsp::SequencePattern& pattern,
                        const std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts>& meterTimelines,
-                       const size_t& activePartIndex, const float& appliedBpm, const bool& eighthNoteUnit,
-                       const float sampleRate)
+                       const float& appliedBpm, const bool& eighthNoteUnit, const float sampleRate)
         : m_bank(bank)
         , m_seq(seq)
         , m_sliceLibrary(sliceLibrary)
         , m_pattern(pattern)
         , m_meterTimelines(meterTimelines)
-        , m_activePartIndex(activePartIndex)
         , m_appliedBpm(appliedBpm)
         , m_eighthNoteUnit(eighthNoteUnit)
         , m_sampleRate(sampleRate)
@@ -162,8 +173,15 @@ class LoopStorageService
             return false;
         }
         std::error_code ec;
-        const bool removedWav = std::filesystem::remove(loopWavPath(name), ec);
-        std::filesystem::remove(loopJsonPath(name), ec);
+        const bool removedWav = std::filesystem::remove(partWavPath(name, 0), ec);
+        std::filesystem::remove(partJsonPath(name, 0), ec);
+        for (size_t p = 1; p < AbacDsp::kMaxLoopParts; ++p)
+        {
+            std::filesystem::remove(partWavPath(name, p), ec);
+            std::filesystem::remove(partJsonPath(name, p), ec);
+            std::filesystem::remove(partMidPath(name, p), ec);
+            std::filesystem::remove(partOverdubWavPath(name, p), ec);
+        }
         if (removedWav)
         {
             std::lock_guard<std::mutex> lock(m_currentLoopMutex);
@@ -182,13 +200,19 @@ class LoopStorageService
             return false;
         }
         std::error_code ec;
-        std::filesystem::create_directories(loopWavPath(newName).parent_path(), ec);
-        std::filesystem::rename(loopWavPath(oldName), loopWavPath(newName), ec);
+        std::filesystem::create_directories(partWavPath(newName, 0).parent_path(), ec);
+        std::filesystem::rename(partWavPath(oldName, 0), partWavPath(newName, 0), ec);
         if (ec)
         {
             return false;
         }
-        std::filesystem::rename(loopJsonPath(oldName), loopJsonPath(newName), ec);
+        std::filesystem::rename(partJsonPath(oldName, 0), partJsonPath(newName, 0), ec);
+        for (size_t p = 1; p < AbacDsp::kMaxLoopParts; ++p)
+        {
+            std::error_code partEc;
+            std::filesystem::rename(partWavPath(oldName, p), partWavPath(newName, p), partEc);
+            std::filesystem::rename(partJsonPath(oldName, p), partJsonPath(newName, p), partEc);
+        }
         {
             std::lock_guard<std::mutex> lock(m_currentLoopMutex);
             if (oldName == m_currentLoopName)
@@ -288,6 +312,8 @@ class LoopStorageService
     // LooperImpl::restoreExtraState()) into the same gen-counter handshake
     // requestLoad() uses on success, so the same pollLoadCompletion() poll
     // installs it. A no-op while a named load is already pending.
+    // Only ever installs into Part A; host-state restore stays single-part
+    // (out of scope here, same as the frozen tracks/sequencer pattern above).
     void injectRestoredLoad(std::vector<float> left, std::vector<float> right, const float resolvedBpm,
                             AbacDsp::MeterTimeline meterTimeline, std::vector<float> overdubLeft = {},
                             std::vector<float> overdubRight = {})
@@ -296,16 +322,20 @@ class LoopStorageService
         {
             return;
         }
-        m_loopLoadLeft = std::move(left);
-        m_loopLoadRight = std::move(right);
+        for (auto& part : m_loopLoadParts)
+        {
+            part = LoopLoadPartData{};
+        }
+        m_loopLoadParts[0].left = std::move(left);
+        m_loopLoadParts[0].right = std::move(right);
+        m_loopLoadParts[0].meterTimeline = std::move(meterTimeline);
+        m_loopLoadParts[0].hasOverdub = !overdubLeft.empty() && !overdubRight.empty();
+        m_loopLoadParts[0].overdubLeft = std::move(overdubLeft);
+        m_loopLoadParts[0].overdubRight = std::move(overdubRight);
         m_loopLoadResolvedBpm = resolvedBpm;
-        m_loopLoadMeterTimeline = std::move(meterTimeline);
         m_loopLoadHasSequencerData = false;
         m_loopLoadTracks.clear();
         m_loopLoadPattern.reset();
-        m_loopLoadHasOverdub = !overdubLeft.empty() && !overdubRight.empty();
-        m_loopLoadOverdubLeft = std::move(overdubLeft);
-        m_loopLoadOverdubRight = std::move(overdubRight);
 
         m_loopLoadRequestedGen = m_loopLoadRequestGen.load(std::memory_order_relaxed) + 1;
         m_loopLoadPending = true;
@@ -326,16 +356,11 @@ class LoopStorageService
         }
         m_loopLoadPending = false;
         LoopLoadResult result;
-        result.left = std::move(m_loopLoadLeft);
-        result.right = std::move(m_loopLoadRight);
+        result.parts = std::move(m_loopLoadParts);
         result.resolvedBpm = m_loopLoadResolvedBpm;
-        result.meterTimeline = std::move(m_loopLoadMeterTimeline);
         result.hasSequencerData = m_loopLoadHasSequencerData;
         result.tracks = std::move(m_loopLoadTracks);
         result.pattern = std::move(m_loopLoadPattern);
-        result.hasOverdub = m_loopLoadHasOverdub;
-        result.overdubLeft = std::move(m_loopLoadOverdubLeft);
-        result.overdubRight = std::move(m_loopLoadOverdubRight);
         return result;
     }
 
@@ -412,24 +437,44 @@ class LoopStorageService
         return path;
     }
 
-    [[nodiscard]] std::filesystem::path loopWavPath(const std::string& name, const bool createDirs = false) const
+    // "" for Part A (index 0, unsuffixed for backward compatibility with
+    // loops saved before multi-part support), "_partB"/"_partC"/"_partD"
+    // otherwise.
+    [[nodiscard]] static std::string partSuffix(const size_t index)
+    {
+        return index == 0 ? std::string{} : std::string("_part") + static_cast<char>('A' + index);
+    }
+
+    [[nodiscard]] std::filesystem::path partWavPath(const std::string& name, const size_t index,
+                                                    const bool createDirs = false) const
     {
         auto path = loopBasePath(name, createDirs);
+        path += partSuffix(index);
         path += ".wav";
         return path;
     }
 
-    [[nodiscard]] std::filesystem::path loopJsonPath(const std::string& name) const
+    [[nodiscard]] std::filesystem::path partJsonPath(const std::string& name, const size_t index) const
     {
         auto path = loopBasePath(name);
+        path += partSuffix(index);
         path += ".json";
         return path;
     }
 
-    [[nodiscard]] std::filesystem::path loopMidPath(const std::string& name) const
+    [[nodiscard]] std::filesystem::path partMidPath(const std::string& name, const size_t index) const
     {
         auto path = loopBasePath(name);
+        path += partSuffix(index);
         path += ".mid";
+        return path;
+    }
+
+    [[nodiscard]] std::filesystem::path partOverdubWavPath(const std::string& name, const size_t index) const
+    {
+        auto path = loopBasePath(name);
+        path += partSuffix(index);
+        path += "_overdub.wav";
         return path;
     }
 
@@ -438,18 +483,6 @@ class LoopStorageService
         auto path = loopBasePath(name);
         path += "_track" + std::to_string(track) + ".wav";
         return path;
-    }
-
-    [[nodiscard]] std::filesystem::path loopOverdubWavPath(const std::string& name) const
-    {
-        auto path = loopBasePath(name);
-        path += "_overdub.wav";
-        return path;
-    }
-
-    [[nodiscard]] const AbacDsp::MeterTimeline& activeMeterTimeline() const noexcept
-    {
-        return m_meterTimelines[m_activePartIndex];
     }
 
     // MIDI ticks spanned by one bar of the given meter (denominator convention:
@@ -481,57 +514,58 @@ class LoopStorageService
         }
     }
 
-    // Worker thread only: writes <name>.wav (+ iXML metadata) and <name>.json;
-    // if any tracks are frozen, also <name>_track<N>.wav per track.
-    void runSaveLoopAs(const uint64_t gen)
+    // Worker thread only: writes <name><suffix>.wav (+ iXML metadata) and
+    // <name><suffix>.json for one populated part; index 0 (Part A) also
+    // carries patchParams/pattern/tracks/the "parts" manifest.
+    void saveOnePart(const size_t index, const std::vector<std::string>& partSuffixList)
     {
-        const size_t loopLen = m_bank.active().loopLengthFrames();
-        if (loopLen > 0)
+        const size_t loopLen = m_bank.part(index).loopLengthFrames();
+        std::vector<float> left(loopLen);
+        std::vector<float> right(loopLen);
+        for (size_t f = 0; f < loopLen; ++f)
         {
-            std::vector<float> left(loopLen);
-            std::vector<float> right(loopLen);
-            for (size_t f = 0; f < loopLen; ++f)
-            {
-                left[f] = m_bank.active().sample(f, 0);
-                right[f] = m_bank.active().sample(f, 1);
-            }
-            // Descriptive metadata only (the pattern's own serialized beatsPerBar is
-            // authoritative on load); approximate using the loop's current meter,
-            // which may not be exact for a take whose meter changed mid-recording.
-            const float samplesPerBeat = m_sampleRate * 60.f / m_appliedBpm;
-            const float beats = (samplesPerBeat > 0.f) ? static_cast<float>(loopLen) / samplesPerBeat : 0.f;
-            const float bars = beats / static_cast<float>(m_seq.beatsPerBar());
-            const AbacDsp::LoopMetadata meta{1, m_appliedBpm, bars, beats};
-            AbacDsp::LoopFile<nlohmann::json>::saveStereoWav(loopWavPath(m_loopSaveName, true).string(), left, right,
-                                                             m_sampleRate, meta);
+            left[f] = m_bank.part(index).sample(f, 0);
+            right[f] = m_bank.part(index).sample(f, 1);
+        }
+        // Descriptive metadata only (the pattern's own serialized beatsPerBar is
+        // authoritative on load); approximate using the loop's current meter,
+        // which may not be exact for a take whose meter changed mid-recording.
+        const float samplesPerBeat = m_sampleRate * 60.f / m_appliedBpm;
+        const float beats = (samplesPerBeat > 0.f) ? static_cast<float>(loopLen) / samplesPerBeat : 0.f;
+        const float bars = beats / static_cast<float>(m_seq.beatsPerBar());
+        const AbacDsp::LoopMetadata meta{1, m_appliedBpm, bars, beats};
+        AbacDsp::LoopFile<nlohmann::json>::saveStereoWav(partWavPath(m_loopSaveName, index, true).string(), left, right,
+                                                         m_sampleRate, meta);
 
-            // Standard MIDI File sidecar carrying the take's own tempo + meter
-            // timeline; written unconditionally (a constant-meter take just gets
-            // a single time-signature event) so loading only ever needs one path.
-            AbacDsp::MidiFile midi;
-            midi.setTempoBpm(m_appliedBpm);
-            const std::vector<AbacDsp::MeterSegment> segmentsToWrite =
-                activeMeterTimeline().empty()
-                    ? std::vector<AbacDsp::MeterSegment>{{0, m_seq.beatsPerBar(), m_eighthNoteUnit}}
-                    : activeMeterTimeline().segments();
-            uint32_t midiTick = 0;
-            for (size_t i = 0; i < segmentsToWrite.size(); ++i)
+        // Standard MIDI File sidecar carrying this part's own tempo + meter
+        // timeline; written unconditionally (a constant-meter take just gets
+        // a single time-signature event) so loading only ever needs one path.
+        AbacDsp::MidiFile midi;
+        midi.setTempoBpm(m_appliedBpm);
+        const auto& timeline = m_meterTimelines[index];
+        const std::vector<AbacDsp::MeterSegment> segmentsToWrite =
+            timeline.empty() ? std::vector<AbacDsp::MeterSegment>{{0, m_seq.beatsPerBar(), m_eighthNoteUnit}}
+                             : timeline.segments();
+        uint32_t midiTick = 0;
+        for (size_t i = 0; i < segmentsToWrite.size(); ++i)
+        {
+            const auto& seg = segmentsToWrite[i];
+            if (i > 0)
             {
-                const auto& seg = segmentsToWrite[i];
-                if (i > 0)
-                {
-                    const auto& prevSeg = segmentsToWrite[i - 1];
-                    midiTick += static_cast<uint32_t>(seg.startBar - prevSeg.startBar) *
-                                midiTicksPerBar(prevSeg.beatsPerBar, prevSeg.eighthUnit);
-                }
-                midi.addTimeSignature(midiTick, static_cast<uint8_t>(seg.beatsPerBar), seg.eighthUnit ? 3 : 2);
+                const auto& prevSeg = segmentsToWrite[i - 1];
+                midiTick += static_cast<uint32_t>(seg.startBar - prevSeg.startBar) *
+                            midiTicksPerBar(prevSeg.beatsPerBar, prevSeg.eighthUnit);
             }
-            if (!midi.writeToFile(loopMidPath(m_loopSaveName).string()))
-            {
-                std::cerr << "LoopStorageService: failed to write " << loopMidPath(m_loopSaveName) << std::endl;
-            }
+            midi.addTimeSignature(midiTick, static_cast<uint8_t>(seg.beatsPerBar), seg.eighthUnit ? 3 : 2);
+        }
+        if (!midi.writeToFile(partMidPath(m_loopSaveName, index).string()))
+        {
+            std::cerr << "LoopStorageService: failed to write " << partMidPath(m_loopSaveName, index) << std::endl;
+        }
 
-            nlohmann::json j = meta;
+        nlohmann::json j = meta;
+        if (index == 0)
+        {
             if (!m_loopSaveParamsJson.empty())
             {
                 try
@@ -562,24 +596,55 @@ class LoopStorageService
                 }
                 j["tracks"] = tracksJson;
             }
-            if (m_bank.active().hasOverdub())
+            if (!partSuffixList.empty())
             {
-                std::vector<float> overdubLeft(loopLen);
-                std::vector<float> overdubRight(loopLen);
-                for (size_t f = 0; f < loopLen; ++f)
-                {
-                    overdubLeft[f] = m_bank.active().overdubSample(f, 0);
-                    overdubRight[f] = m_bank.active().overdubSample(f, 1);
-                }
-                const auto overdubPath = loopOverdubWavPath(m_loopSaveName).string();
-                AudioUtility::SaveWav::saveStereoAs(overdubPath, overdubLeft, overdubRight, m_sampleRate);
-                j["overdub"] = {{"file", std::filesystem::path(overdubPath).filename().string()}};
+                j["parts"] = partSuffixList;
             }
-            std::ofstream jsonOut(loopJsonPath(m_loopSaveName));
-            if (jsonOut)
+        }
+        if (m_bank.part(index).hasOverdub())
+        {
+            std::vector<float> overdubLeft(loopLen);
+            std::vector<float> overdubRight(loopLen);
+            for (size_t f = 0; f < loopLen; ++f)
             {
-                jsonOut << j.dump(2);
+                overdubLeft[f] = m_bank.part(index).overdubSample(f, 0);
+                overdubRight[f] = m_bank.part(index).overdubSample(f, 1);
             }
+            const auto overdubPath = partOverdubWavPath(m_loopSaveName, index).string();
+            AudioUtility::SaveWav::saveStereoAs(overdubPath, overdubLeft, overdubRight, m_sampleRate);
+            j["overdub"] = {{"file", std::filesystem::path(overdubPath).filename().string()}};
+        }
+        std::ofstream jsonOut(partJsonPath(m_loopSaveName, index));
+        if (jsonOut)
+        {
+            jsonOut << j.dump(2);
+        }
+    }
+
+    // Worker thread only: saves every populated part (B/C/D only when they
+    // actually have content), then a "parts" manifest in Part A's own json.
+    void runSaveLoopAs(const uint64_t gen)
+    {
+        std::vector<std::string> partSuffixList;
+        for (size_t p = 1; p < AbacDsp::kMaxLoopParts; ++p)
+        {
+            if (m_bank.part(p).loopLengthFrames() > 0)
+            {
+                partSuffixList.push_back(std::string(1, static_cast<char>('A' + p)));
+            }
+        }
+        bool savedAny = false;
+        for (size_t p = 0; p < AbacDsp::kMaxLoopParts; ++p)
+        {
+            if (m_bank.part(p).loopLengthFrames() == 0)
+            {
+                continue;
+            }
+            savedAny = true;
+            saveOnePart(p, partSuffixList);
+        }
+        if (savedAny)
+        {
             std::lock_guard<std::mutex> lock(m_lastSavedLoopMutex);
             m_lastSavedLoopName = m_loopSaveName;
         }
@@ -623,8 +688,82 @@ class LoopStorageService
         m_loopLoadHasSequencerData = true;
     }
 
-    // Worker thread only: decodes <name>.wav + .json and compares their BPM
-    // belief (iXML-embedded vs sidecar) rather than picking one silently.
+    // Worker thread only: reconstructs one part's meter timeline from its own
+    // .mid sidecar, if present (absent just leaves an empty timeline).
+    void loadPartMeter(const size_t index, AbacDsp::MeterTimeline& meterTimeline) const
+    {
+        AbacDsp::MidiFile midi;
+        if (!midi.readFromFile(partMidPath(m_loopLoadName, index).string()))
+        {
+            return;
+        }
+        size_t bar = 0;
+        uint32_t prevTick = 0;
+        const auto& events = midi.timeSignatures();
+        for (size_t i = 0; i < events.size(); ++i)
+        {
+            const auto& ev = events[i];
+            if (i > 0)
+            {
+                const auto& prevEv = events[i - 1];
+                const uint32_t ticksPerBarPrev = midiTicksPerBar(prevEv.numerator, prevEv.denominatorPower == 3);
+                bar += (ticksPerBarPrev > 0) ? (ev.tick - prevTick) / ticksPerBarPrev : 0;
+            }
+            meterTimeline.addSegment(bar, ev.numerator, ev.denominatorPower == 3);
+            prevTick = ev.tick;
+        }
+    }
+
+    // Worker thread only: an "overdub" json entry resolves against loopDir,
+    // shared by Part A and every other loaded part.
+    void loadPartOverdub(const nlohmann::json& j, const std::filesystem::path& loopDir, LoopLoadPartData& part) const
+    {
+        const auto overdubFile = j.at("overdub").at("file").get<std::string>();
+        const auto overdubLoaded = AbacDsp::LoopFile<nlohmann::json>::loadStereoWav((loopDir / overdubFile).string());
+        if (!overdubLoaded.left.empty())
+        {
+            part.overdubLeft = overdubLoaded.left;
+            part.overdubRight = overdubLoaded.right;
+            part.hasOverdub = true;
+        }
+    }
+
+    // Worker thread only: loads one of the "parts" manifest's extra parts
+    // (B/C/D) - audio, its own overdub/meter, no session-level fields.
+    void loadOneExtraPart(const size_t index, const std::filesystem::path& loopDir)
+    {
+        const auto loaded =
+            AbacDsp::LoopFile<nlohmann::json>::loadStereoWav(partWavPath(m_loopLoadName, index).string());
+        if (loaded.left.empty())
+        {
+            return;
+        }
+        m_loopLoadParts[index].left = loaded.left;
+        m_loopLoadParts[index].right = loaded.right;
+        std::ifstream jsonIn(partJsonPath(m_loopLoadName, index));
+        if (jsonIn)
+        {
+            try
+            {
+                nlohmann::json j;
+                jsonIn >> j;
+                if (j.contains("overdub"))
+                {
+                    loadPartOverdub(j, loopDir, m_loopLoadParts[index]);
+                }
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "LoopStorageService: failed to parse " << partJsonPath(m_loopLoadName, index) << ": "
+                          << e.what() << std::endl;
+            }
+        }
+        loadPartMeter(index, m_loopLoadParts[index].meterTimeline);
+    }
+
+    // Worker thread only: decodes <name>.wav + .json (Part A) and compares
+    // their BPM belief (iXML-embedded vs sidecar) rather than picking one
+    // silently, then loads whichever B/C/D parts the "parts" manifest lists.
     void runLoadLoop(const uint64_t gen)
     {
         LoopLoadOutcome outcome;
@@ -632,15 +771,17 @@ class LoopStorageService
         m_loopLoadHasSequencerData = false;
         m_loopLoadTracks.clear();
         m_loopLoadPattern.reset();
-        m_loopLoadMeterTimeline.clear();
-        m_loopLoadHasOverdub = false;
-        m_loopLoadOverdubLeft.clear();
-        m_loopLoadOverdubRight.clear();
-        const auto loaded = AbacDsp::LoopFile<nlohmann::json>::loadStereoWav(loopWavPath(m_loopLoadName).string());
+        for (auto& part : m_loopLoadParts)
+        {
+            part = LoopLoadPartData{};
+        }
+        const auto loaded = AbacDsp::LoopFile<nlohmann::json>::loadStereoWav(partWavPath(m_loopLoadName, 0).string());
         if (!loaded.left.empty())
         {
             std::optional<AbacDsp::LoopMetadata> sidecarMeta;
-            std::ifstream jsonIn(loopJsonPath(m_loopLoadName));
+            std::vector<std::string> partSuffixList;
+            const auto loopDir = loopBasePath(m_loopLoadName).parent_path();
+            std::ifstream jsonIn(partJsonPath(m_loopLoadName, 0));
             if (jsonIn)
             {
                 try
@@ -652,59 +793,43 @@ class LoopStorageService
                     {
                         outcome.patchParamsJson = j.at("patchParams").dump();
                     }
-                    const auto loopDir = loopBasePath(m_loopLoadName).parent_path();
                     if (j.contains("pattern") && j.contains("tracks"))
                     {
                         loadSequencerData(j, loopDir);
                     }
                     if (j.contains("overdub"))
                     {
-                        const auto overdubFile = j.at("overdub").at("file").get<std::string>();
-                        const auto overdubPath = loopDir / overdubFile;
-                        const auto overdubLoaded =
-                            AbacDsp::LoopFile<nlohmann::json>::loadStereoWav(overdubPath.string());
-                        if (!overdubLoaded.left.empty())
-                        {
-                            m_loopLoadOverdubLeft = overdubLoaded.left;
-                            m_loopLoadOverdubRight = overdubLoaded.right;
-                            m_loopLoadHasOverdub = true;
-                        }
+                        loadPartOverdub(j, loopDir, m_loopLoadParts[0]);
+                    }
+                    if (j.contains("parts"))
+                    {
+                        partSuffixList = j.at("parts").get<std::vector<std::string>>();
                     }
                 }
                 catch (const std::exception& e)
                 {
-                    std::cerr << "LoopStorageService: failed to parse " << loopJsonPath(m_loopLoadName) << ": "
+                    std::cerr << "LoopStorageService: failed to parse " << partJsonPath(m_loopLoadName, 0) << ": "
                               << e.what() << std::endl;
                 }
             }
 
-            AbacDsp::MidiFile midi;
-            if (midi.readFromFile(loopMidPath(m_loopLoadName).string()))
-            {
-                size_t bar = 0;
-                uint32_t prevTick = 0;
-                const auto& events = midi.timeSignatures();
-                for (size_t i = 0; i < events.size(); ++i)
-                {
-                    const auto& ev = events[i];
-                    if (i > 0)
-                    {
-                        const auto& prevEv = events[i - 1];
-                        const uint32_t ticksPerBarPrev =
-                            midiTicksPerBar(prevEv.numerator, prevEv.denominatorPower == 3);
-                        bar += (ticksPerBarPrev > 0) ? (ev.tick - prevTick) / ticksPerBarPrev : 0;
-                    }
-                    m_loopLoadMeterTimeline.addSegment(bar, ev.numerator, ev.denominatorPower == 3);
-                    prevTick = ev.tick;
-                }
-            }
-
-            m_loopLoadLeft = loaded.left;
-            m_loopLoadRight = loaded.right;
+            loadPartMeter(0, m_loopLoadParts[0].meterTimeline);
+            m_loopLoadParts[0].left = loaded.left;
+            m_loopLoadParts[0].right = loaded.right;
             outcome.success = true;
             {
                 std::lock_guard<std::mutex> lock(m_currentLoopMutex);
                 m_currentLoopName = m_loopLoadName;
+            }
+
+            for (const auto& letter : partSuffixList)
+            {
+                if (letter.size() != 1 || letter[0] < 'B' ||
+                    letter[0] >= static_cast<char>('A' + AbacDsp::kMaxLoopParts))
+                {
+                    continue;
+                }
+                loadOneExtraPart(static_cast<size_t>(letter[0] - 'A'), loopDir);
             }
 
             float resolvedBpm = 120.f;
@@ -751,7 +876,6 @@ class LoopStorageService
     const AbacDsp::SliceLibrary& m_sliceLibrary;
     const AbacDsp::SequencePattern& m_pattern;
     const std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts>& m_meterTimelines;
-    const size_t& m_activePartIndex;
     const float& m_appliedBpm;
     const bool& m_eighthNoteUnit;
     float m_sampleRate;
@@ -780,17 +904,13 @@ class LoopStorageService
     std::mutex m_loopLoadWaitMutex;
     std::condition_variable_any m_loopLoadCv;
     std::jthread m_loopLoadThread;
-    std::vector<float> m_loopLoadLeft; // worker-owned scratch, audio thread reads once confirmed
-    std::vector<float> m_loopLoadRight;
+    std::array<LoopLoadPartData, AbacDsp::kMaxLoopParts>
+        m_loopLoadParts; // worker-owned, audio thread reads once confirmed
     float m_loopLoadResolvedBpm{120.f};
     std::atomic<bool> m_loopLoadNeedsResolve{false};
     std::mutex m_loopLoadOutcomeMutex;
     LoopLoadOutcome m_loopLoadOutcome;
-    std::vector<LoopLoadTrackData> m_loopLoadTracks; // worker-owned scratch, same handoff as left/right above
+    std::vector<LoopLoadTrackData> m_loopLoadTracks; // worker-owned scratch, same handoff as parts above
     std::optional<AbacDsp::SequencePattern> m_loopLoadPattern;
     bool m_loopLoadHasSequencerData{false};
-    AbacDsp::MeterTimeline m_loopLoadMeterTimeline; // worker-owned scratch, reconstructed from the .mid sidecar
-    bool m_loopLoadHasOverdub{false};
-    std::vector<float> m_loopLoadOverdubLeft;
-    std::vector<float> m_loopLoadOverdubRight;
 };

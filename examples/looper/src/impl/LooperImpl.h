@@ -125,8 +125,8 @@ class LooperImpl final : public EffectBase
                              m_countInEndTickAbs, m_suppressNextClick, sampleRate)
         , m_captureRing(sampleRate)
         , m_freezeService(m_bank)
-        , m_loopStorage(m_bank, m_seq, m_sliceLibrary, m_pattern, m_meterTimelines, m_activePartIndex, m_appliedBpm,
-                        m_eighthNoteUnit, sampleRate)
+        , m_loopStorage(m_bank, m_seq, m_sliceLibrary, m_pattern, m_meterTimelines, m_appliedBpm, m_eighthNoteUnit,
+                        sampleRate)
         , m_resizeService(m_bank, sampleRate)
         , m_transportController(typename LooperTransportController<BlockSize>::Deps{
               .bank = m_bank,
@@ -1261,20 +1261,10 @@ class LooperImpl final : public EffectBase
         m_bank.setActiveIndex(0);
         m_activePartIndex = 0;
         m_selectedPartIndex = 0;
-        m_bank.active().loadLoop(result->left, result->right);
-        if (result->hasOverdub)
-        {
-            m_bank.active().loadOverdub(result->overdubLeft, result->overdubRight);
-        }
         requestSpectrogramRegen();
         m_seq.setBpm(result->resolvedBpm);
         m_appliedBpm = result->resolvedBpm;
         m_bpm.store(result->resolvedBpm, std::memory_order_relaxed);
-        if (!result->meterTimeline.empty())
-        {
-            activeMeterTimeline() = std::move(result->meterTimeline);
-            m_timingController.finalizeMeterTimeline(m_bank.active().loopLengthFrames());
-        }
         if (result->hasSequencerData)
         {
             m_sliceLibrary.clear();
@@ -1284,6 +1274,33 @@ class LooperImpl final : public EffectBase
             }
             m_pattern = *result->pattern;
             m_sequencer.setPattern(&m_pattern);
+        }
+        for (size_t i = 0; i < AbacDsp::kMaxLoopParts; ++i)
+        {
+            installLoadedPart(i, result->parts[i]);
+        }
+    }
+
+    // Audio thread; installs one part's decoded audio/overdub/meter, if the
+    // load actually carried content for it (parts[i].hasContent()).
+    void installLoadedPart(const size_t index, const LoopStorageService<BlockSize>::LoopLoadPartData& partData)
+    {
+        if (!partData.hasContent())
+        {
+            return;
+        }
+        m_bank.part(index).loadLoop(partData.left, partData.right);
+        if (partData.hasOverdub)
+        {
+            m_bank.part(index).loadOverdub(partData.overdubLeft, partData.overdubRight);
+        }
+        if (!partData.meterTimeline.empty())
+        {
+            const float samplesPerQuarterBeat = sampleRate() * 60.f / m_appliedBpm;
+            m_meterTimelines[index] = partData.meterTimeline;
+            m_finalizedBarCounts[index] =
+                m_meterTimelines[index].barCountForFrames(m_bank.part(index).loopLengthFrames(), samplesPerQuarterBeat);
+            m_meterTimelines[index].buildFrameMap(m_finalizedBarCounts[index], samplesPerQuarterBeat);
         }
     }
 
