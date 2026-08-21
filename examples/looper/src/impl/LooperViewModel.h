@@ -67,6 +67,24 @@ class LooperViewModel
         return m_deps.finalizedBarCounts[m_deps.activePartIndex];
     }
 
+    // "Part A: 8 bars" for a bar-locked take, "Part B: 3.2s" for a free-recorded
+    // one (no finalized bar count to show), "Part C: free" when empty.
+    [[nodiscard]] std::string partStatusLabel(const size_t index) const
+    {
+        static constexpr std::array<const char*, AbacDsp::kMaxLoopParts> kNames{"Part A", "Part B", "Part C", "Part D"};
+        const char* name = kNames[index];
+        if (!m_deps.bank.hasContent(index))
+        {
+            return std::format("{}: free", name);
+        }
+        if (m_deps.finalizedBarCounts[index] > 0)
+        {
+            return std::format("{}: {} bars", name, m_deps.finalizedBarCounts[index]);
+        }
+        const float seconds = static_cast<float>(m_deps.bank.loopLengthFrames(index)) / m_deps.sampleRate;
+        return std::format("{}: {:.1f}s", name, seconds);
+    }
+
     [[nodiscard]] const AbacDsp::LoopRecorder<BlockSize>& activeRecorder() const noexcept
     {
         return m_deps.bank.active();

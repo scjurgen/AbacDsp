@@ -49,6 +49,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("recordBars", this);
         m_parameters.addParameterListener("partCount", this);
         m_parameters.addParameterListener("partCapacityBars", this);
+        m_parameters.addParameterListener("selectedPart", this);
         m_parameters.addParameterListener("sliceDivision", this);
         m_parameters.addParameterListener("bpm", this);
         m_parameters.addParameterListener("clickVolume", this);
@@ -84,6 +85,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("recordBars", this);
         m_parameters.removeParameterListener("partCount", this);
         m_parameters.removeParameterListener("partCapacityBars", this);
+        m_parameters.removeParameterListener("selectedPart", this);
         m_parameters.removeParameterListener("sliceDivision", this);
         m_parameters.removeParameterListener("bpm", this);
         m_parameters.removeParameterListener("clickVolume", this);
@@ -370,6 +372,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("bars").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 0) + " bars"; })));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("selectedPart", 1), juce::String::fromUTF8("Part"),
+            juce::StringArray{juce::String::fromUTF8("Part A"), juce::String::fromUTF8("Part B"),
+                              juce::String::fromUTF8("Part C"), juce::String::fromUTF8("Part D")},
+            0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID("sliceDivision", 1), juce::String::fromUTF8("Division"),
             juce::StringArray{juce::String::fromUTF8("1/4"), juce::String::fromUTF8("1/8"),
                               juce::String::fromUTF8("1/16"), juce::String::fromUTF8("1/32")},
@@ -508,6 +515,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setPartCapacityBars(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::partCapacityBars, v);
+             }},
+            {"selectedPart",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setSelectedPart(static_cast<int>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::selectedPart, v);
              }},
             {"sliceDivision",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -680,6 +693,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("partCapacityBars");
             float normalized = range.convertTo0to1(params.partCapacityBars);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("selectedPart"))
+        {
+            const auto& range = m_parameters.getParameterRange("selectedPart");
+            float normalized = range.convertTo0to1(params.selectedPart);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("sliceDivision"))
@@ -981,6 +1000,14 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner && pluginRunner->canEditPartSettings();
     }
+    [[nodiscard]] int currentPartCount() const noexcept
+    {
+        return pluginRunner ? pluginRunner->currentPartCount() : 0;
+    }
+    [[nodiscard]] int currentSelectedPartIndex() const noexcept
+    {
+        return pluginRunner ? pluginRunner->currentSelectedPartIndex() : 0;
+    }
     [[nodiscard]] bool isHostPresent() const noexcept
     {
         return wrapperType != juce::AudioProcessor::wrapperType_Standalone;
@@ -1080,6 +1107,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             pluginRunner->resolveLoopLoadBpm(bpm);
         }
+    }
+    [[nodiscard]] juce::String partStatusLabel(const int index) const
+    {
+        return pluginRunner ? juce::String(pluginRunner->partStatusLabel(index)) : juce::String();
     }
 
 

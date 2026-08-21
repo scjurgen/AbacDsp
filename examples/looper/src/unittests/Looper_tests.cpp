@@ -1718,6 +1718,134 @@ TEST(PartSettings, ChangingPartCapacityWhileEmptyResizesThenRecordingStillWorks)
     EXPECT_TRUE(looper.isRecording());
 }
 
+namespace
+{
+// Frees part 0 into Stopped (not audible), so a later selection change
+// commits/redirects immediately instead of queuing for a bar boundary.
+void recordThenStopPlayback(Looper& looper, Buffer& out, const float value)
+{
+    Buffer in{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        in(i, 0) = value;
+        in(i, 1) = value;
+    }
+    looper.setRecord(true);
+    looper.processBlock(in, out);
+    looper.setRecord(true);
+    looper.processBlock(in, out); // finalizes -> Playing
+    looper.setPlay(true);
+    looper.processBlock(Buffer{}, out); // -> Stopped
+}
+}
+
+TEST(PartSelection, SelectingEmptyPartWhileActiveIsStoppedRecordsImmediatelyIntoNewPart)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFreeRecord(true);
+    looper.setFadeMs(0.f);
+    Buffer out{};
+    recordThenStopPlayback(looper, out, 1.f);
+
+    looper.setSelectedPart(1);
+    looper.processBlock(Buffer{}, out);
+    ASSERT_EQ(looper.currentSelectedPartIndex(), 1);
+
+    Buffer inB{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inB(i, 0) = 3.f;
+        inB(i, 1) = 3.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(inB, out);
+    ASSERT_TRUE(looper.isRecording()) << "the Record press must redirect into part 1, not stop anything";
+    looper.setRecord(true);
+    looper.processBlock(inB, out);
+    EXPECT_NEAR(looper.rawLoopSample(0, 0), 3.f, 1e-3f);
+}
+
+TEST(PartSelection, SelectingPartWithContentSwitchesImmediatelyWhenActiveIsNotPlaying)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFreeRecord(true);
+    looper.setFadeMs(0.f);
+    Buffer out{};
+    recordThenStopPlayback(looper, out, 1.f);
+
+    looper.setSelectedPart(1);
+    looper.processBlock(Buffer{}, out);
+    recordThenStopPlayback(looper, out, 2.f); // redirected into part 1
+
+    looper.setSelectedPart(0);
+    looper.processBlock(Buffer{}, out);
+    EXPECT_EQ(looper.currentSelectedPartIndex(), 0);
+    EXPECT_NEAR(looper.rawLoopSample(0, 0), 1.f, 1e-3f) << "active part should now be part 0's content";
+}
+
+TEST(PartSelection, SelectingCurrentlyActivePartIsANoOp)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    ASSERT_EQ(looper.currentSelectedPartIndex(), 0);
+
+    looper.setSelectedPart(0);
+    Buffer in{};
+    Buffer out{};
+    looper.processBlock(in, out);
+    EXPECT_EQ(looper.currentSelectedPartIndex(), 0);
+    EXPECT_FALSE(looper.isRecording());
+}
+
+TEST(PartSelection, RefusedSwitchLeavesSelectedPartIndexUnchanged)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFreeRecord(true);
+    looper.setFadeMs(0.f);
+    Buffer out{};
+    recordThenStopPlayback(looper, out, 1.f);
+
+    looper.setSelectedPart(1);
+    looper.processBlock(Buffer{}, out);
+    Buffer inB{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inB(i, 0) = 2.f;
+        inB(i, 1) = 2.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(inB, out); // redirected -> recording on part 1
+    ASSERT_TRUE(looper.isRecording());
+    ASSERT_EQ(looper.currentSelectedPartIndex(), 1);
+
+    looper.setSelectedPart(0); // part 0 has content, but active part 1 is Recording -> refused
+    looper.processBlock(inB, out);
+    EXPECT_EQ(looper.currentSelectedPartIndex(), 1) << "a refused switch must not update the selected index";
+}
+
+TEST(PartSelection, PartStatusLabelReflectsContentAndEmptiness)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFreeRecord(true);
+    looper.setFadeMs(0.f);
+
+    EXPECT_EQ(looper.partStatusLabel(0), "Part A: free");
+    EXPECT_EQ(looper.partStatusLabel(1), "Part B: free");
+
+    Buffer out{};
+    recordThenStopPlayback(looper, out, 1.f);
+    EXPECT_NE(looper.partStatusLabel(0), "Part A: free");
+}
+
 TEST(SpectrogramWrap, IsWrappedOnlyOnceRecordingStops)
 {
     Looper looper(kSampleRate);

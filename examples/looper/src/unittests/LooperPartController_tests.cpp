@@ -192,6 +192,7 @@ struct TransportFixture
               .undoPulse = undoPulse,
               .mixDownPulse = mixDownPulse,
               .requestSpectrogramRegen = [] {},
+              .tryRedirectRecordIntoSelectedPart = [] { return false; },
           })
     {
     }

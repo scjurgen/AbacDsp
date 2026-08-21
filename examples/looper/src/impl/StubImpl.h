@@ -78,6 +78,10 @@ class StubImpl final : public EffectBase
     {
         m_partCapacityBars = value;
     }
+    void setSelectedPart(const size_t value)
+    {
+        m_selectedPart = value;
+    }
     void setSliceDivision(const size_t value)
     {
         m_sliceDivision = value;
@@ -156,6 +160,7 @@ class StubImpl final : public EffectBase
     float m_recordBars{};
     float m_partCount{};
     float m_partCapacityBars{};
+    size_t m_selectedPart{};
     size_t m_sliceDivision{};
     float m_bpm{};
     float m_clickVolume{};

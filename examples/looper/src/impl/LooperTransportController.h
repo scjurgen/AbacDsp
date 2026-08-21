@@ -78,6 +78,9 @@ class LooperTransportController
         std::atomic<bool>& mixDownPulse;
 
         std::function<void()> requestSpectrogramRegen;
+        // Consulted only by toggleRecord()'s immediate-start branch; true means
+        // it redirected the press into a part-switch instead of starting fresh.
+        std::function<bool()> tryRedirectRecordIntoSelectedPart;
     };
 
     explicit LooperTransportController(Deps deps)
@@ -331,7 +334,7 @@ class LooperTransportController
             m_deps.timing.resetTimekeeper(false); // the performer needs an audible downbeat while waiting to play in
             m_deps.armed = true;                  // wait for the input to cross the threshold
         }
-        else
+        else if (!m_deps.tryRedirectRecordIntoSelectedPart())
         {
             startFreshRecording();
         }

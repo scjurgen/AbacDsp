@@ -169,6 +169,7 @@ class LooperImpl final : public EffectBase
               .undoPulse = m_undoPulse,
               .mixDownPulse = m_mixDownPulse,
               .requestSpectrogramRegen = [this] { requestSpectrogramRegen(); },
+              .tryRedirectRecordIntoSelectedPart = [this] { return tryRedirectRecordIntoSelectedPart(); },
           })
         , m_viewModel(typename LooperViewModel<BlockSize>::Deps{
               .bank = m_bank,
@@ -286,6 +287,12 @@ class LooperImpl final : public EffectBase
     void setPartCapacityBars(const float value) noexcept
     {
         m_partCapacityBarsReq.store(value, std::memory_order_relaxed);
+    }
+    // Applied in applyPartSelectionRequest(): a part with content queues an
+    // immediate switch, an empty one only becomes the next Record's target.
+    void setSelectedPart(const int value) noexcept
+    {
+        m_selectedPartReq.store(value, std::memory_order_relaxed);
     }
     // Index into kTimeSignatures. Applies immediately while stopped/armed/counting
     // in; queues to apply at the next bar boundary while recording; ignored while
@@ -632,6 +639,18 @@ class LooperImpl final : public EffectBase
         }
         return !isRecording() && !m_armed && !m_countingIn;
     }
+    [[nodiscard]] int currentPartCount() const noexcept
+    {
+        return m_appliedPartCount;
+    }
+    [[nodiscard]] int currentSelectedPartIndex() const noexcept
+    {
+        return static_cast<int>(m_selectedPartIndex);
+    }
+    [[nodiscard]] std::string partStatusLabel(const int index) const
+    {
+        return m_viewModel.partStatusLabel(static_cast<size_t>(index));
+    }
     [[nodiscard]] bool isArmed() const noexcept
     {
         return m_armed;
@@ -851,6 +870,37 @@ class LooperImpl final : public EffectBase
             m_appliedFadeMs = fadeMs;
         }
         applyPartSettingsRequest();
+        applyPartSelectionRequest();
+    }
+
+    // A part with content queues an immediate switch; an empty one is accepted
+    // unconditionally as just the next Record press's redirect target. A
+    // refusal leaves m_selectedPartIndex unchanged so the UI can snap back.
+    void applyPartSelectionRequest()
+    {
+        const auto target = static_cast<size_t>(std::clamp(m_selectedPartReq.load(std::memory_order_relaxed), 0,
+                                                           static_cast<int>(AbacDsp::kMaxLoopParts) - 1));
+        if (target == m_selectedPartIndex)
+        {
+            return;
+        }
+        if (target != m_activePartIndex && m_bank.hasContent(target) && !m_partController.requestSwitch(target))
+        {
+            return;
+        }
+        m_selectedPartIndex = target;
+    }
+
+    // Called from toggleRecord()'s immediate-start branch: true means the
+    // selected part is a different, empty one, so the press was redirected
+    // into a record-switch instead of starting fresh on the active part.
+    [[nodiscard]] bool tryRedirectRecordIntoSelectedPart()
+    {
+        if (m_selectedPartIndex == m_activePartIndex || m_bank.hasContent(m_selectedPartIndex))
+        {
+            return false;
+        }
+        return m_partController.requestRecordSwitch(m_selectedPartIndex);
     }
 
     // Only takes effect while canEditPartSettings() holds; otherwise retried
@@ -1454,10 +1504,14 @@ class LooperImpl final : public EffectBase
     int m_appliedTimeSignature{LooperTimingController::kDefaultTimeSignature};
     bool m_eighthNoteUnit{false};
     // Indexed by m_activePartIndex; see activeMeterTimeline()/activeFinalizedBarCount().
-    // Fixed at 0 until LooperPartController (Phase 2d) starts moving it.
     std::array<AbacDsp::MeterTimeline, AbacDsp::kMaxLoopParts> m_meterTimelines;
     std::array<size_t, AbacDsp::kMaxLoopParts> m_finalizedBarCounts{};
     size_t m_activePartIndex{0};
+    // The Part dropdown's intended target: accepted immediately for a switch
+    // request (even while it's still queued), left unchanged on refusal so the
+    // UI can snap the control back. See applyPartSelectionRequest().
+    size_t m_selectedPartIndex{0};
+    std::atomic<int> m_selectedPartReq{0};
     size_t m_takeBarIndex{0}; // bars elapsed since this take's own start (beginBarLockedRecord)
     // One-shot: set whenever a bar-locked take starts, consumed by the first bar
     // wrap applyMeterAtBarBoundary() sees, unconditionally cleared at the end of

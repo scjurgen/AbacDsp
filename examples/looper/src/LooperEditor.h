@@ -182,6 +182,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(partCountDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(partCapacityBarsDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(selectedPartDrop)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.performLayout(areas[0].toFloat());
             }
             {
@@ -352,6 +357,20 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             {
                 m_statusBar.showMessage(err);
             }
+            for (int i = 0; i < 4; ++i)
+            {
+                selectedPartDrop.changeItemText(i + 1, processorRef.partStatusLabel(i));
+                selectedPartDrop.setItemEnabled(i + 1, i < processorRef.currentPartCount());
+            }
+            if (auto* p = valueTreeState.getParameter("selectedPart"))
+            {
+                const int wanted = processorRef.currentSelectedPartIndex();
+                if (juce::roundToInt(p->convertFrom0to1(p->getValue())) != wanted)
+                {
+                    const auto& range = valueTreeState.getParameterRange("selectedPart");
+                    p->setValueNotifyingHost(range.convertTo0to1(static_cast<float>(wanted)));
+                }
+            }
             handleLoopLoadOutcome();
             beatGauge.setRemainingRecordLabel(processorRef.getRemainingRecordLabel());
             processorRef.consumeLastLearnedCc();
@@ -439,6 +458,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         partCapacityBarsDial.reset(valueTreeState, "partCapacityBars");
         partCapacityBarsDial.setLabelText(juce::String::fromUTF8("Part Capacity"));
         partCapacityBarsDial.setTooltip(juce::String::fromUTF8("Part Capacity (1 to 256 bars)"));
+        addAndMakeVisible(selectedPartDrop);
+        selectedPartDrop.addItemList(valueTreeState.getParameter("selectedPart")->getAllValueStrings(), 1);
+        selectedPartDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "selectedPart", selectedPartDrop);
+        selectedPartDrop.setTooltip(juce::String::fromUTF8("Part (Part A, Part B, Part C, Part D)"));
         addAndMakeVisible(sliceDivisionDrop);
         sliceDivisionDrop.addItemList(valueTreeState.getParameter("sliceDivision")->getAllValueStrings(), 1);
         sliceDivisionDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
@@ -550,6 +574,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             recordBarsDial.setVisible(false);
             partCountDial.setVisible(false);
             partCapacityBarsDial.setVisible(false);
+            selectedPartDrop.setVisible(false);
             sliceDivisionDrop.setVisible(false);
             bpmDial.setVisible(false);
             clickVolumeDial.setVisible(true);
@@ -581,6 +606,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             recordBarsDial.setVisible(true);
             partCountDial.setVisible(true);
             partCapacityBarsDial.setVisible(true);
+            selectedPartDrop.setVisible(true);
             sliceDivisionDrop.setVisible(true);
             bpmDial.setVisible(true);
             clickVolumeDial.setVisible(true);
@@ -1245,6 +1271,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial recordBarsDial{this};
     CustomRotaryDial partCountDial{this};
     CustomRotaryDial partCapacityBarsDial{this};
+    juce::ComboBox selectedPartDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> selectedPartDropAttachment;
     juce::ComboBox sliceDivisionDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> sliceDivisionDropAttachment;
     CustomRotaryDial bpmDial{this};

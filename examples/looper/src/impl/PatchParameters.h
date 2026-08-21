@@ -28,6 +28,7 @@ struct PatchParameters
         recordBars       , // dial
         partCount        , // dial
         partCapacityBars , // dial
+        selectedPart     , // drop
         sliceDivision    , // drop
         bpm              , // dial
         clickVolume      , // dial
@@ -53,6 +54,7 @@ bool autoStop{false};
 float recordBars{4.0f};
 float partCount{4.0f};
 float partCapacityBars{16.0f};
+size_t selectedPart{0};
 size_t sliceDivision{1};
 float bpm{120.0f};
 float clickVolume{-12.0f};
@@ -80,6 +82,7 @@ bool clearSeq{false};
 "recordBars",
 "partCount",
 "partCapacityBars",
+"selectedPart",
 "sliceDivision",
 "bpm",
 "clickVolume",
@@ -122,6 +125,7 @@ bool clearSeq{false};
         else if constexpr (ParamId == Id::recordBars) return recordBars;
         else if constexpr (ParamId == Id::partCount) return partCount;
         else if constexpr (ParamId == Id::partCapacityBars) return partCapacityBars;
+        else if constexpr (ParamId == Id::selectedPart) return selectedPart;
         else if constexpr (ParamId == Id::sliceDivision) return sliceDivision;
         else if constexpr (ParamId == Id::bpm) return bpm;
         else if constexpr (ParamId == Id::clickVolume) return clickVolume;
@@ -172,6 +176,8 @@ break;
  case Id::partCount: if (!isEqual(get<Id::partCount>(), value)) {get<Id::partCount>() = value;m_modified = true;}
 break;
  case Id::partCapacityBars: if (!isEqual(get<Id::partCapacityBars>(), value)) {get<Id::partCapacityBars>() = value;m_modified = true;}
+break;
+ case Id::selectedPart: if (!isEqual(get<Id::selectedPart>(), value)) {get<Id::selectedPart>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
  case Id::sliceDivision: if (!isEqual(get<Id::sliceDivision>(), value)) {get<Id::sliceDivision>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
@@ -246,6 +252,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         recordBars       , // dial
         partCount        , // dial
         partCapacityBars , // dial
+        selectedPart     , // drop
         sliceDivision    , // drop
         bpm              , // dial
         clickVolume      , // dial
