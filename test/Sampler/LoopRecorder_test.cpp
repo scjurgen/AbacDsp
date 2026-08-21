@@ -732,4 +732,128 @@ TEST(LoopRecorderTest, LoadLoopWithEmptySpansClears)
     EXPECT_FALSE(rec.hasLoop());
 }
 
+TEST(LoopRecorderTest, SnapshotForUndoBeforeFirstTakeUndoesToEmpty)
+{
+    Recorder rec{48000.f};
+    EXPECT_FALSE(rec.hasUndoSnapshot());
+    rec.snapshotForUndo(); // captures the Empty state itself
+    EXPECT_TRUE(rec.hasUndoSnapshot());
+
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+    ASSERT_TRUE(rec.hasLoop());
+
+    rec.undoRecord();
+    EXPECT_EQ(rec.state(), LooperState::Empty);
+    EXPECT_FALSE(rec.hasLoop());
+    EXPECT_FALSE(rec.hasUndoSnapshot());
+}
+
+TEST(LoopRecorderTest, UndoRecordAfterReRecordRestoresPreviousLoopContent)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+    ASSERT_EQ(rec.loopLengthFrames(), kBlock);
+
+    rec.snapshotForUndo();
+    rec.beginRecord();
+    feed(rec, kBlock, 100.f); // new take with clearly different content
+    rec.stopRecordFree();
+    ASSERT_FLOAT_EQ(rec.sample(0, 0), 100.f);
+
+    rec.undoRecord();
+    EXPECT_EQ(rec.state(), LooperState::Playing);
+    EXPECT_EQ(rec.loopLengthFrames(), kBlock);
+    for (size_t f = 0; f < kBlock; ++f)
+    {
+        EXPECT_FLOAT_EQ(rec.sample(f, 0), 1.f + static_cast<float>(f));
+    }
+}
+
+TEST(LoopRecorderTest, UndoRecordAbortsInProgressRecordAndRestoresPrevious)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+    ASSERT_EQ(rec.loopLengthFrames(), kBlock);
+
+    rec.snapshotForUndo();
+    rec.beginRecord();
+    feed(rec, kBlock, 50.f); // new take started, never stopped
+    ASSERT_EQ(rec.state(), LooperState::Recording);
+
+    rec.undoRecord();
+    EXPECT_EQ(rec.state(), LooperState::Playing);
+    EXPECT_EQ(rec.loopLengthFrames(), kBlock);
+    for (size_t f = 0; f < kBlock; ++f)
+    {
+        EXPECT_FLOAT_EQ(rec.sample(f, 0), 1.f + static_cast<float>(f));
+    }
+}
+
+TEST(LoopRecorderTest, UndoRecordWithoutSnapshotIsNoOp)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+    ASSERT_TRUE(rec.hasLoop());
+    EXPECT_FALSE(rec.hasUndoSnapshot());
+
+    rec.undoRecord();
+    EXPECT_EQ(rec.state(), LooperState::Playing);
+    EXPECT_EQ(rec.loopLengthFrames(), kBlock);
+    EXPECT_FLOAT_EQ(rec.sample(0, 0), 1.f);
+}
+
+TEST(LoopRecorderTest, UndoRecordRestoresOverdubLayerToo)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+
+    rec.beginOverdub();
+    runOne(rec, 10.f);
+    rec.endOverdub();
+    ASSERT_TRUE(rec.hasOverdub());
+
+    rec.snapshotForUndo();
+    rec.beginRecord();
+    feed(rec, kBlock, 99.f);
+    rec.stopRecordFree();
+    ASSERT_FALSE(rec.hasOverdub()); // fresh take starts with no overdub layer
+
+    rec.undoRecord();
+    EXPECT_TRUE(rec.hasOverdub());
+    for (size_t f = 0; f < kBlock; ++f)
+    {
+        EXPECT_FLOAT_EQ(rec.sample(f, 0), 1.f + static_cast<float>(f));
+        EXPECT_FLOAT_EQ(rec.overdubSample(f, 0), 10.f);
+    }
+}
+
+TEST(LoopRecorderTest, UndoRecordIsOneShot)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+
+    rec.snapshotForUndo();
+    rec.beginRecord();
+    feed(rec, kBlock, 50.f);
+    rec.stopRecordFree();
+
+    rec.undoRecord();
+    EXPECT_FALSE(rec.hasUndoSnapshot());
+    rec.undoRecord(); // second press: nothing left to undo
+    EXPECT_EQ(rec.loopLengthFrames(), kBlock);
+    EXPECT_FLOAT_EQ(rec.sample(0, 0), 1.f);
+}
+
 }

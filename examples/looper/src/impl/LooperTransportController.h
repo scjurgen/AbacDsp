@@ -97,9 +97,10 @@ class LooperTransportController
         const bool undoReq = m_deps.undoPulse.exchange(false, std::memory_order_relaxed);
         const bool mixDownReq = m_deps.mixDownPulse.exchange(false, std::memory_order_relaxed);
 
-        // The sequencer play/stop toggle, its own Clear, and Undo/Mix Down only
-        // touch state independent of the recorder's own transport state, so
-        // all are exempt from the guard below.
+        // The sequencer play/stop toggle, its own Clear, Undo, and Mix Down
+        // are exempt from the guard below. Undo in particular must still work
+        // while pendingStop is set: aborting an in-progress bar-locked take
+        // (see undo()) is exactly what it needs to do.
         if (seqPlayReq)
         {
             toggleSequencerPlayback();
@@ -110,7 +111,7 @@ class LooperTransportController
         }
         if (undoReq)
         {
-            m_deps.recorder.undoOverdub();
+            undo();
         }
         if (mixDownReq)
         {
@@ -153,6 +154,8 @@ class LooperTransportController
     // count-in elapsing), not just via toggleRecord().
     void startRecording()
     {
+        m_deps.recorder.snapshotForUndo();
+        m_deps.timing.snapshotMeterForUndo();
         m_deps.barLockedTake = !m_deps.freeRecord;
         if (m_deps.barLockedTake)
         {
@@ -243,6 +246,30 @@ class LooperTransportController
         m_deps.pattern.clear();
         m_deps.sequencerPlaying = false;
         m_deps.sequencer.setEnabled(false);
+    }
+
+    // Overdubbing: undo the overdub layer (unchanged from before). Otherwise:
+    // undo the last record instead, aborting an in-progress take or reverting
+    // a just-finished one back to whatever was there before it started.
+    void undo()
+    {
+        if (isOverdubbing())
+        {
+            m_deps.recorder.undoOverdub();
+            return;
+        }
+        if (!m_deps.recorder.hasUndoSnapshot())
+        {
+            return;
+        }
+        m_deps.recorder.undoRecord();
+        m_deps.timing.restoreMeterFromUndo();
+        m_deps.armed = false;
+        m_deps.countingIn = false;
+        m_deps.autoStopArmed = false;
+        m_deps.pendingStop = false;
+        m_deps.barLockedTake = false;
+        m_deps.requestSpectrogramRegen();
     }
 
     void finishRecording()

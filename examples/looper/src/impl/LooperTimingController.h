@@ -105,6 +105,21 @@ class LooperTimingController
         m_meterTimeline.buildFrameMap(m_finalizedBarCount, samplesPerQuarterBeat);
     }
 
+    // Pairs with LoopRecorder::snapshotForUndo()/undoRecord(): a record-undo
+    // reverts the audio but must also revert the meter timeline describing it,
+    // or the bar count/visualization would keep describing the aborted take.
+    void snapshotMeterForUndo() noexcept
+    {
+        m_undoMeterTimeline = m_meterTimeline;
+        m_undoFinalizedBarCount = m_finalizedBarCount;
+    }
+
+    void restoreMeterFromUndo() noexcept
+    {
+        m_meterTimeline = m_undoMeterTimeline;
+        m_finalizedBarCount = m_undoFinalizedBarCount;
+    }
+
     // Every fresh take starts at bar 1 beat 1. suppressFirstClick distinguishes
     // a pure phase resync (Play-resume, freeze completion: the next beatStart
     // is an artifact of the jump, not a real beat) from a fresh Record start,
@@ -164,4 +179,6 @@ class LooperTimingController
     bool& m_suppressNextClick;
     float m_sampleRate;
     uint64_t m_lastSyncedUpdateCount{0};
+    AbacDsp::MeterTimeline m_undoMeterTimeline;
+    size_t m_undoFinalizedBarCount{0};
 };

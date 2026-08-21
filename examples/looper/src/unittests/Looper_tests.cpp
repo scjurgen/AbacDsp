@@ -1268,6 +1268,85 @@ TEST(RecordingModes, PresetBarsAutoStopsAfterExactlyNBars)
     EXPECT_EQ(looper.rawLoopLengthFrames(), kExpectedLength);
 }
 
+TEST(RecordingModes, UndoRestoresPreviousLoopAfterReRecord)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFreeRecord(true); // sidesteps bar-locked stop timing, not the point of this test
+    looper.setFadeMs(0.f);      // isolates frame 0 from the boundary fade-in
+
+    Buffer inA{};
+    Buffer out{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inA(i, 0) = 1.f;
+        inA(i, 1) = 1.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(inA, out); // starts take 1
+    ASSERT_TRUE(looper.isRecording());
+    looper.processBlock(inA, out);
+    looper.setRecord(true);
+    looper.processBlock(inA, out); // stops take 1 (free record stops immediately)
+    ASSERT_FALSE(looper.isRecording());
+    const size_t firstLength = looper.rawLoopLengthFrames();
+    ASSERT_GT(firstLength, 0u);
+    ASSERT_NEAR(looper.rawLoopSample(0, 0), 1.f, 1e-3f);
+
+    Buffer inB{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inB(i, 0) = 5.f;
+        inB(i, 1) = 5.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(inB, out); // starts take 2, over-recording take 1
+    ASSERT_TRUE(looper.isRecording());
+    looper.setRecord(true);
+    looper.processBlock(inB, out); // stops take 2
+    ASSERT_FALSE(looper.isRecording());
+    ASSERT_NEAR(looper.rawLoopSample(0, 0), 5.f, 1e-3f);
+
+    looper.setUndo(true);
+    looper.processBlock(inB, out); // consumes the undo pulse
+    EXPECT_EQ(looper.rawLoopLengthFrames(), firstLength);
+    EXPECT_NEAR(looper.rawLoopSample(0, 0), 1.f, 1e-3f) << "undo after a record should restore the prior take";
+}
+
+TEST(RecordingModes, UndoWhileOverdubbingStillUndoesTheOverdubNotTheRecord)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFreeRecord(true);
+    looper.setFadeMs(0.f); // isolates frame 0 from the boundary fade-in
+
+    Buffer in{};
+    Buffer out{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        in(i, 0) = 1.f;
+        in(i, 1) = 1.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(in, out); // start
+    looper.setRecord(true);
+    looper.processBlock(in, out); // stop -> Playing
+    ASSERT_FALSE(looper.isRecording());
+    const size_t loopLength = looper.rawLoopLengthFrames();
+
+    looper.setOverdub(true);
+    looper.processBlock(in, out);
+    ASSERT_TRUE(looper.isOverdubbing());
+
+    looper.setUndo(true);
+    looper.processBlock(in, out); // undo while overdubbing: drops the overdub layer
+    EXPECT_FALSE(looper.isOverdubbing());
+    EXPECT_EQ(looper.rawLoopLengthFrames(), loopLength) << "the base take must be untouched";
+    EXPECT_NEAR(looper.rawLoopSample(0, 0), 1.f, 1e-3f);
+}
+
 TEST(TimeSignatureChange, ChangeDuringRecordingAppliesOnlyAtNextBarBoundary)
 {
     Looper looper(kSampleRate);

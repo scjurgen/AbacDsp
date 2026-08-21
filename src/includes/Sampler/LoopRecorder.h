@@ -46,6 +46,8 @@ class LoopRecorder
     {
         m_buffer.assign(m_maxFrames * kChannels, 0.f);
         m_overdubBuffer.assign(m_maxFrames * kChannels, 0.f);
+        m_undoBuffer.assign(m_maxFrames * kChannels, 0.f);
+        m_undoOverdubBuffer.assign(m_maxFrames * kChannels, 0.f);
         // Covers half a bar of relocate/fold at the slowest supported tempo.
         const size_t scratchFrames = std::max<size_t>(1, static_cast<size_t>(sampleRate * 8.f));
         m_postRollScratch.assign(scratchFrames * kChannels, 0.f);
@@ -208,6 +210,51 @@ class LoopRecorder
         {
             m_state = LooperState::Playing;
         }
+    }
+
+    // Captures the current loop so a following record can be undone. Call
+    // before beginRecord(); harmless (and correct) to call on an Empty loop,
+    // since undoing a first-ever take should revert to Empty too.
+    void snapshotForUndo() noexcept
+    {
+        m_undoLoopLengthFrames = m_loopLengthFrames;
+        m_undoHasOverdub = m_hasOverdub;
+        for (size_t frame = 0; frame < m_loopLengthFrames; ++frame)
+        {
+            m_undoBuffer[frame * kChannels] = m_buffer[frame * kChannels];
+            m_undoBuffer[frame * kChannels + 1] = m_buffer[frame * kChannels + 1];
+            m_undoOverdubBuffer[frame * kChannels] = m_overdubBuffer[frame * kChannels];
+            m_undoOverdubBuffer[frame * kChannels + 1] = m_overdubBuffer[frame * kChannels + 1];
+        }
+        m_undoValid = true;
+    }
+
+    [[nodiscard]] bool hasUndoSnapshot() const noexcept
+    {
+        return m_undoValid;
+    }
+
+    // Restores whatever snapshotForUndo() last captured: aborts an
+    // in-progress record, or reverts a just-finished one. One-shot, no redo.
+    void undoRecord() noexcept
+    {
+        if (!m_undoValid)
+        {
+            return;
+        }
+        m_loopLengthFrames = m_undoLoopLengthFrames;
+        m_hasOverdub = m_undoHasOverdub;
+        for (size_t frame = 0; frame < m_loopLengthFrames; ++frame)
+        {
+            m_buffer[frame * kChannels] = m_undoBuffer[frame * kChannels];
+            m_buffer[frame * kChannels + 1] = m_undoBuffer[frame * kChannels + 1];
+            m_overdubBuffer[frame * kChannels] = m_undoOverdubBuffer[frame * kChannels];
+            m_overdubBuffer[frame * kChannels + 1] = m_undoOverdubBuffer[frame * kChannels + 1];
+        }
+        m_recordedFrames = m_loopLengthFrames;
+        m_playPos = 0;
+        m_state = (m_loopLengthFrames > 0) ? LooperState::Playing : LooperState::Empty;
+        m_undoValid = false;
     }
 
     void processBlock(const AudioBuffer<kChannels, BlockSize>& in, AudioBuffer<kChannels, BlockSize>& out) noexcept
@@ -496,10 +543,15 @@ class LoopRecorder
     std::vector<float> m_overdubBuffer;
     std::vector<float> m_postRollScratch;
     std::vector<float> m_frontScratch;
+    std::vector<float> m_undoBuffer;
+    std::vector<float> m_undoOverdubBuffer;
 
     size_t m_fadeFrames{0};
     float m_overdubDecay{1.f};
     bool m_hasOverdub{false};
+    size_t m_undoLoopLengthFrames{0};
+    bool m_undoHasOverdub{false};
+    bool m_undoValid{false};
 
     LooperState m_state{LooperState::Empty};
     size_t m_recordedFrames{0};
