@@ -2251,6 +2251,35 @@ TEST(PartSelection, SwitchingPartsAppliesEachPartsOwnBpm)
     EXPECT_NEAR(looper.currentAppliedBpm(), 90.f, 1e-3f) << "part 0's own tempo must come back, not part 1's";
 }
 
+// Regression: switching into an empty part used to force-reset the live
+// bpm to its unset 120 default instead of carrying over the current one.
+TEST(PartSelection, RedirectedRecordInheritsTheCurrentBpmNotDefault)
+{
+    Looper looper(kSampleRate);
+    looper.setThreshRec(false);
+    looper.setFreeRecord(true);
+    looper.setFadeMs(0.f);
+
+    looper.setBpm(90.f);
+    Buffer out{};
+    recordThenStopPlayback(looper, out, 1.f); // part 0 recorded at 90 BPM
+
+    looper.setSelectedPart(1);
+    looper.processBlock(Buffer{}, out); // part 1 empty -> no immediate switch yet
+
+    Buffer inB{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inB(i, 0) = 2.f;
+        inB(i, 1) = 2.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(inB, out); // redirected: part 0 was Stopped, so this commits immediately
+    ASSERT_TRUE(looper.isRecording());
+    looper.processBlock(inB, out); // lets the inherited live bpm get adopted into part 1's own slot
+    EXPECT_NEAR(looper.currentAppliedBpm(), 90.f, 1e-3f) << "must inherit the live bpm, not reset to 120";
+}
+
 TEST(SpectrogramWrap, IsWrappedOnlyOnceRecordingStops)
 {
     Looper looper(kSampleRate);

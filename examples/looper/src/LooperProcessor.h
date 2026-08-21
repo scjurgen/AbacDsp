@@ -1012,6 +1012,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner ? pluginRunner->currentAppliedBpm() : 0.f;
     }
+    [[nodiscard]] bool canEditBpm() const noexcept
+    {
+        return pluginRunner && pluginRunner->canEditBpm();
+    }
     [[nodiscard]] bool isHostPresent() const noexcept
     {
         return wrapperType != juce::AudioProcessor::wrapperType_Standalone;

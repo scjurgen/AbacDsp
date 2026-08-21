@@ -195,7 +195,8 @@ class LooperTimingController
             m_seq.setBeatsPerBar(seg0.beatsPerBar);
             m_eighthNoteUnit = seg0.eighthUnit;
         }
-        applyTimeSignatureAwareBpm(activeAppliedBpm());
+        // bpm is deliberately NOT reapplied here: only LooperPartController
+        // knows whether the target has content, so it decides that itself.
     }
 
   private:

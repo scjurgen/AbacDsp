@@ -190,6 +190,10 @@ class LooperPartController
         m_activePartIndex = target;
         m_bank.setActiveIndex(target); // keeps LoopPartBank's own active() in sync
         m_timing.resyncTimekeeperToLoopStart();
+        if (m_bank.hasContent(target))
+        {
+            m_timing.applyTimeSignatureAwareBpm(m_timing.activeAppliedBpm()); // restore target's own bpm
+        }
 
         if (wasAudible)
         {

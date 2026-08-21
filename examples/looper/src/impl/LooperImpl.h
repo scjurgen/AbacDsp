@@ -615,6 +615,10 @@ class LooperImpl final : public EffectBase
     {
         return m_bank.active().state() == AbacDsp::LooperState::Overdubbing;
     }
+    [[nodiscard]] bool canEditBpm() const noexcept
+    {
+        return !isPlaying(); // includes Overdubbing; only Empty/Stopped/Recording/armed allow it
+    }
     [[nodiscard]] bool hasOverdub() const noexcept
     {
         return m_bank.active().hasOverdub();
@@ -1070,12 +1074,14 @@ class LooperImpl final : public EffectBase
         m_loopStorage.checkSaveCompletion();
         checkLoopLoadCompletion();
         m_resizeService.checkResizeCompletion();
-        // A part switch (possibly just committed above, in processRecorder())
-        // must not let the dial's stale last-requested bpm clobber the newly
-        // active part's own tempo on the next block; see applyParameters().
+        // Only resync the dial for a part with its own stored bpm; an empty
+        // part keeps whatever's currently live (see applyParameters()).
         if (m_activePartIndex != m_bpmSyncedPartIndex)
         {
-            m_bpm.store(m_appliedBpm[m_activePartIndex], std::memory_order_relaxed);
+            if (m_bank.hasContent(m_activePartIndex))
+            {
+                m_bpm.store(m_appliedBpm[m_activePartIndex], std::memory_order_relaxed);
+            }
             m_bpmSyncedPartIndex = m_activePartIndex;
         }
     }

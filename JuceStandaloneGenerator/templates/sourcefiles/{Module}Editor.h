@@ -574,6 +574,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
         juce::PopupMenu loops;
         loops.addSubMenu("Load", loadMenu, !m_loopMenuNames.empty());
+        loops.addItem(kLoopSaveId, "Save", !currentName.isEmpty());
         loops.addItem(kLoopSaveAsId, "Save As...");
         loops.addSubMenu("Delete", deleteMenu, !m_loopMenuNames.empty());
         loops.addSubMenu("Rename", renameMenu, !m_loopMenuNames.empty());
@@ -582,7 +583,16 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
     void handleLoopMenuSelection(int menuItemID)
     {
-        if (menuItemID == kLoopSaveAsId)
+        if (menuItemID == kLoopSaveId)
+        {
+            const auto currentName = processorRef.getCurrentLoopName();
+            if (!currentName.isEmpty())
+            {
+                processorRef.saveLoopAs(currentName);
+                m_statusBar.showMessage("Saving '" + currentName + "'...");
+            }
+        }
+        else if (menuItemID == kLoopSaveAsId)
         {
             promptSaveLoopAs();
         }
@@ -1136,6 +1146,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     /*END_PRESETBROWSER*/
 
     /*START_LOOPBROWSER*/
+    static constexpr int kLoopSaveId = 4999;
     static constexpr int kLoopSaveAsId = 5000;
     static constexpr int kLoopLoadIdBase = 6000;
     static constexpr int kLoopDeleteIdBase = 7000;
