@@ -2280,6 +2280,55 @@ TEST(PartSelection, RedirectedRecordInheritsTheCurrentBpmNotDefault)
     EXPECT_NEAR(looper.currentAppliedBpm(), 90.f, 1e-3f) << "must inherit the live bpm, not reset to 120";
 }
 
+// Regression: turning the dial while a recorded part is Stopped (allowed by
+// canEditBpm) used to immediately rescale that part's own display away from
+// its actual fixed-length audio, before any new take was ever recorded.
+TEST(PartSelection, BpmDialChangeWhileStoppedDoesNotDesyncUntilReRecorded)
+{
+    Looper looper(kSampleRate);
+    looper.setThreshRec(false);
+    looper.setFadeMs(0.f);
+    looper.setClickVolume(-60.f);
+    Buffer out{};
+    Buffer inA{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inA(i, 0) = 1.f;
+        inA(i, 1) = 1.f;
+    }
+    looper.setBpm(90.f);
+    looper.setRecord(true);
+    looper.processBlock(inA, out);
+    const size_t samplesPerBar90 = looper.getSamplesPerBar();
+    for (size_t elapsed = kBlock; elapsed < samplesPerBar90; elapsed += kBlock)
+    {
+        looper.processBlock(inA, out);
+    }
+    looper.setRecord(true);
+    while (looper.isRecording())
+    {
+        looper.processBlock(inA, out);
+    }
+    ASSERT_TRUE(looper.isPlaying());
+
+    looper.setPlay(true); // toggle: stop playback
+    looper.processBlock(Buffer{}, out);
+    ASSERT_FALSE(looper.isPlaying());
+
+    looper.setBpm(140.f); // allowed by canEditBpm while Stopped, must not apply yet
+    looper.processBlock(Buffer{}, out);
+    EXPECT_EQ(looper.getSamplesPerBar(), samplesPerBar90) << "display must stay on the recorded part's own tempo";
+    EXPECT_NEAR(looper.currentAppliedBpm(), 90.f, 1e-3f);
+
+    looper.setRecord(true); // re-record over the same part: now 140 may apply
+    while (!looper.isRecording())
+    {
+        looper.processBlock(inA, out);
+    }
+    looper.processBlock(inA, out); // lets the now-Recording state adopt the dialed-in tempo
+    EXPECT_NEAR(looper.currentAppliedBpm(), 140.f, 1e-3f) << "a fresh take on this part adopts the dialed-in tempo";
+}
+
 TEST(SpectrogramWrap, IsWrappedOnlyOnceRecordingStops)
 {
     Looper looper(kSampleRate);

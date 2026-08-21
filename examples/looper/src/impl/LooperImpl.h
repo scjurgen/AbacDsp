@@ -848,7 +848,11 @@ class LooperImpl final : public EffectBase
   private:
     void applyParameters()
     {
-        if (!m_hostSync)
+        // A Stopped part with content keeps its own tempo until a fresh take
+        // actually starts on it, or the ring display would desync from audio
+        // that hasn't been re-recorded.
+        const bool aboutToRecord = m_armed || m_countingIn || isRecording();
+        if (!m_hostSync && (!m_bank.hasContent(m_activePartIndex) || aboutToRecord))
         {
             const float bpm = m_bpm.load(std::memory_order_relaxed);
             if (std::not_equal_to<float>{}(bpm, m_appliedBpm[m_activePartIndex]))
