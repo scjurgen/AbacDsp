@@ -11,6 +11,7 @@
   "ports-control": [
     {"short": "DIV-O", "type": "label", "display": "—— Overdub ——", "symbol": "divo"},
     {"short": "DIV-S", "type": "label", "display": "—— Sequencer ——", "symbol": "divs"},
+    {"short": "TSTAT", "type": "label", "display": "Stopped", "symbol": "transportStatus"},
     {"short": "REC",  "type": "switch", "display": "Record",   "symbol": "record",   "default": 0, "momentary": true, "cc": {"controller": 64}},
     {"short": "PLAY", "type": "switch", "display": "Play",      "symbol": "play",     "default": 0, "momentary": true, "cc": {"controller": 66},
       "state_label": {"query": "isPlaying", "on": "Stop", "off": "Play"}, "enabled_query": "hasLoop"},
@@ -99,7 +100,7 @@
   },
   "performance-page": {
     "type": "||",
-    "composition": "C=(3:1) A1=(BEAT) A2=(BPM, PCNT, PART, REC, ASTP, PLAY, CLR, CVOL, LVOL, ODUB, UNDO, MIXD)"
+    "composition": "C=(3:1) A1=(BEAT) A2=(TSTAT, BPM, PCNT, PART, REC, ASTP, PLAY, CLR, CVOL, LVOL, ODUB, UNDO, MIXD)"
   },
   "extra_ui_includes": [
     "inc/SliceWaveDisplay.h",
@@ -114,7 +115,8 @@
     "if (auto* p = valueTreeState.getParameter(\"selectedPart\")) { const int wanted = processorRef.currentSelectedPartIndex(); if (juce::roundToInt(p->convertFrom0to1(p->getValue())) != wanted) { const auto& range = valueTreeState.getParameterRange(\"selectedPart\"); p->setValueNotifyingHost(range.convertTo0to1(static_cast<float>(wanted))); } }",
     "if (auto* p = valueTreeState.getParameter(\"bpm\")) { const float wanted = processorRef.currentAppliedBpm(); const float diff = p->convertFrom0to1(p->getValue()) - wanted; if (diff > 0.05f || diff < -0.05f) { const auto& range = valueTreeState.getParameterRange(\"bpm\"); p->setValueNotifyingHost(range.convertTo0to1(wanted)); } }",
     "handleLoopLoadOutcome();",
-    "beatGauge.setRemainingRecordLabel(processorRef.getRemainingRecordLabel());"
+    "beatGauge.setRemainingRecordLabel(processorRef.getRemainingRecordLabel());",
+    "transportStatusLabel.setText(juce::String::fromUTF8(processorRef.transportStatusText().c_str()), juce::dontSendNotification);"
   ],
   "processor_forwards": [
     {"name": "isHostSynced", "type": "bool"},
@@ -150,7 +152,8 @@
     {"name": "currentPartCount", "type": "int"},
     {"name": "currentSelectedPartIndex", "type": "int"},
     {"name": "currentAppliedBpm", "type": "float"},
-    {"name": "canEditBpm", "type": "bool"}
+    {"name": "canEditBpm", "type": "bool"},
+    {"name": "transportStatusText", "type": "std::string"}
   ],
   "extra_processor_methods": [
     "[[nodiscard]] bool isHostPresent() const noexcept { return wrapperType != juce::AudioProcessor::wrapperType_Standalone; }",

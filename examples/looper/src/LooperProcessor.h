@@ -1016,6 +1016,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner && pluginRunner->canEditBpm();
     }
+    [[nodiscard]] std::string transportStatusText() const
+    {
+        return pluginRunner ? pluginRunner->transportStatusText() : std::string{};
+    }
     [[nodiscard]] bool isHostPresent() const noexcept
     {
         return wrapperType != juce::AudioProcessor::wrapperType_Standalone;

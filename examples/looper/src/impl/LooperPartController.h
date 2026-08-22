@@ -71,6 +71,18 @@ class LooperPartController
         return m_pending;
     }
 
+    // Only meaningful while isSwitchPending() is true.
+    [[nodiscard]] size_t pendingTargetIndex() const noexcept
+    {
+        return m_pendingTarget;
+    }
+
+    // Only meaningful while isSwitchPending() is true.
+    [[nodiscard]] bool isPendingSwitchARecordRedirect() const noexcept
+    {
+        return m_pendingIsRecord;
+    }
+
     [[nodiscard]] bool isCrossfading() const noexcept
     {
         return m_crossfadeRemaining > 0;

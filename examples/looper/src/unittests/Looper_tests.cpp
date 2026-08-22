@@ -2415,3 +2415,156 @@ TEST(SpectrogramWrap, SeamSliceReflectsLoopTailNotRecordingStart)
     }
     EXPECT_GT(seamEnergy, 0.01f) << "seam slice should carry real energy from the loop's loud tail";
 }
+
+TEST(TransportStatusText, StoppedWhenFreshlyConstructed)
+{
+    Looper looper(kSampleRate);
+    EXPECT_EQ(looper.transportStatusText(), "Stopped");
+}
+
+TEST(TransportStatusText, ArmedWhileWaitingForThreshold)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(true);
+    looper.setRecThreshold(-24.f);
+
+    looper.setRecord(true); // arms, nothing loud enough to trigger yet
+    Buffer out{};
+    looper.processBlock(Buffer{}, out);
+    ASSERT_TRUE(looper.isArmed());
+    EXPECT_EQ(looper.transportStatusText(), "Armed, waiting for input");
+}
+
+TEST(TransportStatusText, CountingIn)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setCountInBars(2);
+
+    looper.setRecord(true);
+    Buffer out{};
+    looper.processBlock(Buffer{}, out);
+    ASSERT_TRUE(looper.isCountingIn());
+    EXPECT_EQ(looper.transportStatusText(), "Counting in");
+}
+
+TEST(TransportStatusText, RecordingShowsBarCountWhenAutoStopArmed)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setAutoStop(true);
+    looper.setRecordBars(2);
+
+    Buffer in{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        in(i, 0) = 0.3f;
+        in(i, 1) = -0.3f;
+    }
+    looper.setRecord(true);
+    Buffer out{};
+    looper.processBlock(in, out);
+    ASSERT_TRUE(looper.isRecording());
+    EXPECT_EQ(looper.transportStatusText(), "Recording (bar 1 of 2)");
+}
+
+TEST(TransportStatusText, PlayingOnceALoopExists)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFreeRecord(true);
+    looper.setFadeMs(0.f);
+
+    Buffer out{};
+    looper.setRecord(true);
+    Buffer in{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        in(i, 0) = 1.f;
+        in(i, 1) = 1.f;
+    }
+    looper.processBlock(in, out);
+    looper.setRecord(true);
+    looper.processBlock(in, out); // finalizes -> auto-transitions to Playing
+    EXPECT_EQ(looper.transportStatusText(), "Playing");
+}
+
+// Matches PartSelection.QueuedSwitchWaitsForActiveLoopsOwnLengthNotJustOneBar's setup:
+// selecting an empty part while the active one is audible queues a record-redirect.
+TEST(TransportStatusText, RecordRedirectQueuedNamesTheTargetPart)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFadeMs(0.f);
+    looper.setAutoStop(true);
+    looper.setRecordBars(8);
+
+    Buffer out{};
+    Buffer inA{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inA(i, 0) = 1.f;
+        inA(i, 1) = 1.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(inA, out);
+    while (looper.isRecording())
+    {
+        looper.processBlock(inA, out);
+    }
+    ASSERT_TRUE(looper.isPlaying());
+
+    looper.setSelectedPart(1);
+    looper.processBlock(Buffer{}, out);
+    Buffer inB{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inB(i, 0) = 2.f;
+        inB(i, 1) = 2.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(inB, out); // queued: part 0 is still audible
+    ASSERT_FALSE(looper.isRecording());
+    EXPECT_EQ(looper.transportStatusText(), "Record redirect to Part B queued");
+}
+
+TEST(TransportStatusText, SwitchToAlreadyRecordedPartQueuedNamesTheTargetPart)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFreeRecord(true);
+    looper.setFadeMs(0.f);
+    Buffer out{};
+
+    // Part A: recorded then explicitly stopped, so the redirect below commits immediately.
+    recordThenStopPlayback(looper, out, 1.f);
+
+    looper.setSelectedPart(1);
+    looper.processBlock(Buffer{}, out);
+    Buffer inB{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        inB(i, 0) = 2.f;
+        inB(i, 1) = 2.f;
+    }
+    looper.setRecord(true);
+    looper.processBlock(inB, out); // part A Stopped -> redirect commits immediately
+    ASSERT_TRUE(looper.isRecording());
+    for (int i = 0; i < 4; ++i)
+    {
+        looper.processBlock(inB, out); // several blocks, so the loop doesn't wrap in a single block below
+    }
+    looper.setRecord(true);
+    looper.processBlock(inB, out); // finalizes -> Part B Playing
+    ASSERT_TRUE(looper.isPlaying());
+
+    looper.setSelectedPart(0); // Part A has content, Part B is audible -> queues
+    looper.processBlock(Buffer{}, out);
+    EXPECT_EQ(looper.transportStatusText(), "Switch to Part A queued");
+}

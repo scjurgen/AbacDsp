@@ -101,6 +101,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
                 box.flexDirection = juce::FlexBox::Direction::column;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(transportStatusLabel)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(partCountDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(selectedPartDrop)
@@ -396,6 +401,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             }
             handleLoopLoadOutcome();
             beatGauge.setRemainingRecordLabel(processorRef.getRemainingRecordLabel());
+            transportStatusLabel.setText(juce::String::fromUTF8(processorRef.transportStatusText().c_str()),
+                                         juce::dontSendNotification);
             processorRef.consumeLastLearnedCc();
         }
     }
@@ -408,6 +415,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(divsLabel);
         divsLabel.setText(juce::String::fromUTF8("—— Sequencer ——"), juce::dontSendNotification);
         divsLabel.setTooltip(juce::String::fromUTF8("—— Sequencer ——"));
+        addAndMakeVisible(transportStatusLabel);
+        transportStatusLabel.setText(juce::String::fromUTF8("Stopped"), juce::dontSendNotification);
+        transportStatusLabel.setTooltip(juce::String::fromUTF8("Stopped"));
         addAndMakeVisible(recordSwitch);
         recordSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "record", recordSwitch);
@@ -582,6 +592,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         {
             divoLabel.setVisible(false);
             divsLabel.setVisible(false);
+            transportStatusLabel.setVisible(true);
             recordSwitch.setVisible(true);
             playSwitch.setVisible(true);
             overdubSwitch.setVisible(true);
@@ -614,6 +625,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         {
             divoLabel.setVisible(true);
             divsLabel.setVisible(true);
+            transportStatusLabel.setVisible(false);
             recordSwitch.setVisible(true);
             playSwitch.setVisible(true);
             overdubSwitch.setVisible(true);
@@ -1278,6 +1290,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
     juce::Label divoLabel{};
     juce::Label divsLabel{};
+    juce::Label transportStatusLabel{};
     MomentaryToggleButton recordSwitch{juce::String::fromUTF8("Record")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> recordSwitchAttachment;
     MomentaryToggleButton playSwitch{juce::String::fromUTF8("Play")};

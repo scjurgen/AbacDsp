@@ -674,6 +674,45 @@ class LooperImpl final : public EffectBase
         return m_viewModel.getStateLabel(m_armed, m_countingIn);
     }
 
+    // Accessible, textual transport status: richer than getStateLabel() (bar-count-
+    // remaining while recording, a queued part switch/record-redirect target).
+    [[nodiscard]] std::string transportStatusText() const
+    {
+        if (isRecording())
+        {
+            if (m_autoStopArmed)
+            {
+                return "Recording (bar " + std::to_string(m_takeBarIndex + 1) + " of " +
+                       std::to_string(m_autoStopBarTarget) + ")";
+            }
+            return "Recording";
+        }
+        if (m_countingIn)
+        {
+            return "Counting in";
+        }
+        if (m_armed)
+        {
+            return "Armed, waiting for input";
+        }
+        if (m_partController.isSwitchPending())
+        {
+            const char target = static_cast<char>('A' + m_partController.pendingTargetIndex());
+            return m_partController.isPendingSwitchARecordRedirect()
+                       ? std::string("Record redirect to Part ") + target + " queued"
+                       : std::string("Switch to Part ") + target + " queued";
+        }
+        if (isOverdubbing())
+        {
+            return "Overdubbing";
+        }
+        if (isPlaying())
+        {
+            return "Playing";
+        }
+        return "Stopped";
+    }
+
     // One bar of the musical signal, downbeat at index 0, for the CircularBarDisplay
     // (fed through the generated default "signal" gauge call). SliceWaveDisplay
     // ignores this and uses getLoopWaveform() instead.
