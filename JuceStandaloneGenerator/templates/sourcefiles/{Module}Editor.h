@@ -356,6 +356,51 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         return {fullName.substring(0, slashIndex), fullName.substring(slashIndex + 1)};
     }
 
+    // The unique, sorted set of folder prefixes already used by an existing name list
+    // (each entry "folder/leaf" or a root-level "leaf"), for a Save/Rename dialog's
+    // folder dropdown.
+    [[nodiscard]] static juce::StringArray collectFolderNames(const std::vector<juce::String>& names)
+    {
+        juce::StringArray folders;
+        for (const auto& fullName : names)
+        {
+            const int slashIndex = fullName.lastIndexOfChar('/');
+            if (slashIndex >= 0)
+            {
+                folders.addIfNotAlreadyThere(fullName.substring(0, slashIndex));
+            }
+        }
+        folders.sort(false);
+        return folders;
+    }
+
+    // Adds an editable folder dropdown to a Save/Rename dialog: existing folders to
+    // pick from, or type a new one in the same box. currentValue empty means root.
+    static void addFolderComboBox(juce::AlertWindow& dialog, const std::vector<juce::String>& existingNames,
+                                  const juce::String& currentValue)
+    {
+        juce::StringArray items{"(none)"};
+        items.addArray(collectFolderNames(existingNames));
+        dialog.addComboBox("folder", items, "Folder:");
+        if (auto* combo = dialog.getComboBoxComponent("folder"))
+        {
+            combo->setEditableText(true);
+            combo->setText(currentValue.isEmpty() ? "(none)" : currentValue, juce::dontSendNotification);
+        }
+    }
+
+    // Reads back addFolderComboBox()'s current value (picked or freely typed),
+    // mapping the "(none)" placeholder back to root/empty.
+    [[nodiscard]] static juce::String readFolderComboBox(const juce::AlertWindow& dialog)
+    {
+        if (auto* combo = dialog.getComboBoxComponent("folder"))
+        {
+            const auto text = combo->getText().trim();
+            return text == "(none)" ? juce::String() : text;
+        }
+        return {};
+    }
+
     /*START_PRESETBROWSER*/
     // A "/" in a name (e.g. "chorus/classic tri chorus") groups it under a folder
     // submenu; root-level entries stay directly in the returned menu. Shared by the
@@ -463,7 +508,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         const auto [folder, name] = splitFolderAndName(processorRef.getCurrentPatchName());
         m_patchNameDialog =
             std::make_unique<juce::AlertWindow>("Save Patch", juce::String(), juce::MessageBoxIconType::NoIcon);
-        m_patchNameDialog->addTextEditor("folder", folder, "Folder (optional):");
+        addFolderComboBox(*m_patchNameDialog, m_patchMenuNames, folder);
         m_patchNameDialog->addTextEditor("name", name, "Name:");
         m_patchNameDialog->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
         m_patchNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
@@ -471,8 +516,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                            juce::ModalCallbackFunction::create(
                                                [this](int result)
                                                {
-                                                   const auto folderText =
-                                                       m_patchNameDialog->getTextEditorContents("folder").trim();
+                                                   const auto folderText = readFolderComboBox(*m_patchNameDialog);
                                                    const auto nameText =
                                                        m_patchNameDialog->getTextEditorContents("name").trim();
                                                    m_patchNameDialog.reset();
@@ -499,7 +543,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         const auto [folder, name] = splitFolderAndName(oldName);
         m_patchNameDialog = std::make_unique<juce::AlertWindow>("Rename Patch \"" + oldName + "\"", juce::String(),
                                                                 juce::MessageBoxIconType::NoIcon);
-        m_patchNameDialog->addTextEditor("folder", folder, "Folder (optional):");
+        addFolderComboBox(*m_patchNameDialog, m_patchMenuNames, folder);
         m_patchNameDialog->addTextEditor("name", name, "Name:");
         m_patchNameDialog->addButton("Rename", 1, juce::KeyPress(juce::KeyPress::returnKey));
         m_patchNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
@@ -507,8 +551,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                            juce::ModalCallbackFunction::create(
                                                [this, oldName](int result)
                                                {
-                                                   const auto folderText =
-                                                       m_patchNameDialog->getTextEditorContents("folder").trim();
+                                                   const auto folderText = readFolderComboBox(*m_patchNameDialog);
                                                    const auto nameText =
                                                        m_patchNameDialog->getTextEditorContents("name").trim();
                                                    m_patchNameDialog.reset();
@@ -619,7 +662,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         m_loopNameDialog =
             std::make_unique<juce::AlertWindow>("Save Loop", juce::String(), juce::MessageBoxIconType::NoIcon);
-        m_loopNameDialog->addTextEditor("folder", "", "Folder (optional):");
+        addFolderComboBox(*m_loopNameDialog, m_loopMenuNames, "");
         m_loopNameDialog->addTextEditor("name", "", "Name:");
         m_loopNameDialog->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
         m_loopNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
@@ -627,8 +670,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                           juce::ModalCallbackFunction::create(
                                               [this](int result)
                                               {
-                                                  const auto folderText =
-                                                      m_loopNameDialog->getTextEditorContents("folder").trim();
+                                                  const auto folderText = readFolderComboBox(*m_loopNameDialog);
                                                   const auto nameText =
                                                       m_loopNameDialog->getTextEditorContents("name").trim();
                                                   m_loopNameDialog.reset();
@@ -649,7 +691,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         const auto [folder, name] = splitFolderAndName(oldName);
         m_loopNameDialog = std::make_unique<juce::AlertWindow>("Rename Loop \"" + oldName + "\"", juce::String(),
                                                                juce::MessageBoxIconType::NoIcon);
-        m_loopNameDialog->addTextEditor("folder", folder, "Folder (optional):");
+        addFolderComboBox(*m_loopNameDialog, m_loopMenuNames, folder);
         m_loopNameDialog->addTextEditor("name", name, "Name:");
         m_loopNameDialog->addButton("Rename", 1, juce::KeyPress(juce::KeyPress::returnKey));
         m_loopNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
@@ -657,8 +699,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                           juce::ModalCallbackFunction::create(
                                               [this, oldName](int result)
                                               {
-                                                  const auto folderText =
-                                                      m_loopNameDialog->getTextEditorContents("folder").trim();
+                                                  const auto folderText = readFolderComboBox(*m_loopNameDialog);
                                                   const auto nameText =
                                                       m_loopNameDialog->getTextEditorContents("name").trim();
                                                   m_loopNameDialog.reset();
@@ -916,7 +957,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         m_scriptNameDialog =
             std::make_unique<juce::AlertWindow>("Save Script", juce::String(), juce::MessageBoxIconType::NoIcon);
-        m_scriptNameDialog->addTextEditor("folder", "", "Folder (optional):");
+        addFolderComboBox(*m_scriptNameDialog, m_scriptMenuNames, "");
         m_scriptNameDialog->addTextEditor("name", "", "Name:");
         m_scriptNameDialog->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
         m_scriptNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
@@ -924,8 +965,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                             juce::ModalCallbackFunction::create(
                                                 [this](int result)
                                                 {
-                                                    const auto folderText =
-                                                        m_scriptNameDialog->getTextEditorContents("folder").trim();
+                                                    const auto folderText = readFolderComboBox(*m_scriptNameDialog);
                                                     const auto nameText =
                                                         m_scriptNameDialog->getTextEditorContents("name").trim();
                                                     m_scriptNameDialog.reset();
@@ -952,7 +992,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         const auto [folder, name] = splitFolderAndName(oldName);
         m_scriptNameDialog = std::make_unique<juce::AlertWindow>("Rename Script \"" + oldName + "\"", juce::String(),
                                                                  juce::MessageBoxIconType::NoIcon);
-        m_scriptNameDialog->addTextEditor("folder", folder, "Folder (optional):");
+        addFolderComboBox(*m_scriptNameDialog, m_scriptMenuNames, folder);
         m_scriptNameDialog->addTextEditor("name", name, "Name:");
         m_scriptNameDialog->addButton("Rename", 1, juce::KeyPress(juce::KeyPress::returnKey));
         m_scriptNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
@@ -960,8 +1000,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                             juce::ModalCallbackFunction::create(
                                                 [this, oldName](int result)
                                                 {
-                                                    const auto folderText =
-                                                        m_scriptNameDialog->getTextEditorContents("folder").trim();
+                                                    const auto folderText = readFolderComboBox(*m_scriptNameDialog);
                                                     const auto nameText =
                                                         m_scriptNameDialog->getTextEditorContents("name").trim();
                                                     m_scriptNameDialog.reset();
