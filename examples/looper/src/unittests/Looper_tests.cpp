@@ -2022,7 +2022,10 @@ TEST(PartSelection, SwitchingBackToAPreviouslyStoppedPartResumesItsPlayback)
 
 // Regression: Count-In used to short-circuit toggleRecord() before the
 // redirect check ran, so it always re-recorded the active part instead.
-TEST(PartSelection, RedirectedRecordSkipsCountInWhenActivePartIsStopped)
+// Regression (reported bug): the active part being Stopped means there is no live
+// audio reference to record against, exactly like the very first take -- so unlike a
+// redirect onto an audible part, this one must still honor count-in when configured.
+TEST(PartSelection, RedirectedRecordCountsInWhenActivePartIsStopped)
 {
     Looper looper(kSampleRate);
     looper.setBpm(kBpm);
@@ -2032,7 +2035,7 @@ TEST(PartSelection, RedirectedRecordSkipsCountInWhenActivePartIsStopped)
     Buffer out{};
     recordThenStopPlayback(looper, out, 1.f); // part 0: value 1, active=0, Stopped
 
-    looper.setCountInBars(2); // must not apply to the redirected take
+    looper.setCountInBars(2);
     looper.setSelectedPart(1);
     looper.processBlock(Buffer{}, out);
     ASSERT_EQ(looper.currentSelectedPartIndex(), 1);
@@ -2045,8 +2048,18 @@ TEST(PartSelection, RedirectedRecordSkipsCountInWhenActivePartIsStopped)
     }
     looper.setRecord(true);
     looper.processBlock(inB, out);
-    EXPECT_FALSE(looper.isCountingIn()) << "a redirected take must not count in again";
-    EXPECT_TRUE(looper.isRecording()) << "the redirected take must start immediately";
+    EXPECT_TRUE(looper.isCountingIn()) << "no live reference to record against -- count-in must still apply";
+    EXPECT_FALSE(looper.isRecording());
+
+    constexpr size_t kExpectedCountInFrames = 2 * kSamplesPerBar;
+    size_t elapsed = kBlock;
+    while (looper.isCountingIn())
+    {
+        looper.processBlock(inB, out);
+        elapsed += kBlock;
+        ASSERT_LE(elapsed, kExpectedCountInFrames + kBlock) << "count-in ran longer than expected";
+    }
+    EXPECT_TRUE(looper.isRecording()) << "the redirected take must start once count-in completes";
 }
 
 // Same gap, matching the actually-reported scenario: the active part is

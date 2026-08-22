@@ -224,9 +224,8 @@ class LooperPartController
         m_crossfadeRemaining = 0;
         if (isRecord)
         {
-            std::cout << diagPrefix() << "DIAG commitSwitch: not audible, starting fresh recording on target=" << target
-                      << "\n";
-            m_transport.startFreshRecording();
+            std::cout << diagPrefix() << "DIAG commitSwitch: not audible, arming take on target=" << target << "\n";
+            m_transport.beginFreshTakeOrArm();
         }
         else
         {

@@ -179,13 +179,34 @@ class LooperTransportController
         }
     }
 
-    // Beat 1 of a fresh take is a real downbeat, not a resync artifact, so
-    // this always resets the clock first -- used both by toggleRecord()'s own
-    // immediate-start branch and by a part-switch committing into a new take.
+    // Beat 1 of a fresh take is a real downbeat, not a resync artifact, so this
+    // always resets the clock first -- used by beginFreshTakeOrArm() below and
+    // by a part-switch's crossfade-complete transition (already had a reference).
     void startFreshRecording()
     {
         m_deps.timing.resetTimekeeper(false);
         startRecording();
+    }
+
+    // Count-in or threshold-arm if configured (no audio reference to record
+    // against yet), otherwise starts immediately. Shared by toggleRecord()'s own
+    // fallback and by commitSwitch()'s redirect-onto-a-silent-part case.
+    void beginFreshTakeOrArm()
+    {
+        if (m_deps.countInBars > 0)
+        {
+            m_deps.timing.resetTimekeeper(false); // count-in needs its beat 1 click to actually count something
+            m_deps.timing.beginCountIn(m_deps.countInBars, m_deps.absPos);
+        }
+        else if (m_deps.threshRecReq.load(std::memory_order_relaxed))
+        {
+            m_deps.timing.resetTimekeeper(false); // the performer needs an audible downbeat while waiting to play in
+            m_deps.armed = true;                  // wait for the input to cross the threshold
+        }
+        else
+        {
+            startFreshRecording();
+        }
     }
 
     // Remembers which path this take used, independent of later toggling.
@@ -377,26 +398,15 @@ class LooperTransportController
         {
             m_deps.armed = false; // pressing Record again while armed disarms
         }
-        // Checked before Count-In/Threshold: a redirected take starts on an
-        // already-audible part, so it needs neither -- those only make sense
-        // for the very first take, with no existing tempo reference yet.
+        // A redirect onto an audible part needs neither: it's itself the reference.
+        // A redirect onto a silent part still reaches beginFreshTakeOrArm() below.
         else if (m_deps.tryRedirectRecordIntoSelectedPart())
         {
             std::cout << diagPrefix() << "DIAG toggleRecord: redirected via tryRedirectRecordIntoSelectedPart\n";
         }
-        else if (m_deps.countInBars > 0)
-        {
-            m_deps.timing.resetTimekeeper(false); // count-in needs its beat 1 click to actually count something
-            m_deps.timing.beginCountIn(m_deps.countInBars, m_deps.absPos);
-        }
-        else if (m_deps.threshRecReq.load(std::memory_order_relaxed))
-        {
-            m_deps.timing.resetTimekeeper(false); // the performer needs an audible downbeat while waiting to play in
-            m_deps.armed = true;                  // wait for the input to cross the threshold
-        }
         else
         {
-            startFreshRecording();
+            beginFreshTakeOrArm();
         }
     }
 
