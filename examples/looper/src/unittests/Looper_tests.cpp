@@ -2459,6 +2459,46 @@ TEST(SpectrogramWrap, SeamSliceReflectsLoopTailNotRecordingStart)
     EXPECT_GT(seamEnergy, 0.01f) << "seam slice should carry real energy from the loop's loud tail";
 }
 
+// Regression: switching the active part left the spectrogram showing whichever part
+// was regenerated last, since commitSwitch() never requested a fresh regen itself.
+TEST(SpectrogramWrap, RegeneratesWhenActivePartSwitches)
+{
+    Looper looper(kSampleRate);
+    looper.setBpm(kBpm);
+    looper.setThreshRec(false);
+    looper.setFreeRecord(true);
+    looper.setFadeMs(0.f);
+
+    Buffer out{};
+    const auto waitForRegen = [&]
+    {
+        bool wrapped = false;
+        for (int i = 0; i < 2000 && !wrapped; ++i)
+        {
+            looper.processBlock(Buffer{}, out);
+            wrapped = looper.isSpectrogramWrapped() && looper.getSpectrogramHeadFrames() > 0;
+            if (!wrapped)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        }
+        ASSERT_TRUE(wrapped) << "spectrogram regen never completed";
+    };
+
+    recordThenStopPlayback(looper, out, 1.f); // part A, Stopped
+    waitForRegen();
+
+    looper.setSelectedPart(1);
+    looper.processBlock(Buffer{}, out);
+    recordThenStopPlayback(looper, out, 2.f); // redirected into part B (A is Stopped), also Stopped
+    waitForRegen();
+
+    looper.setSelectedPart(0); // B is Stopped -> commits immediately
+    looper.processBlock(Buffer{}, out);
+    EXPECT_EQ(looper.getSpectrogramHeadFrames(), 0u) << "switching parts must request a fresh regen";
+    waitForRegen();
+}
+
 TEST(TransportStatusText, StoppedWhenFreshlyConstructed)
 {
     Looper looper(kSampleRate);

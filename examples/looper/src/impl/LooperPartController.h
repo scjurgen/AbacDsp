@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstddef>
 #include <format>
+#include <functional>
 #include <iostream>
 
 #include "Audio/AudioBuffer.h"
@@ -21,13 +22,15 @@ class LooperPartController
   public:
     using Bank = AbacDsp::LoopPartBank<BlockSize>;
 
-    LooperPartController(Bank& bank, LooperTimingController& timing, LooperTransportController<BlockSize>& transport,
-                         size_t& activePartIndex, const size_t fadeFrames)
+    LooperPartController(
+        Bank& bank, LooperTimingController& timing, LooperTransportController<BlockSize>& transport,
+        size_t& activePartIndex, const size_t fadeFrames, std::function<void()> requestSpectrogramRegen = [] {})
         : m_bank(bank)
         , m_timing(timing)
         , m_transport(transport)
         , m_activePartIndex(activePartIndex)
         , m_fadeFrames(std::max<size_t>(1, fadeFrames))
+        , m_requestSpectrogramRegen(std::move(requestSpectrogramRegen))
     {
     }
 
@@ -201,6 +204,7 @@ class LooperPartController
 
         m_activePartIndex = target;
         m_bank.setActiveIndex(target); // keeps LoopPartBank's own active() in sync
+        m_requestSpectrogramRegen();   // the display must reflect whichever part is active now
         m_timing.resyncTimekeeperToLoopStart();
         if (m_bank.hasContent(target))
         {
@@ -240,6 +244,7 @@ class LooperPartController
     LooperTransportController<BlockSize>& m_transport;
     size_t& m_activePartIndex;
     size_t m_fadeFrames;
+    std::function<void()> m_requestSpectrogramRegen;
     bool m_pending{false};
     bool m_pendingIsRecord{false};
     size_t m_pendingTarget{0};

@@ -196,7 +196,8 @@ class LooperImpl final : public EffectBase
               .sampleRate = sampleRate,
           })
         , m_partController(m_bank, m_timingController, m_transportController, m_activePartIndex,
-                           static_cast<size_t>(kPartSwitchFadeMs / 1000.f * sampleRate))
+                           static_cast<size_t>(kPartSwitchFadeMs / 1000.f * sampleRate),
+                           [this] { requestSpectrogramRegen(); })
     {
         m_seq.setBpm(m_appliedBpm[m_activePartIndex]);
         m_click.setVolumeDb(m_clickVol.load(std::memory_order_relaxed));
