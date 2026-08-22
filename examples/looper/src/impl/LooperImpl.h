@@ -897,6 +897,21 @@ class LooperImpl final : public EffectBase
                            m_timingController.diagBeatIndexInBar() + 1);
     }
 
+    // DIAG: one heartbeat per beat. pos: is the running total; loop: wraps it to the
+    // active part's own bar count (a 4-bar loop's pos:5.1 is loop:1.1).
+    [[nodiscard]] std::string diagBeatLine() const
+    {
+        const auto deltaMs =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_diagStartTime)
+                .count();
+        const size_t totalBar = m_timingController.diagBarIndex() + 1;
+        const size_t beat = m_timingController.diagBeatIndexInBar() + 1;
+        const size_t loopBars = m_finalizedBarCounts[m_activePartIndex];
+        const size_t loopBar = loopBars > 0 ? ((totalBar - 1) % loopBars) + 1 : totalBar;
+        return std::format("[t={} pos:{}.{} loop:{}.{}] active: {} selected: {}\n", deltaMs, totalBar, beat, loopBar,
+                           beat, m_activePartIndex, m_selectedPartIndex);
+    }
+
     // A part with content queues an immediate switch; an empty one is accepted
     // unconditionally as just the next Record press's redirect target. A
     // refusal leaves m_selectedPartIndex unchanged so the UI can snap back.
@@ -1305,7 +1320,28 @@ class LooperImpl final : public EffectBase
             // conflict concept, so their own json's bpm is used directly.
             installLoadedPart(i, result->parts[i], i == 0 ? result->resolvedBpm : result->parts[i].bpm);
         }
+        logLoopLoadSummary();
         requestSpectrogramRegen();
+    }
+
+    // Descriptive only, same formula LoopStorageService::saveOnePart() uses for its
+    // JSON "bars" field: one source of truth for "how long is this part in bars".
+    void logLoopLoadSummary() const
+    {
+        std::cout << "LooperImpl: loaded '" << m_loopStorage.currentLoopName() << "'\n";
+        for (size_t i = 0; i < AbacDsp::kMaxLoopParts; ++i)
+        {
+            if (!m_bank.part(i).hasLoop())
+            {
+                continue;
+            }
+            const float bpm = m_appliedBpm[i];
+            const float samplesPerBeat = sampleRate() * 60.f / bpm;
+            const float bars = samplesPerBeat > 0.f ? static_cast<float>(m_bank.part(i).loopLengthFrames()) /
+                                                          samplesPerBeat / static_cast<float>(m_seq.beatsPerBar())
+                                                    : 0.f;
+            std::cout << "  part " << static_cast<char>('A' + i) << ": " << bars << " bars @ " << bpm << " bpm\n";
+        }
     }
 
     // Audio thread; installs one part's decoded audio/overdub/meter, if the
@@ -1501,10 +1537,7 @@ class LooperImpl final : public EffectBase
             m_barPos[i] = event.beatIndexInBar * samplesPerBeat + event.beatSamplePos;
             if (event.beatStart)
             {
-                std::cout << diagPrefix() << "DIAG beat: absPos=" << (m_absPos + i)
-                          << " suppressed=" << m_suppressNextClick << " isRecording=" << isRecording()
-                          << " isCountingIn=" << m_countingIn << " isPlaying=" << isPlaying()
-                          << " selectedPart=" << m_selectedPartIndex << " activePart=" << m_activePartIndex << "\n";
+                std::cout << diagBeatLine();
             }
             if (active)
             {
@@ -1639,6 +1672,9 @@ class LooperImpl final : public EffectBase
     // Bar-locked recording state.
     CaptureRing<BlockSize> m_captureRing;
     uint64_t m_absPos{0}; // free-running sample position, never reset
+
+    // DIAG: reference instant for diagBeatLine()'s relative timestamps.
+    const std::chrono::steady_clock::time_point m_diagStartTime{std::chrono::steady_clock::now()};
 
     bool m_barLockedTake{false};
     long m_startOffset{0}; // signed: tick - trigger (see beginBarLockedRecord)
