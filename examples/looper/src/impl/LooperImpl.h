@@ -169,6 +169,7 @@ class LooperImpl final : public EffectBase
               .threshRecReq = m_threshRecReq,
               .undoPulse = m_undoPulse,
               .mixDownPulse = m_mixDownPulse,
+              .replacePulse = m_replacePulse,
               .requestSpectrogramRegen = [this] { requestSpectrogramRegen(); },
               .tryRedirectRecordIntoSelectedPart = [this] { return tryRedirectRecordIntoSelectedPart(); },
           })
@@ -356,6 +357,13 @@ class LooperImpl final : public EffectBase
         if (value)
         {
             m_mixDownPulse.store(true, std::memory_order_relaxed);
+        }
+    }
+    void setReplace(const bool value) noexcept
+    {
+        if (value)
+        {
+            m_replacePulse.store(true, std::memory_order_relaxed);
         }
     }
     void setClear(const bool value) noexcept
@@ -1693,6 +1701,7 @@ class LooperImpl final : public EffectBase
     std::atomic<bool> m_overdubPulse{false};
     std::atomic<bool> m_undoPulse{false};
     std::atomic<bool> m_mixDownPulse{false};
+    std::atomic<bool> m_replacePulse{false};
     std::atomic<bool> m_clearPulse{false};
 
     // Each part remembers its own tempo; see LooperTimingController::activeAppliedBpm().

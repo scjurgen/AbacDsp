@@ -18,6 +18,7 @@ struct PatchParameters
         overdub          , // switch
         undo             , // switch
         mixDown          , // switch
+        replace          , // switch
         clear            , // switch
         threshRec        , // switch
         hostSync         , // switch
@@ -44,6 +45,7 @@ bool play{false};
 bool overdub{false};
 bool undo{false};
 bool mixDown{false};
+bool replace{false};
 bool clear{false};
 bool threshRec{false};
 bool hostSync{false};
@@ -72,6 +74,7 @@ bool clearSeq{false};
 "overdub",
 "undo",
 "mixDown",
+"replace",
 "clear",
 "threshRec",
 "hostSync",
@@ -115,6 +118,7 @@ bool clearSeq{false};
         else if constexpr (ParamId == Id::overdub) return overdub;
         else if constexpr (ParamId == Id::undo) return undo;
         else if constexpr (ParamId == Id::mixDown) return mixDown;
+        else if constexpr (ParamId == Id::replace) return replace;
         else if constexpr (ParamId == Id::clear) return clear;
         else if constexpr (ParamId == Id::threshRec) return threshRec;
         else if constexpr (ParamId == Id::hostSync) return hostSync;
@@ -156,6 +160,8 @@ break;
  case Id::undo: if (!isEqual(get<Id::undo>(), value)) {get<Id::undo>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::mixDown: if (!isEqual(get<Id::mixDown>(), value)) {get<Id::mixDown>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::replace: if (!isEqual(get<Id::replace>(), value)) {get<Id::replace>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::clear: if (!isEqual(get<Id::clear>(), value)) {get<Id::clear>() = static_cast<bool>(value) ;m_modified = true;}
 break;
@@ -242,6 +248,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         overdub          , // switch
         undo             , // switch
         mixDown          , // switch
+        replace          , // switch
         clear            , // switch
         threshRec        , // switch
         hostSync         , // switch

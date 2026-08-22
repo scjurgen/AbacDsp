@@ -38,6 +38,10 @@ class StubImpl final : public EffectBase
     {
         m_mixDown = value;
     }
+    void setReplace(const bool value)
+    {
+        m_replace = value;
+    }
     void setClear(const bool value)
     {
         m_clear = value;
@@ -150,6 +154,7 @@ class StubImpl final : public EffectBase
     bool m_overdub{};
     bool m_undo{};
     bool m_mixDown{};
+    bool m_replace{};
     bool m_clear{};
     bool m_threshRec{};
     bool m_hostSync{};

@@ -212,6 +212,22 @@ class LoopRecorder
         }
     }
 
+    // Discards the loop instead of merging: anywhere not touched during the overdub
+    // goes silent. Ends the take if called mid-overdub, same as endOverdub().
+    void replaceWithOverdub() noexcept
+    {
+        for (size_t frame = 0; frame < m_loopLengthFrames; ++frame)
+        {
+            m_buffer[frame * kChannels] = m_overdubBuffer[frame * kChannels];
+            m_buffer[frame * kChannels + 1] = m_overdubBuffer[frame * kChannels + 1];
+        }
+        resetOverdub();
+        if (m_state == LooperState::Overdubbing)
+        {
+            m_state = LooperState::Playing;
+        }
+    }
+
     // Captures the current loop so a following record can be undone. Call
     // before beginRecord(); harmless (and correct) to call on an Empty loop,
     // since undoing a first-ever take should revert to Empty too.

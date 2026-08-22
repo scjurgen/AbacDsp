@@ -21,6 +21,8 @@
       "state_label": {"query": "hasOverdub", "on": "Undo Overdub", "off": "Undo"}, "enabled_query": "hasLoop"},
     {"short": "MIXD", "type": "switch", "display": "Mix Down",  "symbol": "mixDown",  "default": 0, "momentary": true, "cc": {"controller": 68},
       "enabled_query": "hasOverdub"},
+    {"short": "REPL", "type": "switch", "display": "Replace",  "symbol": "replace",  "default": 0, "momentary": true, "cc": {"controller": 73},
+      "description": "Replace the loop with the overdub layer", "enabled_query": "hasOverdub"},
     {"short": "CLR",  "type": "switch", "display": "Clear",     "symbol": "clear",    "default": 0, "momentary": true, "cc": {"controller": 69},
       "enabled_query": "hasLoop"},
     {"short": "TREC", "type": "switch", "display": "Thresh Rec", "symbol": "threshRec", "default": 0, "cc": {"controller": 70}},
@@ -96,11 +98,11 @@
     "WINDOW_WIDTH": "1400",
     "WINDOW_HEIGHT": "800",
     "type": "||||",
-    "composition": "C=(1:1:1:1) A1=(SYNC, TSIG, CIN, BPM, DIV, RBAR, PCNT, PCAP, PART) A2=(REC, ASTP, TREC, FREE, THR, CVOL, CTRK) A3=(PLAY, CLR, LVOL, FRZ) A4=(DIV-O, ODUB, UNDO, MIXD, DIV-S, SEQP, CLRS)"
+    "composition": "C=(1:1:1:1) A1=(SYNC, TSIG, CIN, BPM, DIV, RBAR, PCNT, PCAP, PART) A2=(REC, ASTP, TREC, FREE, THR, CVOL, CTRK) A3=(PLAY, CLR, LVOL, FRZ) A4=(DIV-O, ODUB, UNDO, MIXD, REPL, DIV-S, SEQP, CLRS)"
   },
   "performance-page": {
     "type": "||",
-    "composition": "C=(3:1) A1=(BEAT) A2=(TSTAT, BPM, PCNT, PART, REC, ASTP, PLAY, CLR, CVOL, LVOL, ODUB, UNDO, MIXD)"
+    "composition": "C=(3:1) A1=(BEAT) A2=(TSTAT, BPM, PCNT, PART, REC, ASTP, PLAY, CLR, CVOL, LVOL, ODUB, UNDO, MIXD, REPL)"
   },
   "extra_ui_includes": [
     "inc/SliceWaveDisplay.h",

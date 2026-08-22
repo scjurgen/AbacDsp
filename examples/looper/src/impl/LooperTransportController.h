@@ -79,6 +79,7 @@ class LooperTransportController
         std::atomic<bool>& threshRecReq;
         std::atomic<bool>& undoPulse;
         std::atomic<bool>& mixDownPulse;
+        std::atomic<bool>& replacePulse;
 
         std::function<void()> requestSpectrogramRegen;
         // Consulted only by toggleRecord()'s immediate-start branch; true means
@@ -111,8 +112,9 @@ class LooperTransportController
         const bool clearSeqReq = m_deps.clearSeqPulse.exchange(false, std::memory_order_relaxed);
         const bool undoReq = m_deps.undoPulse.exchange(false, std::memory_order_relaxed);
         const bool mixDownReq = m_deps.mixDownPulse.exchange(false, std::memory_order_relaxed);
+        const bool replaceReq = m_deps.replacePulse.exchange(false, std::memory_order_relaxed);
 
-        // seqPlay/clearSeq/undo/mixDown are exempt from the guard below;
+        // seqPlay/clearSeq/undo/mixDown/replace are exempt from the guard below;
         // Undo must work even during pendingStop (aborts an in-progress take).
         if (seqPlayReq)
         {
@@ -129,6 +131,11 @@ class LooperTransportController
         if (mixDownReq)
         {
             activeRecorder().mixDownOverdub();
+            m_deps.requestSpectrogramRegen();
+        }
+        if (replaceReq)
+        {
+            activeRecorder().replaceWithOverdub();
             m_deps.requestSpectrogramRegen();
         }
 

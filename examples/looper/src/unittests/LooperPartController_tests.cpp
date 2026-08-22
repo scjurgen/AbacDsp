@@ -140,6 +140,7 @@ struct TransportFixture
     std::atomic<bool> threshRecReq{false};
     std::atomic<bool> undoPulse{false};
     std::atomic<bool> mixDownPulse{false};
+    std::atomic<bool> replacePulse{false};
 
     Transport transport;
 
@@ -191,6 +192,7 @@ struct TransportFixture
               .threshRecReq = threshRecReq,
               .undoPulse = undoPulse,
               .mixDownPulse = mixDownPulse,
+              .replacePulse = replacePulse,
               .requestSpectrogramRegen = [] {},
               .tryRedirectRecordIntoSelectedPart = [] { return false; },
           })

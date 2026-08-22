@@ -150,6 +150,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(replaceSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.performLayout(areas[1].toFloat());
             }
         }
@@ -279,6 +284,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(replaceSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(divsLabel)
                                   .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
@@ -332,6 +342,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             overdubSwitch.tickFlash();
             undoSwitch.tickFlash();
             mixDownSwitch.tickFlash();
+            replaceSwitch.tickFlash();
             clearSwitch.tickFlash();
             freezeSwitch.tickFlash();
             seqPlaySwitch.tickFlash();
@@ -348,6 +359,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             overdubSwitch.setEnabled(processorRef.hasLoop());
             undoSwitch.setEnabled(processorRef.hasLoop());
             mixDownSwitch.setEnabled(processorRef.hasOverdub());
+            replaceSwitch.setEnabled(processorRef.hasOverdub());
             clearSwitch.setEnabled(processorRef.hasLoop());
             hostSyncSwitch.setEnabled(processorRef.isHostPresent());
             freeRecordSwitch.setEnabled(processorRef.hasLoop());
@@ -442,6 +454,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         mixDownSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             valueTreeState, "mixDown", mixDownSwitch);
         mixDownSwitch.setTooltip(juce::String::fromUTF8("Mix Down"));
+
+        addAndMakeVisible(replaceSwitch);
+        replaceSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "replace", replaceSwitch);
+        replaceSwitch.setTooltip(juce::String::fromUTF8("Replace the loop with the overdub layer"));
 
         addAndMakeVisible(clearSwitch);
         clearSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -598,6 +615,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             overdubSwitch.setVisible(true);
             undoSwitch.setVisible(true);
             mixDownSwitch.setVisible(true);
+            replaceSwitch.setVisible(true);
             clearSwitch.setVisible(true);
             threshRecSwitch.setVisible(false);
             hostSyncSwitch.setVisible(false);
@@ -631,6 +649,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             overdubSwitch.setVisible(true);
             undoSwitch.setVisible(true);
             mixDownSwitch.setVisible(true);
+            replaceSwitch.setVisible(true);
             clearSwitch.setVisible(true);
             threshRecSwitch.setVisible(true);
             hostSyncSwitch.setVisible(true);
@@ -1301,6 +1320,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> undoSwitchAttachment;
     MomentaryToggleButton mixDownSwitch{juce::String::fromUTF8("Mix Down")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> mixDownSwitchAttachment;
+    MomentaryToggleButton replaceSwitch{juce::String::fromUTF8("Replace")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> replaceSwitchAttachment;
     MomentaryToggleButton clearSwitch{juce::String::fromUTF8("Clear")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> clearSwitchAttachment;
     juce::ToggleButton threshRecSwitch{juce::String::fromUTF8("Thresh Rec")};

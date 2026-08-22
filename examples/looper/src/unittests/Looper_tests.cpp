@@ -1551,6 +1551,36 @@ TEST(RecordingModes, UndoWhileOverdubbingStillUndoesTheOverdubNotTheRecord)
     EXPECT_NEAR(looper.rawLoopSample(0, 0), 1.f, 1e-3f);
 }
 
+// Differs from Mix Down (which sums the overdub onto the loop): Replace makes the loop
+// exactly the overdub layer, frame for frame, silencing whatever it never touched.
+TEST(RecordingModes, ReplaceDiscardsTheLoopKeepingOnlyTheOverdubLayer)
+{
+    Looper looper(kLoopFileSampleRate);
+    recordKnownLoop(looper);
+    ASSERT_TRUE(looper.isPlaying());
+    const size_t loopLength = looper.rawLoopLengthFrames();
+
+    addKnownOverdub(looper, 0.5f);
+    ASSERT_TRUE(looper.hasOverdub());
+    std::vector<float> overdubSnapshot(loopLength);
+    for (size_t f = 0; f < loopLength; ++f)
+    {
+        overdubSnapshot[f] = looper.rawOverdubSample(f, 0);
+    }
+    ASSERT_TRUE(std::ranges::any_of(overdubSnapshot, [](const float v) { return v == 0.f; }))
+        << "test setup must leave part of the loop unoverdubbed";
+
+    Buffer silence{};
+    Buffer out{};
+    looper.setReplace(true);
+    looper.processBlock(silence, out);
+    EXPECT_FALSE(looper.hasOverdub());
+    for (size_t f = 0; f < loopLength; ++f)
+    {
+        EXPECT_NEAR(looper.rawLoopSample(f, 0), overdubSnapshot[f], 1e-3f) << "frame " << f;
+    }
+}
+
 TEST(TimeSignatureChange, ChangeDuringRecordingAppliesOnlyAtNextBarBoundary)
 {
     Looper looper(kSampleRate);

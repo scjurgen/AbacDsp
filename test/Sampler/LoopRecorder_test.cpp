@@ -544,6 +544,68 @@ TEST(LoopRecorderTest, MixDownOverdubMidTakeEndsTake)
     }
 }
 
+TEST(LoopRecorderTest, ReplaceWithOverdubUsesOnlyTheOverdubLayer)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+
+    rec.beginOverdub();
+    runOne(rec, 10.f);
+    rec.endOverdub();
+
+    rec.replaceWithOverdub();
+    EXPECT_FALSE(rec.hasOverdub());
+    for (size_t f = 0; f < kBlock; ++f)
+    {
+        EXPECT_FLOAT_EQ(rec.sample(f, 0), 10.f);
+        EXPECT_FLOAT_EQ(rec.overdubSample(f, 0), 0.f);
+    }
+}
+
+TEST(LoopRecorderTest, ReplaceWithOverdubMidTakeEndsTake)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, kBlock, 1.f);
+    rec.stopRecordFree();
+
+    rec.beginOverdub();
+    runOne(rec, 10.f);
+    rec.replaceWithOverdub();
+    EXPECT_EQ(rec.state(), LooperState::Playing);
+    EXPECT_FALSE(rec.hasOverdub());
+    for (size_t f = 0; f < kBlock; ++f)
+    {
+        EXPECT_FLOAT_EQ(rec.sample(f, 0), 10.f);
+    }
+}
+
+// The actual differentiator from Mix Down: a partial overdub (fewer frames than the
+// loop) leaves the untouched tail unchanged after Mix Down, silent after Replace.
+TEST(LoopRecorderTest, ReplaceWithOverdubSilencesFramesTheOverdubNeverTouched)
+{
+    Recorder rec{48000.f};
+    rec.beginRecord();
+    feed(rec, 2 * kBlock, 1.f);
+    rec.stopRecordFree();
+
+    rec.beginOverdub();
+    runOne(rec, 10.f); // only the first block is overdubbed
+    rec.endOverdub();
+
+    rec.replaceWithOverdub();
+    for (size_t f = 0; f < kBlock; ++f)
+    {
+        EXPECT_FLOAT_EQ(rec.sample(f, 0), 10.f);
+    }
+    for (size_t f = kBlock; f < 2 * kBlock; ++f)
+    {
+        EXPECT_FLOAT_EQ(rec.sample(f, 0), 0.f) << "frame " << f << " was never overdubbed";
+    }
+}
+
 TEST(LoopRecorderTest, MultipleOverdubPassesAccumulateInLayer)
 {
     Recorder rec{48000.f};
