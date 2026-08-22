@@ -1285,7 +1285,6 @@ class LooperImpl final : public EffectBase
         m_bank.setActiveIndex(0);
         m_activePartIndex = 0;
         m_selectedPartIndex = 0;
-        requestSpectrogramRegen();
         m_seq.setBpm(result->resolvedBpm);
         m_appliedBpm[0] = result->resolvedBpm;
         m_bpm.store(result->resolvedBpm, std::memory_order_relaxed);
@@ -1306,6 +1305,7 @@ class LooperImpl final : public EffectBase
             // conflict concept, so their own json's bpm is used directly.
             installLoadedPart(i, result->parts[i], i == 0 ? result->resolvedBpm : result->parts[i].bpm);
         }
+        requestSpectrogramRegen();
     }
 
     // Audio thread; installs one part's decoded audio/overdub/meter, if the
