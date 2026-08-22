@@ -29,9 +29,9 @@ enum class SubdivType : uint8_t
  * clock: a caller learns the exact frame a beat starts on, so a triggered event
  * lands on the sample rather than at the next block boundary.
  *
- * Position is carried as an integer sample count within the beat instead of an
- * accumulated float phase, so a long run cannot drift away from the bar line.
- * The grid can be realigned to a host quarter-note position at any time.
+ * Each beat's length comes from a running fractional accumulator rather than a
+ * fixed rounded value, keeping bar boundaries within half a sample of true
+ * tempo indefinitely instead of compounding a per-beat rounding error.
  */
 class BeatSequencer
 {
@@ -85,6 +85,7 @@ class BeatSequencer
         m_beatSamplePos = 0;
         m_beatIndexInBar = 0;
         m_barIndex = 0;
+        restartBeatLengthAccumulator();
     }
 
     void resetBarPosition() noexcept
@@ -106,9 +107,10 @@ class BeatSequencer
                 break;
             }
         }
-        if (++m_beatSamplePos >= m_samplesPerBeat)
+        if (++m_beatSamplePos >= m_currentBeatLength)
         {
             m_beatSamplePos = 0;
+            m_currentBeatLength = nextBeatLength();
             if (++m_beatIndexInBar >= m_beatsPerBar)
             {
                 m_beatIndexInBar = 0;
@@ -136,6 +138,7 @@ class BeatSequencer
         const double beatFraction = phaseInBar - static_cast<double>(beatIndex);
         m_beatIndexInBar = beatIndex;
         m_beatSamplePos = static_cast<size_t>(beatFraction * static_cast<double>(m_samplesPerBeat));
+        restartBeatLengthAccumulator();
     }
 
     [[nodiscard]] float bpm() const noexcept
@@ -218,8 +221,30 @@ class BeatSequencer
     void applyBpm(const float bpm)
     {
         m_bpm = bpm;
+        m_exactSamplesPerBeat = static_cast<double>(m_sampleRate) * 60.0 / static_cast<double>(bpm);
         m_samplesPerBeat = beatsToSamples(bpm);
+        m_currentBeatLength = m_samplesPerBeat;
         updateSubPositions();
+    }
+
+    // Restarts the drift-correction accumulator (advance()'s beat-length source) fresh
+    // from the current instant: used whenever position itself is reset or repositioned.
+    void restartBeatLengthAccumulator() noexcept
+    {
+        m_idealBeatBoundary = 0.0;
+        m_actualBeatBoundary = 0;
+        m_currentBeatLength = m_samplesPerBeat;
+    }
+
+    // Bresenham-style correction: m_actualBeatBoundary tracks round(m_idealBeatBoundary)
+    // exactly at every beat, so no per-beat rounding error can compound across a run.
+    [[nodiscard]] size_t nextBeatLength() noexcept
+    {
+        m_idealBeatBoundary += m_exactSamplesPerBeat;
+        const auto idealRounded = static_cast<int64_t>(std::llround(m_idealBeatBoundary));
+        const auto length = static_cast<size_t>(idealRounded - m_actualBeatBoundary);
+        m_actualBeatBoundary = idealRounded;
+        return length;
     }
 
     void updateSubPositions()
@@ -257,7 +282,7 @@ class BeatSequencer
 
     [[nodiscard]] size_t beatsToSamples(const float bpm) const noexcept
     {
-        return static_cast<size_t>(m_sampleRate * 60.f / bpm);
+        return static_cast<size_t>(std::lround(m_sampleRate * 60.f / bpm));
     }
 
     float m_sampleRate{48000.f};
@@ -270,6 +295,12 @@ class BeatSequencer
     size_t m_beatSamplePos{0};
     size_t m_beatIndexInBar{0};
     size_t m_barIndex{0};
+
+    // Drift-correction state for advance()'s per-beat length (see nextBeatLength()).
+    double m_exactSamplesPerBeat{0.0};
+    double m_idealBeatBoundary{0.0};
+    int64_t m_actualBeatBoundary{0};
+    size_t m_currentBeatLength{0};
 
     std::vector<size_t> m_subPositions;
 };

@@ -45,6 +45,44 @@ TEST(BeatSequencerTest, SamplesPerBeatMatchesBpm)
     EXPECT_EQ(seq.samplesPerBeat(), 48000u);
 }
 
+TEST(BeatSequencerTest, SamplesPerBeatRoundsInsteadOfTruncating)
+{
+    BeatSequencer seq{kSampleRate};
+    // 95 BPM -> 30315.789... samples/beat; truncation gave 30315, nearest is 30316.
+    seq.setBpm(95.f);
+    EXPECT_EQ(seq.samplesPerBeat(), 30316u);
+}
+
+// Regression: a fixed rounded samples-per-beat compounds its own rounding error over many
+// beats (24 * round(36923.0769) = 886152, two samples short of the 886154 a 6-bar/4-4 take
+// at 78 BPM should actually land on). The accumulator in nextBeatLength() must not drift.
+TEST(BeatSequencerTest, BeatBoundariesStayWithinOneSampleOfContinuousTempoOverManyBeats)
+{
+    BeatSequencer seq{kSampleRate};
+    seq.setBpm(78.f);
+    constexpr size_t kBeats = 24; // 6 bars of 4/4, the originally reported scenario
+    constexpr double kExactSamplesPerBeat = static_cast<double>(kSampleRate) * 60.0 / 78.0;
+    const auto idealTotal = static_cast<size_t>(kExactSamplesPerBeat * static_cast<double>(kBeats) + 0.5);
+
+    size_t completedBeats = 0;
+    size_t sample = 0;
+    size_t totalFrames = 0;
+    while (completedBeats < kBeats)
+    {
+        const auto event = seq.advance();
+        if (event.beatStart && sample > 0)
+        {
+            ++completedBeats;
+            if (completedBeats == kBeats)
+            {
+                totalFrames = sample;
+            }
+        }
+        ++sample;
+    }
+    EXPECT_EQ(totalFrames, idealTotal);
+}
+
 TEST(BeatSequencerTest, BeatStartsAreEvenlySpaced)
 {
     BeatSequencer seq{kSampleRate};
