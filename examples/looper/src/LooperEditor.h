@@ -234,6 +234,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.items.add(juce::FlexItem(recThresholdDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(clickVolumeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(clickRecordVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(useGrooveSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(grooveVariationDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[1].toFloat());
             }
             {
@@ -547,6 +553,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                    [this](float lo, float hi) { processorRef.setCcRange(CcTarget::clickRecordVolume, lo, hi); },
                    [this] { processorRef.clearCcAssignment(CcTarget::clickRecordVolume); },
                    [this] { return processorRef.getCcController(CcTarget::clickRecordVolume); }});
+        addAndMakeVisible(useGrooveSwitch);
+        useGrooveSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "useGroove", useGrooveSwitch);
+        useGrooveSwitch.setTooltip(juce::String::fromUTF8("Groove"));
+
+        addAndMakeVisible(grooveVariationDial);
+        grooveVariationDial.reset(valueTreeState, "grooveVariation");
+        grooveVariationDial.setLabelText(juce::String::fromUTF8("Variation"));
+        grooveVariationDial.setTooltip(juce::String::fromUTF8("Variation (0 to 31)"));
         addAndMakeVisible(loopVolumeDial);
         loopVolumeDial.reset(valueTreeState, "loopVolume");
         loopVolumeDial.setLabelText(juce::String::fromUTF8("Loop Volume"));
@@ -631,6 +646,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             bpmDial.setVisible(true);
             clickVolumeDial.setVisible(true);
             clickRecordVolumeDial.setVisible(false);
+            useGrooveSwitch.setVisible(false);
+            grooveVariationDial.setVisible(false);
             loopVolumeDial.setVisible(true);
             recThresholdDial.setVisible(false);
             freezeSwitch.setVisible(false);
@@ -665,6 +682,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             bpmDial.setVisible(true);
             clickVolumeDial.setVisible(true);
             clickRecordVolumeDial.setVisible(true);
+            useGrooveSwitch.setVisible(true);
+            grooveVariationDial.setVisible(true);
             loopVolumeDial.setVisible(true);
             recThresholdDial.setVisible(true);
             freezeSwitch.setVisible(true);
@@ -716,6 +735,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         juce::StringArray names{"Theme"};
         names.add("Patches");
         names.add("Loops");
+        names.add("Groove");
+
         names.add("About");
         return names;
     }
@@ -734,6 +755,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         {
             return buildLoopsMenu();
         }
+        if (menuName == "Groove")
+        {
+            return buildGrooveMenu();
+        }
+
         if (menuName == "About")
         {
             return buildAboutMenu();
@@ -824,6 +850,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         }
         handlePatchMenuSelection(menuItemID);
         handleLoopMenuSelection(menuItemID);
+        handleGrooveMenuSelection(menuItemID);
     }
 
     void applyTheme(GuiConstants::Theme preset)
@@ -1312,6 +1339,31 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     }
 
 
+    juce::PopupMenu buildGrooveMenu()
+    {
+        const auto names = processorRef.listGrooveNames();
+        juce::String currentStyle = processorRef.getCurrentGrooveName();
+        const int lastSlash = currentStyle.lastIndexOfChar('/');
+        const int vPos = currentStyle.lastIndexOf("_v");
+        if (vPos > lastSlash)
+        {
+            currentStyle = currentStyle.substring(0, vPos);
+        }
+        return buildGroupedMenu(names, 20000, currentStyle);
+    }
+
+    void handleGrooveMenuSelection(int menuItemID)
+    {
+        const auto names = processorRef.listGrooveNames();
+        if (menuItemID >= 20000 && menuItemID < 20000 + static_cast<int>(names.size()))
+        {
+            const auto& style = names[static_cast<size_t>(menuItemID - 20000)];
+            processorRef.requestLoadGroove(style, 0);
+            m_statusBar.showMessage("Loading groove '" + style + "'...");
+        }
+    }
+
+
   private:
     AudioPluginAudioProcessor& processorRef;
     juce::AudioProcessorValueTreeState& valueTreeState;
@@ -1387,6 +1439,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial bpmDial{this};
     CustomRotaryDial clickVolumeDial{this};
     CustomRotaryDial clickRecordVolumeDial{this};
+    juce::ToggleButton useGrooveSwitch{juce::String::fromUTF8("Groove")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> useGrooveSwitchAttachment;
+    CustomRotaryDial grooveVariationDial{this};
     CustomRotaryDial loopVolumeDial{this};
     CustomRotaryDial recThresholdDial{this};
     MomentaryToggleButton freezeSwitch{juce::String::fromUTF8("Freeze")};

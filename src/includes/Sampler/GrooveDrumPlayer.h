@@ -1,0 +1,289 @@
+#pragma once
+
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <format>
+#include <iostream>
+#include <random>
+#include <span>
+#include <string>
+#include <vector>
+
+#include "Sampler/SliceLibrary.h"
+
+namespace AbacDsp
+{
+
+/// @ingroup sampler
+/// @brief One resolved MIDI-groove note: an exact tick position, a resolved
+/// SliceLibrary track, and a linear playback gain.
+struct GrooveTrigger
+{
+    uint32_t tick{0};
+    size_t track{0};
+    float gain{1.f};
+};
+
+/// @ingroup sampler
+/// @brief A groove's trigger list plus the tick geometry needed to place them in
+/// time. triggers must be sorted by tick ascending.
+struct GrooveProgram
+{
+    std::vector<GrooveTrigger> triggers;
+    uint32_t loopLengthTicks{1};
+    uint16_t ticksPerQuarterNote{1};
+};
+
+/**
+ * @ingroup sampler
+ * @brief Polyphonic voice pool playing a resolved MIDI groove against a SliceLibrary.
+ *
+ * Tracks its own tick position: a free-running loop of loopLengthTicks,
+ * independent of any bar/beat/step grid, advanced each sample from the
+ * caller's live samplesPerBeat so it stays in tempo without sharing a clock
+ * object. resetPosition() snaps back to tick 0 on demand (e.g. to resync
+ * with a host loop boundary); nothing else does, so a shorter groove under
+ * a longer host loop simply keeps repeating on its own period until told
+ * otherwise.
+ *
+ * Every trigger plays a uniformly random slice from its track (round-robin
+ * variation) at a fixed sample rate (no pitch/reverse - a groove has no use
+ * for either), gain applied as given with no peak-normalization: unlike
+ * SequencerEngine, a groove's own recorded levels are trusted as-is.
+ * Oldest-voice stealing and edge fades mirror SequencerEngine/SlicePlayer.
+ *
+ * Not thread-safe. Library and program pointers are borrowed and must
+ * outlive the player.
+ *
+ * @warning triggerVoice() logs every trigger through std::cout. That can
+ *          block and is not realtime-safe; accepted deliberately, matching
+ *          SequencerEngine's own precedent.
+ */
+class GrooveDrumPlayer
+{
+  public:
+    static constexpr size_t kChannels = 2;
+    static constexpr size_t kMaxVoices = 16;
+
+    explicit GrooveDrumPlayer(const float sampleRate) noexcept
+        : m_sampleRate(sampleRate)
+    {
+        setFadeMs(2.f);
+    }
+
+    void setLibrary(const SliceLibrary* library) noexcept
+    {
+        m_library = library;
+    }
+
+    // Optional per-track display names ("bd", "sd", "hh", ...) for the
+    // trigger print; a track with no name, or an unset span, falls back to
+    // its numeric index. Non-owning: the caller must keep storage alive.
+    void setTrackNames(const std::span<const std::string> names) noexcept
+    {
+        m_trackNames = names;
+    }
+
+    // Only resets playback position when program is actually a new pointer,
+    // so calling this every audio block (to pick up a background-thread-
+    // installed groove) is always safe.
+    void setGroove(const GrooveProgram* program) noexcept
+    {
+        if (program == m_program)
+        {
+            return;
+        }
+        m_program = program;
+        resetPosition();
+    }
+
+    void resetPosition() noexcept
+    {
+        m_tickPos = 0.0;
+        m_nextTriggerIndex = 0;
+    }
+
+    void setFadeMs(const float ms) noexcept
+    {
+        m_fadeFrames = std::max<size_t>(1, static_cast<size_t>(ms / 1000.f * m_sampleRate));
+    }
+
+    [[nodiscard]] size_t activeVoiceCount() const noexcept
+    {
+        size_t count = 0;
+        for (const Voice& voice : m_voices)
+        {
+            count += voice.active ? 1 : 0;
+        }
+        return count;
+    }
+
+    // Advances by one sample at the live tempo, triggers any groove events
+    // crossed this sample, renders every active voice, and returns the
+    // mixed stereo output.
+    [[nodiscard]] std::array<float, kChannels> advanceSample(const size_t samplesPerBeat) noexcept
+    {
+        checkTriggers(samplesPerBeat);
+        ++m_sampleCounter;
+        std::array<float, kChannels> out{0.f, 0.f};
+        for (Voice& voice : m_voices)
+        {
+            if (voice.active)
+            {
+                renderVoice(voice, out);
+            }
+        }
+        return out;
+    }
+
+  private:
+    /// @brief One playing slice. startOrder is a monotonic counter, so stealing picks the oldest by comparison.
+    struct Voice
+    {
+        bool active{false};
+        size_t track{0};
+        size_t indexInTrack{0};
+        size_t lengthFrames{0};
+        size_t pos{0};
+        size_t effectiveFade{1};
+        float gain{1.f};
+        uint64_t startOrder{0};
+    };
+
+    // Advances the tick position by this sample's worth of ticks and fires
+    // every trigger whose tick falls in the half-open interval crossed,
+    // wrapping the trigger cursor back to the start on a loop wrap.
+    void checkTriggers(const size_t samplesPerBeat) noexcept
+    {
+        if (m_program == nullptr || m_library == nullptr || m_program->triggers.empty() ||
+            m_program->loopLengthTicks == 0 || samplesPerBeat == 0)
+        {
+            return;
+        }
+        const auto& triggers = m_program->triggers;
+        const double loopLengthTicks = static_cast<double>(m_program->loopLengthTicks);
+        const double ticksPerSample =
+            static_cast<double>(m_program->ticksPerQuarterNote) / static_cast<double>(samplesPerBeat);
+        double newTickPos = m_tickPos + ticksPerSample;
+
+        while (m_nextTriggerIndex < triggers.size() &&
+               static_cast<double>(triggers[m_nextTriggerIndex].tick) < newTickPos)
+        {
+            triggerVoice(triggers[m_nextTriggerIndex]);
+            ++m_nextTriggerIndex;
+        }
+        if (newTickPos >= loopLengthTicks)
+        {
+            newTickPos -= loopLengthTicks;
+            m_nextTriggerIndex = 0;
+            while (m_nextTriggerIndex < triggers.size() &&
+                   static_cast<double>(triggers[m_nextTriggerIndex].tick) < newTickPos)
+            {
+                triggerVoice(triggers[m_nextTriggerIndex]);
+                ++m_nextTriggerIndex;
+            }
+        }
+        m_tickPos = newTickPos;
+    }
+
+    void triggerVoice(const GrooveTrigger& trigger) noexcept
+    {
+        if (trigger.track >= m_library->trackCount())
+        {
+            return;
+        }
+        const size_t sliceCount = m_library->sliceCountInTrack(trigger.track);
+        const size_t sliceIndex = randomSliceIndex(sliceCount);
+        if (sliceIndex >= sliceCount)
+        {
+            return;
+        }
+        const auto& info = m_library->sliceInfo(trigger.track, sliceIndex);
+        if (info.lengthFrames == 0)
+        {
+            return;
+        }
+        const bool hasName = trigger.track < m_trackNames.size() && !m_trackNames[trigger.track].empty();
+        const std::string trackLabel = hasName ? m_trackNames[trigger.track] : std::to_string(trigger.track);
+        std::cout << std::format("{:8.3f}s  track {:>6}  slice {}\n",
+                                 static_cast<double>(m_sampleCounter) / static_cast<double>(m_sampleRate), trackLabel,
+                                 sliceIndex);
+
+        Voice& voice = allocateVoice();
+        voice.active = true;
+        voice.track = trigger.track;
+        voice.indexInTrack = sliceIndex;
+        voice.lengthFrames = info.lengthFrames;
+        voice.pos = 0;
+        voice.gain = trigger.gain;
+        voice.effectiveFade = std::max<size_t>(1, std::min(m_fadeFrames, info.lengthFrames / 2));
+        voice.startOrder = m_triggerCounter++;
+    }
+
+    [[nodiscard]] size_t randomSliceIndex(const size_t sliceCount) noexcept
+    {
+        if (sliceCount == 0)
+        {
+            return 0;
+        }
+        std::uniform_int_distribution<size_t> dist(0, sliceCount - 1);
+        return dist(m_rng);
+    }
+
+    [[nodiscard]] Voice& allocateVoice() noexcept
+    {
+        for (Voice& voice : m_voices)
+        {
+            if (!voice.active)
+            {
+                return voice;
+            }
+        }
+        Voice* oldest = &m_voices[0];
+        for (Voice& voice : m_voices)
+        {
+            if (voice.startOrder < oldest->startOrder)
+            {
+                oldest = &voice;
+            }
+        }
+        return *oldest;
+    }
+
+    void renderVoice(Voice& voice, std::array<float, kChannels>& out) noexcept
+    {
+        const auto gain = edgeGain(voice) * voice.gain;
+        for (size_t channel = 0; channel < kChannels; ++channel)
+        {
+            out[channel] += m_library->sample(voice.track, voice.indexInTrack, voice.pos, channel) * gain;
+        }
+        if (++voice.pos >= voice.lengthFrames)
+        {
+            voice.active = false;
+        }
+    }
+
+    [[nodiscard]] static float edgeGain(const Voice& voice) noexcept
+    {
+        const auto fade = static_cast<float>(voice.effectiveFade);
+        const auto fadeIn = static_cast<float>(voice.pos + 1) / fade;
+        const auto fadeOut = static_cast<float>(voice.lengthFrames - voice.pos) / fade;
+        return std::clamp(std::min(fadeIn, fadeOut), 0.f, 1.f);
+    }
+
+    float m_sampleRate;
+    size_t m_fadeFrames{1};
+    const SliceLibrary* m_library{nullptr};
+    const GrooveProgram* m_program{nullptr};
+    std::span<const std::string> m_trackNames{};
+    double m_tickPos{0.0};
+    size_t m_nextTriggerIndex{0};
+    uint64_t m_sampleCounter{0}; // for the trigger-log timestamp only
+    std::array<Voice, kMaxVoices> m_voices{};
+    uint64_t m_triggerCounter{1};
+    std::mt19937 m_rng{std::random_device{}()};
+};
+
+}

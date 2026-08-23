@@ -55,6 +55,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("bpm", this);
         m_parameters.addParameterListener("clickVolume", this);
         m_parameters.addParameterListener("clickRecordVolume", this);
+        m_parameters.addParameterListener("useGroove", this);
+        m_parameters.addParameterListener("grooveVariation", this);
         m_parameters.addParameterListener("loopVolume", this);
         m_parameters.addParameterListener("recThreshold", this);
         m_parameters.addParameterListener("freeze", this);
@@ -92,6 +94,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("bpm", this);
         m_parameters.removeParameterListener("clickVolume", this);
         m_parameters.removeParameterListener("clickRecordVolume", this);
+        m_parameters.removeParameterListener("useGroove", this);
+        m_parameters.removeParameterListener("grooveVariation", this);
         m_parameters.removeParameterListener("loopVolume", this);
         m_parameters.removeParameterListener("recThreshold", this);
         m_parameters.removeParameterListener("freeze", this);
@@ -400,6 +404,13 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::NormalisableRange<float>(-60, 0, 0.1, 1, false), -60,
             juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("useGroove", 1),
+                                                                    juce::String::fromUTF8("Groove"), 0));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("grooveVariation", 1), juce::String::fromUTF8("Variation"),
+            juce::NormalisableRange<float>(0, 31, 1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("loopVolume", 1), juce::String::fromUTF8("Loop Volume"),
             juce::NormalisableRange<float>(-60, 12, 0.1, 1, false), 0,
@@ -555,6 +566,18 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setClickRecordVolume(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::clickRecordVolume, v);
+             }},
+            {"useGroove",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setUseGroove(static_cast<bool>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::useGroove, v);
+             }},
+            {"grooveVariation",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setGrooveVariation(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::grooveVariation, v);
              }},
             {"loopVolume",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -739,6 +762,18 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("clickRecordVolume");
             float normalized = range.convertTo0to1(params.clickRecordVolume);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("useGroove"))
+        {
+            const auto& range = m_parameters.getParameterRange("useGroove");
+            float normalized = range.convertTo0to1(params.useGroove);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("grooveVariation"))
+        {
+            const auto& range = m_parameters.getParameterRange("grooveVariation");
+            float normalized = range.convertTo0to1(params.grooveVariation);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("loopVolume"))
@@ -1139,6 +1174,29 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     [[nodiscard]] juce::String partStatusLabel(const int index) const
     {
         return pluginRunner ? juce::String(pluginRunner->partStatusLabel(index)) : juce::String();
+    }
+    [[nodiscard]] std::vector<juce::String> listGrooveNames() const
+    {
+        std::vector<juce::String> result;
+        if (pluginRunner)
+        {
+            for (const auto& n : pluginRunner->listGrooveNames())
+            {
+                result.push_back(juce::String(n));
+            }
+        }
+        return result;
+    }
+    [[nodiscard]] juce::String getCurrentGrooveName() const
+    {
+        return pluginRunner ? juce::String(pluginRunner->currentGrooveName()) : juce::String();
+    }
+    void requestLoadGroove(const juce::String& styleName, const int variationIndex)
+    {
+        if (pluginRunner)
+        {
+            pluginRunner->requestLoadGroove(styleName.toStdString(), static_cast<unsigned>(variationIndex));
+        }
     }
 
 

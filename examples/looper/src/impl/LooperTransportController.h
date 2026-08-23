@@ -85,6 +85,10 @@ class LooperTransportController
         // Consulted only by toggleRecord()'s immediate-start branch; true means
         // it redirected the press into a part-switch instead of starting fresh.
         std::function<bool()> tryRedirectRecordIntoSelectedPart;
+        // Called once a recording just finished (or a manual Clear), to associate
+        // the active part with whichever groove was (or wasn't) playing.
+        std::function<void()> stampGrooveOnActivePart = [] {};
+        std::function<void()> clearGrooveOnActivePart = [] {};
     };
 
     explicit LooperTransportController(Deps deps)
@@ -273,6 +277,7 @@ class LooperTransportController
         activeRecorder().stopRecordBarLocked(m_deps.pendingStopLoopLength, preRoll, m_deps.startOffset, catchUpFrames);
         m_deps.barLockedTake = false;
         m_deps.timing.finalizeMeterTimeline(m_deps.pendingStopLoopLength);
+        m_deps.stampGrooveOnActivePart();
         // stopRecordBarLocked() auto-transitions straight into playback (no
         // separate Play press): resync here too, not just in togglePlay().
         m_deps.timing.resyncTimekeeperToLoopStart();
@@ -320,6 +325,7 @@ class LooperTransportController
         m_deps.pendingStop = false;
         m_deps.barLockedTake = false;
         activeRecorder().clear();
+        m_deps.clearGrooveOnActivePart();
     }
 
     // Clears only the sequencer's own audio: every frozen track/slice in the
@@ -377,6 +383,7 @@ class LooperTransportController
             m_deps.timing.activeMeterTimeline().clear();
             m_deps.timing.activeFinalizedBarCount() = 0;
         }
+        m_deps.stampGrooveOnActivePart();
     }
 
     void toggleRecord()

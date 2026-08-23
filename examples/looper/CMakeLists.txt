@@ -139,6 +139,23 @@ target_compile_definitions(
         JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=0
 )
 
+# Groove kit / default groove file: user-supplied, copyrighted content that lives
+# outside the repo (see samples/README.md and MidiDrums/README.md), so it is
+# referenced by absolute path rather than bundled as binary data. Baked into a
+# generated header (not a -D define): CMake refuses to pass a '#' character
+# through a compiler command line, and MidiDrums filenames contain one.
+set(ABACDSP_DRUM_SAMPLES_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../samples/drums/reggae"
+)
+set(ABACDSP_MIDI_DRUMS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../MidiDrums")
+set(ABACDSP_DEFAULT_GROOVE_NAME "Session Drums/str_4#4_1_c_v1.mid")
+configure_file(
+    src/impl/GrooveDefaultPaths.h.in
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/GrooveDefaultPaths.h"
+    @ONLY
+)
+include_directories("${CMAKE_CURRENT_BINARY_DIR}/generated")
+
 target_link_libraries(
     "${PROJECT_NAME}"
     PRIVATE LooperAssets ${JUCE_DEPENDENCIES} nlohmann_json::nlohmann_json

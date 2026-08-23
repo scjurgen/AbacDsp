@@ -40,6 +40,8 @@ from codegen_widgets import (
     gauge_present, create_gauge_callbacks, create_theme_callbacks,
     create_widgets_decl, create_init_widgets, create_extra_private_methods,
     performance_page_shorts, create_page_switch_methods,
+    create_extra_menu_names, create_extra_menu_dispatch,
+    create_extra_menu_selection_dispatch, create_extra_menu_methods,
 )
 from template_engine import (
     get_target_name, run_clang_format, create_and_save_module_substitutions,
@@ -142,6 +144,10 @@ CPP_JUCE_FILE_VARS = [
     "TIMER_CALLBACKS",
     "APPLY_THEME_CALLBACKS",
     "EXTRA_PRIVATE_METHODS",
+    "EXTRA_MENU_NAMES",
+    "EXTRA_MENU_DISPATCH",
+    "EXTRA_MENU_SELECTION_DISPATCH",
+    "EXTRA_MENU_METHODS",
     "EXTRA_PROCESSOR_METHODS",
     "EXTRA_PROCESSOR_MEMBERS",
     "EXTRA_PREPARE_CALLS",
@@ -269,6 +275,10 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
     )
     blueprint["CPP"].update(create_page_switch_methods(blueprint))
     blueprint["CPP"]["EXTRA_PRIVATE_METHODS"] = create_extra_private_methods(blueprint)
+    blueprint["CPP"]["EXTRA_MENU_NAMES"] = create_extra_menu_names(blueprint)
+    blueprint["CPP"]["EXTRA_MENU_DISPATCH"] = create_extra_menu_dispatch(blueprint)
+    blueprint["CPP"]["EXTRA_MENU_SELECTION_DISPATCH"] = create_extra_menu_selection_dispatch(blueprint)
+    blueprint["CPP"]["EXTRA_MENU_METHODS"] = create_extra_menu_methods(blueprint)
     blueprint["CPP"]["EXTRA_PROCESSOR_METHODS"] = create_extra_processor_methods(blueprint)
     blueprint["CPP"]["EXTRA_PREPARE_CALLS"] = create_extra_prepare_calls(blueprint)
     blueprint["CPP"]["EXTRA_PROCESSOR_MEMBERS"] = create_extra_processor_members(blueprint)

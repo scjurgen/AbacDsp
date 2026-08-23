@@ -187,6 +187,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         /*START_SCRIPTBROWSER*/
         names.add("Scripts");
         /*END_SCRIPTBROWSER*/
+        /*EXTRA_MENU_NAMES*/
         names.add("About");
         return names;
     }
@@ -215,6 +216,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             return buildScriptsMenu();
         }
         /*END_SCRIPTBROWSER*/
+        /*EXTRA_MENU_DISPATCH*/
         if (menuName == "About")
         {
             return buildAboutMenu();
@@ -307,6 +309,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         /*START_SCRIPTBROWSER*/
         handleScriptMenuSelection(menuItemID);
         /*END_SCRIPTBROWSER*/
+        /*EXTRA_MENU_SELECTION_DISPATCH*/
     }
 
     void applyTheme(GuiConstants::Theme preset)
@@ -1151,6 +1154,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         }
     }
     /*END_SCRIPTBROWSER*/
+
+    /*EXTRA_MENU_METHODS*/
 
     /*EXTRA_PRIVATE_METHODS*/
   private:

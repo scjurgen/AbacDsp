@@ -20,7 +20,7 @@ Examples are designed to:
 - focus on interactive performance using various interface methods (including multiple
   performance-page layouts)
 - explore extended capabilities through embedded scripting (dronesequencer's Lua engine; see
-  `LUA.md` for the scripting API), leaving room for LLM-assisted behavior in the future
+  `LUA.md` for the scripting API), leaving room for LLM-assisted behavior/scripts.
 
 ### Submodules used
 - googletest
@@ -39,6 +39,17 @@ Examples are designed to:
 - operations on simple buffer design with interleaved or mono array
 - raw float operations allowed but with BlockSize only
 - testability
+
+### Fixed internal sample rate in example plugins
+
+Every generated example plugin (`examples/*/src/*Processor.h`) wraps its DSP implementation
+in `AbacDsp::InternalRateNormalizingProcessor`
+(`src/includes/SamplerateConverter/InternalRateNormalizingProcessor.h`), which sinc-resamples
+host audio to/from a fixed `kInternalSampleRate = 48000.f` and is bypassed at zero cost when
+the host already runs at 48 kHz. The DSP implementation classes themselves (e.g. `LooperImpl`)
+therefore always see `sampleRate == 48000.f`, never the host's actual rate. Any bundled audio
+asset authored at 48 kHz (samples, impulse responses, etc.) can be loaded and played back
+verbatim by these implementations with no extra resampling.
 
 ## What
 - Analysis (FFT, Yin pitch detection, spectrogram, envelope follower, onset/transient
@@ -78,6 +89,11 @@ JUCE-based plugins under `examples/` (built with `-DBUILD_FULL_PROJECT=ON`, see 
 See `examples/README.md` for a description of each one, and how the generated JUCE
 plumbing relates to each example's hand-written DSP. See `LUA.md` for the Lua scripting API
 shared by any script-driven example (currently `dronesequencer`).
+
+`looper`'s optional drum-groove playback (an alternative to its synthetic click) needs a
+user-supplied sample kit and MIDI groove file under `samples/drums/` and `MidiDrums/`
+respectively - both third-party, copyrighted content not included in this repository. See
+`samples/README.md` and `MidiDrums/README.md` for the expected layout.
 
 ## Building
 

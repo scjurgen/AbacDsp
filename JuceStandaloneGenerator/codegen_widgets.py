@@ -264,3 +264,51 @@ def create_extra_private_methods(blueprint: Blueprint) -> str:
             result += f"""    {varname}.setVisible({condition});\n"""
             result += f"""    resized();\n  }}\n\n"""
     return result
+
+
+# Generic escape hatch for a blueprint-declared custom menu bar item, so a new
+# menu (Groove, or any future one) needs only blueprint JSON, never a template
+# or generator change. Each entry supplies raw build/select method bodies
+# (same trust-the-author model as extra_processor_methods); the one thing the
+# generator computes is a non-colliding item-ID base per entry, exposed to
+# those raw bodies via a literal {ID_BASE} substitution.
+def _extra_menu_identifier(name: str) -> str:
+    return "".join(ch for ch in name if ch.isalnum())
+
+
+# Starts well above the built-in menus' hand-allocated ranges (Scripts' own
+# range ends at 13999) so a blueprint's extra_menus never collides with them.
+_EXTRA_MENU_ID_BASE_START = 20000
+_EXTRA_MENU_ID_BASE_STEP = 1000
+
+
+def create_extra_menu_names(blueprint: Blueprint) -> str:
+    menus = blueprint.get("extra_menus", [])
+    return "".join(f'names.add("{m["name"]}");\n' for m in menus)
+
+
+def create_extra_menu_dispatch(blueprint: Blueprint) -> str:
+    result = ""
+    for m in blueprint.get("extra_menus", []):
+        ident = _extra_menu_identifier(m["name"])
+        result += f'if (menuName == "{m["name"]}") {{ return build{ident}Menu(); }}\n'
+    return result
+
+
+def create_extra_menu_selection_dispatch(blueprint: Blueprint) -> str:
+    result = ""
+    for m in blueprint.get("extra_menus", []):
+        ident = _extra_menu_identifier(m["name"])
+        result += f"handle{ident}MenuSelection(menuItemID);\n"
+    return result
+
+
+def create_extra_menu_methods(blueprint: Blueprint) -> str:
+    result = ""
+    id_base = _EXTRA_MENU_ID_BASE_START
+    for m in blueprint.get("extra_menus", []):
+        count = m.get("id_count", _EXTRA_MENU_ID_BASE_STEP)
+        result += m["build_method"].replace("{ID_BASE}", str(id_base)) + "\n\n"
+        result += m["select_method"].replace("{ID_BASE}", str(id_base)) + "\n\n"
+        id_base += count
+    return result

@@ -17,6 +17,12 @@ packages
 *.log
 *.tar.gz
 
+# Copyrighted material
+samples/*
+!samples/README.md
+MidiDrums/*
+!MidiDrums/README.md
+
 # Misc
 tmp
 *venv

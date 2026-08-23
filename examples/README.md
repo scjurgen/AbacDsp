@@ -50,7 +50,7 @@ patterns, host sync, and circular beat/spectrogram displays.
 
 Records audio, quantizes the loop to whole bars, slices it, and plays the
 slices back locked to a metronome click, with a concentric bar/loop clock
-display.
+display. 
 
 ## Sampleplayer
 

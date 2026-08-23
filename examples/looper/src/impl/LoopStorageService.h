@@ -70,6 +70,7 @@ class LoopStorageService
         bool hasOverdub{false};
         std::vector<float> overdubLeft;
         std::vector<float> overdubRight;
+        std::string grooveFile; // relative-to-MidiDrums name; empty if none was saved
 
         [[nodiscard]] bool hasContent() const noexcept
         {
@@ -232,11 +233,11 @@ class LoopStorageService
         return m_currentLoopName;
     }
 
-    // Guarded by the caller (recording/overdub/empty-loop checks); writes
-    // <loopsDirectory>/<name>.wav + .json on the save worker (file I/O isn't RT-safe).
-    // patchParamsJson is an opaque snapshot (caller's patch/parameter state) embedded
-    // in the sidecar so a loop reload can restore the settings it was captured with.
-    void requestSave(const std::string& name, const std::string& patchParamsJson = {})
+    // Guarded by the caller; writes <loopsDirectory>/<name>.wav + .json on the save
+    // worker. partGrooveNames is each part's own groove (relative-to-MidiDrums
+    // name); an empty entry writes no "groove" field for that part.
+    void requestSave(const std::string& name, const std::string& patchParamsJson = {},
+                     const std::array<std::string, AbacDsp::kMaxLoopParts>& partGrooveNames = {})
     {
         if (m_loopSavePending || m_loopsDirectory.empty() || sanitizeLoopName(name).empty())
         {
@@ -244,6 +245,7 @@ class LoopStorageService
         }
         m_loopSaveName = name;
         m_loopSaveParamsJson = patchParamsJson;
+        m_loopSaveGrooveNames = partGrooveNames;
         m_loopSaveRequestedGen = m_loopSaveRequestGen.load(std::memory_order_relaxed) + 1;
         m_loopSavePending = true;
         m_loopSaveRequestGen.store(m_loopSaveRequestedGen, std::memory_order_release);
@@ -604,6 +606,10 @@ class LoopStorageService
                 j["parts"] = partSuffixList;
             }
         }
+        if (!m_loopSaveGrooveNames[index].empty())
+        {
+            j["groove"] = m_loopSaveGrooveNames[index];
+        }
         if (m_bank.part(index).hasOverdub())
         {
             std::vector<float> overdubLeft(loopLen);
@@ -756,6 +762,10 @@ class LoopStorageService
                 {
                     loadPartOverdub(j, loopDir, m_loopLoadParts[index]);
                 }
+                if (j.contains("groove"))
+                {
+                    m_loopLoadParts[index].grooveFile = j.at("groove").get<std::string>();
+                }
             }
             catch (const std::exception& e)
             {
@@ -809,6 +819,10 @@ class LoopStorageService
                     if (j.contains("parts"))
                     {
                         partSuffixList = j.at("parts").get<std::vector<std::string>>();
+                    }
+                    if (j.contains("groove"))
+                    {
+                        m_loopLoadParts[0].grooveFile = j.at("groove").get<std::string>();
                     }
                 }
                 catch (const std::exception& e)
@@ -888,6 +902,7 @@ class LoopStorageService
     std::string m_loopsDirectory; // set once via setLoopsDirectory(), before any save/load
     std::string m_loopSaveName;
     std::string m_loopSaveParamsJson;
+    std::array<std::string, AbacDsp::kMaxLoopParts> m_loopSaveGrooveNames;
     bool m_loopSavePending{false};
     uint64_t m_loopSaveRequestedGen{0};
     std::atomic<uint64_t> m_loopSaveRequestGen{0};

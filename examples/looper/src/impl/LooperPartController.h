@@ -24,13 +24,15 @@ class LooperPartController
 
     LooperPartController(
         Bank& bank, LooperTimingController& timing, LooperTransportController<BlockSize>& transport,
-        size_t& activePartIndex, const size_t fadeFrames, std::function<void()> requestSpectrogramRegen = [] {})
+        size_t& activePartIndex, const size_t fadeFrames, std::function<void()> requestSpectrogramRegen = [] {},
+        std::function<void(size_t)> requestGrooveForPart = [](size_t) {})
         : m_bank(bank)
         , m_timing(timing)
         , m_transport(transport)
         , m_activePartIndex(activePartIndex)
         , m_fadeFrames(std::max<size_t>(1, fadeFrames))
         , m_requestSpectrogramRegen(std::move(requestSpectrogramRegen))
+        , m_requestGrooveForPart(std::move(requestGrooveForPart))
     {
     }
 
@@ -205,6 +207,7 @@ class LooperPartController
         m_activePartIndex = target;
         m_bank.setActiveIndex(target); // keeps LoopPartBank's own active() in sync
         m_requestSpectrogramRegen();   // the display must reflect whichever part is active now
+        m_requestGrooveForPart(target);
         m_timing.resyncTimekeeperToLoopStart();
         if (m_bank.hasContent(target))
         {
@@ -245,6 +248,7 @@ class LooperPartController
     size_t& m_activePartIndex;
     size_t m_fadeFrames;
     std::function<void()> m_requestSpectrogramRegen;
+    std::function<void(size_t)> m_requestGrooveForPart;
     bool m_pending{false};
     bool m_pendingIsRecord{false};
     size_t m_pendingTarget{0};

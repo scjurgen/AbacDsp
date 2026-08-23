@@ -2651,3 +2651,320 @@ TEST(TransportStatusText, SwitchToAlreadyRecordedPartQueuedNamesTheTargetPart)
     looper.processBlock(Buffer{}, out);
     EXPECT_EQ(looper.transportStatusText(), "Switch to Part A queued");
 }
+
+// GrooveKit: loads a synthetic kit + groove file from a temp directory, exercising
+// the note -> tag -> loaded-piece fallback end to end (not just via mocks), so the
+// test stays independent of the real (gitignored, user-supplied) sample/MIDI content.
+namespace
+{
+class TempGrooveKitDir
+{
+  public:
+    TempGrooveKitDir()
+        : m_dir(std::filesystem::temp_directory_path() / "abacdsp_groovekit_test")
+    {
+        std::error_code ec;
+        std::filesystem::remove_all(m_dir, ec);
+        std::filesystem::create_directories(m_dir);
+    }
+
+    ~TempGrooveKitDir()
+    {
+        std::error_code ec;
+        std::filesystem::remove_all(m_dir, ec);
+    }
+
+    [[nodiscard]] std::string dir() const
+    {
+        return m_dir.string();
+    }
+
+    [[nodiscard]] std::string filePath(const std::string& filename) const
+    {
+        return (m_dir / filename).string();
+    }
+
+  private:
+    std::filesystem::path m_dir;
+};
+
+void appendGrooveVlq(std::vector<uint8_t>& buf, uint32_t value)
+{
+    std::array<uint8_t, 5> stack{};
+    size_t count = 0;
+    stack[count++] = static_cast<uint8_t>(value & 0x7F);
+    value >>= 7;
+    while (value > 0)
+    {
+        stack[count++] = static_cast<uint8_t>(value & 0x7F);
+        value >>= 7;
+    }
+    for (size_t i = count; i-- > 0;)
+    {
+        buf.push_back(static_cast<uint8_t>(stack[i] | (i != 0 ? 0x80 : 0x00)));
+    }
+}
+
+void appendGrooveU16BE(std::vector<uint8_t>& buf, const uint16_t value)
+{
+    buf.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
+    buf.push_back(static_cast<uint8_t>(value & 0xFF));
+}
+
+void appendGrooveU32BE(std::vector<uint8_t>& buf, const uint32_t value)
+{
+    buf.push_back(static_cast<uint8_t>((value >> 24) & 0xFF));
+    buf.push_back(static_cast<uint8_t>((value >> 16) & 0xFF));
+    buf.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
+    buf.push_back(static_cast<uint8_t>(value & 0xFF));
+}
+
+// One-track, format-0 SMF with a note-on (velocity 100) for every {tick, note}
+// pair given, in ascending tick order.
+[[nodiscard]] std::vector<uint8_t> buildGrooveMidiBytes(const std::vector<std::pair<uint32_t, uint8_t>>& notes,
+                                                        const uint16_t division = 480)
+{
+    std::vector<uint8_t> body;
+    uint32_t lastTick = 0;
+    for (const auto& [tick, note] : notes)
+    {
+        appendGrooveVlq(body, tick - lastTick);
+        body.push_back(0x90);
+        body.push_back(note);
+        body.push_back(100);
+        lastTick = tick;
+    }
+    appendGrooveVlq(body, 0);
+    body.push_back(0xFF);
+    body.push_back(0x2F);
+    body.push_back(0x00);
+
+    std::vector<uint8_t> bytes{'M', 'T', 'h', 'd'};
+    appendGrooveU32BE(bytes, 6);
+    appendGrooveU16BE(bytes, 0);
+    appendGrooveU16BE(bytes, 1);
+    appendGrooveU16BE(bytes, division);
+    bytes.push_back('M');
+    bytes.push_back('T');
+    bytes.push_back('r');
+    bytes.push_back('k');
+    appendGrooveU32BE(bytes, static_cast<uint32_t>(body.size()));
+    bytes.insert(bytes.end(), body.begin(), body.end());
+    return bytes;
+}
+
+void writeGrooveMidiFile(const std::string& path, const std::vector<std::pair<uint32_t, uint8_t>>& notes,
+                         const uint16_t division = 480)
+{
+    const auto bytes = buildGrooveMidiBytes(notes, division);
+    std::ofstream out(path, std::ios::binary);
+    out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+}
+
+void writeGrooveTake(const TempGrooveKitDir& dir, const std::string& code, const unsigned index)
+{
+    const std::vector<float> mono(32, 0.1f);
+    AudioUtility::SaveWav::saveStereoAs(dir.filePath(code + "_" + std::to_string(index) + ".wav"), mono, mono);
+}
+
+[[nodiscard]] bool waitUntilGrooveKitReady(GrooveKit& kit)
+{
+    for (int i = 0; i < 2000; ++i)
+    {
+        kit.pollAndInstall();
+        if (kit.isReady())
+        {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return false;
+}
+}
+
+TEST(GrooveKitTest, ResolvesDirectAndFallbackMatchesAndSkipsUnmatchedNotes)
+{
+    const TempGrooveKitDir dir;
+    writeGrooveTake(dir, "bd", 1); // kick: single take
+    writeGrooveTake(dir, "hh", 1); // closed hihat: two round-robin takes
+    writeGrooveTake(dir, "hh", 2); // (no "hhopen", no snare/crash/etc at all)
+
+    writeGrooveMidiFile(dir.filePath("groove.mid"),
+                        {
+                            {0, 36},   // Kick: direct match ("bd")
+                            {480, 21}, // HihatClosedPedal -> HihatClosed: direct match ("hh")
+                            {960, 49}, // HihatOpen -> Hihat (umbrella fallback): matches "hh"
+                            {1440, 38} // Snare: no snare piece loaded at all -> must be skipped
+                        });
+
+    GrooveKit kit;
+    kit.requestLoad(dir.dir(), dir.dir(), "groove.mid");
+    ASSERT_TRUE(waitUntilGrooveKitReady(kit));
+
+    const auto* library = kit.library();
+    const auto* program = kit.program();
+    ASSERT_NE(library, nullptr);
+    ASSERT_NE(program, nullptr);
+    EXPECT_EQ(program->ticksPerQuarterNote, 480u);
+    EXPECT_EQ(program->loopLengthTicks, 1920u); // last note at tick 1440 -> 4 beats
+    ASSERT_EQ(program->triggers.size(), 3u) << "the unmatched snare note must not become a trigger";
+
+    size_t kickTrack = 0;
+    size_t hihatTrack = 0;
+    bool foundKick = false;
+    bool foundHihatDirect = false;
+    bool foundHihatFallback = false;
+    for (const auto& trigger : program->triggers)
+    {
+        const size_t sliceCount = library->sliceCountInTrack(trigger.track);
+        if (sliceCount == 1)
+        {
+            kickTrack = trigger.track;
+            foundKick = true;
+        }
+        else if (sliceCount == 2)
+        {
+            hihatTrack = trigger.track;
+            if (foundHihatDirect)
+            {
+                foundHihatFallback = true;
+            }
+            foundHihatDirect = true;
+        }
+    }
+    EXPECT_TRUE(foundKick);
+    EXPECT_TRUE(foundHihatDirect);
+    EXPECT_TRUE(foundHihatFallback);
+    EXPECT_NE(kickTrack, hihatTrack);
+}
+
+TEST(GrooveKitTest, MissingSampleDirectoryStillBecomesReadyWithEmptyProgram)
+{
+    const TempGrooveKitDir dir; // never populated with any WAV or MIDI file
+
+    GrooveKit kit;
+    kit.requestLoad(dir.dir() + "/does_not_exist", dir.dir(), "missing.mid");
+    ASSERT_TRUE(waitUntilGrooveKitReady(kit));
+
+    ASSERT_NE(kit.library(), nullptr);
+    ASSERT_NE(kit.program(), nullptr);
+    EXPECT_EQ(kit.program()->triggers.size(), 0u);
+}
+
+TEST(GrooveKitTest, ListAvailableGroovesGroupsByStyleAndSortsVariations)
+{
+    const TempGrooveKitDir dir;
+    const auto genreDir = dir.dir() + "/Session Drums";
+    std::filesystem::create_directories(genreDir);
+    for (const char* file : {"str_4#4_1_c_v1.mid", "str_4#4_1_c_v3.mid", "swg_4#4_2_c_v1.mid"})
+    {
+        std::ofstream(std::filesystem::path(genreDir) / file).put('\0'); // content irrelevant to listing
+    }
+
+    const auto names = GrooveKit::listAvailableGrooves(dir.dir());
+    ASSERT_EQ(names.size(), 2u);
+    EXPECT_EQ(names[0], "Session Drums/str_4#4_1_c");
+    EXPECT_EQ(names[1], "Session Drums/swg_4#4_2_c");
+
+    EXPECT_EQ(GrooveKit::countVariations(dir.dir(), "Session Drums/str_4#4_1_c"), 2u);
+    EXPECT_EQ(GrooveKit::countVariations(dir.dir(), "Session Drums/swg_4#4_2_c"), 1u);
+    EXPECT_EQ(GrooveKit::countVariations(dir.dir(), "Session Drums/does_not_exist"), 0u);
+
+    EXPECT_EQ(GrooveKit::resolveGrooveName(dir.dir(), "Session Drums/str_4#4_1_c", 0),
+              "Session Drums/str_4#4_1_c_v1.mid");
+    EXPECT_EQ(GrooveKit::resolveGrooveName(dir.dir(), "Session Drums/str_4#4_1_c", 1),
+              "Session Drums/str_4#4_1_c_v3.mid");
+    EXPECT_FALSE(GrooveKit::resolveGrooveName(dir.dir(), "Session Drums/str_4#4_1_c", 2).has_value());
+}
+
+TEST(GrooveKitTest, RequestLoadStyleResolvesFilenameOnBackgroundThread)
+{
+    const TempGrooveKitDir dir;
+    writeGrooveTake(dir, "bd", 1);
+    const auto genreDir = dir.dir() + "/Session Drums";
+    std::filesystem::create_directories(genreDir);
+    writeGrooveMidiFile((std::filesystem::path(genreDir) / "str_4#4_1_c_v1.mid").string(), {{0, 36}});
+
+    GrooveKit kit;
+    kit.requestLoadStyle(dir.dir(), dir.dir(), "Session Drums/str_4#4_1_c", 0);
+    ASSERT_TRUE(waitUntilGrooveKitReady(kit));
+
+    EXPECT_EQ(kit.program()->triggers.size(), 1u);
+    EXPECT_EQ(kit.currentGrooveName(), "Session Drums/str_4#4_1_c_v1.mid");
+}
+
+// Optional "groove" field (see runSaveLoopAs): exercises only the read side (a
+// hand-written sidecar) - a positive write round trip needs a real GrooveKit
+// load to succeed, left to the manual smoke test instead.
+TEST(LooperLoopFile, LoadRestoresGrooveFieldFromSidecarJson)
+{
+    const TempLoopsDir dir;
+    Looper writer(kLoopFileSampleRate);
+    writer.setLoopsDirectory(dir.path());
+    recordKnownLoop(writer);
+    writer.requestSaveLoopAs("groovyloop");
+    waitUntilLoopSaveDone(writer);
+
+    const auto jsonPath = std::filesystem::path(dir.path()) / "groovyloop.json";
+    nlohmann::json savedJson;
+    {
+        std::ifstream jsonIn(jsonPath);
+        ASSERT_TRUE(jsonIn);
+        jsonIn >> savedJson;
+    }
+    EXPECT_FALSE(savedJson.contains("groove")) << "no groove was ever loaded before saving";
+    savedJson["groove"] = "Session Drums/str_4#4_1_c_v1.mid";
+    std::ofstream(jsonPath) << savedJson.dump(2);
+
+    Looper reader(kLoopFileSampleRate);
+    reader.setLoopsDirectory(dir.path());
+    reader.requestLoadLoop("groovyloop");
+    const auto outcome = waitForLoopLoadOutcome(reader);
+    EXPECT_TRUE(outcome.success);
+    EXPECT_EQ(reader.partGrooveName(0), "Session Drums/str_4#4_1_c_v1.mid");
+}
+
+// Same hand-written-sidecar technique, extended to two parts: each part's
+// own json carries its own "groove" field, restored independently.
+TEST(LooperLoopFile, LoadRestoresDistinctGroovePerPart)
+{
+    const TempLoopsDir dir;
+    Looper writer(kLoopFileSampleRate);
+    writer.setLoopsDirectory(dir.path());
+    recordKnownLoop(writer);
+    writer.setPlay(true); // -> Stopped, so the part-B redirect below is immediate
+
+    writer.setSelectedPart(1);
+    Buffer out{};
+    writer.processBlock(Buffer{}, out);
+    recordKnownLoop(writer);
+
+    writer.requestSaveLoopAs("multigroove");
+    waitUntilLoopSaveDone(writer);
+
+    const std::filesystem::path partAJson = std::filesystem::path(dir.path()) / "multigroove.json";
+    const std::filesystem::path partBJson = std::filesystem::path(dir.path()) / "multigroove_partB.json";
+    const std::string grooveA = "Session Drums/str_4#4_1_c_v1.mid";
+    const std::string grooveB = "Indiependent/str_4#4_10_c_v1.mid";
+    for (const auto& [path, grooveName] : {std::pair{partAJson, grooveA}, std::pair{partBJson, grooveB}})
+    {
+        nlohmann::json j;
+        {
+            std::ifstream jsonIn(path);
+            ASSERT_TRUE(jsonIn);
+            jsonIn >> j;
+        }
+        j["groove"] = grooveName;
+        std::ofstream(path) << j.dump(2);
+    }
+
+    Looper reader(kLoopFileSampleRate);
+    reader.setLoopsDirectory(dir.path());
+    reader.requestLoadLoop("multigroove");
+    const auto outcome = waitForLoopLoadOutcome(reader);
+    ASSERT_TRUE(outcome.success);
+    waitUntilLoopLoadInstalled(reader);
+
+    EXPECT_EQ(reader.partGrooveName(0), grooveA);
+    EXPECT_EQ(reader.partGrooveName(1), grooveB);
+}

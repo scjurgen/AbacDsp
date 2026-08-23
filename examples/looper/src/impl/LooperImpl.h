@@ -27,6 +27,7 @@
 #include "Generators/BeatSequencer.h"
 #include "Generators/ClickGenerator.h"
 #include "Generators/MeterTimeline.h"
+#include "Sampler/GrooveDrumPlayer.h"
 #include "Sampler/LoopFile.h"
 #include "Sampler/LoopPartBank.h"
 #include "Sampler/LoopRecorder.h"
@@ -73,6 +74,8 @@ struct adl_serializer<AbacDsp::SequencePattern>
 
 #include "CaptureRing.h"
 #include "FreezeService.h"
+#include "GrooveDefaultPaths.h"
+#include "GrooveKit.h"
 #include "LoopStorageService.h"
 #include "LooperPartController.h"
 #include "LooperTimingController.h"
@@ -120,6 +123,7 @@ class LooperImpl final : public EffectBase
         , m_sequencer(sampleRate)
         , m_pattern(1, m_seq.beatsPerBar(), m_seq.samplesPerBeat())
         , m_patternBuilder(m_seq, m_bank, m_sliceLibrary, m_pattern)
+        , m_grooveSequencer(sampleRate)
         , m_timingController(m_seq, m_meterTimelines, m_finalizedBarCounts, m_activePartIndex, m_appliedBpm,
                              m_eighthNoteUnit, m_appliedTimeSignature, m_countingIn, m_countInBarsOffset,
                              m_countInEndTickAbs, m_suppressNextClick, sampleRate)
@@ -172,6 +176,8 @@ class LooperImpl final : public EffectBase
               .replacePulse = m_replacePulse,
               .requestSpectrogramRegen = [this] { requestSpectrogramRegen(); },
               .tryRedirectRecordIntoSelectedPart = [this] { return tryRedirectRecordIntoSelectedPart(); },
+              .stampGrooveOnActivePart = [this] { stampGrooveOnActivePart(); },
+              .clearGrooveOnActivePart = [this] { clearGrooveOnActivePart(); },
           })
         , m_viewModel(typename LooperViewModel<BlockSize>::Deps{
               .bank = m_bank,
@@ -195,9 +201,10 @@ class LooperImpl final : public EffectBase
               .sequencerPlaying = m_sequencerPlaying,
               .sampleRate = sampleRate,
           })
-        , m_partController(m_bank, m_timingController, m_transportController, m_activePartIndex,
-                           static_cast<size_t>(kPartSwitchFadeMs / 1000.f * sampleRate),
-                           [this] { requestSpectrogramRegen(); })
+        , m_partController(
+              m_bank, m_timingController, m_transportController, m_activePartIndex,
+              static_cast<size_t>(kPartSwitchFadeMs / 1000.f * sampleRate), [this] { requestSpectrogramRegen(); },
+              [this](const size_t target) { requestGrooveForPart(target); })
     {
         m_seq.setBpm(m_appliedBpm[m_activePartIndex]);
         m_click.setVolumeDb(m_clickVol.load(std::memory_order_relaxed));
@@ -216,6 +223,9 @@ class LooperImpl final : public EffectBase
                                       64);
         m_sequencer.setLibrary(&m_sliceLibrary);
         m_sequencer.setPattern(&m_pattern);
+        // Groove loading is deliberately lazy (triggered on first use, not here):
+        // it means real disk I/O against a potentially large MidiDrums/samples
+        // tree, which every LooperImpl construction would otherwise pay for.
 
         m_spectrogramRegenThread = std::jthread(
             [this](const std::stop_token& stopToken)
@@ -257,6 +267,67 @@ class LooperImpl final : public EffectBase
     {
         m_loopVol.store(value, std::memory_order_relaxed);
     }
+    // First-use lazy load: the switch alone starts the compiled-in default groove;
+    // requestLoadGroove()/requestLoadGrooveByName() already trigger their own load
+    // and mark this done too, so this never clobbers an explicit selection.
+    void setUseGroove(const bool value) noexcept
+    {
+        m_useGroove.store(value, std::memory_order_relaxed);
+        if (value && !m_grooveLoadTriggered.exchange(true, std::memory_order_relaxed))
+        {
+            m_grooveKit.requestLoad(kAbacDspDrumSamplesDir, kAbacDspMidiDrumsDir, kAbacDspDefaultGrooveName);
+        }
+    }
+
+    // Variation dial: may be set from any thread (host automation), so it only
+    // stores a value here; applyParameters() (audio thread) detects the change
+    // and issues the actual (background-resolved) load request.
+    void setGrooveVariation(const float value) noexcept
+    {
+        m_grooveVariationReq.store(static_cast<int>(value), std::memory_order_relaxed);
+    }
+
+    // Groove menu click: styleName is one of listGrooveNames()'s own entries.
+    void requestLoadGroove(const std::string& styleName, const unsigned variationIndex)
+    {
+        m_grooveLoadTriggered.store(true, std::memory_order_relaxed);
+        {
+            std::lock_guard lock(m_grooveStyleMutex);
+            m_currentGrooveStyle = styleName;
+        }
+        m_grooveKit.requestLoadStyle(kAbacDspDrumSamplesDir, kAbacDspMidiDrumsDir, styleName, variationIndex);
+    }
+
+    // Restoring a saved loop's own recorded groove (exact relative path, not a
+    // style/index pair - see LoopStorageService's "groove" JSON field).
+    void requestLoadGrooveByName(const std::string& relativeName)
+    {
+        m_grooveLoadTriggered.store(true, std::memory_order_relaxed);
+        m_grooveKit.requestLoad(kAbacDspDrumSamplesDir, kAbacDspMidiDrumsDir, relativeName);
+    }
+
+    [[nodiscard]] std::vector<std::string> listGrooveNames() const
+    {
+        return GrooveKit::listAvailableGrooves(kAbacDspMidiDrumsDir);
+    }
+
+    // Relative-to-MidiDrums-root name of the groove currently installed and
+    // playing (empty if none has finished loading yet). For menu ticking and
+    // for LoopStorageService's save-request snapshot.
+    [[nodiscard]] std::string currentGrooveName() const
+    {
+        return m_grooveKit.currentGrooveName();
+    }
+
+    // The groove associated with partIndex (empty: none recorded, or that
+    // part has no content). Not necessarily the one currently playing -
+    // see currentGrooveName() for that.
+    [[nodiscard]] std::string partGrooveName(const size_t partIndex)
+    {
+        std::lock_guard lock(m_partGrooveMutex);
+        return partIndex < AbacDsp::kMaxLoopParts ? m_partGrooveName[partIndex] : std::string();
+    }
+
     void setThreshRec(const bool value) noexcept
     {
         m_threshRecReq.store(value, std::memory_order_relaxed);
@@ -416,7 +487,12 @@ class LooperImpl final : public EffectBase
         {
             return;
         }
-        m_loopStorage.requestSave(name, patchParamsJson);
+        std::array<std::string, AbacDsp::kMaxLoopParts> partGrooveNames;
+        {
+            std::lock_guard lock(m_partGrooveMutex);
+            partGrooveNames = m_partGrooveName;
+        }
+        m_loopStorage.requestSave(name, patchParamsJson, partGrooveNames);
     }
 
     [[nodiscard]] bool isLoopSavePending() const noexcept
@@ -450,6 +526,9 @@ class LooperImpl final : public EffectBase
         return m_loopStorage.isLoadPending();
     }
 
+    // Each part's own groove is restored per-part by checkLoopLoadCompletion()
+    // (audio thread, alongside its audio/overdub/meter); this just forwards
+    // patchParamsJson/BPM-conflict info to the UI.
     [[nodiscard]] LoopLoadOutcome consumeLoopLoadOutcome()
     {
         return m_loopStorage.consumeLoadOutcome();
@@ -882,12 +961,13 @@ class LooperImpl final : public EffectBase
         // click-to-track gain (below) can be mixed into what actually gets captured.
         std::array<float, BlockSize> click{};
         AbacDsp::AudioBuffer<2, BlockSize> seqOut{};
-        renderClickAndSequencer(click, seqOut);
+        AbacDsp::AudioBuffer<2, BlockSize> grooveOut{};
+        renderClickAndSequencer(click, seqOut, grooveOut);
 
         const AbacDsp::AudioBuffer<2, BlockSize> recorderOut = processRecorder(in, click);
 
         commitPendingActions();
-        mixOutputsAndUpdateVisualization(in, click, seqOut, recorderOut, out);
+        mixOutputsAndUpdateVisualization(in, click, seqOut, grooveOut, recorderOut, out);
 
         m_absPos += BlockSize;
         m_suppressNextBarIndexIncrement = false;
@@ -916,6 +996,22 @@ class LooperImpl final : public EffectBase
             m_appliedDivision = division;
         }
         m_click.setVolumeDb(m_clickVol.load(std::memory_order_relaxed));
+        m_grooveGain = std::pow(10.f, m_clickVol.load(std::memory_order_relaxed) / 20.f);
+        const int grooveVariation = m_grooveVariationReq.load(std::memory_order_relaxed);
+        if (grooveVariation != m_appliedGrooveVariation)
+        {
+            m_appliedGrooveVariation = grooveVariation;
+            std::string style;
+            {
+                std::lock_guard lock(m_grooveStyleMutex);
+                style = m_currentGrooveStyle;
+            }
+            if (!style.empty())
+            {
+                m_grooveKit.requestLoadStyle(kAbacDspDrumSamplesDir, kAbacDspMidiDrumsDir, style,
+                                             static_cast<unsigned>(grooveVariation));
+            }
+        }
         const float clickRecordVol = m_clickRecordVol.load(std::memory_order_relaxed);
         m_clickRecordGain = (clickRecordVol <= -60.f) ? 0.f : std::pow(10.f, clickRecordVol / 20.f);
         m_loopGain = std::pow(10.f, m_loopVol.load(std::memory_order_relaxed) / 20.f);
@@ -958,6 +1054,52 @@ class LooperImpl final : public EffectBase
         const size_t loopBar = loopBars > 0 ? ((totalBar - 1) % loopBars) + 1 : totalBar;
         return std::format("[t={} pos:{}.{} loop:{}.{}] active: {} selected: {}\n", deltaMs, totalBar, beat, loopBar,
                            beat, m_activePartIndex, m_selectedPartIndex);
+    }
+
+    // Logs once per actually-installed groove change instead of on every beat line.
+    void logGrooveChangeIfAny()
+    {
+        const std::string& grooveName = m_grooveKit.installedGrooveName();
+        if (grooveName == m_lastLoggedGrooveName)
+        {
+            return;
+        }
+        m_lastLoggedGrooveName = grooveName;
+        if (!grooveName.empty())
+        {
+            std::cout << "Groove loaded: " << grooveName << '\n';
+        }
+    }
+
+    // A recording just finished: remember which groove (if any) was actually
+    // playing, so switching back to this part later restores it.
+    void stampGrooveOnActivePart()
+    {
+        const std::string grooveName =
+            m_useGroove.load(std::memory_order_relaxed) ? m_grooveKit.installedGrooveName() : std::string();
+        std::lock_guard lock(m_partGrooveMutex);
+        m_partGrooveName[m_bank.activeIndex()] = grooveName;
+    }
+
+    void clearGrooveOnActivePart()
+    {
+        std::lock_guard lock(m_partGrooveMutex);
+        m_partGrooveName[m_bank.activeIndex()] = {};
+    }
+
+    // Part-switch commit: reloads target's own associated groove, if it has
+    // one; a part with no association leaves whatever is currently playing.
+    void requestGrooveForPart(const size_t target)
+    {
+        std::string grooveName;
+        {
+            std::lock_guard lock(m_partGrooveMutex);
+            grooveName = m_partGrooveName[target];
+        }
+        if (!grooveName.empty())
+        {
+            requestLoadGrooveByName(grooveName);
+        }
     }
 
     // A part with content queues an immediate switch; an empty one is accepted
@@ -1159,6 +1301,7 @@ class LooperImpl final : public EffectBase
     void mixOutputsAndUpdateVisualization(const AbacDsp::AudioBuffer<2, BlockSize>& in,
                                           const std::array<float, BlockSize>& click,
                                           const AbacDsp::AudioBuffer<2, BlockSize>& seqOut,
+                                          const AbacDsp::AudioBuffer<2, BlockSize>& grooveOut,
                                           const AbacDsp::AudioBuffer<2, BlockSize>& recorderOut,
                                           AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
@@ -1168,8 +1311,8 @@ class LooperImpl final : public EffectBase
         {
             const float loopL = recorderOut(i, 0) * loopGain;
             const float loopR = recorderOut(i, 1) * loopGain;
-            out(i, 0) = in(i, 0) + loopL + click[i] + seqOut(i, 0);
-            out(i, 1) = in(i, 1) + loopR + click[i] + seqOut(i, 1);
+            out(i, 0) = in(i, 0) + loopL + click[i] + seqOut(i, 0) + grooveOut(i, 0);
+            out(i, 1) = in(i, 1) + loopR + click[i] + seqOut(i, 1) + grooveOut(i, 1);
 
             // Feed the bar display with the dry input only (no loop, no click).
             // A noise gate keeps the ring flat on quiet sections: the signed
@@ -1345,6 +1488,10 @@ class LooperImpl final : public EffectBase
             m_finalizedBarCounts[i] = 0;
             m_appliedBpm[i] = 120.f;
         }
+        {
+            std::lock_guard lock(m_partGrooveMutex);
+            m_partGrooveName = {};
+        }
         m_bank.setActiveIndex(0);
         m_activePartIndex = 0;
         m_selectedPartIndex = 0;
@@ -1368,6 +1515,7 @@ class LooperImpl final : public EffectBase
             // conflict concept, so their own json's bpm is used directly.
             installLoadedPart(i, result->parts[i], i == 0 ? result->resolvedBpm : result->parts[i].bpm);
         }
+        requestGrooveForPart(0); // whichever groove Part A itself was recorded with
         logLoopLoadSummary();
         requestSpectrogramRegen();
     }
@@ -1405,6 +1553,10 @@ class LooperImpl final : public EffectBase
         if (partData.hasOverdub)
         {
             m_bank.part(index).loadOverdub(partData.overdubLeft, partData.overdubRight);
+        }
+        {
+            std::lock_guard lock(m_partGrooveMutex);
+            m_partGrooveName[index] = partData.grooveFile;
         }
         m_appliedBpm[index] = bpm;
         if (!partData.meterTimeline.empty())
@@ -1564,10 +1716,17 @@ class LooperImpl final : public EffectBase
     // while the independent sequencer is soloing a frozen pattern. Fully stopped/
     // waiting holds the clock (and the bar display feed) frozen at its last position.
     // Click and sequencer share one m_seq.advance() call per sample (it mutates position).
-    void renderClickAndSequencer(std::array<float, BlockSize>& click, AbacDsp::AudioBuffer<2, BlockSize>& seqOut)
+    void renderClickAndSequencer(std::array<float, BlockSize>& click, AbacDsp::AudioBuffer<2, BlockSize>& seqOut,
+                                 AbacDsp::AudioBuffer<2, BlockSize>& grooveOut)
     {
         const bool active = isRecording() || isPlaying() || m_armed || m_countingIn;
         const bool transportRunning = active || m_sequencerPlaying;
+        m_grooveKit.pollAndInstall();
+        logGrooveChangeIfAny();
+        m_grooveSequencer.setLibrary(m_grooveKit.library());
+        m_grooveSequencer.setTrackNames(m_grooveKit.installedTrackNames());
+        m_grooveSequencer.setGroove(m_grooveKit.program());
+        const bool useGroove = m_useGroove.load(std::memory_order_relaxed) && m_grooveKit.isReady();
         for (size_t i = 0; i < BlockSize; ++i)
         {
             if (!transportRunning)
@@ -1580,6 +1739,13 @@ class LooperImpl final : public EffectBase
                 // May change beatsPerBar/bpm for the bar about to start: read
                 // samplesPerBeat fresh below rather than caching it per block.
                 applyMeterAtBarBoundary();
+                // The groove free-runs on its own length; only force it back to
+                // tick 0 when the active part's own recorded loop restarts.
+                const size_t loopBars = m_finalizedBarCounts[m_activePartIndex];
+                if (loopBars > 0 && m_timingController.diagBarIndex() % loopBars == 0)
+                {
+                    m_grooveSequencer.resetPosition();
+                }
             }
             const size_t samplesPerBeat = m_seq.samplesPerBeat();
             m_barPos[i] = event.beatIndexInBar * samplesPerBeat + event.beatSamplePos;
@@ -1587,7 +1753,7 @@ class LooperImpl final : public EffectBase
             {
                 std::cout << diagBeatLine();
             }
-            if (active)
+            if (active && !useGroove)
             {
                 if (event.beatStart && m_suppressNextClick)
                 {
@@ -1603,11 +1769,18 @@ class LooperImpl final : public EffectBase
                     m_click.triggerSub();
                 }
             }
-            click[i] = active ? m_click.step0() : 0.f;
+            click[i] = (active && !useGroove) ? m_click.step0() : 0.f;
 
             const auto seqSample = m_sequencer.advanceSample(event, samplesPerBeat);
             seqOut(i, 0) = seqSample[0];
             seqOut(i, 1) = seqSample[1];
+
+            if (active && useGroove)
+            {
+                const auto grooveSample = m_grooveSequencer.advanceSample(samplesPerBeat);
+                grooveOut(i, 0) = grooveSample[0] * m_grooveGain;
+                grooveOut(i, 1) = grooveSample[1] * m_grooveGain;
+            }
         }
     }
 
@@ -1635,6 +1808,22 @@ class LooperImpl final : public EffectBase
     AbacDsp::SequencerEngine<> m_sequencer;
     AbacDsp::SequencePattern m_pattern;
     SequencerPatternBuilder<BlockSize> m_patternBuilder;
+
+    // Groove: a second, independent trigger source alongside the take-slicing
+    // sequencer above, played from a MIDI file instead of the user's own loop.
+    GrooveKit m_grooveKit;
+    AbacDsp::GrooveDrumPlayer m_grooveSequencer;
+    std::string m_lastLoggedGrooveName;
+    std::atomic<bool> m_useGroove{false};
+    std::atomic<bool> m_grooveLoadTriggered{false};
+    std::atomic<int> m_grooveVariationReq{0};
+    int m_appliedGrooveVariation{0}; // audio thread only
+    std::mutex m_grooveStyleMutex;
+    std::string m_currentGrooveStyle; // "<Genre>/<style>", empty until a menu pick
+    // Guards m_partGrooveName: written from the audio thread (record-finalize,
+    // Clear, load), read cross-thread by requestSaveLoopAs() (message thread).
+    std::mutex m_partGrooveMutex;
+    std::array<std::string, AbacDsp::kMaxLoopParts> m_partGrooveName{};
 
     std::vector<float> m_visualWave;
     std::vector<float> m_preparedWave;
@@ -1686,6 +1875,7 @@ class LooperImpl final : public EffectBase
     std::atomic<float> m_partCapacityBarsReq{kDefaultPartCapacityBars};
     float m_loopGain{1.f};
     float m_clickRecordGain{0.f};
+    float m_grooveGain{1.f}; // same dB control as the click (m_clickVol)
     float m_recThresholdLinear{0.0158f};
     bool m_armed{false};
 

@@ -102,6 +102,14 @@ class StubImpl final : public EffectBase
     {
         m_clickRecordVolume = std::pow(10.f, value / 20.f);
     }
+    void setUseGroove(const bool value)
+    {
+        m_useGroove = value;
+    }
+    void setGrooveVariation(const float value)
+    {
+        m_grooveVariation = value;
+    }
     void setLoopVolume(const float value)
     {
         m_loopVolume = std::pow(10.f, value / 20.f);
@@ -170,6 +178,8 @@ class StubImpl final : public EffectBase
     float m_bpm{};
     float m_clickVolume{};
     float m_clickRecordVolume{};
+    bool m_useGroove{};
+    float m_grooveVariation{};
     float m_loopVolume{};
     float m_recThreshold{};
     bool m_freeze{};

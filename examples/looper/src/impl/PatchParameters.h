@@ -34,6 +34,8 @@ struct PatchParameters
         bpm              , // dial
         clickVolume      , // dial
         clickRecordVolume, // dial
+        useGroove        , // switch
+        grooveVariation  , // dial
         loopVolume       , // dial
         recThreshold     , // dial
         freeze           , // switch
@@ -61,6 +63,8 @@ size_t sliceDivision{1};
 float bpm{120.0f};
 float clickVolume{-12.0f};
 float clickRecordVolume{-60.0f};
+bool useGroove{false};
+float grooveVariation{0.0f};
 float loopVolume{0.0f};
 float recThreshold{-36.0f};
 bool freeze{false};
@@ -90,6 +94,8 @@ bool clearSeq{false};
 "bpm",
 "clickVolume",
 "clickRecordVolume",
+"useGroove",
+"grooveVariation",
 "loopVolume",
 "recThreshold",
 "freeze",
@@ -134,6 +140,8 @@ bool clearSeq{false};
         else if constexpr (ParamId == Id::bpm) return bpm;
         else if constexpr (ParamId == Id::clickVolume) return clickVolume;
         else if constexpr (ParamId == Id::clickRecordVolume) return clickRecordVolume;
+        else if constexpr (ParamId == Id::useGroove) return useGroove;
+        else if constexpr (ParamId == Id::grooveVariation) return grooveVariation;
         else if constexpr (ParamId == Id::loopVolume) return loopVolume;
         else if constexpr (ParamId == Id::recThreshold) return recThreshold;
         else if constexpr (ParamId == Id::freeze) return freeze;
@@ -192,6 +200,10 @@ break;
  case Id::clickVolume: if (!isEqual(get<Id::clickVolume>(), value)) {get<Id::clickVolume>() = value;m_modified = true;}
 break;
  case Id::clickRecordVolume: if (!isEqual(get<Id::clickRecordVolume>(), value)) {get<Id::clickRecordVolume>() = value;m_modified = true;}
+break;
+ case Id::useGroove: if (!isEqual(get<Id::useGroove>(), value)) {get<Id::useGroove>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::grooveVariation: if (!isEqual(get<Id::grooveVariation>(), value)) {get<Id::grooveVariation>() = value;m_modified = true;}
 break;
  case Id::loopVolume: if (!isEqual(get<Id::loopVolume>(), value)) {get<Id::loopVolume>() = value;m_modified = true;}
 break;
@@ -264,6 +276,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         bpm              , // dial
         clickVolume      , // dial
         clickRecordVolume, // dial
+        useGroove        , // switch
+        grooveVariation  , // dial
         loopVolume       , // dial
         recThreshold     , // dial
         freeze           , // switch
