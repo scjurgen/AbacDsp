@@ -200,37 +200,30 @@ TEST(GrooveDrumPlayerTest, ResetPositionRetriggersImmediately)
     EXPECT_EQ(player.activeVoiceCount(), 1u) << "resetPosition() should re-arm the tick-0 event";
 }
 
-TEST(GrooveDrumPlayerTest, TriggerLogUsesTrackNameWhenSetAndIndexOtherwise)
+TEST(GrooveDrumPlayerTest, LogsOnlyOnceWhenTheLoopRepeats)
 {
     const auto loop = makeConstLoop(4, 1.f, 1.f);
     SliceLibrary library(4);
     library.extractTrack(loop, std::vector<Slice>{{0, 4}});
     GrooveProgram program{{{0, 0, 1.f}}, 1000, 1};
 
+    GrooveDrumPlayer player(kSampleRate);
+    player.setLibrary(&library);
+    player.setGroove(&program);
+
     std::ostringstream captured;
     std::streambuf* originalCoutBuffer = std::cout.rdbuf(captured.rdbuf());
-
+    for (int i = 0; i < 999; ++i)
     {
-        GrooveDrumPlayer player(kSampleRate);
-        player.setLibrary(&library);
-        player.setGroove(&program);
-        static_cast<void>(player.advanceSample(1)); // no setTrackNames(): falls back to "0"
+        static_cast<void>(player.advanceSample(1)); // one tick per call; loop is 1000 ticks
     }
-
-    const std::vector<std::string> names{"bd"};
-    {
-        GrooveDrumPlayer player(kSampleRate);
-        player.setLibrary(&library);
-        player.setTrackNames(names);
-        player.setGroove(&program);
-        static_cast<void>(player.advanceSample(1));
-    }
-
+    const std::string beforeWrap = captured.str();
+    static_cast<void>(player.advanceSample(1)); // crosses the loop boundary
     std::cout.rdbuf(originalCoutBuffer);
 
-    const std::string log = captured.str();
-    EXPECT_NE(log.find("track      0"), std::string::npos);
-    EXPECT_NE(log.find("track     bd"), std::string::npos);
+    const std::string afterWrap = captured.str();
+    EXPECT_EQ(beforeWrap.find("loop repeat"), std::string::npos);
+    EXPECT_NE(afterWrap.find("loop repeat"), std::string::npos);
 }
 
 TEST(GrooveDrumPlayerTest, MissingLibraryOrProgramProducesSilenceAndNoCrash)

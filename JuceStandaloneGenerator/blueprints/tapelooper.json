@@ -1,0 +1,75 @@
+{
+  "name": "tapelooper",
+  "plugintype": "Looper",
+  "description": [
+    "Varispeed 3-track tape recorder (A, B, C) plus a parallel MIDI-groove track.\n",
+    "Each tape track records and plays back independently, at a shared tape speed.\n"
+  ],
+  "patches": true,
+  "host_transport": true,
+  "ports-control":
+  [
+    {"short": "SPD", "type": "dial", "display": "Tape Speed", "symbol": "tapeSpeed", "default": 1.0,
+      "range": [0.1, 4.0, 0.01, 1.0, false], "precision": 2, "unit": "x"},
+    {"short": "BARS", "type": "dial", "display": "Bars", "symbol": "bars", "default": 8,
+      "range": [1, 32, 1, 1, false], "precision": 0},
+
+    {"short": "IGAIN", "type": "dial", "display": "Input Level", "symbol": "inputGain", "default": 0,
+      "range": [-60, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "GLVL", "type": "dial", "display": "Groove Level", "symbol": "grooveLevel", "default": 0,
+      "range": [-60, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+
+    {"short": "RECA", "type": "switch", "display": "Rec A", "symbol": "recordA", "default": 0},
+    {"short": "PLAA", "type": "switch", "display": "Play A", "symbol": "playA", "default": 0},
+    {"short": "CLRA", "type": "switch", "display": "Clear A", "symbol": "clearA", "default": 0, "momentary": true},
+    {"short": "RECB", "type": "switch", "display": "Rec B", "symbol": "recordB", "default": 0},
+    {"short": "PLAB", "type": "switch", "display": "Play B", "symbol": "playB", "default": 0},
+    {"short": "CLRB", "type": "switch", "display": "Clear B", "symbol": "clearB", "default": 0, "momentary": true},
+    {"short": "RECC", "type": "switch", "display": "Rec C", "symbol": "recordC", "default": 0},
+    {"short": "PLAC", "type": "switch", "display": "Play C", "symbol": "playC", "default": 0},
+    {"short": "CLRC", "type": "switch", "display": "Clear C", "symbol": "clearC", "default": 0, "momentary": true},
+
+    {"short": "GPLY", "type": "switch", "display": "Groove", "symbol": "groovePlay", "default": 0,
+      "state_label": {"query": "isGroovePlaying", "on": "Stop", "off": "Play"}},
+    {"short": "GBPM", "type": "dial", "display": "BPM", "symbol": "bpm", "default": 120,
+      "range": [50, 250, 0.5, 1, false], "precision": 1, "unit": "BPM", "enabled_query": "canEditBpm"},
+    {"short": "GVAR", "type": "dial", "display": "Groove Var", "symbol": "grooveVariation", "default": 0,
+      "range": [0, 31, 1, 1, false], "precision": 0},
+
+    {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu"},
+    {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" }
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "900",
+    "WINDOW_HEIGHT": "700",
+    "type": "=5",
+    "composition": "R=(1:1:1:1:1) A1=(SPD, BARS) A2=(IGAIN, GLVL) A3=(RECA, PLAA, CLRA, RECB, PLAB, CLRB, RECC, PLAC, CLRC) A4=(GPLY, GBPM, GVAR) A5=(LVL*100, CPU*100)"
+  },
+  "processor_forwards": [
+    {"name": "isGroovePlaying", "type": "bool"},
+    {"name": "canEditBpm", "type": "bool"}
+  ],
+  "extra_timer_callbacks": [
+    "if (const auto info = processorRef.consumeGrooveInfoText(); info.isNotEmpty()) { m_statusBar.showMessage(info); }"
+  ],
+  "extra_processor_methods": [
+    "[[nodiscard]] std::vector<juce::String> listGrooveNames() const { std::vector<juce::String> result; if (pluginRunner) { for (const auto& n : pluginRunner->listGrooveNames()) { result.push_back(juce::String(n)); } } return result; }",
+    "[[nodiscard]] juce::String getCurrentGrooveName() const { return pluginRunner ? juce::String(pluginRunner->currentGrooveName()) : juce::String(); }",
+    "void requestLoadGroove(const juce::String& styleName, const int variationIndex) { if (pluginRunner) { pluginRunner->requestLoadGroove(styleName.toStdString(), static_cast<unsigned>(variationIndex)); } }",
+    "[[nodiscard]] juce::String consumeGrooveInfoText() const { return pluginRunner ? juce::String(pluginRunner->consumeGrooveInfoText()) : juce::String(); }"
+  ],
+  "extra_menus": [
+    {
+      "name": "Groove",
+      "id_count": 4000,
+      "build_method": "juce::PopupMenu buildGrooveMenu()\n{\n    const auto names = processorRef.listGrooveNames();\n    juce::String currentStyle = processorRef.getCurrentGrooveName();\n    const int lastSlash = currentStyle.lastIndexOfChar('/');\n    const int vPos = currentStyle.lastIndexOf(\"_v\");\n    if (vPos > lastSlash) { currentStyle = currentStyle.substring(0, vPos); }\n    return buildGroupedMenu(names, {ID_BASE}, currentStyle);\n}",
+      "select_method": "void handleGrooveMenuSelection(int menuItemID)\n{\n    const auto names = processorRef.listGrooveNames();\n    if (menuItemID >= {ID_BASE} && menuItemID < {ID_BASE} + static_cast<int>(names.size()))\n    {\n        const auto& style = names[static_cast<size_t>(menuItemID - {ID_BASE})];\n        processorRef.requestLoadGroove(style, 0);\n        m_statusBar.showMessage(\"Loading groove '\" + style + \"'...\");\n    }\n}"
+    }
+  ],
+  "protected_files": ["src/unittests/Tapelooper_tests.cpp"],
+  "CPP": {
+    "CLASS_NAME": "TapeLooperImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/TapeLooperImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

@@ -59,8 +59,9 @@ struct GrooveBurstResult
  * renderBurst()-rendered burst); resetPosition() snaps to tick 0. Not thread-safe;
  * library/program pointers are borrowed and must outlive the player.
  *
- * @warning triggerVoice() logs every trigger via std::cout - not realtime-safe,
- *          accepted deliberately (matches SequencerEngine's own precedent).
+ * @warning checkTriggers() logs once per loop repeat via std::cout - not
+ *          realtime-safe, accepted deliberately (matches SequencerEngine's own
+ *          precedent).
  */
 class GrooveDrumPlayer
 {
@@ -243,6 +244,8 @@ class GrooveDrumPlayer
         if (newTickPos >= loopLengthTicks)
         {
             newTickPos -= loopLengthTicks;
+            std::cout << std::format("{:8.3f}s  loop repeat\n",
+                                     static_cast<double>(m_sampleCounter) / static_cast<double>(m_sampleRate));
             m_nextTriggerIndex = 0;
             while (m_nextTriggerIndex < triggers.size() &&
                    static_cast<double>(triggers[m_nextTriggerIndex].tick) < newTickPos)
@@ -271,12 +274,6 @@ class GrooveDrumPlayer
         {
             return;
         }
-        const bool hasName = trigger.track < m_trackNames.size() && !m_trackNames[trigger.track].empty();
-        const std::string trackLabel = hasName ? m_trackNames[trigger.track] : std::to_string(trigger.track);
-        std::cout << std::format("{:8.3f}s  track {:>6}  slice {}\n",
-                                 static_cast<double>(m_sampleCounter) / static_cast<double>(m_sampleRate), trackLabel,
-                                 sliceIndex);
-
         Voice& voice = allocateVoice();
         voice.active = true;
         voice.track = trigger.track;

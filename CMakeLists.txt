@@ -48,6 +48,7 @@ if(BUILD_FULL_PROJECT)
     add_subdirectory(examples/sampleplayertimestretched)
     add_subdirectory(examples/spectraltap)
     add_subdirectory(examples/tanpura)
+    add_subdirectory(examples/tapelooper)
     add_subdirectory(JuceStandaloneGenerator/theme-review)
 else()
     # For tests-only builds, just include DSP headers

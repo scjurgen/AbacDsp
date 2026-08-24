@@ -1,0 +1,219 @@
+#include <cmath>
+#include <numbers>
+#include <vector>
+
+#include "gtest/gtest.h"
+
+#include "Audio/AudioBuffer.h"
+#include "impl/TapeLooperImpl.h"
+
+// Deliberately does not depend on real (gitignored, user-supplied) sample/MIDI
+// content, same reasoning as Groover_tests.cpp: the default groove path is
+// content-independent for buffering mechanics (silence in, silence out).
+namespace
+{
+constexpr size_t kBlock = 64;
+constexpr float kSampleRate = 48000.f;
+
+using TapeLooper = TapeLooperImpl<kBlock>;
+using Buffer = AbacDsp::AudioBuffer<2, kBlock>;
+
+constexpr size_t kTestLoopFrames = TapeLooperDetail::framesForLoop(4.f, 100.f);
+
+Buffer sineBlock(const float amplitude, const float frequency, size_t& phaseSampleIndex)
+{
+    Buffer buf{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        const float phase =
+            2.f * std::numbers::pi_v<float> * frequency * static_cast<float>(phaseSampleIndex) / kSampleRate;
+        const float sample = amplitude * std::sin(phase);
+        buf(i, 0) = sample;
+        buf(i, 1) = sample;
+        ++phaseSampleIndex;
+    }
+    return buf;
+}
+
+float outputRms(TapeLooper& sut, const Buffer& in, const size_t numBlocks)
+{
+    double sumSquares = 0.0;
+    size_t sampleCount = 0;
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        Buffer out{};
+        sut.processBlock(in, out);
+        for (size_t i = 0; i < kBlock; ++i)
+        {
+            sumSquares += static_cast<double>(out(i, 0)) * out(i, 0);
+            ++sampleCount;
+        }
+    }
+    return static_cast<float>(std::sqrt(sumSquares / static_cast<double>(sampleCount)));
+}
+
+// One RMS per numBlocksPerChunk-sized chunk, so a dip in a single later
+// repeat (rather than a uniform level change) shows up as one low entry.
+std::vector<float> outputRmsPerChunk(TapeLooper& sut, const Buffer& in, const size_t numBlocksPerChunk,
+                                     const size_t numChunks)
+{
+    std::vector<float> result;
+    result.reserve(numChunks);
+    for (size_t chunk = 0; chunk < numChunks; ++chunk)
+    {
+        result.push_back(outputRms(sut, in, numBlocksPerChunk));
+    }
+    return result;
+}
+}
+
+TEST(TapeLooperTest, StoppedRecordSustainsPreviouslyRecordedLevel)
+{
+    TapeLooper sut(kSampleRate);
+    sut.setBars(4.f);
+    sut.setBpm(100.f);
+    sut.setTapeSpeed(1.f);
+    sut.setRecordA(true);
+    sut.setPlayA(true);
+
+    const size_t numBlocks = kTestLoopFrames / kBlock;
+    size_t phase = 0;
+    const float recordAmplitude = 0.7f;
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        const auto in = sineBlock(recordAmplitude, 220.f, phase);
+        Buffer out{};
+        sut.processBlock(in, out);
+    }
+    const float recordedRms = recordAmplitude / std::numbers::sqrt2_v<float>;
+
+    // Stop recording (still playing): whatever "live" input is fed now must be
+    // ignored, and the loop just recorded must keep sounding at its own level.
+    sut.setRecordA(false);
+    const Buffer decoyIn{}; // silence - if this leaked through, output RMS would collapse
+    const float sustainedRms = outputRms(sut, decoyIn, numBlocks);
+
+    EXPECT_GT(sustainedRms, recordedRms * 0.5f);
+    EXPECT_LT(sustainedRms, recordedRms * 1.5f);
+}
+
+TEST(TapeLooperTest, RecordingASecondPassOverdubsOntoTheFirst)
+{
+    TapeLooper sut(kSampleRate);
+    sut.setBars(4.f);
+    sut.setBpm(100.f);
+    sut.setTapeSpeed(1.f);
+    sut.setRecordA(true);
+    sut.setPlayA(true);
+
+    const size_t numBlocks = kTestLoopFrames / kBlock;
+    const float amplitude = 0.4f;
+    size_t phase = 0;
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        const auto in = sineBlock(amplitude, 220.f, phase);
+        Buffer out{};
+        sut.processBlock(in, out);
+    }
+    phase = 0;
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        const auto in = sineBlock(amplitude, 880.f, phase); // second pass, different tone
+        Buffer out{};
+        sut.processBlock(in, out);
+    }
+
+    sut.setRecordA(false);
+    const Buffer decoyIn{};
+    const float overdubbedRms = outputRms(sut, decoyIn, numBlocks);
+
+    // Two uncorrelated equal-amplitude tones combine to ~sqrt(2) times either
+    // one's RMS alone, distinguishing overdub from a plain replace.
+    const float singleToneRms = amplitude / std::numbers::sqrt2_v<float>;
+    EXPECT_GT(overdubbedRms, singleToneRms * 1.2f);
+}
+
+// Reproduction attempt for a reported "gap" heard some repeats into sustained
+// playback: checks every individual repeat's level, not just an average over
+// several, so a dip in one specific later cycle would show up here.
+TEST(TapeLooperTest, SustainedLoopLevelStaysConsistentAcrossManyRepeats)
+{
+    TapeLooper sut(kSampleRate);
+    sut.setBars(4.f);
+    sut.setBpm(100.f);
+    sut.setTapeSpeed(1.f);
+    sut.setRecordA(true);
+    sut.setPlayA(true);
+
+    const size_t numBlocks = kTestLoopFrames / kBlock;
+    size_t phase = 0;
+    const float recordAmplitude = 0.7f;
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        const auto in = sineBlock(recordAmplitude, 220.f, phase);
+        Buffer out{};
+        sut.processBlock(in, out);
+    }
+    const float recordedRms = recordAmplitude / std::numbers::sqrt2_v<float>;
+
+    sut.setRecordA(false);
+    const Buffer decoyIn{};
+    constexpr size_t kRepeats = 4;
+    const auto perRepeatRms = outputRmsPerChunk(sut, decoyIn, numBlocks, kRepeats);
+
+    for (size_t repeat = 0; repeat < perRepeatRms.size(); ++repeat)
+    {
+        EXPECT_GT(perRepeatRms[repeat], recordedRms * 0.5f) << "repeat " << repeat;
+        EXPECT_LT(perRepeatRms[repeat], recordedRms * 1.5f) << "repeat " << repeat;
+    }
+}
+
+TEST(TapeLooperTest, TrackNotPlayingContributesNothingBeforeAnyLoopWraparound)
+{
+    TapeLooper sut(kSampleRate);
+    sut.setRecordA(true);
+    sut.setPlayA(false); // recording but not audible
+    sut.setRecordB(false);
+    sut.setPlayB(true); // audible but nothing recorded yet
+    sut.setRecordC(false);
+    sut.setPlayC(false);
+
+    Buffer in{};
+    for (size_t i = 0; i < kBlock; ++i)
+    {
+        in(i, 0) = 0.5f;
+        in(i, 1) = 0.5f;
+    }
+
+    // Far fewer samples than any preset's loop distance, so nothing has had
+    // time to wrap back to the read heads regardless of play/record state;
+    // the input itself still always reaches the output (live monitoring).
+    for (size_t block = 0; block < 100; ++block)
+    {
+        Buffer out{};
+        sut.processBlock(in, out);
+        for (size_t i = 0; i < kBlock; ++i)
+        {
+            EXPECT_FLOAT_EQ(out(i, 0), 0.5f);
+            EXPECT_FLOAT_EQ(out(i, 1), 0.5f);
+        }
+    }
+}
+
+TEST(TapeLooperTest, GrooveBuffersOnlyFillWhilePlaying)
+{
+    TapeLooper sut(kSampleRate);
+    const Buffer in{};
+
+    for (size_t block = 0; block < 20; ++block)
+    {
+        Buffer out{};
+        sut.processBlock(in, out);
+    }
+    EXPECT_EQ(sut.grooveLoopBufferFramesAheadForTest(), 0u);
+
+    sut.setGroovePlay(true);
+    Buffer out{};
+    sut.processBlock(in, out);
+    EXPECT_GT(sut.grooveLoopBufferFramesAheadForTest(), 0u);
+}

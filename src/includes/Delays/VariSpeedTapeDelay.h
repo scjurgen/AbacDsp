@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstddef>
 #include <vector>
 
 #include "Helpers/ConstructArray.h"
@@ -37,6 +38,9 @@ namespace AbacDsp
 template <size_t BufferSize, size_t NumChannels, size_t NumReadHeads, size_t TileSize>
 class VariSpeedTapeDelay
 {
+    // TODO: no tape-defects noise coloring yet (dropout/hiss). A prior reference
+    // implementation had one (pink noise shaped by a biquad); it was naive and
+    // deliberately not ported. A proper model is still open.
   public:
     /// Octaves per second when speeding up.
     static constexpr auto accelPerSec = 6.f;
@@ -77,7 +81,9 @@ class VariSpeedTapeDelay
             m_rdhd[hdIdx].advancePosition();
 
             const auto indexBuffer = static_cast<size_t>(std::floor(m_rdhd[hdIdx].getPosition()));
-            const float fraction = m_rdhd[hdIdx].getPosition() - static_cast<float>(indexBuffer);
+            // Subtract in double first, or a large tape position would already
+            // have lost the sub-sample fraction before narrowing to float.
+            const float fraction = static_cast<float>(m_rdhd[hdIdx].getPosition() - static_cast<double>(indexBuffer));
             std::array<float, NumChannels> tmp{};
             TapeInterpolation::catmullRom(&m_buffer[indexBuffer * NumChannels], tmp.data(), fraction);
             for (size_t c = 0; c < NumChannels; ++c)
@@ -189,7 +195,8 @@ class VariSpeedTapeDelay
         {
             if (const auto availableFrames = std::min(BufferSize - m_writeHead, frames); availableFrames >= frames)
             {
-                std::copy_n(data, availableFrames * NumChannels, m_buffer.begin() + m_writeHead * NumChannels);
+                std::copy_n(data, availableFrames * NumChannels,
+                            m_buffer.begin() + static_cast<std::ptrdiff_t>(m_writeHead * NumChannels));
                 m_writeHead += availableFrames;
                 return;
             }
