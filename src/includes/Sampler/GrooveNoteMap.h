@@ -3,6 +3,9 @@
 #include <array>
 #include <cstdint>
 
+namespace AbacDsp
+{
+
 // Instrument tags a groove MIDI note can carry, most specific first, transcribed from
 // MidiDrums/README.md's note table. Kit-independent: "what a note means", not which sample
 // plays it - see GrooveKit.h for how a kit's own pieces resolve against this vocabulary.
@@ -139,4 +142,6 @@ inline constexpr auto kGrooveNoteMap = std::to_array<GrooveNoteTags>({
         }
     }
     return {GrooveTag::None, GrooveTag::None, GrooveTag::None, GrooveTag::None};
+}
+
 }

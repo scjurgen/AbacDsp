@@ -1,0 +1,57 @@
+# Compilation
+*.o
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+*.exe
+
+# Build directories
+build/
+cmake-build-*/
+Builds/
+out/
+dist/
+*.cmake
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# CMake
+CMakeCache.txt
+CMakeLists.txt.user
+cmake_install.cmake
+
+# JUCE specific
+JuceLibraryCode/
+.DS_Store
+*.jucer.user
+
+# Project files
+*.xcodeproj/
+*.xcworkspace/
+*.sln
+*.vcxproj*
+*.pro.user
+*.cbp
+
+# Dependencies/Third-party
+3rdparty/*
+!3rdparty/.gitkeep
+
+# Patch files
+*.patch
+*.diff
+
+# Logs
+*.log
+
+# OS specific
+Thumbs.db
+.directory

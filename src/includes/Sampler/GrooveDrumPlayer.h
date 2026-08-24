@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -36,36 +37,39 @@ struct GrooveProgram
     uint16_t ticksPerQuarterNote{1};
 };
 
+/// @ingroup sampler
+/// @brief Output of GrooveDrumPlayer::renderBurst(): pre-rendered audio plus the
+/// tick state it ended at, for GrooveDrumPlayer::primeTickState() to resume from.
+struct GrooveBurstResult
+{
+    std::vector<float> audio; // interleaved stereo
+    double tickPos{0.0};
+    size_t nextTriggerIndex{0};
+};
+
 /**
  * @ingroup sampler
  * @brief Polyphonic voice pool playing a resolved MIDI groove against a SliceLibrary.
  *
- * Tracks its own tick position: a free-running loop of loopLengthTicks,
- * independent of any bar/beat/step grid, advanced each sample from the
- * caller's live samplesPerBeat so it stays in tempo without sharing a clock
- * object. resetPosition() snaps back to tick 0 on demand (e.g. to resync
- * with a host loop boundary); nothing else does, so a shorter groove under
- * a longer host loop simply keeps repeating on its own period until told
- * otherwise.
+ * Tracks its own tick position: a free-running loop of loopLengthTicks, advanced
+ * each sample from the caller's live samplesPerBeat, independent of any bar/beat/
+ * step grid. Every trigger plays a random slice from its track at unmodified gain
+ * (no pitch/reverse/normalization - recorded levels are trusted as-is).
+ * syncToPpq()/primeTickState() reposition tick state (host resync, or resuming a
+ * renderBurst()-rendered burst); resetPosition() snaps to tick 0. Not thread-safe;
+ * library/program pointers are borrowed and must outlive the player.
  *
- * Every trigger plays a uniformly random slice from its track (round-robin
- * variation) at a fixed sample rate (no pitch/reverse - a groove has no use
- * for either), gain applied as given with no peak-normalization: unlike
- * SequencerEngine, a groove's own recorded levels are trusted as-is.
- * Oldest-voice stealing and edge fades mirror SequencerEngine/SlicePlayer.
- *
- * Not thread-safe. Library and program pointers are borrowed and must
- * outlive the player.
- *
- * @warning triggerVoice() logs every trigger through std::cout. That can
- *          block and is not realtime-safe; accepted deliberately, matching
- *          SequencerEngine's own precedent.
+ * @warning triggerVoice() logs every trigger via std::cout - not realtime-safe,
+ *          accepted deliberately (matches SequencerEngine's own precedent).
  */
 class GrooveDrumPlayer
 {
   public:
     static constexpr size_t kChannels = 2;
     static constexpr size_t kMaxVoices = 16;
+    // syncToPpq()'s no-op-vs-resync threshold: tight enough to never fire on
+    // ordinary floating-point drift, loose enough to ignore sub-audible jitter.
+    static constexpr double kSyncToleranceTicks = 1.0;
 
     explicit GrooveDrumPlayer(const float sampleRate) noexcept
         : m_sampleRate(sampleRate)
@@ -105,6 +109,45 @@ class GrooveDrumPlayer
         m_nextTriggerIndex = 0;
     }
 
+    // Resumes exactly where a renderBurst() result left off - the caller already
+    // knows the matching trigger index, so unlike syncToPpq() this just assigns.
+    void primeTickState(const double tickPos, const size_t nextTriggerIndex) noexcept
+    {
+        m_tickPos = tickPos;
+        m_nextTriggerIndex = nextTriggerIndex;
+    }
+
+    // Phase-locks to a host's ppqPosition, called every host block while playing.
+    // Most calls are a no-op sub-tick drift correction; returns true only on a
+    // real jump (a host seek), which also repositions the trigger cursor.
+    [[nodiscard]] bool syncToPpq(const double ppqPosition) noexcept
+    {
+        if (m_program == nullptr || m_program->ticksPerQuarterNote == 0 || m_program->loopLengthTicks == 0)
+        {
+            return false;
+        }
+        const double loopLengthTicks = static_cast<double>(m_program->loopLengthTicks);
+        double newTickPos =
+            std::fmod(ppqPosition * static_cast<double>(m_program->ticksPerQuarterNote), loopLengthTicks);
+        if (newTickPos < 0.0)
+        {
+            newTickPos += loopLengthTicks;
+        }
+        const double forwardDistance = std::fmod(newTickPos - m_tickPos + loopLengthTicks, loopLengthTicks);
+        const double wrapDistance = std::min(forwardDistance, loopLengthTicks - forwardDistance);
+        if (wrapDistance <= kSyncToleranceTicks)
+        {
+            return false;
+        }
+        m_tickPos = newTickPos;
+        const auto& triggers = m_program->triggers;
+        m_nextTriggerIndex = static_cast<size_t>(
+            std::distance(triggers.begin(), std::upper_bound(triggers.begin(), triggers.end(), newTickPos,
+                                                             [](const double tick, const GrooveTrigger& trigger)
+                                                             { return tick < static_cast<double>(trigger.tick); })));
+        return true;
+    }
+
     void setFadeMs(const float ms) noexcept
     {
         m_fadeFrames = std::max<size_t>(1, static_cast<size_t>(ms / 1000.f * m_sampleRate));
@@ -136,6 +179,29 @@ class GrooveDrumPlayer
             }
         }
         return out;
+    }
+
+    // Off-thread, non-realtime: renders frames samples of a fresh player against
+    // library/program for later resumption via primeTickState(). Allocates.
+    [[nodiscard]] static GrooveBurstResult renderBurst(const float sampleRate, const float bpm,
+                                                       const SliceLibrary& library, const GrooveProgram& program,
+                                                       const size_t frames)
+    {
+        GrooveDrumPlayer player(sampleRate);
+        player.setLibrary(&library);
+        player.setGroove(&program);
+        const auto samplesPerBeat = static_cast<size_t>(sampleRate * 60.f / std::max(1.f, bpm));
+        GrooveBurstResult result;
+        result.audio.resize(frames * kChannels);
+        for (size_t i = 0; i < frames; ++i)
+        {
+            const auto frame = player.advanceSample(samplesPerBeat);
+            result.audio[i * kChannels] = frame[0];
+            result.audio[i * kChannels + 1] = frame[1];
+        }
+        result.tickPos = player.m_tickPos;
+        result.nextTriggerIndex = player.m_nextTriggerIndex;
+        return result;
     }
 
   private:

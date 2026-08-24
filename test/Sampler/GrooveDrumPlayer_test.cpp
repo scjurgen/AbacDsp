@@ -245,4 +245,139 @@ TEST(GrooveDrumPlayerTest, MissingLibraryOrProgramProducesSilenceAndNoCrash)
     EXPECT_EQ(player.activeVoiceCount(), 0u);
 }
 
+TEST(GrooveDrumPlayerTest, SyncToPpqWithNoGrooveIsNoOp)
+{
+    GrooveDrumPlayer player(kSampleRate);
+    EXPECT_FALSE(player.syncToPpq(1.0));
+}
+
+TEST(GrooveDrumPlayerTest, SyncToPpqSubTickDriftIsNoOp)
+{
+    const auto loop = makeConstLoop(4, 1.f, 1.f);
+    SliceLibrary library(4);
+    library.extractTrack(loop, std::vector<Slice>{{0, 4}});
+    GrooveProgram program{{{0, 0, 1.f}, {500, 0, 1.f}}, 960, 480};
+
+    GrooveDrumPlayer player(kSampleRate);
+    player.setLibrary(&library);
+    player.setGroove(&program);
+    for (int i = 0; i < 100; ++i) // 1 tick/sample: now at tick 100
+    {
+        static_cast<void>(player.advanceSample(480));
+    }
+    EXPECT_FALSE(player.syncToPpq(100.0 / 480.0)) << "same position (in quarter notes) must not resync";
+}
+
+TEST(GrooveDrumPlayerTest, SyncToPpqRealJumpSkipsAlreadyPassedTriggers)
+{
+    const auto loop = makeConstLoop(4, 1.f, 1.f);
+    SliceLibrary library(4);
+    library.extractTrack(loop, std::vector<Slice>{{0, 4}});
+    GrooveProgram program{{{0, 0, 1.f}, {200, 0, 1.f}, {400, 0, 1.f}}, 480, 480};
+
+    GrooveDrumPlayer player(kSampleRate);
+    player.setLibrary(&library);
+    player.setGroove(&program);
+
+    EXPECT_TRUE(player.syncToPpq(300.0 / 480.0)); // jump past ticks 0 and 200
+
+    size_t risingEdges = 0;
+    bool wasActive = false;
+    for (int i = 0; i < 150; ++i) // 300 -> 450 ticks at 1 tick/sample
+    {
+        static_cast<void>(player.advanceSample(480));
+        const bool active = player.activeVoiceCount() > 0;
+        if (active && !wasActive)
+        {
+            ++risingEdges;
+        }
+        wasActive = active;
+    }
+    EXPECT_EQ(risingEdges, 1u) << "only the tick-400 trigger should fire, not the already-passed 0/200";
+}
+
+TEST(GrooveDrumPlayerTest, SyncToPpqWrapsPositionAcrossLoopBoundary)
+{
+    const auto loop = makeConstLoop(4, 1.f, 1.f);
+    SliceLibrary library(4);
+    library.extractTrack(loop, std::vector<Slice>{{0, 4}});
+    GrooveProgram program{{{50, 0, 1.f}}, 100, 100};
+
+    GrooveDrumPlayer player(kSampleRate);
+    player.setLibrary(&library);
+    player.setGroove(&program);
+
+    // 2.5 quarter notes * 100 ticks/quarter = 250 ticks -> wraps to tick 50.
+    EXPECT_TRUE(player.syncToPpq(2.5));
+    for (int i = 0; i < 40; ++i)
+    {
+        static_cast<void>(player.advanceSample(100));
+    }
+    EXPECT_EQ(player.activeVoiceCount(), 0u) << "landing exactly on tick 50 must not refire it";
+
+    size_t risingEdges = 0;
+    bool wasActive = false;
+    for (int i = 0; i < 110; ++i) // wraps once more, past tick 50 again
+    {
+        static_cast<void>(player.advanceSample(100));
+        const bool active = player.activeVoiceCount() > 0;
+        if (active && !wasActive)
+        {
+            ++risingEdges;
+        }
+        wasActive = active;
+    }
+    EXPECT_EQ(risingEdges, 1u) << "expected exactly one refire on the next loop pass";
+}
+
+TEST(GrooveDrumPlayerTest, RenderBurstProducesRequestedFrameCount)
+{
+    const auto loop = makeConstLoop(4, 1.f, 1.f);
+    SliceLibrary library(4);
+    library.extractTrack(loop, std::vector<Slice>{{0, 4}});
+    GrooveProgram program{{{0, 0, 1.f}}, 1000, 1};
+
+    const auto burst = GrooveDrumPlayer::renderBurst(kSampleRate, 120.f, library, program, 37);
+    EXPECT_EQ(burst.audio.size(), 37u * 2);
+}
+
+TEST(GrooveDrumPlayerTest, PrimedPlayerContinuesEquivalentToDirectRender)
+{
+    // A single slice per track: round-robin picks it deterministically (sliceCount
+    // == 1), so this isolates tick-continuity from the two players' independent
+    // (and deliberately not transferred) RNG streams.
+    const auto loop = makeConstLoop(6, 3.f, 3.f);
+    SliceLibrary library(6);
+    library.extractTrack(loop, std::vector<Slice>{{0, 6}});
+    GrooveProgram program{{{5, 0, 1.f}, {20, 0, 1.f}, {45, 0, 1.f}}, 60, 60};
+
+    constexpr float kBurstBpm = 1000.f; // samplesPerBeat == ticksPerQuarterNote == 60: 1 tick/sample
+    constexpr size_t kBurstFrames = 30;
+    constexpr size_t kContinueFrames = 25;
+    const auto samplesPerBeat = static_cast<size_t>(kSampleRate * 60.f / kBurstBpm);
+
+    const auto burst = GrooveDrumPlayer::renderBurst(kSampleRate, kBurstBpm, library, program, kBurstFrames);
+
+    GrooveDrumPlayer primed(kSampleRate);
+    primed.setLibrary(&library);
+    primed.setGroove(&program);
+    primed.primeTickState(burst.tickPos, burst.nextTriggerIndex);
+
+    GrooveDrumPlayer reference(kSampleRate);
+    reference.setLibrary(&library);
+    reference.setGroove(&program);
+    for (size_t i = 0; i < kBurstFrames; ++i)
+    {
+        static_cast<void>(reference.advanceSample(samplesPerBeat));
+    }
+
+    for (size_t i = 0; i < kContinueFrames; ++i)
+    {
+        const auto primedOut = primed.advanceSample(samplesPerBeat);
+        const auto referenceOut = reference.advanceSample(samplesPerBeat);
+        EXPECT_FLOAT_EQ(primedOut[0], referenceOut[0]) << "frame " << i;
+        EXPECT_FLOAT_EQ(primedOut[1], referenceOut[1]) << "frame " << i;
+    }
+}
+
 }

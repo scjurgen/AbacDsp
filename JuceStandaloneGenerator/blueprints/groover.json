@@ -1,0 +1,59 @@
+{
+  "name": "groover",
+  "plugintype": "Groove",
+  "description": [
+    "Plays a MIDI drum groove through a round-robin sample kit.\n",
+    "Audio in is passed through with its own gain.\n"
+  ],
+  "patches": true,
+  "host_transport": true,
+  "ports-control": [
+    {"short": "PLAY", "type": "switch", "display": "Play", "symbol": "play", "default": 0, "momentary": true,
+      "state_label": {"query": "isGroovePlaying", "on": "Stop", "off": "Play"}},
+    {"short": "SYNC", "type": "switch", "display": "Host Sync", "symbol": "hostSync", "default": 0,
+      "enabled_query": "isHostPresent"},
+    {"short": "BPM",  "type": "dial",   "display": "BPM", "symbol": "bpm", "default": 120,
+      "range": [50, 250, 0.5, 1, false], "precision": 1, "unit": "BPM", "enabled_query": "canEditBpm"},
+    {"short": "GVAR", "type": "dial",   "display": "Variation", "symbol": "grooveVariation", "default": 0,
+      "range": [0, 31, 1, 1, false], "precision": 0},
+    {"short": "LVL",  "type": "dial",   "display": "Output Level", "symbol": "outputLevel", "default": 0,
+      "range": [-60, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "IGAIN","type": "dial",   "display": "Input Gain", "symbol": "inputGain", "default": 0,
+      "range": [-60, 12, 0.1, 1, false], "precision": 1, "unit": "dB"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "600",
+    "WINDOW_HEIGHT": "400",
+    "type": "||",
+    "composition": "C=(1:1) A1=(PLAY, SYNC, BPM, GVAR) A2=(LVL, IGAIN)"
+  },
+  "extra_timer_callbacks": [
+    "if (const auto info = processorRef.consumeGrooveInfoText(); info.isNotEmpty()) { m_statusBar.showMessage(info); }"
+  ],
+  "processor_forwards": [
+    {"name": "isGroovePlaying", "type": "bool"},
+    {"name": "isHostSynced", "type": "bool"},
+    {"name": "canEditBpm", "type": "bool"}
+  ],
+  "extra_processor_methods": [
+    "[[nodiscard]] bool isHostPresent() const noexcept { return wrapperType != juce::AudioProcessor::wrapperType_Standalone; }",
+    "[[nodiscard]] std::vector<juce::String> listGrooveNames() const { std::vector<juce::String> result; if (pluginRunner) { for (const auto& n : pluginRunner->listGrooveNames()) { result.push_back(juce::String(n)); } } return result; }",
+    "[[nodiscard]] juce::String getCurrentGrooveName() const { return pluginRunner ? juce::String(pluginRunner->currentGrooveName()) : juce::String(); }",
+    "void requestLoadGroove(const juce::String& styleName, const int variationIndex) { if (pluginRunner) { pluginRunner->requestLoadGroove(styleName.toStdString(), static_cast<unsigned>(variationIndex)); } }",
+    "[[nodiscard]] juce::String consumeGrooveInfoText() const { return pluginRunner ? juce::String(pluginRunner->consumeGrooveInfoText()) : juce::String(); }"
+  ],
+  "extra_menus": [
+    {
+      "name": "Groove",
+      "id_count": 4000,
+      "build_method": "juce::PopupMenu buildGrooveMenu()\n{\n    const auto names = processorRef.listGrooveNames();\n    juce::String currentStyle = processorRef.getCurrentGrooveName();\n    const int lastSlash = currentStyle.lastIndexOfChar('/');\n    const int vPos = currentStyle.lastIndexOf(\"_v\");\n    if (vPos > lastSlash) { currentStyle = currentStyle.substring(0, vPos); }\n    return buildGroupedMenu(names, {ID_BASE}, currentStyle);\n}",
+      "select_method": "void handleGrooveMenuSelection(int menuItemID)\n{\n    const auto names = processorRef.listGrooveNames();\n    if (menuItemID >= {ID_BASE} && menuItemID < {ID_BASE} + static_cast<int>(names.size()))\n    {\n        const auto& style = names[static_cast<size_t>(menuItemID - {ID_BASE})];\n        processorRef.requestLoadGroove(style, 0);\n        m_statusBar.showMessage(\"Loading groove '\" + style + \"'...\");\n    }\n}"
+    }
+  ],
+  "protected_files": ["src/unittests/Groover_tests.cpp"],
+  "CPP": {
+    "CLASS_NAME": "GrooverImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/GrooverImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

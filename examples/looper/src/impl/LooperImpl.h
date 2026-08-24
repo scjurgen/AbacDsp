@@ -28,6 +28,7 @@
 #include "Generators/ClickGenerator.h"
 #include "Generators/MeterTimeline.h"
 #include "Sampler/GrooveDrumPlayer.h"
+#include "Sampler/GrooveKit.h"
 #include "Sampler/LoopFile.h"
 #include "Sampler/LoopPartBank.h"
 #include "Sampler/LoopRecorder.h"
@@ -42,7 +43,13 @@ namespace AbacDsp
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(LoopMetadata, version, bpm, bars, beats)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(SequenceEvent, stepPosition, track, sliceIndex, gain, pitchRatio,
                                                 reverse, randomizeSlice, timingOffsetFrames, humanizeAmountFrames)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(GrooveSidecarRhythm, feel, timeSignature)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(GrooveSidecar, rhythm, dominantSounds)
 }
+
+// GrooveKit<Json> is JSON-library-generic for the same reason LoopFile<Json> is
+// (see the ADL-hook comment above); this example only ever uses nlohmann::json.
+using GrooveKit = AbacDsp::GrooveKit<nlohmann::json>;
 
 // SequencePattern has no default constructor, so it needs nlohmann's
 // adl_serializer specialization hook instead of free to_json/from_json.
@@ -75,7 +82,6 @@ struct adl_serializer<AbacDsp::SequencePattern>
 #include "CaptureRing.h"
 #include "FreezeService.h"
 #include "GrooveDefaultPaths.h"
-#include "GrooveKit.h"
 #include "LoopStorageService.h"
 #include "LooperPartController.h"
 #include "LooperTimingController.h"
