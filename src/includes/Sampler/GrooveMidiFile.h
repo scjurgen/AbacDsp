@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "Sampler/MidiFile.h"
+
 namespace AbacDsp
 {
 
@@ -18,13 +20,22 @@ struct GrooveNoteEvent
     uint8_t velocity{0};
 };
 
+/// @ingroup sampler
+/// @brief One Set Tempo (0xFF 0x51) meta event read from a Standard MIDI File.
+struct GrooveTempoEvent
+{
+    uint32_t tick{0};
+    uint32_t microsecondsPerQuarterNote{500000};
+};
+
 /**
  * @ingroup sampler
- * @brief Reads note-on events out of a Standard MIDI File, for offline groove loading.
+ * @brief Reads note-on, tempo and time-signature events out of a Standard MIDI File,
+ * for offline groove loading.
  *
- * Parses every track of a format 0 or 1 file (running status, meta and sysex events all
- * skipped correctly) and merges their note-on events into one tick-ordered list. Note-off
- * and zero-velocity note-on events are both treated as note-off and dropped, matching
+ * Parses every track of a format 0 or 1 file (running status and sysex events skipped
+ * correctly) and merges each event kind into its own tick-ordered list. Note-off and
+ * zero-velocity note-on events are both treated as note-off and dropped, matching
  * standard MIDI convention. Deliberately not realtime-safe (uses std::vector/std::ifstream):
  * meant for a background load, not for driving playback directly - unlike AbacDsp::MidiFile,
  * which stays scoped to tempo/time-signature only and is written for that realtime use.
@@ -72,18 +83,32 @@ class GrooveMidiFile
             }
         }
         std::ranges::stable_sort(m_events, {}, &GrooveNoteEvent::tick);
+        std::ranges::stable_sort(m_tempoEvents, {}, &GrooveTempoEvent::tick);
+        std::ranges::stable_sort(m_timeSignatures, {}, &MidiTimeSignatureEvent::tick);
         return true;
     }
 
     void clear() noexcept
     {
         m_events.clear();
+        m_tempoEvents.clear();
+        m_timeSignatures.clear();
         m_ticksPerQuarterNote = kDefaultTicksPerQuarterNote;
     }
 
     [[nodiscard]] const std::vector<GrooveNoteEvent>& noteEvents() const noexcept
     {
         return m_events;
+    }
+
+    [[nodiscard]] const std::vector<GrooveTempoEvent>& tempoEvents() const noexcept
+    {
+        return m_tempoEvents;
+    }
+
+    [[nodiscard]] const std::vector<MidiTimeSignatureEvent>& timeSignatures() const noexcept
+    {
+        return m_timeSignatures;
     }
 
     [[nodiscard]] uint16_t ticksPerQuarterNote() const noexcept
@@ -153,7 +178,7 @@ class GrooveMidiFile
         const uint8_t hi = status & 0xF0;
         if (hi == 0xF0)
         {
-            return consumeMetaOrSysex(bytes, pos, trackEnd, status);
+            return consumeMetaOrSysex(bytes, pos, trackEnd, status, tick);
         }
         if (pos >= trackEnd)
         {
@@ -176,16 +201,18 @@ class GrooveMidiFile
         return true;
     }
 
-    [[nodiscard]] static bool consumeMetaOrSysex(const std::vector<uint8_t>& bytes, size_t& pos, const size_t trackEnd,
-                                                 const uint8_t status)
+    [[nodiscard]] bool consumeMetaOrSysex(const std::vector<uint8_t>& bytes, size_t& pos, const size_t trackEnd,
+                                          const uint8_t status, const uint32_t tick)
     {
-        if (status == 0xFF)
+        uint8_t metaType = 0;
+        const bool isMeta = status == 0xFF;
+        if (isMeta)
         {
             if (pos >= trackEnd)
             {
                 return false;
             }
-            ++pos; // meta type, not needed by this reader
+            metaType = bytes[pos++];
         }
         else if (status != 0xF0 && status != 0xF7)
         {
@@ -195,6 +222,17 @@ class GrooveMidiFile
         if (len > trackEnd - pos)
         {
             return false;
+        }
+        if (isMeta && metaType == 0x51 && len == 3)
+        {
+            const uint32_t micros = (static_cast<uint32_t>(bytes[pos]) << 16) |
+                                    (static_cast<uint32_t>(bytes[pos + 1]) << 8) |
+                                    static_cast<uint32_t>(bytes[pos + 2]);
+            m_tempoEvents.push_back({tick, micros});
+        }
+        else if (isMeta && metaType == 0x58 && len == 4)
+        {
+            m_timeSignatures.push_back({tick, bytes[pos], bytes[pos + 1]});
         }
         pos += len;
         return true;
@@ -235,6 +273,8 @@ class GrooveMidiFile
     }
 
     std::vector<GrooveNoteEvent> m_events;
+    std::vector<GrooveTempoEvent> m_tempoEvents;
+    std::vector<MidiTimeSignatureEvent> m_timeSignatures;
     uint16_t m_ticksPerQuarterNote{kDefaultTicksPerQuarterNote};
 };
 

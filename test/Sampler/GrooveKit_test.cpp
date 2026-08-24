@@ -26,6 +26,7 @@ namespace
 // test build. Its own text format is "<feel>|<timeSignature>|<sound1,sound2,...>",
 // not real JSON - GrooveKit.h never inspects the text itself, only what Json::parse()
 // and .get<GrooveSidecar>() hand back, so any format both sides agree on is valid.
+// Own text format: "<feel>|<timeSignature>|<idealBpm>|<sound1,sound2,...>".
 class FakeJson
 {
   public:
@@ -41,14 +42,17 @@ class FakeJson
     {
         const auto firstBar = m_text.find('|');
         const auto secondBar = firstBar == std::string::npos ? std::string::npos : m_text.find('|', firstBar + 1);
-        if (firstBar == std::string::npos || secondBar == std::string::npos)
+        const auto thirdBar = secondBar == std::string::npos ? std::string::npos : m_text.find('|', secondBar + 1);
+        if (firstBar == std::string::npos || secondBar == std::string::npos || thirdBar == std::string::npos)
         {
             throw std::runtime_error("FakeJson: malformed groove sidecar");
         }
         T sidecar{};
         sidecar.rhythm.feel = m_text.substr(0, firstBar);
         sidecar.rhythm.timeSignature = m_text.substr(firstBar + 1, secondBar - firstBar - 1);
-        const auto sounds = m_text.substr(secondBar + 1);
+        const auto idealBpmText = m_text.substr(secondBar + 1, thirdBar - secondBar - 1);
+        sidecar.idealBpm = idealBpmText.empty() ? 0.f : std::stof(idealBpmText);
+        const auto sounds = m_text.substr(thirdBar + 1);
         size_t start = 0;
         while (!sounds.empty() && start <= sounds.size())
         {
@@ -314,7 +318,7 @@ TEST(GrooveKitTest, MetadataParsesSidecarAndComputesBarsFromBeatCount)
     const TempGrooveKitDir dir;
     writeGrooveTake(dir, "bd", 1);
     writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 36}, {3360, 36}}); // tick 3360/480=7 -> 8 beats
-    std::ofstream(dir.filePath("groove.json")) << "even|4/4|kick,hihat";
+    std::ofstream(dir.filePath("groove.json")) << "even|4/4|91|kick,hihat";
 
     GrooveKit kit;
     kit.requestLoad(dir.dir(), dir.dir(), "groove.mid");
@@ -323,6 +327,7 @@ TEST(GrooveKitTest, MetadataParsesSidecarAndComputesBarsFromBeatCount)
     const auto& metadata = kit.installedMetadata();
     EXPECT_EQ(metadata.feel, "even");
     EXPECT_EQ(metadata.timeSignature, "4/4");
+    EXPECT_FLOAT_EQ(metadata.idealBpm, 91.f);
     EXPECT_EQ(metadata.bars, 2u); // 8 beats / 4 per bar
     ASSERT_EQ(metadata.dominantSounds.size(), 2u);
     EXPECT_EQ(metadata.dominantSounds[0], "kick");
@@ -334,7 +339,7 @@ TEST(GrooveKitTest, BarCountUsesTimeSignatureNumeratorAsDivisor)
     const TempGrooveKitDir dir;
     writeGrooveTake(dir, "bd", 1);
     writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 36}, {2400, 36}}); // tick 2400/480=5 -> 6 beats
-    std::ofstream(dir.filePath("groove.json")) << "straight|3/4|";
+    std::ofstream(dir.filePath("groove.json")) << "straight|3/4||";
 
     GrooveKit kit;
     kit.requestLoad(dir.dir(), dir.dir(), "groove.mid");
@@ -380,10 +385,11 @@ TEST(GrooveKitTest, FormatGrooveInfoTextBuildsExpectedShape)
     metadata.bars = 4;
     metadata.feel = "even";
     metadata.timeSignature = "4/4";
+    metadata.idealBpm = 91.f;
     metadata.dominantSounds = {"hihat", "snare"};
 
     EXPECT_EQ(GrooveKit::formatGrooveInfoText("Session Drums/str_4#4_1_c_v1", metadata),
-              "Session Drums/str_4#4_1_c_v1: 4 bars, even feel, 4/4 - hihat, snare");
+              "Session Drums/str_4#4_1_c_v1: 4 bars, even feel, 4/4, 91 BPM - hihat, snare");
 }
 
 TEST(GrooveKitTest, FormatGrooveInfoTextOmitsEmptyFields)
@@ -404,6 +410,58 @@ TEST(GrooveKitTest, DefaultBurstConfigRendersNoBurst)
     ASSERT_TRUE(waitUntilGrooveKitReady(kit));
 
     EXPECT_EQ(kit.installedBurstAudio(), nullptr);
+}
+
+TEST(GrooveKitTest, DefaultPushLifeProducesTriggersIdenticalToRawSourceTicks)
+{
+    const TempGrooveKitDir dir;
+    writeGrooveTake(dir, "bd", 1);
+    writeGrooveTake(dir, "sd", 1);
+    // Slightly off-grid ticks: the point is that push = 0, life = 1 must not quantize.
+    writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 36}, {487, 38}, {965, 36}, {1441, 38}});
+
+    GrooveKit kit;
+    kit.requestLoad(dir.dir(), dir.dir(), "groove.mid");
+    ASSERT_TRUE(waitUntilGrooveKitReady(kit));
+
+    const auto* program = kit.program();
+    ASSERT_NE(program, nullptr);
+    ASSERT_EQ(program->triggers.size(), 4u);
+    const std::array<uint32_t, 4> expectedTicks{0, 487, 965, 1441};
+    for (size_t i = 0; i < expectedTicks.size(); ++i)
+    {
+        EXPECT_EQ(program->triggers[i].tick, expectedTicks[i]) << i;
+    }
+}
+
+TEST(GrooveKitTest, RequestHumanizeChangeDoesNotReloadTheSampleKit)
+{
+    const TempGrooveKitDir dir;
+    writeGrooveTake(dir, "bd", 1);
+    writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 36}, {960, 36}});
+
+    GrooveKit kit;
+    kit.requestLoad(dir.dir(), dir.dir(), "groove.mid");
+    ASSERT_TRUE(waitUntilGrooveKitReady(kit));
+    const auto* libraryBeforeChange = kit.library();
+
+    // push = -1 (driving), life = 0 (dead): kick's 0.15-of-a-step bias against
+    // a 120-tick (16th note @ 480 tpqn) grid nudges tick 960 to 942.
+    kit.requestHumanizeChange(-1.f, 0.f);
+    bool sawUpdatedTick = false;
+    for (int i = 0; i < 2000; ++i)
+    {
+        kit.pollAndInstall();
+        if (kit.program()->triggers.size() == 2 && kit.program()->triggers[1].tick == 942)
+        {
+            sawUpdatedTick = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    EXPECT_TRUE(sawUpdatedTick);
+    EXPECT_EQ(kit.library(), libraryBeforeChange);
 }
 
 TEST(GrooveKitTest, BurstConfigRendersRequestedBurst)

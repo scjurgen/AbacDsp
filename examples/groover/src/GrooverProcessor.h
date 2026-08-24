@@ -40,6 +40,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("grooveVariation", this);
         m_parameters.addParameterListener("outputLevel", this);
         m_parameters.addParameterListener("inputGain", this);
+        m_parameters.addParameterListener("push", this);
+        m_parameters.addParameterListener("life", this);
 
         m_fileIo.initialize(m_patchIndex);
     }
@@ -51,6 +53,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("grooveVariation", this);
         m_parameters.removeParameterListener("outputLevel", this);
         m_parameters.removeParameterListener("inputGain", this);
+        m_parameters.removeParameterListener("push", this);
+        m_parameters.removeParameterListener("life", this);
     }
 
     void prepareToPlay(const double sampleRate, const int samplesPerBlock) override
@@ -251,6 +255,16 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::NormalisableRange<float>(-60, 12, 0.1, 1, false), 0,
             juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("push", 1), juce::String::fromUTF8("Push"),
+            juce::NormalisableRange<float>(-100, 100, 1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " %"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("life", 1), juce::String::fromUTF8("Life"),
+            juce::NormalisableRange<float>(0, 100, 1, 1, false), 100,
+            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " %"; })));
 
         return {params.begin(), params.end()};
     }
@@ -300,6 +314,18 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setInputGain(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::inputGain, v);
+             }},
+            {"push",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setPush(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::push, v);
+             }},
+            {"life",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setLife(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::life, v);
              }},
 
         };
@@ -364,6 +390,18 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("inputGain");
             float normalized = range.convertTo0to1(params.inputGain);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("push"))
+        {
+            const auto& range = m_parameters.getParameterRange("push");
+            float normalized = range.convertTo0to1(params.push);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("life"))
+        {
+            const auto& range = m_parameters.getParameterRange("life");
+            float normalized = range.convertTo0to1(params.life);
             p->setValueNotifyingHost(normalized);
         }
     }

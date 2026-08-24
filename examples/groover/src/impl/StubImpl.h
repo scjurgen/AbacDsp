@@ -41,6 +41,14 @@ class StubImpl final : public EffectBase
     {
         m_inputGain = std::pow(10.f, value / 20.f);
     }
+    void setPush(const float value)
+    {
+        m_push = value;
+    }
+    void setLife(const float value)
+    {
+        m_life = value;
+    }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
@@ -58,4 +66,6 @@ class StubImpl final : public EffectBase
     float m_grooveVariation{};
     float m_outputLevel{};
     float m_inputGain{};
+    float m_push{};
+    float m_life{};
 };

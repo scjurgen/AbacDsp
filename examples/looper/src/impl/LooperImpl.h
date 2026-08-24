@@ -44,7 +44,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(LoopMetadata, version, bpm, bars
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(SequenceEvent, stepPosition, track, sliceIndex, gain, pitchRatio,
                                                 reverse, randomizeSlice, timingOffsetFrames, humanizeAmountFrames)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(GrooveSidecarRhythm, feel, timeSignature)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(GrooveSidecar, rhythm, dominantSounds)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(GrooveSidecar, idealBpm, rhythm, dominantSounds)
 }
 
 // GrooveKit<Json> is JSON-library-generic for the same reason LoopFile<Json> is

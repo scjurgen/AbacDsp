@@ -125,6 +125,19 @@ void appendTempoMeta(std::vector<uint8_t>& body, const uint32_t delta = 0)
     body.push_back(0xA1);
     body.push_back(0x20);
 }
+
+void appendTimeSignatureMeta(std::vector<uint8_t>& body, const uint32_t delta, const uint8_t numerator,
+                             const uint8_t denominatorPower)
+{
+    appendVlq(body, delta);
+    body.push_back(0xFF);
+    body.push_back(0x58);
+    body.push_back(0x04);
+    body.push_back(numerator);
+    body.push_back(denominatorPower);
+    body.push_back(24);
+    body.push_back(8);
+}
 }
 
 TEST(GrooveMidiFile, ReadsSingleTrackNoteOnEvents)
@@ -313,6 +326,64 @@ TEST(GrooveMidiFile, RoundTripsThroughFile)
     GrooveMidiFile midi;
     ASSERT_TRUE(midi.readFromFile(temp.path()));
     EXPECT_EQ(midi.ticksPerQuarterNote(), 240u);
+    ASSERT_EQ(midi.noteEvents().size(), 1u);
+}
+
+TEST(GrooveMidiFile, ReadsTempoMetaEvent)
+{
+    std::vector<uint8_t> body;
+    appendTempoMeta(body, 0); // 0x07A120 microseconds/quarter = 120 BPM
+    appendEndOfTrack(body);
+
+    std::vector<uint8_t> bytes = buildHeader(0, 1, 480);
+    appendTrackChunk(bytes, body);
+
+    GrooveMidiFile midi;
+    ASSERT_TRUE(midi.readFromBuffer(bytes));
+    ASSERT_EQ(midi.tempoEvents().size(), 1u);
+    EXPECT_EQ(midi.tempoEvents()[0].tick, 0u);
+    EXPECT_EQ(midi.tempoEvents()[0].microsecondsPerQuarterNote, 500000u);
+}
+
+TEST(GrooveMidiFile, ReadsTimeSignatureMetaEvent)
+{
+    std::vector<uint8_t> body;
+    appendTimeSignatureMeta(body, 0, 3, 2); // 3/4
+    appendEndOfTrack(body);
+
+    std::vector<uint8_t> bytes = buildHeader(0, 1, 480);
+    appendTrackChunk(bytes, body);
+
+    GrooveMidiFile midi;
+    ASSERT_TRUE(midi.readFromBuffer(bytes));
+    ASSERT_EQ(midi.timeSignatures().size(), 1u);
+    EXPECT_EQ(midi.timeSignatures()[0].tick, 0u);
+    EXPECT_EQ(midi.timeSignatures()[0].numerator, 3u);
+    EXPECT_EQ(midi.timeSignatures()[0].denominatorPower, 2u);
+}
+
+TEST(GrooveMidiFile, TempoAndTimeSignatureFromAConductorTrackMergeWithNoteTracks)
+{
+    std::vector<uint8_t> conductorTrack;
+    appendTempoMeta(conductorTrack, 0);
+    appendTimeSignatureMeta(conductorTrack, 0, 4, 2);
+    appendTimeSignatureMeta(conductorTrack, 1920, 3, 2);
+    appendEndOfTrack(conductorTrack);
+
+    std::vector<uint8_t> noteTrack;
+    appendNoteOn(noteTrack, 0, 36, 100);
+    appendEndOfTrack(noteTrack);
+
+    std::vector<uint8_t> bytes = buildHeader(1, 2, 480);
+    appendTrackChunk(bytes, conductorTrack);
+    appendTrackChunk(bytes, noteTrack);
+
+    GrooveMidiFile midi;
+    ASSERT_TRUE(midi.readFromBuffer(bytes));
+    ASSERT_EQ(midi.tempoEvents().size(), 1u);
+    ASSERT_EQ(midi.timeSignatures().size(), 2u);
+    EXPECT_EQ(midi.timeSignatures()[1].tick, 1920u);
+    EXPECT_EQ(midi.timeSignatures()[1].numerator, 3u);
     ASSERT_EQ(midi.noteEvents().size(), 1u);
 }
 

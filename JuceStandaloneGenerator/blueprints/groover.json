@@ -19,13 +19,17 @@
     {"short": "LVL",  "type": "dial",   "display": "Output Level", "symbol": "outputLevel", "default": 0,
       "range": [-60, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
     {"short": "IGAIN","type": "dial",   "display": "Input Gain", "symbol": "inputGain", "default": 0,
-      "range": [-60, 12, 0.1, 1, false], "precision": 1, "unit": "dB"}
+      "range": [-60, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "PUSH", "type": "dial",   "display": "Push", "symbol": "push", "default": 0,
+      "range": [-100, 100, 1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "LIFE", "type": "dial",   "display": "Life", "symbol": "life", "default": 100,
+      "range": [0, 100, 1, 1, false], "precision": 1, "unit": "%"}
   ],
   "layout": {
     "WINDOW_WIDTH": "600",
     "WINDOW_HEIGHT": "400",
-    "type": "||",
-    "composition": "C=(1:1) A1=(PLAY, SYNC, BPM, GVAR) A2=(LVL, IGAIN)"
+    "type": "|||",
+    "composition": "C=(1:1:1) A1=(PLAY, SYNC, BPM, GVAR) A2=(LVL, IGAIN) A3=(PUSH, LIFE)"
   },
   "extra_timer_callbacks": [
     "if (const auto info = processorRef.consumeGrooveInfoText(); info.isNotEmpty()) { m_statusBar.showMessage(info); }"

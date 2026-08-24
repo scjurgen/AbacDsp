@@ -79,10 +79,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // auto generated
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-            std::vector<juce::Rectangle<int>> areas(2);
-            const auto colWidth = area.getWidth() / 2;
+            std::vector<juce::Rectangle<int>> areas(3);
+            const auto colWidth = area.getWidth() / 3;
             areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
-            areas[1] = area.reduced(Constants::Margins::small);
+            areas[1] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+            areas[2] = area.reduced(Constants::Margins::small);
 
             {
                 juce::FlexBox box;
@@ -111,6 +112,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.items.add(juce::FlexItem(outputLevelDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(inputGainDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[1].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::column;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(pushDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(lifeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[2].toFloat());
             }
         }
     }
@@ -161,6 +171,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         inputGainDial.reset(valueTreeState, "inputGain");
         inputGainDial.setLabelText(juce::String::fromUTF8("Input Gain"));
         inputGainDial.setTooltip(juce::String::fromUTF8("Input Gain (-60 to 12 dB)"));
+        addAndMakeVisible(pushDial);
+        pushDial.reset(valueTreeState, "push");
+        pushDial.setLabelText(juce::String::fromUTF8("Push"));
+        pushDial.setTooltip(juce::String::fromUTF8("Push (-100 to 100 %)"));
+        addAndMakeVisible(lifeDial);
+        lifeDial.reset(valueTreeState, "life");
+        lifeDial.setLabelText(juce::String::fromUTF8("Life"));
+        lifeDial.setTooltip(juce::String::fromUTF8("Life (0 to 100 %)"));
     }
 
 
@@ -667,6 +685,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial grooveVariationDial{this};
     CustomRotaryDial outputLevelDial{this};
     CustomRotaryDial inputGainDial{this};
+    CustomRotaryDial pushDial{this};
+    CustomRotaryDial lifeDial{this};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
 };

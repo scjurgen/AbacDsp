@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <map>
 #include <memory>
@@ -24,6 +25,7 @@
 #include "AudioFile/LoadWav.h"
 
 #include "Sampler/GrooveDrumPlayer.h"
+#include "Sampler/GrooveHumanize.h"
 #include "Sampler/GrooveMidiFile.h"
 #include "Sampler/GrooveNoteMap.h"
 #include "Sampler/SliceLibrary.h"
@@ -40,6 +42,7 @@ struct GrooveMetadata
     unsigned bars{0};
     std::string feel;
     std::string timeSignature;
+    float idealBpm{0.f};
     std::vector<std::string> dominantSounds;
 };
 
@@ -65,6 +68,7 @@ struct GrooveSidecarRhythm
 /// @brief The shape of a groove's sidecar `.json` that GrooveKit actually reads.
 struct GrooveSidecar
 {
+    float idealBpm{0.f};
     GrooveSidecarRhythm rhythm;
     std::vector<std::string> dominantSounds;
 };
@@ -156,6 +160,18 @@ class GrooveKit
         submitRequest(std::move(request));
     }
 
+    // Queues a push/life-only change (see GrooveHumanize.h): reuses the
+    // already-analyzed notes of whichever groove is currently loaded rather
+    // than re-parsing the MIDI file. Reload-triggered, like requestLoad().
+    void requestHumanizeChange(const float push, const float life)
+    {
+        Request request;
+        request.isHumanizeOnly = true;
+        request.push = push;
+        request.life = life;
+        submitRequest(std::move(request));
+    }
+
     // Call every audio block; installs a newly completed load if one is pending
     // (cheap no-op otherwise: one atomic load and a comparison).
     void pollAndInstall() noexcept
@@ -175,6 +191,7 @@ class GrooveKit
         m_installedGrooveName = std::move(result.grooveName);
         m_installedTrackNames = std::move(result.trackNames);
         m_installedMetadata = result.metadata;
+        m_installedDiagnosticsCsv = std::move(result.diagnosticsCsv);
         m_installedBurstAudio = std::move(result.burstAudio);
         m_installedBurstTickPos = result.burstTickPos;
         m_installedBurstNextTriggerIndex = result.burstNextTriggerIndex;
@@ -218,6 +235,13 @@ class GrooveKit
         return m_installedMetadata;
     }
 
+    // Per-note push/life diagnostics for the installed groove (see
+    // GrooveHumanize.h's toCsv()) - empty until a groove has loaded.
+    [[nodiscard]] const std::string& installedDiagnosticsCsv() const noexcept
+    {
+        return m_installedDiagnosticsCsv;
+    }
+
     // Pre-rendered playback-ready burst for the installed groove (see
     // BurstConfig); null if no burst was requested for that load.
     [[nodiscard]] std::shared_ptr<const std::vector<float>> installedBurstAudio() const noexcept
@@ -247,6 +271,10 @@ class GrooveKit
         if (!metadata.timeSignature.empty())
         {
             text += ", " + metadata.timeSignature;
+        }
+        if (metadata.idealBpm > 0.f)
+        {
+            text += std::format(", {:.0f} BPM", metadata.idealBpm);
         }
         if (!metadata.dominantSounds.empty())
         {
@@ -324,23 +352,31 @@ class GrooveKit
         std::string grooveName;
         std::shared_ptr<const std::vector<std::string>> trackNames;
         GrooveMetadata metadata;
+        std::string diagnosticsCsv;
         std::shared_ptr<const std::vector<float>> burstAudio;
         double burstTickPos{0.0};
         size_t burstNextTriggerIndex{0};
     };
 
-    // A program and its sidecar-derived metadata are built together on a cache
-    // miss and reused together on a cache hit - metadata.bars depends on the
-    // same MIDI read buildGrooveProgram() already does.
-    struct CachedGroove
+    // A groove's analyzed notes, sidecar metadata and tick geometry, built
+    // together on a cache miss and reused on a cache hit - kit-independent,
+    // so it stays valid across both a sample-kit reload and a push/life-only
+    // change, and only needs rebuilding when the source MIDI file changes.
+    struct AnalyzedGroove
     {
-        std::shared_ptr<const GrooveProgram> program;
+        std::vector<GrooveAnalysisNote> notes;
+        uint16_t ticksPerQuarterNote{480};
+        uint32_t loopLengthTicks{480};
         GrooveMetadata metadata;
     };
 
+    static constexpr GridResolution kGridResolution = GridResolution::Sixteenth;
+
     // Exactly one of relativeGrooveName or styleName is set, depending on which
     // requestXxx() was called; runLoad() branches on that to decide whether it
-    // needs to resolve a style+index into a filename itself.
+    // needs to resolve a style+index into a filename itself. isHumanizeOnly
+    // requests (see requestHumanizeChange()) ignore every other field and
+    // reuse whichever groove is currently loaded.
     struct Request
     {
         std::string sampleDir;
@@ -349,6 +385,9 @@ class GrooveKit
         std::string styleName;
         unsigned variationIndex{0};
         BurstConfig burst;
+        bool isHumanizeOnly{false};
+        float push{0.f};
+        float life{1.f};
     };
 
     void submitRequest(Request request)
@@ -361,9 +400,9 @@ class GrooveKit
         m_cv.notify_one();
     }
 
-    // Background thread only. Reloads the sample kit only when sampleDir actually
-    // changed since the last call; a groove-only switch just rebuilds the pattern
-    // against the already-loaded kit's classification.
+    // Background thread only. Reloads the sample kit only when sampleDir changed;
+    // a push/life-only request skips both the kit reload and the MIDI re-parse,
+    // reusing the currently loaded groove.
     void runLoad(const uint64_t gen)
     {
         Request request;
@@ -371,51 +410,69 @@ class GrooveKit
             std::lock_guard lock(m_requestMutex);
             request = m_request;
         }
-        const std::string& sampleDir = request.sampleDir;
-        const std::string& midiDrumsRootDir = request.midiDrumsRootDir;
-        const std::string grooveName =
-            request.styleName.empty() ? request.relativeGrooveName
-                                      : resolveGrooveName(midiDrumsRootDir, request.styleName, request.variationIndex)
-                                            .value_or(std::string());
-        if (sampleDir != m_loadedSampleDir)
+        std::string midiDrumsRootDir = m_loadedMidiDrumsRootDir;
+        std::string grooveName = m_currentGrooveName;
+        BurstConfig burst;
+
+        if (request.isHumanizeOnly)
         {
-            reloadKit(sampleDir);
-            m_loadedSampleDir = sampleDir;
-            m_programCache.clear(); // cached programs' track indices belong to the old kit
+            m_push = request.push;
+            m_life = request.life;
         }
-        CachedGroove cached;
-        if (const auto it = m_programCache.find(grooveName); it != m_programCache.end())
+        else
         {
-            cached = it->second;
+            const std::string& sampleDir = request.sampleDir;
+            midiDrumsRootDir = request.midiDrumsRootDir;
+            grooveName = request.styleName.empty()
+                             ? request.relativeGrooveName
+                             : resolveGrooveName(midiDrumsRootDir, request.styleName, request.variationIndex)
+                                   .value_or(std::string());
+            burst = request.burst;
+            if (sampleDir != m_loadedSampleDir)
+            {
+                reloadKit(sampleDir);
+                m_loadedSampleDir = sampleDir;
+            }
+            m_loadedMidiDrumsRootDir = midiDrumsRootDir;
+        }
+
+        AnalyzedGroove analyzed;
+        if (const auto it = m_analyzedCache.find(grooveName); it != m_analyzedCache.end())
+        {
+            analyzed = it->second;
         }
         else
         {
             const auto midiPath = (std::filesystem::path(midiDrumsRootDir) / grooveName).string();
-            cached.program = buildGrooveProgram(midiPath, m_tagToTrack);
-            cached.metadata = readGrooveMetadata(midiPath, *cached.program);
-            m_programCache.emplace(grooveName, cached);
+            analyzed = analyzeGrooveFile(midiPath);
+            m_analyzedCache.emplace(grooveName, analyzed);
         }
+
+        const auto humanized =
+            applyHumanize(analyzed.notes, analyzed.ticksPerQuarterNote, kGridResolution, m_push, m_life);
+        auto program = buildGrooveProgram(analyzed, humanized, m_tagToTrack);
 
         std::shared_ptr<const std::vector<float>> burstAudio;
         double burstTickPos = 0.0;
         size_t burstNextTriggerIndex = 0;
-        if (request.burst.sampleRate > 0.f && m_currentLibrary && cached.program)
+        if (burst.sampleRate > 0.f && m_currentLibrary && program)
         {
-            const auto burstFrames = static_cast<size_t>(request.burst.sampleRate * kBurstSeconds);
-            auto burst = GrooveDrumPlayer::renderBurst(request.burst.sampleRate, request.burst.bpm, *m_currentLibrary,
-                                                       *cached.program, burstFrames);
-            burstAudio = std::make_shared<const std::vector<float>>(std::move(burst.audio));
-            burstTickPos = burst.tickPos;
-            burstNextTriggerIndex = burst.nextTriggerIndex;
+            const auto burstFrames = static_cast<size_t>(burst.sampleRate * kBurstSeconds);
+            auto renderedBurst =
+                GrooveDrumPlayer::renderBurst(burst.sampleRate, burst.bpm, *m_currentLibrary, *program, burstFrames);
+            burstAudio = std::make_shared<const std::vector<float>>(std::move(renderedBurst.audio));
+            burstTickPos = renderedBurst.tickPos;
+            burstNextTriggerIndex = renderedBurst.nextTriggerIndex;
         }
 
         {
             std::lock_guard lock(m_resultMutex);
             m_result.library = m_currentLibrary;
-            m_result.program = cached.program;
+            m_result.program = std::move(program);
             m_result.grooveName = grooveName;
             m_result.trackNames = m_currentTrackNames;
-            m_result.metadata = cached.metadata;
+            m_result.metadata = analyzed.metadata;
+            m_result.diagnosticsCsv = toCsv(analyzed.notes, humanized);
             m_result.burstAudio = std::move(burstAudio);
             m_result.burstTickPos = burstTickPos;
             m_result.burstNextTriggerIndex = burstNextTriggerIndex;
@@ -591,46 +648,61 @@ class GrooveKit
         return tagToTrack;
     }
 
-    // Triggers land at their exact source-file tick, so nothing here quantizes
-    // or pads a loop. loopLengthTicks is the fewest whole beats containing
-    // every note - a groove need not span a whole number of bars.
-    [[nodiscard]] static std::shared_ptr<GrooveProgram> buildGrooveProgram(const std::string& midiFile,
-                                                                           const TagToTrack& tagToTrack)
+    // loopLengthTicks is the fewest whole beats containing every note - a
+    // groove need not span a whole number of bars. Kit-independent, so this
+    // only needs rerunning when the source MIDI file itself changes.
+    [[nodiscard]] static AnalyzedGroove analyzeGrooveFile(const std::string& midiFile)
     {
-        auto program = std::make_shared<GrooveProgram>();
+        AnalyzedGroove analyzed;
         GrooveMidiFile midi;
         if (midiFile.empty() || !midi.readFromFile(midiFile) || midi.noteEvents().empty())
         {
-            program->ticksPerQuarterNote = midi.ticksPerQuarterNote();
-            program->loopLengthTicks = program->ticksPerQuarterNote;
-            return program;
+            analyzed.ticksPerQuarterNote = midi.ticksPerQuarterNote();
+            analyzed.loopLengthTicks = analyzed.ticksPerQuarterNote;
+            return analyzed;
         }
         const uint16_t ticksPerQuarterNote = midi.ticksPerQuarterNote();
         const uint32_t maxTick = midi.noteEvents().back().tick;
         const uint32_t lastBeatIndex = maxTick / ticksPerQuarterNote;
         const uint32_t totalBeats = lastBeatIndex + 1;
 
-        program->ticksPerQuarterNote = ticksPerQuarterNote;
-        program->loopLengthTicks = totalBeats * static_cast<uint32_t>(ticksPerQuarterNote);
-        for (const auto& note : midi.noteEvents())
+        analyzed.ticksPerQuarterNote = ticksPerQuarterNote;
+        analyzed.loopLengthTicks = totalBeats * static_cast<uint32_t>(ticksPerQuarterNote);
+        analyzed.notes = analyzeNotes(midi.noteEvents(), ticksPerQuarterNote, midi.timeSignatures(), kGridResolution);
+        analyzed.metadata = readGrooveMetadata(midiFile, analyzed.loopLengthTicks, ticksPerQuarterNote);
+        return analyzed;
+    }
+
+    // Triggers land at each humanized note's output tick; kept sorted since
+    // push can reorder notes that started out adjacent.
+    [[nodiscard]] static std::shared_ptr<GrooveProgram> buildGrooveProgram(const AnalyzedGroove& analyzed,
+                                                                           const std::vector<HumanizedNote>& humanized,
+                                                                           const TagToTrack& tagToTrack)
+    {
+        auto program = std::make_shared<GrooveProgram>();
+        program->ticksPerQuarterNote = analyzed.ticksPerQuarterNote;
+        program->loopLengthTicks = analyzed.loopLengthTicks;
+        for (size_t i = 0; i < analyzed.notes.size(); ++i)
         {
-            const auto track = resolveTrack(note.note, tagToTrack);
+            const auto track = resolveTrack(analyzed.notes[i].note, tagToTrack);
             if (!track.has_value())
             {
                 continue;
             }
             // Cubic velocity curve: low hits read as noticeably quieter than a linear
             // mapping would give, matching how velocity is generally perceived.
-            const float velocityNorm = static_cast<float>(note.velocity) / 127.f;
-            program->triggers.push_back({note.tick, *track, velocityNorm * velocityNorm * velocityNorm});
+            const float velocityNorm = static_cast<float>(humanized[i].velocity) / 127.f;
+            program->triggers.push_back({humanized[i].tick, *track, velocityNorm * velocityNorm * velocityNorm});
         }
+        std::ranges::stable_sort(program->triggers, {}, &GrooveTrigger::tick);
         return program;
     }
 
     // Reads midiFile's sidecar "<stem>.json" (idealBpm/rhythm/dominantSounds,
-    // see MidiDrums's own file layout) and derives bars from program's beat
-    // count. Missing/unparseable sidecar just leaves metadata default-empty.
-    [[nodiscard]] static GrooveMetadata readGrooveMetadata(const std::string& midiFile, const GrooveProgram& program)
+    // see MidiDrums's own file layout) and derives bars from the beat count.
+    // Missing/unparseable sidecar just leaves metadata default-empty.
+    [[nodiscard]] static GrooveMetadata readGrooveMetadata(const std::string& midiFile, const uint32_t loopLengthTicks,
+                                                           const uint16_t ticksPerQuarterNote)
     {
         GrooveMetadata metadata;
         std::ifstream file(std::filesystem::path(midiFile).replace_extension(".json"));
@@ -651,9 +723,9 @@ class GrooveKit
         }
         metadata.feel = sidecar.rhythm.feel;
         metadata.timeSignature = sidecar.rhythm.timeSignature;
+        metadata.idealBpm = sidecar.idealBpm;
         metadata.dominantSounds = sidecar.dominantSounds;
-        const uint32_t totalBeats =
-            program.ticksPerQuarterNote > 0 ? program.loopLengthTicks / program.ticksPerQuarterNote : 0;
+        const uint32_t totalBeats = ticksPerQuarterNote > 0 ? loopLengthTicks / ticksPerQuarterNote : 0;
         metadata.bars = totalBeats / parseBeatsPerBar(metadata.timeSignature);
         return metadata;
     }
@@ -761,11 +833,14 @@ class GrooveKit
 
     // Background thread only.
     std::string m_loadedSampleDir;
+    std::string m_loadedMidiDrumsRootDir;
     std::shared_ptr<const SliceLibrary> m_currentLibrary;
     std::shared_ptr<const std::vector<std::string>> m_currentTrackNames;
-    std::unordered_map<std::string, CachedGroove> m_programCache;
+    std::unordered_map<std::string, AnalyzedGroove> m_analyzedCache;
     TagToTrack m_tagToTrack{};
     std::string m_currentGrooveName; // see currentGrooveName()'s own doc comment
+    float m_push{0.f};
+    float m_life{1.f};
 
     // Audio thread only.
     std::shared_ptr<const SliceLibrary> m_installedLibrary;
@@ -773,6 +848,7 @@ class GrooveKit
     std::string m_installedGrooveName;
     std::shared_ptr<const std::vector<std::string>> m_installedTrackNames;
     GrooveMetadata m_installedMetadata;
+    std::string m_installedDiagnosticsCsv;
     std::shared_ptr<const std::vector<float>> m_installedBurstAudio;
     double m_installedBurstTickPos{0.0};
     size_t m_installedBurstNextTriggerIndex{0};

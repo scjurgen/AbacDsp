@@ -18,7 +18,9 @@ struct PatchParameters
         bpm            , // dial
         grooveVariation, // dial
         outputLevel    , // dial
-        inputGain       // dial
+        inputGain      , // dial
+        push           , // dial
+        life            // dial
     };
 bool play{false};
 bool hostSync{false};
@@ -26,6 +28,8 @@ float bpm{120.0f};
 float grooveVariation{0.0f};
 float outputLevel{0.0f};
 float inputGain{0.0f};
+float push{0.0f};
+float life{100.0f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
@@ -34,7 +38,9 @@ float inputGain{0.0f};
 "bpm",
 "grooveVariation",
 "outputLevel",
-"inputGain"
+"inputGain",
+"push",
+"life"
     });
 //        "onOff", "patch", "input", "modulationDepth", "mix", "density", "threshold", "knee"});
 
@@ -59,6 +65,8 @@ float inputGain{0.0f};
         else if constexpr (ParamId == Id::grooveVariation) return grooveVariation;
         else if constexpr (ParamId == Id::outputLevel) return outputLevel;
         else if constexpr (ParamId == Id::inputGain) return inputGain;
+        else if constexpr (ParamId == Id::push) return push;
+        else if constexpr (ParamId == Id::life) return life;
 
     }
 
@@ -82,6 +90,10 @@ break;
  case Id::outputLevel: if (!isEqual(get<Id::outputLevel>(), value)) {get<Id::outputLevel>() = value;m_modified = true;}
 break;
  case Id::inputGain: if (!isEqual(get<Id::inputGain>(), value)) {get<Id::inputGain>() = value;m_modified = true;}
+break;
+ case Id::push: if (!isEqual(get<Id::push>(), value)) {get<Id::push>() = value;m_modified = true;}
+break;
+ case Id::life: if (!isEqual(get<Id::life>(), value)) {get<Id::life>() = value;m_modified = true;}
 break;
 
             default:
@@ -128,5 +140,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         bpm            , // dial
         grooveVariation, // dial
         outputLevel    , // dial
-        inputGain       // dial
+        inputGain      , // dial
+        push           , // dial
+        life            // dial
 )

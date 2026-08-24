@@ -23,7 +23,7 @@
 namespace AbacDsp
 {
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(GrooveSidecarRhythm, feel, timeSignature)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(GrooveSidecar, rhythm, dominantSounds)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(GrooveSidecar, idealBpm, rhythm, dominantSounds)
 }
 
 using GrooveKit = AbacDsp::GrooveKit<nlohmann::json>;
@@ -81,6 +81,16 @@ class GrooverImpl final : public EffectBase
     void setInputGain(const float value) noexcept
     {
         m_inputGain.store(std::pow(10.f, value / 20.f), std::memory_order_relaxed);
+    }
+
+    void setPush(const float value) noexcept
+    {
+        m_pushPercentReq.store(value, std::memory_order_relaxed);
+    }
+
+    void setLife(const float value) noexcept
+    {
+        m_lifePercentReq.store(value, std::memory_order_relaxed);
     }
 
     // Groove menu click: styleName is one of listGrooveNames()'s own entries.
@@ -200,7 +210,26 @@ class GrooverImpl final : public EffectBase
                                              AbacDsp::BurstConfig{sampleRate(), m_bpm.load(std::memory_order_relaxed)});
             }
         }
+
+        applyHumanizeIfChanged();
     }
+
+    // Same exact-equality reasoning as PingsynthImpl's notifyUiParametersIfChanged():
+    // a stored float either stays bit-identical or is genuinely a new UI value.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+    void applyHumanizeIfChanged() noexcept
+    {
+        const float pushPercent = m_pushPercentReq.load(std::memory_order_relaxed);
+        const float lifePercent = m_lifePercentReq.load(std::memory_order_relaxed);
+        if (pushPercent != m_appliedPushPercent || lifePercent != m_appliedLifePercent)
+        {
+            m_appliedPushPercent = pushPercent;
+            m_appliedLifePercent = lifePercent;
+            m_grooveKit.requestHumanizeChange(pushPercent / 100.f, lifePercent / 100.f);
+        }
+    }
+#pragma GCC diagnostic pop
 
     // A newly-installed program means stale, already-buffered audio was rendered
     // against the previous groove - flush it (mirrors the Play-press/host-sync-jump
@@ -269,10 +298,14 @@ class GrooverImpl final : public EffectBase
     std::atomic<int> m_grooveVariationReq{0};
     std::atomic<float> m_outputGain{1.f};
     std::atomic<float> m_inputGain{1.f};
+    std::atomic<float> m_pushPercentReq{0.f};
+    std::atomic<float> m_lifePercentReq{100.f};
 
     bool m_hostSync{false};
     bool m_isPlaying{false};
     int m_appliedGrooveVariation{0};
+    float m_appliedPushPercent{0.f};
+    float m_appliedLifePercent{100.f};
 
     std::mutex m_grooveStyleMutex;
     std::string m_currentGrooveStyle; // "<Genre>/<style>", empty until a menu pick
