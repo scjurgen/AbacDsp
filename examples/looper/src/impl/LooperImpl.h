@@ -1777,7 +1777,11 @@ class LooperImpl final : public EffectBase
 
             if (active && useGroove)
             {
-                const auto grooveSample = m_grooveSequencer.advanceSample(samplesPerBeat);
+                // GrooveDrumPlayer's tick math is always quarter-note-relative
+                // (matching the MIDI file's ticksPerQuarterNote); undo the
+                // eighth-unit meter's bpm doubling that samplesPerBeat carries.
+                const size_t samplesPerQuarterNote = m_eighthNoteUnit ? samplesPerBeat * 2 : samplesPerBeat;
+                const auto grooveSample = m_grooveSequencer.advanceSample(samplesPerQuarterNote);
                 grooveOut(i, 0) = grooveSample[0] * m_grooveGain;
                 grooveOut(i, 1) = grooveSample[1] * m_grooveGain;
             }
