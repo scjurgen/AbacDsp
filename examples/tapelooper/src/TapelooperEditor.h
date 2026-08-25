@@ -136,6 +136,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(trackGainADial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowDepthADial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowRateADial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowDriftADial).withFlex(1).withMargin(knobMarginSmall));
@@ -163,6 +164,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(trackGainBDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowDepthBDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowRateBDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowDriftBDial).withFlex(1).withMargin(knobMarginSmall));
@@ -190,6 +192,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(trackGainCDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowDepthCDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowRateCDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowDriftCDial).withFlex(1).withMargin(knobMarginSmall));
@@ -313,6 +316,18 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         grooveVariationDial.reset(valueTreeState, "grooveVariation");
         grooveVariationDial.setLabelText(juce::String::fromUTF8("Groove Var"));
         grooveVariationDial.setTooltip(juce::String::fromUTF8("Groove Var (0 to 31)"));
+        addAndMakeVisible(trackGainADial);
+        trackGainADial.reset(valueTreeState, "trackGainA");
+        trackGainADial.setLabelText(juce::String::fromUTF8("Track Gain A"));
+        trackGainADial.setTooltip(juce::String::fromUTF8("Track Gain A (-60 to 12 dB)"));
+        addAndMakeVisible(trackGainBDial);
+        trackGainBDial.reset(valueTreeState, "trackGainB");
+        trackGainBDial.setLabelText(juce::String::fromUTF8("Track Gain B"));
+        trackGainBDial.setTooltip(juce::String::fromUTF8("Track Gain B (-60 to 12 dB)"));
+        addAndMakeVisible(trackGainCDial);
+        trackGainCDial.reset(valueTreeState, "trackGainC");
+        trackGainCDial.setLabelText(juce::String::fromUTF8("Track Gain C"));
+        trackGainCDial.setTooltip(juce::String::fromUTF8("Track Gain C (-60 to 12 dB)"));
         addAndMakeVisible(wowDepthADial);
         wowDepthADial.reset(valueTreeState, "wowDepthA");
         wowDepthADial.setLabelText(juce::String::fromUTF8("Wow Depth A"));
@@ -1370,6 +1385,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> groovePlaySwitchAttachment;
     CustomRotaryDial bpmDial{this};
     CustomRotaryDial grooveVariationDial{this};
+    CustomRotaryDial trackGainADial{this};
+    CustomRotaryDial trackGainBDial{this};
+    CustomRotaryDial trackGainCDial{this};
     CustomRotaryDial wowDepthADial{this};
     CustomRotaryDial wowRateADial{this};
     CustomRotaryDial wowDriftADial{this};

@@ -81,6 +81,18 @@ class StubImpl final : public EffectBase
     {
         m_grooveVariation = value;
     }
+    void setTrackGainA(const float value)
+    {
+        m_trackGainA = std::pow(10.f, value / 20.f);
+    }
+    void setTrackGainB(const float value)
+    {
+        m_trackGainB = std::pow(10.f, value / 20.f);
+    }
+    void setTrackGainC(const float value)
+    {
+        m_trackGainC = std::pow(10.f, value / 20.f);
+    }
     void setWowDepthA(const float value)
     {
         m_wowDepthA = value;
@@ -200,6 +212,9 @@ class StubImpl final : public EffectBase
     bool m_groovePlay{};
     float m_bpm{};
     float m_grooveVariation{};
+    float m_trackGainA{};
+    float m_trackGainB{};
+    float m_trackGainC{};
     float m_wowDepthA{};
     float m_wowRateA{};
     float m_wowDriftA{};

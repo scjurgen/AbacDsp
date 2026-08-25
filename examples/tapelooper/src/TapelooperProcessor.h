@@ -55,6 +55,9 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("groovePlay", this);
         m_parameters.addParameterListener("bpm", this);
         m_parameters.addParameterListener("grooveVariation", this);
+        m_parameters.addParameterListener("trackGainA", this);
+        m_parameters.addParameterListener("trackGainB", this);
+        m_parameters.addParameterListener("trackGainC", this);
         m_parameters.addParameterListener("wowDepthA", this);
         m_parameters.addParameterListener("wowRateA", this);
         m_parameters.addParameterListener("wowDriftA", this);
@@ -105,6 +108,9 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("groovePlay", this);
         m_parameters.removeParameterListener("bpm", this);
         m_parameters.removeParameterListener("grooveVariation", this);
+        m_parameters.removeParameterListener("trackGainA", this);
+        m_parameters.removeParameterListener("trackGainB", this);
+        m_parameters.removeParameterListener("trackGainC", this);
         m_parameters.removeParameterListener("wowDepthA", this);
         m_parameters.removeParameterListener("wowRateA", this);
         m_parameters.removeParameterListener("wowDriftA", this);
@@ -373,6 +379,21 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 0) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("trackGainA", 1), juce::String::fromUTF8("Track Gain A"),
+            juce::NormalisableRange<float>(-60, 12, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("trackGainB", 1), juce::String::fromUTF8("Track Gain B"),
+            juce::NormalisableRange<float>(-60, 12, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("trackGainC", 1), juce::String::fromUTF8("Track Gain C"),
+            juce::NormalisableRange<float>(-60, 12, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("wowDepthA", 1), juce::String::fromUTF8("Wow Depth A"),
             juce::NormalisableRange<float>(0, 1, 0.01, 0.1, false), 0.1,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
@@ -596,6 +617,24 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setGrooveVariation(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::grooveVariation, v);
+             }},
+            {"trackGainA",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setTrackGainA(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::trackGainA, v);
+             }},
+            {"trackGainB",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setTrackGainB(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::trackGainB, v);
+             }},
+            {"trackGainC",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setTrackGainC(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::trackGainC, v);
              }},
             {"wowDepthA",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -858,6 +897,24 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("grooveVariation");
             float normalized = range.convertTo0to1(params.grooveVariation);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("trackGainA"))
+        {
+            const auto& range = m_parameters.getParameterRange("trackGainA");
+            float normalized = range.convertTo0to1(params.trackGainA);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("trackGainB"))
+        {
+            const auto& range = m_parameters.getParameterRange("trackGainB");
+            float normalized = range.convertTo0to1(params.trackGainB);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("trackGainC"))
+        {
+            const auto& range = m_parameters.getParameterRange("trackGainC");
+            float normalized = range.convertTo0to1(params.trackGainC);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("wowDepthA"))

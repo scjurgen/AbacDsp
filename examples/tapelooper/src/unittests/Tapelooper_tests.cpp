@@ -304,6 +304,45 @@ TEST(TapeLooperTest, DefaultScriptSwitchesToClickWhileRecording)
     EXPECT_GT(clickRms, 1e-4f);
 }
 
+// The linear-ramp smoother reaches its target within one block, so a fade set via script
+// is fully in effect by the very next block processed after it.
+TEST(TapeLooperTest, ScriptTrackGainFadesOutAndBackIn)
+{
+    TapeLooper sut(kSampleRate);
+    sut.setBars(4.f);
+    sut.setBpm(100.f);
+    sut.setTapeSpeed(1.f);
+    sut.setRecordA(true);
+    sut.setPlayA(true);
+
+    const size_t numBlocks = kTestLoopFrames / kBlock;
+    size_t phase = 0;
+    const float recordAmplitude = 0.7f;
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        const auto in = sineBlock(recordAmplitude, 220.f, phase);
+        Buffer out{};
+        sut.processBlock(in, out);
+    }
+    sut.setRecordA(false);
+    const float recordedRms = recordAmplitude / std::numbers::sqrt2_v<float>;
+
+    const Buffer decoyIn{};
+    const float baselineRms = outputRms(sut, decoyIn, numBlocks);
+    EXPECT_GT(baselineRms, recordedRms * 0.5f);
+
+    ASSERT_TRUE(sut.setScript("SetTrackGain(0, 0)"));
+    Buffer rampOut{};
+    sut.processBlock(decoyIn, rampOut);
+    const float fadedRms = outputRms(sut, decoyIn, numBlocks);
+    EXPECT_LT(fadedRms, recordedRms * 0.05f);
+
+    ASSERT_TRUE(sut.setScript("SetTrackGain(0, 1)"));
+    sut.processBlock(decoyIn, rampOut);
+    const float restoredRms = outputRms(sut, decoyIn, numBlocks);
+    EXPECT_GT(restoredRms, recordedRms * 0.5f);
+}
+
 TEST(TapeLooperTest, GrooveBuffersOnlyFillWhilePlaying)
 {
     TapeLooper sut(kSampleRate);

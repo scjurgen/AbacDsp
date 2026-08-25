@@ -19,6 +19,7 @@
 #include "GrooveDefaultPaths.h"
 #include "GrooveLoopBuffer.h"
 #include "Helpers/ConstructArray.h"
+#include "Parameters/LinearParameter.h"
 #include "Sampler/GrooveDrumPlayer.h"
 #include "Sampler/GrooveKit.h"
 #include "TapeLooperScriptEngine.h"
@@ -49,6 +50,10 @@ constexpr float kDefaultWowRate = 0.4f;
 constexpr float kDefaultWowDrift = 0.05f;
 constexpr float kDefaultFlutterDepth = 0.1f;
 constexpr float kDefaultFlutterRate = 0.4f;
+
+constexpr float kDefaultTrackGain = 1.f;
+// Matches the Track Gain dial's own +12 dB ceiling (10^(12/20)).
+constexpr float kMaxTrackGain = 4.f;
 
 constexpr size_t framesForLoop(const float bars, const float bpm) noexcept
 {
@@ -91,11 +96,19 @@ class TapeLooperImpl final : public EffectBase
         , m_grooveSequencer(sampleRate)
         , m_loopBuffer(sampleRate)
         , m_clickGen(sampleRate)
+        , m_trackGainSmoother(
+              AbacDsp::constructArray<AbacDsp::LinearSmoothingParameter<BlockSize>, TapeLooperDetail::kFreeTracks>(
+                  TapeLooperDetail::kDefaultTrackGain))
     {
         applyLoopLengthIfChanged();
         m_grooveKit.requestLoad(kAbacDspDrumSamplesDir, kAbacDspMidiDrumsDir, kAbacDspDefaultGrooveName,
                                 AbacDsp::BurstConfig{sampleRate, m_bpmReq.load(std::memory_order_relaxed)});
         m_scriptEngine.setSampleRate(sampleRate);
+        for (auto& smoother : m_trackGainSmoother)
+        {
+            smoother.setMin(0.f);
+            smoother.setMax(TapeLooperDetail::kMaxTrackGain);
+        }
     }
 
     // A reload resets the script's Lua globals, so resendUiParameters() re-syncs it to
@@ -340,6 +353,21 @@ class TapeLooperImpl final : public EffectBase
         m_flutterRateReq[2].store(value, std::memory_order_relaxed);
     }
 
+    void setTrackGainA(const float valueDb) noexcept
+    {
+        m_trackGainReq[0].store(std::pow(10.f, valueDb / 20.f), std::memory_order_relaxed);
+    }
+
+    void setTrackGainB(const float valueDb) noexcept
+    {
+        m_trackGainReq[1].store(std::pow(10.f, valueDb / 20.f), std::memory_order_relaxed);
+    }
+
+    void setTrackGainC(const float valueDb) noexcept
+    {
+        m_trackGainReq[2].store(std::pow(10.f, valueDb / 20.f), std::memory_order_relaxed);
+    }
+
     // Groove menu click: styleName is one of listGrooveNames()'s own entries.
     void requestLoadGroove(const std::string& styleName, const unsigned variationIndex)
     {
@@ -452,6 +480,7 @@ class TapeLooperImpl final : public EffectBase
             m_wowDrift[track] = m_wowDriftReq[track].load(std::memory_order_relaxed);
             m_flutterDepth[track] = m_flutterDepthReq[track].load(std::memory_order_relaxed);
             m_flutterRate[track] = m_flutterRateReq[track].load(std::memory_order_relaxed);
+            m_trackGainSmoother[track].setValue(m_trackGainReq[track].load(std::memory_order_relaxed));
         }
 
         const bool groovePlayReq = m_groovePlayReq.load(std::memory_order_relaxed);
@@ -492,6 +521,10 @@ class TapeLooperImpl final : public EffectBase
             if (const auto v = m_scriptEngine.drainPlayCommand(track))
             {
                 m_playReq[track].store(*v, std::memory_order_relaxed);
+            }
+            if (const auto v = m_scriptEngine.drainTrackGainCommand(track))
+            {
+                m_trackGainReq[track].store(*v, std::memory_order_relaxed);
             }
         }
         if (const auto v = m_scriptEngine.drainGrooveSourceCommand())
@@ -626,8 +659,9 @@ class TapeLooperImpl final : public EffectBase
             {
                 for (size_t i = 0; i < BlockSize; ++i)
                 {
-                    mix[i * 2] += tapeOut[i * 2];
-                    mix[i * 2 + 1] += tapeOut[i * 2 + 1];
+                    const auto gain = m_trackGainSmoother[track].getValue(i);
+                    mix[i * 2] += tapeOut[i * 2] * gain;
+                    mix[i * 2 + 1] += tapeOut[i * 2 + 1] * gain;
                 }
             }
         }
@@ -710,6 +744,7 @@ class TapeLooperImpl final : public EffectBase
     GrooveLoopBuffer m_loopBuffer;
     const AbacDsp::GrooveProgram* m_lastGrooveProgram{nullptr};
     AbacDsp::ClickGenerator m_clickGen;
+    std::array<AbacDsp::LinearSmoothingParameter<BlockSize>, TapeLooperDetail::kFreeTracks> m_trackGainSmoother;
     TapeLooperScriptEngine m_scriptEngine;
 
     std::atomic<float> m_tapeSpeedReq{1.f};
@@ -736,6 +771,8 @@ class TapeLooperImpl final : public EffectBase
     std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_flutterRateReq{
         TapeLooperDetail::kDefaultFlutterRate, TapeLooperDetail::kDefaultFlutterRate,
         TapeLooperDetail::kDefaultFlutterRate};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_trackGainReq{
+        TapeLooperDetail::kDefaultTrackGain, TapeLooperDetail::kDefaultTrackGain, TapeLooperDetail::kDefaultTrackGain};
 
     float m_tapeSpeed{1.f};
     float m_appliedBars{0.f};

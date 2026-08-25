@@ -48,6 +48,7 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
 "--   SetGrooveVariation(index)           0-based, picks among the loaded style's variations\n"
 "--   SetTrackRecord(track, isRecording)  track is 0-based (A=0, B=1, C=2)\n"
 "--   SetTrackPlay(track, isPlaying)\n"
+"--   SetTrackGain(track, gain)           linear multiplier, 0 silent, 1 unity\n"
 "--   SetGrooveSource(mode)               \"groove\" (loaded MIDI groove) or \"click\"\n"
 "\n"
 "-- Fires whenever a track's applied record state changes (edge-triggered, not polled).\n"
@@ -72,6 +73,7 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     [[nodiscard]] std::optional<float> drainGrooveVariationCommand() noexcept;
     [[nodiscard]] std::optional<bool> drainRecordCommand(size_t track) noexcept;
     [[nodiscard]] std::optional<bool> drainPlayCommand(size_t track) noexcept;
+    [[nodiscard]] std::optional<float> drainTrackGainCommand(size_t track) noexcept;
     // true = click, false = groove.
     [[nodiscard]] std::optional<bool> drainGrooveSourceCommand() noexcept;
 
@@ -81,6 +83,7 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
 
     void luaSetTrackRecord(size_t track, bool value) noexcept;
     void luaSetTrackPlay(size_t track, bool value) noexcept;
+    void luaSetTrackGain(size_t track, float value) noexcept;
     void luaSetTapeSpeed(float value) noexcept;
     void luaSetBpm(float value) noexcept;
     void luaSetGrooveVariation(float value) noexcept;
@@ -92,6 +95,7 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     std::optional<float> m_pendingGrooveVariation;
     std::array<std::optional<bool>, kTracks> m_pendingRecord{};
     std::array<std::optional<bool>, kTracks> m_pendingPlay{};
+    std::array<std::optional<float>, kTracks> m_pendingTrackGain{};
     std::optional<bool> m_pendingGrooveSource;
 };
 
@@ -109,6 +113,7 @@ inline void TapeLooperScriptEngine::bindScriptFunctions()
     m_onRecordStateChangedFn = m_lua["OnRecordStateChanged"];
     m_lua.set_function("SetTrackRecord", &TapeLooperScriptEngine::luaSetTrackRecord, this);
     m_lua.set_function("SetTrackPlay", &TapeLooperScriptEngine::luaSetTrackPlay, this);
+    m_lua.set_function("SetTrackGain", &TapeLooperScriptEngine::luaSetTrackGain, this);
     m_lua.set_function("SetTapeSpeed", &TapeLooperScriptEngine::luaSetTapeSpeed, this);
     m_lua.set_function("SetBpm", &TapeLooperScriptEngine::luaSetBpm, this);
     m_lua.set_function("SetGrooveVariation", &TapeLooperScriptEngine::luaSetGrooveVariation, this);
@@ -133,6 +138,14 @@ inline void TapeLooperScriptEngine::luaSetTrackPlay(const size_t track, const bo
     if (track < kTracks)
     {
         m_pendingPlay[track] = value;
+    }
+}
+
+inline void TapeLooperScriptEngine::luaSetTrackGain(const size_t track, const float value) noexcept
+{
+    if (track < kTracks)
+    {
+        m_pendingTrackGain[track] = value;
     }
 }
 
@@ -204,6 +217,17 @@ inline std::optional<bool> TapeLooperScriptEngine::drainPlayCommand(const size_t
     }
     const auto result = m_pendingPlay[track];
     m_pendingPlay[track].reset();
+    return result;
+}
+
+inline std::optional<float> TapeLooperScriptEngine::drainTrackGainCommand(const size_t track) noexcept
+{
+    if (track >= kTracks)
+    {
+        return std::nullopt;
+    }
+    const auto result = m_pendingTrackGain[track];
+    m_pendingTrackGain[track].reset();
     return result;
 }
 

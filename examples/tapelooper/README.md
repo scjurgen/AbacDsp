@@ -17,6 +17,7 @@ at a fixed rate.
 | Input Level | -60 - 12 dB | Live input gain, before it reaches the tape tracks |
 | Groove Level | -60 - 12 dB | Groove track output level |
 | Rec/Play/Clear A, B, C | (switches) | Per-track record, play, and clear (momentary) |
+| Track Gain A, B, C | -60 - 12 dB | Per-track playback level - a fader, not a mute; Play stays the hard on/off |
 | Groove | (switch) | Play/stop the groove track |
 | BPM | 50 - 250 | Groove/click tempo |
 | Groove Var | 0 - 31 | Selects among the loaded style's variations |
@@ -51,11 +52,14 @@ SetBpm(bpm)                         -- groove/click tempo
 SetGrooveVariation(index)           -- 0-based, picks among the loaded style's variations
 SetTrackRecord(track, isRecording)  -- track is 0-based: A=0, B=1, C=2
 SetTrackPlay(track, isPlaying)
+SetTrackGain(track, gain)           -- linear multiplier: 0 silent, 1 unity, ~4 is the
+                                     -- Track Gain dial's own +12 dB ceiling
 ```
 
 Each of these writes into the same underlying state the plugin's own dials/switches do, so
 whichever - host automation or script - sets a value last wins; there's no separate "script
-override" layer to fight with the UI.
+override" layer to fight with the UI. `SetTrackGain` ramps linearly to its new value over one
+audio block, so repeated calls (e.g. from `Timer.Every`) fade smoothly instead of zippering.
 
 ### Groove source
 
@@ -78,6 +82,29 @@ end
 Fires whenever a track's *applied* record state changes (edge-triggered against the value the
 audio thread has actually caught up to, not the raw switch, so a script never reacts to a state
 the audio thread hasn't reached yet). track is 0-based, same as `SetTrackRecord`.
+
+### Example: fading a track
+
+```lua
+-- Fade track A out over 4 seconds, useful for a performance-style drop.
+local fadeId = nil
+
+function StartFadeOut()
+    local steps, stepMs = 40, 100
+    local i = 0
+    fadeId = Timer.Every(stepMs, function()
+        i = i + 1
+        SetTrackGain(0, math.max(0, 1 - i / steps))
+        if i >= steps then Timer.Cancel(fadeId) end
+    end)
+end
+```
+
+### Example: `base-scripts/fade-track-a.lua`
+
+A directly-runnable smoke test for the fade above: record onto track A, stop recording, and
+it fades itself out over 4 seconds with no further steps - `OnRecordStateChanged` triggers the
+fade automatically instead of waiting on a `StartFadeOut()` call from elsewhere.
 
 ### Default (stub) script
 

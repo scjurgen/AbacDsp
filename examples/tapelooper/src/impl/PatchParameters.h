@@ -29,6 +29,9 @@ struct PatchParameters
         groovePlay     , // switch
         bpm            , // dial
         grooveVariation, // dial
+        trackGainA     , // dial
+        trackGainB     , // dial
+        trackGainC     , // dial
         wowDepthA      , // dial
         wowRateA       , // dial
         wowDriftA      , // dial
@@ -70,6 +73,9 @@ bool clearC{false};
 bool groovePlay{false};
 float bpm{120.0f};
 float grooveVariation{0.0f};
+float trackGainA{0.0f};
+float trackGainB{0.0f};
+float trackGainC{0.0f};
 float wowDepthA{0.1f};
 float wowRateA{0.4f};
 float wowDriftA{0.05f};
@@ -113,6 +119,9 @@ std::string script{};
 "groovePlay",
 "bpm",
 "grooveVariation",
+"trackGainA",
+"trackGainB",
+"trackGainC",
 "wowDepthA",
 "wowRateA",
 "wowDriftA",
@@ -170,6 +179,9 @@ std::string script{};
         else if constexpr (ParamId == Id::groovePlay) return groovePlay;
         else if constexpr (ParamId == Id::bpm) return bpm;
         else if constexpr (ParamId == Id::grooveVariation) return grooveVariation;
+        else if constexpr (ParamId == Id::trackGainA) return trackGainA;
+        else if constexpr (ParamId == Id::trackGainB) return trackGainB;
+        else if constexpr (ParamId == Id::trackGainC) return trackGainC;
         else if constexpr (ParamId == Id::wowDepthA) return wowDepthA;
         else if constexpr (ParamId == Id::wowRateA) return wowRateA;
         else if constexpr (ParamId == Id::wowDriftA) return wowDriftA;
@@ -237,6 +249,12 @@ break;
  case Id::bpm: if (!isEqual(get<Id::bpm>(), value)) {get<Id::bpm>() = value;m_modified = true;}
 break;
  case Id::grooveVariation: if (!isEqual(get<Id::grooveVariation>(), value)) {get<Id::grooveVariation>() = value;m_modified = true;}
+break;
+ case Id::trackGainA: if (!isEqual(get<Id::trackGainA>(), value)) {get<Id::trackGainA>() = value;m_modified = true;}
+break;
+ case Id::trackGainB: if (!isEqual(get<Id::trackGainB>(), value)) {get<Id::trackGainB>() = value;m_modified = true;}
+break;
+ case Id::trackGainC: if (!isEqual(get<Id::trackGainC>(), value)) {get<Id::trackGainC>() = value;m_modified = true;}
 break;
  case Id::wowDepthA: if (!isEqual(get<Id::wowDepthA>(), value)) {get<Id::wowDepthA>() = value;m_modified = true;}
 break;
@@ -342,6 +360,9 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         groovePlay     , // switch
         bpm            , // dial
         grooveVariation, // dial
+        trackGainA     , // dial
+        trackGainB     , // dial
+        trackGainC     , // dial
         wowDepthA      , // dial
         wowRateA       , // dial
         wowDriftA      , // dial
