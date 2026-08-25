@@ -141,6 +141,38 @@ class StubImpl final : public EffectBase
     {
         m_flutterRateC = value;
     }
+    void setLuaParam1(const float value)
+    {
+        m_luaParam1 = value;
+    }
+    void setLuaParam2(const float value)
+    {
+        m_luaParam2 = value;
+    }
+    void setLuaParam3(const float value)
+    {
+        m_luaParam3 = value;
+    }
+    void setLuaParam4(const float value)
+    {
+        m_luaParam4 = value;
+    }
+    void setLuaParam5(const float value)
+    {
+        m_luaParam5 = value;
+    }
+    void setLuaParam6(const float value)
+    {
+        m_luaParam6 = value;
+    }
+    void setLuaParam7(const float value)
+    {
+        m_luaParam7 = value;
+    }
+    void setLuaParam8(const float value)
+    {
+        m_luaParam8 = value;
+    }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
@@ -183,4 +215,12 @@ class StubImpl final : public EffectBase
     float m_flutterRateB{};
     float m_flutterDepthC{};
     float m_flutterRateC{};
+    float m_luaParam1{};
+    float m_luaParam2{};
+    float m_luaParam3{};
+    float m_luaParam4{};
+    float m_luaParam5{};
+    float m_luaParam6{};
+    float m_luaParam7{};
+    float m_luaParam8{};
 };

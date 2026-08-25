@@ -253,6 +253,57 @@ TEST(TapeLooperTest, WowFlutterDepthAudiblyChangesPlayback)
     EXPECT_TRUE(sawDifference);
 }
 
+// Script-driven record/play reaches the same applied state as the host setters do -
+// started via script, stopped via host, proving both paths share one underlying state.
+TEST(TapeLooperTest, ScriptCanDriveTrackRecordAndPlay)
+{
+    TapeLooper sut(kSampleRate);
+    sut.setBars(4.f);
+    sut.setBpm(100.f);
+    sut.setTapeSpeed(1.f);
+    ASSERT_TRUE(sut.setScript("SetTrackRecord(0, true)\nSetTrackPlay(0, true)\n"));
+
+    const size_t numBlocks = kTestLoopFrames / kBlock;
+    size_t phase = 0;
+    const float recordAmplitude = 0.7f;
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        const auto in = sineBlock(recordAmplitude, 220.f, phase);
+        Buffer out{};
+        sut.processBlock(in, out);
+    }
+    const float recordedRms = recordAmplitude / std::numbers::sqrt2_v<float>;
+
+    sut.setRecordA(false);
+    const Buffer decoyIn{};
+    const float sustainedRms = outputRms(sut, decoyIn, numBlocks);
+
+    EXPECT_GT(sustainedRms, recordedRms * 0.5f);
+    EXPECT_LT(sustainedRms, recordedRms * 1.5f);
+}
+
+// End-to-end with the engine's own default stub script: recording on track A fires
+// OnRecordStateChanged, which the script answers with SetGrooveSource("click").
+TEST(TapeLooperTest, DefaultScriptSwitchesToClickWhileRecording)
+{
+    TapeLooper sut(kSampleRate);
+    sut.setBpm(120.f);
+    sut.setGroovePlay(true);
+
+    const Buffer in{};
+    const size_t numBlocks = 50;
+    const float silentGrooveRms = outputRms(sut, in, numBlocks);
+    EXPECT_LT(silentGrooveRms, 1e-6f);
+
+    sut.setRecordA(true);
+    Buffer out{};
+    sut.processBlock(in, out); // applies the record edge and drains the resulting script command
+    // The groove tape's fixed ~4800-sample read-behind-write delay (VariSpeedTapeDelay's
+    // own default read head) must be fed past once before playback catches up to it.
+    const float clickRms = outputRms(sut, in, 200);
+    EXPECT_GT(clickRms, 1e-4f);
+}
+
 TEST(TapeLooperTest, GrooveBuffersOnlyFillWhilePlaying)
 {
     TapeLooper sut(kSampleRate);

@@ -11,7 +11,10 @@ macro(package_add_test TESTNAME)
         gmock
         gtest_main
         nlohmann_json::nlohmann_json
+        tapelooper_lua
     )
+    target_include_directories(${TESTNAME} PRIVATE ${SOL2_DIR}/include)
+    target_compile_definitions(${TESTNAME} PRIVATE SOL_USING_CXX_LUA=1)
     gtest_discover_tests(
         ${TESTNAME}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}

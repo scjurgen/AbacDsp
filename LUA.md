@@ -3,7 +3,7 @@
 This covers the Lua scripting API shared by every Lua-scripted JUCE example generated via
 `JuceStandaloneGenerator` - the machinery lives in `LuaScriptEngineBase.h` and
 `LuaMusicMathLib.h`, both fixed, always-copied components (`CPP_SOURCE_FILES_FIXED` in
-`generate-juce-standalone.py`) that any generated example can pull in. Three examples use it
+`generate-juce-standalone.py`) that any generated example can pull in. Five examples use it
 today - each one's own additional hooks are documented in its own README.md's "Scripting"
 section, not repeated here:
 
@@ -13,6 +13,7 @@ section, not repeated here:
 | `resonik` | `examples/resonik/README.md` | `SetFreqRange`/`SetDecayRange`/`SetGainRange`/`SetDelayRange`/`SetQ`/`SetResonanceBody` |
 | `pingsynth` | `examples/pingsynth/README.md` | `SetHarmonics`/`SetPitchBendRange`, `OnMpeModeChanged` |
 | `spectraltap` | `examples/spectraltap/README.md` | `SetMaxTaps`/`SetTap`, `SetFrequency`/`SetResonance`/`SetFormant`/`SetPan`/`SetGain` |
+| `tapelooper` | `examples/tapelooper/README.md` | `SetTapeSpeed`/`SetBpm`/`SetGrooveVariation`/`SetTrackRecord`/`SetTrackPlay`/`SetGrooveSource`, `OnRecordStateChanged` |
 
 ## Sandbox
 

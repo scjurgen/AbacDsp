@@ -15,11 +15,13 @@
 #include "Delays/VariSpeedTapeDelay.h"
 #include "EffectBase.h"
 #include "Filters/Sinc/sinc_4.h"
+#include "Generators/ClickGenerator.h"
 #include "GrooveDefaultPaths.h"
 #include "GrooveLoopBuffer.h"
 #include "Helpers/ConstructArray.h"
 #include "Sampler/GrooveDrumPlayer.h"
 #include "Sampler/GrooveKit.h"
+#include "TapeLooperScriptEngine.h"
 
 // ADL hooks so GrooveKit<nlohmann::json> can parse a groove's sidecar metadata;
 // kept here (not in core) since the core library must stay JSON-library-free.
@@ -78,6 +80,8 @@ class TapeLooperImpl final : public EffectBase
 {
   public:
     using TapeTrack = AbacDsp::VariSpeedTapeDelay<TapeLooperDetail::kBufferSize, 2, 1, BlockSize>;
+    static_assert(TapeLooperScriptEngine::kTracks == TapeLooperDetail::kFreeTracks,
+                  "TapeLooperScriptEngine's per-track pool must match TapeLooperDetail::kFreeTracks");
 
     explicit TapeLooperImpl(const float sampleRate)
         : EffectBase(sampleRate)
@@ -86,10 +90,90 @@ class TapeLooperImpl final : public EffectBase
         , m_grooveTape(sampleRate, m_sincFilter)
         , m_grooveSequencer(sampleRate)
         , m_loopBuffer(sampleRate)
+        , m_clickGen(sampleRate)
     {
         applyLoopLengthIfChanged();
         m_grooveKit.requestLoad(kAbacDspDrumSamplesDir, kAbacDspMidiDrumsDir, kAbacDspDefaultGrooveName,
                                 AbacDsp::BurstConfig{sampleRate, m_bpmReq.load(std::memory_order_relaxed)});
+        m_scriptEngine.setSampleRate(sampleRate);
+    }
+
+    // A reload resets the script's Lua globals, so resendUiParameters() re-syncs it to
+    // each claimed slot's current value - otherwise it stays believing coded defaults.
+    bool setScript(const std::string_view source)
+    {
+        const bool ok = m_scriptEngine.loadScript(source);
+        if (ok)
+        {
+            resendUiParameters();
+        }
+        return ok;
+    }
+
+    void setImportResolver(TapeLooperScriptEngine::ImportResolver resolver)
+    {
+        m_scriptEngine.setImportResolver(std::move(resolver));
+    }
+
+    [[nodiscard]] bool hasScriptError() const noexcept
+    {
+        return m_scriptEngine.hasError();
+    }
+
+    [[nodiscard]] const std::string& scriptError() const noexcept
+    {
+        return m_scriptEngine.lastError();
+    }
+
+    // Shown by the popup editor's Reset button, not the engine's own default script.
+    [[nodiscard]] static std::string scriptSkeleton()
+    {
+        return std::string(TapeLooperScriptEngine::kFullSkeletonScript);
+    }
+
+    [[nodiscard]] const TapeLooperScriptEngine::UiParamSlots& uiParamSlots() const noexcept
+    {
+        return m_scriptEngine.uiParamSlots();
+    }
+
+    void setLuaParam1(const float value) noexcept
+    {
+        m_luaParamValues[0] = value;
+    }
+
+    void setLuaParam2(const float value) noexcept
+    {
+        m_luaParamValues[1] = value;
+    }
+
+    void setLuaParam3(const float value) noexcept
+    {
+        m_luaParamValues[2] = value;
+    }
+
+    void setLuaParam4(const float value) noexcept
+    {
+        m_luaParamValues[3] = value;
+    }
+
+    void setLuaParam5(const float value) noexcept
+    {
+        m_luaParamValues[4] = value;
+    }
+
+    void setLuaParam6(const float value) noexcept
+    {
+        m_luaParamValues[5] = value;
+    }
+
+    void setLuaParam7(const float value) noexcept
+    {
+        m_luaParamValues[6] = value;
+    }
+
+    void setLuaParam8(const float value) noexcept
+    {
+        m_luaParamValues[7] = value;
     }
 
     void setTapeSpeed(const float value) noexcept
@@ -304,6 +388,9 @@ class TapeLooperImpl final : public EffectBase
         m_grooveKit.pollAndInstall();
         checkGrooveInfoTextChanged();
         installGrooveProgramIfChanged();
+        m_scriptEngine.tickBlock(BlockSize);
+        notifyUiParametersIfChanged();
+        applyScriptCommands();
         applyParameters();
 
         for (size_t track = 0; track < m_tapeTrack.size(); ++track)
@@ -354,6 +441,11 @@ class TapeLooperImpl final : public EffectBase
                 m_tapeTrack[track].reset();
             }
             m_recording[track] = m_recordReq[track].load(std::memory_order_relaxed);
+            if (m_recording[track] != m_lastNotifiedRecording[track])
+            {
+                m_scriptEngine.notifyRecordStateChanged(track, m_recording[track]);
+                m_lastNotifiedRecording[track] = m_recording[track];
+            }
             m_playing[track] = m_playReq[track].load(std::memory_order_relaxed);
             m_wowDepth[track] = m_wowDepthReq[track].load(std::memory_order_relaxed);
             m_wowRate[track] = m_wowRateReq[track].load(std::memory_order_relaxed);
@@ -369,8 +461,72 @@ class TapeLooperImpl final : public EffectBase
             m_loopBuffer.reset();
         }
         m_groovePlaying = groovePlayReq;
+        m_useClick = m_grooveSourceReq.load(std::memory_order_relaxed);
 
         applyGrooveVariationIfChanged();
+    }
+
+    // Drains whatever the script requested this block into the same request atomics
+    // host automation writes to, so the two sources share one apply path below and the
+    // most recent write - script or host - simply wins.
+    void applyScriptCommands() noexcept
+    {
+        if (const auto v = m_scriptEngine.drainTapeSpeedCommand())
+        {
+            m_tapeSpeedReq.store(*v, std::memory_order_relaxed);
+        }
+        if (const auto v = m_scriptEngine.drainBpmCommand())
+        {
+            m_bpmReq.store(*v, std::memory_order_relaxed);
+        }
+        if (const auto v = m_scriptEngine.drainGrooveVariationCommand())
+        {
+            m_grooveVariationReq.store(*v, std::memory_order_relaxed);
+        }
+        for (size_t track = 0; track < TapeLooperDetail::kFreeTracks; ++track)
+        {
+            if (const auto v = m_scriptEngine.drainRecordCommand(track))
+            {
+                m_recordReq[track].store(*v, std::memory_order_relaxed);
+            }
+            if (const auto v = m_scriptEngine.drainPlayCommand(track))
+            {
+                m_playReq[track].store(*v, std::memory_order_relaxed);
+            }
+        }
+        if (const auto v = m_scriptEngine.drainGrooveSourceCommand())
+        {
+            m_grooveSourceReq.store(*v, std::memory_order_relaxed);
+        }
+    }
+
+    // Same exact-equality reasoning as ResonikImpl's own notifyUiParametersIfChanged():
+    // a stored float either stays bit-identical or is genuinely a new host/UI value.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+    void notifyUiParametersIfChanged() noexcept
+    {
+        for (size_t i = 0; i < TapeLooperScriptEngine::kMaxLuaParams; ++i)
+        {
+            if (m_luaParamValues[i] == m_lastNotifiedLuaParamValues[i])
+            {
+                continue;
+            }
+            m_scriptEngine.notifyUiParameterChanged(i, m_luaParamValues[i]);
+            m_lastNotifiedLuaParamValues[i] = m_luaParamValues[i];
+        }
+    }
+#pragma GCC diagnostic pop
+
+    // Notifies every slot's current value unconditionally, unlike
+    // notifyUiParametersIfChanged() - see setScript()'s comment for why.
+    void resendUiParameters() noexcept
+    {
+        for (size_t i = 0; i < TapeLooperScriptEngine::kMaxLuaParams; ++i)
+        {
+            m_scriptEngine.notifyUiParameterChanged(i, m_luaParamValues[i]);
+            m_lastNotifiedLuaParamValues[i] = m_luaParamValues[i];
+        }
     }
 
     // Loop length is bars * beats/bar / BPM, the same BPM the groove plays at.
@@ -477,14 +633,39 @@ class TapeLooperImpl final : public EffectBase
         }
     }
 
+    [[nodiscard]] size_t samplesPerBeat() const noexcept
+    {
+        return static_cast<size_t>(sampleRate() * 60.f / std::max(1.f, m_bpm));
+    }
+
+    // Advances the click's own beat clock by BlockSize samples, writing a tempo-locked
+    // click (accented on beat 1 of the bar) into grooveIn instead of the MIDI groove.
+    void renderClick(std::array<float, 2 * BlockSize>& grooveIn) noexcept
+    {
+        const auto spb = std::max<size_t>(samplesPerBeat(), 1);
+        for (size_t i = 0; i < BlockSize; ++i)
+        {
+            if (m_clickPhase == 0)
+            {
+                const bool downbeat = m_clickBeatIndex % static_cast<size_t>(TapeLooperDetail::kBeatsPerBar) == 0;
+                m_clickGen.trigger(downbeat ? AbacDsp::ClickAccent::Downbeat : AbacDsp::ClickAccent::Beat);
+                m_clickBeatIndex = (m_clickBeatIndex + 1) % static_cast<size_t>(TapeLooperDetail::kBeatsPerBar);
+            }
+            const auto sample = m_clickGen.step0();
+            grooveIn[i * 2] = sample;
+            grooveIn[i * 2 + 1] = sample;
+            m_clickPhase = (m_clickPhase + 1) % spb;
+        }
+    }
+
     void renderGrooveTrack(std::array<float, 2 * BlockSize>& mix) noexcept
     {
-        if (m_groovePlaying)
+        if (m_groovePlaying && !m_useClick)
         {
-            const auto samplesPerBeat = static_cast<size_t>(sampleRate() * 60.f / std::max(1.f, m_bpm));
-            while (m_loopBuffer.framesAhead() < samplesPerBeat)
+            const auto spb = samplesPerBeat();
+            while (m_loopBuffer.framesAhead() < spb)
             {
-                const auto frame = m_grooveSequencer.advanceSample(samplesPerBeat);
+                const auto frame = m_grooveSequencer.advanceSample(spb);
                 m_loopBuffer.writeFrame(frame[0], frame[1]);
             }
         }
@@ -495,11 +676,18 @@ class TapeLooperImpl final : public EffectBase
         std::array<float, 2 * BlockSize> grooveIn{};
         if (m_groovePlaying)
         {
-            for (size_t i = 0; i < BlockSize; ++i)
+            if (m_useClick)
             {
-                const auto frame = m_loopBuffer.readFrame();
-                grooveIn[i * 2] = frame[0];
-                grooveIn[i * 2 + 1] = frame[1];
+                renderClick(grooveIn);
+            }
+            else
+            {
+                for (size_t i = 0; i < BlockSize; ++i)
+                {
+                    const auto frame = m_loopBuffer.readFrame();
+                    grooveIn[i * 2] = frame[0];
+                    grooveIn[i * 2 + 1] = frame[1];
+                }
             }
         }
         m_grooveTape.feed(grooveIn);
@@ -521,6 +709,8 @@ class TapeLooperImpl final : public EffectBase
     AbacDsp::GrooveDrumPlayer m_grooveSequencer;
     GrooveLoopBuffer m_loopBuffer;
     const AbacDsp::GrooveProgram* m_lastGrooveProgram{nullptr};
+    AbacDsp::ClickGenerator m_clickGen;
+    TapeLooperScriptEngine m_scriptEngine;
 
     std::atomic<float> m_tapeSpeedReq{1.f};
     std::atomic<float> m_barsReq{8.f};
@@ -532,6 +722,7 @@ class TapeLooperImpl final : public EffectBase
     std::atomic<bool> m_groovePlayReq{false};
     std::atomic<float> m_bpmReq{120.f};
     std::atomic<float> m_grooveVariationReq{0.f};
+    std::atomic<bool> m_grooveSourceReq{false}; // false = groove, true = click
 
     std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_wowDepthReq{
         TapeLooperDetail::kDefaultWowDepth, TapeLooperDetail::kDefaultWowDepth, TapeLooperDetail::kDefaultWowDepth};
@@ -566,6 +757,13 @@ class TapeLooperImpl final : public EffectBase
                                                                    TapeLooperDetail::kDefaultFlutterRate,
                                                                    TapeLooperDetail::kDefaultFlutterRate};
     bool m_groovePlaying{false};
+    bool m_useClick{false};
+    size_t m_clickPhase{0};
+    size_t m_clickBeatIndex{0};
+    std::array<bool, TapeLooperDetail::kFreeTracks> m_lastNotifiedRecording{};
+    std::array<float, TapeLooperScriptEngine::kMaxLuaParams> m_luaParamValues{};
+    std::array<float, TapeLooperScriptEngine::kMaxLuaParams> m_lastNotifiedLuaParamValues{-1.f, -1.f, -1.f, -1.f,
+                                                                                          -1.f, -1.f, -1.f, -1.f};
     float m_bpm{120.f};
     int m_appliedGrooveVariation{0};
 

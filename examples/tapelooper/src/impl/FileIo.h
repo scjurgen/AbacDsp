@@ -5,10 +5,13 @@
 #include <functional>
 #include <iostream>
 #include <juce_core/juce_core.h>
+#include <optional>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
+#include "../inc/LuaScriptEngineBase.h"
 #include "PatchParameters.h"
 
 class FileIo
@@ -24,7 +27,7 @@ class FileIo
     void initialize(const std::vector<int>& patchIndex)
     {
         m_currentPatch = patchIndex;
-
+        syncBaseLibraryScripts();
         loadPatch(patchIndex);
         m_currentParams.clearModified();
         m_isInitialized = true;
@@ -214,6 +217,176 @@ class FileIo
     }
 
 
+    void updateScript(const std::string& value)
+    {
+        if (!m_isInitialized)
+        {
+            return;
+        }
+        m_currentParams.updateScript(value);
+    }
+
+    [[nodiscard]] const std::string& currentScript() const
+    {
+        return m_currentParams.script;
+    }
+
+    [[nodiscard]] std::vector<std::string> listScriptNames() const
+    {
+        std::vector<std::string> names;
+        const auto rootDir = getScriptDirectory();
+        for (const auto& f : rootDir.findChildFiles(juce::File::findFiles, true, "*.lua"))
+        {
+            const auto relative = f.getRelativePathFrom(rootDir).replaceCharacter('\\', '/');
+            names.push_back(relative.upToLastOccurrenceOf(".lua", false, false).toStdString());
+        }
+        std::sort(names.begin(), names.end());
+        return names;
+    }
+
+    [[nodiscard]] const std::string& currentScriptName() const
+    {
+        return m_currentScriptName;
+    }
+
+    bool saveScriptNamed(const std::string& name)
+    {
+        const std::string filename = getScriptFilename(name);
+        if (filename.empty())
+        {
+            return false;
+        }
+        std::ofstream out(filename);
+        if (!out)
+        {
+            std::cerr << "FileIo: ERROR - Failed to open " << filename << " for writing" << std::endl;
+            return false;
+        }
+        out << m_currentParams.script;
+        m_currentScriptName = name;
+        return true;
+    }
+
+    bool loadScriptNamed(const std::string& name)
+    {
+        const std::string filename = getScriptFilename(name);
+        std::ifstream in(filename);
+        if (filename.empty() || !in)
+        {
+            std::cerr << "FileIo: ERROR - Failed to open " << filename << " for reading" << std::endl;
+            return false;
+        }
+        std::ostringstream buffer;
+        buffer << in.rdbuf();
+        updateScript(buffer.str());
+        m_currentScriptName = name;
+        return true;
+    }
+
+    bool deleteScriptNamed(const std::string& name)
+    {
+        const std::string filename = getScriptFilename(name);
+        if (filename.empty())
+        {
+            return false;
+        }
+        if (name == m_currentScriptName)
+        {
+            m_currentScriptName.clear();
+        }
+        return juce::File(filename).deleteFile();
+    }
+
+    bool renameScriptNamed(const std::string& oldName, const std::string& newName)
+    {
+        const std::string oldFilename = getScriptFilename(oldName);
+        const std::string newFilename = getScriptFilename(newName);
+        if (oldFilename.empty() || newFilename.empty())
+        {
+            return false;
+        }
+        if (!juce::File(oldFilename).moveFileTo(juce::File(newFilename)))
+        {
+            return false;
+        }
+        if (oldName == m_currentScriptName)
+        {
+            m_currentScriptName = newName;
+        }
+        return true;
+    }
+
+    // Resolves an `import "name"` library lookup: the user's own Library/User/ directory
+    // takes precedence over the repo-synced Library/Base/ one, so a user copy of the same
+    // name overrides the built-in. On failure, notFoundDetail lists the full paths checked.
+    [[nodiscard]] static ImportLookup resolveLibraryScript(const std::string_view name)
+    {
+        const juce::String sanitized = juce::String(std::string(name)).removeCharacters("\\/:*?\"<>|");
+        if (sanitized.isEmpty())
+        {
+            return {std::nullopt, "\"" + std::string(name) + "\" is not a valid library file name"};
+        }
+        juce::StringArray checkedPaths;
+        for (const auto& dir : {getLibraryUserDirectory(), getLibraryBaseDirectory()})
+        {
+            const juce::File file = dir.getChildFile(sanitized + ".lua");
+            if (file.existsAsFile())
+            {
+                return {file.loadFileAsString().toStdString(), {}};
+            }
+            checkedPaths.add(file.getFullPathName());
+        }
+        return {std::nullopt, "looked in " + checkedPaths.joinIntoString("; ").toStdString()};
+    }
+
+    // Writes/overwrites a Library/User/ script, e.g. from the LLM-Assist watched-folder
+    // workflow. Rejects a name normalizeImportName() would itself reject, so nothing is
+    // ever written here that could never actually be import "..."-ed back out.
+    [[nodiscard]] static bool saveUserLibraryScript(const std::string_view name, const std::string_view content)
+    {
+        const std::optional<std::string> normalized = normalizeImportName(name);
+        if (!normalized)
+        {
+            return false;
+        }
+        const juce::File file = getLibraryUserDirectory().getChildFile(juce::String(*normalized) + ".lua");
+        return file.replaceWithText(juce::String(std::string(content)));
+    }
+
+    // Every installed library name, User and Base combined - a name in both is listed
+    // once, matching resolveLibraryScript()'s own "User overrides Base" resolution.
+    [[nodiscard]] static std::vector<std::string> listLibraryScriptNames()
+    {
+        std::vector<std::string> names;
+        for (const auto& dir : {getLibraryUserDirectory(), getLibraryBaseDirectory()})
+        {
+            for (const auto& f : dir.findChildFiles(juce::File::findFiles, false, "*.lua"))
+            {
+                names.push_back(f.getFileNameWithoutExtension().toStdString());
+            }
+        }
+        std::sort(names.begin(), names.end());
+        names.erase(std::unique(names.begin(), names.end()), names.end());
+        return names;
+    }
+
+    // Repo-synced (see syncBaseLibraryScripts()) - not meant to be hand-edited by users.
+    static juce::File getLibraryBaseDirectory()
+    {
+        const auto dir = getLibraryDirectory().getChildFile("Base");
+        dir.createDirectory();
+        return dir;
+    }
+
+    // The user's own import-able library scripts; never touched by syncBaseLibraryScripts().
+    static juce::File getLibraryUserDirectory()
+    {
+        const auto dir = getLibraryDirectory().getChildFile("User");
+        dir.createDirectory();
+        return dir;
+    }
+
+
   private:
     // JUCE's userApplicationDataDirectory is bare "~/Library" on macOS; the
     // "Application Support" segment is a convention apps must add themselves.
@@ -295,6 +468,77 @@ class FileIo
     }
 
 
+    static juce::File getScriptDirectory()
+    {
+        auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
+#if JUCE_MAC
+        base = base.getChildFile("Application Support");
+#endif
+        const auto dir = base.getChildFile("AbacDsp").getChildFile("Tapelooper").getChildFile("Scripts");
+        dir.createDirectory();
+        return dir;
+    }
+
+    static juce::File getLibraryDirectory()
+    {
+        auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
+#if JUCE_MAC
+        base = base.getChildFile("Application Support");
+#endif
+        const auto dir = base.getChildFile("AbacDsp").getChildFile("Tapelooper").getChildFile("Library");
+        dir.createDirectory();
+        return dir;
+    }
+
+    // Refreshes Library/Base/ from the repo's base-scripts/ directory (only available in a
+    // dev build from a real checkout - TAPELOOPER_BASE_SCRIPTS_DIR is undefined
+    // otherwise, in which case this is a no-op and whatever is already on disk is used).
+    static void syncBaseLibraryScripts()
+    {
+#ifdef TAPELOOPER_BASE_SCRIPTS_DIR
+        const juce::File repoDir(TAPELOOPER_BASE_SCRIPTS_DIR);
+        if (!repoDir.isDirectory())
+        {
+            return;
+        }
+        const juce::File targetDir = getLibraryBaseDirectory();
+        for (const auto& source : repoDir.findChildFiles(juce::File::findFiles, false, "*.lua"))
+        {
+            source.copyFileTo(targetDir.getChildFile(source.getFileName()));
+        }
+#endif
+    }
+
+    static std::string getScriptFilename(const std::string& name)
+    {
+        juce::StringArray segments;
+        segments.addTokens(juce::String(name), "/", "");
+        segments.trim();
+        segments.removeEmptyStrings();
+        if (segments.isEmpty())
+        {
+            return {};
+        }
+        juce::File dir = getScriptDirectory();
+        for (int i = 0; i < segments.size() - 1; ++i)
+        {
+            const juce::String sanitized = segments[i].removeCharacters("\\:*?\"<>|");
+            if (sanitized.isEmpty())
+            {
+                return {};
+            }
+            dir = dir.getChildFile(sanitized);
+        }
+        const juce::String fileName = segments[segments.size() - 1].removeCharacters("\\:*?\"<>|");
+        if (fileName.isEmpty())
+        {
+            return {};
+        }
+        dir.createDirectory();
+        return dir.getChildFile(fileName + ".lua").getFullPathName().toStdString();
+    }
+
+
     bool savePatch(const std::vector<int>& patchIndex)
     {
         const std::string filename = getPatchFilename(patchIndex);
@@ -342,4 +586,5 @@ class FileIo
     std::vector<int> m_currentPatch;
     PatchParameters m_currentParams;
     std::string m_currentPatchName;
+    std::string m_currentScriptName;
 };

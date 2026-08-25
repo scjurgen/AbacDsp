@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 set(PROJECT_NAME "Tapelooper")
+set(TAPELOOPER_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(FORMATS AU VST3 AUv3 Standalone)
 
 # Check if we're building as part of main project or standalone
@@ -91,6 +92,32 @@ juce_add_plugin("${PROJECT_NAME}"
 
 target_compile_features("${PROJECT_NAME}" PRIVATE cxx_std_20)
 
+# Lua, compiled as C++ (not C): lua_error then propagates as a real C++ exception
+# instead of a longjmp that would skip destructors, which matters once Lua state
+# lives next to RAII C++ objects on the audio thread. SOL_USING_CXX_LUA=1 below keeps
+# sol2's declarations on the matching (non "extern C") linkage.
+set(LUA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../3rdparty/lua)
+set(SOL2_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../3rdparty/sol2)
+
+file(GLOB LUA_IMPL_SRCS ${LUA_DIR}/*.c)
+list(FILTER LUA_IMPL_SRCS EXCLUDE REGEX ".*/(lua|luac|onelua|ltests)\\.c$")
+set_source_files_properties(${LUA_IMPL_SRCS} PROPERTIES LANGUAGE CXX)
+
+add_library(tapelooper_lua STATIC ${LUA_IMPL_SRCS})
+target_include_directories(tapelooper_lua PUBLIC ${LUA_DIR})
+set_target_properties(
+    tapelooper_lua
+    PROPERTIES FOLDER "Examples/${PROJECT_NAME}"
+)
+
+if(APPLE)
+    target_compile_definitions(tapelooper_lua PUBLIC LUA_USE_MACOSX)
+elseif(UNIX)
+    target_compile_definitions(tapelooper_lua PUBLIC LUA_USE_LINUX)
+elseif(WIN32)
+    target_compile_definitions(tapelooper_lua PUBLIC LUA_USE_WINDOWS)
+endif()
+
 file(GLOB IncludeFiles "src/inc/*.h" "src/inc/*.cpp")
 file(GLOB RootFiles "src/*.h" "src/*.cpp")
 file(GLOB ImplFiles "src/impl/*.h" "src/impl/*.cpp")
@@ -102,6 +129,12 @@ list(FILTER SourceFiles EXCLUDE REGEX ".*StubImpl\\.h$")
 
 # Include directories for AbacDsp library (from main project)
 target_include_directories("${PROJECT_NAME}" PUBLIC ../../src/includes)
+target_include_directories("${PROJECT_NAME}" SYSTEM PRIVATE ${SOL2_DIR}/include)
+target_compile_definitions("${PROJECT_NAME}" PRIVATE SOL_USING_CXX_LUA=1)
+target_compile_definitions(
+    "${PROJECT_NAME}"
+    PRIVATE TAPELOOPER_BASE_SCRIPTS_DIR="${TAPELOOPER_DIR}/base-scripts"
+)
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
 
@@ -161,7 +194,11 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 target_link_libraries(
     "${PROJECT_NAME}"
-    PRIVATE TapelooperAssets ${JUCE_DEPENDENCIES} nlohmann_json::nlohmann_json
+    PRIVATE
+        TapelooperAssets
+        ${JUCE_DEPENDENCIES}
+        nlohmann_json::nlohmann_json
+        tapelooper_lua
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
