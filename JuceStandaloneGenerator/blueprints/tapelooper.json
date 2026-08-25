@@ -10,7 +10,7 @@
   "ports-control":
   [
     {"short": "SPD", "type": "dial", "display": "Tape Speed", "symbol": "tapeSpeed", "default": 1.0,
-      "range": [0.1, 4.0, 0.01, 1.0, false], "precision": 2, "unit": "x"},
+      "range": [0.25, 4.0, 0.01, 1.0, false], "precision": 2, "unit": "x"},
     {"short": "BARS", "type": "dial", "display": "Bars", "symbol": "bars", "default": 8,
       "range": [1, 32, 1, 1, false], "precision": 0},
 
@@ -36,14 +36,46 @@
     {"short": "GVAR", "type": "dial", "display": "Groove Var", "symbol": "grooveVariation", "default": 0,
       "range": [0, 31, 1, 1, false], "precision": 0},
 
+    {"short": "WDPA", "type": "dial", "display": "Wow Depth A", "symbol": "wowDepthA", "default": 0.1,
+      "range": [0, 1, 0.01, 0.1, false], "precision": 2},
+    {"short": "WRTA", "type": "dial", "display": "Wow Rate A", "symbol": "wowRateA", "default": 0.4,
+      "range": [0, 3, 0.01, 0.4, false], "precision": 2, "unit": "Hz"},
+    {"short": "WDRA", "type": "dial", "display": "Wow Drift A", "symbol": "wowDriftA", "default": 0.05,
+      "range": [0, 1, 0.01, 0.05, false], "precision": 2},
+    {"short": "WDPB", "type": "dial", "display": "Wow Depth B", "symbol": "wowDepthB", "default": 0.1,
+      "range": [0, 1, 0.01, 0.1, false], "precision": 2},
+    {"short": "WRTB", "type": "dial", "display": "Wow Rate B", "symbol": "wowRateB", "default": 0.4,
+      "range": [0, 3, 0.01, 0.4, false], "precision": 2, "unit": "Hz"},
+    {"short": "WDRB", "type": "dial", "display": "Wow Drift B", "symbol": "wowDriftB", "default": 0.05,
+      "range": [0, 1, 0.01, 0.05, false], "precision": 2},
+    {"short": "WDPC", "type": "dial", "display": "Wow Depth C", "symbol": "wowDepthC", "default": 0.1,
+      "range": [0, 1, 0.01, 0.1, false], "precision": 2},
+    {"short": "WRTC", "type": "dial", "display": "Wow Rate C", "symbol": "wowRateC", "default": 0.4,
+      "range": [0, 3, 0.01, 0.4, false], "precision": 2, "unit": "Hz"},
+    {"short": "WDRC", "type": "dial", "display": "Wow Drift C", "symbol": "wowDriftC", "default": 0.05,
+      "range": [0, 1, 0.01, 0.05, false], "precision": 2},
+
+    {"short": "FDPA", "type": "dial", "display": "Flutter Depth A", "symbol": "flutterDepthA", "default": 0.1,
+      "range": [0, 1, 0.01, 0.1, false], "precision": 2},
+    {"short": "FRTA", "type": "dial", "display": "Flutter Rate A", "symbol": "flutterRateA", "default": 0.4,
+      "range": [0, 10, 0.01, 0.4, false], "precision": 2, "unit": "Hz"},
+    {"short": "FDPB", "type": "dial", "display": "Flutter Depth B", "symbol": "flutterDepthB", "default": 0.1,
+      "range": [0, 1, 0.01, 0.1, false], "precision": 2},
+    {"short": "FRTB", "type": "dial", "display": "Flutter Rate B", "symbol": "flutterRateB", "default": 0.4,
+      "range": [0, 10, 0.01, 0.4, false], "precision": 2, "unit": "Hz"},
+    {"short": "FDPC", "type": "dial", "display": "Flutter Depth C", "symbol": "flutterDepthC", "default": 0.1,
+      "range": [0, 1, 0.01, 0.1, false], "precision": 2},
+    {"short": "FRTC", "type": "dial", "display": "Flutter Rate C", "symbol": "flutterRateC", "default": 0.4,
+      "range": [0, 10, 0.01, 0.4, false], "precision": 2, "unit": "Hz"},
+
     {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu"},
     {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" }
   ],
   "layout": {
-    "WINDOW_WIDTH": "900",
-    "WINDOW_HEIGHT": "700",
-    "type": "=5",
-    "composition": "R=(1:1:1:1:1) A1=(SPD, BARS) A2=(IGAIN, GLVL) A3=(RECA, PLAA, CLRA, RECB, PLAB, CLRB, RECC, PLAC, CLRC) A4=(GPLY, GBPM, GVAR) A5=(LVL*100, CPU*100)"
+    "WINDOW_WIDTH": "1750",
+    "WINDOW_HEIGHT": "800",
+    "type": "|||||",
+    "composition": "C=(1:1:1:1:1) A1=(SPD, BARS, IGAIN, LVL*100, CPU*100) A2=(GPLY, GBPM, GVAR, GLVL) A3=(RECA, PLAA, CLRA, WDPA, WRTA, WDRA, FDPA, FRTA) A4=(RECB, PLAB, CLRB, WDPB, WRTB, WDRB, FDPB, FRTB) A5=(RECC, PLAC, CLRC, WDPC, WRTC, WDRC, FDPC, FRTC)"
   },
   "processor_forwards": [
     {"name": "isGroovePlaying", "type": "bool"},

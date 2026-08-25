@@ -200,6 +200,59 @@ TEST(TapeLooperTest, TrackNotPlayingContributesNothingBeforeAnyLoopWraparound)
     }
 }
 
+// Proves the new setters reach VariSpeedTapeDelay, not that pitch is more
+// stable (out of scope for wiring-only Phase 2).
+TEST(TapeLooperTest, WowFlutterDepthAudiblyChangesPlayback)
+{
+    const auto record = [](TapeLooper& sut)
+    {
+        sut.setBars(4.f);
+        sut.setBpm(100.f);
+        sut.setTapeSpeed(1.f);
+        sut.setRecordA(true);
+        sut.setPlayA(true);
+        size_t phase = 0;
+        for (size_t block = 0; block < kTestLoopFrames / kBlock; ++block)
+        {
+            const auto in = sineBlock(0.7f, 220.f, phase);
+            Buffer out{};
+            sut.processBlock(in, out);
+        }
+        sut.setRecordA(false);
+    };
+
+    TapeLooper modulated(kSampleRate);
+    record(modulated);
+
+    TapeLooper flat(kSampleRate);
+    flat.setWowDepthA(0.f);
+    flat.setWowRateA(0.f);
+    flat.setWowDriftA(0.f);
+    flat.setFlutterDepthA(0.f);
+    flat.setFlutterRateA(0.f);
+    record(flat);
+
+    const Buffer decoyIn{};
+    const size_t numBlocks = kTestLoopFrames / kBlock;
+    bool sawDifference = false;
+    for (size_t block = 0; block < numBlocks && !sawDifference; ++block)
+    {
+        Buffer modulatedOut{};
+        Buffer flatOut{};
+        modulated.processBlock(decoyIn, modulatedOut);
+        flat.processBlock(decoyIn, flatOut);
+        for (size_t i = 0; i < kBlock; ++i)
+        {
+            if (std::abs(modulatedOut(i, 0) - flatOut(i, 0)) > 1e-6f)
+            {
+                sawDifference = true;
+                break;
+            }
+        }
+    }
+    EXPECT_TRUE(sawDifference);
+}
+
 TEST(TapeLooperTest, GrooveBuffersOnlyFillWhilePlaying)
 {
     TapeLooper sut(kSampleRate);

@@ -55,6 +55,21 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("groovePlay", this);
         m_parameters.addParameterListener("bpm", this);
         m_parameters.addParameterListener("grooveVariation", this);
+        m_parameters.addParameterListener("wowDepthA", this);
+        m_parameters.addParameterListener("wowRateA", this);
+        m_parameters.addParameterListener("wowDriftA", this);
+        m_parameters.addParameterListener("wowDepthB", this);
+        m_parameters.addParameterListener("wowRateB", this);
+        m_parameters.addParameterListener("wowDriftB", this);
+        m_parameters.addParameterListener("wowDepthC", this);
+        m_parameters.addParameterListener("wowRateC", this);
+        m_parameters.addParameterListener("wowDriftC", this);
+        m_parameters.addParameterListener("flutterDepthA", this);
+        m_parameters.addParameterListener("flutterRateA", this);
+        m_parameters.addParameterListener("flutterDepthB", this);
+        m_parameters.addParameterListener("flutterRateB", this);
+        m_parameters.addParameterListener("flutterDepthC", this);
+        m_parameters.addParameterListener("flutterRateC", this);
 
         m_fileIo.initialize(m_patchIndex);
     }
@@ -76,6 +91,21 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("groovePlay", this);
         m_parameters.removeParameterListener("bpm", this);
         m_parameters.removeParameterListener("grooveVariation", this);
+        m_parameters.removeParameterListener("wowDepthA", this);
+        m_parameters.removeParameterListener("wowRateA", this);
+        m_parameters.removeParameterListener("wowDriftA", this);
+        m_parameters.removeParameterListener("wowDepthB", this);
+        m_parameters.removeParameterListener("wowRateB", this);
+        m_parameters.removeParameterListener("wowDriftB", this);
+        m_parameters.removeParameterListener("wowDepthC", this);
+        m_parameters.removeParameterListener("wowRateC", this);
+        m_parameters.removeParameterListener("wowDriftC", this);
+        m_parameters.removeParameterListener("flutterDepthA", this);
+        m_parameters.removeParameterListener("flutterRateA", this);
+        m_parameters.removeParameterListener("flutterDepthB", this);
+        m_parameters.removeParameterListener("flutterRateB", this);
+        m_parameters.removeParameterListener("flutterDepthC", this);
+        m_parameters.removeParameterListener("flutterRateC", this);
     }
 
     void prepareToPlay(const double sampleRate, const int samplesPerBlock) override
@@ -254,7 +284,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("tapeSpeed", 1), juce::String::fromUTF8("Tape Speed"),
-            juce::NormalisableRange<float>(0.1, 4.0, 0.01, 1.0, false), 1.0,
+            juce::NormalisableRange<float>(0.25, 4.0, 0.01, 1.0, false), 1.0,
             juce::AudioParameterFloatAttributes{}.withLabel("x").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " x"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -302,6 +332,81 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::NormalisableRange<float>(0, 31, 1, 1, false), 0,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 0) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("wowDepthA", 1), juce::String::fromUTF8("Wow Depth A"),
+            juce::NormalisableRange<float>(0, 1, 0.01, 0.1, false), 0.1,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("wowRateA", 1), juce::String::fromUTF8("Wow Rate A"),
+            juce::NormalisableRange<float>(0, 3, 0.01, 0.4, false), 0.4,
+            juce::AudioParameterFloatAttributes{}.withLabel("Hz").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " Hz"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("wowDriftA", 1), juce::String::fromUTF8("Wow Drift A"),
+            juce::NormalisableRange<float>(0, 1, 0.01, 0.05, false), 0.05,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("wowDepthB", 1), juce::String::fromUTF8("Wow Depth B"),
+            juce::NormalisableRange<float>(0, 1, 0.01, 0.1, false), 0.1,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("wowRateB", 1), juce::String::fromUTF8("Wow Rate B"),
+            juce::NormalisableRange<float>(0, 3, 0.01, 0.4, false), 0.4,
+            juce::AudioParameterFloatAttributes{}.withLabel("Hz").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " Hz"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("wowDriftB", 1), juce::String::fromUTF8("Wow Drift B"),
+            juce::NormalisableRange<float>(0, 1, 0.01, 0.05, false), 0.05,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("wowDepthC", 1), juce::String::fromUTF8("Wow Depth C"),
+            juce::NormalisableRange<float>(0, 1, 0.01, 0.1, false), 0.1,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("wowRateC", 1), juce::String::fromUTF8("Wow Rate C"),
+            juce::NormalisableRange<float>(0, 3, 0.01, 0.4, false), 0.4,
+            juce::AudioParameterFloatAttributes{}.withLabel("Hz").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " Hz"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("wowDriftC", 1), juce::String::fromUTF8("Wow Drift C"),
+            juce::NormalisableRange<float>(0, 1, 0.01, 0.05, false), 0.05,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("flutterDepthA", 1), juce::String::fromUTF8("Flutter Depth A"),
+            juce::NormalisableRange<float>(0, 1, 0.01, 0.1, false), 0.1,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("flutterRateA", 1), juce::String::fromUTF8("Flutter Rate A"),
+            juce::NormalisableRange<float>(0, 10, 0.01, 0.4, false), 0.4,
+            juce::AudioParameterFloatAttributes{}.withLabel("Hz").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " Hz"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("flutterDepthB", 1), juce::String::fromUTF8("Flutter Depth B"),
+            juce::NormalisableRange<float>(0, 1, 0.01, 0.1, false), 0.1,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("flutterRateB", 1), juce::String::fromUTF8("Flutter Rate B"),
+            juce::NormalisableRange<float>(0, 10, 0.01, 0.4, false), 0.4,
+            juce::AudioParameterFloatAttributes{}.withLabel("Hz").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " Hz"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("flutterDepthC", 1), juce::String::fromUTF8("Flutter Depth C"),
+            juce::NormalisableRange<float>(0, 1, 0.01, 0.1, false), 0.1,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("flutterRateC", 1), juce::String::fromUTF8("Flutter Rate C"),
+            juce::NormalisableRange<float>(0, 10, 0.01, 0.4, false), 0.4,
+            juce::AudioParameterFloatAttributes{}.withLabel("Hz").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " Hz"; })));
 
         return {params.begin(), params.end()};
     }
@@ -411,6 +516,96 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setGrooveVariation(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::grooveVariation, v);
+             }},
+            {"wowDepthA",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setWowDepthA(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::wowDepthA, v);
+             }},
+            {"wowRateA",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setWowRateA(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::wowRateA, v);
+             }},
+            {"wowDriftA",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setWowDriftA(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::wowDriftA, v);
+             }},
+            {"wowDepthB",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setWowDepthB(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::wowDepthB, v);
+             }},
+            {"wowRateB",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setWowRateB(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::wowRateB, v);
+             }},
+            {"wowDriftB",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setWowDriftB(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::wowDriftB, v);
+             }},
+            {"wowDepthC",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setWowDepthC(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::wowDepthC, v);
+             }},
+            {"wowRateC",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setWowRateC(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::wowRateC, v);
+             }},
+            {"wowDriftC",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setWowDriftC(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::wowDriftC, v);
+             }},
+            {"flutterDepthA",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFlutterDepthA(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::flutterDepthA, v);
+             }},
+            {"flutterRateA",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFlutterRateA(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::flutterRateA, v);
+             }},
+            {"flutterDepthB",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFlutterDepthB(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::flutterDepthB, v);
+             }},
+            {"flutterRateB",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFlutterRateB(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::flutterRateB, v);
+             }},
+            {"flutterDepthC",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFlutterDepthC(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::flutterDepthC, v);
+             }},
+            {"flutterRateC",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFlutterRateC(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::flutterRateC, v);
              }},
 
         };
@@ -535,6 +730,96 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("grooveVariation");
             float normalized = range.convertTo0to1(params.grooveVariation);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("wowDepthA"))
+        {
+            const auto& range = m_parameters.getParameterRange("wowDepthA");
+            float normalized = range.convertTo0to1(params.wowDepthA);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("wowRateA"))
+        {
+            const auto& range = m_parameters.getParameterRange("wowRateA");
+            float normalized = range.convertTo0to1(params.wowRateA);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("wowDriftA"))
+        {
+            const auto& range = m_parameters.getParameterRange("wowDriftA");
+            float normalized = range.convertTo0to1(params.wowDriftA);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("wowDepthB"))
+        {
+            const auto& range = m_parameters.getParameterRange("wowDepthB");
+            float normalized = range.convertTo0to1(params.wowDepthB);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("wowRateB"))
+        {
+            const auto& range = m_parameters.getParameterRange("wowRateB");
+            float normalized = range.convertTo0to1(params.wowRateB);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("wowDriftB"))
+        {
+            const auto& range = m_parameters.getParameterRange("wowDriftB");
+            float normalized = range.convertTo0to1(params.wowDriftB);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("wowDepthC"))
+        {
+            const auto& range = m_parameters.getParameterRange("wowDepthC");
+            float normalized = range.convertTo0to1(params.wowDepthC);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("wowRateC"))
+        {
+            const auto& range = m_parameters.getParameterRange("wowRateC");
+            float normalized = range.convertTo0to1(params.wowRateC);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("wowDriftC"))
+        {
+            const auto& range = m_parameters.getParameterRange("wowDriftC");
+            float normalized = range.convertTo0to1(params.wowDriftC);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("flutterDepthA"))
+        {
+            const auto& range = m_parameters.getParameterRange("flutterDepthA");
+            float normalized = range.convertTo0to1(params.flutterDepthA);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("flutterRateA"))
+        {
+            const auto& range = m_parameters.getParameterRange("flutterRateA");
+            float normalized = range.convertTo0to1(params.flutterRateA);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("flutterDepthB"))
+        {
+            const auto& range = m_parameters.getParameterRange("flutterDepthB");
+            float normalized = range.convertTo0to1(params.flutterDepthB);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("flutterRateB"))
+        {
+            const auto& range = m_parameters.getParameterRange("flutterRateB");
+            float normalized = range.convertTo0to1(params.flutterRateB);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("flutterDepthC"))
+        {
+            const auto& range = m_parameters.getParameterRange("flutterDepthC");
+            float normalized = range.convertTo0to1(params.flutterDepthC);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("flutterRateC"))
+        {
+            const auto& range = m_parameters.getParameterRange("flutterRateC");
+            float normalized = range.convertTo0to1(params.flutterRateC);
             p->setValueNotifyingHost(normalized);
         }
     }

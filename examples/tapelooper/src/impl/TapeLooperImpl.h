@@ -40,6 +40,14 @@ constexpr float kMaxBars = 32.f;
 constexpr float kMinBpm = 50.f;
 constexpr size_t kFreeTracks{3};
 
+// Match VariSpeedTapeDelay's own constructor defaults, so wiring these in
+// doesn't change the default sound.
+constexpr float kDefaultWowDepth = 0.1f;
+constexpr float kDefaultWowRate = 0.4f;
+constexpr float kDefaultWowDrift = 0.05f;
+constexpr float kDefaultFlutterDepth = 0.1f;
+constexpr float kDefaultFlutterRate = 0.4f;
+
 constexpr size_t framesForLoop(const float bars, const float bpm) noexcept
 {
     return static_cast<size_t>(bars * kBeatsPerBar / bpm * 60.f * kAssumedSampleRate);
@@ -173,6 +181,81 @@ class TapeLooperImpl final : public EffectBase
         m_grooveVariationReq.store(value, std::memory_order_relaxed);
     }
 
+    void setWowDepthA(const float value) noexcept
+    {
+        m_wowDepthReq[0].store(value, std::memory_order_relaxed);
+    }
+
+    void setWowDepthB(const float value) noexcept
+    {
+        m_wowDepthReq[1].store(value, std::memory_order_relaxed);
+    }
+
+    void setWowDepthC(const float value) noexcept
+    {
+        m_wowDepthReq[2].store(value, std::memory_order_relaxed);
+    }
+
+    void setWowRateA(const float value) noexcept
+    {
+        m_wowRateReq[0].store(value, std::memory_order_relaxed);
+    }
+
+    void setWowRateB(const float value) noexcept
+    {
+        m_wowRateReq[1].store(value, std::memory_order_relaxed);
+    }
+
+    void setWowRateC(const float value) noexcept
+    {
+        m_wowRateReq[2].store(value, std::memory_order_relaxed);
+    }
+
+    void setWowDriftA(const float value) noexcept
+    {
+        m_wowDriftReq[0].store(value, std::memory_order_relaxed);
+    }
+
+    void setWowDriftB(const float value) noexcept
+    {
+        m_wowDriftReq[1].store(value, std::memory_order_relaxed);
+    }
+
+    void setWowDriftC(const float value) noexcept
+    {
+        m_wowDriftReq[2].store(value, std::memory_order_relaxed);
+    }
+
+    void setFlutterDepthA(const float value) noexcept
+    {
+        m_flutterDepthReq[0].store(value, std::memory_order_relaxed);
+    }
+
+    void setFlutterDepthB(const float value) noexcept
+    {
+        m_flutterDepthReq[1].store(value, std::memory_order_relaxed);
+    }
+
+    void setFlutterDepthC(const float value) noexcept
+    {
+        m_flutterDepthReq[2].store(value, std::memory_order_relaxed);
+    }
+
+    void setFlutterRateA(const float value) noexcept
+    {
+        m_flutterRateReq[0].store(value, std::memory_order_relaxed);
+    }
+
+    void setFlutterRateB(const float value) noexcept
+    {
+        m_flutterRateReq[1].store(value, std::memory_order_relaxed);
+    }
+
+    void setFlutterRateC(const float value) noexcept
+    {
+        m_flutterRateReq[2].store(value, std::memory_order_relaxed);
+    }
+
     // Groove menu click: styleName is one of listGrooveNames()'s own entries.
     void requestLoadGroove(const std::string& styleName, const unsigned variationIndex)
     {
@@ -223,8 +306,14 @@ class TapeLooperImpl final : public EffectBase
         installGrooveProgramIfChanged();
         applyParameters();
 
-        for (auto& tape : m_tapeTrack)
+        for (size_t track = 0; track < m_tapeTrack.size(); ++track)
         {
+            auto& tape = m_tapeTrack[track];
+            tape.setWowDepth(m_wowDepth[track]);
+            tape.setWowRate(m_wowRate[track]);
+            tape.setWowDrift(m_wowDrift[track]);
+            tape.setFlutterDepth(m_flutterDepth[track]);
+            tape.setFlutterRate(m_flutterRate[track]);
             tape.setRatio(m_tapeSpeed);
         }
         m_grooveTape.setRatio(m_tapeSpeed);
@@ -266,6 +355,11 @@ class TapeLooperImpl final : public EffectBase
             }
             m_recording[track] = m_recordReq[track].load(std::memory_order_relaxed);
             m_playing[track] = m_playReq[track].load(std::memory_order_relaxed);
+            m_wowDepth[track] = m_wowDepthReq[track].load(std::memory_order_relaxed);
+            m_wowRate[track] = m_wowRateReq[track].load(std::memory_order_relaxed);
+            m_wowDrift[track] = m_wowDriftReq[track].load(std::memory_order_relaxed);
+            m_flutterDepth[track] = m_flutterDepthReq[track].load(std::memory_order_relaxed);
+            m_flutterRate[track] = m_flutterRateReq[track].load(std::memory_order_relaxed);
         }
 
         const bool groovePlayReq = m_groovePlayReq.load(std::memory_order_relaxed);
@@ -439,6 +533,19 @@ class TapeLooperImpl final : public EffectBase
     std::atomic<float> m_bpmReq{120.f};
     std::atomic<float> m_grooveVariationReq{0.f};
 
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_wowDepthReq{
+        TapeLooperDetail::kDefaultWowDepth, TapeLooperDetail::kDefaultWowDepth, TapeLooperDetail::kDefaultWowDepth};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_wowRateReq{
+        TapeLooperDetail::kDefaultWowRate, TapeLooperDetail::kDefaultWowRate, TapeLooperDetail::kDefaultWowRate};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_wowDriftReq{
+        TapeLooperDetail::kDefaultWowDrift, TapeLooperDetail::kDefaultWowDrift, TapeLooperDetail::kDefaultWowDrift};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_flutterDepthReq{
+        TapeLooperDetail::kDefaultFlutterDepth, TapeLooperDetail::kDefaultFlutterDepth,
+        TapeLooperDetail::kDefaultFlutterDepth};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_flutterRateReq{
+        TapeLooperDetail::kDefaultFlutterRate, TapeLooperDetail::kDefaultFlutterRate,
+        TapeLooperDetail::kDefaultFlutterRate};
+
     float m_tapeSpeed{1.f};
     float m_appliedBars{0.f};
     float m_appliedBpmForLoopLength{0.f};
@@ -446,6 +553,18 @@ class TapeLooperImpl final : public EffectBase
     float m_grooveLevel{1.f};
     std::array<bool, TapeLooperDetail::kFreeTracks> m_recording{};
     std::array<bool, TapeLooperDetail::kFreeTracks> m_playing{};
+    std::array<float, TapeLooperDetail::kFreeTracks> m_wowDepth{
+        TapeLooperDetail::kDefaultWowDepth, TapeLooperDetail::kDefaultWowDepth, TapeLooperDetail::kDefaultWowDepth};
+    std::array<float, TapeLooperDetail::kFreeTracks> m_wowRate{
+        TapeLooperDetail::kDefaultWowRate, TapeLooperDetail::kDefaultWowRate, TapeLooperDetail::kDefaultWowRate};
+    std::array<float, TapeLooperDetail::kFreeTracks> m_wowDrift{
+        TapeLooperDetail::kDefaultWowDrift, TapeLooperDetail::kDefaultWowDrift, TapeLooperDetail::kDefaultWowDrift};
+    std::array<float, TapeLooperDetail::kFreeTracks> m_flutterDepth{TapeLooperDetail::kDefaultFlutterDepth,
+                                                                    TapeLooperDetail::kDefaultFlutterDepth,
+                                                                    TapeLooperDetail::kDefaultFlutterDepth};
+    std::array<float, TapeLooperDetail::kFreeTracks> m_flutterRate{TapeLooperDetail::kDefaultFlutterRate,
+                                                                   TapeLooperDetail::kDefaultFlutterRate,
+                                                                   TapeLooperDetail::kDefaultFlutterRate};
     bool m_groovePlaying{false};
     float m_bpm{120.f};
     int m_appliedGrooveVariation{0};

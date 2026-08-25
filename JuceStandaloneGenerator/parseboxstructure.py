@@ -20,6 +20,7 @@ patterns = ["-",  # (C1) (A1) (h)
             "=3",  # (R1:R2:R3:R4) (A1-A) (hhhh) // TODO
             "=4",  # (R1:R2:R3:R4) (A1-A) (hhhh) // TODO
             "=5",  # (R1:R2:R3:R4:R5) (A1-5) (hhhhh)
+            "=6",  # (R1:R2:R3:R4:R5:R6) (A1-6) (hhhhhh)
             "=|",  # (C1:C2  R1:R2)  (A1-3) (hh v) // TODO
             "|=",  # (C1:C2  R1:R2)  (A1-3) (v hh)
             "|=|",  # (C1:C2:C3  R1:R2)  (A1-4) (v h v) // TODO

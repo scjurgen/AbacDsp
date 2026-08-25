@@ -80,104 +80,119 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
             std::vector<juce::Rectangle<int>> areas(5);
-            const auto rowHeight = area.getHeight() / 5;
-            areas[0] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-            areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-            areas[2] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-            areas[3] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            const auto colWidth = area.getWidth() / 5;
+            areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+            areas[1] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+            areas[2] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+            areas[3] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
             areas[4] = area.reduced(Constants::Margins::small);
 
             {
                 juce::FlexBox box;
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::row;
+                box.flexDirection = juce::FlexBox::Direction::column;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
                 box.items.add(juce::FlexItem(tapeSpeedDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(barsDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(inputGainDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(levelGauge).withHeight(100).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(cpuGauge).withHeight(100).withMargin(knobMarginSmall));
                 box.performLayout(areas[0].toFloat());
             }
             {
                 juce::FlexBox box;
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::row;
+                box.flexDirection = juce::FlexBox::Direction::column;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(inputGainDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(groovePlaySwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(grooveVariationDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(grooveLevelDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[1].toFloat());
             }
             {
                 juce::FlexBox box;
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::row;
+                box.flexDirection = juce::FlexBox::Direction::column;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
                 box.items.add(juce::FlexItem(recordASwitch)
-                                  .withWidth(Constants::Text::labelWidth)
+                                  .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(playASwitch)
-                                  .withWidth(Constants::Text::labelWidth)
+                                  .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(clearASwitch)
-                                  .withWidth(Constants::Text::labelWidth)
+                                  .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(recordBSwitch)
-                                  .withWidth(Constants::Text::labelWidth)
-                                  .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
-                                  .withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(playBSwitch)
-                                  .withWidth(Constants::Text::labelWidth)
-                                  .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
-                                  .withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(clearBSwitch)
-                                  .withWidth(Constants::Text::labelWidth)
-                                  .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
-                                  .withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(recordCSwitch)
-                                  .withWidth(Constants::Text::labelWidth)
-                                  .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
-                                  .withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(playCSwitch)
-                                  .withWidth(Constants::Text::labelWidth)
-                                  .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
-                                  .withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(clearCSwitch)
-                                  .withWidth(Constants::Text::labelWidth)
-                                  .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
-                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(wowDepthADial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(wowRateADial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(wowDriftADial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(flutterDepthADial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(flutterRateADial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[2].toFloat());
             }
             {
                 juce::FlexBox box;
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::row;
+                box.flexDirection = juce::FlexBox::Direction::column;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(groovePlaySwitch)
-                                  .withWidth(Constants::Text::labelWidth)
+                box.items.add(juce::FlexItem(recordBSwitch)
+                                  .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
-                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(grooveVariationDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(playBSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(clearBSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(wowDepthBDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(wowRateBDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(wowDriftBDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(flutterDepthBDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(flutterRateBDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[3].toFloat());
             }
             {
                 juce::FlexBox box;
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::row;
+                box.flexDirection = juce::FlexBox::Direction::column;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(levelGauge).withWidth(100).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(cpuGauge).withWidth(100).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(recordCSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(playCSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(clearCSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(wowDepthCDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(wowRateCDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(wowDriftCDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(flutterDepthCDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(flutterRateCDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[4].toFloat());
             }
         }
@@ -209,7 +224,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(tapeSpeedDial);
         tapeSpeedDial.reset(valueTreeState, "tapeSpeed");
         tapeSpeedDial.setLabelText(juce::String::fromUTF8("Tape Speed"));
-        tapeSpeedDial.setTooltip(juce::String::fromUTF8("Tape Speed (0.1 to 4.0 x)"));
+        tapeSpeedDial.setTooltip(juce::String::fromUTF8("Tape Speed (0.25 to 4.0 x)"));
         addAndMakeVisible(barsDial);
         barsDial.reset(valueTreeState, "bars");
         barsDial.setLabelText(juce::String::fromUTF8("Bars"));
@@ -280,6 +295,66 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         grooveVariationDial.reset(valueTreeState, "grooveVariation");
         grooveVariationDial.setLabelText(juce::String::fromUTF8("Groove Var"));
         grooveVariationDial.setTooltip(juce::String::fromUTF8("Groove Var (0 to 31)"));
+        addAndMakeVisible(wowDepthADial);
+        wowDepthADial.reset(valueTreeState, "wowDepthA");
+        wowDepthADial.setLabelText(juce::String::fromUTF8("Wow Depth A"));
+        wowDepthADial.setTooltip(juce::String::fromUTF8("Wow Depth A (0 to 1)"));
+        addAndMakeVisible(wowRateADial);
+        wowRateADial.reset(valueTreeState, "wowRateA");
+        wowRateADial.setLabelText(juce::String::fromUTF8("Wow Rate A"));
+        wowRateADial.setTooltip(juce::String::fromUTF8("Wow Rate A (0 to 3 Hz)"));
+        addAndMakeVisible(wowDriftADial);
+        wowDriftADial.reset(valueTreeState, "wowDriftA");
+        wowDriftADial.setLabelText(juce::String::fromUTF8("Wow Drift A"));
+        wowDriftADial.setTooltip(juce::String::fromUTF8("Wow Drift A (0 to 1)"));
+        addAndMakeVisible(wowDepthBDial);
+        wowDepthBDial.reset(valueTreeState, "wowDepthB");
+        wowDepthBDial.setLabelText(juce::String::fromUTF8("Wow Depth B"));
+        wowDepthBDial.setTooltip(juce::String::fromUTF8("Wow Depth B (0 to 1)"));
+        addAndMakeVisible(wowRateBDial);
+        wowRateBDial.reset(valueTreeState, "wowRateB");
+        wowRateBDial.setLabelText(juce::String::fromUTF8("Wow Rate B"));
+        wowRateBDial.setTooltip(juce::String::fromUTF8("Wow Rate B (0 to 3 Hz)"));
+        addAndMakeVisible(wowDriftBDial);
+        wowDriftBDial.reset(valueTreeState, "wowDriftB");
+        wowDriftBDial.setLabelText(juce::String::fromUTF8("Wow Drift B"));
+        wowDriftBDial.setTooltip(juce::String::fromUTF8("Wow Drift B (0 to 1)"));
+        addAndMakeVisible(wowDepthCDial);
+        wowDepthCDial.reset(valueTreeState, "wowDepthC");
+        wowDepthCDial.setLabelText(juce::String::fromUTF8("Wow Depth C"));
+        wowDepthCDial.setTooltip(juce::String::fromUTF8("Wow Depth C (0 to 1)"));
+        addAndMakeVisible(wowRateCDial);
+        wowRateCDial.reset(valueTreeState, "wowRateC");
+        wowRateCDial.setLabelText(juce::String::fromUTF8("Wow Rate C"));
+        wowRateCDial.setTooltip(juce::String::fromUTF8("Wow Rate C (0 to 3 Hz)"));
+        addAndMakeVisible(wowDriftCDial);
+        wowDriftCDial.reset(valueTreeState, "wowDriftC");
+        wowDriftCDial.setLabelText(juce::String::fromUTF8("Wow Drift C"));
+        wowDriftCDial.setTooltip(juce::String::fromUTF8("Wow Drift C (0 to 1)"));
+        addAndMakeVisible(flutterDepthADial);
+        flutterDepthADial.reset(valueTreeState, "flutterDepthA");
+        flutterDepthADial.setLabelText(juce::String::fromUTF8("Flutter Depth A"));
+        flutterDepthADial.setTooltip(juce::String::fromUTF8("Flutter Depth A (0 to 1)"));
+        addAndMakeVisible(flutterRateADial);
+        flutterRateADial.reset(valueTreeState, "flutterRateA");
+        flutterRateADial.setLabelText(juce::String::fromUTF8("Flutter Rate A"));
+        flutterRateADial.setTooltip(juce::String::fromUTF8("Flutter Rate A (0 to 10 Hz)"));
+        addAndMakeVisible(flutterDepthBDial);
+        flutterDepthBDial.reset(valueTreeState, "flutterDepthB");
+        flutterDepthBDial.setLabelText(juce::String::fromUTF8("Flutter Depth B"));
+        flutterDepthBDial.setTooltip(juce::String::fromUTF8("Flutter Depth B (0 to 1)"));
+        addAndMakeVisible(flutterRateBDial);
+        flutterRateBDial.reset(valueTreeState, "flutterRateB");
+        flutterRateBDial.setLabelText(juce::String::fromUTF8("Flutter Rate B"));
+        flutterRateBDial.setTooltip(juce::String::fromUTF8("Flutter Rate B (0 to 10 Hz)"));
+        addAndMakeVisible(flutterDepthCDial);
+        flutterDepthCDial.reset(valueTreeState, "flutterDepthC");
+        flutterDepthCDial.setLabelText(juce::String::fromUTF8("Flutter Depth C"));
+        flutterDepthCDial.setTooltip(juce::String::fromUTF8("Flutter Depth C (0 to 1)"));
+        addAndMakeVisible(flutterRateCDial);
+        flutterRateCDial.reset(valueTreeState, "flutterRateC");
+        flutterRateCDial.setLabelText(juce::String::fromUTF8("Flutter Rate C"));
+        flutterRateCDial.setTooltip(juce::String::fromUTF8("Flutter Rate C (0 to 10 Hz)"));
         addAndMakeVisible(cpuGauge);
         cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
         cpuGauge.setTooltip(juce::String::fromUTF8("CPU"));
@@ -812,6 +887,21 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> groovePlaySwitchAttachment;
     CustomRotaryDial bpmDial{this};
     CustomRotaryDial grooveVariationDial{this};
+    CustomRotaryDial wowDepthADial{this};
+    CustomRotaryDial wowRateADial{this};
+    CustomRotaryDial wowDriftADial{this};
+    CustomRotaryDial wowDepthBDial{this};
+    CustomRotaryDial wowRateBDial{this};
+    CustomRotaryDial wowDriftBDial{this};
+    CustomRotaryDial wowDepthCDial{this};
+    CustomRotaryDial wowRateCDial{this};
+    CustomRotaryDial wowDriftCDial{this};
+    CustomRotaryDial flutterDepthADial{this};
+    CustomRotaryDial flutterRateADial{this};
+    CustomRotaryDial flutterDepthBDial{this};
+    CustomRotaryDial flutterRateBDial{this};
+    CustomRotaryDial flutterDepthCDial{this};
+    CustomRotaryDial flutterRateCDial{this};
     CpuGauge cpuGauge{};
     Gauge levelGauge{};
 

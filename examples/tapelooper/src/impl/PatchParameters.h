@@ -28,7 +28,22 @@ struct PatchParameters
         clearC         , // switch
         groovePlay     , // switch
         bpm            , // dial
-        grooveVariation // dial
+        grooveVariation, // dial
+        wowDepthA      , // dial
+        wowRateA       , // dial
+        wowDriftA      , // dial
+        wowDepthB      , // dial
+        wowRateB       , // dial
+        wowDriftB      , // dial
+        wowDepthC      , // dial
+        wowRateC       , // dial
+        wowDriftC      , // dial
+        flutterDepthA  , // dial
+        flutterRateA   , // dial
+        flutterDepthB  , // dial
+        flutterRateB   , // dial
+        flutterDepthC  , // dial
+        flutterRateC    // dial
     };
 float tapeSpeed{1.0f};
 float bars{8.0f};
@@ -46,6 +61,21 @@ bool clearC{false};
 bool groovePlay{false};
 float bpm{120.0f};
 float grooveVariation{0.0f};
+float wowDepthA{0.1f};
+float wowRateA{0.4f};
+float wowDriftA{0.05f};
+float wowDepthB{0.1f};
+float wowRateB{0.4f};
+float wowDriftB{0.05f};
+float wowDepthC{0.1f};
+float wowRateC{0.4f};
+float wowDriftC{0.05f};
+float flutterDepthA{0.1f};
+float flutterRateA{0.4f};
+float flutterDepthB{0.1f};
+float flutterRateB{0.4f};
+float flutterDepthC{0.1f};
+float flutterRateC{0.4f};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
@@ -64,7 +94,22 @@ float grooveVariation{0.0f};
 "clearC",
 "groovePlay",
 "bpm",
-"grooveVariation"
+"grooveVariation",
+"wowDepthA",
+"wowRateA",
+"wowDriftA",
+"wowDepthB",
+"wowRateB",
+"wowDriftB",
+"wowDepthC",
+"wowRateC",
+"wowDriftC",
+"flutterDepthA",
+"flutterRateA",
+"flutterDepthB",
+"flutterRateB",
+"flutterDepthC",
+"flutterRateC"
     });
 //        "onOff", "patch", "input", "modulationDepth", "mix", "density", "threshold", "knee"});
 
@@ -99,6 +144,21 @@ float grooveVariation{0.0f};
         else if constexpr (ParamId == Id::groovePlay) return groovePlay;
         else if constexpr (ParamId == Id::bpm) return bpm;
         else if constexpr (ParamId == Id::grooveVariation) return grooveVariation;
+        else if constexpr (ParamId == Id::wowDepthA) return wowDepthA;
+        else if constexpr (ParamId == Id::wowRateA) return wowRateA;
+        else if constexpr (ParamId == Id::wowDriftA) return wowDriftA;
+        else if constexpr (ParamId == Id::wowDepthB) return wowDepthB;
+        else if constexpr (ParamId == Id::wowRateB) return wowRateB;
+        else if constexpr (ParamId == Id::wowDriftB) return wowDriftB;
+        else if constexpr (ParamId == Id::wowDepthC) return wowDepthC;
+        else if constexpr (ParamId == Id::wowRateC) return wowRateC;
+        else if constexpr (ParamId == Id::wowDriftC) return wowDriftC;
+        else if constexpr (ParamId == Id::flutterDepthA) return flutterDepthA;
+        else if constexpr (ParamId == Id::flutterRateA) return flutterRateA;
+        else if constexpr (ParamId == Id::flutterDepthB) return flutterDepthB;
+        else if constexpr (ParamId == Id::flutterRateB) return flutterRateB;
+        else if constexpr (ParamId == Id::flutterDepthC) return flutterDepthC;
+        else if constexpr (ParamId == Id::flutterRateC) return flutterRateC;
 
     }
 
@@ -142,6 +202,36 @@ break;
  case Id::bpm: if (!isEqual(get<Id::bpm>(), value)) {get<Id::bpm>() = value;m_modified = true;}
 break;
  case Id::grooveVariation: if (!isEqual(get<Id::grooveVariation>(), value)) {get<Id::grooveVariation>() = value;m_modified = true;}
+break;
+ case Id::wowDepthA: if (!isEqual(get<Id::wowDepthA>(), value)) {get<Id::wowDepthA>() = value;m_modified = true;}
+break;
+ case Id::wowRateA: if (!isEqual(get<Id::wowRateA>(), value)) {get<Id::wowRateA>() = value;m_modified = true;}
+break;
+ case Id::wowDriftA: if (!isEqual(get<Id::wowDriftA>(), value)) {get<Id::wowDriftA>() = value;m_modified = true;}
+break;
+ case Id::wowDepthB: if (!isEqual(get<Id::wowDepthB>(), value)) {get<Id::wowDepthB>() = value;m_modified = true;}
+break;
+ case Id::wowRateB: if (!isEqual(get<Id::wowRateB>(), value)) {get<Id::wowRateB>() = value;m_modified = true;}
+break;
+ case Id::wowDriftB: if (!isEqual(get<Id::wowDriftB>(), value)) {get<Id::wowDriftB>() = value;m_modified = true;}
+break;
+ case Id::wowDepthC: if (!isEqual(get<Id::wowDepthC>(), value)) {get<Id::wowDepthC>() = value;m_modified = true;}
+break;
+ case Id::wowRateC: if (!isEqual(get<Id::wowRateC>(), value)) {get<Id::wowRateC>() = value;m_modified = true;}
+break;
+ case Id::wowDriftC: if (!isEqual(get<Id::wowDriftC>(), value)) {get<Id::wowDriftC>() = value;m_modified = true;}
+break;
+ case Id::flutterDepthA: if (!isEqual(get<Id::flutterDepthA>(), value)) {get<Id::flutterDepthA>() = value;m_modified = true;}
+break;
+ case Id::flutterRateA: if (!isEqual(get<Id::flutterRateA>(), value)) {get<Id::flutterRateA>() = value;m_modified = true;}
+break;
+ case Id::flutterDepthB: if (!isEqual(get<Id::flutterDepthB>(), value)) {get<Id::flutterDepthB>() = value;m_modified = true;}
+break;
+ case Id::flutterRateB: if (!isEqual(get<Id::flutterRateB>(), value)) {get<Id::flutterRateB>() = value;m_modified = true;}
+break;
+ case Id::flutterDepthC: if (!isEqual(get<Id::flutterDepthC>(), value)) {get<Id::flutterDepthC>() = value;m_modified = true;}
+break;
+ case Id::flutterRateC: if (!isEqual(get<Id::flutterRateC>(), value)) {get<Id::flutterRateC>() = value;m_modified = true;}
 break;
 
             default:
@@ -198,5 +288,20 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         clearC         , // switch
         groovePlay     , // switch
         bpm            , // dial
-        grooveVariation // dial
+        grooveVariation, // dial
+        wowDepthA      , // dial
+        wowRateA       , // dial
+        wowDriftA      , // dial
+        wowDepthB      , // dial
+        wowRateB       , // dial
+        wowDriftB      , // dial
+        wowDepthC      , // dial
+        wowRateC       , // dial
+        wowDriftC      , // dial
+        flutterDepthA  , // dial
+        flutterRateA   , // dial
+        flutterDepthB  , // dial
+        flutterRateB   , // dial
+        flutterDepthC  , // dial
+        flutterRateC    // dial
 )

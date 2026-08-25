@@ -81,6 +81,66 @@ class StubImpl final : public EffectBase
     {
         m_grooveVariation = value;
     }
+    void setWowDepthA(const float value)
+    {
+        m_wowDepthA = value;
+    }
+    void setWowRateA(const float value)
+    {
+        m_wowRateA = value;
+    }
+    void setWowDriftA(const float value)
+    {
+        m_wowDriftA = value;
+    }
+    void setWowDepthB(const float value)
+    {
+        m_wowDepthB = value;
+    }
+    void setWowRateB(const float value)
+    {
+        m_wowRateB = value;
+    }
+    void setWowDriftB(const float value)
+    {
+        m_wowDriftB = value;
+    }
+    void setWowDepthC(const float value)
+    {
+        m_wowDepthC = value;
+    }
+    void setWowRateC(const float value)
+    {
+        m_wowRateC = value;
+    }
+    void setWowDriftC(const float value)
+    {
+        m_wowDriftC = value;
+    }
+    void setFlutterDepthA(const float value)
+    {
+        m_flutterDepthA = value;
+    }
+    void setFlutterRateA(const float value)
+    {
+        m_flutterRateA = value;
+    }
+    void setFlutterDepthB(const float value)
+    {
+        m_flutterDepthB = value;
+    }
+    void setFlutterRateB(const float value)
+    {
+        m_flutterRateB = value;
+    }
+    void setFlutterDepthC(const float value)
+    {
+        m_flutterDepthC = value;
+    }
+    void setFlutterRateC(const float value)
+    {
+        m_flutterRateC = value;
+    }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
@@ -108,4 +168,19 @@ class StubImpl final : public EffectBase
     bool m_groovePlay{};
     float m_bpm{};
     float m_grooveVariation{};
+    float m_wowDepthA{};
+    float m_wowRateA{};
+    float m_wowDriftA{};
+    float m_wowDepthB{};
+    float m_wowRateB{};
+    float m_wowDriftB{};
+    float m_wowDepthC{};
+    float m_wowRateC{};
+    float m_wowDriftC{};
+    float m_flutterDepthA{};
+    float m_flutterRateA{};
+    float m_flutterDepthB{};
+    float m_flutterRateB{};
+    float m_flutterDepthC{};
+    float m_flutterRateC{};
 };
