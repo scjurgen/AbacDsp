@@ -33,6 +33,14 @@ class StubImpl final : public EffectBase
     {
         m_grooveLevel = std::pow(10.f, value / 20.f);
     }
+    void setReverbSize(const float value)
+    {
+        m_reverbSize = value;
+    }
+    void setReverbDecay(const float value)
+    {
+        m_reverbDecay = value;
+    }
     void setRecordA(const bool value)
     {
         m_recordA = value;
@@ -105,6 +113,10 @@ class StubImpl final : public EffectBase
     {
         m_filterModeA = value;
     }
+    void setReverbSendA(const float value)
+    {
+        m_reverbSendA = value;
+    }
     void setFilterCutoffB(const float value)
     {
         m_filterCutoffB = value;
@@ -117,6 +129,10 @@ class StubImpl final : public EffectBase
     {
         m_filterModeB = value;
     }
+    void setReverbSendB(const float value)
+    {
+        m_reverbSendB = value;
+    }
     void setFilterCutoffC(const float value)
     {
         m_filterCutoffC = value;
@@ -128,6 +144,10 @@ class StubImpl final : public EffectBase
     void setFilterModeC(const size_t value)
     {
         m_filterModeC = value;
+    }
+    void setReverbSendC(const float value)
+    {
+        m_reverbSendC = value;
     }
     void setWowDepthA(const float value)
     {
@@ -236,6 +256,8 @@ class StubImpl final : public EffectBase
     float m_bars{};
     float m_inputGain{};
     float m_grooveLevel{};
+    float m_reverbSize{};
+    float m_reverbDecay{};
     bool m_recordA{};
     bool m_playA{};
     bool m_clearA{};
@@ -254,12 +276,15 @@ class StubImpl final : public EffectBase
     float m_filterCutoffA{};
     float m_filterResonanceA{};
     size_t m_filterModeA{};
+    float m_reverbSendA{};
     float m_filterCutoffB{};
     float m_filterResonanceB{};
     size_t m_filterModeB{};
+    float m_reverbSendB{};
     float m_filterCutoffC{};
     float m_filterResonanceC{};
     size_t m_filterModeC{};
+    float m_reverbSendC{};
     float m_wowDepthA{};
     float m_wowRateA{};
     float m_wowDriftA{};

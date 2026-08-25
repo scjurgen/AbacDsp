@@ -396,6 +396,40 @@ TEST(TapeLooperTest, ScriptTrackFilterAttenuatesHighTonePerTrackOnly)
     EXPECT_LT(bAfterRms, bBeforeRms * 1.3f);
 }
 
+// Cutting Play stops the dry signal and any new feed into the reverb bus, but not the bus's
+// own already-excited state - a raised send keeps ringing briefly after; send 0 does not.
+TEST(TapeLooperTest, ScriptReverbSendProducesATailAfterPlayStops)
+{
+    TapeLooper sut(kSampleRate);
+    sut.setBars(4.f);
+    sut.setBpm(100.f);
+    sut.setTapeSpeed(1.f);
+    sut.setRecordA(true);
+    sut.setPlayA(true);
+
+    const size_t numBlocks = kTestLoopFrames / kBlock;
+    size_t phase = 0;
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        Buffer out{};
+        sut.processBlock(sineBlock(0.7f, 440.f, phase), out);
+    }
+    sut.setRecordA(false);
+
+    const Buffer decoyIn{};
+    sut.setPlayA(false);
+    const float dryTailRms = outputRms(sut, decoyIn, 20);
+    EXPECT_LT(dryTailRms, 1e-5f);
+
+    sut.setPlayA(true);
+    ASSERT_TRUE(sut.setScript("SetTrackReverbSend(0, 1)\nSetReverbDecay(800)"));
+    outputRms(sut, decoyIn, 50); // feed the reverb bus for a while before cutting the source
+    sut.setPlayA(false);
+    const float wetTailRms = outputRms(sut, decoyIn, 20);
+    EXPECT_GT(wetTailRms, 1e-4f);
+    EXPECT_GT(wetTailRms, dryTailRms * 10.f);
+}
+
 TEST(TapeLooperTest, GrooveBuffersOnlyFillWhilePlaying)
 {
     TapeLooper sut(kSampleRate);

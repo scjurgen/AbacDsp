@@ -17,6 +17,8 @@ struct PatchParameters
         bars            , // dial
         inputGain       , // dial
         grooveLevel     , // dial
+        reverbSize      , // dial
+        reverbDecay     , // dial
         recordA         , // switch
         playA           , // switch
         clearA          , // switch
@@ -35,12 +37,15 @@ struct PatchParameters
         filterCutoffA   , // dial
         filterResonanceA, // dial
         filterModeA     , // drop
+        reverbSendA     , // dial
         filterCutoffB   , // dial
         filterResonanceB, // dial
         filterModeB     , // drop
+        reverbSendB     , // dial
         filterCutoffC   , // dial
         filterResonanceC, // dial
         filterModeC     , // drop
+        reverbSendC     , // dial
         wowDepthA       , // dial
         wowRateA        , // dial
         wowDriftA       , // dial
@@ -70,6 +75,8 @@ float tapeSpeed{1.0f};
 float bars{8.0f};
 float inputGain{0.0f};
 float grooveLevel{0.0f};
+float reverbSize{15.0f};
+float reverbDecay{2000.0f};
 bool recordA{false};
 bool playA{false};
 bool clearA{false};
@@ -88,12 +95,15 @@ float trackGainC{0.0f};
 float filterCutoffA{20000.0f};
 float filterResonanceA{0.0f};
 size_t filterModeA{0};
+float reverbSendA{0.0f};
 float filterCutoffB{20000.0f};
 float filterResonanceB{0.0f};
 size_t filterModeB{0};
+float reverbSendB{0.0f};
 float filterCutoffC{20000.0f};
 float filterResonanceC{0.0f};
 size_t filterModeC{0};
+float reverbSendC{0.0f};
 float wowDepthA{0.1f};
 float wowRateA{0.4f};
 float wowDriftA{0.05f};
@@ -125,6 +135,8 @@ std::string script{};
 "bars",
 "inputGain",
 "grooveLevel",
+"reverbSize",
+"reverbDecay",
 "recordA",
 "playA",
 "clearA",
@@ -143,12 +155,15 @@ std::string script{};
 "filterCutoffA",
 "filterResonanceA",
 "filterModeA",
+"reverbSendA",
 "filterCutoffB",
 "filterResonanceB",
 "filterModeB",
+"reverbSendB",
 "filterCutoffC",
 "filterResonanceC",
 "filterModeC",
+"reverbSendC",
 "wowDepthA",
 "wowRateA",
 "wowDriftA",
@@ -194,6 +209,8 @@ std::string script{};
         else if constexpr (ParamId == Id::bars) return bars;
         else if constexpr (ParamId == Id::inputGain) return inputGain;
         else if constexpr (ParamId == Id::grooveLevel) return grooveLevel;
+        else if constexpr (ParamId == Id::reverbSize) return reverbSize;
+        else if constexpr (ParamId == Id::reverbDecay) return reverbDecay;
         else if constexpr (ParamId == Id::recordA) return recordA;
         else if constexpr (ParamId == Id::playA) return playA;
         else if constexpr (ParamId == Id::clearA) return clearA;
@@ -212,12 +229,15 @@ std::string script{};
         else if constexpr (ParamId == Id::filterCutoffA) return filterCutoffA;
         else if constexpr (ParamId == Id::filterResonanceA) return filterResonanceA;
         else if constexpr (ParamId == Id::filterModeA) return filterModeA;
+        else if constexpr (ParamId == Id::reverbSendA) return reverbSendA;
         else if constexpr (ParamId == Id::filterCutoffB) return filterCutoffB;
         else if constexpr (ParamId == Id::filterResonanceB) return filterResonanceB;
         else if constexpr (ParamId == Id::filterModeB) return filterModeB;
+        else if constexpr (ParamId == Id::reverbSendB) return reverbSendB;
         else if constexpr (ParamId == Id::filterCutoffC) return filterCutoffC;
         else if constexpr (ParamId == Id::filterResonanceC) return filterResonanceC;
         else if constexpr (ParamId == Id::filterModeC) return filterModeC;
+        else if constexpr (ParamId == Id::reverbSendC) return reverbSendC;
         else if constexpr (ParamId == Id::wowDepthA) return wowDepthA;
         else if constexpr (ParamId == Id::wowRateA) return wowRateA;
         else if constexpr (ParamId == Id::wowDriftA) return wowDriftA;
@@ -262,6 +282,10 @@ break;
 break;
  case Id::grooveLevel: if (!isEqual(get<Id::grooveLevel>(), value)) {get<Id::grooveLevel>() = value;m_modified = true;}
 break;
+ case Id::reverbSize: if (!isEqual(get<Id::reverbSize>(), value)) {get<Id::reverbSize>() = value;m_modified = true;}
+break;
+ case Id::reverbDecay: if (!isEqual(get<Id::reverbDecay>(), value)) {get<Id::reverbDecay>() = value;m_modified = true;}
+break;
  case Id::recordA: if (!isEqual(get<Id::recordA>(), value)) {get<Id::recordA>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::playA: if (!isEqual(get<Id::playA>(), value)) {get<Id::playA>() = static_cast<bool>(value) ;m_modified = true;}
@@ -298,17 +322,23 @@ break;
 break;
  case Id::filterModeA: if (!isEqual(get<Id::filterModeA>(), value)) {get<Id::filterModeA>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
+ case Id::reverbSendA: if (!isEqual(get<Id::reverbSendA>(), value)) {get<Id::reverbSendA>() = value;m_modified = true;}
+break;
  case Id::filterCutoffB: if (!isEqual(get<Id::filterCutoffB>(), value)) {get<Id::filterCutoffB>() = value;m_modified = true;}
 break;
  case Id::filterResonanceB: if (!isEqual(get<Id::filterResonanceB>(), value)) {get<Id::filterResonanceB>() = value;m_modified = true;}
 break;
  case Id::filterModeB: if (!isEqual(get<Id::filterModeB>(), value)) {get<Id::filterModeB>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
+ case Id::reverbSendB: if (!isEqual(get<Id::reverbSendB>(), value)) {get<Id::reverbSendB>() = value;m_modified = true;}
+break;
  case Id::filterCutoffC: if (!isEqual(get<Id::filterCutoffC>(), value)) {get<Id::filterCutoffC>() = value;m_modified = true;}
 break;
  case Id::filterResonanceC: if (!isEqual(get<Id::filterResonanceC>(), value)) {get<Id::filterResonanceC>() = value;m_modified = true;}
 break;
  case Id::filterModeC: if (!isEqual(get<Id::filterModeC>(), value)) {get<Id::filterModeC>() = static_cast<size_t>(value) ;m_modified = true;}
+break;
+ case Id::reverbSendC: if (!isEqual(get<Id::reverbSendC>(), value)) {get<Id::reverbSendC>() = value;m_modified = true;}
 break;
  case Id::wowDepthA: if (!isEqual(get<Id::wowDepthA>(), value)) {get<Id::wowDepthA>() = value;m_modified = true;}
 break;
@@ -402,6 +432,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         bars            , // dial
         inputGain       , // dial
         grooveLevel     , // dial
+        reverbSize      , // dial
+        reverbDecay     , // dial
         recordA         , // switch
         playA           , // switch
         clearA          , // switch
@@ -420,12 +452,15 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         filterCutoffA   , // dial
         filterResonanceA, // dial
         filterModeA     , // drop
+        reverbSendA     , // dial
         filterCutoffB   , // dial
         filterResonanceB, // dial
         filterModeB     , // drop
+        reverbSendB     , // dial
         filterCutoffC   , // dial
         filterResonanceC, // dial
         filterModeC     , // drop
+        reverbSendC     , // dial
         wowDepthA       , // dial
         wowRateA        , // dial
         wowDriftA       , // dial

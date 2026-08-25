@@ -63,6 +63,9 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
 "--   SetTrackFilter(track, cutoffHz, resonance[, modeName])  modeName defaults to \"LP4\";\n"
 "--     resonance 1.0 is the self-oscillation threshold; any AbacDsp::poleMixingList name\n"
 "--     works (PoleMixingFilter.h), not just the dial's curated LP4/HP4/BP4/Notch subset\n"
+"--   SetTrackReverbSend(track, amount)    0 dry, 1 fully sent to the shared reverb bus\n"
+"--   SetReverbSize(meters)                shared by every track's send\n"
+"--   SetReverbDecay(ms)                   shared by every track's send\n"
 "\n"
 "-- Fires whenever a track's applied record state changes (edge-triggered, not polled).\n"
 "function OnRecordStateChanged(track, isRecording)\n"
@@ -88,6 +91,9 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     [[nodiscard]] std::optional<bool> drainPlayCommand(size_t track) noexcept;
     [[nodiscard]] std::optional<float> drainTrackGainCommand(size_t track) noexcept;
     [[nodiscard]] std::optional<TapeLooperFilterCommand> drainTrackFilterCommand(size_t track) noexcept;
+    [[nodiscard]] std::optional<float> drainTrackReverbSendCommand(size_t track) noexcept;
+    [[nodiscard]] std::optional<float> drainReverbSizeCommand() noexcept;
+    [[nodiscard]] std::optional<float> drainReverbDecayCommand() noexcept;
     // true = click, false = groove.
     [[nodiscard]] std::optional<bool> drainGrooveSourceCommand() noexcept;
 
@@ -99,6 +105,9 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     void luaSetTrackPlay(size_t track, bool value) noexcept;
     void luaSetTrackGain(size_t track, float value) noexcept;
     void luaSetTrackFilter(size_t track, float cutoffHz, float resonance, sol::optional<std::string> modeName);
+    void luaSetTrackReverbSend(size_t track, float value) noexcept;
+    void luaSetReverbSize(float value) noexcept;
+    void luaSetReverbDecay(float value) noexcept;
     void luaSetTapeSpeed(float value) noexcept;
     void luaSetBpm(float value) noexcept;
     void luaSetGrooveVariation(float value) noexcept;
@@ -112,6 +121,9 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     std::array<std::optional<bool>, kTracks> m_pendingPlay{};
     std::array<std::optional<float>, kTracks> m_pendingTrackGain{};
     std::array<std::optional<TapeLooperFilterCommand>, kTracks> m_pendingTrackFilter{};
+    std::array<std::optional<float>, kTracks> m_pendingTrackReverbSend{};
+    std::optional<float> m_pendingReverbSize;
+    std::optional<float> m_pendingReverbDecay;
     std::optional<bool> m_pendingGrooveSource;
 };
 
@@ -131,6 +143,9 @@ inline void TapeLooperScriptEngine::bindScriptFunctions()
     m_lua.set_function("SetTrackPlay", &TapeLooperScriptEngine::luaSetTrackPlay, this);
     m_lua.set_function("SetTrackGain", &TapeLooperScriptEngine::luaSetTrackGain, this);
     m_lua.set_function("SetTrackFilter", &TapeLooperScriptEngine::luaSetTrackFilter, this);
+    m_lua.set_function("SetTrackReverbSend", &TapeLooperScriptEngine::luaSetTrackReverbSend, this);
+    m_lua.set_function("SetReverbSize", &TapeLooperScriptEngine::luaSetReverbSize, this);
+    m_lua.set_function("SetReverbDecay", &TapeLooperScriptEngine::luaSetReverbDecay, this);
     m_lua.set_function("SetTapeSpeed", &TapeLooperScriptEngine::luaSetTapeSpeed, this);
     m_lua.set_function("SetBpm", &TapeLooperScriptEngine::luaSetBpm, this);
     m_lua.set_function("SetGrooveVariation", &TapeLooperScriptEngine::luaSetGrooveVariation, this);
@@ -183,6 +198,24 @@ inline void TapeLooperScriptEngine::luaSetTrackFilter(const size_t track, const 
         // Unknown mode name: cutoff/resonance still apply, mode stays whatever it was.
     }
     m_pendingTrackFilter[track] = command;
+}
+
+inline void TapeLooperScriptEngine::luaSetTrackReverbSend(const size_t track, const float value) noexcept
+{
+    if (track < kTracks)
+    {
+        m_pendingTrackReverbSend[track] = value;
+    }
+}
+
+inline void TapeLooperScriptEngine::luaSetReverbSize(const float value) noexcept
+{
+    m_pendingReverbSize = value;
+}
+
+inline void TapeLooperScriptEngine::luaSetReverbDecay(const float value) noexcept
+{
+    m_pendingReverbDecay = value;
 }
 
 inline void TapeLooperScriptEngine::luaSetTapeSpeed(const float value) noexcept
@@ -276,6 +309,31 @@ inline std::optional<TapeLooperFilterCommand> TapeLooperScriptEngine::drainTrack
     }
     const auto result = m_pendingTrackFilter[track];
     m_pendingTrackFilter[track].reset();
+    return result;
+}
+
+inline std::optional<float> TapeLooperScriptEngine::drainTrackReverbSendCommand(const size_t track) noexcept
+{
+    if (track >= kTracks)
+    {
+        return std::nullopt;
+    }
+    const auto result = m_pendingTrackReverbSend[track];
+    m_pendingTrackReverbSend[track].reset();
+    return result;
+}
+
+inline std::optional<float> TapeLooperScriptEngine::drainReverbSizeCommand() noexcept
+{
+    const auto result = m_pendingReverbSize;
+    m_pendingReverbSize.reset();
+    return result;
+}
+
+inline std::optional<float> TapeLooperScriptEngine::drainReverbDecayCommand() noexcept
+{
+    const auto result = m_pendingReverbDecay;
+    m_pendingReverbDecay.reset();
     return result;
 }
 

@@ -21,6 +21,7 @@
 #include "GrooveLoopBuffer.h"
 #include "Helpers/ConstructArray.h"
 #include "Parameters/LinearParameter.h"
+#include "Reverbs/FdnTankGlide.h"
 #include "Sampler/GrooveDrumPlayer.h"
 #include "Sampler/GrooveKit.h"
 #include "TapeLooperScriptEngine.h"
@@ -63,6 +64,15 @@ constexpr float kDefaultFilterCutoff = 20000.f;
 constexpr float kDefaultFilterResonance = 0.f;
 constexpr size_t kDefaultFilterModeIndex = 0; // "LP4" - see the filterMode drop's listitems
 
+// One FdnTankGlide instance per track (independent tails); order 16, not 32, bounds the
+// 3x instance-count CPU cost. FdnTankGlide over FdnTank: proven in maxdiffuser, and its
+// resize glides instead of clicking - see FdnTank's own class doc in Reverbs/FdnReverb.h.
+constexpr size_t kReverbMaxSizePerElement = 48000;
+constexpr size_t kReverbOrder = 16;
+constexpr float kDefaultReverbSize = 15.f;
+constexpr float kDefaultReverbDecay = 2000.f;
+constexpr float kDefaultReverbSend = 0.f; // inaudible until a track's send is touched
+
 constexpr size_t framesForLoop(const float bars, const float bpm) noexcept
 {
     return static_cast<size_t>(bars * kBeatsPerBar / bpm * 60.f * kAssumedSampleRate);
@@ -93,6 +103,8 @@ class TapeLooperImpl final : public EffectBase
 {
   public:
     using TapeTrack = AbacDsp::VariSpeedTapeDelay<TapeLooperDetail::kBufferSize, 2, 1, BlockSize>;
+    using ReverbBus =
+        AbacDsp::FdnTankGlide<TapeLooperDetail::kReverbMaxSizePerElement, TapeLooperDetail::kReverbOrder, BlockSize>;
     static_assert(TapeLooperScriptEngine::kTracks == TapeLooperDetail::kFreeTracks,
                   "TapeLooperScriptEngine's per-track pool must match TapeLooperDetail::kFreeTracks");
 
@@ -111,7 +123,15 @@ class TapeLooperImpl final : public EffectBase
               AbacDsp::constructArray<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks>(sampleRate))
         , m_filterR(
               AbacDsp::constructArray<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks>(sampleRate))
+        , m_reverb(AbacDsp::constructArray<ReverbBus, TapeLooperDetail::kFreeTracks>(sampleRate))
     {
+        for (auto& reverb : m_reverb)
+        {
+            reverb.setMinSize(TapeLooperDetail::kDefaultReverbSize * 0.5f);
+            reverb.setMaxSize(TapeLooperDetail::kDefaultReverbSize);
+            reverb.setDecay(TapeLooperDetail::kDefaultReverbDecay);
+        }
+        m_appliedReverbSize = TapeLooperDetail::kDefaultReverbSize;
         applyLoopLengthIfChanged();
         m_grooveKit.requestLoad(kAbacDspDrumSamplesDir, kAbacDspMidiDrumsDir, kAbacDspDefaultGrooveName,
                                 AbacDsp::BurstConfig{sampleRate, m_bpmReq.load(std::memory_order_relaxed)});
@@ -425,6 +445,31 @@ class TapeLooperImpl final : public EffectBase
         m_filterModeReq[2].store(value, std::memory_order_relaxed);
     }
 
+    void setReverbSendA(const float value) noexcept
+    {
+        m_reverbSendReq[0].store(value, std::memory_order_relaxed);
+    }
+
+    void setReverbSendB(const float value) noexcept
+    {
+        m_reverbSendReq[1].store(value, std::memory_order_relaxed);
+    }
+
+    void setReverbSendC(const float value) noexcept
+    {
+        m_reverbSendReq[2].store(value, std::memory_order_relaxed);
+    }
+
+    void setReverbSize(const float valueMeters) noexcept
+    {
+        m_reverbSizeReq.store(valueMeters, std::memory_order_relaxed);
+    }
+
+    void setReverbDecay(const float valueMs) noexcept
+    {
+        m_reverbDecayReq.store(valueMs, std::memory_order_relaxed);
+    }
+
     // Groove menu click: styleName is one of listGrooveNames()'s own entries.
     void requestLoadGroove(const std::string& styleName, const unsigned variationIndex)
     {
@@ -548,7 +593,12 @@ class TapeLooperImpl final : public EffectBase
             m_filterR[track].setResonance(resonance);
             m_filterL[track].setFilterCoefficients(AbacDsp::poleMixingList[modeIndex].cf);
             m_filterR[track].setFilterCoefficients(AbacDsp::poleMixingList[modeIndex].cf);
+
+            m_reverbSend[track] = m_reverbSendReq[track].load(std::memory_order_relaxed);
+            m_reverb[track].setDecay(m_reverbDecayReq.load(std::memory_order_relaxed));
         }
+
+        applyReverbSizeIfChanged();
 
         const bool groovePlayReq = m_groovePlayReq.load(std::memory_order_relaxed);
         if (groovePlayReq && !m_groovePlaying)
@@ -602,6 +652,18 @@ class TapeLooperImpl final : public EffectBase
                     m_filterModeReq[track].store(*v->modeIndex, std::memory_order_relaxed);
                 }
             }
+            if (const auto v = m_scriptEngine.drainTrackReverbSendCommand(track))
+            {
+                m_reverbSendReq[track].store(*v, std::memory_order_relaxed);
+            }
+        }
+        if (const auto v = m_scriptEngine.drainReverbSizeCommand())
+        {
+            m_reverbSizeReq.store(*v, std::memory_order_relaxed);
+        }
+        if (const auto v = m_scriptEngine.drainReverbDecayCommand())
+        {
+            m_reverbDecayReq.store(*v, std::memory_order_relaxed);
         }
         if (const auto v = m_scriptEngine.drainGrooveSourceCommand())
         {
@@ -658,6 +720,27 @@ class TapeLooperImpl final : public EffectBase
         for (auto& tape : m_tapeTrack)
         {
             tape.setReadHead(0, static_cast<float>(loopFrames), true);
+        }
+    }
+#pragma GCC diagnostic pop
+
+    // setMinSize()/setMaxSize() re-randomize every delay line's length (computeDelaySizes()),
+    // cheap only because it's skipped when nothing changed - unlike setDecay(), which is a
+    // pure gain recompute and safe to call every block regardless.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+    void applyReverbSizeIfChanged() noexcept
+    {
+        const auto size = m_reverbSizeReq.load(std::memory_order_relaxed);
+        if (size == m_appliedReverbSize)
+        {
+            return;
+        }
+        m_appliedReverbSize = size;
+        for (auto& reverb : m_reverb)
+        {
+            reverb.setMinSize(size * 0.5f);
+            reverb.setMaxSize(size);
         }
     }
 #pragma GCC diagnostic pop
@@ -731,14 +814,30 @@ class TapeLooperImpl final : public EffectBase
             }
             m_tapeTrack[track].feed(tapeIn);
 
+            // Fed only while playing, but ticked every block regardless - its own tail
+            // keeps ringing after Play (or the send) drops, the way a real room does.
+            std::array<float, BlockSize> reverbSendIn{};
             if (m_playing[track])
             {
+                const auto send = m_reverbSend[track];
                 for (size_t i = 0; i < BlockSize; ++i)
                 {
                     const auto gain = m_trackGainSmoother[track].getValue(i);
-                    mix[i * 2] += m_filterL[track].step(tapeOut[i * 2] * gain);
-                    mix[i * 2 + 1] += m_filterR[track].step(tapeOut[i * 2 + 1] * gain);
+                    const auto filteredL = m_filterL[track].step(tapeOut[i * 2] * gain);
+                    const auto filteredR = m_filterR[track].step(tapeOut[i * 2 + 1] * gain);
+                    mix[i * 2] += filteredL;
+                    mix[i * 2 + 1] += filteredR;
+                    reverbSendIn[i] = (filteredL + filteredR) * 0.5f * send;
                 }
+            }
+
+            std::array<float, BlockSize> wetL{};
+            std::array<float, BlockSize> wetR{};
+            m_reverb[track].processBlockSplitAdd(reverbSendIn.data(), wetL.data(), wetR.data());
+            for (size_t i = 0; i < BlockSize; ++i)
+            {
+                mix[i * 2] += wetL[i];
+                mix[i * 2 + 1] += wetR[i];
             }
         }
     }
@@ -823,6 +922,7 @@ class TapeLooperImpl final : public EffectBase
     std::array<AbacDsp::LinearSmoothingParameter<BlockSize>, TapeLooperDetail::kFreeTracks> m_trackGainSmoother;
     std::array<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks> m_filterL;
     std::array<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks> m_filterR;
+    std::array<ReverbBus, TapeLooperDetail::kFreeTracks> m_reverb;
     TapeLooperScriptEngine m_scriptEngine;
 
     std::atomic<float> m_tapeSpeedReq{1.f};
@@ -860,6 +960,11 @@ class TapeLooperImpl final : public EffectBase
     std::array<std::atomic<size_t>, TapeLooperDetail::kFreeTracks> m_filterModeReq{
         TapeLooperDetail::kDefaultFilterModeIndex, TapeLooperDetail::kDefaultFilterModeIndex,
         TapeLooperDetail::kDefaultFilterModeIndex};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_reverbSendReq{TapeLooperDetail::kDefaultReverbSend,
+                                                                                  TapeLooperDetail::kDefaultReverbSend,
+                                                                                  TapeLooperDetail::kDefaultReverbSend};
+    std::atomic<float> m_reverbSizeReq{TapeLooperDetail::kDefaultReverbSize};
+    std::atomic<float> m_reverbDecayReq{TapeLooperDetail::kDefaultReverbDecay};
 
     float m_tapeSpeed{1.f};
     float m_appliedBars{0.f};
@@ -890,6 +995,10 @@ class TapeLooperImpl final : public EffectBase
                                                                                           -1.f, -1.f, -1.f, -1.f};
     float m_bpm{120.f};
     int m_appliedGrooveVariation{0};
+    std::array<float, TapeLooperDetail::kFreeTracks> m_reverbSend{TapeLooperDetail::kDefaultReverbSend,
+                                                                  TapeLooperDetail::kDefaultReverbSend,
+                                                                  TapeLooperDetail::kDefaultReverbSend};
+    float m_appliedReverbSize{0.f}; // 0 forces the first applyReverbSizeIfChanged() to apply
 
     std::mutex m_grooveStyleMutex;
     std::string m_currentGrooveStyle; // "<Genre>/<style>", empty until a menu pick

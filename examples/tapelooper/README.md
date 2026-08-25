@@ -21,6 +21,9 @@ at a fixed rate.
 | Filter Cutoff A, B, C | 20 - 20000 Hz | Per-track four-stage filter cutoff (default at the ceiling, so it's inaudible until touched) |
 | Filter Reso A, B, C | 0 - 1.2 | Per-track resonance; 1.0 is the measured self-oscillation threshold |
 | Filter Mode A, B, C | LP4/HP4/BP4/Notch | Per-track filter response; more responses are reachable from a script, see below |
+| Reverb Send A, B, C | 0 - 1 | Per-track send to that track's own reverb instance, tapped post-filter; 0 (default) is dry |
+| Reverb Size | 2 - 60 m | Shared room size for every track's reverb send |
+| Reverb Decay | 100 - 10000 ms | Shared decay time for every track's reverb send |
 | Groove | (switch) | Play/stop the groove track |
 | BPM | 50 - 250 | Groove/click tempo |
 | Groove Var | 0 - 31 | Selects among the loaded style's variations |
@@ -78,6 +81,20 @@ curated `"LP4"`/`"HP4"`/`"BP4"`/`"Notch"` subset - any name from `AbacDsp::poleM
 ignored and the track's filter mode stays whatever it was - cutoff and resonance still apply.
 Both cutoff and resonance ramp smoothly on their own (the filter class smooths them
 internally), so `Timer.Every`-driven sweeps don't need any extra smoothing in the script.
+
+### Reverb send
+
+```lua
+SetTrackReverbSend(track, amount)  -- 0 dry, 1 fully sent to that track's reverb
+SetReverbSize(meters)              -- shared by every track's reverb
+SetReverbDecay(ms)                 -- shared by every track's reverb
+```
+
+Each track has its own `AbacDsp::FdnTankGlide` reverb instance - independent tails, no
+cross-track bleed through a shared bus - but Size and Decay tune all three together, tapped
+post-filter at each track's own send level (0 is dry, regardless of size/decay). Each track's
+reverb keeps ringing on its own momentum after that track's send drops to 0 or Play stops,
+the way a real room does.
 
 ### Groove source
 
@@ -140,6 +157,25 @@ end)
 
 The same sweep, ready to run as-is - it starts as soon as the script loads, no further steps
 needed to hear it (make sure track B has something recorded and is playing).
+
+### Example: reverb swelling in
+
+```lua
+-- Reverb swells in on track A the moment it stops recording.
+function OnRecordStateChanged(track, isRecording)
+    if track == 0 and not isRecording then
+        local i = 0
+        Timer.Every(200, function()
+            i = i + 1
+            SetTrackReverbSend(0, math.min(0.6, i / 20))
+        end)
+    end
+end
+```
+
+### Example: `base-scripts/reverb-swell-track-a.lua`
+
+The same swell, ready to run as-is - record onto track A and stop recording to hear it build.
 
 ### Default (stub) script
 

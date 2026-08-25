@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <random>
 
 #include "Delays/DispersionDelay.h"
@@ -27,6 +28,8 @@ namespace AbacDsp
  * of them within a few circulations. Treating every line would cost order times
  * as much for an effect that is already fully diffused.
  * @see https://ccrma.stanford.edu/~jos/pasp/FDN_Reverberation.html
+ *
+ * Note: It is preferred to use the FdnTankGlide.h if you want to use realtime changes of size.
  */
 template <size_t MaxSizePerElement, size_t MAXORDER, size_t BlockSize>
 class FdnTank
@@ -202,7 +205,7 @@ class FdnTank
 
     void computeDelaySizes()
     {
-        std::mt19937 gen(m_order);
+        std::mt19937 gen(static_cast<std::mt19937::result_type>(m_order));
         std::normal_distribution distribution(0.0f, m_spreadLines / 30.0f);
         std::array<float, MAXORDER> m_meters;
         std::array<size_t, MAXORDER> m_discreteSize;
@@ -210,7 +213,7 @@ class FdnTank
         {
             const auto frac = static_cast<float>(i) / static_cast<float>(m_order - 1);
             auto x = getBulgeValue(frac, -m_bulge);
-            if (m_spreadLines)
+            if (std::fabs(m_spreadLines) > 0.f)
             {
                 x += distribution(gen);
             }
@@ -220,7 +223,7 @@ class FdnTank
         }
         if (m_avoidEqualLengthDelay)
         {
-            ensureUniqueDiscreteSize(m_discreteSize.data(), m_order);
+            ensureUniqueDiscreteSize(m_discreteSize.data(), static_cast<unsigned int>(m_order));
         }
         for (size_t i = 0; i < m_order; ++i)
         {
@@ -365,7 +368,7 @@ class FdnTank
 
     void matrixFeed(float in)
     {
-        hadamardFeed(m_order, m_lastValue.data(), m_feedValue.data());
+        hadamardFeed(static_cast<unsigned int>(m_order), m_lastValue.data(), m_feedValue.data());
 
         if (m_usePitch)
         {

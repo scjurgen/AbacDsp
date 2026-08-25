@@ -13,7 +13,7 @@ section, not repeated here:
 | `resonik` | `examples/resonik/README.md` | `SetFreqRange`/`SetDecayRange`/`SetGainRange`/`SetDelayRange`/`SetQ`/`SetResonanceBody` |
 | `pingsynth` | `examples/pingsynth/README.md` | `SetHarmonics`/`SetPitchBendRange`, `OnMpeModeChanged` |
 | `spectraltap` | `examples/spectraltap/README.md` | `SetMaxTaps`/`SetTap`, `SetFrequency`/`SetResonance`/`SetFormant`/`SetPan`/`SetGain` |
-| `tapelooper` | `examples/tapelooper/README.md` | `SetTapeSpeed`/`SetBpm`/`SetGrooveVariation`/`SetTrackRecord`/`SetTrackPlay`/`SetTrackGain`/`SetTrackFilter`/`SetGrooveSource`, `OnRecordStateChanged` |
+| `tapelooper` | `examples/tapelooper/README.md` | `SetTapeSpeed`/`SetBpm`/`SetGrooveVariation`/`SetTrackRecord`/`SetTrackPlay`/`SetTrackGain`/`SetTrackFilter`/`SetTrackReverbSend`/`SetReverbSize`/`SetReverbDecay`/`SetGrooveSource`, `OnRecordStateChanged` |
 
 ## Sandbox
 

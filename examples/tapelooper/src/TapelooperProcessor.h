@@ -43,6 +43,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("bars", this);
         m_parameters.addParameterListener("inputGain", this);
         m_parameters.addParameterListener("grooveLevel", this);
+        m_parameters.addParameterListener("reverbSize", this);
+        m_parameters.addParameterListener("reverbDecay", this);
         m_parameters.addParameterListener("recordA", this);
         m_parameters.addParameterListener("playA", this);
         m_parameters.addParameterListener("clearA", this);
@@ -61,12 +63,15 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("filterCutoffA", this);
         m_parameters.addParameterListener("filterResonanceA", this);
         m_parameters.addParameterListener("filterModeA", this);
+        m_parameters.addParameterListener("reverbSendA", this);
         m_parameters.addParameterListener("filterCutoffB", this);
         m_parameters.addParameterListener("filterResonanceB", this);
         m_parameters.addParameterListener("filterModeB", this);
+        m_parameters.addParameterListener("reverbSendB", this);
         m_parameters.addParameterListener("filterCutoffC", this);
         m_parameters.addParameterListener("filterResonanceC", this);
         m_parameters.addParameterListener("filterModeC", this);
+        m_parameters.addParameterListener("reverbSendC", this);
         m_parameters.addParameterListener("wowDepthA", this);
         m_parameters.addParameterListener("wowRateA", this);
         m_parameters.addParameterListener("wowDriftA", this);
@@ -105,6 +110,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("bars", this);
         m_parameters.removeParameterListener("inputGain", this);
         m_parameters.removeParameterListener("grooveLevel", this);
+        m_parameters.removeParameterListener("reverbSize", this);
+        m_parameters.removeParameterListener("reverbDecay", this);
         m_parameters.removeParameterListener("recordA", this);
         m_parameters.removeParameterListener("playA", this);
         m_parameters.removeParameterListener("clearA", this);
@@ -123,12 +130,15 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("filterCutoffA", this);
         m_parameters.removeParameterListener("filterResonanceA", this);
         m_parameters.removeParameterListener("filterModeA", this);
+        m_parameters.removeParameterListener("reverbSendA", this);
         m_parameters.removeParameterListener("filterCutoffB", this);
         m_parameters.removeParameterListener("filterResonanceB", this);
         m_parameters.removeParameterListener("filterModeB", this);
+        m_parameters.removeParameterListener("reverbSendB", this);
         m_parameters.removeParameterListener("filterCutoffC", this);
         m_parameters.removeParameterListener("filterResonanceC", this);
         m_parameters.removeParameterListener("filterModeC", this);
+        m_parameters.removeParameterListener("reverbSendC", this);
         m_parameters.removeParameterListener("wowDepthA", this);
         m_parameters.removeParameterListener("wowRateA", this);
         m_parameters.removeParameterListener("wowDriftA", this);
@@ -366,6 +376,16 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::NormalisableRange<float>(-60, 12, 0.1, 1, false), 0,
             juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("reverbSize", 1), juce::String::fromUTF8("Reverb Size"),
+            juce::NormalisableRange<float>(2, 60, 0.1, 0.5, false), 15,
+            juce::AudioParameterFloatAttributes{}.withLabel("m").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " m"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("reverbDecay", 1), juce::String::fromUTF8("Reverb Decay"),
+            juce::NormalisableRange<float>(100, 10000, 1, 0.4, false), 2000,
+            juce::AudioParameterFloatAttributes{}.withLabel("ms").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " ms"; })));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("recordA", 1),
                                                                     juce::String::fromUTF8("Rec A"), 0));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("playA", 1),
@@ -427,6 +447,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                               juce::String::fromUTF8("BP4"), juce::String::fromUTF8("Notch")},
             0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("reverbSendA", 1), juce::String::fromUTF8("Reverb Send A"),
+            juce::NormalisableRange<float>(0, 1, 0.01, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("filterCutoffB", 1), juce::String::fromUTF8("Filter Cutoff B"),
             juce::NormalisableRange<float>(20, 20000, 1, 0.5, false), 20000,
             juce::AudioParameterFloatAttributes{}.withLabel("Hz").withStringFromValueFunction(
@@ -442,6 +467,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                               juce::String::fromUTF8("BP4"), juce::String::fromUTF8("Notch")},
             0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("reverbSendB", 1), juce::String::fromUTF8("Reverb Send B"),
+            juce::NormalisableRange<float>(0, 1, 0.01, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("filterCutoffC", 1), juce::String::fromUTF8("Filter Cutoff C"),
             juce::NormalisableRange<float>(20, 20000, 1, 0.5, false), 20000,
             juce::AudioParameterFloatAttributes{}.withLabel("Hz").withStringFromValueFunction(
@@ -456,6 +486,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::StringArray{juce::String::fromUTF8("LP4"), juce::String::fromUTF8("HP4"),
                               juce::String::fromUTF8("BP4"), juce::String::fromUTF8("Notch")},
             0));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("reverbSendC", 1), juce::String::fromUTF8("Reverb Send C"),
+            juce::NormalisableRange<float>(0, 1, 0.01, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("wowDepthA", 1), juce::String::fromUTF8("Wow Depth A"),
             juce::NormalisableRange<float>(0, 1, 0.01, 0.1, false), 0.1,
@@ -609,6 +644,18 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                  p.pluginRunner->setGrooveLevel(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::grooveLevel, v);
              }},
+            {"reverbSize",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setReverbSize(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbSize, v);
+             }},
+            {"reverbDecay",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setReverbDecay(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbDecay, v);
+             }},
             {"recordA",
              [](AudioPluginAudioProcessor& p, const float v)
              {
@@ -717,6 +764,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                  p.pluginRunner->setFilterModeA(static_cast<size_t>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::filterModeA, v);
              }},
+            {"reverbSendA",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setReverbSendA(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbSendA, v);
+             }},
             {"filterCutoffB",
              [](AudioPluginAudioProcessor& p, const float v)
              {
@@ -735,6 +788,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                  p.pluginRunner->setFilterModeB(static_cast<size_t>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::filterModeB, v);
              }},
+            {"reverbSendB",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setReverbSendB(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbSendB, v);
+             }},
             {"filterCutoffC",
              [](AudioPluginAudioProcessor& p, const float v)
              {
@@ -752,6 +811,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setFilterModeC(static_cast<size_t>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::filterModeC, v);
+             }},
+            {"reverbSendC",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setReverbSendC(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbSendC, v);
              }},
             {"wowDepthA",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -944,6 +1009,18 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             float normalized = range.convertTo0to1(params.grooveLevel);
             p->setValueNotifyingHost(normalized);
         }
+        if (auto* p = m_parameters.getParameter("reverbSize"))
+        {
+            const auto& range = m_parameters.getParameterRange("reverbSize");
+            float normalized = range.convertTo0to1(params.reverbSize);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("reverbDecay"))
+        {
+            const auto& range = m_parameters.getParameterRange("reverbDecay");
+            float normalized = range.convertTo0to1(params.reverbDecay);
+            p->setValueNotifyingHost(normalized);
+        }
         if (auto* p = m_parameters.getParameter("recordA"))
         {
             const auto& range = m_parameters.getParameterRange("recordA");
@@ -1052,6 +1129,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             float normalized = range.convertTo0to1(params.filterModeA);
             p->setValueNotifyingHost(normalized);
         }
+        if (auto* p = m_parameters.getParameter("reverbSendA"))
+        {
+            const auto& range = m_parameters.getParameterRange("reverbSendA");
+            float normalized = range.convertTo0to1(params.reverbSendA);
+            p->setValueNotifyingHost(normalized);
+        }
         if (auto* p = m_parameters.getParameter("filterCutoffB"))
         {
             const auto& range = m_parameters.getParameterRange("filterCutoffB");
@@ -1070,6 +1153,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             float normalized = range.convertTo0to1(params.filterModeB);
             p->setValueNotifyingHost(normalized);
         }
+        if (auto* p = m_parameters.getParameter("reverbSendB"))
+        {
+            const auto& range = m_parameters.getParameterRange("reverbSendB");
+            float normalized = range.convertTo0to1(params.reverbSendB);
+            p->setValueNotifyingHost(normalized);
+        }
         if (auto* p = m_parameters.getParameter("filterCutoffC"))
         {
             const auto& range = m_parameters.getParameterRange("filterCutoffC");
@@ -1086,6 +1175,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("filterModeC");
             float normalized = range.convertTo0to1(params.filterModeC);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("reverbSendC"))
+        {
+            const auto& range = m_parameters.getParameterRange("reverbSendC");
+            float normalized = range.convertTo0to1(params.reverbSendC);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("wowDepthA"))
