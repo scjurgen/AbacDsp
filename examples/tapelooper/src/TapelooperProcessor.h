@@ -58,6 +58,15 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("trackGainA", this);
         m_parameters.addParameterListener("trackGainB", this);
         m_parameters.addParameterListener("trackGainC", this);
+        m_parameters.addParameterListener("filterCutoffA", this);
+        m_parameters.addParameterListener("filterResonanceA", this);
+        m_parameters.addParameterListener("filterModeA", this);
+        m_parameters.addParameterListener("filterCutoffB", this);
+        m_parameters.addParameterListener("filterResonanceB", this);
+        m_parameters.addParameterListener("filterModeB", this);
+        m_parameters.addParameterListener("filterCutoffC", this);
+        m_parameters.addParameterListener("filterResonanceC", this);
+        m_parameters.addParameterListener("filterModeC", this);
         m_parameters.addParameterListener("wowDepthA", this);
         m_parameters.addParameterListener("wowRateA", this);
         m_parameters.addParameterListener("wowDriftA", this);
@@ -111,6 +120,15 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("trackGainA", this);
         m_parameters.removeParameterListener("trackGainB", this);
         m_parameters.removeParameterListener("trackGainC", this);
+        m_parameters.removeParameterListener("filterCutoffA", this);
+        m_parameters.removeParameterListener("filterResonanceA", this);
+        m_parameters.removeParameterListener("filterModeA", this);
+        m_parameters.removeParameterListener("filterCutoffB", this);
+        m_parameters.removeParameterListener("filterResonanceB", this);
+        m_parameters.removeParameterListener("filterModeB", this);
+        m_parameters.removeParameterListener("filterCutoffC", this);
+        m_parameters.removeParameterListener("filterResonanceC", this);
+        m_parameters.removeParameterListener("filterModeC", this);
         m_parameters.removeParameterListener("wowDepthA", this);
         m_parameters.removeParameterListener("wowRateA", this);
         m_parameters.removeParameterListener("wowDriftA", this);
@@ -394,6 +412,51 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " dB"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("filterCutoffA", 1), juce::String::fromUTF8("Filter Cutoff A"),
+            juce::NormalisableRange<float>(20, 20000, 1, 0.5, false), 20000,
+            juce::AudioParameterFloatAttributes{}.withLabel("Hz").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " Hz"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("filterResonanceA", 1), juce::String::fromUTF8("Filter Reso A"),
+            juce::NormalisableRange<float>(0, 1.2, 0.01, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("filterModeA", 1), juce::String::fromUTF8("Filter Mode A"),
+            juce::StringArray{juce::String::fromUTF8("LP4"), juce::String::fromUTF8("HP4"),
+                              juce::String::fromUTF8("BP4"), juce::String::fromUTF8("Notch")},
+            0));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("filterCutoffB", 1), juce::String::fromUTF8("Filter Cutoff B"),
+            juce::NormalisableRange<float>(20, 20000, 1, 0.5, false), 20000,
+            juce::AudioParameterFloatAttributes{}.withLabel("Hz").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " Hz"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("filterResonanceB", 1), juce::String::fromUTF8("Filter Reso B"),
+            juce::NormalisableRange<float>(0, 1.2, 0.01, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("filterModeB", 1), juce::String::fromUTF8("Filter Mode B"),
+            juce::StringArray{juce::String::fromUTF8("LP4"), juce::String::fromUTF8("HP4"),
+                              juce::String::fromUTF8("BP4"), juce::String::fromUTF8("Notch")},
+            0));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("filterCutoffC", 1), juce::String::fromUTF8("Filter Cutoff C"),
+            juce::NormalisableRange<float>(20, 20000, 1, 0.5, false), 20000,
+            juce::AudioParameterFloatAttributes{}.withLabel("Hz").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " Hz"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("filterResonanceC", 1), juce::String::fromUTF8("Filter Reso C"),
+            juce::NormalisableRange<float>(0, 1.2, 0.01, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("filterModeC", 1), juce::String::fromUTF8("Filter Mode C"),
+            juce::StringArray{juce::String::fromUTF8("LP4"), juce::String::fromUTF8("HP4"),
+                              juce::String::fromUTF8("BP4"), juce::String::fromUTF8("Notch")},
+            0));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("wowDepthA", 1), juce::String::fromUTF8("Wow Depth A"),
             juce::NormalisableRange<float>(0, 1, 0.01, 0.1, false), 0.1,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
@@ -635,6 +698,60 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setTrackGainC(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::trackGainC, v);
+             }},
+            {"filterCutoffA",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFilterCutoffA(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::filterCutoffA, v);
+             }},
+            {"filterResonanceA",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFilterResonanceA(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::filterResonanceA, v);
+             }},
+            {"filterModeA",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFilterModeA(static_cast<size_t>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::filterModeA, v);
+             }},
+            {"filterCutoffB",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFilterCutoffB(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::filterCutoffB, v);
+             }},
+            {"filterResonanceB",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFilterResonanceB(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::filterResonanceB, v);
+             }},
+            {"filterModeB",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFilterModeB(static_cast<size_t>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::filterModeB, v);
+             }},
+            {"filterCutoffC",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFilterCutoffC(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::filterCutoffC, v);
+             }},
+            {"filterResonanceC",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFilterResonanceC(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::filterResonanceC, v);
+             }},
+            {"filterModeC",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setFilterModeC(static_cast<size_t>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::filterModeC, v);
              }},
             {"wowDepthA",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -915,6 +1032,60 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("trackGainC");
             float normalized = range.convertTo0to1(params.trackGainC);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("filterCutoffA"))
+        {
+            const auto& range = m_parameters.getParameterRange("filterCutoffA");
+            float normalized = range.convertTo0to1(params.filterCutoffA);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("filterResonanceA"))
+        {
+            const auto& range = m_parameters.getParameterRange("filterResonanceA");
+            float normalized = range.convertTo0to1(params.filterResonanceA);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("filterModeA"))
+        {
+            const auto& range = m_parameters.getParameterRange("filterModeA");
+            float normalized = range.convertTo0to1(params.filterModeA);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("filterCutoffB"))
+        {
+            const auto& range = m_parameters.getParameterRange("filterCutoffB");
+            float normalized = range.convertTo0to1(params.filterCutoffB);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("filterResonanceB"))
+        {
+            const auto& range = m_parameters.getParameterRange("filterResonanceB");
+            float normalized = range.convertTo0to1(params.filterResonanceB);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("filterModeB"))
+        {
+            const auto& range = m_parameters.getParameterRange("filterModeB");
+            float normalized = range.convertTo0to1(params.filterModeB);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("filterCutoffC"))
+        {
+            const auto& range = m_parameters.getParameterRange("filterCutoffC");
+            float normalized = range.convertTo0to1(params.filterCutoffC);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("filterResonanceC"))
+        {
+            const auto& range = m_parameters.getParameterRange("filterResonanceC");
+            float normalized = range.convertTo0to1(params.filterResonanceC);
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("filterModeC"))
+        {
+            const auto& range = m_parameters.getParameterRange("filterModeC");
+            float normalized = range.convertTo0to1(params.filterModeC);
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("wowDepthA"))

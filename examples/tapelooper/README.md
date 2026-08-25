@@ -18,6 +18,9 @@ at a fixed rate.
 | Groove Level | -60 - 12 dB | Groove track output level |
 | Rec/Play/Clear A, B, C | (switches) | Per-track record, play, and clear (momentary) |
 | Track Gain A, B, C | -60 - 12 dB | Per-track playback level - a fader, not a mute; Play stays the hard on/off |
+| Filter Cutoff A, B, C | 20 - 20000 Hz | Per-track four-stage filter cutoff (default at the ceiling, so it's inaudible until touched) |
+| Filter Reso A, B, C | 0 - 1.2 | Per-track resonance; 1.0 is the measured self-oscillation threshold |
+| Filter Mode A, B, C | LP4/HP4/BP4/Notch | Per-track filter response; more responses are reachable from a script, see below |
 | Groove | (switch) | Play/stop the groove track |
 | BPM | 50 - 250 | Groove/click tempo |
 | Groove Var | 0 - 31 | Selects among the loaded style's variations |
@@ -60,6 +63,21 @@ Each of these writes into the same underlying state the plugin's own dials/switc
 whichever - host automation or script - sets a value last wins; there's no separate "script
 override" layer to fight with the UI. `SetTrackGain` ramps linearly to its new value over one
 audio block, so repeated calls (e.g. from `Timer.Every`) fade smoothly instead of zippering.
+
+### Track filter
+
+```lua
+SetTrackFilter(track, cutoffHz, resonance)             -- mode defaults to "LP4"
+SetTrackFilter(track, cutoffHz, resonance, modeName)
+```
+
+`resonance` is normalized: 1.0 is the measured self-oscillation threshold at the current
+cutoff, same convention as the Filter Reso dial. `modeName` isn't limited to the dial's
+curated `"LP4"`/`"HP4"`/`"BP4"`/`"Notch"` subset - any name from `AbacDsp::poleMixingList`
+(`Filters/PoleMixingFilter.h`) works, e.g. `"AP2"` or `"BP Notch"`. An unrecognized name is
+ignored and the track's filter mode stays whatever it was - cutoff and resonance still apply.
+Both cutoff and resonance ramp smoothly on their own (the filter class smooths them
+internally), so `Timer.Every`-driven sweeps don't need any extra smoothing in the script.
 
 ### Groove source
 
@@ -105,6 +123,23 @@ end
 A directly-runnable smoke test for the fade above: record onto track A, stop recording, and
 it fades itself out over 4 seconds with no further steps - `OnRecordStateChanged` triggers the
 fade automatically instead of waiting on a `StartFadeOut()` call from elsewhere.
+
+### Example: a resonant filter sweep
+
+```lua
+-- Slow resonant filter sweep on track B, for a build-up feel.
+local phase = 0
+Timer.Every(50, function()
+    phase = phase + 0.02
+    local cutoff = 400 + (math.sin(phase) * 0.5 + 0.5) * 3000
+    SetTrackFilter(1, cutoff, 0.6, "LP4")
+end)
+```
+
+### Example: `base-scripts/filter-sweep-track-b.lua`
+
+The same sweep, ready to run as-is - it starts as soon as the script loads, no further steps
+needed to hear it (make sure track B has something recorded and is playing).
 
 ### Default (stub) script
 

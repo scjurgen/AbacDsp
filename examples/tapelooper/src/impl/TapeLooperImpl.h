@@ -14,6 +14,7 @@
 #include "Audio/AudioBuffer.h"
 #include "Delays/VariSpeedTapeDelay.h"
 #include "EffectBase.h"
+#include "Filters/PoleMixingFilter.h"
 #include "Filters/Sinc/sinc_4.h"
 #include "Generators/ClickGenerator.h"
 #include "GrooveDefaultPaths.h"
@@ -54,6 +55,13 @@ constexpr float kDefaultFlutterRate = 0.4f;
 constexpr float kDefaultTrackGain = 1.f;
 // Matches the Track Gain dial's own +12 dB ceiling (10^(12/20)).
 constexpr float kMaxTrackGain = 4.f;
+
+// Cutoff at the dial's own ceiling and zero resonance, so the filter is
+// inaudible until touched, matching wow/flutter/gain's own default-sound
+// preservation above.
+constexpr float kDefaultFilterCutoff = 20000.f;
+constexpr float kDefaultFilterResonance = 0.f;
+constexpr size_t kDefaultFilterModeIndex = 0; // "LP4" - see the filterMode drop's listitems
 
 constexpr size_t framesForLoop(const float bars, const float bpm) noexcept
 {
@@ -99,6 +107,10 @@ class TapeLooperImpl final : public EffectBase
         , m_trackGainSmoother(
               AbacDsp::constructArray<AbacDsp::LinearSmoothingParameter<BlockSize>, TapeLooperDetail::kFreeTracks>(
                   TapeLooperDetail::kDefaultTrackGain))
+        , m_filterL(
+              AbacDsp::constructArray<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks>(sampleRate))
+        , m_filterR(
+              AbacDsp::constructArray<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks>(sampleRate))
     {
         applyLoopLengthIfChanged();
         m_grooveKit.requestLoad(kAbacDspDrumSamplesDir, kAbacDspMidiDrumsDir, kAbacDspDefaultGrooveName,
@@ -368,6 +380,51 @@ class TapeLooperImpl final : public EffectBase
         m_trackGainReq[2].store(std::pow(10.f, valueDb / 20.f), std::memory_order_relaxed);
     }
 
+    void setFilterCutoffA(const float valueHz) noexcept
+    {
+        m_filterCutoffReq[0].store(valueHz, std::memory_order_relaxed);
+    }
+
+    void setFilterCutoffB(const float valueHz) noexcept
+    {
+        m_filterCutoffReq[1].store(valueHz, std::memory_order_relaxed);
+    }
+
+    void setFilterCutoffC(const float valueHz) noexcept
+    {
+        m_filterCutoffReq[2].store(valueHz, std::memory_order_relaxed);
+    }
+
+    void setFilterResonanceA(const float value) noexcept
+    {
+        m_filterResonanceReq[0].store(value, std::memory_order_relaxed);
+    }
+
+    void setFilterResonanceB(const float value) noexcept
+    {
+        m_filterResonanceReq[1].store(value, std::memory_order_relaxed);
+    }
+
+    void setFilterResonanceC(const float value) noexcept
+    {
+        m_filterResonanceReq[2].store(value, std::memory_order_relaxed);
+    }
+
+    void setFilterModeA(const size_t value) noexcept
+    {
+        m_filterModeReq[0].store(value, std::memory_order_relaxed);
+    }
+
+    void setFilterModeB(const size_t value) noexcept
+    {
+        m_filterModeReq[1].store(value, std::memory_order_relaxed);
+    }
+
+    void setFilterModeC(const size_t value) noexcept
+    {
+        m_filterModeReq[2].store(value, std::memory_order_relaxed);
+    }
+
     // Groove menu click: styleName is one of listGrooveNames()'s own entries.
     void requestLoadGroove(const std::string& styleName, const unsigned variationIndex)
     {
@@ -481,6 +538,16 @@ class TapeLooperImpl final : public EffectBase
             m_flutterDepth[track] = m_flutterDepthReq[track].load(std::memory_order_relaxed);
             m_flutterRate[track] = m_flutterRateReq[track].load(std::memory_order_relaxed);
             m_trackGainSmoother[track].setValue(m_trackGainReq[track].load(std::memory_order_relaxed));
+
+            const auto cutoffHz = m_filterCutoffReq[track].load(std::memory_order_relaxed);
+            const auto resonance = m_filterResonanceReq[track].load(std::memory_order_relaxed);
+            const auto modeIndex = m_filterModeReq[track].load(std::memory_order_relaxed);
+            m_filterL[track].setCutoffFrequency(cutoffHz);
+            m_filterR[track].setCutoffFrequency(cutoffHz);
+            m_filterL[track].setResonance(resonance);
+            m_filterR[track].setResonance(resonance);
+            m_filterL[track].setFilterCoefficients(AbacDsp::poleMixingList[modeIndex].cf);
+            m_filterR[track].setFilterCoefficients(AbacDsp::poleMixingList[modeIndex].cf);
         }
 
         const bool groovePlayReq = m_groovePlayReq.load(std::memory_order_relaxed);
@@ -525,6 +592,15 @@ class TapeLooperImpl final : public EffectBase
             if (const auto v = m_scriptEngine.drainTrackGainCommand(track))
             {
                 m_trackGainReq[track].store(*v, std::memory_order_relaxed);
+            }
+            if (const auto v = m_scriptEngine.drainTrackFilterCommand(track))
+            {
+                m_filterCutoffReq[track].store(v->cutoffHz, std::memory_order_relaxed);
+                m_filterResonanceReq[track].store(v->resonance, std::memory_order_relaxed);
+                if (v->modeIndex)
+                {
+                    m_filterModeReq[track].store(*v->modeIndex, std::memory_order_relaxed);
+                }
             }
         }
         if (const auto v = m_scriptEngine.drainGrooveSourceCommand())
@@ -660,8 +736,8 @@ class TapeLooperImpl final : public EffectBase
                 for (size_t i = 0; i < BlockSize; ++i)
                 {
                     const auto gain = m_trackGainSmoother[track].getValue(i);
-                    mix[i * 2] += tapeOut[i * 2] * gain;
-                    mix[i * 2 + 1] += tapeOut[i * 2 + 1] * gain;
+                    mix[i * 2] += m_filterL[track].step(tapeOut[i * 2] * gain);
+                    mix[i * 2 + 1] += m_filterR[track].step(tapeOut[i * 2 + 1] * gain);
                 }
             }
         }
@@ -745,6 +821,8 @@ class TapeLooperImpl final : public EffectBase
     const AbacDsp::GrooveProgram* m_lastGrooveProgram{nullptr};
     AbacDsp::ClickGenerator m_clickGen;
     std::array<AbacDsp::LinearSmoothingParameter<BlockSize>, TapeLooperDetail::kFreeTracks> m_trackGainSmoother;
+    std::array<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks> m_filterL;
+    std::array<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks> m_filterR;
     TapeLooperScriptEngine m_scriptEngine;
 
     std::atomic<float> m_tapeSpeedReq{1.f};
@@ -773,6 +851,15 @@ class TapeLooperImpl final : public EffectBase
         TapeLooperDetail::kDefaultFlutterRate};
     std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_trackGainReq{
         TapeLooperDetail::kDefaultTrackGain, TapeLooperDetail::kDefaultTrackGain, TapeLooperDetail::kDefaultTrackGain};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_filterCutoffReq{
+        TapeLooperDetail::kDefaultFilterCutoff, TapeLooperDetail::kDefaultFilterCutoff,
+        TapeLooperDetail::kDefaultFilterCutoff};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_filterResonanceReq{
+        TapeLooperDetail::kDefaultFilterResonance, TapeLooperDetail::kDefaultFilterResonance,
+        TapeLooperDetail::kDefaultFilterResonance};
+    std::array<std::atomic<size_t>, TapeLooperDetail::kFreeTracks> m_filterModeReq{
+        TapeLooperDetail::kDefaultFilterModeIndex, TapeLooperDetail::kDefaultFilterModeIndex,
+        TapeLooperDetail::kDefaultFilterModeIndex};
 
     float m_tapeSpeed{1.f};
     float m_appliedBars{0.f};

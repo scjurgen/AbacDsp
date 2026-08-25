@@ -343,6 +343,59 @@ TEST(TapeLooperTest, ScriptTrackGainFadesOutAndBackIn)
     EXPECT_GT(restoredRms, recordedRms * 0.5f);
 }
 
+// A script-driven low-pass on track A audibly attenuates a high tone recorded there,
+// while track B (never filtered) stays unaffected - proves both the effect and its
+// per-track independence.
+TEST(TapeLooperTest, ScriptTrackFilterAttenuatesHighTonePerTrackOnly)
+{
+    TapeLooper sut(kSampleRate);
+    sut.setBars(4.f);
+    sut.setBpm(100.f);
+    sut.setTapeSpeed(1.f);
+    const size_t numBlocks = kTestLoopFrames / kBlock;
+
+    sut.setRecordA(true);
+    size_t phaseA = 0;
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        Buffer out{};
+        sut.processBlock(sineBlock(0.7f, 8000.f, phaseA), out);
+    }
+    sut.setRecordA(false);
+
+    sut.setRecordB(true);
+    size_t phaseB = 0;
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        Buffer out{};
+        sut.processBlock(sineBlock(0.7f, 8000.f, phaseB), out);
+    }
+    sut.setRecordB(false);
+    sut.setPlayA(true);
+    sut.setPlayB(true);
+
+    const Buffer decoyIn{};
+    sut.setPlayB(false);
+    const float aBeforeRms = outputRms(sut, decoyIn, numBlocks);
+    sut.setPlayA(false);
+    sut.setPlayB(true);
+    const float bBeforeRms = outputRms(sut, decoyIn, numBlocks);
+
+    ASSERT_TRUE(sut.setScript("SetTrackFilter(0, 200, 0, \"LP4\")"));
+    sut.setPlayA(true);
+    outputRms(sut, decoyIn, 20); // let the filter's internal smoothing converge
+
+    sut.setPlayB(false);
+    const float aAfterRms = outputRms(sut, decoyIn, numBlocks);
+    sut.setPlayA(false);
+    sut.setPlayB(true);
+    const float bAfterRms = outputRms(sut, decoyIn, numBlocks);
+
+    EXPECT_LT(aAfterRms, aBeforeRms * 0.2f);
+    EXPECT_GT(bAfterRms, bBeforeRms * 0.7f);
+    EXPECT_LT(bAfterRms, bBeforeRms * 1.3f);
+}
+
 TEST(TapeLooperTest, GrooveBuffersOnlyFillWhilePlaying)
 {
     TapeLooper sut(kSampleRate);

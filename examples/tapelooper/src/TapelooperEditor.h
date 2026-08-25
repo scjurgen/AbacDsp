@@ -137,6 +137,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(trackGainADial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(filterCutoffADial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(filterResonanceADial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(filterModeADrop)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowDepthADial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowRateADial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowDriftADial).withFlex(1).withMargin(knobMarginSmall));
@@ -165,6 +172,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(trackGainBDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(filterCutoffBDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(filterResonanceBDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(filterModeBDrop)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowDepthBDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowRateBDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowDriftBDial).withFlex(1).withMargin(knobMarginSmall));
@@ -193,6 +207,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(trackGainCDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(filterCutoffCDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(filterResonanceCDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(filterModeCDrop)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowDepthCDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowRateCDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(wowDriftCDial).withFlex(1).withMargin(knobMarginSmall));
@@ -328,6 +349,45 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         trackGainCDial.reset(valueTreeState, "trackGainC");
         trackGainCDial.setLabelText(juce::String::fromUTF8("Track Gain C"));
         trackGainCDial.setTooltip(juce::String::fromUTF8("Track Gain C (-60 to 12 dB)"));
+        addAndMakeVisible(filterCutoffADial);
+        filterCutoffADial.reset(valueTreeState, "filterCutoffA");
+        filterCutoffADial.setLabelText(juce::String::fromUTF8("Filter Cutoff A"));
+        filterCutoffADial.setTooltip(juce::String::fromUTF8("Filter Cutoff A (20 to 20000 Hz)"));
+        addAndMakeVisible(filterResonanceADial);
+        filterResonanceADial.reset(valueTreeState, "filterResonanceA");
+        filterResonanceADial.setLabelText(juce::String::fromUTF8("Filter Reso A"));
+        filterResonanceADial.setTooltip(juce::String::fromUTF8("Filter Reso A (0 to 1.2)"));
+        addAndMakeVisible(filterModeADrop);
+        filterModeADrop.addItemList(valueTreeState.getParameter("filterModeA")->getAllValueStrings(), 1);
+        filterModeADropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "filterModeA", filterModeADrop);
+        filterModeADrop.setTooltip(juce::String::fromUTF8("Filter Mode A (LP4, HP4, BP4, Notch)"));
+        addAndMakeVisible(filterCutoffBDial);
+        filterCutoffBDial.reset(valueTreeState, "filterCutoffB");
+        filterCutoffBDial.setLabelText(juce::String::fromUTF8("Filter Cutoff B"));
+        filterCutoffBDial.setTooltip(juce::String::fromUTF8("Filter Cutoff B (20 to 20000 Hz)"));
+        addAndMakeVisible(filterResonanceBDial);
+        filterResonanceBDial.reset(valueTreeState, "filterResonanceB");
+        filterResonanceBDial.setLabelText(juce::String::fromUTF8("Filter Reso B"));
+        filterResonanceBDial.setTooltip(juce::String::fromUTF8("Filter Reso B (0 to 1.2)"));
+        addAndMakeVisible(filterModeBDrop);
+        filterModeBDrop.addItemList(valueTreeState.getParameter("filterModeB")->getAllValueStrings(), 1);
+        filterModeBDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "filterModeB", filterModeBDrop);
+        filterModeBDrop.setTooltip(juce::String::fromUTF8("Filter Mode B (LP4, HP4, BP4, Notch)"));
+        addAndMakeVisible(filterCutoffCDial);
+        filterCutoffCDial.reset(valueTreeState, "filterCutoffC");
+        filterCutoffCDial.setLabelText(juce::String::fromUTF8("Filter Cutoff C"));
+        filterCutoffCDial.setTooltip(juce::String::fromUTF8("Filter Cutoff C (20 to 20000 Hz)"));
+        addAndMakeVisible(filterResonanceCDial);
+        filterResonanceCDial.reset(valueTreeState, "filterResonanceC");
+        filterResonanceCDial.setLabelText(juce::String::fromUTF8("Filter Reso C"));
+        filterResonanceCDial.setTooltip(juce::String::fromUTF8("Filter Reso C (0 to 1.2)"));
+        addAndMakeVisible(filterModeCDrop);
+        filterModeCDrop.addItemList(valueTreeState.getParameter("filterModeC")->getAllValueStrings(), 1);
+        filterModeCDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "filterModeC", filterModeCDrop);
+        filterModeCDrop.setTooltip(juce::String::fromUTF8("Filter Mode C (LP4, HP4, BP4, Notch)"));
         addAndMakeVisible(wowDepthADial);
         wowDepthADial.reset(valueTreeState, "wowDepthA");
         wowDepthADial.setLabelText(juce::String::fromUTF8("Wow Depth A"));
@@ -1388,6 +1448,18 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial trackGainADial{this};
     CustomRotaryDial trackGainBDial{this};
     CustomRotaryDial trackGainCDial{this};
+    CustomRotaryDial filterCutoffADial{this};
+    CustomRotaryDial filterResonanceADial{this};
+    juce::ComboBox filterModeADrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> filterModeADropAttachment;
+    CustomRotaryDial filterCutoffBDial{this};
+    CustomRotaryDial filterResonanceBDial{this};
+    juce::ComboBox filterModeBDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> filterModeBDropAttachment;
+    CustomRotaryDial filterCutoffCDial{this};
+    CustomRotaryDial filterResonanceCDial{this};
+    juce::ComboBox filterModeCDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> filterModeCDropAttachment;
     CustomRotaryDial wowDepthADial{this};
     CustomRotaryDial wowRateADial{this};
     CustomRotaryDial wowDriftADial{this};

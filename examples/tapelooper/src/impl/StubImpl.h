@@ -93,6 +93,42 @@ class StubImpl final : public EffectBase
     {
         m_trackGainC = std::pow(10.f, value / 20.f);
     }
+    void setFilterCutoffA(const float value)
+    {
+        m_filterCutoffA = value;
+    }
+    void setFilterResonanceA(const float value)
+    {
+        m_filterResonanceA = value;
+    }
+    void setFilterModeA(const size_t value)
+    {
+        m_filterModeA = value;
+    }
+    void setFilterCutoffB(const float value)
+    {
+        m_filterCutoffB = value;
+    }
+    void setFilterResonanceB(const float value)
+    {
+        m_filterResonanceB = value;
+    }
+    void setFilterModeB(const size_t value)
+    {
+        m_filterModeB = value;
+    }
+    void setFilterCutoffC(const float value)
+    {
+        m_filterCutoffC = value;
+    }
+    void setFilterResonanceC(const float value)
+    {
+        m_filterResonanceC = value;
+    }
+    void setFilterModeC(const size_t value)
+    {
+        m_filterModeC = value;
+    }
     void setWowDepthA(const float value)
     {
         m_wowDepthA = value;
@@ -215,6 +251,15 @@ class StubImpl final : public EffectBase
     float m_trackGainA{};
     float m_trackGainB{};
     float m_trackGainC{};
+    float m_filterCutoffA{};
+    float m_filterResonanceA{};
+    size_t m_filterModeA{};
+    float m_filterCutoffB{};
+    float m_filterResonanceB{};
+    size_t m_filterModeB{};
+    float m_filterCutoffC{};
+    float m_filterResonanceC{};
+    size_t m_filterModeC{};
     float m_wowDepthA{};
     float m_wowRateA{};
     float m_wowDriftA{};

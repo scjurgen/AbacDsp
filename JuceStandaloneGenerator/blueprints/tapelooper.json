@@ -45,6 +45,25 @@
     {"short": "TGC", "type": "dial", "display": "Track Gain C", "symbol": "trackGainC", "default": 0,
       "range": [-60, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
 
+    {"short": "FCTA", "type": "dial", "display": "Filter Cutoff A", "symbol": "filterCutoffA", "default": 20000,
+      "range": [20, 20000, 1, 0.5, false], "precision": 0, "unit": "Hz"},
+    {"short": "FRSA", "type": "dial", "display": "Filter Reso A", "symbol": "filterResonanceA", "default": 0,
+      "range": [0, 1.2, 0.01, 1, false], "precision": 2},
+    {"short": "FMDA", "type": "drop", "display": "Filter Mode A", "symbol": "filterModeA", "default": 0,
+      "listitems": ["LP4", "HP4", "BP4", "Notch"], "signed": false},
+    {"short": "FCTB", "type": "dial", "display": "Filter Cutoff B", "symbol": "filterCutoffB", "default": 20000,
+      "range": [20, 20000, 1, 0.5, false], "precision": 0, "unit": "Hz"},
+    {"short": "FRSB", "type": "dial", "display": "Filter Reso B", "symbol": "filterResonanceB", "default": 0,
+      "range": [0, 1.2, 0.01, 1, false], "precision": 2},
+    {"short": "FMDB", "type": "drop", "display": "Filter Mode B", "symbol": "filterModeB", "default": 0,
+      "listitems": ["LP4", "HP4", "BP4", "Notch"], "signed": false},
+    {"short": "FCTC", "type": "dial", "display": "Filter Cutoff C", "symbol": "filterCutoffC", "default": 20000,
+      "range": [20, 20000, 1, 0.5, false], "precision": 0, "unit": "Hz"},
+    {"short": "FRSC", "type": "dial", "display": "Filter Reso C", "symbol": "filterResonanceC", "default": 0,
+      "range": [0, 1.2, 0.01, 1, false], "precision": 2},
+    {"short": "FMDC", "type": "drop", "display": "Filter Mode C", "symbol": "filterModeC", "default": 0,
+      "listitems": ["LP4", "HP4", "BP4", "Notch"], "signed": false},
+
     {"short": "WDPA", "type": "dial", "display": "Wow Depth A", "symbol": "wowDepthA", "default": 0.1,
       "range": [0, 1, 0.01, 0.1, false], "precision": 2},
     {"short": "WRTA", "type": "dial", "display": "Wow Rate A", "symbol": "wowRateA", "default": 0.4,
@@ -85,7 +104,7 @@
     "WINDOW_WIDTH": "1300",
     "WINDOW_HEIGHT": "800",
     "type": "||||||",
-    "composition": "C=(1:1:1:1:1:1) A1=(SPD, BARS, IGAIN, LVL*100, CPU*100) A2=(GPLY, GBPM, GVAR, GLVL) A3=(RECA, PLAA, CLRA, TGA, WDPA, WRTA, WDRA, FDPA, FRTA) A4=(RECB, PLAB, CLRB, TGB, WDPB, WRTB, WDRB, FDPB, FRTB) A5=(RECC, PLAC, CLRC, TGC, WDPC, WRTC, WDRC, FDPC, FRTC) A6=(LUACTL)"
+    "composition": "C=(1:1:1:1:1:1) A1=(SPD, BARS, IGAIN, LVL*100, CPU*100) A2=(GPLY, GBPM, GVAR, GLVL) A3=(RECA, PLAA, CLRA, TGA, FCTA, FRSA, FMDA, WDPA, WRTA, WDRA, FDPA, FRTA) A4=(RECB, PLAB, CLRB, TGB, FCTB, FRSB, FMDB, WDPB, WRTB, WDRB, FDPB, FRTB) A5=(RECC, PLAC, CLRC, TGC, FCTC, FRSC, FMDC, WDPC, WRTC, WDRC, FDPC, FRTC) A6=(LUACTL)"
   },
   "processor_forwards": [
     {"name": "isGroovePlaying", "type": "bool"},

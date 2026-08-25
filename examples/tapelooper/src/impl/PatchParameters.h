@@ -13,49 +13,58 @@ struct PatchParameters
 {
     enum class Id : int
     {
-        tapeSpeed      , // dial
-        bars           , // dial
-        inputGain      , // dial
-        grooveLevel    , // dial
-        recordA        , // switch
-        playA          , // switch
-        clearA         , // switch
-        recordB        , // switch
-        playB          , // switch
-        clearB         , // switch
-        recordC        , // switch
-        playC          , // switch
-        clearC         , // switch
-        groovePlay     , // switch
-        bpm            , // dial
-        grooveVariation, // dial
-        trackGainA     , // dial
-        trackGainB     , // dial
-        trackGainC     , // dial
-        wowDepthA      , // dial
-        wowRateA       , // dial
-        wowDriftA      , // dial
-        wowDepthB      , // dial
-        wowRateB       , // dial
-        wowDriftB      , // dial
-        wowDepthC      , // dial
-        wowRateC       , // dial
-        wowDriftC      , // dial
-        flutterDepthA  , // dial
-        flutterRateA   , // dial
-        flutterDepthB  , // dial
-        flutterRateB   , // dial
-        flutterDepthC  , // dial
-        flutterRateC   , // dial
-        luaParam1      , // dial
-        luaParam2      , // dial
-        luaParam3      , // dial
-        luaParam4      , // dial
-        luaParam5      , // dial
-        luaParam6      , // dial
-        luaParam7      , // dial
-        luaParam8      , // dial
-        script          // script
+        tapeSpeed       , // dial
+        bars            , // dial
+        inputGain       , // dial
+        grooveLevel     , // dial
+        recordA         , // switch
+        playA           , // switch
+        clearA          , // switch
+        recordB         , // switch
+        playB           , // switch
+        clearB          , // switch
+        recordC         , // switch
+        playC           , // switch
+        clearC          , // switch
+        groovePlay      , // switch
+        bpm             , // dial
+        grooveVariation , // dial
+        trackGainA      , // dial
+        trackGainB      , // dial
+        trackGainC      , // dial
+        filterCutoffA   , // dial
+        filterResonanceA, // dial
+        filterModeA     , // drop
+        filterCutoffB   , // dial
+        filterResonanceB, // dial
+        filterModeB     , // drop
+        filterCutoffC   , // dial
+        filterResonanceC, // dial
+        filterModeC     , // drop
+        wowDepthA       , // dial
+        wowRateA        , // dial
+        wowDriftA       , // dial
+        wowDepthB       , // dial
+        wowRateB        , // dial
+        wowDriftB       , // dial
+        wowDepthC       , // dial
+        wowRateC        , // dial
+        wowDriftC       , // dial
+        flutterDepthA   , // dial
+        flutterRateA    , // dial
+        flutterDepthB   , // dial
+        flutterRateB    , // dial
+        flutterDepthC   , // dial
+        flutterRateC    , // dial
+        luaParam1       , // dial
+        luaParam2       , // dial
+        luaParam3       , // dial
+        luaParam4       , // dial
+        luaParam5       , // dial
+        luaParam6       , // dial
+        luaParam7       , // dial
+        luaParam8       , // dial
+        script           // script
     };
 float tapeSpeed{1.0f};
 float bars{8.0f};
@@ -76,6 +85,15 @@ float grooveVariation{0.0f};
 float trackGainA{0.0f};
 float trackGainB{0.0f};
 float trackGainC{0.0f};
+float filterCutoffA{20000.0f};
+float filterResonanceA{0.0f};
+size_t filterModeA{0};
+float filterCutoffB{20000.0f};
+float filterResonanceB{0.0f};
+size_t filterModeB{0};
+float filterCutoffC{20000.0f};
+float filterResonanceC{0.0f};
+size_t filterModeC{0};
 float wowDepthA{0.1f};
 float wowRateA{0.4f};
 float wowDriftA{0.05f};
@@ -122,6 +140,15 @@ std::string script{};
 "trackGainA",
 "trackGainB",
 "trackGainC",
+"filterCutoffA",
+"filterResonanceA",
+"filterModeA",
+"filterCutoffB",
+"filterResonanceB",
+"filterModeB",
+"filterCutoffC",
+"filterResonanceC",
+"filterModeC",
 "wowDepthA",
 "wowRateA",
 "wowDriftA",
@@ -182,6 +209,15 @@ std::string script{};
         else if constexpr (ParamId == Id::trackGainA) return trackGainA;
         else if constexpr (ParamId == Id::trackGainB) return trackGainB;
         else if constexpr (ParamId == Id::trackGainC) return trackGainC;
+        else if constexpr (ParamId == Id::filterCutoffA) return filterCutoffA;
+        else if constexpr (ParamId == Id::filterResonanceA) return filterResonanceA;
+        else if constexpr (ParamId == Id::filterModeA) return filterModeA;
+        else if constexpr (ParamId == Id::filterCutoffB) return filterCutoffB;
+        else if constexpr (ParamId == Id::filterResonanceB) return filterResonanceB;
+        else if constexpr (ParamId == Id::filterModeB) return filterModeB;
+        else if constexpr (ParamId == Id::filterCutoffC) return filterCutoffC;
+        else if constexpr (ParamId == Id::filterResonanceC) return filterResonanceC;
+        else if constexpr (ParamId == Id::filterModeC) return filterModeC;
         else if constexpr (ParamId == Id::wowDepthA) return wowDepthA;
         else if constexpr (ParamId == Id::wowRateA) return wowRateA;
         else if constexpr (ParamId == Id::wowDriftA) return wowDriftA;
@@ -255,6 +291,24 @@ break;
  case Id::trackGainB: if (!isEqual(get<Id::trackGainB>(), value)) {get<Id::trackGainB>() = value;m_modified = true;}
 break;
  case Id::trackGainC: if (!isEqual(get<Id::trackGainC>(), value)) {get<Id::trackGainC>() = value;m_modified = true;}
+break;
+ case Id::filterCutoffA: if (!isEqual(get<Id::filterCutoffA>(), value)) {get<Id::filterCutoffA>() = value;m_modified = true;}
+break;
+ case Id::filterResonanceA: if (!isEqual(get<Id::filterResonanceA>(), value)) {get<Id::filterResonanceA>() = value;m_modified = true;}
+break;
+ case Id::filterModeA: if (!isEqual(get<Id::filterModeA>(), value)) {get<Id::filterModeA>() = static_cast<size_t>(value) ;m_modified = true;}
+break;
+ case Id::filterCutoffB: if (!isEqual(get<Id::filterCutoffB>(), value)) {get<Id::filterCutoffB>() = value;m_modified = true;}
+break;
+ case Id::filterResonanceB: if (!isEqual(get<Id::filterResonanceB>(), value)) {get<Id::filterResonanceB>() = value;m_modified = true;}
+break;
+ case Id::filterModeB: if (!isEqual(get<Id::filterModeB>(), value)) {get<Id::filterModeB>() = static_cast<size_t>(value) ;m_modified = true;}
+break;
+ case Id::filterCutoffC: if (!isEqual(get<Id::filterCutoffC>(), value)) {get<Id::filterCutoffC>() = value;m_modified = true;}
+break;
+ case Id::filterResonanceC: if (!isEqual(get<Id::filterResonanceC>(), value)) {get<Id::filterResonanceC>() = value;m_modified = true;}
+break;
+ case Id::filterModeC: if (!isEqual(get<Id::filterModeC>(), value)) {get<Id::filterModeC>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
  case Id::wowDepthA: if (!isEqual(get<Id::wowDepthA>(), value)) {get<Id::wowDepthA>() = value;m_modified = true;}
 break;
@@ -344,47 +398,56 @@ private:
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     PatchParameters,
-        tapeSpeed      , // dial
-        bars           , // dial
-        inputGain      , // dial
-        grooveLevel    , // dial
-        recordA        , // switch
-        playA          , // switch
-        clearA         , // switch
-        recordB        , // switch
-        playB          , // switch
-        clearB         , // switch
-        recordC        , // switch
-        playC          , // switch
-        clearC         , // switch
-        groovePlay     , // switch
-        bpm            , // dial
-        grooveVariation, // dial
-        trackGainA     , // dial
-        trackGainB     , // dial
-        trackGainC     , // dial
-        wowDepthA      , // dial
-        wowRateA       , // dial
-        wowDriftA      , // dial
-        wowDepthB      , // dial
-        wowRateB       , // dial
-        wowDriftB      , // dial
-        wowDepthC      , // dial
-        wowRateC       , // dial
-        wowDriftC      , // dial
-        flutterDepthA  , // dial
-        flutterRateA   , // dial
-        flutterDepthB  , // dial
-        flutterRateB   , // dial
-        flutterDepthC  , // dial
-        flutterRateC   , // dial
-        luaParam1      , // dial
-        luaParam2      , // dial
-        luaParam3      , // dial
-        luaParam4      , // dial
-        luaParam5      , // dial
-        luaParam6      , // dial
-        luaParam7      , // dial
-        luaParam8      , // dial
-        script          // script
+        tapeSpeed       , // dial
+        bars            , // dial
+        inputGain       , // dial
+        grooveLevel     , // dial
+        recordA         , // switch
+        playA           , // switch
+        clearA          , // switch
+        recordB         , // switch
+        playB           , // switch
+        clearB          , // switch
+        recordC         , // switch
+        playC           , // switch
+        clearC          , // switch
+        groovePlay      , // switch
+        bpm             , // dial
+        grooveVariation , // dial
+        trackGainA      , // dial
+        trackGainB      , // dial
+        trackGainC      , // dial
+        filterCutoffA   , // dial
+        filterResonanceA, // dial
+        filterModeA     , // drop
+        filterCutoffB   , // dial
+        filterResonanceB, // dial
+        filterModeB     , // drop
+        filterCutoffC   , // dial
+        filterResonanceC, // dial
+        filterModeC     , // drop
+        wowDepthA       , // dial
+        wowRateA        , // dial
+        wowDriftA       , // dial
+        wowDepthB       , // dial
+        wowRateB        , // dial
+        wowDriftB       , // dial
+        wowDepthC       , // dial
+        wowRateC        , // dial
+        wowDriftC       , // dial
+        flutterDepthA   , // dial
+        flutterRateA    , // dial
+        flutterDepthB   , // dial
+        flutterRateB    , // dial
+        flutterDepthC   , // dial
+        flutterRateC    , // dial
+        luaParam1       , // dial
+        luaParam2       , // dial
+        luaParam3       , // dial
+        luaParam4       , // dial
+        luaParam5       , // dial
+        luaParam6       , // dial
+        luaParam7       , // dial
+        luaParam8       , // dial
+        script           // script
 )
