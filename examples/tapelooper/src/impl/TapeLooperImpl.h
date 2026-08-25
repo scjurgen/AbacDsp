@@ -62,7 +62,13 @@ constexpr float kMaxTrackGain = 4.f;
 // preservation above.
 constexpr float kDefaultFilterCutoff = 20000.f;
 constexpr float kDefaultFilterResonance = 0.f;
-constexpr size_t kDefaultFilterModeIndex = 0; // "LP4" - see the filterMode drop's listitems
+
+// The filterMode drop's listitems, in order - its raw 0-3 selection indexes this table, not
+// AbacDsp::poleMixingList directly (fixes a Phase 5 bug where every curated position landed
+// on LP1/LP2/LP3/LP4 instead, since those happen to be poleMixingList's own first 4 entries).
+const std::array<size_t, 4> kCuratedFilterModeIndex{AbacDsp::findFilterIndex("LP4"), AbacDsp::findFilterIndex("HP4"),
+                                                    AbacDsp::findFilterIndex("BP4"), AbacDsp::findFilterIndex("Notch")};
+const size_t kDefaultFilterModeIndex = kCuratedFilterModeIndex[0]; // "LP4"
 
 // One FdnTankGlide instance per track (independent tails); order 16, not 32, bounds the
 // 3x instance-count CPU cost. FdnTankGlide over FdnTank: proven in maxdiffuser, and its
@@ -432,17 +438,17 @@ class TapeLooperImpl final : public EffectBase
 
     void setFilterModeA(const size_t value) noexcept
     {
-        m_filterModeReq[0].store(value, std::memory_order_relaxed);
+        m_filterModeReq[0].store(resolveCuratedFilterMode(value), std::memory_order_relaxed);
     }
 
     void setFilterModeB(const size_t value) noexcept
     {
-        m_filterModeReq[1].store(value, std::memory_order_relaxed);
+        m_filterModeReq[1].store(resolveCuratedFilterMode(value), std::memory_order_relaxed);
     }
 
     void setFilterModeC(const size_t value) noexcept
     {
-        m_filterModeReq[2].store(value, std::memory_order_relaxed);
+        m_filterModeReq[2].store(resolveCuratedFilterMode(value), std::memory_order_relaxed);
     }
 
     void setReverbSendA(const float value) noexcept
@@ -513,6 +519,12 @@ class TapeLooperImpl final : public EffectBase
         return m_loopBuffer.framesAhead();
     }
 
+    // Test-support only: exposes the tape-speed-scaled beat clock samplesPerBeat() drives.
+    [[nodiscard]] size_t samplesPerBeatForTest() const noexcept
+    {
+        return samplesPerBeat();
+    }
+
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
         m_grooveKit.pollAndInstall();
@@ -556,6 +568,15 @@ class TapeLooperImpl final : public EffectBase
     }
 
   private:
+    // Maps the filterMode drop's raw 0-3 selection to a real poleMixingList index - see
+    // kCuratedFilterModeIndex's own comment for why this indirection exists.
+    [[nodiscard]] static size_t resolveCuratedFilterMode(const size_t curatedIndex) noexcept
+    {
+        return curatedIndex < TapeLooperDetail::kCuratedFilterModeIndex.size()
+                   ? TapeLooperDetail::kCuratedFilterModeIndex[curatedIndex]
+                   : TapeLooperDetail::kDefaultFilterModeIndex;
+    }
+
     void applyParameters() noexcept
     {
         m_tapeSpeed = std::clamp(m_tapeSpeedReq.load(std::memory_order_relaxed), 0.001f, 8.f);
@@ -721,6 +742,10 @@ class TapeLooperImpl final : public EffectBase
         {
             tape.setReadHead(0, static_cast<float>(loopFrames), true);
         }
+        // The loop just (re)started at its own beginning - keep the groove from drifting
+        // out of sync with it rather than free-running against the old definition.
+        m_grooveSequencer.resetPosition();
+        m_loopBuffer.reset();
     }
 #pragma GCC diagnostic pop
 
@@ -842,9 +867,11 @@ class TapeLooperImpl final : public EffectBase
         }
     }
 
+    // Tape speed multiplies the effective tempo, same as slowing/speeding a physical tape
+    // changes the pitch and rate of everything already on it - 2x speed means 2x BPM.
     [[nodiscard]] size_t samplesPerBeat() const noexcept
     {
-        return static_cast<size_t>(sampleRate() * 60.f / std::max(1.f, m_bpm));
+        return static_cast<size_t>(sampleRate() * 60.f / std::max(1.f, m_bpm * m_tapeSpeed));
     }
 
     // Advances the click's own beat clock by BlockSize samples, writing a tempo-locked

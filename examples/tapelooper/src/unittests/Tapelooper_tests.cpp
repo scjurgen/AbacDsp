@@ -343,6 +343,38 @@ TEST(TapeLooperTest, ScriptTrackGainFadesOutAndBackIn)
     EXPECT_GT(restoredRms, recordedRms * 0.5f);
 }
 
+// Regression for a real Phase 5 bug: the Filter Mode dial's raw 0-3 selection was used
+// directly as a poleMixingList index, so every curated position landed on LP1-LP4 - the
+// dial's "HP4" position (curated index 1) must actually cut a low tone, not pass it like LP4.
+TEST(TapeLooperTest, HostFilterModeDropResolvesToCuratedPreset)
+{
+    TapeLooper sut(kSampleRate);
+    sut.setBars(4.f);
+    sut.setBpm(100.f);
+    sut.setTapeSpeed(1.f);
+    sut.setRecordA(true);
+    size_t phase = 0;
+    const size_t numBlocks = kTestLoopFrames / kBlock;
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        Buffer out{};
+        sut.processBlock(sineBlock(0.7f, 100.f, phase), out);
+    }
+    sut.setRecordA(false);
+    sut.setPlayA(true);
+    sut.setFilterCutoffA(4000.f);
+    sut.setFilterResonanceA(0.f);
+
+    const Buffer decoyIn{};
+    sut.setFilterModeA(0); // curated LP4
+    const float lowPassRms = outputRms(sut, decoyIn, numBlocks);
+
+    sut.setFilterModeA(1); // curated HP4
+    const float highPassRms = outputRms(sut, decoyIn, numBlocks);
+
+    EXPECT_LT(highPassRms, lowPassRms * 0.5f);
+}
+
 // A script-driven low-pass on track A audibly attenuates a high tone recorded there,
 // while track B (never filtered) stays unaffected - proves both the effect and its
 // per-track independence.
@@ -446,4 +478,22 @@ TEST(TapeLooperTest, GrooveBuffersOnlyFillWhilePlaying)
     Buffer out{};
     sut.processBlock(in, out);
     EXPECT_GT(sut.grooveLoopBufferFramesAheadForTest(), 0u);
+}
+
+// Tape speed multiplies the effective groove/click tempo: 2x speed halves the beat clock.
+TEST(TapeLooperTest, TapeSpeedScalesTheGrooveClickBeatClock)
+{
+    TapeLooper sut(kSampleRate);
+    sut.setBpm(120.f);
+    sut.setTapeSpeed(1.f);
+    const Buffer in{};
+    Buffer out{};
+    sut.processBlock(in, out);
+    const auto baseSpb = sut.samplesPerBeatForTest();
+
+    sut.setTapeSpeed(2.f);
+    sut.processBlock(in, out);
+    const auto doubledSpeedSpb = sut.samplesPerBeatForTest();
+
+    EXPECT_NEAR(static_cast<double>(doubledSpeedSpb), static_cast<double>(baseSpb) / 2.0, 1.0);
 }
