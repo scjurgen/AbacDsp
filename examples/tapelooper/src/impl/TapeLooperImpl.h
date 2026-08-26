@@ -9,10 +9,13 @@
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "Audio/AudioBuffer.h"
+#include "Delays/MultiTapDelay.h"
 #include "Delays/VariSpeedTapeDelay.h"
+#include "Dynamics/Compressor.h"
 #include "EffectBase.h"
 #include "Filters/PoleMixingFilter.h"
 #include "Filters/Sinc/sinc_4.h"
@@ -20,8 +23,13 @@
 #include "GrooveDefaultPaths.h"
 #include "GrooveLoopBuffer.h"
 #include "Helpers/ConstructArray.h"
+#include "Helpers/StereoTrackBank.h"
+#include "Modulation/RingModulator.h"
+#include "Modulation/Tremolo.h"
+#include "NonLinear/SimpleHysteresis.h"
 #include "Parameters/LinearParameter.h"
 #include "Reverbs/FdnTankGlide.h"
+#include "Reverbs/ModulationDelayNoFeedback.h"
 #include "Sampler/GrooveDrumPlayer.h"
 #include "Sampler/GrooveKit.h"
 #include "TapeLooperScriptEngine.h"
@@ -63,12 +71,9 @@ constexpr float kMaxTrackGain = 4.f;
 constexpr float kDefaultFilterCutoff = 20000.f;
 constexpr float kDefaultFilterResonance = 0.f;
 
-// The filterMode drop's listitems, in order - its raw 0-3 selection indexes this table, not
-// AbacDsp::poleMixingList directly (fixes a Phase 5 bug where every curated position landed
-// on LP1/LP2/LP3/LP4 instead, since those happen to be poleMixingList's own first 4 entries).
-const std::array<size_t, 4> kCuratedFilterModeIndex{AbacDsp::findFilterIndex("LP4"), AbacDsp::findFilterIndex("HP4"),
-                                                    AbacDsp::findFilterIndex("BP4"), AbacDsp::findFilterIndex("Notch")};
-const size_t kDefaultFilterModeIndex = kCuratedFilterModeIndex[0]; // "LP4"
+// Filter mode has no dial anymore (Lua-only, via SetTrackFilter's modeName resolved
+// directly through AbacDsp::findFilterIndex) - this is just the atomics' initial value.
+const size_t kDefaultFilterModeIndex = AbacDsp::findFilterIndex("LP4");
 
 // One FdnTankGlide instance per track (independent tails); order 16, not 32, bounds the
 // 3x instance-count CPU cost. FdnTankGlide over FdnTank: proven in maxdiffuser, and its
@@ -78,6 +83,60 @@ constexpr size_t kReverbOrder = 16;
 constexpr float kDefaultReverbSize = 15.f;
 constexpr float kDefaultReverbDecay = 2000.f;
 constexpr float kDefaultReverbSend = 0.f; // inaudible until a track's send is touched
+
+// Distortion (7a): setFrequencyResponse()'s rate is exp(-2*pi*Hz/fs) - 0 Hz gives rate 1,
+// an exact per-sample identity. Driven endpoint matches SimpleHysteresis's own
+// "checkNonLinearity" test calibration (6000/12000).
+constexpr float kHysteresisNeutralHz = 0.f;
+constexpr float kHysteresisDrivenAttackHz = 6000.f;
+constexpr float kHysteresisDrivenDecayHz = 12000.f;
+
+// Echo (7b): one shared bus-independent delay line per track, per channel. Sized for the
+// longest reachable time (a "1/1" division at the slowest allowed BPM).
+constexpr float kMaxEchoBeats = 4.f;
+constexpr size_t kMaxEchoDelaySamples = static_cast<size_t>(kMaxEchoBeats * 60.f / kMinBpm * kAssumedSampleRate) + 4;
+
+struct SyncDivision
+{
+    std::string_view name;
+    float quarterNotes;
+};
+
+// Same table/order as delay.json's own syncDivision drop - kept as its own copy since
+// this file doesn't share a blueprint with that example.
+constexpr auto kSyncDivisions = std::to_array<SyncDivision>({
+    {"1/1", 4.f},
+    {"1/2", 2.f},
+    {"1/2.", 3.f},
+    {"1/2T", 4.f / 3.f},
+    {"1/4", 1.f},
+    {"1/4.", 1.5f},
+    {"1/4T", 2.f / 3.f},
+    {"1/8", 0.5f},
+    {"1/8.", 0.75f},
+    {"1/8T", 1.f / 3.f},
+    {"1/16", 0.25f},
+    {"1/16.", 0.375f},
+    {"1/16T", 1.f / 6.f},
+});
+constexpr size_t kDefaultEchoDivision = 4; // "1/4"
+
+// Chorus (7c): typical short-delay modulation range: depth doubles as the wet/dry mix
+// (0 = fully dry, matching every other effect's own default-sound preservation).
+constexpr float kChorusBaseWidthMs = 18.f;
+constexpr float kDefaultChorusRate = 0.5f;
+constexpr size_t kChorusMaxSizeSamples = 4800; // 100 ms at 48 kHz, generous headroom over kChorusBaseWidthMs
+
+// Compressor (7e): ratio 1 is a mathematically exact no-op regardless of threshold, so
+// this needs no separate "off" scalar the way echo/chorus do.
+constexpr float kDefaultCompThreshold = 0.f;
+constexpr float kDefaultCompRatio = 1.f;
+constexpr float kDefaultCompAttack = 10.f;
+constexpr float kDefaultCompRelease = 100.f;
+
+constexpr float kDefaultRingModFreq = 200.f;
+
+constexpr float kDefaultTremoloRate = 4.f;
 
 constexpr size_t framesForLoop(const float bars, const float bpm) noexcept
 {
@@ -111,6 +170,8 @@ class TapeLooperImpl final : public EffectBase
     using TapeTrack = AbacDsp::VariSpeedTapeDelay<TapeLooperDetail::kBufferSize, 2, 1, BlockSize>;
     using ReverbBus =
         AbacDsp::FdnTankGlide<TapeLooperDetail::kReverbMaxSizePerElement, TapeLooperDetail::kReverbOrder, BlockSize>;
+    using EchoDelay = AbacDsp::MultiTapDelay<TapeLooperDetail::kMaxEchoDelaySamples, 1>;
+    using ChorusDelay = AbacDsp::ModulationDelayNoFeedback<TapeLooperDetail::kChorusMaxSizeSamples>;
     static_assert(TapeLooperScriptEngine::kTracks == TapeLooperDetail::kFreeTracks,
                   "TapeLooperScriptEngine's per-track pool must match TapeLooperDetail::kFreeTracks");
 
@@ -125,12 +186,17 @@ class TapeLooperImpl final : public EffectBase
         , m_trackGainSmoother(
               AbacDsp::constructArray<AbacDsp::LinearSmoothingParameter<BlockSize>, TapeLooperDetail::kFreeTracks>(
                   TapeLooperDetail::kDefaultTrackGain))
-        , m_filterL(
-              AbacDsp::constructArray<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks>(sampleRate))
-        , m_filterR(
-              AbacDsp::constructArray<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks>(sampleRate))
+        , m_filter(sampleRate)
         , m_reverb(AbacDsp::constructArray<ReverbBus, TapeLooperDetail::kFreeTracks>(sampleRate))
+        , m_distortion(sampleRate)
+        , m_chorus(sampleRate)
+        , m_echo()
+        , m_compressor(sampleRate)
+        , m_ringMod(sampleRate)
+        , m_tremolo(sampleRate)
     {
+        m_chorus.forEach([](ChorusDelay& chorus) { chorus.setWidthInMsecs(TapeLooperDetail::kChorusBaseWidthMs); });
+        m_echo.forEach([](EchoDelay& echo) { echo.setTapDelay(0, 1); });
         for (auto& reverb : m_reverb)
         {
             reverb.setMinSize(TapeLooperDetail::kDefaultReverbSize * 0.5f);
@@ -316,81 +382,6 @@ class TapeLooperImpl final : public EffectBase
         m_grooveVariationReq.store(value, std::memory_order_relaxed);
     }
 
-    void setWowDepthA(const float value) noexcept
-    {
-        m_wowDepthReq[0].store(value, std::memory_order_relaxed);
-    }
-
-    void setWowDepthB(const float value) noexcept
-    {
-        m_wowDepthReq[1].store(value, std::memory_order_relaxed);
-    }
-
-    void setWowDepthC(const float value) noexcept
-    {
-        m_wowDepthReq[2].store(value, std::memory_order_relaxed);
-    }
-
-    void setWowRateA(const float value) noexcept
-    {
-        m_wowRateReq[0].store(value, std::memory_order_relaxed);
-    }
-
-    void setWowRateB(const float value) noexcept
-    {
-        m_wowRateReq[1].store(value, std::memory_order_relaxed);
-    }
-
-    void setWowRateC(const float value) noexcept
-    {
-        m_wowRateReq[2].store(value, std::memory_order_relaxed);
-    }
-
-    void setWowDriftA(const float value) noexcept
-    {
-        m_wowDriftReq[0].store(value, std::memory_order_relaxed);
-    }
-
-    void setWowDriftB(const float value) noexcept
-    {
-        m_wowDriftReq[1].store(value, std::memory_order_relaxed);
-    }
-
-    void setWowDriftC(const float value) noexcept
-    {
-        m_wowDriftReq[2].store(value, std::memory_order_relaxed);
-    }
-
-    void setFlutterDepthA(const float value) noexcept
-    {
-        m_flutterDepthReq[0].store(value, std::memory_order_relaxed);
-    }
-
-    void setFlutterDepthB(const float value) noexcept
-    {
-        m_flutterDepthReq[1].store(value, std::memory_order_relaxed);
-    }
-
-    void setFlutterDepthC(const float value) noexcept
-    {
-        m_flutterDepthReq[2].store(value, std::memory_order_relaxed);
-    }
-
-    void setFlutterRateA(const float value) noexcept
-    {
-        m_flutterRateReq[0].store(value, std::memory_order_relaxed);
-    }
-
-    void setFlutterRateB(const float value) noexcept
-    {
-        m_flutterRateReq[1].store(value, std::memory_order_relaxed);
-    }
-
-    void setFlutterRateC(const float value) noexcept
-    {
-        m_flutterRateReq[2].store(value, std::memory_order_relaxed);
-    }
-
     void setTrackGainA(const float valueDb) noexcept
     {
         m_trackGainReq[0].store(std::pow(10.f, valueDb / 20.f), std::memory_order_relaxed);
@@ -404,76 +395,6 @@ class TapeLooperImpl final : public EffectBase
     void setTrackGainC(const float valueDb) noexcept
     {
         m_trackGainReq[2].store(std::pow(10.f, valueDb / 20.f), std::memory_order_relaxed);
-    }
-
-    void setFilterCutoffA(const float valueHz) noexcept
-    {
-        m_filterCutoffReq[0].store(valueHz, std::memory_order_relaxed);
-    }
-
-    void setFilterCutoffB(const float valueHz) noexcept
-    {
-        m_filterCutoffReq[1].store(valueHz, std::memory_order_relaxed);
-    }
-
-    void setFilterCutoffC(const float valueHz) noexcept
-    {
-        m_filterCutoffReq[2].store(valueHz, std::memory_order_relaxed);
-    }
-
-    void setFilterResonanceA(const float value) noexcept
-    {
-        m_filterResonanceReq[0].store(value, std::memory_order_relaxed);
-    }
-
-    void setFilterResonanceB(const float value) noexcept
-    {
-        m_filterResonanceReq[1].store(value, std::memory_order_relaxed);
-    }
-
-    void setFilterResonanceC(const float value) noexcept
-    {
-        m_filterResonanceReq[2].store(value, std::memory_order_relaxed);
-    }
-
-    void setFilterModeA(const size_t value) noexcept
-    {
-        m_filterModeReq[0].store(resolveCuratedFilterMode(value), std::memory_order_relaxed);
-    }
-
-    void setFilterModeB(const size_t value) noexcept
-    {
-        m_filterModeReq[1].store(resolveCuratedFilterMode(value), std::memory_order_relaxed);
-    }
-
-    void setFilterModeC(const size_t value) noexcept
-    {
-        m_filterModeReq[2].store(resolveCuratedFilterMode(value), std::memory_order_relaxed);
-    }
-
-    void setReverbSendA(const float value) noexcept
-    {
-        m_reverbSendReq[0].store(value, std::memory_order_relaxed);
-    }
-
-    void setReverbSendB(const float value) noexcept
-    {
-        m_reverbSendReq[1].store(value, std::memory_order_relaxed);
-    }
-
-    void setReverbSendC(const float value) noexcept
-    {
-        m_reverbSendReq[2].store(value, std::memory_order_relaxed);
-    }
-
-    void setReverbSize(const float valueMeters) noexcept
-    {
-        m_reverbSizeReq.store(valueMeters, std::memory_order_relaxed);
-    }
-
-    void setReverbDecay(const float valueMs) noexcept
-    {
-        m_reverbDecayReq.store(valueMs, std::memory_order_relaxed);
     }
 
     // Groove menu click: styleName is one of listGrooveNames()'s own entries.
@@ -568,15 +489,6 @@ class TapeLooperImpl final : public EffectBase
     }
 
   private:
-    // Maps the filterMode drop's raw 0-3 selection to a real poleMixingList index - see
-    // kCuratedFilterModeIndex's own comment for why this indirection exists.
-    [[nodiscard]] static size_t resolveCuratedFilterMode(const size_t curatedIndex) noexcept
-    {
-        return curatedIndex < TapeLooperDetail::kCuratedFilterModeIndex.size()
-                   ? TapeLooperDetail::kCuratedFilterModeIndex[curatedIndex]
-                   : TapeLooperDetail::kDefaultFilterModeIndex;
-    }
-
     void applyParameters() noexcept
     {
         m_tapeSpeed = std::clamp(m_tapeSpeedReq.load(std::memory_order_relaxed), 0.001f, 8.f);
@@ -608,15 +520,18 @@ class TapeLooperImpl final : public EffectBase
             const auto cutoffHz = m_filterCutoffReq[track].load(std::memory_order_relaxed);
             const auto resonance = m_filterResonanceReq[track].load(std::memory_order_relaxed);
             const auto modeIndex = m_filterModeReq[track].load(std::memory_order_relaxed);
-            m_filterL[track].setCutoffFrequency(cutoffHz);
-            m_filterR[track].setCutoffFrequency(cutoffHz);
-            m_filterL[track].setResonance(resonance);
-            m_filterR[track].setResonance(resonance);
-            m_filterL[track].setFilterCoefficients(AbacDsp::poleMixingList[modeIndex].cf);
-            m_filterR[track].setFilterCoefficients(AbacDsp::poleMixingList[modeIndex].cf);
+            m_filter.forEachAtTrack(track,
+                                    [cutoffHz, resonance, modeIndex](AbacDsp::Filter1Pole4StageSmooth& filter)
+                                    {
+                                        filter.setCutoffFrequency(cutoffHz);
+                                        filter.setResonance(resonance);
+                                        filter.setFilterCoefficients(AbacDsp::poleMixingList[modeIndex].cf);
+                                    });
 
             m_reverbSend[track] = m_reverbSendReq[track].load(std::memory_order_relaxed);
             m_reverb[track].setDecay(m_reverbDecayReq.load(std::memory_order_relaxed));
+
+            applyTrackEffectParameters(track);
         }
 
         applyReverbSizeIfChanged();
@@ -631,6 +546,81 @@ class TapeLooperImpl final : public EffectBase
         m_useClick = m_grooveSourceReq.load(std::memory_order_relaxed);
 
         applyGrooveVariationIfChanged();
+    }
+
+    // Drive interpolates SimpleHysteresis toward its own calibrated non-linear extreme;
+    // chorus/ring-mod store their mix fraction for processTapeTracks() to blend with, since
+    // neither effect object does dry/wet mixing itself.
+    void applyTrackEffectParameters(const size_t track) noexcept
+    {
+        const auto drive = std::clamp(m_driveReq[track].load(std::memory_order_relaxed), 0.f, 1.f);
+        const auto hysteresisAttackHz =
+            std::lerp(TapeLooperDetail::kHysteresisNeutralHz, TapeLooperDetail::kHysteresisDrivenAttackHz, drive);
+        const auto hysteresisDecayHz =
+            std::lerp(TapeLooperDetail::kHysteresisNeutralHz, TapeLooperDetail::kHysteresisDrivenDecayHz, drive);
+        m_distortion.forEachAtTrack(track,
+                                    [hysteresisAttackHz, hysteresisDecayHz](AbacDsp::SimpleHysteresis& hysteresis)
+                                    { hysteresis.setFrequencyResponse(hysteresisAttackHz, hysteresisDecayHz); });
+
+        const auto chorusDepth = std::clamp(m_chorusDepthReq[track].load(std::memory_order_relaxed), 0.f, 1.f);
+        const auto chorusRateHz = std::max(m_chorusRateReq[track].load(std::memory_order_relaxed), 0.f);
+        m_chorusMix[track] = chorusDepth;
+        m_chorus.forEachAtTrack(track,
+                                [chorusDepth, chorusRateHz](ChorusDelay& chorus)
+                                {
+                                    chorus.setModDepth(chorusDepth);
+                                    chorus.setModSpeed(chorusRateHz);
+                                });
+
+        const auto echoDivisionIndex = std::min(m_echoDivisionReq[track].load(std::memory_order_relaxed),
+                                                TapeLooperDetail::kSyncDivisions.size() - 1);
+        m_echoFeedback[track] = std::clamp(m_echoFeedbackReq[track].load(std::memory_order_relaxed), 0.f, 0.95f);
+        applyEchoDelayIfChanged(track, echoDivisionIndex);
+
+        const auto compThresholdDb = m_compThresholdReq[track].load(std::memory_order_relaxed);
+        const auto compRatio = m_compRatioReq[track].load(std::memory_order_relaxed);
+        const auto compAttackMs = m_compAttackReq[track].load(std::memory_order_relaxed);
+        const auto compReleaseMs = m_compReleaseReq[track].load(std::memory_order_relaxed);
+        m_compressor.forEachAtTrack(track,
+                                    [compThresholdDb, compRatio, compAttackMs, compReleaseMs](AbacDsp::Compressor& comp)
+                                    {
+                                        comp.setThresholdDb(compThresholdDb);
+                                        comp.setRatio(compRatio);
+                                        comp.setAttackMs(compAttackMs);
+                                        comp.setReleaseMs(compReleaseMs);
+                                    });
+
+        const auto ringModFreqHz = std::max(m_ringModFreqReq[track].load(std::memory_order_relaxed), 0.f);
+        m_ringModMix[track] = std::clamp(m_ringModMixReq[track].load(std::memory_order_relaxed), 0.f, 1.f);
+        m_ringMod.forEachAtTrack(track,
+                                 [ringModFreqHz](AbacDsp::RingModulator& rm) { rm.setFrequency(ringModFreqHz); });
+
+        const auto tremoloRateHz = std::max(m_tremoloRateReq[track].load(std::memory_order_relaxed), 0.f);
+        const auto tremoloDepth = m_tremoloDepthReq[track].load(std::memory_order_relaxed);
+        const auto tremoloDrive = m_tremoloDriveReq[track].load(std::memory_order_relaxed);
+        m_tremolo.forEachAtTrack(track,
+                                 [tremoloRateHz, tremoloDepth, tremoloDrive](AbacDsp::Tremolo& tremolo)
+                                 {
+                                     tremolo.setRate(tremoloRateHz);
+                                     tremolo.setDepth(tremoloDepth);
+                                     tremolo.setDrive(tremoloDrive);
+                                 });
+    }
+
+    // MultiTapDelay's setTapDelay() hard-jumps the read head, so re-applying an unchanged
+    // width is a numeric no-op (see class comment) but a changed one clicks - unlike
+    // ModulationDelayNoFeedback, it has no glide/fade mode to avoid that.
+    void applyEchoDelayIfChanged(const size_t track, const size_t divisionIndex) noexcept
+    {
+        const auto quarterNotes = TapeLooperDetail::kSyncDivisions[divisionIndex].quarterNotes;
+        const auto delaySamples =
+            static_cast<size_t>(quarterNotes * 60.f / std::max(m_bpm, TapeLooperDetail::kMinBpm) * sampleRate());
+        if (delaySamples == m_appliedEchoDelaySamples[track])
+        {
+            return;
+        }
+        m_appliedEchoDelaySamples[track] = delaySamples;
+        m_echo.forEachAtTrack(track, [delaySamples](EchoDelay& echo) { echo.setTapDelay(0, delaySamples); });
     }
 
     // Drains whatever the script requested this block into the same request atomics
@@ -676,6 +666,49 @@ class TapeLooperImpl final : public EffectBase
             if (const auto v = m_scriptEngine.drainTrackReverbSendCommand(track))
             {
                 m_reverbSendReq[track].store(*v, std::memory_order_relaxed);
+            }
+            if (const auto v = m_scriptEngine.drainTrackWowCommand(track))
+            {
+                m_wowDepthReq[track].store(v->depth, std::memory_order_relaxed);
+                m_wowRateReq[track].store(v->rate, std::memory_order_relaxed);
+                m_wowDriftReq[track].store(v->drift, std::memory_order_relaxed);
+            }
+            if (const auto v = m_scriptEngine.drainTrackFlutterCommand(track))
+            {
+                m_flutterDepthReq[track].store(v->depth, std::memory_order_relaxed);
+                m_flutterRateReq[track].store(v->rate, std::memory_order_relaxed);
+            }
+            if (const auto v = m_scriptEngine.drainTrackDriveCommand(track))
+            {
+                m_driveReq[track].store(*v, std::memory_order_relaxed);
+            }
+            if (const auto v = m_scriptEngine.drainTrackChorusCommand(track))
+            {
+                m_chorusDepthReq[track].store(v->depth, std::memory_order_relaxed);
+                m_chorusRateReq[track].store(v->rateHz, std::memory_order_relaxed);
+            }
+            if (const auto v = m_scriptEngine.drainTrackEchoCommand(track))
+            {
+                m_echoDivisionReq[track].store(v->divisionIndex, std::memory_order_relaxed);
+                m_echoFeedbackReq[track].store(v->feedback, std::memory_order_relaxed);
+            }
+            if (const auto v = m_scriptEngine.drainTrackCompressorCommand(track))
+            {
+                m_compThresholdReq[track].store(v->thresholdDb, std::memory_order_relaxed);
+                m_compRatioReq[track].store(v->ratio, std::memory_order_relaxed);
+                m_compAttackReq[track].store(v->attackMs, std::memory_order_relaxed);
+                m_compReleaseReq[track].store(v->releaseMs, std::memory_order_relaxed);
+            }
+            if (const auto v = m_scriptEngine.drainTrackRingModCommand(track))
+            {
+                m_ringModFreqReq[track].store(v->freqHz, std::memory_order_relaxed);
+                m_ringModMixReq[track].store(v->mix, std::memory_order_relaxed);
+            }
+            if (const auto v = m_scriptEngine.drainTrackTremoloCommand(track))
+            {
+                m_tremoloRateReq[track].store(v->rateHz, std::memory_order_relaxed);
+                m_tremoloDepthReq[track].store(v->depth, std::memory_order_relaxed);
+                m_tremoloDriveReq[track].store(v->drive, std::memory_order_relaxed);
             }
         }
         if (const auto v = m_scriptEngine.drainReverbSizeCommand())
@@ -819,6 +852,37 @@ class TapeLooperImpl final : public EffectBase
         m_pendingInfoText = text;
     }
 
+    // Chains distortion -> chorus -> echo -> compressor -> ring-mod -> tremolo per sample.
+    // Every stage always runs, so raising a mix from 0 finds already-warm internal state
+    // rather than a cold-start transient; only the final blend is mix-gated.
+    [[nodiscard]] std::pair<float, float> stepTrackEffectsChain(const size_t track, const float inL,
+                                                                const float inR) noexcept
+    {
+        const auto distortedL = m_distortion.left(track).step(inL);
+        const auto distortedR = m_distortion.right(track).step(inR);
+
+        const auto chorusMix = m_chorusMix[track];
+        const auto chorusedL = distortedL + chorusMix * (m_chorus.left(track).step(distortedL) - distortedL);
+        const auto chorusedR = distortedR + chorusMix * (m_chorus.right(track).step(distortedR) - distortedR);
+
+        const auto echoFeedback = m_echoFeedback[track];
+        const auto echoContribL = echoFeedback * m_echo.left(track).readTap(0);
+        const auto echoContribR = echoFeedback * m_echo.right(track).readTap(0);
+        m_echo.left(track).write(chorusedL + echoContribL);
+        m_echo.right(track).write(chorusedR + echoContribR);
+        const auto afterEchoL = chorusedL + echoContribL;
+        const auto afterEchoR = chorusedR + echoContribR;
+
+        const auto compressedL = m_compressor.left(track).step(afterEchoL);
+        const auto compressedR = m_compressor.right(track).step(afterEchoR);
+
+        const auto ringModMix = m_ringModMix[track];
+        const auto ringModdedL = compressedL + ringModMix * (m_ringMod.left(track).step(compressedL) - compressedL);
+        const auto ringModdedR = compressedR + ringModMix * (m_ringMod.right(track).step(compressedR) - compressedR);
+
+        return {m_tremolo.left(track).step(ringModdedL), m_tremolo.right(track).step(ringModdedR)};
+    }
+
     // Reads each track's current tape output before writing this block's
     // input: recording adds live input onto that read-back (overdub, not
     // replace); not recording writes it back unchanged, sustaining the loop.
@@ -848,11 +912,12 @@ class TapeLooperImpl final : public EffectBase
                 for (size_t i = 0; i < BlockSize; ++i)
                 {
                     const auto gain = m_trackGainSmoother[track].getValue(i);
-                    const auto filteredL = m_filterL[track].step(tapeOut[i * 2] * gain);
-                    const auto filteredR = m_filterR[track].step(tapeOut[i * 2 + 1] * gain);
-                    mix[i * 2] += filteredL;
-                    mix[i * 2 + 1] += filteredR;
-                    reverbSendIn[i] = (filteredL + filteredR) * 0.5f * send;
+                    const auto filteredL = m_filter.left(track).step(tapeOut[i * 2] * gain);
+                    const auto filteredR = m_filter.right(track).step(tapeOut[i * 2 + 1] * gain);
+                    const auto [wetChainL, wetChainR] = stepTrackEffectsChain(track, filteredL, filteredR);
+                    mix[i * 2] += wetChainL;
+                    mix[i * 2 + 1] += wetChainR;
+                    reverbSendIn[i] = (wetChainL + wetChainR) * 0.5f * send;
                 }
             }
 
@@ -947,9 +1012,14 @@ class TapeLooperImpl final : public EffectBase
     const AbacDsp::GrooveProgram* m_lastGrooveProgram{nullptr};
     AbacDsp::ClickGenerator m_clickGen;
     std::array<AbacDsp::LinearSmoothingParameter<BlockSize>, TapeLooperDetail::kFreeTracks> m_trackGainSmoother;
-    std::array<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks> m_filterL;
-    std::array<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks> m_filterR;
+    AbacDsp::StereoTrackBank<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks> m_filter;
     std::array<ReverbBus, TapeLooperDetail::kFreeTracks> m_reverb;
+    AbacDsp::StereoTrackBank<AbacDsp::SimpleHysteresis, TapeLooperDetail::kFreeTracks> m_distortion;
+    AbacDsp::StereoTrackBank<ChorusDelay, TapeLooperDetail::kFreeTracks> m_chorus;
+    AbacDsp::StereoTrackBank<EchoDelay, TapeLooperDetail::kFreeTracks> m_echo;
+    AbacDsp::StereoTrackBank<AbacDsp::Compressor, TapeLooperDetail::kFreeTracks> m_compressor;
+    AbacDsp::StereoTrackBank<AbacDsp::RingModulator, TapeLooperDetail::kFreeTracks> m_ringMod;
+    AbacDsp::StereoTrackBank<AbacDsp::Tremolo, TapeLooperDetail::kFreeTracks> m_tremolo;
     TapeLooperScriptEngine m_scriptEngine;
 
     std::atomic<float> m_tapeSpeedReq{1.f};
@@ -993,6 +1063,36 @@ class TapeLooperImpl final : public EffectBase
     std::atomic<float> m_reverbSizeReq{TapeLooperDetail::kDefaultReverbSize};
     std::atomic<float> m_reverbDecayReq{TapeLooperDetail::kDefaultReverbDecay};
 
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_driveReq{0.f, 0.f, 0.f};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_chorusDepthReq{0.f, 0.f, 0.f};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_chorusRateReq{TapeLooperDetail::kDefaultChorusRate,
+                                                                                  TapeLooperDetail::kDefaultChorusRate,
+                                                                                  TapeLooperDetail::kDefaultChorusRate};
+    std::array<std::atomic<size_t>, TapeLooperDetail::kFreeTracks> m_echoDivisionReq{
+        TapeLooperDetail::kDefaultEchoDivision, TapeLooperDetail::kDefaultEchoDivision,
+        TapeLooperDetail::kDefaultEchoDivision};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_echoFeedbackReq{0.f, 0.f, 0.f};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_compThresholdReq{
+        TapeLooperDetail::kDefaultCompThreshold, TapeLooperDetail::kDefaultCompThreshold,
+        TapeLooperDetail::kDefaultCompThreshold};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_compRatioReq{
+        TapeLooperDetail::kDefaultCompRatio, TapeLooperDetail::kDefaultCompRatio, TapeLooperDetail::kDefaultCompRatio};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_compAttackReq{TapeLooperDetail::kDefaultCompAttack,
+                                                                                  TapeLooperDetail::kDefaultCompAttack,
+                                                                                  TapeLooperDetail::kDefaultCompAttack};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_compReleaseReq{
+        TapeLooperDetail::kDefaultCompRelease, TapeLooperDetail::kDefaultCompRelease,
+        TapeLooperDetail::kDefaultCompRelease};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_ringModFreqReq{
+        TapeLooperDetail::kDefaultRingModFreq, TapeLooperDetail::kDefaultRingModFreq,
+        TapeLooperDetail::kDefaultRingModFreq};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_ringModMixReq{0.f, 0.f, 0.f};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_tremoloRateReq{
+        TapeLooperDetail::kDefaultTremoloRate, TapeLooperDetail::kDefaultTremoloRate,
+        TapeLooperDetail::kDefaultTremoloRate};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_tremoloDepthReq{0.f, 0.f, 0.f};
+    std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_tremoloDriveReq{0.f, 0.f, 0.f};
+
     float m_tapeSpeed{1.f};
     float m_appliedBars{0.f};
     float m_appliedBpmForLoopLength{0.f};
@@ -1026,6 +1126,11 @@ class TapeLooperImpl final : public EffectBase
                                                                   TapeLooperDetail::kDefaultReverbSend,
                                                                   TapeLooperDetail::kDefaultReverbSend};
     float m_appliedReverbSize{0.f}; // 0 forces the first applyReverbSizeIfChanged() to apply
+
+    std::array<float, TapeLooperDetail::kFreeTracks> m_chorusMix{0.f, 0.f, 0.f};
+    std::array<float, TapeLooperDetail::kFreeTracks> m_ringModMix{0.f, 0.f, 0.f};
+    std::array<float, TapeLooperDetail::kFreeTracks> m_echoFeedback{0.f, 0.f, 0.f};
+    std::array<size_t, TapeLooperDetail::kFreeTracks> m_appliedEchoDelaySamples{};
 
     std::mutex m_grooveStyleMutex;
     std::string m_currentGrooveStyle; // "<Genre>/<style>", empty until a menu pick

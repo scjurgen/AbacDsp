@@ -65,6 +65,28 @@ std::vector<float> outputRmsPerChunk(TapeLooper& sut, const Buffer& in, const si
     }
     return result;
 }
+
+// Feeds identical silence into both and reports whether any sample pair ever diverges -
+// used to prove an effect actually reaches playback without asserting its direction/size.
+bool outputsDifferAudibly(TapeLooper& a, TapeLooper& b, const size_t numBlocks)
+{
+    const Buffer decoyIn{};
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        Buffer outA{};
+        Buffer outB{};
+        a.processBlock(decoyIn, outA);
+        b.processBlock(decoyIn, outB);
+        for (size_t i = 0; i < kBlock; ++i)
+        {
+            if (std::abs(outA(i, 0) - outB(i, 0)) > 1e-6f)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
 }
 
 TEST(TapeLooperTest, StoppedRecordSustainsPreviouslyRecordedLevel)
@@ -200,8 +222,8 @@ TEST(TapeLooperTest, TrackNotPlayingContributesNothingBeforeAnyLoopWraparound)
     }
 }
 
-// Proves the new setters reach VariSpeedTapeDelay, not that pitch is more
-// stable (out of scope for wiring-only Phase 2).
+// Proves the script's wow/flutter commands reach VariSpeedTapeDelay, not that
+// pitch is more stable (out of scope here).
 TEST(TapeLooperTest, WowFlutterDepthAudiblyChangesPlayback)
 {
     const auto record = [](TapeLooper& sut)
@@ -225,32 +247,120 @@ TEST(TapeLooperTest, WowFlutterDepthAudiblyChangesPlayback)
     record(modulated);
 
     TapeLooper flat(kSampleRate);
-    flat.setWowDepthA(0.f);
-    flat.setWowRateA(0.f);
-    flat.setWowDriftA(0.f);
-    flat.setFlutterDepthA(0.f);
-    flat.setFlutterRateA(0.f);
+    ASSERT_TRUE(flat.setScript("SetTrackWow(0, 0, 0, 0)\nSetTrackFlutter(0, 0, 0)\n"));
     record(flat);
 
-    const Buffer decoyIn{};
-    const size_t numBlocks = kTestLoopFrames / kBlock;
-    bool sawDifference = false;
-    for (size_t block = 0; block < numBlocks && !sawDifference; ++block)
+    EXPECT_TRUE(outputsDifferAudibly(modulated, flat, kTestLoopFrames / kBlock));
+}
+
+// Lua-only Phase 7 effects: each is proven by comparing a scripted instance against an
+// untouched (all-default, i.e. neutral) one, the same audible-difference approach as
+// WowFlutterDepthAudiblyChangesPlayback above.
+namespace
+{
+void recordATone(TapeLooper& sut)
+{
+    sut.setBars(4.f);
+    sut.setBpm(100.f);
+    sut.setTapeSpeed(1.f);
+    sut.setRecordA(true);
+    sut.setPlayA(true);
+    size_t phase = 0;
+    for (size_t block = 0; block < kTestLoopFrames / kBlock; ++block)
     {
-        Buffer modulatedOut{};
-        Buffer flatOut{};
-        modulated.processBlock(decoyIn, modulatedOut);
-        flat.processBlock(decoyIn, flatOut);
-        for (size_t i = 0; i < kBlock; ++i)
-        {
-            if (std::abs(modulatedOut(i, 0) - flatOut(i, 0)) > 1e-6f)
-            {
-                sawDifference = true;
-                break;
-            }
-        }
+        const auto in = sineBlock(0.7f, 220.f, phase);
+        Buffer out{};
+        sut.processBlock(in, out);
     }
-    EXPECT_TRUE(sawDifference);
+    sut.setRecordA(false);
+}
+}
+
+TEST(TapeLooperTest, ScriptDriveAudiblyChangesPlayback)
+{
+    TapeLooper clean(kSampleRate);
+    recordATone(clean);
+
+    TapeLooper driven(kSampleRate);
+    ASSERT_TRUE(driven.setScript("SetTrackDrive(0, 1)"));
+    recordATone(driven);
+
+    EXPECT_TRUE(outputsDifferAudibly(clean, driven, kTestLoopFrames / kBlock));
+}
+
+TEST(TapeLooperTest, ScriptChorusAudiblyChangesPlayback)
+{
+    TapeLooper dry(kSampleRate);
+    recordATone(dry);
+
+    TapeLooper chorused(kSampleRate);
+    ASSERT_TRUE(chorused.setScript("SetTrackChorus(0, 1, 2)"));
+    recordATone(chorused);
+
+    EXPECT_TRUE(outputsDifferAudibly(dry, chorused, kTestLoopFrames / kBlock));
+}
+
+TEST(TapeLooperTest, ScriptEchoAudiblyChangesPlayback)
+{
+    TapeLooper dry(kSampleRate);
+    recordATone(dry);
+
+    TapeLooper echoed(kSampleRate);
+    ASSERT_TRUE(echoed.setScript("SetTrackEcho(0, 4, 0.5)"));
+    recordATone(echoed);
+
+    EXPECT_TRUE(outputsDifferAudibly(dry, echoed, kTestLoopFrames / kBlock));
+}
+
+TEST(TapeLooperTest, ScriptCompressorReducesLoudPlaybackLevel)
+{
+    TapeLooper sut(kSampleRate);
+    sut.setBars(4.f);
+    sut.setBpm(100.f);
+    sut.setTapeSpeed(1.f);
+    sut.setRecordA(true);
+    sut.setPlayA(true);
+    size_t phase = 0;
+    const size_t numBlocks = kTestLoopFrames / kBlock;
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        Buffer out{};
+        sut.processBlock(sineBlock(0.9f, 220.f, phase), out);
+    }
+    sut.setRecordA(false);
+
+    const Buffer decoyIn{};
+    const float uncompressedRms = outputRms(sut, decoyIn, numBlocks);
+
+    ASSERT_TRUE(sut.setScript("SetTrackCompressor(0, -40, 8, 5, 50)"));
+    outputRms(sut, decoyIn, 20); // let the envelope follower settle
+    const float compressedRms = outputRms(sut, decoyIn, numBlocks);
+
+    EXPECT_LT(compressedRms, uncompressedRms * 0.8f);
+}
+
+TEST(TapeLooperTest, ScriptRingModAudiblyChangesPlayback)
+{
+    TapeLooper dry(kSampleRate);
+    recordATone(dry);
+
+    TapeLooper ringModded(kSampleRate);
+    ASSERT_TRUE(ringModded.setScript("SetTrackRingMod(0, 300, 1)"));
+    recordATone(ringModded);
+
+    EXPECT_TRUE(outputsDifferAudibly(dry, ringModded, kTestLoopFrames / kBlock));
+}
+
+TEST(TapeLooperTest, ScriptTremoloAudiblyChangesPlayback)
+{
+    TapeLooper dry(kSampleRate);
+    recordATone(dry);
+
+    TapeLooper tremoloed(kSampleRate);
+    ASSERT_TRUE(tremoloed.setScript("SetTrackTremolo(0, 5, 1, 1)"));
+    recordATone(tremoloed);
+
+    EXPECT_TRUE(outputsDifferAudibly(dry, tremoloed, kTestLoopFrames / kBlock));
 }
 
 // Script-driven record/play reaches the same applied state as the host setters do -
@@ -341,38 +451,6 @@ TEST(TapeLooperTest, ScriptTrackGainFadesOutAndBackIn)
     sut.processBlock(decoyIn, rampOut);
     const float restoredRms = outputRms(sut, decoyIn, numBlocks);
     EXPECT_GT(restoredRms, recordedRms * 0.5f);
-}
-
-// Regression for a real Phase 5 bug: the Filter Mode dial's raw 0-3 selection was used
-// directly as a poleMixingList index, so every curated position landed on LP1-LP4 - the
-// dial's "HP4" position (curated index 1) must actually cut a low tone, not pass it like LP4.
-TEST(TapeLooperTest, HostFilterModeDropResolvesToCuratedPreset)
-{
-    TapeLooper sut(kSampleRate);
-    sut.setBars(4.f);
-    sut.setBpm(100.f);
-    sut.setTapeSpeed(1.f);
-    sut.setRecordA(true);
-    size_t phase = 0;
-    const size_t numBlocks = kTestLoopFrames / kBlock;
-    for (size_t block = 0; block < numBlocks; ++block)
-    {
-        Buffer out{};
-        sut.processBlock(sineBlock(0.7f, 100.f, phase), out);
-    }
-    sut.setRecordA(false);
-    sut.setPlayA(true);
-    sut.setFilterCutoffA(4000.f);
-    sut.setFilterResonanceA(0.f);
-
-    const Buffer decoyIn{};
-    sut.setFilterModeA(0); // curated LP4
-    const float lowPassRms = outputRms(sut, decoyIn, numBlocks);
-
-    sut.setFilterModeA(1); // curated HP4
-    const float highPassRms = outputRms(sut, decoyIn, numBlocks);
-
-    EXPECT_LT(highPassRms, lowPassRms * 0.5f);
 }
 
 // A script-driven low-pass on track A audibly attenuates a high tone recorded there,

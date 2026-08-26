@@ -18,6 +18,52 @@ struct TapeLooperFilterCommand
     std::optional<size_t> modeIndex;
 };
 
+struct TapeLooperWowCommand
+{
+    float depth{0.f};
+    float rate{0.f};
+    float drift{0.f};
+};
+
+struct TapeLooperFlutterCommand
+{
+    float depth{0.f};
+    float rate{0.f};
+};
+
+struct TapeLooperChorusCommand
+{
+    float depth{0.f};
+    float rateHz{0.f};
+};
+
+struct TapeLooperEchoCommand
+{
+    size_t divisionIndex{0};
+    float feedback{0.f};
+};
+
+struct TapeLooperCompressorCommand
+{
+    float thresholdDb{0.f};
+    float ratio{1.f};
+    float attackMs{10.f};
+    float releaseMs{100.f};
+};
+
+struct TapeLooperRingModCommand
+{
+    float freqHz{0.f};
+    float mix{0.f};
+};
+
+struct TapeLooperTremoloCommand
+{
+    float rateHz{0.f};
+    float depth{0.f};
+    float drive{0.f};
+};
+
 /**
  * Adds tapelooper's own scripted entry points on top of LuaScriptEngineBase's shared
  * MIDI/UI-parameter machinery: transport (tape speed, BPM, groove variation), per-track
@@ -66,6 +112,15 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
 "--   SetTrackReverbSend(track, amount)    0 dry, 1 fully sent to the shared reverb bus\n"
 "--   SetReverbSize(meters)                shared by every track's send\n"
 "--   SetReverbDecay(ms)                   shared by every track's send\n"
+"--   SetTrackWow(track, depth, rate, drift)      tape speed-drift character\n"
+"--   SetTrackFlutter(track, depth, rate)         fast speed-irregularity character\n"
+"--   SetTrackDrive(track, amount)                0 clean, 1 hysteresis-distorted\n"
+"--   SetTrackChorus(track, depth, rateHz)         depth also sets the wet/dry mix\n"
+"--   SetTrackEcho(track, divisionIndex, feedback) 0-based sync division; feedback also\n"
+"--     sets the send level (0 = no echo at all, not just no repeats)\n"
+"--   SetTrackCompressor(track, thresholdDb, ratio, attackMs, releaseMs)  ratio 1 = off\n"
+"--   SetTrackRingMod(track, freqHz, mix)\n"
+"--   SetTrackTremolo(track, rateHz, depth, drive)  drive squares the LFO toward a gate\n"
 "\n"
 "-- Fires whenever a track's applied record state changes (edge-triggered, not polled).\n"
 "function OnRecordStateChanged(track, isRecording)\n"
@@ -96,6 +151,14 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     [[nodiscard]] std::optional<float> drainReverbDecayCommand() noexcept;
     // true = click, false = groove.
     [[nodiscard]] std::optional<bool> drainGrooveSourceCommand() noexcept;
+    [[nodiscard]] std::optional<TapeLooperWowCommand> drainTrackWowCommand(size_t track) noexcept;
+    [[nodiscard]] std::optional<TapeLooperFlutterCommand> drainTrackFlutterCommand(size_t track) noexcept;
+    [[nodiscard]] std::optional<float> drainTrackDriveCommand(size_t track) noexcept;
+    [[nodiscard]] std::optional<TapeLooperChorusCommand> drainTrackChorusCommand(size_t track) noexcept;
+    [[nodiscard]] std::optional<TapeLooperEchoCommand> drainTrackEchoCommand(size_t track) noexcept;
+    [[nodiscard]] std::optional<TapeLooperCompressorCommand> drainTrackCompressorCommand(size_t track) noexcept;
+    [[nodiscard]] std::optional<TapeLooperRingModCommand> drainTrackRingModCommand(size_t track) noexcept;
+    [[nodiscard]] std::optional<TapeLooperTremoloCommand> drainTrackTremoloCommand(size_t track) noexcept;
 
   private:
     friend class LuaScriptEngineBase<TapeLooperScriptEngine>;
@@ -112,6 +175,14 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     void luaSetBpm(float value) noexcept;
     void luaSetGrooveVariation(float value) noexcept;
     void luaSetGrooveSource(const std::string& mode) noexcept;
+    void luaSetTrackWow(size_t track, float depth, float rate, float drift) noexcept;
+    void luaSetTrackFlutter(size_t track, float depth, float rate) noexcept;
+    void luaSetTrackDrive(size_t track, float value) noexcept;
+    void luaSetTrackChorus(size_t track, float depth, float rateHz) noexcept;
+    void luaSetTrackEcho(size_t track, size_t divisionIndex, float feedback) noexcept;
+    void luaSetTrackCompressor(size_t track, float thresholdDb, float ratio, float attackMs, float releaseMs) noexcept;
+    void luaSetTrackRingMod(size_t track, float freqHz, float mix) noexcept;
+    void luaSetTrackTremolo(size_t track, float rateHz, float depth, float drive) noexcept;
 
     sol::protected_function m_onRecordStateChangedFn;
     std::optional<float> m_pendingTapeSpeed;
@@ -125,6 +196,14 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     std::optional<float> m_pendingReverbSize;
     std::optional<float> m_pendingReverbDecay;
     std::optional<bool> m_pendingGrooveSource;
+    std::array<std::optional<TapeLooperWowCommand>, kTracks> m_pendingTrackWow{};
+    std::array<std::optional<TapeLooperFlutterCommand>, kTracks> m_pendingTrackFlutter{};
+    std::array<std::optional<float>, kTracks> m_pendingTrackDrive{};
+    std::array<std::optional<TapeLooperChorusCommand>, kTracks> m_pendingTrackChorus{};
+    std::array<std::optional<TapeLooperEchoCommand>, kTracks> m_pendingTrackEcho{};
+    std::array<std::optional<TapeLooperCompressorCommand>, kTracks> m_pendingTrackCompressor{};
+    std::array<std::optional<TapeLooperRingModCommand>, kTracks> m_pendingTrackRingMod{};
+    std::array<std::optional<TapeLooperTremoloCommand>, kTracks> m_pendingTrackTremolo{};
 };
 
 inline const std::string TapeLooperScriptEngine::kFullSkeletonScript =
@@ -150,6 +229,14 @@ inline void TapeLooperScriptEngine::bindScriptFunctions()
     m_lua.set_function("SetBpm", &TapeLooperScriptEngine::luaSetBpm, this);
     m_lua.set_function("SetGrooveVariation", &TapeLooperScriptEngine::luaSetGrooveVariation, this);
     m_lua.set_function("SetGrooveSource", &TapeLooperScriptEngine::luaSetGrooveSource, this);
+    m_lua.set_function("SetTrackWow", &TapeLooperScriptEngine::luaSetTrackWow, this);
+    m_lua.set_function("SetTrackFlutter", &TapeLooperScriptEngine::luaSetTrackFlutter, this);
+    m_lua.set_function("SetTrackDrive", &TapeLooperScriptEngine::luaSetTrackDrive, this);
+    m_lua.set_function("SetTrackChorus", &TapeLooperScriptEngine::luaSetTrackChorus, this);
+    m_lua.set_function("SetTrackEcho", &TapeLooperScriptEngine::luaSetTrackEcho, this);
+    m_lua.set_function("SetTrackCompressor", &TapeLooperScriptEngine::luaSetTrackCompressor, this);
+    m_lua.set_function("SetTrackRingMod", &TapeLooperScriptEngine::luaSetTrackRingMod, this);
+    m_lua.set_function("SetTrackTremolo", &TapeLooperScriptEngine::luaSetTrackTremolo, this);
 }
 
 inline void TapeLooperScriptEngine::notifyRecordStateChanged(const size_t track, const bool isRecording) noexcept
@@ -244,6 +331,76 @@ inline void TapeLooperScriptEngine::luaSetGrooveSource(const std::string& mode) 
         m_pendingGrooveSource = false;
     }
     // Anything else is ignored - previous source stays in effect.
+}
+
+inline void TapeLooperScriptEngine::luaSetTrackWow(const size_t track, const float depth, const float rate,
+                                                   const float drift) noexcept
+{
+    if (track < kTracks)
+    {
+        m_pendingTrackWow[track] = TapeLooperWowCommand{depth, rate, drift};
+    }
+}
+
+inline void TapeLooperScriptEngine::luaSetTrackFlutter(const size_t track, const float depth, const float rate) noexcept
+{
+    if (track < kTracks)
+    {
+        m_pendingTrackFlutter[track] = TapeLooperFlutterCommand{depth, rate};
+    }
+}
+
+inline void TapeLooperScriptEngine::luaSetTrackDrive(const size_t track, const float value) noexcept
+{
+    if (track < kTracks)
+    {
+        m_pendingTrackDrive[track] = value;
+    }
+}
+
+inline void TapeLooperScriptEngine::luaSetTrackChorus(const size_t track, const float depth,
+                                                      const float rateHz) noexcept
+{
+    if (track < kTracks)
+    {
+        m_pendingTrackChorus[track] = TapeLooperChorusCommand{depth, rateHz};
+    }
+}
+
+inline void TapeLooperScriptEngine::luaSetTrackEcho(const size_t track, const size_t divisionIndex,
+                                                    const float feedback) noexcept
+{
+    if (track < kTracks)
+    {
+        m_pendingTrackEcho[track] = TapeLooperEchoCommand{divisionIndex, feedback};
+    }
+}
+
+inline void TapeLooperScriptEngine::luaSetTrackCompressor(const size_t track, const float thresholdDb,
+                                                          const float ratio, const float attackMs,
+                                                          const float releaseMs) noexcept
+{
+    if (track < kTracks)
+    {
+        m_pendingTrackCompressor[track] = TapeLooperCompressorCommand{thresholdDb, ratio, attackMs, releaseMs};
+    }
+}
+
+inline void TapeLooperScriptEngine::luaSetTrackRingMod(const size_t track, const float freqHz, const float mix) noexcept
+{
+    if (track < kTracks)
+    {
+        m_pendingTrackRingMod[track] = TapeLooperRingModCommand{freqHz, mix};
+    }
+}
+
+inline void TapeLooperScriptEngine::luaSetTrackTremolo(const size_t track, const float rateHz, const float depth,
+                                                       const float drive) noexcept
+{
+    if (track < kTracks)
+    {
+        m_pendingTrackTremolo[track] = TapeLooperTremoloCommand{rateHz, depth, drive};
+    }
 }
 
 inline std::optional<float> TapeLooperScriptEngine::drainTapeSpeedCommand() noexcept
@@ -341,5 +498,98 @@ inline std::optional<bool> TapeLooperScriptEngine::drainGrooveSourceCommand() no
 {
     const auto result = m_pendingGrooveSource;
     m_pendingGrooveSource.reset();
+    return result;
+}
+
+inline std::optional<TapeLooperWowCommand> TapeLooperScriptEngine::drainTrackWowCommand(const size_t track) noexcept
+{
+    if (track >= kTracks)
+    {
+        return std::nullopt;
+    }
+    const auto result = m_pendingTrackWow[track];
+    m_pendingTrackWow[track].reset();
+    return result;
+}
+
+inline std::optional<TapeLooperFlutterCommand> TapeLooperScriptEngine::drainTrackFlutterCommand(
+    const size_t track) noexcept
+{
+    if (track >= kTracks)
+    {
+        return std::nullopt;
+    }
+    const auto result = m_pendingTrackFlutter[track];
+    m_pendingTrackFlutter[track].reset();
+    return result;
+}
+
+inline std::optional<float> TapeLooperScriptEngine::drainTrackDriveCommand(const size_t track) noexcept
+{
+    if (track >= kTracks)
+    {
+        return std::nullopt;
+    }
+    const auto result = m_pendingTrackDrive[track];
+    m_pendingTrackDrive[track].reset();
+    return result;
+}
+
+inline std::optional<TapeLooperChorusCommand> TapeLooperScriptEngine::drainTrackChorusCommand(
+    const size_t track) noexcept
+{
+    if (track >= kTracks)
+    {
+        return std::nullopt;
+    }
+    const auto result = m_pendingTrackChorus[track];
+    m_pendingTrackChorus[track].reset();
+    return result;
+}
+
+inline std::optional<TapeLooperEchoCommand> TapeLooperScriptEngine::drainTrackEchoCommand(const size_t track) noexcept
+{
+    if (track >= kTracks)
+    {
+        return std::nullopt;
+    }
+    const auto result = m_pendingTrackEcho[track];
+    m_pendingTrackEcho[track].reset();
+    return result;
+}
+
+inline std::optional<TapeLooperCompressorCommand> TapeLooperScriptEngine::drainTrackCompressorCommand(
+    const size_t track) noexcept
+{
+    if (track >= kTracks)
+    {
+        return std::nullopt;
+    }
+    const auto result = m_pendingTrackCompressor[track];
+    m_pendingTrackCompressor[track].reset();
+    return result;
+}
+
+inline std::optional<TapeLooperRingModCommand> TapeLooperScriptEngine::drainTrackRingModCommand(
+    const size_t track) noexcept
+{
+    if (track >= kTracks)
+    {
+        return std::nullopt;
+    }
+    const auto result = m_pendingTrackRingMod[track];
+    m_pendingTrackRingMod[track].reset();
+    return result;
+}
+
+inline std::optional<TapeLooperTremoloCommand> TapeLooperScriptEngine::drainTrackTremoloCommand(
+    const size_t track) noexcept
+{
+    if (track >= kTracks)
+    {
+        return std::nullopt;
+    }
+    const auto result = m_pendingTrackTremolo[track];
+    m_pendingTrackTremolo[track].reset();
     return result;
 }

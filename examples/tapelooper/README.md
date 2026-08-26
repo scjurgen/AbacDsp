@@ -18,18 +18,16 @@ at a fixed rate.
 | Groove Level | -60 - 12 dB | Groove track output level |
 | Rec/Play/Clear A, B, C | (switches) | Per-track record, play, and clear (momentary) |
 | Track Gain A, B, C | -60 - 12 dB | Per-track playback level - a fader, not a mute; Play stays the hard on/off |
-| Filter Cutoff A, B, C | 20 - 20000 Hz | Per-track four-stage filter cutoff (default at the ceiling, so it's inaudible until touched) |
-| Filter Reso A, B, C | 0 - 1.2 | Per-track resonance; 1.0 is the measured self-oscillation threshold |
-| Filter Mode A, B, C | LP4/HP4/BP4/Notch | Per-track filter response; more responses are reachable from a script, see below |
-| Reverb Send A, B, C | 0 - 1 | Per-track send to that track's own reverb instance, tapped post-filter; 0 (default) is dry |
-| Reverb Size | 2 - 60 m | Shared room size for every track's reverb send |
-| Reverb Decay | 100 - 10000 ms | Shared decay time for every track's reverb send |
 | Groove | (switch) | Play/stop the groove track |
 | BPM | 50 - 250 | Groove/click tempo |
 | Groove Var | 0 - 31 | Selects among the loaded style's variations |
-| Wow Depth/Rate/Drift (A, B, C) | 0-1, 0-3 Hz, 0-1 | Per-track slow speed-drift character (`VariSpeedTapeDelay`'s own wow model) |
-| Flutter Depth/Rate (A, B, C) | 0-1, 0-10 Hz | Per-track fast speed-irregularity character |
 | Script | (button) | Opens the popup editor for the current patch's script. The editor's own Reset button replaces the text with a full skeleton (every available hook, stubbed out) - Cancel discards it, Apply commits it. |
+
+Everything else - filter, reverb send/size/decay, wow/flutter, drive/distortion, chorus,
+echo, compressor, ring mod, and tremolo - is Lua-only: there's no dial for it, only the
+functions documented below. This keeps the UI to what's essential (transport and the
+record/play basics) while every sound-shaping parameter stays reachable and automatable
+from a script.
 
 **Settings > Scripts** manages a named pool of saved scripts, separate from the script embedded
 in the current patch. **Settings > Patches** saves/loads full patches, including whichever
@@ -75,10 +73,10 @@ SetTrackFilter(track, cutoffHz, resonance, modeName)
 ```
 
 `resonance` is normalized: 1.0 is the measured self-oscillation threshold at the current
-cutoff, same convention as the Filter Reso dial. `modeName` isn't limited to the dial's
-curated `"LP4"`/`"HP4"`/`"BP4"`/`"Notch"` subset - any name from `AbacDsp::poleMixingList`
-(`Filters/PoleMixingFilter.h`) works, e.g. `"AP2"` or `"BP Notch"`. An unrecognized name is
-ignored and the track's filter mode stays whatever it was - cutoff and resonance still apply.
+cutoff. `modeName` isn't limited to a curated `"LP4"`/`"HP4"`/`"BP4"`/`"Notch"` subset - any
+name from `AbacDsp::poleMixingList` (`Filters/PoleMixingFilter.h`) works, e.g. `"AP2"` or
+`"BP Notch"`. An unrecognized name is ignored and the track's filter mode stays whatever it
+was - cutoff and resonance still apply.
 Both cutoff and resonance ramp smoothly on their own (the filter class smooths them
 internally), so `Timer.Every`-driven sweeps don't need any extra smoothing in the script.
 
@@ -95,6 +93,87 @@ cross-track bleed through a shared bus - but Size and Decay tune all three toget
 post-filter at each track's own send level (0 is dry, regardless of size/decay). Each track's
 reverb keeps ringing on its own momentum after that track's send drops to 0 or Play stops,
 the way a real room does.
+
+### Wow and flutter
+
+```lua
+SetTrackWow(track, depth, rate, drift)  -- slow speed-drift character
+SetTrackFlutter(track, depth, rate)     -- fast speed-irregularity character
+```
+
+Drives `VariSpeedTapeDelay`'s own wow/flutter model directly. `depth` is 0-1, `rate` is in
+Hz, `drift` (wow only) is 0-1. All default to a small nonzero amount (a plain patch already
+sounds like tape, not digitally locked); `SetTrackWow(track, 0, 0, 0)` /
+`SetTrackFlutter(track, 0, 0)` removes it entirely.
+
+### Drive
+
+```lua
+SetTrackDrive(track, amount)  -- 0 clean (exact bypass), 1 fully hysteresis-distorted
+```
+
+Runs the track through `AbacDsp::SimpleHysteresis`: asymmetric attack/decay rates that
+depend on signal direction, the classic tape-saturation non-linearity. 0 is an exact
+per-sample identity, not just "low amount".
+
+### Chorus
+
+```lua
+SetTrackChorus(track, depth, rateHz)  -- depth (0-1) also sets the wet/dry mix
+```
+
+A short modulated delay (`AbacDsp::ModulationDelayNoFeedback`) blended in by `depth` - 0 is
+fully dry. `rateHz` is the modulation LFO speed.
+
+### Echo
+
+```lua
+SetTrackEcho(track, divisionIndex, feedback)  -- feedback (0-1) also sets the send level
+```
+
+A single BPM-synced tap (`AbacDsp::MultiTapDelay`) with manual feedback: each repeat is the
+previous one scaled by `feedback`, and `feedback` doubles as the send level, so 0 means no
+echo at all rather than "one repeat at full volume". `divisionIndex` is 0-based into:
+
+| Index | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Division | 1/1 | 1/2 | 1/2. | 1/2T | 1/4 | 1/4. | 1/4T | 1/8 | 1/8. | 1/8T | 1/16 | 1/16. | 1/16T |
+
+### Compressor
+
+```lua
+SetTrackCompressor(track, thresholdDb, ratio, attackMs, releaseMs)  -- ratio 1 = off
+```
+
+A feedforward peak compressor (`AbacDsp::Compressor`) with a fixed 3 dB soft knee and no
+makeup gain. `ratio` of 1 is a mathematically exact no-op regardless of threshold.
+
+### Ring mod
+
+```lua
+SetTrackRingMod(track, freqHz, mix)  -- mix 0 dry, 1 fully ring-modulated
+```
+
+Multiplies the track by an audio-rate sine carrier (`AbacDsp::RingModulator`), producing
+sum/difference sidebands instead of the original pitch - classic bell/metallic tones.
+
+### Tremolo
+
+```lua
+SetTrackTremolo(track, rateHz, depth, drive)  -- drive squares the LFO toward a hard gate
+```
+
+Sine-LFO amplitude modulation (`AbacDsp::Tremolo`). At `depth` 0 it's an exact unity gain
+regardless of `drive`. Raising `drive` pushes the LFO through a tanh waveshaper, morphing it
+from a sine toward a near-square wave - full `drive` and `depth` is a hard on/off "stutter".
+
+### Example: track C effects presets
+
+Three directly-runnable smoke tests for the effects above, each self-contained -
+`base-scripts/lofi-tape-fx-track-c.lua` (drive + chorus + echo, a warped-tape character),
+`base-scripts/modulation-fx-track-c.lua` (compressor + ring mod + tremolo), and
+`base-scripts/digital-clean-track-c.lua` (wow/flutter to 0, removing tape's default
+speed-drift). Record something onto track C and play it back to hear any of them.
 
 ### Groove source
 
