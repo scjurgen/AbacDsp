@@ -200,6 +200,38 @@ track's input, still passing through the same varispeed tape - so it wow/flutter
 speed-changes right along with everything else. Only takes effect while the Groove switch is
 playing, same as the MIDI groove path it replaces.
 
+### Per-instrument groove control
+
+```lua
+SetInstrumentGain(name, gain)          -- linear multiplier, 0 mutes that instrument
+MuteInstrument(name)                   -- sugar for SetInstrumentGain(name, 0)
+SetInstrumentReverbSend(name, amount)  -- sent to the groove track's own reverb
+```
+
+`name` is a lowercase instrument tag - the full vocabulary a groove note can carry, matching
+`AbacDsp::kGrooveTagNames` (`Sampler/GrooveNoteMap.h`):
+
+```
+kick, snare, snare_roll, snare_alt, rimshot, sidestick,
+tom, tom_low, tom1, tom2, tom3, tom_left,
+hihat, hihat_closed, hihat_open, hihat_open_tip, hihat_closed_pedal, hihat_closed_edge,
+hihat_open_pedal, hihat_open1, hihat_open2, hihat_open3, hihat_step, hihat_half_open,
+hihat_stopped, hihat_soft_step, hihat_ghost,
+cymbal, crash, crash_stopped, crash_long, ride, ride_bell, china,
+timbale, timbale1, timbale2, timbale3, timbale4, timbale_damped, woodblock
+```
+
+Which of these actually resolve to audio depends on the currently loaded kit - an unknown name,
+or a name the kit has no piece for, is a silent no-op rather than an error, so the same
+instrument name works across kits with different pieces or naming, without a script needing to
+know which kit is loaded.
+
+The groove track has its own `AbacDsp::FdnTankGlide` reverb, separate from the three tape
+tracks' own reverbs, fed by a true per-instrument mix (each instrument's own audio, weighted by
+its own send) carried through the same varispeed tape processing as the main groove signal - so
+it wow/flutters and speed-changes in sync rather than following raw tempo. `SetReverbSize`/
+`SetReverbDecay` above tune this bus too, alongside the three tape tracks' own.
+
 ### Recording notified
 
 ```lua
@@ -269,6 +301,25 @@ end
 ### Example: `base-scripts/reverb-swell-track-a.lua`
 
 The same swell, ready to run as-is - record onto track A and stop recording to hear it build.
+
+### Example: a groove instrument mix
+
+```lua
+-- Drop kick and snare, leave hats/cymbals - a classic "breakdown" filter - and swell
+-- the closed hihat's own reverb send over ~4 seconds.
+MuteInstrument("kick")
+MuteInstrument("snare")
+
+local i = 0
+Timer.Every(200, function()
+    i = i + 1
+    SetInstrumentReverbSend("hihat_closed", math.min(0.6, i / 20))
+end)
+```
+
+### Example: `base-scripts/groove-instrument-mix.lua`
+
+The same mix, ready to run as-is - turn on the Groove switch to hear it.
 
 ### Default (stub) script
 

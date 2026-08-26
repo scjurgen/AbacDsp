@@ -612,3 +612,27 @@ TEST(TapeLooperTest, TapeSpeedScalesTheGrooveClickBeatClock)
 
     EXPECT_NEAR(static_cast<double>(doubledSpeedSpb), static_cast<double>(baseSpb) / 2.0, 1.0);
 }
+
+// No real kit ever loads in this test file (see the top-of-file note), so every instrument
+// name here is necessarily untagged - this proves that stays a silent no-op, per the plan's
+// own risk callout, rather than a crash, while the groove track is actively playing.
+TEST(TapeLooperTest, ScriptInstrumentCommandsAreSafeNoOpsWithoutALoadedKit)
+{
+    TapeLooper sut(kSampleRate);
+    ASSERT_TRUE(sut.setScript("SetInstrumentGain(\"kick\", 0.3)\n"
+                              "MuteInstrument(\"snare\")\n"
+                              "SetInstrumentReverbSend(\"hihat_closed\", 0.8)\n"
+                              "SetInstrumentGain(\"not_a_real_instrument\", 0.5)\n"));
+    sut.setGroovePlay(true);
+    const Buffer in{};
+    for (int block = 0; block < 20; ++block)
+    {
+        Buffer out{};
+        sut.processBlock(in, out);
+        for (size_t i = 0; i < kBlock; ++i)
+        {
+            EXPECT_FLOAT_EQ(out(i, 0), 0.f);
+            EXPECT_FLOAT_EQ(out(i, 1), 0.f);
+        }
+    }
+}

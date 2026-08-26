@@ -32,6 +32,7 @@
 #include "Reverbs/ModulationDelayNoFeedback.h"
 #include "Sampler/GrooveDrumPlayer.h"
 #include "Sampler/GrooveKit.h"
+#include "Sampler/GrooveNoteMap.h"
 #include "TapeLooperScriptEngine.h"
 
 // ADL hooks so GrooveKit<nlohmann::json> can parse a groove's sidecar metadata;
@@ -83,6 +84,11 @@ constexpr size_t kReverbOrder = 16;
 constexpr float kDefaultReverbSize = 15.f;
 constexpr float kDefaultReverbDecay = 2000.f;
 constexpr float kDefaultReverbSend = 0.f; // inaudible until a track's send is touched
+
+// Per-instrument groove control (9b): gain/send are indexed by GrooveTag, not by
+// track, since a script names instruments ("kick", "snare"), not raw track numbers.
+constexpr float kDefaultInstrumentGain = 1.f;
+constexpr float kDefaultInstrumentReverbSend = 0.f;
 
 // Distortion (7a): setFrequencyResponse()'s rate is exp(-2*pi*Hz/fs) - 0 Hz gives rate 1,
 // an exact per-sample identity. Driven endpoint matches SimpleHysteresis's own
@@ -187,20 +193,28 @@ class TapeLooperImpl final : public EffectBase
         , m_sincFilter(std::make_shared<AbacDsp::SincFilter>(sinc4))
         , m_tapeTrack(AbacDsp::constructArray<TapeTrack, TapeLooperDetail::kFreeTracks>(sampleRate, m_sincFilter))
         , m_grooveTape(sampleRate, m_sincFilter)
+        , m_grooveSendTape(sampleRate, m_sincFilter)
         , m_grooveSequencer(sampleRate)
         , m_loopBuffer(sampleRate)
+        , m_grooveSendLoopBuffer(sampleRate)
         , m_clickGen(sampleRate)
         , m_trackGainSmoother(
               AbacDsp::constructArray<AbacDsp::LinearSmoothingParameter<BlockSize>, TapeLooperDetail::kFreeTracks>(
                   TapeLooperDetail::kDefaultTrackGain))
         , m_filter(sampleRate)
         , m_reverb(AbacDsp::constructArray<ReverbBus, TapeLooperDetail::kFreeTracks>(sampleRate))
+        , m_grooveReverb(sampleRate)
         , m_distortion(sampleRate)
         , m_chorus(sampleRate)
         , m_echo()
         , m_compressor(sampleRate)
         , m_ringMod(sampleRate)
         , m_tremolo(sampleRate)
+        , m_instrumentGainReq(AbacDsp::constructArray<std::atomic<float>, TapeLooperScriptEngine::kInstrumentTags>(
+              TapeLooperDetail::kDefaultInstrumentGain))
+        , m_instrumentReverbSendReq(
+              AbacDsp::constructArray<std::atomic<float>, TapeLooperScriptEngine::kInstrumentTags>(
+                  TapeLooperDetail::kDefaultInstrumentReverbSend))
     {
         m_chorus.forEach([](ChorusDelay& chorus) { chorus.setWidthInMsecs(TapeLooperDetail::kChorusBaseWidthMs); });
         m_echo.forEach([](EchoDelay& echo) { echo.setTapDelay(0, 1); });
@@ -210,6 +224,9 @@ class TapeLooperImpl final : public EffectBase
             reverb.setMaxSize(TapeLooperDetail::kDefaultReverbSize);
             reverb.setDecay(TapeLooperDetail::kDefaultReverbDecay);
         }
+        m_grooveReverb.setMinSize(TapeLooperDetail::kDefaultReverbSize * 0.5f);
+        m_grooveReverb.setMaxSize(TapeLooperDetail::kDefaultReverbSize);
+        m_grooveReverb.setDecay(TapeLooperDetail::kDefaultReverbDecay);
         m_appliedReverbSize = TapeLooperDetail::kDefaultReverbSize;
         applyLoopLengthIfChanged();
         m_grooveKit.requestLoad(kAbacDspDrumSamplesDir, kAbacDspMidiDrumsDir, kAbacDspDefaultGrooveName,
@@ -474,6 +491,7 @@ class TapeLooperImpl final : public EffectBase
             tape.setRatio(m_tapeSpeed);
         }
         m_grooveTape.setRatio(m_tapeSpeed);
+        m_grooveSendTape.setRatio(m_tapeSpeed);
 
         std::array<float, 2 * BlockSize> gainedIn{};
         for (size_t i = 0; i < BlockSize; ++i)
@@ -542,12 +560,15 @@ class TapeLooperImpl final : public EffectBase
         }
 
         applyReverbSizeIfChanged();
+        m_grooveReverb.setDecay(m_reverbDecayReq.load(std::memory_order_relaxed));
+        applyGrooveInstrumentParameters();
 
         const bool groovePlayReq = m_groovePlayReq.load(std::memory_order_relaxed);
         if (groovePlayReq && !m_groovePlaying)
         {
             m_grooveSequencer.resetPosition();
             m_loopBuffer.reset();
+            m_grooveSendLoopBuffer.reset();
         }
         m_groovePlaying = groovePlayReq;
         m_useClick = m_grooveSourceReq.load(std::memory_order_relaxed);
@@ -628,6 +649,24 @@ class TapeLooperImpl final : public EffectBase
         }
         m_appliedEchoDelaySamples[track] = delaySamples;
         m_echo.forEachAtTrack(track, [delaySamples](EchoDelay& echo) { echo.setTapDelay(0, delaySamples); });
+    }
+
+    // Resolves every instrument tag's gain/send against the currently installed kit's
+    // tag -> track map; a tag the kit has no piece for is silently skipped, per-track
+    // gain applies directly, and send is cached for renderGrooveTrack() to consume.
+    void applyGrooveInstrumentParameters() noexcept
+    {
+        m_instrumentSendByTrack.fill(0.f);
+        for (size_t tagIndex = 1; tagIndex < TapeLooperScriptEngine::kInstrumentTags; ++tagIndex)
+        {
+            const auto track = m_grooveKit.trackForTag(static_cast<AbacDsp::GrooveTag>(tagIndex));
+            if (!track || *track >= AbacDsp::GrooveDrumPlayer::kMaxTracks)
+            {
+                continue;
+            }
+            m_grooveSequencer.setTrackGain(*track, m_instrumentGainReq[tagIndex].load(std::memory_order_relaxed));
+            m_instrumentSendByTrack[*track] = m_instrumentReverbSendReq[tagIndex].load(std::memory_order_relaxed);
+        }
     }
 
     // Drains whatever the script requested this block into the same request atomics
@@ -722,6 +761,17 @@ class TapeLooperImpl final : public EffectBase
                 m_chain[track] = *v;
             }
         }
+        for (size_t tagIndex = 0; tagIndex < TapeLooperScriptEngine::kInstrumentTags; ++tagIndex)
+        {
+            if (const auto v = m_scriptEngine.drainInstrumentGainCommand(tagIndex))
+            {
+                m_instrumentGainReq[tagIndex].store(*v, std::memory_order_relaxed);
+            }
+            if (const auto v = m_scriptEngine.drainInstrumentReverbSendCommand(tagIndex))
+            {
+                m_instrumentReverbSendReq[tagIndex].store(*v, std::memory_order_relaxed);
+            }
+        }
         if (const auto v = m_scriptEngine.drainReverbSizeCommand())
         {
             m_reverbSizeReq.store(*v, std::memory_order_relaxed);
@@ -790,6 +840,7 @@ class TapeLooperImpl final : public EffectBase
         // out of sync with it rather than free-running against the old definition.
         m_grooveSequencer.resetPosition();
         m_loopBuffer.reset();
+        m_grooveSendLoopBuffer.reset();
     }
 #pragma GCC diagnostic pop
 
@@ -811,6 +862,8 @@ class TapeLooperImpl final : public EffectBase
             reverb.setMinSize(size * 0.5f);
             reverb.setMaxSize(size);
         }
+        m_grooveReverb.setMinSize(size * 0.5f);
+        m_grooveReverb.setMaxSize(size);
     }
 #pragma GCC diagnostic pop
 
@@ -844,6 +897,7 @@ class TapeLooperImpl final : public EffectBase
         {
             m_lastGrooveProgram = program;
             m_loopBuffer.reset();
+            m_grooveSendLoopBuffer.reset();
         }
         m_grooveSequencer.setLibrary(m_grooveKit.library());
         m_grooveSequencer.setTrackNames(m_grooveKit.installedTrackNames());
@@ -1026,6 +1080,9 @@ class TapeLooperImpl final : public EffectBase
         }
     }
 
+    // The per-instrument reverb send is generated alongside the main groove signal, weighted
+    // by m_instrumentSendByTrack, and carried through its own loop buffer + varispeed tape so
+    // it stays in sync with the main signal's own tape speed/wow/flutter.
     void renderGrooveTrack(std::array<float, 2 * BlockSize>& mix) noexcept
     {
         if (m_groovePlaying && !m_useClick)
@@ -1033,15 +1090,31 @@ class TapeLooperImpl final : public EffectBase
             const auto spb = samplesPerBeat();
             while (m_loopBuffer.framesAhead() < spb)
             {
-                const auto frame = m_grooveSequencer.advanceSample(spb);
+                std::array<std::array<float, AbacDsp::GrooveDrumPlayer::kChannels>,
+                           AbacDsp::GrooveDrumPlayer::kMaxTracks>
+                    perTrack{};
+                const auto frame = m_grooveSequencer.advanceSample(spb, &perTrack);
                 m_loopBuffer.writeFrame(frame[0], frame[1]);
+
+                float sendL = 0.f;
+                float sendR = 0.f;
+                for (size_t track = 0; track < AbacDsp::GrooveDrumPlayer::kMaxTracks; ++track)
+                {
+                    const auto send = m_instrumentSendByTrack[track];
+                    sendL += perTrack[track][0] * send;
+                    sendR += perTrack[track][1] * send;
+                }
+                m_grooveSendLoopBuffer.writeFrame(sendL, sendR);
             }
         }
 
         std::array<float, 2 * BlockSize> grooveOut{};
         m_grooveTape.readBlock(0, grooveOut);
+        std::array<float, 2 * BlockSize> sendOut{};
+        m_grooveSendTape.readBlock(0, sendOut);
 
         std::array<float, 2 * BlockSize> grooveIn{};
+        std::array<float, 2 * BlockSize> sendIn{};
         if (m_groovePlaying)
         {
             if (m_useClick)
@@ -1055,10 +1128,23 @@ class TapeLooperImpl final : public EffectBase
                     const auto frame = m_loopBuffer.readFrame();
                     grooveIn[i * 2] = frame[0];
                     grooveIn[i * 2 + 1] = frame[1];
+                    const auto sendFrame = m_grooveSendLoopBuffer.readFrame();
+                    sendIn[i * 2] = sendFrame[0];
+                    sendIn[i * 2 + 1] = sendFrame[1];
                 }
             }
         }
         m_grooveTape.feed(grooveIn);
+        m_grooveSendTape.feed(sendIn);
+
+        std::array<float, BlockSize> reverbSendMono{};
+        for (size_t i = 0; i < BlockSize; ++i)
+        {
+            reverbSendMono[i] = (sendOut[i * 2] + sendOut[i * 2 + 1]) * 0.5f;
+        }
+        std::array<float, BlockSize> wetL{};
+        std::array<float, BlockSize> wetR{};
+        m_grooveReverb.processBlockSplitAdd(reverbSendMono.data(), wetL.data(), wetR.data());
 
         if (m_groovePlaying)
         {
@@ -1068,19 +1154,28 @@ class TapeLooperImpl final : public EffectBase
                 mix[i * 2 + 1] += grooveOut[i * 2 + 1] * m_grooveLevel;
             }
         }
+        for (size_t i = 0; i < BlockSize; ++i)
+        {
+            mix[i * 2] += wetL[i];
+            mix[i * 2 + 1] += wetR[i];
+        }
     }
 
     std::shared_ptr<AbacDsp::SincFilter> m_sincFilter;
     std::array<TapeTrack, TapeLooperDetail::kFreeTracks> m_tapeTrack;
     TapeTrack m_grooveTape;
+    TapeTrack
+        m_grooveSendTape; // carries the per-instrument reverb send through the same varispeed path as m_grooveTape
     GrooveKit m_grooveKit;
     AbacDsp::GrooveDrumPlayer m_grooveSequencer;
     GrooveLoopBuffer m_loopBuffer;
+    GrooveLoopBuffer m_grooveSendLoopBuffer;
     const AbacDsp::GrooveProgram* m_lastGrooveProgram{nullptr};
     AbacDsp::ClickGenerator m_clickGen;
     std::array<AbacDsp::LinearSmoothingParameter<BlockSize>, TapeLooperDetail::kFreeTracks> m_trackGainSmoother;
     AbacDsp::StereoTrackBank<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks> m_filter;
     std::array<ReverbBus, TapeLooperDetail::kFreeTracks> m_reverb;
+    ReverbBus m_grooveReverb;
     AbacDsp::StereoTrackBank<AbacDsp::SimpleHysteresis, TapeLooperDetail::kFreeTracks> m_distortion;
     AbacDsp::StereoTrackBank<ChorusDelay, TapeLooperDetail::kFreeTracks> m_chorus;
     AbacDsp::StereoTrackBank<EchoDelay, TapeLooperDetail::kFreeTracks> m_echo;
@@ -1129,6 +1224,8 @@ class TapeLooperImpl final : public EffectBase
                                                                                   TapeLooperDetail::kDefaultReverbSend};
     std::atomic<float> m_reverbSizeReq{TapeLooperDetail::kDefaultReverbSize};
     std::atomic<float> m_reverbDecayReq{TapeLooperDetail::kDefaultReverbDecay};
+    std::array<std::atomic<float>, TapeLooperScriptEngine::kInstrumentTags> m_instrumentGainReq;
+    std::array<std::atomic<float>, TapeLooperScriptEngine::kInstrumentTags> m_instrumentReverbSendReq;
 
     std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_driveReq{0.f, 0.f, 0.f};
     std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_chorusDepthReq{0.f, 0.f, 0.f};
@@ -1193,6 +1290,9 @@ class TapeLooperImpl final : public EffectBase
                                                                   TapeLooperDetail::kDefaultReverbSend,
                                                                   TapeLooperDetail::kDefaultReverbSend};
     float m_appliedReverbSize{0.f}; // 0 forces the first applyReverbSizeIfChanged() to apply
+    // Rebuilt every block by applyGrooveInstrumentParameters() from the tag-indexed
+    // send atomics, resolved through the currently installed kit's tag -> track map.
+    std::array<float, AbacDsp::GrooveDrumPlayer::kMaxTracks> m_instrumentSendByTrack{};
 
     std::array<float, TapeLooperDetail::kFreeTracks> m_chorusMix{0.f, 0.f, 0.f};
     std::array<float, TapeLooperDetail::kFreeTracks> m_ringModMix{0.f, 0.f, 0.f};

@@ -195,6 +195,7 @@ class GrooveKit
         m_installedBurstAudio = std::move(result.burstAudio);
         m_installedBurstTickPos = result.burstTickPos;
         m_installedBurstNextTriggerIndex = result.burstNextTriggerIndex;
+        m_installedTagToTrack = result.tagToTrack;
         m_installedGen = doneGen;
     }
 
@@ -226,6 +227,13 @@ class GrooveKit
     {
         return m_installedTrackNames ? std::span<const std::string>(*m_installedTrackNames)
                                      : std::span<const std::string>{};
+    }
+
+    // Resolves an instrument tag to its track in the installed kit; nullopt if
+    // that tag isn't present.
+    [[nodiscard]] std::optional<size_t> trackForTag(const GrooveTag tag) const noexcept
+    {
+        return m_installedTagToTrack[static_cast<size_t>(tag)];
     }
 
     // Bars/rhythm/instruments for the most recently installed groove - see
@@ -356,6 +364,7 @@ class GrooveKit
         std::shared_ptr<const std::vector<float>> burstAudio;
         double burstTickPos{0.0};
         size_t burstNextTriggerIndex{0};
+        TagToTrack tagToTrack{};
     };
 
     // A groove's analyzed notes, sidecar metadata and tick geometry, built
@@ -476,6 +485,7 @@ class GrooveKit
             m_result.burstAudio = std::move(burstAudio);
             m_result.burstTickPos = burstTickPos;
             m_result.burstNextTriggerIndex = burstNextTriggerIndex;
+            m_result.tagToTrack = m_tagToTrack;
         }
         m_currentGrooveName = grooveName;
         m_doneGen.store(gen, std::memory_order_release);
@@ -852,6 +862,7 @@ class GrooveKit
     std::shared_ptr<const std::vector<float>> m_installedBurstAudio;
     double m_installedBurstTickPos{0.0};
     size_t m_installedBurstNextTriggerIndex{0};
+    TagToTrack m_installedTagToTrack{};
 
     // Declared last so it is destroyed first: join() must complete (the
     // background thread fully stopped) before any member above it might still

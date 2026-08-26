@@ -9,6 +9,7 @@
 
 #include "../inc/LuaScriptEngineBase.h"
 #include "Filters/PoleMixingFilter.h"
+#include "Sampler/GrooveNoteMap.h"
 
 struct TapeLooperFilterCommand
 {
@@ -131,6 +132,7 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     // Kept as its own constant since this file doesn't know about TapeLooperImpl - must
     // match TapeLooperDetail::kFreeTracks.
     static constexpr size_t kTracks{3};
+    static constexpr size_t kInstrumentTags{static_cast<size_t>(AbacDsp::GrooveTag::Count)};
 
     // clang-format off
     static constexpr std::string_view kStubScript =
@@ -175,6 +177,11 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
 "--   SetTrackChain(track, {\"filter\", \"distortion\", ...})  reorders that track's own\n"
 "--     effects (reverb send excluded, always last); an unknown or repeated name rejects\n"
 "--     the whole call and leaves the previous chain in effect\n"
+"--   SetInstrumentGain(name, gain)         groove-kit instrument, e.g. \"kick\", \"snare\",\n"
+"--     \"hihat_closed\" (see Sampler/GrooveNoteMap.h's kGrooveTagNames); unknown name is a\n"
+"--     no-op, as is a name the loaded kit has no piece for\n"
+"--   MuteInstrument(name)                  sugar for SetInstrumentGain(name, 0)\n"
+"--   SetInstrumentReverbSend(name, amount) sent to the groove track's own reverb bus\n"
 "\n"
 "-- Fires whenever a track's applied record state changes (edge-triggered, not polled).\n"
 "function OnRecordStateChanged(track, isRecording)\n"
@@ -214,6 +221,8 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     [[nodiscard]] std::optional<TapeLooperRingModCommand> drainTrackRingModCommand(size_t track) noexcept;
     [[nodiscard]] std::optional<TapeLooperTremoloCommand> drainTrackTremoloCommand(size_t track) noexcept;
     [[nodiscard]] std::optional<TrackEffectChain> drainTrackChainCommand(size_t track) noexcept;
+    [[nodiscard]] std::optional<float> drainInstrumentGainCommand(size_t tagIndex) noexcept;
+    [[nodiscard]] std::optional<float> drainInstrumentReverbSendCommand(size_t tagIndex) noexcept;
 
   private:
     friend class LuaScriptEngineBase<TapeLooperScriptEngine>;
@@ -240,6 +249,9 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     void luaSetTrackTremolo(size_t track, float rateHz, float depth, float drive) noexcept;
     void luaSetTrackChain(size_t track, const sol::table& nodeNames);
     [[nodiscard]] static std::optional<TrackEffectChain> parseTrackEffectChain(const sol::table& nodeNames);
+    void luaSetInstrumentGain(const std::string& name, float value) noexcept;
+    void luaMuteInstrument(const std::string& name) noexcept;
+    void luaSetInstrumentReverbSend(const std::string& name, float value) noexcept;
 
     sol::protected_function m_onRecordStateChangedFn;
     std::optional<float> m_pendingTapeSpeed;
@@ -262,6 +274,8 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     std::array<std::optional<TapeLooperRingModCommand>, kTracks> m_pendingTrackRingMod{};
     std::array<std::optional<TapeLooperTremoloCommand>, kTracks> m_pendingTrackTremolo{};
     std::array<std::optional<TrackEffectChain>, kTracks> m_pendingTrackChain{};
+    std::array<std::optional<float>, kInstrumentTags> m_pendingInstrumentGain{};
+    std::array<std::optional<float>, kInstrumentTags> m_pendingInstrumentReverbSend{};
 };
 
 inline const std::string TapeLooperScriptEngine::kFullSkeletonScript =
@@ -296,6 +310,9 @@ inline void TapeLooperScriptEngine::bindScriptFunctions()
     m_lua.set_function("SetTrackRingMod", &TapeLooperScriptEngine::luaSetTrackRingMod, this);
     m_lua.set_function("SetTrackTremolo", &TapeLooperScriptEngine::luaSetTrackTremolo, this);
     m_lua.set_function("SetTrackChain", &TapeLooperScriptEngine::luaSetTrackChain, this);
+    m_lua.set_function("SetInstrumentGain", &TapeLooperScriptEngine::luaSetInstrumentGain, this);
+    m_lua.set_function("MuteInstrument", &TapeLooperScriptEngine::luaMuteInstrument, this);
+    m_lua.set_function("SetInstrumentReverbSend", &TapeLooperScriptEngine::luaSetInstrumentReverbSend, this);
 }
 
 inline void TapeLooperScriptEngine::notifyRecordStateChanged(const size_t track, const bool isRecording) noexcept
@@ -493,6 +510,27 @@ inline void TapeLooperScriptEngine::luaSetTrackTremolo(const size_t track, const
     if (track < kTracks)
     {
         m_pendingTrackTremolo[track] = TapeLooperTremoloCommand{rateHz, depth, drive};
+    }
+}
+
+inline void TapeLooperScriptEngine::luaSetInstrumentGain(const std::string& name, const float value) noexcept
+{
+    if (const auto tag = AbacDsp::tagFromName(name); tag != AbacDsp::GrooveTag::None)
+    {
+        m_pendingInstrumentGain[static_cast<size_t>(tag)] = value;
+    }
+}
+
+inline void TapeLooperScriptEngine::luaMuteInstrument(const std::string& name) noexcept
+{
+    luaSetInstrumentGain(name, 0.f);
+}
+
+inline void TapeLooperScriptEngine::luaSetInstrumentReverbSend(const std::string& name, const float value) noexcept
+{
+    if (const auto tag = AbacDsp::tagFromName(name); tag != AbacDsp::GrooveTag::None)
+    {
+        m_pendingInstrumentReverbSend[static_cast<size_t>(tag)] = value;
     }
 }
 
@@ -695,5 +733,27 @@ inline std::optional<TrackEffectChain> TapeLooperScriptEngine::drainTrackChainCo
     }
     const auto result = m_pendingTrackChain[track];
     m_pendingTrackChain[track].reset();
+    return result;
+}
+
+inline std::optional<float> TapeLooperScriptEngine::drainInstrumentGainCommand(const size_t tagIndex) noexcept
+{
+    if (tagIndex >= kInstrumentTags)
+    {
+        return std::nullopt;
+    }
+    const auto result = m_pendingInstrumentGain[tagIndex];
+    m_pendingInstrumentGain[tagIndex].reset();
+    return result;
+}
+
+inline std::optional<float> TapeLooperScriptEngine::drainInstrumentReverbSendCommand(const size_t tagIndex) noexcept
+{
+    if (tagIndex >= kInstrumentTags)
+    {
+        return std::nullopt;
+    }
+    const auto result = m_pendingInstrumentReverbSend[tagIndex];
+    m_pendingInstrumentReverbSend[tagIndex].reset();
     return result;
 }

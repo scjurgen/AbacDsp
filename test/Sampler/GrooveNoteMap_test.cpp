@@ -23,4 +23,12 @@ TEST(GrooveNoteMapTest, UnmappedNoteReturnsAllNone)
     }
 }
 
+TEST(GrooveNoteMapTest, TagFromNameResolvesKnownNamesAndRejectsUnknownOnes)
+{
+    EXPECT_EQ(tagFromName("kick"), GrooveTag::Kick);
+    EXPECT_EQ(tagFromName("hihat_closed"), GrooveTag::HihatClosed);
+    EXPECT_EQ(tagFromName("not_a_real_instrument"), GrooveTag::None);
+    EXPECT_EQ(tagFromName(""), GrooveTag::None);
+}
+
 }

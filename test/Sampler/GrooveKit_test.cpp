@@ -258,6 +258,26 @@ TEST(GrooveKitTest, ResolvesDirectAndFallbackMatchesAndSkipsUnmatchedNotes)
     EXPECT_NE(kickTrack, hihatTrack);
 }
 
+TEST(GrooveKitTest, TrackForTagResolvesLoadedInstrumentsAndRejectsMissingOnes)
+{
+    const TempGrooveKitDir dir;
+    writeGrooveTake(dir, "bd", 1);
+    writeGrooveTake(dir, "hh", 1);
+    writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 36}});
+
+    GrooveKit kit;
+    kit.requestLoad(dir.dir(), dir.dir(), "groove.mid");
+    ASSERT_TRUE(waitUntilGrooveKitReady(kit));
+
+    const auto kickTrack = kit.trackForTag(GrooveTag::Kick);
+    ASSERT_TRUE(kickTrack.has_value());
+    const auto trackNames = kit.installedTrackNames();
+    ASSERT_LT(*kickTrack, trackNames.size());
+    EXPECT_EQ(trackNames[*kickTrack], "bd");
+
+    EXPECT_FALSE(kit.trackForTag(GrooveTag::Snare).has_value()) << "no snare piece was loaded";
+}
+
 TEST(GrooveKitTest, MissingSampleDirectoryStillBecomesReadyWithEmptyProgram)
 {
     const TempGrooveKitDir dir; // never populated with any WAV or MIDI file

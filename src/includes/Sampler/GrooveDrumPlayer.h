@@ -68,6 +68,8 @@ class GrooveDrumPlayer
   public:
     static constexpr size_t kChannels = 2;
     static constexpr size_t kMaxVoices = 16;
+    // Headroom over any real kit's track count (the one shipped reggae kit has 39).
+    static constexpr size_t kMaxTracks = 64;
     // syncToPpq()'s no-op-vs-resync threshold: tight enough to never fire on
     // ordinary floating-point drift, loose enough to ignore sub-audible jitter.
     static constexpr double kSyncToleranceTicks = 1.0;
@@ -154,6 +156,16 @@ class GrooveDrumPlayer
         m_fadeFrames = std::max<size_t>(1, static_cast<size_t>(ms / 1000.f * m_sampleRate));
     }
 
+    // Per-track gain multiplier applied to every voice at render time (0 mutes
+    // that instrument). Out-of-range track indices are ignored.
+    void setTrackGain(const size_t track, const float gain) noexcept
+    {
+        if (track < kMaxTracks)
+        {
+            m_trackGain[track] = gain;
+        }
+    }
+
     [[nodiscard]] size_t activeVoiceCount() const noexcept
     {
         size_t count = 0;
@@ -164,19 +176,24 @@ class GrooveDrumPlayer
         return count;
     }
 
-    // Advances by one sample at the live tempo, triggers any groove events
-    // crossed this sample, renders every active voice, and returns the
-    // mixed stereo output.
-    [[nodiscard]] std::array<float, kChannels> advanceSample(const size_t samplesPerBeat) noexcept
+    // Advances by one sample, triggers any groove events crossed, and returns
+    // the mixed stereo output. perTrackOut, if non-null, also gets each track's own contribution.
+    [[nodiscard]] std::array<float, kChannels> advanceSample(
+        const size_t samplesPerBeat,
+        std::array<std::array<float, kChannels>, kMaxTracks>* perTrackOut = nullptr) noexcept
     {
         checkTriggers(samplesPerBeat);
         ++m_sampleCounter;
         std::array<float, kChannels> out{0.f, 0.f};
+        if (perTrackOut != nullptr)
+        {
+            perTrackOut->fill(std::array<float, kChannels>{0.f, 0.f});
+        }
         for (Voice& voice : m_voices)
         {
             if (voice.active)
             {
-                renderVoice(voice, out);
+                renderVoice(voice, out, perTrackOut);
             }
         }
         return out;
@@ -315,17 +332,28 @@ class GrooveDrumPlayer
         return *oldest;
     }
 
-    void renderVoice(Voice& voice, std::array<float, kChannels>& out) noexcept
+    void renderVoice(Voice& voice, std::array<float, kChannels>& out,
+                     std::array<std::array<float, kChannels>, kMaxTracks>* perTrackOut) noexcept
     {
-        const auto gain = edgeGain(voice) * voice.gain;
+        const auto gain = edgeGain(voice) * voice.gain * trackGain(voice.track);
         for (size_t channel = 0; channel < kChannels; ++channel)
         {
-            out[channel] += m_library->sample(voice.track, voice.indexInTrack, voice.pos, channel) * gain;
+            const float sample = m_library->sample(voice.track, voice.indexInTrack, voice.pos, channel) * gain;
+            out[channel] += sample;
+            if (perTrackOut != nullptr && voice.track < kMaxTracks)
+            {
+                (*perTrackOut)[voice.track][channel] += sample;
+            }
         }
         if (++voice.pos >= voice.lengthFrames)
         {
             voice.active = false;
         }
+    }
+
+    [[nodiscard]] float trackGain(const size_t track) const noexcept
+    {
+        return track < kMaxTracks ? m_trackGain[track] : 1.f;
     }
 
     [[nodiscard]] static float edgeGain(const Voice& voice) noexcept
@@ -345,6 +373,12 @@ class GrooveDrumPlayer
     size_t m_nextTriggerIndex{0};
     uint64_t m_sampleCounter{0}; // for the trigger-log timestamp only
     std::array<Voice, kMaxVoices> m_voices{};
+    std::array<float, kMaxTracks> m_trackGain{[]
+                                              {
+                                                  std::array<float, kMaxTracks> gains{};
+                                                  gains.fill(1.f);
+                                                  return gains;
+                                              }()};
     uint64_t m_triggerCounter{1};
     std::mt19937 m_rng{std::random_device{}()};
 };

@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <string_view>
 
 namespace AbacDsp
 {
@@ -55,6 +56,72 @@ enum class GrooveTag : uint8_t
     Woodblock,
     Count, // sentinel: total tag count, for sizing a per-tag lookup table
 };
+
+struct GrooveTagName
+{
+    GrooveTag tag;
+    std::string_view name;
+};
+
+// clang-format off
+inline constexpr auto kGrooveTagNames = std::to_array<GrooveTagName>({
+    {GrooveTag::Kick, "kick"},
+    {GrooveTag::Snare, "snare"},
+    {GrooveTag::SnareRoll, "snare_roll"},
+    {GrooveTag::SnareAlt, "snare_alt"},
+    {GrooveTag::Rimshot, "rimshot"},
+    {GrooveTag::Sidestick, "sidestick"},
+    {GrooveTag::Tom, "tom"},
+    {GrooveTag::TomLow, "tom_low"},
+    {GrooveTag::Tom1, "tom1"},
+    {GrooveTag::Tom2, "tom2"},
+    {GrooveTag::Tom3, "tom3"},
+    {GrooveTag::TomLeft, "tom_left"},
+    {GrooveTag::Hihat, "hihat"},
+    {GrooveTag::HihatClosed, "hihat_closed"},
+    {GrooveTag::HihatOpen, "hihat_open"},
+    {GrooveTag::HihatOpenTip, "hihat_open_tip"},
+    {GrooveTag::HihatClosedPedal, "hihat_closed_pedal"},
+    {GrooveTag::HihatClosedEdge, "hihat_closed_edge"},
+    {GrooveTag::HihatOpenPedal, "hihat_open_pedal"},
+    {GrooveTag::HihatOpen1, "hihat_open1"},
+    {GrooveTag::HihatOpen2, "hihat_open2"},
+    {GrooveTag::HihatOpen3, "hihat_open3"},
+    {GrooveTag::HihatStep, "hihat_step"},
+    {GrooveTag::HihatHalfOpen, "hihat_half_open"},
+    {GrooveTag::HihatStopped, "hihat_stopped"},
+    {GrooveTag::HihatSoftStep, "hihat_soft_step"},
+    {GrooveTag::HihatGhost, "hihat_ghost"},
+    {GrooveTag::Cymbal, "cymbal"},
+    {GrooveTag::Crash, "crash"},
+    {GrooveTag::CrashStopped, "crash_stopped"},
+    {GrooveTag::CrashLong, "crash_long"},
+    {GrooveTag::Ride, "ride"},
+    {GrooveTag::RideBell, "ride_bell"},
+    {GrooveTag::China, "china"},
+    {GrooveTag::Timbale, "timbale"},
+    {GrooveTag::Timbale1, "timbale1"},
+    {GrooveTag::Timbale2, "timbale2"},
+    {GrooveTag::Timbale3, "timbale3"},
+    {GrooveTag::Timbale4, "timbale4"},
+    {GrooveTag::TimbaleDamped, "timbale_damped"},
+    {GrooveTag::Woodblock, "woodblock"},
+});
+// clang-format on
+
+// Resolves a lowercase instrument name (see kGrooveTagNames) to its tag;
+// GrooveTag::None if unrecognized.
+[[nodiscard]] constexpr GrooveTag tagFromName(const std::string_view name) noexcept
+{
+    for (const auto& entry : kGrooveTagNames)
+    {
+        if (entry.name == name)
+        {
+            return entry.tag;
+        }
+    }
+    return GrooveTag::None;
+}
 
 struct GrooveNoteTags
 {

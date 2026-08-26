@@ -323,6 +323,66 @@ TEST(GrooveDrumPlayerTest, SyncToPpqWrapsPositionAcrossLoopBoundary)
     EXPECT_EQ(risingEdges, 1u) << "expected exactly one refire on the next loop pass";
 }
 
+TEST(GrooveDrumPlayerTest, SetTrackGainMutesOneTrackWithoutAffectingOthers)
+{
+    const auto loopA = makeConstLoop(20, 2.f, 2.f);
+    const auto loopB = makeConstLoop(20, 3.f, 3.f);
+    SliceLibrary library(40);
+    library.extractTrack(loopA, std::vector<Slice>{{0, 20}});
+    library.extractTrack(loopB, std::vector<Slice>{{0, 20}});
+
+    GrooveProgram program{{{0, 0, 1.f}, {0, 1, 1.f}}, 1000, 1};
+
+    GrooveDrumPlayer player(kSampleRate);
+    player.setFadeMs(1.f);
+    player.setLibrary(&library);
+    player.setGroove(&program);
+    player.setTrackGain(0, 0.f);
+
+    std::array<float, 2> out{};
+    for (int i = 0; i < 10; ++i)
+    {
+        out = player.advanceSample(1);
+    }
+    EXPECT_NEAR(out[0], 3.f, 1e-3f) << "muted track 0 must not contribute";
+    EXPECT_NEAR(out[1], 3.f, 1e-3f);
+}
+
+TEST(GrooveDrumPlayerTest, PerTrackOutputReportsEachTracksOwnPostGainContribution)
+{
+    const auto loopA = makeConstLoop(20, 2.f, -1.f);
+    const auto loopB = makeConstLoop(20, 3.f, 1.f);
+    SliceLibrary library(40);
+    library.extractTrack(loopA, std::vector<Slice>{{0, 20}});
+    library.extractTrack(loopB, std::vector<Slice>{{0, 20}});
+
+    GrooveProgram program{{{0, 0, 1.f}, {0, 1, 1.f}}, 1000, 1};
+
+    GrooveDrumPlayer player(kSampleRate);
+    player.setFadeMs(1.f);
+    player.setLibrary(&library);
+    player.setGroove(&program);
+    player.setTrackGain(1, 0.5f);
+
+    std::array<std::array<float, GrooveDrumPlayer::kChannels>, GrooveDrumPlayer::kMaxTracks> perTrack{};
+    std::array<float, 2> mix{};
+    for (int i = 0; i < 10; ++i)
+    {
+        mix = player.advanceSample(1, &perTrack);
+    }
+    EXPECT_NEAR(perTrack[0][0], 2.f, 1e-3f);
+    EXPECT_NEAR(perTrack[0][1], -1.f, 1e-3f);
+    EXPECT_NEAR(perTrack[1][0], 1.5f, 1e-3f) << "track 1's own 0.5 gain must be reflected here too";
+    EXPECT_NEAR(perTrack[1][1], 0.5f, 1e-3f);
+    EXPECT_NEAR(mix[0], 3.5f, 1e-3f);
+    EXPECT_NEAR(mix[1], -0.5f, 1e-3f);
+    for (size_t t = 2; t < GrooveDrumPlayer::kMaxTracks; ++t)
+    {
+        EXPECT_FLOAT_EQ(perTrack[t][0], 0.f);
+        EXPECT_FLOAT_EQ(perTrack[t][1], 0.f);
+    }
+}
+
 TEST(GrooveDrumPlayerTest, RenderBurstProducesRequestedFrameCount)
 {
     const auto loop = makeConstLoop(4, 1.f, 1.f);
