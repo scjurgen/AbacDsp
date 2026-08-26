@@ -363,6 +363,43 @@ TEST(TapeLooperTest, ScriptTremoloAudiblyChangesPlayback)
     EXPECT_TRUE(outputsDifferAudibly(dry, tremoloed, kTestLoopFrames / kBlock));
 }
 
+// Distortion before vs. after the filter is a genuinely different signal (a resonant
+// filter shapes what gets clipped, vs. clipping shaping what gets filtered) - proves
+// SetTrackChain's reorder actually changes processing order, not just node enablement.
+TEST(TapeLooperTest, ScriptChainReorderAudiblyChangesProcessing)
+{
+    TapeLooper defaultOrder(kSampleRate);
+    ASSERT_TRUE(defaultOrder.setScript("SetTrackDrive(0, 1)\nSetTrackFilter(0, 400, 0.8)"));
+    recordATone(defaultOrder);
+
+    TapeLooper reordered(kSampleRate);
+    ASSERT_TRUE(reordered.setScript("SetTrackDrive(0, 1)\nSetTrackFilter(0, 400, 0.8)\n"
+                                    "SetTrackChain(0, {\"distortion\", \"filter\", \"chorus\", \"echo\", "
+                                    "\"compressor\", \"ringmod\", \"tremolo\"})"));
+    recordATone(reordered);
+
+    EXPECT_TRUE(outputsDifferAudibly(defaultOrder, reordered, kTestLoopFrames / kBlock));
+}
+
+// Compares one instance against itself, before vs. after the bad call - not two separate
+// instances, since nothing in this file establishes that two independently constructed
+// instances stay bit-identical (every other multi-instance test here asserts a difference).
+TEST(TapeLooperTest, ScriptChainRejectsInvalidNodeNameKeepingPreviousChain)
+{
+    TapeLooper sut(kSampleRate);
+    ASSERT_TRUE(sut.setScript("SetTrackDrive(0, 1)")); // gives the chain something to preserve
+    recordATone(sut);
+
+    const Buffer decoyIn{};
+    const size_t numBlocks = kTestLoopFrames / kBlock;
+    const float rmsBeforeBadCall = outputRms(sut, decoyIn, numBlocks);
+
+    ASSERT_TRUE(sut.setScript("SetTrackChain(0, {\"not-a-real-node\"})"));
+    const float rmsAfterBadCall = outputRms(sut, decoyIn, numBlocks);
+
+    EXPECT_NEAR(rmsAfterBadCall, rmsBeforeBadCall, rmsBeforeBadCall * 0.1f + 1e-6f);
+}
+
 // Script-driven record/play reaches the same applied state as the host setters do -
 // started via script, stopped via host, proving both paths share one underlying state.
 TEST(TapeLooperTest, ScriptCanDriveTrackRecordAndPlay)

@@ -167,13 +167,27 @@ Sine-LFO amplitude modulation (`AbacDsp::Tremolo`). At `depth` 0 it's an exact u
 regardless of `drive`. Raising `drive` pushes the LFO through a tanh waveshaper, morphing it
 from a sine toward a near-square wave - full `drive` and `depth` is a hard on/off "stutter".
 
+### Effect chain order
+
+```lua
+SetTrackChain(track, {"filter", "distortion", "chorus", "echo", "compressor", "ringmod", "tremolo"})
+```
+
+Reorders a track's own effects - the default order is exactly the list above, so an untouched
+track processes the same whether or not a script ever calls this. Any of the 7 names may be
+left out entirely (that effect is simply skipped) but not repeated, and an unrecognized name
+rejects the whole call, leaving the previously-installed chain in effect. Reverb send is not
+in this list - it always taps whatever the chain's last node produces, regardless of order.
+
 ### Example: track C effects presets
 
-Three directly-runnable smoke tests for the effects above, each self-contained -
+Four directly-runnable smoke tests for the effects above, each self-contained -
 `base-scripts/lofi-tape-fx-track-c.lua` (drive + chorus + echo, a warped-tape character),
-`base-scripts/modulation-fx-track-c.lua` (compressor + ring mod + tremolo), and
+`base-scripts/modulation-fx-track-c.lua` (compressor + ring mod + tremolo),
 `base-scripts/digital-clean-track-c.lua` (wow/flutter to 0, removing tape's default
-speed-drift). Record something onto track C and play it back to hear any of them.
+speed-drift), and `base-scripts/reordered-chain-track-c.lua` (distortion moved before the
+filter via `SetTrackChain`, for a grittier result than the default order). Record something
+onto track C and play it back to hear any of them.
 
 ### Groove source
 

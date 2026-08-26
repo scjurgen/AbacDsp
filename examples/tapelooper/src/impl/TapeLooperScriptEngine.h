@@ -64,6 +64,57 @@ struct TapeLooperTremoloCommand
     float drive{0.f};
 };
 
+// Order matters: kEffectNodeNames and the duplicate check in parseTrackEffectChain() both
+// index by this enum's ordinal value, not just its name.
+enum class EffectNodeType
+{
+    Filter,
+    Distortion,
+    Chorus,
+    Echo,
+    Compressor,
+    RingMod,
+    Tremolo
+};
+
+struct EffectNodeName
+{
+    std::string_view name;
+    EffectNodeType type;
+};
+
+constexpr auto kEffectNodeNames = std::to_array<EffectNodeName>({
+    {"filter", EffectNodeType::Filter},
+    {"distortion", EffectNodeType::Distortion},
+    {"chorus", EffectNodeType::Chorus},
+    {"echo", EffectNodeType::Echo},
+    {"compressor", EffectNodeType::Compressor},
+    {"ringmod", EffectNodeType::RingMod},
+    {"tremolo", EffectNodeType::Tremolo},
+});
+constexpr size_t kMaxChainNodes = kEffectNodeNames.size();
+
+[[nodiscard]] constexpr std::optional<EffectNodeType> parseEffectNodeType(const std::string_view name) noexcept
+{
+    for (const auto& entry : kEffectNodeNames)
+    {
+        if (entry.name == name)
+        {
+            return entry.type;
+        }
+    }
+    return std::nullopt;
+}
+
+// A script-declared processing order for one track's non-reverb effects (see
+// TapeLooperImpl.h's stepTrackEffectsChain() family) - reverb send is not reorderable,
+// it always taps whichever signal the chain's last node produces.
+struct TrackEffectChain
+{
+    std::array<EffectNodeType, kMaxChainNodes> nodes{};
+    size_t length{0};
+};
+
 /**
  * Adds tapelooper's own scripted entry points on top of LuaScriptEngineBase's shared
  * MIDI/UI-parameter machinery: transport (tape speed, BPM, groove variation), per-track
@@ -121,6 +172,9 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
 "--   SetTrackCompressor(track, thresholdDb, ratio, attackMs, releaseMs)  ratio 1 = off\n"
 "--   SetTrackRingMod(track, freqHz, mix)\n"
 "--   SetTrackTremolo(track, rateHz, depth, drive)  drive squares the LFO toward a gate\n"
+"--   SetTrackChain(track, {\"filter\", \"distortion\", ...})  reorders that track's own\n"
+"--     effects (reverb send excluded, always last); an unknown or repeated name rejects\n"
+"--     the whole call and leaves the previous chain in effect\n"
 "\n"
 "-- Fires whenever a track's applied record state changes (edge-triggered, not polled).\n"
 "function OnRecordStateChanged(track, isRecording)\n"
@@ -159,6 +213,7 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     [[nodiscard]] std::optional<TapeLooperCompressorCommand> drainTrackCompressorCommand(size_t track) noexcept;
     [[nodiscard]] std::optional<TapeLooperRingModCommand> drainTrackRingModCommand(size_t track) noexcept;
     [[nodiscard]] std::optional<TapeLooperTremoloCommand> drainTrackTremoloCommand(size_t track) noexcept;
+    [[nodiscard]] std::optional<TrackEffectChain> drainTrackChainCommand(size_t track) noexcept;
 
   private:
     friend class LuaScriptEngineBase<TapeLooperScriptEngine>;
@@ -183,6 +238,8 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     void luaSetTrackCompressor(size_t track, float thresholdDb, float ratio, float attackMs, float releaseMs) noexcept;
     void luaSetTrackRingMod(size_t track, float freqHz, float mix) noexcept;
     void luaSetTrackTremolo(size_t track, float rateHz, float depth, float drive) noexcept;
+    void luaSetTrackChain(size_t track, const sol::table& nodeNames);
+    [[nodiscard]] static std::optional<TrackEffectChain> parseTrackEffectChain(const sol::table& nodeNames);
 
     sol::protected_function m_onRecordStateChangedFn;
     std::optional<float> m_pendingTapeSpeed;
@@ -204,6 +261,7 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     std::array<std::optional<TapeLooperCompressorCommand>, kTracks> m_pendingTrackCompressor{};
     std::array<std::optional<TapeLooperRingModCommand>, kTracks> m_pendingTrackRingMod{};
     std::array<std::optional<TapeLooperTremoloCommand>, kTracks> m_pendingTrackTremolo{};
+    std::array<std::optional<TrackEffectChain>, kTracks> m_pendingTrackChain{};
 };
 
 inline const std::string TapeLooperScriptEngine::kFullSkeletonScript =
@@ -237,6 +295,7 @@ inline void TapeLooperScriptEngine::bindScriptFunctions()
     m_lua.set_function("SetTrackCompressor", &TapeLooperScriptEngine::luaSetTrackCompressor, this);
     m_lua.set_function("SetTrackRingMod", &TapeLooperScriptEngine::luaSetTrackRingMod, this);
     m_lua.set_function("SetTrackTremolo", &TapeLooperScriptEngine::luaSetTrackTremolo, this);
+    m_lua.set_function("SetTrackChain", &TapeLooperScriptEngine::luaSetTrackChain, this);
 }
 
 inline void TapeLooperScriptEngine::notifyRecordStateChanged(const size_t track, const bool isRecording) noexcept
@@ -391,6 +450,40 @@ inline void TapeLooperScriptEngine::luaSetTrackRingMod(const size_t track, const
     if (track < kTracks)
     {
         m_pendingTrackRingMod[track] = TapeLooperRingModCommand{freqHz, mix};
+    }
+}
+
+inline std::optional<TrackEffectChain> TapeLooperScriptEngine::parseTrackEffectChain(const sol::table& nodeNames)
+{
+    TrackEffectChain chain{};
+    std::array<bool, kMaxChainNodes> seen{};
+    for (size_t i = 1; i <= kMaxChainNodes; ++i)
+    {
+        const sol::optional<std::string> name = nodeNames[i];
+        if (!name)
+        {
+            break;
+        }
+        const auto nodeType = parseEffectNodeType(*name);
+        if (!nodeType || seen[static_cast<size_t>(*nodeType)])
+        {
+            return std::nullopt;
+        }
+        seen[static_cast<size_t>(*nodeType)] = true;
+        chain.nodes[chain.length++] = *nodeType;
+    }
+    return chain;
+}
+
+inline void TapeLooperScriptEngine::luaSetTrackChain(const size_t track, const sol::table& nodeNames)
+{
+    if (track >= kTracks)
+    {
+        return;
+    }
+    if (const auto chain = parseTrackEffectChain(nodeNames))
+    {
+        m_pendingTrackChain[track] = *chain;
     }
 }
 
@@ -591,5 +684,16 @@ inline std::optional<TapeLooperTremoloCommand> TapeLooperScriptEngine::drainTrac
     }
     const auto result = m_pendingTrackTremolo[track];
     m_pendingTrackTremolo[track].reset();
+    return result;
+}
+
+inline std::optional<TrackEffectChain> TapeLooperScriptEngine::drainTrackChainCommand(const size_t track) noexcept
+{
+    if (track >= kTracks)
+    {
+        return std::nullopt;
+    }
+    const auto result = m_pendingTrackChain[track];
+    m_pendingTrackChain[track].reset();
     return result;
 }

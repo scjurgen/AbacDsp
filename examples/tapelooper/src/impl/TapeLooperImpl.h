@@ -138,6 +138,13 @@ constexpr float kDefaultRingModFreq = 200.f;
 
 constexpr float kDefaultTremoloRate = 4.f;
 
+// Phase 8: matches the fixed order Phases 5-7 hardcoded, so an untouched track's processing
+// is unchanged until a script calls SetTrackChain (reverb send is not itself a node).
+constexpr TrackEffectChain kDefaultTrackEffectChain{
+    {EffectNodeType::Filter, EffectNodeType::Distortion, EffectNodeType::Chorus, EffectNodeType::Echo,
+     EffectNodeType::Compressor, EffectNodeType::RingMod, EffectNodeType::Tremolo},
+    kMaxChainNodes};
+
 constexpr size_t framesForLoop(const float bars, const float bpm) noexcept
 {
     return static_cast<size_t>(bars * kBeatsPerBar / bpm * 60.f * kAssumedSampleRate);
@@ -710,6 +717,10 @@ class TapeLooperImpl final : public EffectBase
                 m_tremoloDepthReq[track].store(v->depth, std::memory_order_relaxed);
                 m_tremoloDriveReq[track].store(v->drive, std::memory_order_relaxed);
             }
+            if (const auto v = m_scriptEngine.drainTrackChainCommand(track))
+            {
+                m_chain[track] = *v;
+            }
         }
         if (const auto v = m_scriptEngine.drainReverbSizeCommand())
         {
@@ -852,35 +863,92 @@ class TapeLooperImpl final : public EffectBase
         m_pendingInfoText = text;
     }
 
-    // Chains distortion -> chorus -> echo -> compressor -> ring-mod -> tremolo per sample.
-    // Every stage always runs, so raising a mix from 0 finds already-warm internal state
-    // rather than a cold-start transient; only the final blend is mix-gated.
-    [[nodiscard]] std::pair<float, float> stepTrackEffectsChain(const size_t track, const float inL,
-                                                                const float inR) noexcept
+    // One function per node type, all sharing the (track, inL, inR) -> (outL, outR) shape so
+    // runTrackEffectChain() can dispatch through them uniformly; a node's own mix (chorus,
+    // ring-mod) always runs regardless of its blend, so raising it later finds warm state.
+    [[nodiscard]] std::pair<float, float> stepFilterNode(const size_t track, const float inL, const float inR) noexcept
     {
-        const auto distortedL = m_distortion.left(track).step(inL);
-        const auto distortedR = m_distortion.right(track).step(inR);
+        return {m_filter.left(track).step(inL), m_filter.right(track).step(inR)};
+    }
 
-        const auto chorusMix = m_chorusMix[track];
-        const auto chorusedL = distortedL + chorusMix * (m_chorus.left(track).step(distortedL) - distortedL);
-        const auto chorusedR = distortedR + chorusMix * (m_chorus.right(track).step(distortedR) - distortedR);
+    [[nodiscard]] std::pair<float, float> stepDistortionNode(const size_t track, const float inL,
+                                                             const float inR) noexcept
+    {
+        return {m_distortion.left(track).step(inL), m_distortion.right(track).step(inR)};
+    }
 
-        const auto echoFeedback = m_echoFeedback[track];
-        const auto echoContribL = echoFeedback * m_echo.left(track).readTap(0);
-        const auto echoContribR = echoFeedback * m_echo.right(track).readTap(0);
-        m_echo.left(track).write(chorusedL + echoContribL);
-        m_echo.right(track).write(chorusedR + echoContribR);
-        const auto afterEchoL = chorusedL + echoContribL;
-        const auto afterEchoR = chorusedR + echoContribR;
+    [[nodiscard]] std::pair<float, float> stepChorusNode(const size_t track, const float inL, const float inR) noexcept
+    {
+        const auto mix = m_chorusMix[track];
+        return {inL + mix * (m_chorus.left(track).step(inL) - inL),
+                inR + mix * (m_chorus.right(track).step(inR) - inR)};
+    }
 
-        const auto compressedL = m_compressor.left(track).step(afterEchoL);
-        const auto compressedR = m_compressor.right(track).step(afterEchoR);
+    // Feedback also doubles as the send level - see TapeLooperEchoCommand's own doc comment.
+    [[nodiscard]] std::pair<float, float> stepEchoNode(const size_t track, const float inL, const float inR) noexcept
+    {
+        const auto feedback = m_echoFeedback[track];
+        const auto contribL = feedback * m_echo.left(track).readTap(0);
+        const auto contribR = feedback * m_echo.right(track).readTap(0);
+        m_echo.left(track).write(inL + contribL);
+        m_echo.right(track).write(inR + contribR);
+        return {inL + contribL, inR + contribR};
+    }
 
-        const auto ringModMix = m_ringModMix[track];
-        const auto ringModdedL = compressedL + ringModMix * (m_ringMod.left(track).step(compressedL) - compressedL);
-        const auto ringModdedR = compressedR + ringModMix * (m_ringMod.right(track).step(compressedR) - compressedR);
+    [[nodiscard]] std::pair<float, float> stepCompressorNode(const size_t track, const float inL,
+                                                             const float inR) noexcept
+    {
+        return {m_compressor.left(track).step(inL), m_compressor.right(track).step(inR)};
+    }
 
-        return {m_tremolo.left(track).step(ringModdedL), m_tremolo.right(track).step(ringModdedR)};
+    [[nodiscard]] std::pair<float, float> stepRingModNode(const size_t track, const float inL, const float inR) noexcept
+    {
+        const auto mix = m_ringModMix[track];
+        return {inL + mix * (m_ringMod.left(track).step(inL) - inL),
+                inR + mix * (m_ringMod.right(track).step(inR) - inR)};
+    }
+
+    [[nodiscard]] std::pair<float, float> stepTremoloNode(const size_t track, const float inL, const float inR) noexcept
+    {
+        return {m_tremolo.left(track).step(inL), m_tremolo.right(track).step(inR)};
+    }
+
+    [[nodiscard]] std::pair<float, float> stepNode(const EffectNodeType type, const size_t track, const float inL,
+                                                   const float inR) noexcept
+    {
+        switch (type)
+        {
+            case EffectNodeType::Filter:
+                return stepFilterNode(track, inL, inR);
+            case EffectNodeType::Distortion:
+                return stepDistortionNode(track, inL, inR);
+            case EffectNodeType::Chorus:
+                return stepChorusNode(track, inL, inR);
+            case EffectNodeType::Echo:
+                return stepEchoNode(track, inL, inR);
+            case EffectNodeType::Compressor:
+                return stepCompressorNode(track, inL, inR);
+            case EffectNodeType::RingMod:
+                return stepRingModNode(track, inL, inR);
+            case EffectNodeType::Tremolo:
+                return stepTremoloNode(track, inL, inR);
+        }
+        return {inL, inR};
+    }
+
+    // Reverb send is not a chain node (see plan's scope cut) - it always taps whatever this
+    // returns, i.e. the chain's last node's output.
+    [[nodiscard]] std::pair<float, float> runTrackEffectChain(const size_t track, const float inL,
+                                                              const float inR) noexcept
+    {
+        auto curL = inL;
+        auto curR = inR;
+        const auto& chain = m_chain[track];
+        for (size_t i = 0; i < chain.length; ++i)
+        {
+            std::tie(curL, curR) = stepNode(chain.nodes[i], track, curL, curR);
+        }
+        return {curL, curR};
     }
 
     // Reads each track's current tape output before writing this block's
@@ -912,9 +980,8 @@ class TapeLooperImpl final : public EffectBase
                 for (size_t i = 0; i < BlockSize; ++i)
                 {
                     const auto gain = m_trackGainSmoother[track].getValue(i);
-                    const auto filteredL = m_filter.left(track).step(tapeOut[i * 2] * gain);
-                    const auto filteredR = m_filter.right(track).step(tapeOut[i * 2 + 1] * gain);
-                    const auto [wetChainL, wetChainR] = stepTrackEffectsChain(track, filteredL, filteredR);
+                    const auto [wetChainL, wetChainR] =
+                        runTrackEffectChain(track, tapeOut[i * 2] * gain, tapeOut[i * 2 + 1] * gain);
                     mix[i * 2] += wetChainL;
                     mix[i * 2 + 1] += wetChainR;
                     reverbSendIn[i] = (wetChainL + wetChainR) * 0.5f * send;
@@ -1131,6 +1198,9 @@ class TapeLooperImpl final : public EffectBase
     std::array<float, TapeLooperDetail::kFreeTracks> m_ringModMix{0.f, 0.f, 0.f};
     std::array<float, TapeLooperDetail::kFreeTracks> m_echoFeedback{0.f, 0.f, 0.f};
     std::array<size_t, TapeLooperDetail::kFreeTracks> m_appliedEchoDelaySamples{};
+    std::array<TrackEffectChain, TapeLooperDetail::kFreeTracks> m_chain{TapeLooperDetail::kDefaultTrackEffectChain,
+                                                                        TapeLooperDetail::kDefaultTrackEffectChain,
+                                                                        TapeLooperDetail::kDefaultTrackEffectChain};
 
     std::mutex m_grooveStyleMutex;
     std::string m_currentGrooveStyle; // "<Genre>/<style>", empty until a menu pick
