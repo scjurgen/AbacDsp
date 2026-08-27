@@ -5,9 +5,6 @@
 #include <atomic>
 #include <cmath>
 #include <cstddef>
-#include <format>
-#include <fstream>
-#include <iostream>
 #include <memory>
 #include <mutex>
 #include <nlohmann/json.hpp>
@@ -28,7 +25,6 @@
 #include "Filters/Sinc/sinc_4.h"
 #include "GrooveDefaultPaths.h"
 #include "Helpers/ConstructArray.h"
-#include "Helpers/DebugClock.h"
 #include "Helpers/StereoTrackBank.h"
 #include "Modulation/RingModulator.h"
 #include "Modulation/Tremolo.h"
@@ -280,7 +276,6 @@ class TapeLooperImpl final : public EffectBase
         m_extractionChunkLeftScratch.resize(TapeLooperDetail::kLoopIoChunkFrames);
         m_extractionChunkRightScratch.resize(TapeLooperDetail::kLoopIoChunkFrames);
         m_installChunkScratch.resize(TapeLooperDetail::kLoopIoChunkFrames * 2);
-        m_blockLogFile.open("/tmp/looper.txt", std::ios::out | std::ios::trunc); // debug-only, temporary
 
         m_barWaveform.assign(TapeLooperDetail::kClockWaveformBuckets, 0.f);
         m_loopWaveformPeaks.assign(TapeLooperDetail::kClockWaveformBuckets, 0.f);
@@ -1123,32 +1118,9 @@ class TapeLooperImpl final : public EffectBase
 
     // Feeds the continuous iris/waveform displays from the final mixed output - never
     // gated by record/play state, since the clock display always shows what's audible.
-    // Debug-only, temporary: prints on every bar.beat change so it can be
-    // correlated against GrooveDrumPlayer's own trigger log, both timestamped
-    // from the same shared AbacDsp::debugElapsedMicroseconds() epoch.
-    void logBarBeatIfChanged(const LoopClock& clock) noexcept
-    {
-        if (clock.samplesPerBar == 0)
-        {
-            return;
-        }
-        const auto bar = 1 + clock.loopPositionFrames / clock.samplesPerBar;
-        const auto beatLen =
-            std::max<size_t>(1, clock.samplesPerBar / static_cast<size_t>(TapeLooperDetail::kBeatsPerBar));
-        const auto beat = 1 + clock.barPositionFrames / beatLen;
-        if (bar == m_lastPrintedBar && beat == m_lastPrintedBeat)
-        {
-            return;
-        }
-        m_lastPrintedBar = bar;
-        m_lastPrintedBeat = beat;
-        std::cout << std::format("{:10} us  bar.beat {}.{}\n", AbacDsp::debugElapsedMicroseconds(), bar, beat);
-    }
-
     void feedClockDisplays(const AbacDsp::AudioBuffer<2, BlockSize>& out) noexcept
     {
         const auto clock = computeLoopClock();
-        logBarBeatIfChanged(clock);
         std::array<float, BlockSize> monoDecimated{};
         size_t decimatedCount = 0;
         float blockPeak = 0.f;
@@ -1178,15 +1150,6 @@ class TapeLooperImpl final : public EffectBase
         {
             const auto bucket = std::min(kBuckets - 1, clock.barPositionFrames * kBuckets / clock.samplesPerBar);
             m_barWaveform[bucket] = blockLast;
-        }
-
-        // Debug-only, temporary: one line per block, not the discrete events the
-        // other logs already cover.
-        if (m_blockLogFile)
-        {
-            m_blockLogFile << AbacDsp::debugElapsedMicroseconds() << " peak=" << blockPeak
-                           << " grooveTick=" << m_grooveSequencer.tickPosition()
-                           << " activeVoices=" << m_grooveSequencer.activeVoiceCount() << '\n';
         }
     }
 
@@ -1838,9 +1801,6 @@ class TapeLooperImpl final : public EffectBase
     // output, never gated by record/play state and never reset.
     AbacDsp::SimpleSpectrogram m_tapeSpectrogram;
     size_t m_tapeSpectrogramDecimatePhase{0};
-    size_t m_lastPrintedBar{0};   // debug-only, temporary
-    size_t m_lastPrintedBeat{0};  // debug-only, temporary
-    std::ofstream m_blockLogFile; // debug-only, temporary
     std::vector<size_t> m_tapeSpectrogramSliceBucket;
     size_t m_tapeSpectrogramNextSliceIndex{0};
     size_t m_tapeSpectrogramWindowFill{0};
