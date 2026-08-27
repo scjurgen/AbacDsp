@@ -1,20 +1,23 @@
 # Metronome
 
-Generates tapelooper's built-in "Metronome" groove: a plain click track expressed as ordinary
-groove-kit assets (two sample pieces, five MIDI patterns), not a runtime-synthesized special
-case. See `.claude/tapelooper-effects-and-lua.md`, Phase 10a ("One conductor") for why - in
-short, the groove track has exactly one playback engine (`AbacDsp::GrooveDrumPlayer`), and click
-is just another groove that engine plays.
+Generates content for tapelooper's built-in "Metronome" groove and related rhythm-guide
+material: ordinary groove-kit assets (click samples plus a MIDI pattern library), not a
+runtime-synthesized special case. See `.claude/tapelooper-effects-and-lua.md`, Phase 10a ("One
+conductor") for why - in short, the groove track has exactly one playback engine
+(`AbacDsp::GrooveDrumPlayer`), and click is just another groove that engine plays.
 
 Run `./generate.sh` to (re)generate everything. It sets up its own local, gitignored Python
 venv and writes:
 
-- `MidiDrums/Metronome/*.mid` (+ `.json` sidecars) - the five rhythm patterns below.
+- `generated/<area>/<family>/*.mid` (+ `manifest.json`, `README.md`) - the rhythm-guide library
+  below, staged locally in this folder for review. Copying the reviewed set into `MidiDrums/`
+  (the folder `GrooveKit` actually scans) is a separate, later step - not done automatically by
+  this script yet.
 - `samples/drums/reggae/clicklow_1..4.wav` / `clickhigh_1..4.wav` - the two click pieces, four
   round-robin takes each, added to the existing reggae kit.
 
-Both folders are gitignored (see `samples/README.md`/`MidiDrums/README.md`) - regenerate
-locally after a fresh clone rather than expecting these files to already be there.
+Both `generated/` and the sample/MidiDrums output folders are gitignored - regenerate locally
+after a fresh clone rather than expecting these files to already be there.
 
 ## Click samples (`generate_click_samples.py`)
 
@@ -30,32 +33,30 @@ variety every other piece in the reggae kit already has - deliberately introduce
 of coming from a live take, so repeated clicks don't sound robotically identical.
 
 Output is plain 48 kHz stereo IEEE-float WAV, written by hand with `struct` (no numpy/soundfile
-dependency), matching the reggae kit's own file format exactly.
+dependency), matching the reggae kit's own file format exactly. These `click_low`/`click_high`
+voices (MIDI notes 100/101) are available to any groove file that wants a pure click sound,
+including patterns in the rhythm-guide library below.
 
-## Rhythm patterns (`generate_metronome_midi.py`)
+## Rhythm-guide library (`rhythm_library/`)
 
-Five patterns, each 4 bars of 4/4 at a nominal 100 BPM (the tempo is just a JSON-sidecar hint -
-tapelooper always drives playback at its own current BPM). Every pattern uses only two notes:
-MIDI note 100 (`click_low`, the accent) and 101 (`click_high`, everything else). Velocity carries
-the dynamics, the same way a real recorded groove would:
+186 educational/looper/performance rhythm-guide MIDI files: meter and subdivision drills,
+swing/shuffle, odd and mixed meter, Afro-Cuban/Afro-diasporic and Middle Eastern pulse guides,
+count-ins, phrase cues, and turnaround-cued performance loops - using this project's real
+drum-kit note map (kick/snare/rimshot/hi-hat/woodblock/etc., see
+`src/includes/Sampler/GrooveNoteMap.h`), 480 ticks per quarter note, one file per pattern. This
+supersedes the project's earlier two-note-click-only generator. See `PLAN.md` for the full
+design and `generated/README.md` (after generating) for the catalog itself.
 
-| Velocity | Role |
-|---|---|
-| 127 | downbeat (beat 1 of the bar) |
-| 100 | the other three quarter-note beats |
-| 60 | 8th-note offbeats, triplet partials, the shuffle's swung note ("ghost notes") |
-| 32 | 16th-note subdivisions that aren't also an 8th-note offbeat |
+```
+python3 -m rhythm_library.generate [--output DIR] [--area AREA] [--family FAMILY] [--clean]
+python3 -m rhythm_library.validation generated
+python3 -m pytest
+python3 -m rhythm_library.deploy [--generated DIR] [--midi-drums DIR]
+```
 
-- **straight** - plain quarter notes, no subdivision.
-- **eighths** - adds the 8th-note offbeat between each quarter note.
-- **sixteenths** - adds both 16th-note subdivisions inside each 8th-note gap, on top of eighths.
-- **triplets** - each quarter note divided into 3, both inner partials at ghost velocity.
-- **shuffle** - a swung feel: the middle triplet partial is dropped, leaving a long-short (2:1)
-  pair per beat, not a straight triplet.
-
-Notes are 10 ticks long (480 ticks/quarter note) - long enough for a clean note-on/note-off
-pair, short enough to stay well clear of the next hit at any of these subdivisions.
-
-`GrooveKit` derives a groove's own loop length from its last note's tick, rounded up to the
-next whole beat - so each file's own 4-bar length becomes its loop length, and the engine loops
-it from there exactly like any other groove.
+Output is staged in `generated/` for review; `rhythm_library.deploy` then copies it into
+`MidiDrums/<area>/<family>/`, appending `_v1` to every filename - `GrooveKit`'s
+`splitStyleAndVariation` (`GrooveKit.h`) silently skips any file whose stem doesn't end in
+`_v<digits>`, since it treats that suffix as a round-robin variation number. Each pattern here
+is a single deterministic take, so it becomes its own one-variation style, the same convention
+the retired `generate_metronome_midi.py` used.
