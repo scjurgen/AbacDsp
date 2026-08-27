@@ -111,7 +111,7 @@ class MelSpectroGram
 
     void advanceWindow()
     {
-        const auto samplesToKeep = static_cast<size_t>(m_fftLength * (1.0f - m_windowForward));
+        const auto samplesToKeep = static_cast<size_t>(static_cast<float>(m_fftLength) * (1.0f - m_windowForward));
         const auto index = m_fftLength - samplesToKeep;
         std::copy_n(&m_buffer[index], m_buffer.size() - index, m_buffer.data());
         m_bufferIndex = samplesToKeep;
@@ -292,7 +292,7 @@ class SpectrogramBase
     void setFftLength(const unsigned N)
     {
         m_fftLength = N;
-        m_forwardLength = static_cast<unsigned>(N * m_windowForwardRatio);
+        m_forwardLength = static_cast<unsigned>(static_cast<float>(N) * m_windowForwardRatio);
         m_fft.resize(m_fftLength);
         m_buffer.resize(m_fftLength, 0.f);
         m_fftBuffer.resize(m_fftLength, 0.f);
@@ -305,7 +305,7 @@ class SpectrogramBase
     void setWindowForward(const float ratio)
     {
         m_windowForwardRatio = std::clamp(ratio, 0.01f, 0.99f);
-        m_forwardLength = static_cast<unsigned>(m_fftLength * m_windowForwardRatio);
+        m_forwardLength = static_cast<unsigned>(static_cast<float>(m_fftLength) * m_windowForwardRatio);
     }
 
     void processBlock(std::span<const float> input)

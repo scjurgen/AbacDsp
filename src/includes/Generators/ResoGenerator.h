@@ -159,7 +159,7 @@ class ResoGenerator
         {
             for (size_t i = 0; i < BlockSize; ++i)
             {
-                const float attackGain = static_cast<float>(m_attackCounter) / m_attackSamples;
+                const float attackGain = static_cast<float>(m_attackCounter) / static_cast<float>(m_attackSamples);
                 out[i] *= attackGain;
                 m_attackCounter++;
             }

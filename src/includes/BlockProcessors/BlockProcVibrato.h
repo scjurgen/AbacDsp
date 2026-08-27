@@ -57,7 +57,8 @@ class Vibrato final : public BlockProcessorBase<BlockSize>
             const float depth = std::clamp(m_wow.step(), -0.95f, 0.95f) * MaxDepth;
 
             const float readPos = static_cast<float>(m_writePos) + depth - MaxDepth;
-            const float wrapped = std::fmod(readPos + m_buffer.size(), static_cast<float>(m_buffer.size()));
+            const float wrapped =
+                std::fmod(readPos + static_cast<float>(m_buffer.size()), static_cast<float>(m_buffer.size()));
 
             const size_t idx0 = static_cast<size_t>(wrapped);
             const size_t idx1 = (idx0 + 1) % m_buffer.size();

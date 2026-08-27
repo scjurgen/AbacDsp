@@ -133,7 +133,7 @@ def load_patches(blueprint: Blueprint) -> str:
                 result += f"""     if (auto* p = m_parameters.getParameter("{item['symbol']}"))
                         {{
                             const auto& range = m_parameters.getParameterRange("{item['symbol']}");
-                            float normalized = range.convertTo0to1(params.{item['symbol']});
+                            float normalized = range.convertTo0to1(static_cast<float>(params.{item['symbol']}));
                             p->setValueNotifyingHost(normalized);
                         }}
                 """

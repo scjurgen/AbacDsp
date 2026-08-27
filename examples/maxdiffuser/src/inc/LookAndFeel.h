@@ -9,6 +9,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
     const float fontHeight{GuiConstants::instance().text.fontHeight};
     juce::Colour backgroundDark, backgroundDarkDisabled;
     juce::Colour backgroundMid;
+    juce::Colour labelColour;
     juce::Colour statusOutline, statusOutlineDisabled;
     juce::Colour gradientDark, gradientDarkDisabled;
     juce::Colour knobGradientStart, knobGradientCenter, knobGradientEnd;
@@ -36,6 +37,7 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
         const auto bgMid = juce::Colour(GuiConstants::instance().colors.backgroundMid);
         const auto fg = juce::Colour(GuiConstants::instance().colors.statusOutline);
         const auto label = juce::Colour(GuiConstants::instance().colors.labelColour);
+        labelColour = label;
 
         setColour(juce::ResizableWindow::backgroundColourId, bg);
         setColour(juce::DocumentWindow::backgroundColourId, bg);
@@ -86,15 +88,17 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
                           bool /*shouldDrawButtonAsDown*/) override
     {
         auto bounds = button.getLocalBounds();
-        auto toggleBounds = bounds.removeFromLeft(static_cast<int>(bounds.getHeight() * 1.5f));
+        auto toggleBounds = bounds.removeFromLeft(static_cast<int>(static_cast<float>(bounds.getHeight()) * 1.5f));
         auto textBounds = bounds.reduced(2);
 
         g.setColour(button.isEnabled() ? backgroundDark : backgroundDarkDisabled);
-        g.fillRoundedRectangle(toggleBounds.toFloat().reduced(2.0f), toggleBounds.getHeight() / 2.0f);
+        g.fillRoundedRectangle(toggleBounds.toFloat().reduced(2.0f),
+                               static_cast<float>(toggleBounds.getHeight()) / 2.0f);
 
-        auto diameter = toggleBounds.getHeight() - 13.0f;
-        auto circleX = button.getToggleState() ? toggleBounds.getRight() - diameter - 6.5f : toggleBounds.getX() + 6.5f;
-        auto circleY = toggleBounds.getY() + 6.5f;
+        auto diameter = static_cast<float>(toggleBounds.getHeight()) - 13.0f;
+        auto circleX = button.getToggleState() ? static_cast<float>(toggleBounds.getRight()) - diameter - 6.5f
+                                               : static_cast<float>(toggleBounds.getX()) + 6.5f;
+        auto circleY = static_cast<float>(toggleBounds.getY()) + 6.5f;
 
         g.setColour(button.isEnabled() ? (button.getToggleState() ? statusOutline : gradientDark)
                                        : (button.getToggleState() ? statusOutlineDisabled : gradientDarkDisabled));
@@ -309,9 +313,10 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
 
         juce::Rectangle<int> arrowZone(static_cast<int>(xOffset) + static_cast<int>(paddedWidth) - 30, 0, 20, height);
         juce::Path path;
-        path.startNewSubPath(arrowZone.getX() + 3.0f, arrowZone.getCentreY() - 2.0f);
-        path.lineTo(static_cast<float>(arrowZone.getCentreX()), arrowZone.getCentreY() + 3.0f);
-        path.lineTo(arrowZone.getRight() - 3.0f, arrowZone.getCentreY() - 2.0f);
+        path.startNewSubPath(static_cast<float>(arrowZone.getX()) + 3.0f,
+                             static_cast<float>(arrowZone.getCentreY()) - 2.0f);
+        path.lineTo(static_cast<float>(arrowZone.getCentreX()), static_cast<float>(arrowZone.getCentreY()) + 3.0f);
+        path.lineTo(static_cast<float>(arrowZone.getRight()) - 3.0f, static_cast<float>(arrowZone.getCentreY()) - 2.0f);
 
         g.setColour(box.findColour(juce::ComboBox::arrowColourId).withAlpha(box.isEnabled() ? 0.9f : 0.2f));
         g.strokePath(path, juce::PathStrokeType(2.0f));
@@ -370,6 +375,29 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
     juce::Font getMenuBarFont(juce::MenuBarComponent&, int, const juce::String&) override
     {
         return mainFontDefinition;
+    }
+
+    // LookAndFeel_V4's default reuses TextButton::buttonOnColourId/textColourOnId for the
+    // hover/open highlight - those are set here for actual toggle buttons, not the menu
+    // bar, so text swung all the way to the app's background colour. Keep text constant.
+    void drawMenuBarItem(juce::Graphics& g, int width, int height, int itemIndex, const juce::String& itemText,
+                         bool isMouseOverItem, bool isMenuOpen, bool /*isMouseOverBar*/,
+                         juce::MenuBarComponent& menuBar) override
+    {
+        if (!menuBar.isEnabled())
+        {
+            g.setColour(labelColour.withMultipliedAlpha(0.5f));
+        }
+        else
+        {
+            if (isMenuOpen || isMouseOverItem)
+            {
+                g.fillAll(backgroundMid.contrasting(0.2f));
+            }
+            g.setColour(labelColour);
+        }
+        g.setFont(getMenuBarFont(menuBar, itemIndex, itemText));
+        g.drawFittedText(itemText, 0, 0, width, height, juce::Justification::centred, 1);
     }
 
     int getDefaultMenuBarHeight() override

@@ -128,7 +128,8 @@ class FdnTankGlide
         }
         m_currentWidth[index] = value;
         m_delay[index].setSize(value);
-        const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
+        const auto tmp =
+            std::pow(0.001f, static_cast<float>(m_currentWidth[index]) / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
     }
 

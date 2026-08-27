@@ -676,7 +676,8 @@ class ChebyshevBiquad
             const auto fSPole = z1 / z2;
             auto fZPole = BilinearTransform(fSPole);
             const auto fSZero =
-                std::complex<float>(0, fC / std::cos(((2 * iPair) + 1) * std::numbers::pi_v<float> / (2 * order)));
+                std::complex<float>(0, fC / std::cos(static_cast<float>((2 * iPair) + 1) * std::numbers::pi_v<float> /
+                                                     static_cast<float>(2 * order)));
             auto fZZero = BilinearTransform(fSZero);
             float fDCPoleDistance;
             if (isLowPass)

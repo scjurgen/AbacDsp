@@ -196,7 +196,8 @@ class SrPushConverter
         auto currentRatio = m_lastRatio;
         auto currentRatioReciprocal = 1.f / m_lastRatio;
         auto halfFilterChannelWidth{0u};
-        const auto cnt = (m_sincFilter->halfCoeffWidth() + 2.0f) / m_sincFilter->increment();
+        const auto cnt =
+            (static_cast<float>(m_sincFilter->halfCoeffWidth()) + 2.0f) / static_cast<float>(m_sincFilter->increment());
         const auto mn = std::min(m_lastRatio, targetRatio);
         const auto count = mn < 1 ? cnt / mn : cnt;
 
@@ -230,20 +231,23 @@ class SrPushConverter
             }
             if (m_bufferRealEnd >= 0)
             {
-                if (m_bufferCurrent + inputIndex + terminate >= m_bufferRealEnd)
+                if (static_cast<float>(m_bufferCurrent) + inputIndex + terminate >= static_cast<float>(m_bufferRealEnd))
                 {
                     break;
                 }
             }
 
-            const auto floatIncrement = m_sincFilter->increment() * (currentRatio < 1.0f ? currentRatio : 1.0f);
-            calcSincOutput<MAXCHANNELS>(floatIncrement, inputIndex, floatIncrement / m_sincFilter->increment(),
+            const auto floatIncrement =
+                static_cast<float>(m_sincFilter->increment()) * (currentRatio < 1.0f ? currentRatio : 1.0f);
+            calcSincOutput<MAXCHANNELS>(floatIncrement, inputIndex,
+                                        floatIncrement / static_cast<float>(m_sincFilter->increment()),
                                         srData.dataOut + m_outGenerated);
 
             m_outGenerated += MAXCHANNELS;
             if (m_outCount > 0 && std::abs(m_lastRatio - targetRatio) > 1e-10)
             {
-                currentRatio = m_lastRatio + m_outGenerated * (targetRatio - m_lastRatio) / m_outCount;
+                currentRatio = m_lastRatio + static_cast<float>(m_outGenerated) * (targetRatio - m_lastRatio) /
+                                                 static_cast<float>(m_outCount);
                 currentRatioReciprocal = 1.f / currentRatio;
             }
 

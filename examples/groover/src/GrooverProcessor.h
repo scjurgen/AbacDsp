@@ -359,49 +359,49 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         if (auto* p = m_parameters.getParameter("play"))
         {
             const auto& range = m_parameters.getParameterRange("play");
-            float normalized = range.convertTo0to1(params.play);
+            float normalized = range.convertTo0to1(static_cast<float>(params.play));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("hostSync"))
         {
             const auto& range = m_parameters.getParameterRange("hostSync");
-            float normalized = range.convertTo0to1(params.hostSync);
+            float normalized = range.convertTo0to1(static_cast<float>(params.hostSync));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("bpm"))
         {
             const auto& range = m_parameters.getParameterRange("bpm");
-            float normalized = range.convertTo0to1(params.bpm);
+            float normalized = range.convertTo0to1(static_cast<float>(params.bpm));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("grooveVariation"))
         {
             const auto& range = m_parameters.getParameterRange("grooveVariation");
-            float normalized = range.convertTo0to1(params.grooveVariation);
+            float normalized = range.convertTo0to1(static_cast<float>(params.grooveVariation));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("outputLevel"))
         {
             const auto& range = m_parameters.getParameterRange("outputLevel");
-            float normalized = range.convertTo0to1(params.outputLevel);
+            float normalized = range.convertTo0to1(static_cast<float>(params.outputLevel));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("inputGain"))
         {
             const auto& range = m_parameters.getParameterRange("inputGain");
-            float normalized = range.convertTo0to1(params.inputGain);
+            float normalized = range.convertTo0to1(static_cast<float>(params.inputGain));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("push"))
         {
             const auto& range = m_parameters.getParameterRange("push");
-            float normalized = range.convertTo0to1(params.push);
+            float normalized = range.convertTo0to1(static_cast<float>(params.push));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("life"))
         {
             const auto& range = m_parameters.getParameterRange("life");
-            float normalized = range.convertTo0to1(params.life);
+            float normalized = range.convertTo0to1(static_cast<float>(params.life));
             p->setValueNotifyingHost(normalized);
         }
     }

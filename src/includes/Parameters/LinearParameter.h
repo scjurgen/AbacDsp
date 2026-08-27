@@ -140,7 +140,7 @@ class LinearParameter
         m_target = std::clamp(newValue, m_min, m_max);
         const float delta = m_target - m_value;
         m_stepsRemaining = static_cast<int>(std::abs(delta / m_step));
-        m_stepApply = m_stepsRemaining > 0 ? delta / m_stepsRemaining : 0.0f;
+        m_stepApply = m_stepsRemaining > 0 ? delta / static_cast<float>(m_stepsRemaining) : 0.0f;
         if (m_stepsRemaining == 0)
         {
             m_value = m_target;

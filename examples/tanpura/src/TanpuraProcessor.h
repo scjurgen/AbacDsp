@@ -779,223 +779,223 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         if (auto* p = m_parameters.getParameter("key"))
         {
             const auto& range = m_parameters.getParameterRange("key");
-            float normalized = range.convertTo0to1(params.key);
+            float normalized = range.convertTo0to1(static_cast<float>(params.key));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("level"))
         {
             const auto& range = m_parameters.getParameterRange("level");
-            float normalized = range.convertTo0to1(params.level);
+            float normalized = range.convertTo0to1(static_cast<float>(params.level));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("tuning"))
         {
             const auto& range = m_parameters.getParameterRange("tuning");
-            float normalized = range.convertTo0to1(params.tuning);
+            float normalized = range.convertTo0to1(static_cast<float>(params.tuning));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("detune"))
         {
             const auto& range = m_parameters.getParameterRange("detune");
-            float normalized = range.convertTo0to1(params.detune);
+            float normalized = range.convertTo0to1(static_cast<float>(params.detune));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("reverbDry"))
         {
             const auto& range = m_parameters.getParameterRange("reverbDry");
-            float normalized = range.convertTo0to1(params.reverbDry);
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbDry));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("reverbWet"))
         {
             const auto& range = m_parameters.getParameterRange("reverbWet");
-            float normalized = range.convertTo0to1(params.reverbWet);
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbWet));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("reverbSize"))
         {
             const auto& range = m_parameters.getParameterRange("reverbSize");
-            float normalized = range.convertTo0to1(params.reverbSize);
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbSize));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("reverbDecay"))
         {
             const auto& range = m_parameters.getParameterRange("reverbDecay");
-            float normalized = range.convertTo0to1(params.reverbDecay);
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbDecay));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("reverbShelfLow"))
         {
             const auto& range = m_parameters.getParameterRange("reverbShelfLow");
-            float normalized = range.convertTo0to1(params.reverbShelfLow);
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbShelfLow));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("reverbShelfHigh"))
         {
             const auto& range = m_parameters.getParameterRange("reverbShelfHigh");
-            float normalized = range.convertTo0to1(params.reverbShelfHigh);
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbShelfHigh));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pattern"))
         {
             const auto& range = m_parameters.getParameterRange("pattern");
-            float normalized = range.convertTo0to1(params.pattern);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pattern));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("slide"))
         {
             const auto& range = m_parameters.getParameterRange("slide");
-            float normalized = range.convertTo0to1(params.slide);
+            float normalized = range.convertTo0to1(static_cast<float>(params.slide));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("slideTime"))
         {
             const auto& range = m_parameters.getParameterRange("slideTime");
-            float normalized = range.convertTo0to1(params.slideTime);
+            float normalized = range.convertTo0to1(static_cast<float>(params.slideTime));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("harmonicFirst"))
         {
             const auto& range = m_parameters.getParameterRange("harmonicFirst");
-            float normalized = range.convertTo0to1(params.harmonicFirst);
+            float normalized = range.convertTo0to1(static_cast<float>(params.harmonicFirst));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("harmonicSecond"))
         {
             const auto& range = m_parameters.getParameterRange("harmonicSecond");
-            float normalized = range.convertTo0to1(params.harmonicSecond);
+            float normalized = range.convertTo0to1(static_cast<float>(params.harmonicSecond));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("playStop"))
         {
             const auto& range = m_parameters.getParameterRange("playStop");
-            float normalized = range.convertTo0to1(params.playStop);
+            float normalized = range.convertTo0to1(static_cast<float>(params.playStop));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("humanizeTiming"))
         {
             const auto& range = m_parameters.getParameterRange("humanizeTiming");
-            float normalized = range.convertTo0to1(params.humanizeTiming);
+            float normalized = range.convertTo0to1(static_cast<float>(params.humanizeTiming));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("humanizeLevel"))
         {
             const auto& range = m_parameters.getParameterRange("humanizeLevel");
-            float normalized = range.convertTo0to1(params.humanizeLevel);
+            float normalized = range.convertTo0to1(static_cast<float>(params.humanizeLevel));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("bpm"))
         {
             const auto& range = m_parameters.getParameterRange("bpm");
-            float normalized = range.convertTo0to1(params.bpm);
+            float normalized = range.convertTo0to1(static_cast<float>(params.bpm));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("hostSync"))
         {
             const auto& range = m_parameters.getParameterRange("hostSync");
-            float normalized = range.convertTo0to1(params.hostSync);
+            float normalized = range.convertTo0to1(static_cast<float>(params.hostSync));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pluckDivision"))
         {
             const auto& range = m_parameters.getParameterRange("pluckDivision");
-            float normalized = range.convertTo0to1(params.pluckDivision);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pluckDivision));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pauseDivision"))
         {
             const auto& range = m_parameters.getParameterRange("pauseDivision");
-            float normalized = range.convertTo0to1(params.pauseDivision);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pauseDivision));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("attack"))
         {
             const auto& range = m_parameters.getParameterRange("attack");
-            float normalized = range.convertTo0to1(params.attack);
+            float normalized = range.convertTo0to1(static_cast<float>(params.attack));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("decay"))
         {
             const auto& range = m_parameters.getParameterRange("decay");
-            float normalized = range.convertTo0to1(params.decay);
+            float normalized = range.convertTo0to1(static_cast<float>(params.decay));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("decayOctave"))
         {
             const auto& range = m_parameters.getParameterRange("decayOctave");
-            float normalized = range.convertTo0to1(params.decayOctave);
+            float normalized = range.convertTo0to1(static_cast<float>(params.decayOctave));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("damper"))
         {
             const auto& range = m_parameters.getParameterRange("damper");
-            float normalized = range.convertTo0to1(params.damper);
+            float normalized = range.convertTo0to1(static_cast<float>(params.damper));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("levelSustain"))
         {
             const auto& range = m_parameters.getParameterRange("levelSustain");
-            float normalized = range.convertTo0to1(params.levelSustain);
+            float normalized = range.convertTo0to1(static_cast<float>(params.levelSustain));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("sustainHumanize"))
         {
             const auto& range = m_parameters.getParameterRange("sustainHumanize");
-            float normalized = range.convertTo0to1(params.sustainHumanize);
+            float normalized = range.convertTo0to1(static_cast<float>(params.sustainHumanize));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("lfoDepth"))
         {
             const auto& range = m_parameters.getParameterRange("lfoDepth");
-            float normalized = range.convertTo0to1(params.lfoDepth);
+            float normalized = range.convertTo0to1(static_cast<float>(params.lfoDepth));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("lfoSpeed"))
         {
             const auto& range = m_parameters.getParameterRange("lfoSpeed");
-            float normalized = range.convertTo0to1(params.lfoSpeed);
+            float normalized = range.convertTo0to1(static_cast<float>(params.lfoSpeed));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("lfoSpeedVariation"))
         {
             const auto& range = m_parameters.getParameterRange("lfoSpeedVariation");
-            float normalized = range.convertTo0to1(params.lfoSpeedVariation);
+            float normalized = range.convertTo0to1(static_cast<float>(params.lfoSpeedVariation));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("attackFilter"))
         {
             const auto& range = m_parameters.getParameterRange("attackFilter");
-            float normalized = range.convertTo0to1(params.attackFilter);
+            float normalized = range.convertTo0to1(static_cast<float>(params.attackFilter));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("decayFilter"))
         {
             const auto& range = m_parameters.getParameterRange("decayFilter");
-            float normalized = range.convertTo0to1(params.decayFilter);
+            float normalized = range.convertTo0to1(static_cast<float>(params.decayFilter));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("levelSustainFilter"))
         {
             const auto& range = m_parameters.getParameterRange("levelSustainFilter");
-            float normalized = range.convertTo0to1(params.levelSustainFilter);
+            float normalized = range.convertTo0to1(static_cast<float>(params.levelSustainFilter));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("filterCutoff"))
         {
             const auto& range = m_parameters.getParameterRange("filterCutoff");
-            float normalized = range.convertTo0to1(params.filterCutoff);
+            float normalized = range.convertTo0to1(static_cast<float>(params.filterCutoff));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("filterResonance"))
         {
             const auto& range = m_parameters.getParameterRange("filterResonance");
-            float normalized = range.convertTo0to1(params.filterResonance);
+            float normalized = range.convertTo0to1(static_cast<float>(params.filterResonance));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("contourFilter"))
         {
             const auto& range = m_parameters.getParameterRange("contourFilter");
-            float normalized = range.convertTo0to1(params.contourFilter);
+            float normalized = range.convertTo0to1(static_cast<float>(params.contourFilter));
             p->setValueNotifyingHost(normalized);
         }
     }

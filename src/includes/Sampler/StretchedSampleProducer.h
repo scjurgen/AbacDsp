@@ -70,7 +70,7 @@ class StretchedSampleProducer
         m_ringWritePos = 0;
         m_ringReadPos = 0;
 
-        const auto lookAheadSamples = static_cast<size_t>(m_fftSize * m_transientLookAhead);
+        const auto lookAheadSamples = static_cast<size_t>(static_cast<float>(m_fftSize) * m_transientLookAhead);
 
         if (isTransient)
         {

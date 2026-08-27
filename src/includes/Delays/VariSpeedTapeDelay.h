@@ -65,7 +65,7 @@ class VariSpeedTapeDelay
         {
             m_rdhd[i].setWrapPosition(BufferSize);
             m_rdhd[i].setCorrectionTime(.005f);
-            setReadHead(i, (i + 1) * 4800, true);
+            setReadHead(i, static_cast<float>((i + 1) * 4800), true);
         }
         m_flutter.setRate(.4f);
         m_flutter.setDepth(0.1f);
@@ -77,7 +77,7 @@ class VariSpeedTapeDelay
 
     void readBlock(const size_t hdIdx, std::array<float, NumChannels * TileSize>& out) noexcept
     {
-        m_rdhd[hdIdx].setCurrentWritePosition(m_writeHead, m_ratio.getLastValue());
+        m_rdhd[hdIdx].setCurrentWritePosition(static_cast<double>(m_writeHead), m_ratio.getLastValue());
         for (size_t i = 0; i < TileSize; ++i)
         {
             m_rdhd[hdIdx].advancePosition();

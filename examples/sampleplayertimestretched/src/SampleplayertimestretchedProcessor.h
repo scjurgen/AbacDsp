@@ -320,25 +320,25 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         if (auto* p = m_parameters.getParameter("vol"))
         {
             const auto& range = m_parameters.getParameterRange("vol");
-            float normalized = range.convertTo0to1(params.vol);
+            float normalized = range.convertTo0to1(static_cast<float>(params.vol));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("type"))
         {
             const auto& range = m_parameters.getParameterRange("type");
-            float normalized = range.convertTo0to1(params.type);
+            float normalized = range.convertTo0to1(static_cast<float>(params.type));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("position"))
         {
             const auto& range = m_parameters.getParameterRange("position");
-            float normalized = range.convertTo0to1(params.position);
+            float normalized = range.convertTo0to1(static_cast<float>(params.position));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("advance"))
         {
             const auto& range = m_parameters.getParameterRange("advance");
-            float normalized = range.convertTo0to1(params.advance);
+            float normalized = range.convertTo0to1(static_cast<float>(params.advance));
             p->setValueNotifyingHost(normalized);
         }
     }
@@ -410,7 +410,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         samplesProcessed += numSamples;
         elapsedTotalNanoSeconds += static_cast<size_t>(elapsed.count());
         constexpr float secondsPoll = 0.5f;
-        if (samplesProcessed > m_sampleRate * secondsPoll)
+        if (static_cast<float>(samplesProcessed) > static_cast<float>(m_sampleRate) * secondsPoll)
         {
             const auto pRate = static_cast<float>(100.0 * static_cast<double>(elapsedTotalNanoSeconds) /
                                                   (secondsPoll * 1'000'000'000.0));
@@ -418,7 +418,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_runningWindowCpu -= m_avgCpu[m_head];
             m_avgCpu[m_head++] = static_cast<size_t>(pRate * 100.f);
             m_head = m_head % m_avgCpu.size();
-            m_cpuLoad.store(m_runningWindowCpu * 0.01f / m_avgCpu.size());
+            m_cpuLoad.store(static_cast<float>(m_runningWindowCpu) * 0.01f / static_cast<float>(m_avgCpu.size()));
             elapsedTotalNanoSeconds = 0;
             samplesProcessed = 0;
         }

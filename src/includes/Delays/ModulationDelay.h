@@ -76,7 +76,7 @@ class ModulatingDelayPitchedAdjust
     void feedBackByTime(const float msecs, const float db = 0.001f, const bool negative = false) noexcept
     {
         m_decayMsecs = msecs;
-        const auto feedback = std::pow(db, m_currentDistance / m_sampleRate / (msecs / 1000.0f));
+        const auto feedback = std::pow(db, static_cast<float>(m_currentDistance) / m_sampleRate / (msecs / 1000.0f));
         setFeedback(negative ? -feedback : feedback);
     }
 
@@ -132,9 +132,10 @@ class ModulatingDelayPitchedAdjust
         if (m_advanceSteps)
         {
             const auto headReadFloor = static_cast<ptrdiff_t>(m_headRead);
-            const ptrdiff_t dt = (m_headWrite > m_headRead)
-                                     ? static_cast<ptrdiff_t>(m_headWrite) - headReadFloor
-                                     : static_cast<ptrdiff_t>(m_headWrite + MaxSizeInSamples) - headReadFloor;
+            const auto headWriteSigned = static_cast<ptrdiff_t>(m_headWrite);
+            const ptrdiff_t dt = (headWriteSigned > headReadFloor)
+                                     ? headWriteSigned - headReadFloor
+                                     : headWriteSigned + static_cast<ptrdiff_t>(MaxSizeInSamples) - headReadFloor;
 
             m_currentDistance = static_cast<size_t>(dt);
             if (static_cast<size_t>(dt) / 4 == m_newDistance / 4)

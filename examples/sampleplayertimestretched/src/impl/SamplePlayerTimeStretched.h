@@ -3,6 +3,7 @@
 #include <array>
 #include <cmath>
 #include <memory>
+#include <tuple>
 #include <vector>
 
 #include "AudioFile/LoadWav.h"
@@ -56,7 +57,8 @@ class SamplePlayerTimeStretched final : public EffectBase
     void setPosition(const float value)
     {
         m_position = value * 0.01f;
-        size_t pos = m_position * m_sample[m_currentSampleBuffer]->size() / 2;
+        const auto pos =
+            static_cast<size_t>(m_position * static_cast<float>(m_sample[m_currentSampleBuffer]->size()) / 2.f);
         m_producer.setPosition(pos, false);
     }
 
@@ -66,14 +68,17 @@ class SamplePlayerTimeStretched final : public EffectBase
         m_producer.setFeedRate(m_advance);
     }
 
-    void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
+    void processBlock([[maybe_unused]] const AbacDsp::AudioBuffer<2, BlockSize>& in,
+                      AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
         if (m_producer.isDone())
         {
-            m_producer.setPosition(m_position * m_sample[m_currentSampleBuffer]->size() / 2, true);
+            m_producer.setPosition(
+                static_cast<size_t>(m_position * static_cast<float>(m_sample[m_currentSampleBuffer]->size()) / 2.f),
+                true);
         }
         std::array<std::array<float, BlockSize>, 2> tmp;
-        m_player.produceSamples(tmp[0].data(), tmp[1].data(), BlockSize);
+        std::ignore = m_player.produceSamples(tmp[0].data(), tmp[1].data(), BlockSize);
         for (size_t i = 0; i < BlockSize; ++i)
         {
             out(i, 0) = tmp[0][i] * m_vol;

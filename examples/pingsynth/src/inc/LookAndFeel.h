@@ -88,15 +88,17 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
                           bool /*shouldDrawButtonAsDown*/) override
     {
         auto bounds = button.getLocalBounds();
-        auto toggleBounds = bounds.removeFromLeft(static_cast<int>(bounds.getHeight() * 1.5f));
+        auto toggleBounds = bounds.removeFromLeft(static_cast<int>(static_cast<float>(bounds.getHeight()) * 1.5f));
         auto textBounds = bounds.reduced(2);
 
         g.setColour(button.isEnabled() ? backgroundDark : backgroundDarkDisabled);
-        g.fillRoundedRectangle(toggleBounds.toFloat().reduced(2.0f), toggleBounds.getHeight() / 2.0f);
+        g.fillRoundedRectangle(toggleBounds.toFloat().reduced(2.0f),
+                               static_cast<float>(toggleBounds.getHeight()) / 2.0f);
 
-        auto diameter = toggleBounds.getHeight() - 13.0f;
-        auto circleX = button.getToggleState() ? toggleBounds.getRight() - diameter - 6.5f : toggleBounds.getX() + 6.5f;
-        auto circleY = toggleBounds.getY() + 6.5f;
+        auto diameter = static_cast<float>(toggleBounds.getHeight()) - 13.0f;
+        auto circleX = button.getToggleState() ? static_cast<float>(toggleBounds.getRight()) - diameter - 6.5f
+                                               : static_cast<float>(toggleBounds.getX()) + 6.5f;
+        auto circleY = static_cast<float>(toggleBounds.getY()) + 6.5f;
 
         g.setColour(button.isEnabled() ? (button.getToggleState() ? statusOutline : gradientDark)
                                        : (button.getToggleState() ? statusOutlineDisabled : gradientDarkDisabled));
@@ -311,9 +313,10 @@ class GuiLookAndFeel : public juce::LookAndFeel_V4
 
         juce::Rectangle<int> arrowZone(static_cast<int>(xOffset) + static_cast<int>(paddedWidth) - 30, 0, 20, height);
         juce::Path path;
-        path.startNewSubPath(arrowZone.getX() + 3.0f, arrowZone.getCentreY() - 2.0f);
-        path.lineTo(static_cast<float>(arrowZone.getCentreX()), arrowZone.getCentreY() + 3.0f);
-        path.lineTo(arrowZone.getRight() - 3.0f, arrowZone.getCentreY() - 2.0f);
+        path.startNewSubPath(static_cast<float>(arrowZone.getX()) + 3.0f,
+                             static_cast<float>(arrowZone.getCentreY()) - 2.0f);
+        path.lineTo(static_cast<float>(arrowZone.getCentreX()), static_cast<float>(arrowZone.getCentreY()) + 3.0f);
+        path.lineTo(static_cast<float>(arrowZone.getRight()) - 3.0f, static_cast<float>(arrowZone.getCentreY()) - 2.0f);
 
         g.setColour(box.findColour(juce::ComboBox::arrowColourId).withAlpha(box.isEnabled() ? 0.9f : 0.2f));
         g.strokePath(path, juce::PathStrokeType(2.0f));

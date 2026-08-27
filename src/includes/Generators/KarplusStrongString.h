@@ -438,9 +438,9 @@ class KarplusStrongString
             }
             case PluckType::Spike:
                 m_pluckOffset = (m_pluckOffset + 1) % m_currentBufferSize;
-                return m_pluckOffset < m_currentBufferSize / 16.f  ? -0.5f
-                       : m_pluckOffset < m_currentBufferSize / 8.f ? 0.5f
-                                                                   : 0.f;
+                return static_cast<float>(m_pluckOffset) < static_cast<float>(m_currentBufferSize) / 16.f  ? -0.5f
+                       : static_cast<float>(m_pluckOffset) < static_cast<float>(m_currentBufferSize) / 8.f ? 0.5f
+                                                                                                           : 0.f;
             case PluckType::Saw:
                 m_pluckOffset = (m_pluckOffset + 1) % m_currentBufferSize;
                 return static_cast<float>(m_pluckOffset) / static_cast<float>(m_currentBufferSize) - 0.5f;

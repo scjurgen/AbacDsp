@@ -43,7 +43,7 @@ class MiniReverbImpl final : public EffectBase
         {
             m_vib[i] = std::make_shared<Vibrato>(sampleRate);
             m_vib[i]->setModDepth(0.f);
-            m_vib[i]->setModSpeed(3.f + i);
+            m_vib[i]->setModSpeed(3.f + static_cast<float>(i));
             m_fdnTank.setDelayCallback(indexCallback, m_vib[i]);
         }
 
@@ -75,7 +75,7 @@ class MiniReverbImpl final : public EffectBase
         m_wet.newTransition(std::pow(10.f, value / 20.f), kParamSmoothingSeconds, sampleRate());
     }
 
-    void setStereoWidth(const float value)
+    void setStereoWidth([[maybe_unused]] const float value)
     {
         // m_width = value;
     }
@@ -108,11 +108,11 @@ class MiniReverbImpl final : public EffectBase
         m_fdnTank.setDecay(value);
     }
 
-    void setAllPassUp(const float value)
+    void setAllPassUp([[maybe_unused]] const float value)
     {
         // m_fdnTank.setAllpassFirstCutoff(value);
     }
-    void setAllPassDown(const float value)
+    void setAllPassDown([[maybe_unused]] const float value)
     {
         // m_fdnTank.setAllpassLastCutoff(value);
     }
@@ -124,32 +124,32 @@ class MiniReverbImpl final : public EffectBase
         }
         // m_fdnTank.setLowpass(value);
     }
-    void setHighPass(const float value)
+    void setHighPass([[maybe_unused]] const float value)
     {
         // m_fdnTank.setHighpass(value);
     }
 
-    void setModulationCount(const size_t value)
+    void setModulationCount([[maybe_unused]] const size_t value)
     {
         // m_fdnTank.setModulationCount(value);
     }
 
-    void setLowPassCount(const float value)
+    void setLowPassCount([[maybe_unused]] const size_t value)
     {
         // m_fdnTank.setLowPassCount(value);
     }
 
-    void setHighPassCount(const float value)
+    void setHighPassCount([[maybe_unused]] const size_t value)
     {
         // m_fdnTank.setHighPassCount(value);
     }
 
-    void setModulationDepth(const float value)
+    void setModulationDepth([[maybe_unused]] const float value)
     {
         // m_fdnTank.setModulationDepth(value);
     }
 
-    void setModulationSpeed(const float value)
+    void setModulationSpeed([[maybe_unused]] const float value)
     {
         // m_fdnTank.setModulationSpeed(value);
     }
@@ -185,7 +185,7 @@ class MiniReverbImpl final : public EffectBase
         std::array<float, BlockSize> inData{};
         for (size_t i = 0; i < BlockSize; ++i)
         {
-            inData[i] = 0.03125 * (in(i, 0) + in(i, 1)); // factor is 1/ORDER
+            inData[i] = 0.03125f * (in(i, 0) + in(i, 1)); // factor is 1/ORDER
         }
         std::array<std::array<float, BlockSize>, 2> res{};
 

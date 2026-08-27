@@ -316,25 +316,25 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         if (auto* p = m_parameters.getParameter("gain"))
         {
             const auto& range = m_parameters.getParameterRange("gain");
-            float normalized = range.convertTo0to1(params.gain);
+            float normalized = range.convertTo0to1(static_cast<float>(params.gain));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("lowShelving"))
         {
             const auto& range = m_parameters.getParameterRange("lowShelving");
-            float normalized = range.convertTo0to1(params.lowShelving);
+            float normalized = range.convertTo0to1(static_cast<float>(params.lowShelving));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("highShelving"))
         {
             const auto& range = m_parameters.getParameterRange("highShelving");
-            float normalized = range.convertTo0to1(params.highShelving);
+            float normalized = range.convertTo0to1(static_cast<float>(params.highShelving));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("latency"))
         {
             const auto& range = m_parameters.getParameterRange("latency");
-            float normalized = range.convertTo0to1(params.latency);
+            float normalized = range.convertTo0to1(static_cast<float>(params.latency));
             p->setValueNotifyingHost(normalized);
         }
     }

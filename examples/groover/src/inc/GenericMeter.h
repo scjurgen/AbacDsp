@@ -87,8 +87,8 @@ class GaugeValue : public juce::Component
         for (size_t i = 0; i < values.size(); ++i)
         {
             constexpr float padC = 2;
-            juce::Rectangle<float> columnBounds{meterBounds.getX() + i * channelWidth + padC, meterBounds.getY(),
-                                                channelWidth - padC * 2, height};
+            juce::Rectangle<float> columnBounds{meterBounds.getX() + static_cast<float>(i) * channelWidth + padC,
+                                                meterBounds.getY(), channelWidth - padC * 2, height};
 
             auto gradient = GuiConstants::instance().getLevelGradient();
             gradient.point1 = columnBounds.getBottomLeft();

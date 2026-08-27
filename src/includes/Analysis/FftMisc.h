@@ -279,7 +279,8 @@ class FFTResponse
                                                             const int binsPerOctave, const float startFreq = -1)
     {
         auto tmp = analyse<interleave, channelOffset>(resultBuffer, windowSize);
-        auto numBins = static_cast<unsigned>(std::ceil(std::log(sampleRate) / std::log(2.f) * binsPerOctave));
+        auto numBins =
+            static_cast<unsigned>(std::ceil(std::log(sampleRate) / std::log(2.f) * static_cast<float>(binsPerOctave)));
         std::vector<float> binSum(numBins, 0);
         std::vector<unsigned> binCount(numBins, 0);
         std::vector<float> binFrequency(numBins, 0);
@@ -287,7 +288,8 @@ class FFTResponse
         for (size_t i = 1; i < tmp.size(); ++i)
         {
             const auto f = sampleRate / static_cast<float>(windowSize) * static_cast<float>(i);
-            auto bin = static_cast<unsigned>(std::round(std::log(f) / std::log(2.0f) * binsPerOctave));
+            auto bin =
+                static_cast<unsigned>(std::round(std::log(f) / std::log(2.0f) * static_cast<float>(binsPerOctave)));
             if (binFrequency[bin] == 0.f)
             {
                 binFrequency[bin] = f;

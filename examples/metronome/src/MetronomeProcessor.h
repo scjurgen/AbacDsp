@@ -416,55 +416,55 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         if (auto* p = m_parameters.getParameter("bpm"))
         {
             const auto& range = m_parameters.getParameterRange("bpm");
-            float normalized = range.convertTo0to1(params.bpm);
+            float normalized = range.convertTo0to1(static_cast<float>(params.bpm));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("dropBars"))
         {
             const auto& range = m_parameters.getParameterRange("dropBars");
-            float normalized = range.convertTo0to1(params.dropBars);
+            float normalized = range.convertTo0to1(static_cast<float>(params.dropBars));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("metroVolume"))
         {
             const auto& range = m_parameters.getParameterRange("metroVolume");
-            float normalized = range.convertTo0to1(params.metroVolume);
+            float normalized = range.convertTo0to1(static_cast<float>(params.metroVolume));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("inputVolume"))
         {
             const auto& range = m_parameters.getParameterRange("inputVolume");
-            float normalized = range.convertTo0to1(params.inputVolume);
+            float normalized = range.convertTo0to1(static_cast<float>(params.inputVolume));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("subVolume"))
         {
             const auto& range = m_parameters.getParameterRange("subVolume");
-            float normalized = range.convertTo0to1(params.subVolume);
+            float normalized = range.convertTo0to1(static_cast<float>(params.subVolume));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("onOff"))
         {
             const auto& range = m_parameters.getParameterRange("onOff");
-            float normalized = range.convertTo0to1(params.onOff);
+            float normalized = range.convertTo0to1(static_cast<float>(params.onOff));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("hostSync"))
         {
             const auto& range = m_parameters.getParameterRange("hostSync");
-            float normalized = range.convertTo0to1(params.hostSync);
+            float normalized = range.convertTo0to1(static_cast<float>(params.hostSync));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("preset"))
         {
             const auto& range = m_parameters.getParameterRange("preset");
-            float normalized = range.convertTo0to1(params.preset);
+            float normalized = range.convertTo0to1(static_cast<float>(params.preset));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("swingRatio"))
         {
             const auto& range = m_parameters.getParameterRange("swingRatio");
-            float normalized = range.convertTo0to1(params.swingRatio);
+            float normalized = range.convertTo0to1(static_cast<float>(params.swingRatio));
             p->setValueNotifyingHost(normalized);
         }
     }

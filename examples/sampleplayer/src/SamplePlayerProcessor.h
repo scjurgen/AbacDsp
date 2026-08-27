@@ -752,223 +752,223 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         if (auto* p = m_parameters.getParameter("sync"))
         {
             const auto& range = m_parameters.getParameterRange("sync");
-            float normalized = range.convertTo0to1(params.sync);
+            float normalized = range.convertTo0to1(static_cast<float>(params.sync));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("type"))
         {
             const auto& range = m_parameters.getParameterRange("type");
-            float normalized = range.convertTo0to1(params.type);
+            float normalized = range.convertTo0to1(static_cast<float>(params.type));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("solo"))
         {
             const auto& range = m_parameters.getParameterRange("solo");
-            float normalized = range.convertTo0to1(params.solo);
+            float normalized = range.convertTo0to1(static_cast<float>(params.solo));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("vol"))
         {
             const auto& range = m_parameters.getParameterRange("vol");
-            float normalized = range.convertTo0to1(params.vol);
+            float normalized = range.convertTo0to1(static_cast<float>(params.vol));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("reverbLevelWet"))
         {
             const auto& range = m_parameters.getParameterRange("reverbLevelWet");
-            float normalized = range.convertTo0to1(params.reverbLevelWet);
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbLevelWet));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("reverbDecay"))
         {
             const auto& range = m_parameters.getParameterRange("reverbDecay");
-            float normalized = range.convertTo0to1(params.reverbDecay);
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbDecay));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("reverbShimmer"))
         {
             const auto& range = m_parameters.getParameterRange("reverbShimmer");
-            float normalized = range.convertTo0to1(params.reverbShimmer);
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbShimmer));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("vol1"))
         {
             const auto& range = m_parameters.getParameterRange("vol1");
-            float normalized = range.convertTo0to1(params.vol1);
+            float normalized = range.convertTo0to1(static_cast<float>(params.vol1));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("vol2"))
         {
             const auto& range = m_parameters.getParameterRange("vol2");
-            float normalized = range.convertTo0to1(params.vol2);
+            float normalized = range.convertTo0to1(static_cast<float>(params.vol2));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("vol3"))
         {
             const auto& range = m_parameters.getParameterRange("vol3");
-            float normalized = range.convertTo0to1(params.vol3);
+            float normalized = range.convertTo0to1(static_cast<float>(params.vol3));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("vol4"))
         {
             const auto& range = m_parameters.getParameterRange("vol4");
-            float normalized = range.convertTo0to1(params.vol4);
+            float normalized = range.convertTo0to1(static_cast<float>(params.vol4));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("vol5"))
         {
             const auto& range = m_parameters.getParameterRange("vol5");
-            float normalized = range.convertTo0to1(params.vol5);
+            float normalized = range.convertTo0to1(static_cast<float>(params.vol5));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("vol6"))
         {
             const auto& range = m_parameters.getParameterRange("vol6");
-            float normalized = range.convertTo0to1(params.vol6);
+            float normalized = range.convertTo0to1(static_cast<float>(params.vol6));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("vol7"))
         {
             const auto& range = m_parameters.getParameterRange("vol7");
-            float normalized = range.convertTo0to1(params.vol7);
+            float normalized = range.convertTo0to1(static_cast<float>(params.vol7));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("vol8"))
         {
             const auto& range = m_parameters.getParameterRange("vol8");
-            float normalized = range.convertTo0to1(params.vol8);
+            float normalized = range.convertTo0to1(static_cast<float>(params.vol8));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("vol9"))
         {
             const auto& range = m_parameters.getParameterRange("vol9");
-            float normalized = range.convertTo0to1(params.vol9);
+            float normalized = range.convertTo0to1(static_cast<float>(params.vol9));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("vol10"))
         {
             const auto& range = m_parameters.getParameterRange("vol10");
-            float normalized = range.convertTo0to1(params.vol10);
+            float normalized = range.convertTo0to1(static_cast<float>(params.vol10));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("revFeed1"))
         {
             const auto& range = m_parameters.getParameterRange("revFeed1");
-            float normalized = range.convertTo0to1(params.revFeed1);
+            float normalized = range.convertTo0to1(static_cast<float>(params.revFeed1));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("revFeed2"))
         {
             const auto& range = m_parameters.getParameterRange("revFeed2");
-            float normalized = range.convertTo0to1(params.revFeed2);
+            float normalized = range.convertTo0to1(static_cast<float>(params.revFeed2));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("revFeed3"))
         {
             const auto& range = m_parameters.getParameterRange("revFeed3");
-            float normalized = range.convertTo0to1(params.revFeed3);
+            float normalized = range.convertTo0to1(static_cast<float>(params.revFeed3));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("revFeed4"))
         {
             const auto& range = m_parameters.getParameterRange("revFeed4");
-            float normalized = range.convertTo0to1(params.revFeed4);
+            float normalized = range.convertTo0to1(static_cast<float>(params.revFeed4));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("revFeed5"))
         {
             const auto& range = m_parameters.getParameterRange("revFeed5");
-            float normalized = range.convertTo0to1(params.revFeed5);
+            float normalized = range.convertTo0to1(static_cast<float>(params.revFeed5));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("revFeed6"))
         {
             const auto& range = m_parameters.getParameterRange("revFeed6");
-            float normalized = range.convertTo0to1(params.revFeed6);
+            float normalized = range.convertTo0to1(static_cast<float>(params.revFeed6));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("revFeed7"))
         {
             const auto& range = m_parameters.getParameterRange("revFeed7");
-            float normalized = range.convertTo0to1(params.revFeed7);
+            float normalized = range.convertTo0to1(static_cast<float>(params.revFeed7));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("revFeed8"))
         {
             const auto& range = m_parameters.getParameterRange("revFeed8");
-            float normalized = range.convertTo0to1(params.revFeed8);
+            float normalized = range.convertTo0to1(static_cast<float>(params.revFeed8));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("revFeed9"))
         {
             const auto& range = m_parameters.getParameterRange("revFeed9");
-            float normalized = range.convertTo0to1(params.revFeed9);
+            float normalized = range.convertTo0to1(static_cast<float>(params.revFeed9));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("revFeed10"))
         {
             const auto& range = m_parameters.getParameterRange("revFeed10");
-            float normalized = range.convertTo0to1(params.revFeed10);
+            float normalized = range.convertTo0to1(static_cast<float>(params.revFeed10));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pitch1"))
         {
             const auto& range = m_parameters.getParameterRange("pitch1");
-            float normalized = range.convertTo0to1(params.pitch1);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pitch1));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pitch2"))
         {
             const auto& range = m_parameters.getParameterRange("pitch2");
-            float normalized = range.convertTo0to1(params.pitch2);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pitch2));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pitch3"))
         {
             const auto& range = m_parameters.getParameterRange("pitch3");
-            float normalized = range.convertTo0to1(params.pitch3);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pitch3));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pitch4"))
         {
             const auto& range = m_parameters.getParameterRange("pitch4");
-            float normalized = range.convertTo0to1(params.pitch4);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pitch4));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pitch5"))
         {
             const auto& range = m_parameters.getParameterRange("pitch5");
-            float normalized = range.convertTo0to1(params.pitch5);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pitch5));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pitch6"))
         {
             const auto& range = m_parameters.getParameterRange("pitch6");
-            float normalized = range.convertTo0to1(params.pitch6);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pitch6));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pitch7"))
         {
             const auto& range = m_parameters.getParameterRange("pitch7");
-            float normalized = range.convertTo0to1(params.pitch7);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pitch7));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pitch8"))
         {
             const auto& range = m_parameters.getParameterRange("pitch8");
-            float normalized = range.convertTo0to1(params.pitch8);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pitch8));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pitch9"))
         {
             const auto& range = m_parameters.getParameterRange("pitch9");
-            float normalized = range.convertTo0to1(params.pitch9);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pitch9));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pitch10"))
         {
             const auto& range = m_parameters.getParameterRange("pitch10");
-            float normalized = range.convertTo0to1(params.pitch10);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pitch10));
             p->setValueNotifyingHost(normalized);
         }
     }
@@ -1040,7 +1040,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         samplesProcessed += numSamples;
         elapsedTotalNanoSeconds += static_cast<size_t>(elapsed.count());
         constexpr float secondsPoll = 0.5f;
-        if (samplesProcessed > m_sampleRate * secondsPoll)
+        if (static_cast<float>(samplesProcessed) > static_cast<float>(m_sampleRate) * secondsPoll)
         {
             const auto pRate = static_cast<float>(100.0 * static_cast<double>(elapsedTotalNanoSeconds) /
                                                   (secondsPoll * 1'000'000'000.0));
@@ -1048,7 +1048,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_runningWindowCpu -= m_avgCpu[m_head];
             m_avgCpu[m_head++] = static_cast<size_t>(pRate * 100.f);
             m_head = m_head % m_avgCpu.size();
-            m_cpuLoad.store(m_runningWindowCpu * 0.01f / m_avgCpu.size());
+            m_cpuLoad.store(static_cast<float>(m_runningWindowCpu) * 0.01f / static_cast<float>(m_avgCpu.size()));
             elapsedTotalNanoSeconds = 0;
             samplesProcessed = 0;
         }

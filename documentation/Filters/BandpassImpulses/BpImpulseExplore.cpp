@@ -33,7 +33,6 @@ void checkCompensationModelForWaveExcitation()
 {
     AbacDsp::SimpleStats<float> statsAll;
     const auto T60 = Convert::dbToGain(-60.f);
-    constexpr float cutoffFreq = 2000.f;
     std::cout << "{";
     float decayStart = 0.0078125f / 8.f;
     float decayEnd = 64.f;
@@ -57,7 +56,7 @@ void checkCompensationModelForWaveExcitation()
             float maxValue = 0;
             int decayTime = 0;
             std::vector<float> result;
-            for (size_t j = 0; decayTime < 48000 * decay * 2; ++j)
+            while (decayTime < 48000 * decay * 2)
             {
                 float localMax = 0;
                 for (int i = 0; i < periodLength * 2; ++i)
@@ -95,7 +94,6 @@ void computeCompensationModelForWaveExcitation(int start, int step)
 {
     AbacDsp::SimpleStats<float> statsAll;
     const auto T60 = Convert::dbToGain(-60.f);
-    constexpr float cutoffFreq = 2000.f;
     std::cout << "{";
     float decayStart = 0.0078125f / 8.f;
     float decayEnd = 64.f;
@@ -119,7 +117,7 @@ void computeCompensationModelForWaveExcitation(int start, int step)
             float maxValue = 0;
             int decayTime = 0;
             std::vector<float> result;
-            for (size_t j = 0; decayTime < 48000 * decay * 2; ++j)
+            while (decayTime < 48000 * decay * 2)
             {
                 float localMax = 0;
                 for (int i = 0; i < periodLength * 4; ++i)

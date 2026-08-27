@@ -456,7 +456,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             {"lowPassCount",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setLowPassCount(static_cast<int>(v));
+                 p.pluginRunner->setLowPassCount(static_cast<size_t>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::lowPassCount, v);
              }},
             {"highPass",
@@ -468,7 +468,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             {"highPassCount",
              [](AudioPluginAudioProcessor& p, const float v)
              {
-                 p.pluginRunner->setHighPassCount(static_cast<int>(v));
+                 p.pluginRunner->setHighPassCount(static_cast<size_t>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::highPassCount, v);
              }},
             {"modulationDepth",
@@ -539,127 +539,127 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         if (auto* p = m_parameters.getParameter("order"))
         {
             const auto& range = m_parameters.getParameterRange("order");
-            float normalized = range.convertTo0to1(params.order);
+            float normalized = range.convertTo0to1(static_cast<float>(params.order));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("dry"))
         {
             const auto& range = m_parameters.getParameterRange("dry");
-            float normalized = range.convertTo0to1(params.dry);
+            float normalized = range.convertTo0to1(static_cast<float>(params.dry));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("wet"))
         {
             const auto& range = m_parameters.getParameterRange("wet");
-            float normalized = range.convertTo0to1(params.wet);
+            float normalized = range.convertTo0to1(static_cast<float>(params.wet));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("stereoWidth"))
         {
             const auto& range = m_parameters.getParameterRange("stereoWidth");
-            float normalized = range.convertTo0to1(params.stereoWidth);
+            float normalized = range.convertTo0to1(static_cast<float>(params.stereoWidth));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("baseSize"))
         {
             const auto& range = m_parameters.getParameterRange("baseSize");
-            float normalized = range.convertTo0to1(params.baseSize);
+            float normalized = range.convertTo0to1(static_cast<float>(params.baseSize));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("sizeFactor"))
         {
             const auto& range = m_parameters.getParameterRange("sizeFactor");
-            float normalized = range.convertTo0to1(params.sizeFactor);
+            float normalized = range.convertTo0to1(static_cast<float>(params.sizeFactor));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("bulge"))
         {
             const auto& range = m_parameters.getParameterRange("bulge");
-            float normalized = range.convertTo0to1(params.bulge);
+            float normalized = range.convertTo0to1(static_cast<float>(params.bulge));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("uniqueDelay"))
         {
             const auto& range = m_parameters.getParameterRange("uniqueDelay");
-            float normalized = range.convertTo0to1(params.uniqueDelay);
+            float normalized = range.convertTo0to1(static_cast<float>(params.uniqueDelay));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("decay"))
         {
             const auto& range = m_parameters.getParameterRange("decay");
-            float normalized = range.convertTo0to1(params.decay);
+            float normalized = range.convertTo0to1(static_cast<float>(params.decay));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("allPassUp"))
         {
             const auto& range = m_parameters.getParameterRange("allPassUp");
-            float normalized = range.convertTo0to1(params.allPassUp);
+            float normalized = range.convertTo0to1(static_cast<float>(params.allPassUp));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("allPassDown"))
         {
             const auto& range = m_parameters.getParameterRange("allPassDown");
-            float normalized = range.convertTo0to1(params.allPassDown);
+            float normalized = range.convertTo0to1(static_cast<float>(params.allPassDown));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("lowPass"))
         {
             const auto& range = m_parameters.getParameterRange("lowPass");
-            float normalized = range.convertTo0to1(params.lowPass);
+            float normalized = range.convertTo0to1(static_cast<float>(params.lowPass));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("lowPassCount"))
         {
             const auto& range = m_parameters.getParameterRange("lowPassCount");
-            float normalized = range.convertTo0to1(params.lowPassCount);
+            float normalized = range.convertTo0to1(static_cast<float>(params.lowPassCount));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("highPass"))
         {
             const auto& range = m_parameters.getParameterRange("highPass");
-            float normalized = range.convertTo0to1(params.highPass);
+            float normalized = range.convertTo0to1(static_cast<float>(params.highPass));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("highPassCount"))
         {
             const auto& range = m_parameters.getParameterRange("highPassCount");
-            float normalized = range.convertTo0to1(params.highPassCount);
+            float normalized = range.convertTo0to1(static_cast<float>(params.highPassCount));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("modulationDepth"))
         {
             const auto& range = m_parameters.getParameterRange("modulationDepth");
-            float normalized = range.convertTo0to1(params.modulationDepth);
+            float normalized = range.convertTo0to1(static_cast<float>(params.modulationDepth));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("modulationSpeed"))
         {
             const auto& range = m_parameters.getParameterRange("modulationSpeed");
-            float normalized = range.convertTo0to1(params.modulationSpeed);
+            float normalized = range.convertTo0to1(static_cast<float>(params.modulationSpeed));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("reversePitch"))
         {
             const auto& range = m_parameters.getParameterRange("reversePitch");
-            float normalized = range.convertTo0to1(params.reversePitch);
+            float normalized = range.convertTo0to1(static_cast<float>(params.reversePitch));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pitchStrength"))
         {
             const auto& range = m_parameters.getParameterRange("pitchStrength");
-            float normalized = range.convertTo0to1(params.pitchStrength);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pitchStrength));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pitch1Inplace"))
         {
             const auto& range = m_parameters.getParameterRange("pitch1Inplace");
-            float normalized = range.convertTo0to1(params.pitch1Inplace);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pitch1Inplace));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("pitch2Inplace"))
         {
             const auto& range = m_parameters.getParameterRange("pitch2Inplace");
-            float normalized = range.convertTo0to1(params.pitch2Inplace);
+            float normalized = range.convertTo0to1(static_cast<float>(params.pitch2Inplace));
             p->setValueNotifyingHost(normalized);
         }
     }
@@ -731,7 +731,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         samplesProcessed += numSamples;
         elapsedTotalNanoSeconds += static_cast<size_t>(elapsed.count());
         constexpr float secondsPoll = 0.5f;
-        if (samplesProcessed > m_sampleRate * secondsPoll)
+        if (static_cast<float>(samplesProcessed) > static_cast<float>(m_sampleRate) * secondsPoll)
         {
             const auto pRate = static_cast<float>(100.0 * static_cast<double>(elapsedTotalNanoSeconds) /
                                                   (secondsPoll * 1'000'000'000.0));
@@ -739,7 +739,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_runningWindowCpu -= m_avgCpu[m_head];
             m_avgCpu[m_head++] = static_cast<size_t>(pRate * 100.f);
             m_head = m_head % m_avgCpu.size();
-            m_cpuLoad.store(m_runningWindowCpu * 0.01f / m_avgCpu.size());
+            m_cpuLoad.store(static_cast<float>(m_runningWindowCpu) * 0.01f / static_cast<float>(m_avgCpu.size()));
             elapsedTotalNanoSeconds = 0;
             samplesProcessed = 0;
         }

@@ -161,7 +161,7 @@ class ModulationDelayNoFeedback
             case ChangeSizeMode::HARDSWITCH:
                 for (auto& mhd : m_headRead)
                 {
-                    mhd = static_cast<float>(m_headWrite) - newSize;
+                    mhd = static_cast<float>(m_headWrite) - static_cast<float>(newSize);
                     if (mhd < 0)
                     {
                         mhd += MAXSIZE;
@@ -241,7 +241,7 @@ class ModulationDelayNoFeedback
         if (m_advanceSteps)
         {
             int64_t dt;
-            if (m_headWrite > m_headRead[index])
+            if (static_cast<int64_t>(m_headWrite) > static_cast<int64_t>(m_headRead[index]))
             {
                 dt = static_cast<int64_t>(m_headWrite) - static_cast<int64_t>(m_headRead[index]);
             }

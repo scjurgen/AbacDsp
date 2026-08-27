@@ -424,73 +424,73 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         if (auto* p = m_parameters.getParameter("gain"))
         {
             const auto& range = m_parameters.getParameterRange("gain");
-            float normalized = range.convertTo0to1(params.gain);
+            float normalized = range.convertTo0to1(static_cast<float>(params.gain));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("dry"))
         {
             const auto& range = m_parameters.getParameterRange("dry");
-            float normalized = range.convertTo0to1(params.dry);
+            float normalized = range.convertTo0to1(static_cast<float>(params.dry));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("wet"))
         {
             const auto& range = m_parameters.getParameterRange("wet");
-            float normalized = range.convertTo0to1(params.wet);
+            float normalized = range.convertTo0to1(static_cast<float>(params.wet));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("timeInMs"))
         {
             const auto& range = m_parameters.getParameterRange("timeInMs");
-            float normalized = range.convertTo0to1(params.timeInMs);
+            float normalized = range.convertTo0to1(static_cast<float>(params.timeInMs));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("hostSync"))
         {
             const auto& range = m_parameters.getParameterRange("hostSync");
-            float normalized = range.convertTo0to1(params.hostSync);
+            float normalized = range.convertTo0to1(static_cast<float>(params.hostSync));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("syncDivision"))
         {
             const auto& range = m_parameters.getParameterRange("syncDivision");
-            float normalized = range.convertTo0to1(params.syncDivision);
+            float normalized = range.convertTo0to1(static_cast<float>(params.syncDivision));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("feedback"))
         {
             const auto& range = m_parameters.getParameterRange("feedback");
-            float normalized = range.convertTo0to1(params.feedback);
+            float normalized = range.convertTo0to1(static_cast<float>(params.feedback));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("lowPass"))
         {
             const auto& range = m_parameters.getParameterRange("lowPass");
-            float normalized = range.convertTo0to1(params.lowPass);
+            float normalized = range.convertTo0to1(static_cast<float>(params.lowPass));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("highPass"))
         {
             const auto& range = m_parameters.getParameterRange("highPass");
-            float normalized = range.convertTo0to1(params.highPass);
+            float normalized = range.convertTo0to1(static_cast<float>(params.highPass));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("allPass"))
         {
             const auto& range = m_parameters.getParameterRange("allPass");
-            float normalized = range.convertTo0to1(params.allPass);
+            float normalized = range.convertTo0to1(static_cast<float>(params.allPass));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("modDepth"))
         {
             const auto& range = m_parameters.getParameterRange("modDepth");
-            float normalized = range.convertTo0to1(params.modDepth);
+            float normalized = range.convertTo0to1(static_cast<float>(params.modDepth));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("modSpeed"))
         {
             const auto& range = m_parameters.getParameterRange("modSpeed");
-            float normalized = range.convertTo0to1(params.modSpeed);
+            float normalized = range.convertTo0to1(static_cast<float>(params.modSpeed));
             p->setValueNotifyingHost(normalized);
         }
     }
@@ -562,7 +562,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         samplesProcessed += numSamples;
         elapsedTotalNanoSeconds += static_cast<size_t>(elapsed.count());
         constexpr float secondsPoll = 0.5f;
-        if (samplesProcessed > m_sampleRate * secondsPoll)
+        if (static_cast<float>(samplesProcessed) > static_cast<float>(m_sampleRate) * secondsPoll)
         {
             const auto pRate = static_cast<float>(100.0 * static_cast<double>(elapsedTotalNanoSeconds) /
                                                   (secondsPoll * 1'000'000'000.0));
@@ -570,7 +570,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_runningWindowCpu -= m_avgCpu[m_head];
             m_avgCpu[m_head++] = static_cast<size_t>(pRate * 100.f);
             m_head = m_head % m_avgCpu.size();
-            m_cpuLoad.store(m_runningWindowCpu * 0.01f / m_avgCpu.size());
+            m_cpuLoad.store(static_cast<float>(m_runningWindowCpu) * 0.01f / static_cast<float>(m_avgCpu.size()));
             elapsedTotalNanoSeconds = 0;
             samplesProcessed = 0;
         }

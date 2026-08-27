@@ -155,7 +155,8 @@ class FdnTankSpiced
         w = getUsefulPrime<11>(w);
         m_currentWidth[index] = w;
         m_delay.setSize(index, w - 1);
-        const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
+        const auto tmp =
+            std::pow(0.001f, static_cast<float>(m_currentWidth[index]) / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
         return w;
     }
@@ -168,7 +169,8 @@ class FdnTankSpiced
         }
         m_currentWidth[index] = value;
         m_delay.setSize(index, value - 2 * BlockSize);
-        const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
+        const auto tmp =
+            std::pow(0.001f, static_cast<float>(m_currentWidth[index]) / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
     }
 

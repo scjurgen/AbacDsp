@@ -1,25 +1,25 @@
 #pragma once
 
-#include "Audio/AudioBuffer.h"
-#include "AudioFile/LoadOgg.h"
-#include "EffectBase.h"
-#include "Helpers/ConstructArray.h"
-#include "SamplerateConverter/ConvertSampleBuffer.h"
-#include "Sampler/SamplePlayerBasic.h"
-#include "Sampler/StretchedSampleProducer.h"
-#include "AmbientReverb.h"
-
-#include <nlohmann/json.hpp>
-
 #include <atomic>
 #include <cassert>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
-#include <functional>
 #include <fstream>
+#include <functional>
 #include <mutex>
+#include <nlohmann/json.hpp>
 #include <thread>
+
+#include "AudioFile/LoadOgg.h"
+
+#include "AmbientReverb.h"
+#include "Audio/AudioBuffer.h"
+#include "EffectBase.h"
+#include "Helpers/ConstructArray.h"
+#include "Sampler/SamplePlayerBasic.h"
+#include "Sampler/StretchedSampleProducer.h"
+#include "SamplerateConverter/ConvertSampleBuffer.h"
 
 static std::string baseFolder{"/Users/scjurgen/projects/"};
 
@@ -47,7 +47,7 @@ class SamplePlayer final : public EffectBase
         , m_smplPlayer(AbacDsp::constructArray<AbacDsp::SamplePlayerBasic, 10>(sampleRate))
         , m_rev(sampleRate)
     {
-        m_rev.setBaseSize(3.1);
+        m_rev.setBaseSize(3.1f);
         m_rev.setBulge(-0.4f);
         m_rev.setSizeFactor(10.f);
         m_rev.setDry(0.f);
@@ -154,7 +154,9 @@ class SamplePlayer final : public EffectBase
                 [this, &tempSamples, baseIdx, folder, letter, i]()
                 {
                     if (m_shouldTerminate.load())
+                    {
                         return;
+                    }
 
                     std::stringstream ss;
                     ss << baseFolder << "mynoise/" << folder << "/" << i << letter << ".ogg";
@@ -165,7 +167,9 @@ class SamplePlayer final : public EffectBase
         for (auto& t : threads)
         {
             if (t.joinable())
+            {
                 t.join();
+            }
         }
 
         const auto t1 = std::chrono::high_resolution_clock::now();
@@ -175,10 +179,12 @@ class SamplePlayer final : public EffectBase
         for (size_t i = baseIdx; i < baseIdx + 10; ++i)
         {
             if (tempSamples[i])
+            {
                 totalSamples += tempSamples[i]->size();
+            }
         }
 
-        const double totalMB = (totalSamples * sizeof(float)) / (1024.0 * 1024.0);
+        const double totalMB = static_cast<double>(totalSamples * sizeof(float)) / (1024.0 * 1024.0);
         std::cout << "loadSet (" << letter << "): " << elapsed << " ms, " << totalMB << " MB\n";
     }
 
@@ -189,7 +195,9 @@ class SamplePlayer final : public EffectBase
         if (std::vector<float> sampleTmp; AudioUtility::LoadOgg::loadStereoInterleavedFromFile(fname, sampleTmp))
         {
             if (m_shouldTerminate.load())
+            {
                 return;
+            }
 
             const auto t1 = std::chrono::high_resolution_clock::now();
             const auto loadTime = std::chrono::duration<double, std::milli>(t1 - t0).count();
@@ -203,7 +211,9 @@ class SamplePlayer final : public EffectBase
             {
                 AbacDsp::ConvertSampleBuffer::convert<2>(ratio, sampleTmp, sampleTmpSRC);
                 if (m_shouldTerminate.load())
+                {
                     return;
+                }
 
                 const auto t2 = std::chrono::high_resolution_clock::now();
                 const auto resampleTime = std::chrono::duration<double, std::milli>(t2 - t1).count();
@@ -217,9 +227,9 @@ class SamplePlayer final : public EffectBase
                 tempSamples[index] = std::make_shared<std::vector<float>>(sampleTmp);
             }
 
-            const double sizeMB = (tempSamples[index]->size() * sizeof(float)) / (1024.0 * 1024.0);
-            std::cout << "Loaded " << sampleTmp.size() / 2 / sampleRate() << " seconds from " << fname << " (" << sizeMB
-                      << " MB, load: " << loadTime << " ms)" << resampleInfo << "\n";
+            const double sizeMB = static_cast<double>(tempSamples[index]->size() * sizeof(float)) / (1024.0 * 1024.0);
+            std::cout << "Loaded " << static_cast<float>(sampleTmp.size() / 2) / sampleRate() << " seconds from "
+                      << fname << " (" << sizeMB << " MB, load: " << loadTime << " ms)" << resampleInfo << "\n";
 
             if (baseIdx == 0 && tempSamples[index] != nullptr)
             {
@@ -439,7 +449,7 @@ class SamplePlayer final : public EffectBase
             {
                 for (size_t i = 0; i < m_smplPlayer.size(); ++i)
                 {
-                    auto idx = 10 * (rand() % 2); // NOLINT
+                    const auto idx = static_cast<size_t>(10 * (rand() % 2)); // NOLINT
                     if (samples[i + idx] != nullptr)
                     {
                         m_smplPlayer[i].runStereo(samples[i + idx]);
@@ -455,7 +465,7 @@ class SamplePlayer final : public EffectBase
             {
                 if (m_smplPlayer[i].isDone())
                 {
-                    auto idx = 10 * (rand() % 2); // NOLINT
+                    const auto idx = static_cast<size_t>(10 * (rand() % 2)); // NOLINT
                     if (samples[i + idx] != nullptr)
                     {
                         m_smplPlayer[i].runStereo(samples[i + idx]);
@@ -466,7 +476,8 @@ class SamplePlayer final : public EffectBase
             }
         }
     }
-    void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
+    void processBlock([[maybe_unused]] const AbacDsp::AudioBuffer<2, BlockSize>& in,
+                      AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
         std::array<std::array<float, BlockSize>, 2> sum{};
         AbacDsp::AudioBuffer<2, BlockSize> revSum{};

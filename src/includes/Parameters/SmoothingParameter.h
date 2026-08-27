@@ -43,7 +43,7 @@ class LinearSmoothing
         if (m_transitionSteps != 0)
         {
             m_transitionSteps -= std::min(transitions, m_transitionSteps);
-            m_currentValue += m_delta * transitions;
+            m_currentValue += m_delta * static_cast<float>(transitions);
             if (m_transitionSteps == 0)
             {
                 m_currentValue = m_newValue;

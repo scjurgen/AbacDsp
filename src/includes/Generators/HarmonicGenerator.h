@@ -81,7 +81,7 @@ class HarmonicGenerator
                 break;
             }
 
-            const auto overtonePosition = static_cast<float>(overtoneNum - 1) / (count - 1);
+            const auto overtonePosition = static_cast<float>(overtoneNum - 1) / static_cast<float>(count - 1);
             const auto overtonePower =
                 applyPowerRandomness(calculateOvertonePower(power, m_strength, overtonePosition));
             target[idx] = Harmonic{overtoneFreq, overtonePower, 0.f, 0};
@@ -182,7 +182,8 @@ inline auto stretched()
     {
         const auto B = strength * 0.01f;
         const auto harmonicNum = overtoneNum + 1;
-        return static_cast<float>(harmonicNum) * std::sqrt(1.f + B * harmonicNum * harmonicNum);
+        const auto harmonicNumF = static_cast<float>(harmonicNum);
+        return harmonicNumF * std::sqrt(1.f + B * harmonicNumF * harmonicNumF);
     };
 }
 

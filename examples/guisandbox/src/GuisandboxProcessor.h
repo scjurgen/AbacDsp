@@ -355,43 +355,43 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         if (auto* p = m_parameters.getParameter("onOff"))
         {
             const auto& range = m_parameters.getParameterRange("onOff");
-            float normalized = range.convertTo0to1(params.onOff);
+            float normalized = range.convertTo0to1(static_cast<float>(params.onOff));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("input"))
         {
             const auto& range = m_parameters.getParameterRange("input");
-            float normalized = range.convertTo0to1(params.input);
+            float normalized = range.convertTo0to1(static_cast<float>(params.input));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("modulationDepth"))
         {
             const auto& range = m_parameters.getParameterRange("modulationDepth");
-            float normalized = range.convertTo0to1(params.modulationDepth);
+            float normalized = range.convertTo0to1(static_cast<float>(params.modulationDepth));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("mix"))
         {
             const auto& range = m_parameters.getParameterRange("mix");
-            float normalized = range.convertTo0to1(params.mix);
+            float normalized = range.convertTo0to1(static_cast<float>(params.mix));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("density"))
         {
             const auto& range = m_parameters.getParameterRange("density");
-            float normalized = range.convertTo0to1(params.density);
+            float normalized = range.convertTo0to1(static_cast<float>(params.density));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("threshold"))
         {
             const auto& range = m_parameters.getParameterRange("threshold");
-            float normalized = range.convertTo0to1(params.threshold);
+            float normalized = range.convertTo0to1(static_cast<float>(params.threshold));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("knee"))
         {
             const auto& range = m_parameters.getParameterRange("knee");
-            float normalized = range.convertTo0to1(params.knee);
+            float normalized = range.convertTo0to1(static_cast<float>(params.knee));
             p->setValueNotifyingHost(normalized);
         }
     }
@@ -463,7 +463,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         samplesProcessed += numSamples;
         elapsedTotalNanoSeconds += static_cast<size_t>(elapsed.count());
         constexpr float secondsPoll = 0.5f;
-        if (samplesProcessed > m_sampleRate * secondsPoll)
+        if (static_cast<float>(samplesProcessed) > static_cast<float>(m_sampleRate) * secondsPoll)
         {
             const auto pRate = static_cast<float>(100.0 * static_cast<double>(elapsedTotalNanoSeconds) /
                                                   (secondsPoll * 1'000'000'000.0));
@@ -471,7 +471,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_runningWindowCpu -= m_avgCpu[m_head];
             m_avgCpu[m_head++] = static_cast<size_t>(pRate * 100.f);
             m_head = m_head % m_avgCpu.size();
-            m_cpuLoad.store(m_runningWindowCpu * 0.01f / m_avgCpu.size());
+            m_cpuLoad.store(static_cast<float>(m_runningWindowCpu) * 0.01f / static_cast<float>(m_avgCpu.size()));
             elapsedTotalNanoSeconds = 0;
             samplesProcessed = 0;
         }

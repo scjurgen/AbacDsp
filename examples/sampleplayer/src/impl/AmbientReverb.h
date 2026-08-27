@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Reverbs/FdnTankSpiced.h"
 #include "BlockProcessors/BlockProcHighpass.h"
 #include "BlockProcessors/BlockProcLowpass.h"
 #include "BlockProcessors/BlockProcPitch.h"
+#include "Reverbs/FdnTankSpiced.h"
 
 
 template <size_t BlockSize>
@@ -121,7 +121,7 @@ class AmbientReverb final
         std::array<float, BlockSize> inData{};
         for (size_t i = 0; i < BlockSize; ++i)
         {
-            inData[i] = 0.03125 * (in(i, 0) + in(i, 1)); // factor is 1/ORDER
+            inData[i] = 0.03125f * (in(i, 0) + in(i, 1)); // factor is 1/ORDER
         }
         std::array<std::array<float, BlockSize>, 2> res{};
 

@@ -24,7 +24,6 @@ struct PerformanceResult
     [[nodiscard]] double samplesPerSecond() const
     {
         constexpr size_t BlockSize = 16;
-        constexpr double SampleRate = 48000.0;
         return (BlockSize * m_runs * 1e9) / (m_totalTimeMs * 1e6);
     }
 
@@ -79,7 +78,6 @@ PerformanceResult perf(const std::string& name, size_t NumElements)
     // Prepare test data
     alignas(16) std::array<float, 16> in{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     alignas(16) std::array<float, 16> out{};
-    double chksum = 0; // force compiler to get some result
     // Actual measurement
     auto start = std::chrono::high_resolution_clock::now();
     for (size_t j = 0; j < samples / NumElements; ++j)
@@ -192,7 +190,7 @@ void runPerfTests(auto& results, std::integer_sequence<size_t, Ns...>)
 }
 
 
-int main(int argc, char* argv[])
+int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[])
 {
     using namespace AbacDsp::Test;
 

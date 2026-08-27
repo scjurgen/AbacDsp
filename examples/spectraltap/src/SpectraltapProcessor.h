@@ -526,109 +526,109 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         if (auto* p = m_parameters.getParameter("dry"))
         {
             const auto& range = m_parameters.getParameterRange("dry");
-            float normalized = range.convertTo0to1(params.dry);
+            float normalized = range.convertTo0to1(static_cast<float>(params.dry));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("wet"))
         {
             const auto& range = m_parameters.getParameterRange("wet");
-            float normalized = range.convertTo0to1(params.wet);
+            float normalized = range.convertTo0to1(static_cast<float>(params.wet));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("bpm"))
         {
             const auto& range = m_parameters.getParameterRange("bpm");
-            float normalized = range.convertTo0to1(params.bpm);
+            float normalized = range.convertTo0to1(static_cast<float>(params.bpm));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("hostSync"))
         {
             const auto& range = m_parameters.getParameterRange("hostSync");
-            float normalized = range.convertTo0to1(params.hostSync);
+            float normalized = range.convertTo0to1(static_cast<float>(params.hostSync));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("division"))
         {
             const auto& range = m_parameters.getParameterRange("division");
-            float normalized = range.convertTo0to1(params.division);
+            float normalized = range.convertTo0to1(static_cast<float>(params.division));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("feedback"))
         {
             const auto& range = m_parameters.getParameterRange("feedback");
-            float normalized = range.convertTo0to1(params.feedback);
+            float normalized = range.convertTo0to1(static_cast<float>(params.feedback));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("feedbackBeats"))
         {
             const auto& range = m_parameters.getParameterRange("feedbackBeats");
-            float normalized = range.convertTo0to1(params.feedbackBeats);
+            float normalized = range.convertTo0to1(static_cast<float>(params.feedbackBeats));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("reverbWet"))
         {
             const auto& range = m_parameters.getParameterRange("reverbWet");
-            float normalized = range.convertTo0to1(params.reverbWet);
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbWet));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("reverbSize"))
         {
             const auto& range = m_parameters.getParameterRange("reverbSize");
-            float normalized = range.convertTo0to1(params.reverbSize);
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbSize));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("reverbDecay"))
         {
             const auto& range = m_parameters.getParameterRange("reverbDecay");
-            float normalized = range.convertTo0to1(params.reverbDecay);
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbDecay));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("luaParam1"))
         {
             const auto& range = m_parameters.getParameterRange("luaParam1");
-            float normalized = range.convertTo0to1(params.luaParam1);
+            float normalized = range.convertTo0to1(static_cast<float>(params.luaParam1));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("luaParam2"))
         {
             const auto& range = m_parameters.getParameterRange("luaParam2");
-            float normalized = range.convertTo0to1(params.luaParam2);
+            float normalized = range.convertTo0to1(static_cast<float>(params.luaParam2));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("luaParam3"))
         {
             const auto& range = m_parameters.getParameterRange("luaParam3");
-            float normalized = range.convertTo0to1(params.luaParam3);
+            float normalized = range.convertTo0to1(static_cast<float>(params.luaParam3));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("luaParam4"))
         {
             const auto& range = m_parameters.getParameterRange("luaParam4");
-            float normalized = range.convertTo0to1(params.luaParam4);
+            float normalized = range.convertTo0to1(static_cast<float>(params.luaParam4));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("luaParam5"))
         {
             const auto& range = m_parameters.getParameterRange("luaParam5");
-            float normalized = range.convertTo0to1(params.luaParam5);
+            float normalized = range.convertTo0to1(static_cast<float>(params.luaParam5));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("luaParam6"))
         {
             const auto& range = m_parameters.getParameterRange("luaParam6");
-            float normalized = range.convertTo0to1(params.luaParam6);
+            float normalized = range.convertTo0to1(static_cast<float>(params.luaParam6));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("luaParam7"))
         {
             const auto& range = m_parameters.getParameterRange("luaParam7");
-            float normalized = range.convertTo0to1(params.luaParam7);
+            float normalized = range.convertTo0to1(static_cast<float>(params.luaParam7));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("luaParam8"))
         {
             const auto& range = m_parameters.getParameterRange("luaParam8");
-            float normalized = range.convertTo0to1(params.luaParam8);
+            float normalized = range.convertTo0to1(static_cast<float>(params.luaParam8));
             p->setValueNotifyingHost(normalized);
         }
 
@@ -785,7 +785,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         samplesProcessed += numSamples;
         elapsedTotalNanoSeconds += static_cast<size_t>(elapsed.count());
         constexpr float secondsPoll = 0.5f;
-        if (samplesProcessed > m_sampleRate * secondsPoll)
+        if (static_cast<float>(samplesProcessed) > static_cast<float>(m_sampleRate) * secondsPoll)
         {
             const auto pRate = static_cast<float>(100.0 * static_cast<double>(elapsedTotalNanoSeconds) /
                                                   (secondsPoll * 1'000'000'000.0));
@@ -793,7 +793,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_runningWindowCpu -= m_avgCpu[m_head];
             m_avgCpu[m_head++] = static_cast<size_t>(pRate * 100.f);
             m_head = m_head % m_avgCpu.size();
-            m_cpuLoad.store(m_runningWindowCpu * 0.01f / m_avgCpu.size());
+            m_cpuLoad.store(static_cast<float>(m_runningWindowCpu) * 0.01f / static_cast<float>(m_avgCpu.size()));
             elapsedTotalNanoSeconds = 0;
             samplesProcessed = 0;
         }

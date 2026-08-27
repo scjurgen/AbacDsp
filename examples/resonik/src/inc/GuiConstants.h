@@ -129,7 +129,7 @@ class GuiConstants
                       [&, i = size_t{0}]() mutable
                       {
                           return m_spectrogramGradient
-                              .getColourAtPosition(static_cast<double>(i++) / colors.cols.size())
+                              .getColourAtPosition(static_cast<double>(i++) / static_cast<double>(colors.cols.size()))
                               .getARGB();
                       });
 
