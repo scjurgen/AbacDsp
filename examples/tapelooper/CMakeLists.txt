@@ -184,7 +184,7 @@ set(ABACDSP_DRUM_SAMPLES_DIR
     "${CMAKE_CURRENT_SOURCE_DIR}/../../samples/drums/reggae"
 )
 set(ABACDSP_MIDI_DRUMS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../MidiDrums")
-set(ABACDSP_DEFAULT_GROOVE_NAME "Session Drums/str_4#4_1_c_v1.mid")
+set(ABACDSP_DEFAULT_GROOVE_NAME "educational/four-four/beat-1-only_v1.mid")
 configure_file(
     src/impl/GrooveDefaultPaths.h.in
     "${CMAKE_CURRENT_BINARY_DIR}/generated/GrooveDefaultPaths.h"

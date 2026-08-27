@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -196,6 +197,9 @@ constexpr size_t kLoopIoChunkFrames = 4096;
 constexpr size_t kTapeSpectrogramDecimation = 4;
 constexpr float kTapeSpectrogramWindowForward = 1.f / 12.f;
 constexpr size_t kClockWaveformBuckets = 2048;
+// VariSpeedTapeDelay's own safety-clamp floor - the smallest read-behind-write
+// distance it allows (constructor default is 4800).
+constexpr float kGrooveTapeReadHeadFrames = 1000.f;
 }
 
 /**
@@ -261,6 +265,8 @@ class TapeLooperImpl final : public EffectBase
         m_grooveReverb.setMaxSize(TapeLooperDetail::kDefaultReverbSize);
         m_grooveReverb.setDecay(TapeLooperDetail::kDefaultReverbDecay);
         m_appliedReverbSize = TapeLooperDetail::kDefaultReverbSize;
+        m_grooveTape.setReadHead(0, TapeLooperDetail::kGrooveTapeReadHeadFrames, true);
+        m_grooveSendTape.setReadHead(0, TapeLooperDetail::kGrooveTapeReadHeadFrames, true);
         applyLoopLengthIfChanged();
         m_grooveKit.requestLoad(kAbacDspDrumSamplesDir, kAbacDspMidiDrumsDir, kAbacDspDefaultGrooveName,
                                 AbacDsp::BurstConfig{sampleRate, m_bpmReq.load(std::memory_order_relaxed)});
@@ -274,6 +280,7 @@ class TapeLooperImpl final : public EffectBase
         m_extractionChunkLeftScratch.resize(TapeLooperDetail::kLoopIoChunkFrames);
         m_extractionChunkRightScratch.resize(TapeLooperDetail::kLoopIoChunkFrames);
         m_installChunkScratch.resize(TapeLooperDetail::kLoopIoChunkFrames * 2);
+        m_blockLogFile.open("/tmp/looper.txt", std::ios::out | std::ios::trunc); // debug-only, temporary
 
         m_barWaveform.assign(TapeLooperDetail::kClockWaveformBuckets, 0.f);
         m_loopWaveformPeaks.assign(TapeLooperDetail::kClockWaveformBuckets, 0.f);
@@ -1097,7 +1104,11 @@ class TapeLooperImpl final : public EffectBase
         }
         const auto bars = std::max<size_t>(1, static_cast<size_t>(m_appliedBars));
         const auto samplesPerBar = std::max<size_t>(1, loopFrames / bars);
-        const auto loopPositionFrames = static_cast<size_t>(m_cleanLoopPositionFrames);
+        // Backdated by kGrooveTapeReadHeadFrames so the display tracks what's
+        // actually audible, not the instantaneous transport position.
+        const auto backdate = static_cast<size_t>(TapeLooperDetail::kGrooveTapeReadHeadFrames) % loopFrames;
+        const auto rawPosition = static_cast<size_t>(m_cleanLoopPositionFrames);
+        const auto loopPositionFrames = (rawPosition + loopFrames - backdate) % loopFrames;
         return {loopFrames, samplesPerBar, loopPositionFrames, loopPositionFrames % samplesPerBar};
     }
 
@@ -1167,6 +1178,15 @@ class TapeLooperImpl final : public EffectBase
         {
             const auto bucket = std::min(kBuckets - 1, clock.barPositionFrames * kBuckets / clock.samplesPerBar);
             m_barWaveform[bucket] = blockLast;
+        }
+
+        // Debug-only, temporary: one line per block, not the discrete events the
+        // other logs already cover.
+        if (m_blockLogFile)
+        {
+            m_blockLogFile << AbacDsp::debugElapsedMicroseconds() << " peak=" << blockPeak
+                           << " grooveTick=" << m_grooveSequencer.tickPosition()
+                           << " activeVoices=" << m_grooveSequencer.activeVoiceCount() << '\n';
         }
     }
 
@@ -1818,8 +1838,9 @@ class TapeLooperImpl final : public EffectBase
     // output, never gated by record/play state and never reset.
     AbacDsp::SimpleSpectrogram m_tapeSpectrogram;
     size_t m_tapeSpectrogramDecimatePhase{0};
-    size_t m_lastPrintedBar{0};  // debug-only, temporary
-    size_t m_lastPrintedBeat{0}; // debug-only, temporary
+    size_t m_lastPrintedBar{0};   // debug-only, temporary
+    size_t m_lastPrintedBeat{0};  // debug-only, temporary
+    std::ofstream m_blockLogFile; // debug-only, temporary
     std::vector<size_t> m_tapeSpectrogramSliceBucket;
     size_t m_tapeSpectrogramNextSliceIndex{0};
     size_t m_tapeSpectrogramWindowFill{0};
