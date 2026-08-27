@@ -8,8 +8,11 @@
 #include <numbers>
 #include <vector>
 
+#include "../impl/ClockDisplayShared.h"
 #include "Analysis/Spectrogram.h"
 #include "GuiConstants.h"
+
+using TapeLooperDetail::kIrisAngularBuckets;
 
 // Tapelooper's clock: like CircularLoopDisplay, but the ring never grows - BARS
 // fixes its span up front - and up to four transports (tracks A/B/C plus the
@@ -478,7 +481,6 @@ class CircularTapeDisplay : public juce::Component
     }
 
     static constexpr int kIrisSize = 256;
-    static constexpr size_t kIrisAngularBuckets = 256;
 
     struct AnnulusPixel
     {

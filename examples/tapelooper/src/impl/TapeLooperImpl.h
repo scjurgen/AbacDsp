@@ -18,6 +18,7 @@
 
 #include "Analysis/Spectrogram.h"
 #include "Audio/AudioBuffer.h"
+#include "ClockDisplayShared.h"
 #include "Delays/MultiTapDelay.h"
 #include "Delays/VariSpeedTapeDelay.h"
 #include "Dynamics/Compressor.h"
@@ -194,10 +195,7 @@ constexpr size_t kLoopIoChunkFrames = 4096;
 // same way looper decimates its own record spectrogram.
 constexpr size_t kTapeSpectrogramDecimation = 4;
 constexpr float kTapeSpectrogramWindowForward = 1.f / 12.f;
-constexpr size_t kClockWaveformBuckets = 128;
-// Must match CircularTapeDisplay::kIrisAngularBuckets - the two sides only agree via
-// this shared bucket count, not a shared type.
-constexpr size_t kIrisAngularBuckets = 256;
+constexpr size_t kClockWaveformBuckets = 2048;
 }
 
 /**
