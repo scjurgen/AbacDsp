@@ -49,7 +49,8 @@ struct GrooveBurstResult
 
 /**
  * @ingroup sampler
- * @brief Polyphonic voice pool playing a resolved MIDI groove against a SliceLibrary.
+ * @brief Polyphonic voice pool playing a resolved MIDI groove against a
+ * sample library.
  *
  * Tracks its own tick position: a free-running loop of loopLengthTicks, advanced
  * each sample from the caller's live samplesPerBeat, independent of any bar/beat/
@@ -60,8 +61,7 @@ struct GrooveBurstResult
  * library/program pointers are borrowed and must outlive the player.
  *
  * @warning checkTriggers() logs once per loop repeat via std::cout - not
- *          realtime-safe, accepted deliberately (matches SequencerEngine's own
- *          precedent).
+ *          realtime-safe, accepted deliberately.
  */
 class GrooveDrumPlayer
 {
@@ -93,9 +93,6 @@ class GrooveDrumPlayer
         m_trackNames = names;
     }
 
-    // Only resets playback position when program is actually a new pointer,
-    // so calling this every audio block (to pick up a background-thread-
-    // installed groove) is always safe.
     void setGroove(const GrooveProgram* program) noexcept
     {
         if (program == m_program)
@@ -112,8 +109,11 @@ class GrooveDrumPlayer
         m_nextTriggerIndex = 0;
     }
 
-    // Resumes exactly where a renderBurst() result left off - the caller already
-    // knows the matching trigger index, so unlike syncToPpq() this just assigns.
+    [[nodiscard]] double tickPosition() const noexcept
+    {
+        return m_tickPos;
+    }
+
     void primeTickState(const double tickPos, const size_t nextTriggerIndex) noexcept
     {
         m_tickPos = tickPos;
@@ -156,8 +156,6 @@ class GrooveDrumPlayer
         m_fadeFrames = std::max<size_t>(1, static_cast<size_t>(ms / 1000.f * m_sampleRate));
     }
 
-    // Per-track gain multiplier applied to every voice at render time (0 mutes
-    // that instrument). Out-of-range track indices are ignored.
     void setTrackGain(const size_t track, const float gain) noexcept
     {
         if (track < kMaxTracks)

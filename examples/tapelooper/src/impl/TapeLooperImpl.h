@@ -1029,11 +1029,15 @@ class TapeLooperImpl final : public EffectBase
     }
 
     // A newly-installed program means stale, already-buffered audio was
-    // rendered against the previous groove - flush it.
+    // rendered against the previous groove - flush it. repositionGrooveSequencer()
+    // undoes setGroove()'s reset-to-0 so a style/variation swap keeps beat position.
     void installGrooveProgramIfChanged()
     {
         const auto* program = m_grooveKit.program();
-        if (program != m_lastGrooveProgram)
+        const bool programChanged = program != m_lastGrooveProgram;
+        const auto* previousProgram = m_lastGrooveProgram;
+        const double previousTickPos = m_grooveSequencer.tickPosition();
+        if (programChanged)
         {
             m_lastGrooveProgram = program;
             m_loopBuffer.reset();
@@ -1042,6 +1046,32 @@ class TapeLooperImpl final : public EffectBase
         m_grooveSequencer.setLibrary(m_grooveKit.library());
         m_grooveSequencer.setTrackNames(m_grooveKit.installedTrackNames());
         m_grooveSequencer.setGroove(program);
+        if (programChanged && previousProgram != nullptr && program != nullptr)
+        {
+            repositionGrooveSequencer(*program, previousTickPos, *previousProgram);
+        }
+    }
+
+    // Wraps via fmod, so a shorter new groove just loops sooner rather than
+    // reading past its own loopLengthTicks.
+    void repositionGrooveSequencer(const AbacDsp::GrooveProgram& program, const double previousTickPos,
+                                   const AbacDsp::GrooveProgram& previousProgram) noexcept
+    {
+        const double previousTicksPerBeat =
+            static_cast<double>(std::max<uint16_t>(1, previousProgram.ticksPerQuarterNote));
+        const double beatPosition = previousTickPos / previousTicksPerBeat;
+        const double loopLengthTicks = static_cast<double>(std::max<uint32_t>(1, program.loopLengthTicks));
+        double newTickPos = std::fmod(beatPosition * static_cast<double>(program.ticksPerQuarterNote), loopLengthTicks);
+        if (newTickPos < 0.0)
+        {
+            newTickPos += loopLengthTicks;
+        }
+        const auto& triggers = program.triggers;
+        const auto nextTriggerIndex = static_cast<size_t>(std::distance(
+            triggers.begin(), std::upper_bound(triggers.begin(), triggers.end(), newTickPos,
+                                               [](const double tick, const AbacDsp::GrooveTrigger& trigger)
+                                               { return tick < static_cast<double>(trigger.tick); })));
+        m_grooveSequencer.primeTickState(newTickPos, nextTriggerIndex);
     }
 
     void checkGrooveInfoTextChanged()
