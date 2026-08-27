@@ -5,6 +5,8 @@
 #include <atomic>
 #include <cmath>
 #include <cstddef>
+#include <format>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <nlohmann/json.hpp>
@@ -14,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "Analysis/Spectrogram.h"
 #include "Audio/AudioBuffer.h"
 #include "Delays/MultiTapDelay.h"
 #include "Delays/VariSpeedTapeDelay.h"
@@ -22,8 +25,8 @@
 #include "Filters/PoleMixingFilter.h"
 #include "Filters/Sinc/sinc_4.h"
 #include "GrooveDefaultPaths.h"
-#include "GrooveLoopBuffer.h"
 #include "Helpers/ConstructArray.h"
+#include "Helpers/DebugClock.h"
 #include "Helpers/StereoTrackBank.h"
 #include "Modulation/RingModulator.h"
 #include "Modulation/Tremolo.h"
@@ -186,6 +189,15 @@ constexpr size_t kBufferSize = kMaxLoopFrames + kModulationMargin;
 // Loop save/load (9c): a full loop can be ~7M frames (32 bars @ 50 BPM), far too large to
 // copy in one block - extraction/installation are spread across blocks in chunks this size.
 constexpr size_t kLoopIoChunkFrames = 4096;
+
+// Clock display (10): continuous iris feed from the final mixed output, decimated the
+// same way looper decimates its own record spectrogram.
+constexpr size_t kTapeSpectrogramDecimation = 4;
+constexpr float kTapeSpectrogramWindowForward = 1.f / 12.f;
+constexpr size_t kClockWaveformBuckets = 128;
+// Must match CircularTapeDisplay::kIrisAngularBuckets - the two sides only agree via
+// this shared bucket count, not a shared type.
+constexpr size_t kIrisAngularBuckets = 256;
 }
 
 /**
@@ -221,8 +233,6 @@ class TapeLooperImpl final : public EffectBase
         , m_grooveTape(sampleRate, m_sincFilter)
         , m_grooveSendTape(sampleRate, m_sincFilter)
         , m_grooveSequencer(sampleRate)
-        , m_loopBuffer(sampleRate)
-        , m_grooveSendLoopBuffer(sampleRate)
         , m_trackGainSmoother(
               AbacDsp::constructArray<AbacDsp::LinearSmoothingParameter<BlockSize>, TapeLooperDetail::kFreeTracks>(
                   TapeLooperDetail::kDefaultTrackGain))
@@ -266,6 +276,22 @@ class TapeLooperImpl final : public EffectBase
         m_extractionChunkLeftScratch.resize(TapeLooperDetail::kLoopIoChunkFrames);
         m_extractionChunkRightScratch.resize(TapeLooperDetail::kLoopIoChunkFrames);
         m_installChunkScratch.resize(TapeLooperDetail::kLoopIoChunkFrames * 2);
+
+        m_barWaveform.assign(TapeLooperDetail::kClockWaveformBuckets, 0.f);
+        m_loopWaveformPeaks.assign(TapeLooperDetail::kClockWaveformBuckets, 0.f);
+        // Sample rate is that of the decimated feed, so the display's Nyquist axis
+        // reflects what's actually analyzed. Sized for the longest possible loop so
+        // the ring is fully painted at any BARS/BPM setting.
+        const float tapeSpectrogramSampleRate =
+            sampleRate / static_cast<float>(TapeLooperDetail::kTapeSpectrogramDecimation);
+        m_tapeSpectrogram.setSampleRate(tapeSpectrogramSampleRate);
+        m_tapeSpectrogram.setWindowForward(TapeLooperDetail::kTapeSpectrogramWindowForward);
+        const auto decimatedMaxFrames =
+            static_cast<float>(TapeLooperDetail::kMaxLoopFrames) / TapeLooperDetail::kTapeSpectrogramDecimation;
+        const auto tapeSpectrogramSlices =
+            static_cast<size_t>(decimatedMaxFrames / (1024.f * TapeLooperDetail::kTapeSpectrogramWindowForward)) + 64;
+        m_tapeSpectrogram.setSlices(tapeSpectrogramSlices);
+        m_tapeSpectrogramSliceBucket.assign(tapeSpectrogramSlices, 0);
     }
 
     // A reload resets the script's Lua globals, so resendUiParameters() re-syncs it to
@@ -481,6 +507,93 @@ class TapeLooperImpl final : public EffectBase
         return true;
     }
 
+    [[nodiscard]] float getBarPhase() const noexcept
+    {
+        const auto clock = computeLoopClock();
+        return clock.samplesPerBar > 0
+                   ? static_cast<float>(clock.barPositionFrames) / static_cast<float>(clock.samplesPerBar)
+                   : 0.f;
+    }
+
+    [[nodiscard]] float getPlayheadNormalized() const noexcept
+    {
+        const auto clock = computeLoopClock();
+        return clock.loopFrames > 0
+                   ? static_cast<float>(clock.loopPositionFrames) / static_cast<float>(clock.loopFrames)
+                   : 0.f;
+    }
+
+    [[nodiscard]] size_t getSamplesPerBar() const noexcept
+    {
+        return computeLoopClock().samplesPerBar;
+    }
+
+    [[nodiscard]] int getBarBeats() const noexcept
+    {
+        return static_cast<int>(TapeLooperDetail::kBeatsPerBar);
+    }
+
+    [[nodiscard]] int getOuterRingBars() const noexcept
+    {
+        return static_cast<int>(m_appliedBars);
+    }
+
+    [[nodiscard]] std::string getBarBeatLabel() const
+    {
+        const auto clock = computeLoopClock();
+        if (clock.samplesPerBar == 0)
+        {
+            return {};
+        }
+        const auto bar = 1 + clock.loopPositionFrames / clock.samplesPerBar;
+        const auto beatLen =
+            std::max<size_t>(1, clock.samplesPerBar / static_cast<size_t>(TapeLooperDetail::kBeatsPerBar));
+        const auto beat = 1 + clock.barPositionFrames / beatLen;
+        return std::to_string(bar) + "." + std::to_string(beat);
+    }
+
+    [[nodiscard]] AbacDsp::SpectrumImageSet getSpectrogramData() const
+    {
+        return m_tapeSpectrogram.getImageSet();
+    }
+
+    [[nodiscard]] const std::vector<size_t>& getSpectrogramSliceBuckets() const noexcept
+    {
+        return m_tapeSpectrogramSliceBucket;
+    }
+
+    [[nodiscard]] std::vector<float> getLoopWaveform() const
+    {
+        return m_loopWaveformPeaks;
+    }
+
+    // Required by the generic "signal" gauge wiring; here it is the bar-in-progress
+    // trace shown on the clock display's inner disc.
+    [[nodiscard]] const std::vector<float>& visualizeWaveData() const noexcept
+    {
+        return m_barWaveform;
+    }
+
+    [[nodiscard]] int getTrackClockStateA() const noexcept
+    {
+        return trackClockState(0);
+    }
+
+    [[nodiscard]] int getTrackClockStateB() const noexcept
+    {
+        return trackClockState(1);
+    }
+
+    [[nodiscard]] int getTrackClockStateC() const noexcept
+    {
+        return trackClockState(2);
+    }
+
+    [[nodiscard]] int getGrooveClockState() const noexcept
+    {
+        return m_groovePlaying ? 1 : 0;
+    }
+
     [[nodiscard]] std::string consumeGrooveInfoText() const
     {
         std::lock_guard lock(m_infoTextMutex);
@@ -488,9 +601,9 @@ class TapeLooperImpl final : public EffectBase
     }
 
     // Test-support only, thin pass-through for Tapelooper_tests.cpp.
-    [[nodiscard]] size_t grooveLoopBufferFramesAheadForTest() const noexcept
+    [[nodiscard]] size_t grooveActiveVoiceCountForTest() const noexcept
     {
-        return m_loopBuffer.framesAhead();
+        return m_grooveSequencer.activeVoiceCount();
     }
 
     // Test-support only: exposes the tape-speed-scaled beat clock samplesPerBeat() drives.
@@ -622,6 +735,7 @@ class TapeLooperImpl final : public EffectBase
             out(i, 0) = gainedIn[i * 2] + mix[i * 2];
             out(i, 1) = gainedIn[i * 2 + 1] + mix[i * 2 + 1];
         }
+        feedClockDisplays(out);
     }
 
   private:
@@ -678,12 +792,12 @@ class TapeLooperImpl final : public EffectBase
         if (groovePlayReq && !m_groovePlaying)
         {
             m_grooveSequencer.resetPosition();
-            m_loopBuffer.reset();
-            m_grooveSendLoopBuffer.reset();
+            m_cleanLoopPositionFrames = 0.0;
         }
         m_groovePlaying = groovePlayReq;
         applyGrooveSourceIfChanged();
         applyGrooveVariationIfChanged();
+        advanceCleanLoopClock();
     }
 
     // Drive interpolates SimpleHysteresis toward its own calibrated non-linear extreme;
@@ -949,10 +1063,154 @@ class TapeLooperImpl final : public EffectBase
         // The loop just (re)started at its own beginning - keep the groove from drifting
         // out of sync with it rather than free-running against the old definition.
         m_grooveSequencer.resetPosition();
-        m_loopBuffer.reset();
-        m_grooveSendLoopBuffer.reset();
+        m_cleanLoopPositionFrames = 0.0;
     }
 #pragma GCC diagnostic pop
+
+    struct LoopClock
+    {
+        size_t loopFrames{0};
+        size_t samplesPerBar{0};
+        size_t loopPositionFrames{0};
+        size_t barPositionFrames{0};
+    };
+
+    // Advances by tapeSpeed alone, deliberately excluding wow/flutter - the same
+    // rate the groove's samplesPerBeat() runs at, so "beat 1" here always matches
+    // the groove's true beat 1, not the tape's wow/flutter-wobbled position.
+    void advanceCleanLoopClock() noexcept
+    {
+        const auto loopFrames = TapeLooperDetail::framesForLoop(m_appliedBars, m_appliedBpmForLoopLength);
+        if (loopFrames == 0)
+        {
+            m_cleanLoopPositionFrames = 0.0;
+            return;
+        }
+        m_cleanLoopPositionFrames += static_cast<double>(BlockSize) * static_cast<double>(m_tapeSpeed);
+        m_cleanLoopPositionFrames = std::fmod(m_cleanLoopPositionFrames, static_cast<double>(loopFrames));
+    }
+
+    [[nodiscard]] LoopClock computeLoopClock() const noexcept
+    {
+        const auto loopFrames = TapeLooperDetail::framesForLoop(m_appliedBars, m_appliedBpmForLoopLength);
+        if (loopFrames == 0)
+        {
+            return {};
+        }
+        const auto bars = std::max<size_t>(1, static_cast<size_t>(m_appliedBars));
+        const auto samplesPerBar = std::max<size_t>(1, loopFrames / bars);
+        const auto loopPositionFrames = static_cast<size_t>(m_cleanLoopPositionFrames);
+        return {loopFrames, samplesPerBar, loopPositionFrames, loopPositionFrames % samplesPerBar};
+    }
+
+    [[nodiscard]] int trackClockState(const size_t track) const noexcept
+    {
+        if (m_recording[track])
+        {
+            return 2;
+        }
+        return m_playing[track] ? 1 : 0;
+    }
+
+    // Feeds the continuous iris/waveform displays from the final mixed output - never
+    // gated by record/play state, since the clock display always shows what's audible.
+    // Debug-only, temporary: prints on every bar.beat change so it can be
+    // correlated against GrooveDrumPlayer's own trigger log, both timestamped
+    // from the same shared AbacDsp::debugElapsedMicroseconds() epoch.
+    void logBarBeatIfChanged(const LoopClock& clock) noexcept
+    {
+        if (clock.samplesPerBar == 0)
+        {
+            return;
+        }
+        const auto bar = 1 + clock.loopPositionFrames / clock.samplesPerBar;
+        const auto beatLen =
+            std::max<size_t>(1, clock.samplesPerBar / static_cast<size_t>(TapeLooperDetail::kBeatsPerBar));
+        const auto beat = 1 + clock.barPositionFrames / beatLen;
+        if (bar == m_lastPrintedBar && beat == m_lastPrintedBeat)
+        {
+            return;
+        }
+        m_lastPrintedBar = bar;
+        m_lastPrintedBeat = beat;
+        std::cout << std::format("{:10} us  bar.beat {}.{}\n", AbacDsp::debugElapsedMicroseconds(), bar, beat);
+    }
+
+    void feedClockDisplays(const AbacDsp::AudioBuffer<2, BlockSize>& out) noexcept
+    {
+        const auto clock = computeLoopClock();
+        logBarBeatIfChanged(clock);
+        std::array<float, BlockSize> monoDecimated{};
+        size_t decimatedCount = 0;
+        float blockPeak = 0.f;
+        float blockLast = 0.f;
+        for (size_t i = 0; i < BlockSize; ++i)
+        {
+            const float mono = 0.5f * (out(i, 0) + out(i, 1));
+            blockPeak = std::max(blockPeak, std::abs(mono));
+            blockLast = mono;
+            if (m_tapeSpectrogramDecimatePhase == 0)
+            {
+                monoDecimated[decimatedCount++] = mono;
+            }
+            m_tapeSpectrogramDecimatePhase =
+                (m_tapeSpectrogramDecimatePhase + 1) % TapeLooperDetail::kTapeSpectrogramDecimation;
+        }
+        tagUpcomingSpectrogramSlices(decimatedCount, clock);
+        m_tapeSpectrogram.processBlock(std::span<const float>{monoDecimated.data(), decimatedCount});
+
+        constexpr auto kBuckets = TapeLooperDetail::kClockWaveformBuckets;
+        if (clock.loopFrames > 0)
+        {
+            const auto bucket = std::min(kBuckets - 1, clock.loopPositionFrames * kBuckets / clock.loopFrames);
+            m_loopWaveformPeaks[bucket] = blockPeak;
+        }
+        if (clock.samplesPerBar > 0)
+        {
+            const auto bucket = std::min(kBuckets - 1, clock.barPositionFrames * kBuckets / clock.samplesPerBar);
+            m_barWaveform[bucket] = blockLast;
+        }
+    }
+
+    // Backdates by half the analysis window's real-sample span (a Hann window's
+    // energy centroid), converted to loop-position units via tapeSpeed, so a slice
+    // is tagged where its content actually peaks, not where its window finished.
+    [[nodiscard]] size_t spectrogramTagBucket(const size_t fftLength, const LoopClock& clock) const noexcept
+    {
+        const auto halfWindowRealSamples = (fftLength * TapeLooperDetail::kTapeSpectrogramDecimation) / 2;
+        const auto loopFramesD = static_cast<double>(clock.loopFrames);
+        const auto backdate = static_cast<size_t>(
+            std::fmod(static_cast<double>(halfWindowRealSamples) * static_cast<double>(m_tapeSpeed), loopFramesD));
+        const auto taggedPosition = (clock.loopPositionFrames + clock.loopFrames - backdate) % clock.loopFrames;
+        return std::min(TapeLooperDetail::kIrisAngularBuckets - 1,
+                        taggedPosition * TapeLooperDetail::kIrisAngularBuckets / clock.loopFrames);
+    }
+
+    // Mirrors m_tapeSpectrogram's own fftLength/forwardLength accumulation to predict
+    // exactly when a new FFT window completes, and stamps it with the position it was
+    // actually fed at - not wherever the playhead is once it's later consumed.
+    void tagUpcomingSpectrogramSlices(const size_t decimatedCount, const LoopClock& clock) noexcept
+    {
+        if (m_tapeSpectrogramSliceBucket.empty())
+        {
+            return;
+        }
+        const auto fftLength = static_cast<size_t>(m_tapeSpectrogram.fftLength());
+        const auto forwardLen = static_cast<size_t>(m_tapeSpectrogram.forwardLength());
+        if (fftLength == 0 || forwardLen == 0)
+        {
+            return;
+        }
+        const auto bucket = clock.loopFrames > 0 ? spectrogramTagBucket(fftLength, clock) : size_t{0};
+        m_tapeSpectrogramWindowFill += decimatedCount;
+        while (m_tapeSpectrogramWindowFill >= fftLength)
+        {
+            m_tapeSpectrogramSliceBucket[m_tapeSpectrogramNextSliceIndex] = bucket;
+            m_tapeSpectrogramNextSliceIndex =
+                (m_tapeSpectrogramNextSliceIndex + 1) % m_tapeSpectrogramSliceBucket.size();
+            m_tapeSpectrogramWindowFill -= forwardLen;
+        }
+    }
 
     // setMinSize()/setMaxSize() re-randomize every delay line's length (computeDelaySizes()),
     // cheap only because it's skipped when nothing changed - unlike setDecay(), which is a
@@ -1028,9 +1286,8 @@ class TapeLooperImpl final : public EffectBase
         }
     }
 
-    // A newly-installed program means stale, already-buffered audio was
-    // rendered against the previous groove - flush it. repositionGrooveSequencer()
-    // undoes setGroove()'s reset-to-0 so a style/variation swap keeps beat position.
+    // repositionGrooveSequencer() undoes setGroove()'s reset-to-0 so a
+    // style/variation swap keeps beat position instead of restarting the pattern.
     void installGrooveProgramIfChanged()
     {
         const auto* program = m_grooveKit.program();
@@ -1040,8 +1297,6 @@ class TapeLooperImpl final : public EffectBase
         if (programChanged)
         {
             m_lastGrooveProgram = program;
-            m_loopBuffer.reset();
-            m_grooveSendLoopBuffer.reset();
         }
         m_grooveSequencer.setLibrary(m_grooveKit.library());
         m_grooveSequencer.setTrackNames(m_grooveKit.installedTrackNames());
@@ -1339,33 +1594,10 @@ class TapeLooperImpl final : public EffectBase
     }
 
     // The per-instrument reverb send is generated alongside the main groove signal, weighted
-    // by m_instrumentSendByTrack, and carried through its own loop buffer + varispeed tape so
-    // it stays in sync with the main signal's own tape speed/wow/flutter.
+    // by m_instrumentSendByTrack, and carried through its own varispeed tape so it stays in
+    // sync with the main signal's own tape speed/wow/flutter.
     void renderGrooveTrack(std::array<float, 2 * BlockSize>& mix) noexcept
     {
-        if (m_groovePlaying)
-        {
-            const auto spb = samplesPerBeat();
-            while (m_loopBuffer.framesAhead() < spb)
-            {
-                std::array<std::array<float, AbacDsp::GrooveDrumPlayer::kChannels>,
-                           AbacDsp::GrooveDrumPlayer::kMaxTracks>
-                    perTrack{};
-                const auto frame = m_grooveSequencer.advanceSample(spb, &perTrack);
-                m_loopBuffer.writeFrame(frame[0], frame[1]);
-
-                float sendL = 0.f;
-                float sendR = 0.f;
-                for (size_t track = 0; track < AbacDsp::GrooveDrumPlayer::kMaxTracks; ++track)
-                {
-                    const auto send = m_instrumentSendByTrack[track];
-                    sendL += perTrack[track][0] * send;
-                    sendR += perTrack[track][1] * send;
-                }
-                m_grooveSendLoopBuffer.writeFrame(sendL, sendR);
-            }
-        }
-
         std::array<float, 2 * BlockSize> grooveOut{};
         m_grooveTape.readBlock(0, grooveOut);
         std::array<float, 2 * BlockSize> sendOut{};
@@ -1375,14 +1607,26 @@ class TapeLooperImpl final : public EffectBase
         std::array<float, 2 * BlockSize> sendIn{};
         if (m_groovePlaying)
         {
+            const auto spb = samplesPerBeat();
             for (size_t i = 0; i < BlockSize; ++i)
             {
-                const auto frame = m_loopBuffer.readFrame();
+                std::array<std::array<float, AbacDsp::GrooveDrumPlayer::kChannels>,
+                           AbacDsp::GrooveDrumPlayer::kMaxTracks>
+                    perTrack{};
+                const auto frame = m_grooveSequencer.advanceSample(spb, &perTrack);
                 grooveIn[i * 2] = frame[0];
                 grooveIn[i * 2 + 1] = frame[1];
-                const auto sendFrame = m_grooveSendLoopBuffer.readFrame();
-                sendIn[i * 2] = sendFrame[0];
-                sendIn[i * 2 + 1] = sendFrame[1];
+
+                float sendL = 0.f;
+                float sendR = 0.f;
+                for (size_t track = 0; track < AbacDsp::GrooveDrumPlayer::kMaxTracks; ++track)
+                {
+                    const auto send = m_instrumentSendByTrack[track];
+                    sendL += perTrack[track][0] * send;
+                    sendR += perTrack[track][1] * send;
+                }
+                sendIn[i * 2] = sendL;
+                sendIn[i * 2 + 1] = sendR;
             }
         }
         m_grooveTape.feed(grooveIn);
@@ -1419,8 +1663,6 @@ class TapeLooperImpl final : public EffectBase
         m_grooveSendTape; // carries the per-instrument reverb send through the same varispeed path as m_grooveTape
     GrooveKit m_grooveKit;
     AbacDsp::GrooveDrumPlayer m_grooveSequencer;
-    GrooveLoopBuffer m_loopBuffer;
-    GrooveLoopBuffer m_grooveSendLoopBuffer;
     const AbacDsp::GrooveProgram* m_lastGrooveProgram{nullptr};
     std::array<AbacDsp::LinearSmoothingParameter<BlockSize>, TapeLooperDetail::kFreeTracks> m_trackGainSmoother;
     AbacDsp::StereoTrackBank<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks> m_filter;
@@ -1510,6 +1752,7 @@ class TapeLooperImpl final : public EffectBase
     float m_tapeSpeed{1.f};
     float m_appliedBars{0.f};
     float m_appliedBpmForLoopLength{0.f};
+    double m_cleanLoopPositionFrames{0.0};
     float m_inputGain{1.f};
     float m_grooveLevel{1.f};
     std::array<bool, TapeLooperDetail::kFreeTracks> m_recording{};
@@ -1572,4 +1815,16 @@ class TapeLooperImpl final : public EffectBase
     size_t m_installTotalFrames{0};
     TapeLooperLoopStorageService<TapeLooperDetail::kFreeTracks>::LoopLoadResult m_installResult;
     std::vector<float> m_installChunkScratch;
+
+    // Clock display (10): fed unconditionally every block from the final mixed
+    // output, never gated by record/play state and never reset.
+    AbacDsp::SimpleSpectrogram m_tapeSpectrogram;
+    size_t m_tapeSpectrogramDecimatePhase{0};
+    size_t m_lastPrintedBar{0};  // debug-only, temporary
+    size_t m_lastPrintedBeat{0}; // debug-only, temporary
+    std::vector<size_t> m_tapeSpectrogramSliceBucket;
+    size_t m_tapeSpectrogramNextSliceIndex{0};
+    size_t m_tapeSpectrogramWindowFill{0};
+    std::vector<float> m_barWaveform;
+    std::vector<float> m_loopWaveformPeaks;
 };

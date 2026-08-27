@@ -1013,6 +1013,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         return m_cpuLoad.load();
     }
 
+    [[nodiscard]] const std::vector<float>& getWaveDataToShow()
+    {
+        return pluginRunner->visualizeWaveData();
+    }
     [[nodiscard]] bool isGroovePlaying() const noexcept
     {
         return pluginRunner && pluginRunner->isGroovePlaying();
@@ -1036,6 +1040,50 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     [[nodiscard]] TapeLooperScriptEngine::UiParamSlots getLuaUiParamSlots() const
     {
         return pluginRunner ? pluginRunner->uiParamSlots() : TapeLooperScriptEngine::UiParamSlots{};
+    }
+    [[nodiscard]] size_t getSamplesPerBar() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getSamplesPerBar() : 0u;
+    }
+    [[nodiscard]] int getBarBeats() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getBarBeats() : 4;
+    }
+    [[nodiscard]] float getBarPhase() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getBarPhase() : 0.f;
+    }
+    [[nodiscard]] std::vector<float> getLoopWaveform() const
+    {
+        return pluginRunner ? pluginRunner->getLoopWaveform() : std::vector<float>{};
+    }
+    [[nodiscard]] float getPlayheadNormalized() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getPlayheadNormalized() : 0.f;
+    }
+    [[nodiscard]] int getOuterRingBars() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getOuterRingBars() : 1;
+    }
+    [[nodiscard]] AbacDsp::SpectrumImageSet getSpectrogramData() const
+    {
+        return pluginRunner ? pluginRunner->getSpectrogramData() : AbacDsp::SpectrumImageSet{};
+    }
+    [[nodiscard]] int getTrackClockStateA() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getTrackClockStateA() : 0;
+    }
+    [[nodiscard]] int getTrackClockStateB() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getTrackClockStateB() : 0;
+    }
+    [[nodiscard]] int getTrackClockStateC() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getTrackClockStateC() : 0;
+    }
+    [[nodiscard]] int getGrooveClockState() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getGrooveClockState() : 0;
     }
     [[nodiscard]] std::vector<juce::String> listGrooveNames() const
     {
@@ -1130,6 +1178,15 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             pluginRunner->resolveLoopLoadBpm(bpm);
         }
+    }
+    [[nodiscard]] juce::String getBarBeatLabel() const
+    {
+        return pluginRunner ? juce::String(pluginRunner->getBarBeatLabel()) : juce::String();
+    }
+    [[nodiscard]] const std::vector<size_t>& getSpectrogramSliceBuckets() const noexcept
+    {
+        static const std::vector<size_t> empty{};
+        return pluginRunner ? pluginRunner->getSpectrogramSliceBuckets() : empty;
     }
 
     [[nodiscard]] std::pair<float, float> getInputDbLoad() const

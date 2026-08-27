@@ -16,6 +16,7 @@ class StubImpl final : public EffectBase
     explicit StubImpl(const float sampleRate)
         : EffectBase(sampleRate)
     {
+        m_visualWavedata.resize(6000);
     }
     void setTapeSpeed(const float value)
     {
@@ -133,6 +134,22 @@ class StubImpl final : public EffectBase
             out(i, 0) = in(i, 0);
             out(i, 1) = in(i, 1);
         }
+
+        for (size_t i = 0; i < BlockSize; ++i)
+        {
+            m_visualWavedata[m_currentSample] = out(i, 0) + out(i, 1);
+            m_currentSample++;
+            if (m_currentSample >= m_visualWavedata.size())
+            {
+                m_currentSample = 0;
+            }
+        }
+    }
+    const std::vector<float>& visualizeWaveData()
+    {
+        m_preparedWavedata.resize(m_visualWavedata.size());
+        m_preparedWavedata = m_visualWavedata;
+        return m_preparedWavedata;
     }
 
   private:
@@ -163,4 +180,9 @@ class StubImpl final : public EffectBase
     float m_luaParam6{};
     float m_luaParam7{};
     float m_luaParam8{};
+
+
+    std::vector<float> m_visualWavedata;
+    std::vector<float> m_preparedWavedata;
+    size_t m_currentSample = 0;
 };

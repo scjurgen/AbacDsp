@@ -9,7 +9,7 @@
   "loops": true,
   "host_transport": true,
   "use-lua": true,
-  "extra_ui_includes": ["impl/LuaControlBridge.h"],
+  "extra_ui_includes": ["impl/LuaControlBridge.h", "inc/CircularTapeDisplay.h"],
   "ports-control":
   [
     {"short": "SPD", "type": "dial", "display": "Tape Speed", "symbol": "tapeSpeed", "default": 1.0,
@@ -48,6 +48,23 @@
 
     {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu"},
     {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "CLOCK", "type": "gauge", "gaugetype": "signal", "display": "Clock", "symbol": "clock",
+      "customtype": "CircularTapeDisplay",
+      "bindings": [
+        {"call": "setSamplesPerBar", "from": "getSamplesPerBar"},
+        {"call": "setBarBeats", "from": "getBarBeats"},
+        {"call": "setBarPhase", "from": "getBarPhase"},
+        {"call": "setLoopWaveform", "from": "getLoopWaveform"},
+        {"call": "setPlayheadNormalized", "from": "getPlayheadNormalized"},
+        {"call": "setOuterRingBars", "from": "getOuterRingBars"},
+        {"call": "setBarBeatLabel", "from": "getBarBeatLabel"},
+        {"call": "setSpectrogramSliceBuckets", "from": "getSpectrogramSliceBuckets"},
+        {"call": "setSpectrogram", "from": "getSpectrogramData"},
+        {"call": "setTrackStateA", "from": "getTrackClockStateA"},
+        {"call": "setTrackStateB", "from": "getTrackClockStateB"},
+        {"call": "setTrackStateC", "from": "getTrackClockStateC"},
+        {"call": "setGrooveState", "from": "getGrooveClockState"}
+      ]},
     {"short": "LUACTL", "type": "luacontrolarea", "display": "Lua Controls", "symbol": "luaControls"}
   ],
   "layout": {
@@ -56,13 +73,28 @@
     "type": "||||||",
     "composition": "C=(1:1:1:1:1:1) A1=(SPD, BARS, IGAIN, LVL*100, CPU*100) A2=(GPLY, GBPM, GVAR, GLVL) A3=(RECA, PLAA, CLRA, TGA) A4=(RECB, PLAB, CLRB, TGB) A5=(RECC, PLAC, CLRC, TGC) A6=(LUACTL)"
   },
+  "performance-page": {
+    "type": "||",
+    "composition": "C=(3:1) A1=(CLOCK) A2=(SPD, BARS, GPLY, GBPM, GVAR, RECA, PLAA, CLRA, RECB, PLAB, CLRB, RECC, PLAC, CLRC)"
+  },
   "processor_forwards": [
     {"name": "isGroovePlaying", "type": "bool"},
     {"name": "canEditBpm", "type": "bool"},
     {"name": "hasScriptError", "type": "bool"},
     {"name": "scriptErrorMessage", "call": "scriptError", "type": "std::string"},
     {"name": "getScriptSkeleton", "call": "scriptSkeleton", "type": "std::string"},
-    {"name": "getLuaUiParamSlots", "call": "uiParamSlots", "type": "TapeLooperScriptEngine::UiParamSlots"}
+    {"name": "getLuaUiParamSlots", "call": "uiParamSlots", "type": "TapeLooperScriptEngine::UiParamSlots"},
+    {"name": "getSamplesPerBar", "type": "size_t"},
+    {"name": "getBarBeats", "type": "int", "default": 4},
+    {"name": "getBarPhase", "type": "float"},
+    {"name": "getLoopWaveform", "type": "std::vector<float>"},
+    {"name": "getPlayheadNormalized", "type": "float"},
+    {"name": "getOuterRingBars", "type": "int", "default": 1},
+    {"name": "getSpectrogramData", "type": "AbacDsp::SpectrumImageSet"},
+    {"name": "getTrackClockStateA", "type": "int"},
+    {"name": "getTrackClockStateB", "type": "int"},
+    {"name": "getTrackClockStateC", "type": "int"},
+    {"name": "getGrooveClockState", "type": "int"}
   ],
   "extra_timer_callbacks": [
     "if (const auto info = processorRef.consumeGrooveInfoText(); info.isNotEmpty()) { m_statusBar.showMessage(info); }",
@@ -85,7 +117,9 @@
     "bool deleteLoopNamed(const juce::String& name) { return pluginRunner && pluginRunner->deleteLoopNamed(name.toStdString()); }",
     "bool renameLoop(const juce::String& oldName, const juce::String& newName) { return pluginRunner && pluginRunner->renameLoopNamed(oldName.toStdString(), newName.toStdString()); }",
     "[[nodiscard]] TapeLooperImpl<NumSamplesPerBlock>::LoopLoadOutcome consumeLoopLoadOutcome() const { return pluginRunner ? pluginRunner->consumeLoopLoadOutcome() : TapeLooperImpl<NumSamplesPerBlock>::LoopLoadOutcome{}; }",
-    "void resolveLoopLoadBpm(const float bpm) { if (pluginRunner) { pluginRunner->resolveLoopLoadBpm(bpm); } }"
+    "void resolveLoopLoadBpm(const float bpm) { if (pluginRunner) { pluginRunner->resolveLoopLoadBpm(bpm); } }",
+    "[[nodiscard]] juce::String getBarBeatLabel() const { return pluginRunner ? juce::String(pluginRunner->getBarBeatLabel()) : juce::String(); }",
+    "[[nodiscard]] const std::vector<size_t>& getSpectrogramSliceBuckets() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSpectrogramSliceBuckets() : empty; }"
   ],
   "extra_prepare_calls": [
     "pluginRunner->setLoopsDirectory(getLoopsDirectory());"

@@ -31,5 +31,6 @@
 #include "inc/LuaScriptMemoryPool.h"
 #include "inc/ScriptEditorWindow.h"
 #include "impl/LuaControlBridge.h"
+#include "inc/CircularTapeDisplay.h"
 
 #include "inc/LookAndFeel.h"

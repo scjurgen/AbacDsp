@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "Helpers/DebugClock.h"
 #include "Sampler/SliceLibrary.h"
 
 namespace AbacDsp
@@ -298,6 +299,16 @@ class GrooveDrumPlayer
         voice.gain = trigger.gain;
         voice.effectiveFade = std::max<size_t>(1, std::min(m_fadeFrames, info.lengthFrames / 2));
         voice.startOrder = m_triggerCounter++;
+        logTrigger(trigger.track);
+    }
+
+    // Debug-only, temporary: names each fired trigger with its absolute time
+    // since process start, for correlating audible groove hits against the
+    // display's own clock (see TapeLooperImpl::logBarBeatIfChanged()).
+    void logTrigger(const size_t track) const
+    {
+        const std::string name = track < m_trackNames.size() ? m_trackNames[track] : std::to_string(track);
+        std::cout << std::format("{:10} us  trigger {}\n", debugElapsedMicroseconds(), name);
     }
 
     [[nodiscard]] size_t randomSliceIndex(const size_t sliceCount) noexcept

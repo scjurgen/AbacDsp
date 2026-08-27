@@ -619,7 +619,7 @@ TEST(TapeLooperTest, ScriptReverbSendProducesATailAfterPlayStops)
     EXPECT_GT(wetTailRms, dryTailRms * 10.f);
 }
 
-TEST(TapeLooperTest, GrooveBuffersOnlyFillWhilePlaying)
+TEST(TapeLooperTest, GrooveOnlyTriggersWhilePlaying)
 {
     TapeLooper sut(kSampleRate);
     const Buffer in{};
@@ -629,12 +629,24 @@ TEST(TapeLooperTest, GrooveBuffersOnlyFillWhilePlaying)
         Buffer out{};
         sut.processBlock(in, out);
     }
-    EXPECT_EQ(sut.grooveLoopBufferFramesAheadForTest(), 0u);
+    EXPECT_EQ(sut.grooveActiveVoiceCountForTest(), 0u);
 
+    // The default groove kit loads asynchronously (mirrors pumpUntilLoopIoSettles()
+    // above) and its first hit isn't necessarily on tick 0 either, so pump real
+    // wall-clock time alongside blocks rather than assuming either is instant.
     sut.setGroovePlay(true);
-    Buffer out{};
-    sut.processBlock(in, out);
-    EXPECT_GT(sut.grooveLoopBufferFramesAheadForTest(), 0u);
+    bool triggeredAtLeastOnce = false;
+    for (int i = 0; i < 5000 && !triggeredAtLeastOnce; ++i)
+    {
+        Buffer out{};
+        sut.processBlock(in, out);
+        triggeredAtLeastOnce = sut.grooveActiveVoiceCountForTest() > 0;
+        if (!triggeredAtLeastOnce)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+    EXPECT_TRUE(triggeredAtLeastOnce);
 }
 
 // Tape speed multiplies the effective groove/click tempo: 2x speed halves the beat clock.

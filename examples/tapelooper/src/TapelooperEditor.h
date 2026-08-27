@@ -75,7 +75,91 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         auto area = getLocalBounds();
         m_menuBar.setBounds(area.removeFromTop(getLookAndFeel().getDefaultMenuBarHeight()));
         m_statusBar.setBounds(area.removeFromBottom(static_cast<int>(Constants::Text::labelHeight)));
+        auto pageSwitchArea = area.removeFromTop(static_cast<int>(Constants::Text::labelHeight));
+        m_pagePerformanceButton.setBounds(pageSwitchArea.removeFromLeft(pageSwitchArea.getWidth() / 2));
+        m_pageSettingsButton.setBounds(pageSwitchArea);
         area = area.reduced(static_cast<int>(Constants::Margins::big));
+        if (m_currentPage == Page::Performance)
+        {
+            // auto generated
+            // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
+            const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
+            std::vector<juce::Rectangle<int>> areas(2);
+            const auto colWidth = area.getWidth() / 4;
+            areas[0] = area.removeFromLeft(colWidth * 3).reduced(Constants::Margins::small);
+            areas[1] = area.reduced(Constants::Margins::small);
+
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::column;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(clockGauge).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[0].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::column;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(tapeSpeedDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(barsDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(groovePlaySwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(grooveVariationDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(recordASwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(playASwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(clearASwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(recordBSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(playBSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(clearBSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(recordCSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(playCSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(clearCSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.performLayout(areas[1].toFloat());
+            }
+        }
+        else
         {
             // auto generated
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
@@ -203,6 +287,20 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         {
             cpuGauge.update(processorRef.getCpuLoad());
             levelGauge.update(processorRef.getInputDbLoad(), processorRef.getOutputDbLoad());
+            clockGauge.update(processorRef.getWaveDataToShow());
+            clockGauge.setSamplesPerBar(processorRef.getSamplesPerBar());
+            clockGauge.setBarBeats(processorRef.getBarBeats());
+            clockGauge.setBarPhase(processorRef.getBarPhase());
+            clockGauge.setLoopWaveform(processorRef.getLoopWaveform());
+            clockGauge.setPlayheadNormalized(processorRef.getPlayheadNormalized());
+            clockGauge.setOuterRingBars(processorRef.getOuterRingBars());
+            clockGauge.setBarBeatLabel(processorRef.getBarBeatLabel());
+            clockGauge.setSpectrogramSliceBuckets(processorRef.getSpectrogramSliceBuckets());
+            clockGauge.setSpectrogram(processorRef.getSpectrogramData());
+            clockGauge.setTrackStateA(processorRef.getTrackClockStateA());
+            clockGauge.setTrackStateB(processorRef.getTrackClockStateB());
+            clockGauge.setTrackStateC(processorRef.getTrackClockStateC());
+            clockGauge.setGrooveState(processorRef.getGrooveClockState());
             clearASwitch.tickFlash();
             clearBSwitch.tickFlash();
             clearCSwitch.tickFlash();
@@ -320,6 +418,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(levelGauge);
         levelGauge.setLabelText(juce::String::fromUTF8("Level"));
         levelGauge.setTooltip(juce::String::fromUTF8("Level (0 to 100 %)"));
+        addAndMakeVisible(clockGauge);
+        clockGauge.setLabelText(juce::String::fromUTF8("Clock"));
         addAndMakeVisible(luaControlsLuaControlArea);
         addAndMakeVisible(luaParam1Dial);
         luaParam1Dial.reset(valueTreeState, "luaParam1");
@@ -401,8 +501,95 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                            { processorRef.setCcRange(CcTarget::luaParam8, lo, hi); },
                                            [this] { processorRef.clearCcAssignment(CcTarget::luaParam8); },
                                            [this] { return processorRef.getCcController(CcTarget::luaParam8); }});
+
+        addAndMakeVisible(m_pagePerformanceButton);
+        addAndMakeVisible(m_pageSettingsButton);
+        m_pagePerformanceButton.onClick = [this] { switchPage(Page::Performance); };
+        m_pageSettingsButton.onClick = [this] { switchPage(Page::Settings); };
+        switchPage(Page::Performance);
     }
 
+    enum class Page
+    {
+        Performance,
+        Settings
+    };
+
+    void switchPage(Page page)
+    {
+        m_currentPage = page;
+        m_pagePerformanceButton.setToggleState(page == Page::Performance, juce::dontSendNotification);
+        m_pageSettingsButton.setToggleState(page == Page::Settings, juce::dontSendNotification);
+        if (page == Page::Performance)
+        {
+            tapeSpeedDial.setVisible(true);
+            barsDial.setVisible(true);
+            inputGainDial.setVisible(false);
+            grooveLevelDial.setVisible(false);
+            recordASwitch.setVisible(true);
+            playASwitch.setVisible(true);
+            clearASwitch.setVisible(true);
+            recordBSwitch.setVisible(true);
+            playBSwitch.setVisible(true);
+            clearBSwitch.setVisible(true);
+            recordCSwitch.setVisible(true);
+            playCSwitch.setVisible(true);
+            clearCSwitch.setVisible(true);
+            groovePlaySwitch.setVisible(true);
+            bpmDial.setVisible(true);
+            grooveVariationDial.setVisible(true);
+            trackGainADial.setVisible(false);
+            trackGainBDial.setVisible(false);
+            trackGainCDial.setVisible(false);
+            cpuGauge.setVisible(false);
+            levelGauge.setVisible(false);
+            clockGauge.setVisible(true);
+            luaControlsLuaControlArea.setVisible(false);
+            luaParam1Dial.setVisible(false);
+            luaParam2Dial.setVisible(false);
+            luaParam3Dial.setVisible(false);
+            luaParam4Dial.setVisible(false);
+            luaParam5Dial.setVisible(false);
+            luaParam6Dial.setVisible(false);
+            luaParam7Dial.setVisible(false);
+            luaParam8Dial.setVisible(false);
+        }
+        else
+        {
+            tapeSpeedDial.setVisible(true);
+            barsDial.setVisible(true);
+            inputGainDial.setVisible(true);
+            grooveLevelDial.setVisible(true);
+            recordASwitch.setVisible(true);
+            playASwitch.setVisible(true);
+            clearASwitch.setVisible(true);
+            recordBSwitch.setVisible(true);
+            playBSwitch.setVisible(true);
+            clearBSwitch.setVisible(true);
+            recordCSwitch.setVisible(true);
+            playCSwitch.setVisible(true);
+            clearCSwitch.setVisible(true);
+            groovePlaySwitch.setVisible(true);
+            bpmDial.setVisible(true);
+            grooveVariationDial.setVisible(true);
+            trackGainADial.setVisible(true);
+            trackGainBDial.setVisible(true);
+            trackGainCDial.setVisible(true);
+            cpuGauge.setVisible(true);
+            levelGauge.setVisible(true);
+            clockGauge.setVisible(false);
+            luaControlsLuaControlArea.setVisible(true);
+            luaParam1Dial.setVisible(false);
+            luaParam2Dial.setVisible(false);
+            luaParam3Dial.setVisible(false);
+            luaParam4Dial.setVisible(false);
+            luaParam5Dial.setVisible(false);
+            luaParam6Dial.setVisible(false);
+            luaParam7Dial.setVisible(false);
+            luaParam8Dial.setVisible(false);
+        }
+        resized();
+    }
 
     void parentHierarchyChanged() override
     {
@@ -581,6 +768,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         backgroundApp = juce::Colour(GuiConstants::instance().colors.background);
         cpuGauge.updateColors();
         levelGauge.updateColors();
+        clockGauge.updateColors();
 
         repaint();
     }
@@ -1444,6 +1632,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Component* m_topLevel{nullptr};
     bool m_boundsRestored{false};
     GuiConstants::Theme m_currentTheme{AppSettings::loadTheme()};
+    Page m_currentPage{Page::Performance};
+    juce::TextButton m_pagePerformanceButton{"Performance"};
+    juce::TextButton m_pageSettingsButton{"Settings"};
     static constexpr int kThemeModeLightId = 9000;
     static constexpr int kThemeModeDarkId = 9001;
     static constexpr int kThemeBaseBichromaticId = 9002;
@@ -1519,6 +1710,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial trackGainCDial{this};
     CpuGauge cpuGauge{};
     Gauge levelGauge{};
+    CircularTapeDisplay clockGauge{};
     LuaControlArea luaControlsLuaControlArea{};
     CustomRotaryDial luaParam1Dial{this};
     CustomRotaryDial luaParam2Dial{this};
