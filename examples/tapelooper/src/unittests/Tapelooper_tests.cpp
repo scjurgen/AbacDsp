@@ -1,5 +1,8 @@
+#include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <numbers>
+#include <thread>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -429,8 +432,8 @@ TEST(TapeLooperTest, ScriptCanDriveTrackRecordAndPlay)
     EXPECT_LT(sustainedRms, recordedRms * 1.5f);
 }
 
-// End-to-end with the engine's own default stub script: recording on track A fires
-// OnRecordStateChanged, which the script answers with SetGrooveSource("click").
+// End-to-end with the engine's own default stub script: recording fires OnRecordStateChanged,
+// answered with SetGrooveSource("click") - checked via the mode flag, not rendered audio.
 TEST(TapeLooperTest, DefaultScriptSwitchesToClickWhileRecording)
 {
     TapeLooper sut(kSampleRate);
@@ -438,17 +441,56 @@ TEST(TapeLooperTest, DefaultScriptSwitchesToClickWhileRecording)
     sut.setGroovePlay(true);
 
     const Buffer in{};
-    const size_t numBlocks = 50;
-    const float silentGrooveRms = outputRms(sut, in, numBlocks);
-    EXPECT_LT(silentGrooveRms, 1e-6f);
+    Buffer out{};
+    ASSERT_FALSE(sut.isUsingGrooveClickSourceForTest());
 
     sut.setRecordA(true);
-    Buffer out{};
     sut.processBlock(in, out); // applies the record edge and drains the resulting script command
-    // The groove tape's fixed ~4800-sample read-behind-write delay (VariSpeedTapeDelay's
-    // own default read head) must be fed past once before playback catches up to it.
-    const float clickRms = outputRms(sut, in, 200);
-    EXPECT_GT(clickRms, 1e-4f);
+    EXPECT_TRUE(sut.isUsingGrooveClickSourceForTest());
+
+    sut.setRecordA(false);
+    sut.processBlock(in, out); // applies the record edge and drains the resulting script command
+    EXPECT_FALSE(sut.isUsingGrooveClickSourceForTest());
+}
+
+// LuaScriptEngineBase's Lua state is shared across reloads, so replacing the default stub
+// script (which defines OnRecordStateChanged) with an empty one must not leave that handler
+// still firing from the outgoing script's stale definition.
+TEST(TapeLooperTest, EmptyScriptDoesNotInheritStaleRecordHandler)
+{
+    TapeLooper sut(kSampleRate);
+    sut.setBpm(120.f);
+    sut.setGroovePlay(true);
+    ASSERT_TRUE(sut.setScript(""));
+
+    sut.setRecordA(true);
+    const Buffer in{};
+    Buffer out{};
+    sut.processBlock(in, out);
+    EXPECT_FALSE(sut.isUsingGrooveClickSourceForTest()) << "an empty script must not keep switching to click";
+}
+
+// Reproduces the exact reported sequence: apply a comment-only script (handler correctly
+// cleared), then apply a truly empty one right after - the handler must stay cleared.
+TEST(TapeLooperTest, EmptyScriptAfterCommentOnlyScriptStaysClear)
+{
+    TapeLooper sut(kSampleRate);
+    sut.setBpm(120.f);
+    sut.setGroovePlay(true);
+
+    ASSERT_TRUE(sut.setScript("--"));
+    sut.setRecordA(true);
+    const Buffer in{};
+    Buffer out{};
+    sut.processBlock(in, out);
+    EXPECT_FALSE(sut.isUsingGrooveClickSourceForTest()) << "a comment-only script must not switch to click";
+
+    sut.setRecordA(false);
+    sut.processBlock(in, out);
+    ASSERT_TRUE(sut.setScript(""));
+    sut.setRecordA(true);
+    sut.processBlock(in, out);
+    EXPECT_FALSE(sut.isUsingGrooveClickSourceForTest()) << "removing the comment must not resurrect the handler";
 }
 
 // The linear-ramp smoother reaches its target within one block, so a fade set via script
@@ -635,4 +677,78 @@ TEST(TapeLooperTest, ScriptInstrumentCommandsAreSafeNoOpsWithoutALoadedKit)
             EXPECT_FLOAT_EQ(out(i, 1), 0.f);
         }
     }
+}
+
+namespace
+{
+// Chunked extraction/install only advance a fixed amount per processBlock() call, and the
+// background WAV/JSON I/O needs real wall-clock time - pump both together until done.
+void pumpUntilLoopIoSettles(TapeLooper& sut, const Buffer& in)
+{
+    // A request just submitted hasn't been picked up by the audio-thread side yet (both
+    // in-progress flags still read false) - process at least once before checking either.
+    for (int i = 0; i < 5000; ++i)
+    {
+        Buffer out{};
+        sut.processBlock(in, out);
+        if (!sut.isLoopSaveInProgressForTest() && !sut.isLoopLoadInProgressForTest())
+        {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+}
+}
+
+TEST(TapeLooperTest, SaveThenLoadRoundTripsRecordedAudio)
+{
+    const auto tempDir = std::filesystem::temp_directory_path() / "abacdsp_tapelooper_loop_test";
+    std::error_code ec;
+    std::filesystem::remove_all(tempDir, ec);
+    std::filesystem::create_directories(tempDir);
+
+    TapeLooper sut(kSampleRate);
+    sut.setLoopsDirectory(tempDir.string());
+    // Wow/flutter jitter the read head continuously and independently of the write head, so
+    // a sample-for-sample comparison across two separate playback passes needs them off.
+    ASSERT_TRUE(sut.setScript("SetTrackWow(0, 0, 0, 0)\nSetTrackFlutter(0, 0, 0)\n"));
+    sut.setBars(1.f);
+    sut.setBpm(200.f);
+    sut.setTapeSpeed(1.f);
+    sut.setRecordA(true);
+    sut.setPlayA(true);
+    const size_t loopFrames = TapeLooperDetail::framesForLoop(1.f, 200.f);
+    const size_t numBlocks = loopFrames / kBlock;
+    size_t phase = 0;
+    for (size_t i = 0; i < numBlocks; ++i)
+    {
+        Buffer out{};
+        sut.processBlock(sineBlock(0.5f, 220.f, phase), out);
+    }
+    sut.setRecordA(false);
+
+    // The read head free-runs rather than resetting to a fixed phase each pass, so a
+    // sample-for-sample compare against live playback (an arbitrary phase) isn't meaningful -
+    // RMS, phase-independent for a periodic signal, is what a faithful round trip preserves.
+    const Buffer silence{};
+    const auto referenceRms = outputRms(sut, silence, numBlocks);
+    ASSERT_GT(referenceRms, 0.1f) << "sanity check: the recorded tone should be clearly audible";
+
+    sut.requestSaveLoopAs("round_trip_test", "");
+    pumpUntilLoopIoSettles(sut, silence);
+    ASSERT_FALSE(sut.isLoopSaveInProgressForTest());
+    EXPECT_EQ(sut.currentLoopName(), "round_trip_test");
+
+    sut.setClearA(true);
+    Buffer discard{};
+    sut.processBlock(silence, discard);
+
+    sut.requestLoadLoop("round_trip_test");
+    pumpUntilLoopIoSettles(sut, silence);
+    ASSERT_FALSE(sut.isLoopLoadInProgressForTest());
+
+    const auto loadedRms = outputRms(sut, silence, numBlocks);
+    EXPECT_NEAR(loadedRms, referenceRms, referenceRms * 0.01f);
+
+    std::filesystem::remove_all(tempDir, ec);
 }

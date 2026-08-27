@@ -6,6 +6,7 @@
     "Each tape track records and plays back independently, at a shared tape speed.\n"
   ],
   "patches": true,
+  "loops": true,
   "host_transport": true,
   "use-lua": true,
   "extra_ui_includes": ["impl/LuaControlBridge.h"],
@@ -67,13 +68,27 @@
     "if (const auto info = processorRef.consumeGrooveInfoText(); info.isNotEmpty()) { m_statusBar.showMessage(info); }",
     "pollScriptError();",
     "pollLlmAssistWatcher();",
-    "if (processorRef.hasRunner()) { luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()), valueTreeState); }"
+    "if (processorRef.hasRunner()) { luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()), valueTreeState); }",
+    "handleLoopLoadOutcome();"
   ],
   "extra_processor_methods": [
     "[[nodiscard]] std::vector<juce::String> listGrooveNames() const { std::vector<juce::String> result; if (pluginRunner) { for (const auto& n : pluginRunner->listGrooveNames()) { result.push_back(juce::String(n)); } } return result; }",
     "[[nodiscard]] juce::String getCurrentGrooveName() const { return pluginRunner ? juce::String(pluginRunner->currentGrooveName()) : juce::String(); }",
     "void requestLoadGroove(const juce::String& styleName, const int variationIndex) { if (pluginRunner) { pluginRunner->requestLoadGroove(styleName.toStdString(), static_cast<unsigned>(variationIndex)); } }",
-    "[[nodiscard]] juce::String consumeGrooveInfoText() const { return pluginRunner ? juce::String(pluginRunner->consumeGrooveInfoText()) : juce::String(); }"
+    "[[nodiscard]] juce::String consumeGrooveInfoText() const { return pluginRunner ? juce::String(pluginRunner->consumeGrooveInfoText()) : juce::String(); }",
+    "static std::string getLoopsDirectory() {\n        auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);\n#if JUCE_MAC\n        base = base.getChildFile(\"Application Support\");\n#endif\n        const auto dir = base.getChildFile(\"AbacDsp\").getChildFile(\"Tapelooper\").getChildFile(\"loops\");\n        dir.createDirectory();\n        return dir.getFullPathName().toStdString();\n    }",
+    "[[nodiscard]] std::vector<juce::String> listLoopNames() const { std::vector<juce::String> result; if (pluginRunner) { for (const auto& n : pluginRunner->listLoopNames()) { result.push_back(juce::String(n)); } } return result; }",
+    "[[nodiscard]] juce::String getCurrentLoopName() const { return pluginRunner ? juce::String(pluginRunner->currentLoopName()) : juce::String(); }",
+    "void saveLoopAs(const juce::String& name) { if (pluginRunner) { pluginRunner->requestSaveLoopAs(name.toStdString(), m_fileIo.currentParametersAsJson()); } }",
+    "void applyLoadedLoopPatchParams(const juce::String& json) { if (m_fileIo.loadParametersFromJson(json.toStdString())) { applyLoadedParametersToHost(); } }",
+    "void requestLoadLoop(const juce::String& name) { if (pluginRunner) { pluginRunner->requestLoadLoop(name.toStdString()); } }",
+    "bool deleteLoopNamed(const juce::String& name) { return pluginRunner && pluginRunner->deleteLoopNamed(name.toStdString()); }",
+    "bool renameLoop(const juce::String& oldName, const juce::String& newName) { return pluginRunner && pluginRunner->renameLoopNamed(oldName.toStdString(), newName.toStdString()); }",
+    "[[nodiscard]] TapeLooperImpl<NumSamplesPerBlock>::LoopLoadOutcome consumeLoopLoadOutcome() const { return pluginRunner ? pluginRunner->consumeLoopLoadOutcome() : TapeLooperImpl<NumSamplesPerBlock>::LoopLoadOutcome{}; }",
+    "void resolveLoopLoadBpm(const float bpm) { if (pluginRunner) { pluginRunner->resolveLoopLoadBpm(bpm); } }"
+  ],
+  "extra_prepare_calls": [
+    "pluginRunner->setLoopsDirectory(getLoopsDirectory());"
   ],
   "extra_menus": [
     {

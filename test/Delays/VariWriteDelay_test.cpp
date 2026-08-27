@@ -1,13 +1,14 @@
-#include "Delays/VariSpeedTapeDelay.h"
-#include "Filters/Sinc/sinc_4.h"
+#include <algorithm>
+#include <array>
+#include <memory>
+#include <span>
+#include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-#include <algorithm>
-#include <array>
-#include <memory>
-#include <vector>
+#include "Delays/VariSpeedTapeDelay.h"
+#include "Filters/Sinc/sinc_4.h"
 
 namespace AbacDsp::Test
 {
@@ -187,4 +188,86 @@ INSTANTIATE_TEST_SUITE_P(VariWriteDelayTestSpeedVariants, VariWriteDelayTestFixt
                              std::ranges::replace(s, '.', '_');
                              return "ratio_" + s;
                          });
+
+// extractLoop()/loadLoop() support tapelooper's saved-loop feature: pulling the currently
+// looping audio out of the ring buffer, and installing previously saved audio back into it.
+TEST(VariSpeedTapeDelayLoopIoTest, ExtractLoopRoundTripsThroughLoadLoopAcrossWraparound)
+{
+    constexpr size_t kSmallBufferSize = 64;
+    constexpr size_t kLoopFrames = 30;
+    VariSpeedTapeDelay<kSmallBufferSize, 1, 1, TileSize> src{48000.f, std::make_shared<SincFilter>(sinc4)};
+    src.setRatio(1.f, true);
+    src.setFlutterDepth(0.f);
+    src.setWowDepth(0.f);
+
+    // Feed well past kSmallBufferSize so the write head has wrapped more than once,
+    // exercising extractLoop()'s wraparound arithmetic rather than a fresh, unwrapped buffer.
+    for (int tile = 0; tile < 20; ++tile)
+    {
+        std::array<float, TileSize> block{};
+        for (size_t s = 0; s < TileSize; ++s)
+        {
+            block[s] = static_cast<float>(tile * static_cast<int>(TileSize) + static_cast<int>(s));
+        }
+        src.feed(block);
+    }
+
+    std::vector<float> extracted(kLoopFrames);
+    src.extractLoop(kLoopFrames, extracted);
+
+    VariSpeedTapeDelay<kSmallBufferSize, 1, 1, TileSize> dst{48000.f, std::make_shared<SincFilter>(sinc4)};
+    dst.loadLoop(extracted, kLoopFrames);
+    std::vector<float> reExtracted(kLoopFrames);
+    dst.extractLoop(kLoopFrames, reExtracted);
+
+    EXPECT_EQ(extracted, reExtracted);
+}
+
+// The resampler has its own startup transient (see the fixture's settle() above), so
+// writeHead() isn't exactly TileSize per feed() from a cold start - only once settled.
+TEST(VariSpeedTapeDelayLoopIoTest, WriteHeadAdvancesByTileSizePerFeedOnceSettled)
+{
+    constexpr size_t kSmallBufferSize = 500;
+    VariSpeedTapeDelay<kSmallBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
+    sut.setRatio(1.f, true);
+
+    std::array<float, TileSize> block{};
+    for (int i = 0; i < 50; ++i)
+    {
+        sut.feed(block);
+    }
+    const auto before = sut.writeHead();
+    sut.feed(block);
+    EXPECT_EQ(sut.writeHead(), (before + TileSize) % kSmallBufferSize);
+}
+
+// tapelooper's chunked save/load path calls installLoopChunk() across several blocks rather
+// than loadLoop() in one shot - verify that produces the exact same result loadLoop() does.
+TEST(VariSpeedTapeDelayLoopIoTest, ChunkedInstallLoopChunkMatchesSingleShotLoadLoop)
+{
+    constexpr size_t kSmallBufferSize = 64;
+    constexpr size_t kLoopFrames = 30;
+    std::vector<float> pattern(kLoopFrames);
+    for (size_t i = 0; i < kLoopFrames; ++i)
+    {
+        pattern[i] = static_cast<float>(i) - 15.f;
+    }
+
+    VariSpeedTapeDelay<kSmallBufferSize, 1, 1, TileSize> viaLoadLoop{48000.f, std::make_shared<SincFilter>(sinc4)};
+    viaLoadLoop.loadLoop(pattern, kLoopFrames);
+
+    VariSpeedTapeDelay<kSmallBufferSize, 1, 1, TileSize> viaChunks{48000.f, std::make_shared<SincFilter>(sinc4)};
+    constexpr size_t kFirstChunk = 12;
+    const std::span<const float> patternSpan(pattern);
+    viaChunks.installLoopChunk(0, patternSpan.subspan(0, kFirstChunk));
+    viaChunks.installLoopChunk(kFirstChunk, patternSpan.subspan(kFirstChunk));
+    viaChunks.finishLoopLoad(kLoopFrames);
+
+    std::vector<float> expected(kLoopFrames);
+    std::vector<float> actual(kLoopFrames);
+    viaLoadLoop.extractLoop(kLoopFrames, expected);
+    viaChunks.extractLoop(kLoopFrames, actual);
+    EXPECT_EQ(expected, actual);
+}
+
 }

@@ -1,7 +1,9 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
+#include <span>
 #include <vector>
 
 #include "Helpers/ConstructArray.h"
@@ -154,6 +156,58 @@ class VariSpeedTapeDelay
         return m_buffer;
     }
 
+    // Write head position: a stable baseline for a caller (e.g. tapelooper's chunked loop
+    // save) extracting the loop's audio across many calls without racing feed().
+    [[nodiscard]] size_t writeHead() const noexcept
+    {
+        return m_writeHead;
+    }
+
+    // Copies the loopFrames frames currently comprising the loop - the ones most recently
+    // written, ending at the write head - into out, wraparound-aware. loopFrames must not
+    // exceed BufferSize; out must hold at least loopFrames * NumChannels samples.
+    void extractLoop(const size_t loopFrames, const std::span<float> out) const noexcept
+    {
+        const auto frames = std::min(loopFrames, BufferSize);
+        assert(out.size() >= frames * NumChannels);
+        const auto start = (m_writeHead + BufferSize - frames) % BufferSize;
+        copyWrapped(start, out, frames);
+    }
+
+    // Writes one chunk of a chunked loadLoop() sequence at ring-buffer offset chunkStart
+    // (frames, from the start of a fresh loop); does not touch the write head - call
+    // finishLoopLoad() once every chunk has been written.
+    void installLoopChunk(const size_t chunkStart, const std::span<const float> chunkData) noexcept
+    {
+        const auto chunkFrames = chunkData.size() / NumChannels;
+        assert(chunkStart + chunkFrames <= BufferSize);
+        std::copy_n(chunkData.begin(), chunkFrames * NumChannels,
+                    m_buffer.begin() + static_cast<std::ptrdiff_t>(chunkStart * NumChannels));
+    }
+
+    // Completes a chunked load: replicates writeToRingBuffer()'s own wrap-padding duplication
+    // for the first 6 frames, then positions the write head so feed()/recording continues
+    // seamlessly right after the loaded content.
+    void finishLoopLoad(const size_t frames) noexcept
+    {
+        const auto count = std::min(frames, BufferSize);
+        for (size_t i = 0; i < std::min<size_t>(count, 6); ++i)
+        {
+            std::copy_n(&m_buffer[i * NumChannels], NumChannels, &m_buffer[(i + BufferSize) * NumChannels]);
+        }
+        m_writeHead = count % BufferSize;
+    }
+
+    // Installs previously extracted loop audio in one call - a thin single-chunk wrapper over
+    // installLoopChunk()/finishLoopLoad(), for a caller not chunking the write across blocks.
+    void loadLoop(const std::span<const float> interleaved, const size_t frames) noexcept
+    {
+        const auto count = std::min(frames, BufferSize);
+        assert(interleaved.size() >= count * NumChannels);
+        installLoopChunk(0, interleaved.subspan(0, count * NumChannels));
+        finishLoopLoad(count);
+    }
+
     void setFlutterDepth(const float value) noexcept
     {
         m_flutter.setDepth(value);
@@ -189,6 +243,18 @@ class VariSpeedTapeDelay
   private:
     /// @brief Appends frames at the write head, taking a bulk copy when the run does not wrap.
     /// The first six frames are duplicated past the end so the interpolator can read across the seam.
+    // Copies frames frames starting at ring position start (wrapping at BufferSize) into out,
+    // as at most two contiguous runs - avoids a per-frame modulo for a potentially large copy.
+    void copyWrapped(const size_t start, const std::span<float> out, const size_t frames) const noexcept
+    {
+        const auto firstRun = std::min(frames, BufferSize - start);
+        std::copy_n(&m_buffer[start * NumChannels], firstRun * NumChannels, out.data());
+        if (firstRun < frames)
+        {
+            std::copy_n(&m_buffer[0], (frames - firstRun) * NumChannels, out.data() + firstRun * NumChannels);
+        }
+    }
+
     void writeToRingBuffer(const float* data, const size_t frames) noexcept
     {
         if (m_writeHead >= 6)

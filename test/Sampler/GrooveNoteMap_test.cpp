@@ -31,4 +31,14 @@ TEST(GrooveNoteMapTest, TagFromNameResolvesKnownNamesAndRejectsUnknownOnes)
     EXPECT_EQ(tagFromName(""), GrooveTag::None);
 }
 
+// The Metronome groove's two pieces - see MidiDrums/Metronome and
+// samples/drums/reggae/clicklow_*.wav/clickhigh_*.wav.
+TEST(GrooveNoteMapTest, ClickNotesResolveToTheirOwnTagsAndNames)
+{
+    EXPECT_EQ(tagsForGrooveNote(100)[0], GrooveTag::ClickLow);
+    EXPECT_EQ(tagsForGrooveNote(101)[0], GrooveTag::ClickHigh);
+    EXPECT_EQ(tagFromName("click_low"), GrooveTag::ClickLow);
+    EXPECT_EQ(tagFromName("click_high"), GrooveTag::ClickHigh);
+}
+
 }

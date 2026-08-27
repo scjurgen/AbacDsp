@@ -22,15 +22,12 @@ TEST(SpectraltapScriptEngine, NoCommandsPendingByDefault)
 TEST(SpectraltapScriptEngine, NotifyTimingFiresOnTimingWithBothArguments)
 {
     SpectraltapScriptEngine engine;
-    ASSERT_TRUE(engine.loadScript("LastBpm = -1\nLastDivision = -1\n"
-                                  "function OnTiming(bpm, divisionIndex)\n"
-                                  "    LastBpm = bpm\n"
-                                  "    LastDivision = divisionIndex\n"
+    ASSERT_TRUE(engine.loadScript("function OnTiming(bpm, divisionIndex)\n"
+                                  "    SetGain(0, (bpm == 96.5 and divisionIndex == 7) and 2.0 or 0.0)\n"
                                   "end\n"));
 
     engine.notifyTiming(96.5f, 7);
 
-    ASSERT_TRUE(engine.loadScript("SetGain(0, LastBpm == 96.5 and LastDivision == 7 and 2.0 or 0.0)"));
     const auto gain = engine.drainGainCommand(0);
     ASSERT_TRUE(gain.has_value());
     EXPECT_FLOAT_EQ(*gain, 2.0f);

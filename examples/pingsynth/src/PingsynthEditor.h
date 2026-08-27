@@ -377,6 +377,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         juce::StringArray names{"Theme"};
         names.add("Patches");
         names.add("Scripts");
+
         names.add("About");
         return names;
     }
@@ -395,6 +396,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         {
             return buildScriptsMenu();
         }
+
         if (menuName == "About")
         {
             return buildAboutMenu();

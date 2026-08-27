@@ -54,6 +54,8 @@ enum class GrooveTag : uint8_t
     Timbale4,
     TimbaleDamped,
     Woodblock,
+    ClickLow, // metronome piece, not a real kit instrument - see MidiDrums/Metronome
+    ClickHigh,
     Count, // sentinel: total tag count, for sizing a per-tag lookup table
 };
 
@@ -106,6 +108,8 @@ inline constexpr auto kGrooveTagNames = std::to_array<GrooveTagName>({
     {GrooveTag::Timbale4, "timbale4"},
     {GrooveTag::TimbaleDamped, "timbale_damped"},
     {GrooveTag::Woodblock, "woodblock"},
+    {GrooveTag::ClickLow, "click_low"},
+    {GrooveTag::ClickHigh, "click_high"},
 });
 // clang-format on
 
@@ -195,6 +199,8 @@ inline constexpr auto kGrooveNoteMap = std::to_array<GrooveNoteTags>({
     {80, {GrooveTag::Tom, GrooveTag::None, GrooveTag::None, GrooveTag::None}},
     {81, {GrooveTag::Tom, GrooveTag::None, GrooveTag::None, GrooveTag::None}},
     {82, {GrooveTag::Tom, GrooveTag::None, GrooveTag::None, GrooveTag::None}},
+    {100, {GrooveTag::ClickLow, GrooveTag::None, GrooveTag::None, GrooveTag::None}},
+    {101, {GrooveTag::ClickHigh, GrooveTag::None, GrooveTag::None, GrooveTag::None}},
 });
 // clang-format on
 

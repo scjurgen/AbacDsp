@@ -598,7 +598,7 @@ class GrooveKit
     // Hand-authored for this one kit; a second kit added later needs its own table.
     [[nodiscard]] static TagToTrack classifyReggaeKit(const std::unordered_map<std::string, size_t>& codeToTrack)
     {
-        static constexpr std::array<std::pair<GrooveTag, std::string_view>, 40> kClassification{{
+        static constexpr std::array<std::pair<GrooveTag, std::string_view>, 42> kClassification{{
             // Umbrella tags: every note whose specific tag has no loaded piece
             // eventually falls back to one of these (see GrooveNoteMap.h).
             {GrooveTag::Hihat, "hh"},
@@ -641,6 +641,8 @@ class GrooveKit
             {GrooveTag::TimbaleDamped, "timbdmp"},
             {GrooveTag::Timbale4, "timb4"},
             {GrooveTag::Sidestick, "sstick"},
+            {GrooveTag::ClickLow, "clicklow"},
+            {GrooveTag::ClickHigh, "clickhigh"},
         }};
         TagToTrack tagToTrack{};
         for (const auto& [tag, code] : kClassification)

@@ -8,9 +8,11 @@
 #include <memory>
 #include <mutex>
 #include <nlohmann/json.hpp>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "Audio/AudioBuffer.h"
 #include "Delays/MultiTapDelay.h"
@@ -19,7 +21,6 @@
 #include "EffectBase.h"
 #include "Filters/PoleMixingFilter.h"
 #include "Filters/Sinc/sinc_4.h"
-#include "Generators/ClickGenerator.h"
 #include "GrooveDefaultPaths.h"
 #include "GrooveLoopBuffer.h"
 #include "Helpers/ConstructArray.h"
@@ -33,6 +34,7 @@
 #include "Sampler/GrooveDrumPlayer.h"
 #include "Sampler/GrooveKit.h"
 #include "Sampler/GrooveNoteMap.h"
+#include "TapeLooperLoopStorageService.h"
 #include "TapeLooperScriptEngine.h"
 
 // ADL hooks so GrooveKit<nlohmann::json> can parse a groove's sidecar metadata;
@@ -89,6 +91,25 @@ constexpr float kDefaultReverbSend = 0.f; // inaudible until a track's send is t
 // track, since a script names instruments ("kick", "snare"), not raw track numbers.
 constexpr float kDefaultInstrumentGain = 1.f;
 constexpr float kDefaultInstrumentReverbSend = 0.f;
+
+// Click substitutes for the groove track by loading this style (see MidiDrums/Metronome/) -
+// the same requestLoadStyle() path any other groove-menu pick uses, not a separate mechanism.
+constexpr std::string_view kMetronomeGrooveStyle = "Metronome/straight_4#4";
+constexpr unsigned kMetronomeGrooveVariation = 0;
+
+// Mirrors GrooveKit::splitStyleAndVariation()'s own "<style>_v<n>.mid" convention, so the
+// constructor's initial requestLoad() has a matching style to fall back to once click mode
+// (which drives the style directly) is switched off again.
+[[nodiscard]] inline std::string styleFromGrooveFileName(const std::string_view relativeGrooveName)
+{
+    std::string_view stem = relativeGrooveName;
+    if (const auto dot = stem.rfind('.'); dot != std::string_view::npos)
+    {
+        stem = stem.substr(0, dot);
+    }
+    const auto vPos = stem.rfind("_v");
+    return std::string(vPos == std::string_view::npos ? stem : stem.substr(0, vPos));
+}
 
 // Distortion (7a): setFrequencyResponse()'s rate is exp(-2*pi*Hz/fs) - 0 Hz gives rate 1,
 // an exact per-sample identity. Driven endpoint matches SimpleHysteresis's own
@@ -161,6 +182,10 @@ constexpr size_t framesForLoop(const float bars, const float bpm) noexcept
 constexpr size_t kMaxLoopFrames = framesForLoop(kMaxBars, kMinBpm);
 constexpr size_t kModulationMargin = 4800;
 constexpr size_t kBufferSize = kMaxLoopFrames + kModulationMargin;
+
+// Loop save/load (9c): a full loop can be ~7M frames (32 bars @ 50 BPM), far too large to
+// copy in one block - extraction/installation are spread across blocks in chunks this size.
+constexpr size_t kLoopIoChunkFrames = 4096;
 }
 
 /**
@@ -181,6 +206,7 @@ class TapeLooperImpl final : public EffectBase
 {
   public:
     using TapeTrack = AbacDsp::VariSpeedTapeDelay<TapeLooperDetail::kBufferSize, 2, 1, BlockSize>;
+    using LoopLoadOutcome = typename TapeLooperLoopStorageService<TapeLooperDetail::kFreeTracks>::LoopLoadOutcome;
     using ReverbBus =
         AbacDsp::FdnTankGlide<TapeLooperDetail::kReverbMaxSizePerElement, TapeLooperDetail::kReverbOrder, BlockSize>;
     using EchoDelay = AbacDsp::MultiTapDelay<TapeLooperDetail::kMaxEchoDelaySamples, 1>;
@@ -197,7 +223,6 @@ class TapeLooperImpl final : public EffectBase
         , m_grooveSequencer(sampleRate)
         , m_loopBuffer(sampleRate)
         , m_grooveSendLoopBuffer(sampleRate)
-        , m_clickGen(sampleRate)
         , m_trackGainSmoother(
               AbacDsp::constructArray<AbacDsp::LinearSmoothingParameter<BlockSize>, TapeLooperDetail::kFreeTracks>(
                   TapeLooperDetail::kDefaultTrackGain))
@@ -231,12 +256,16 @@ class TapeLooperImpl final : public EffectBase
         applyLoopLengthIfChanged();
         m_grooveKit.requestLoad(kAbacDspDrumSamplesDir, kAbacDspMidiDrumsDir, kAbacDspDefaultGrooveName,
                                 AbacDsp::BurstConfig{sampleRate, m_bpmReq.load(std::memory_order_relaxed)});
+        m_currentGrooveStyle = TapeLooperDetail::styleFromGrooveFileName(kAbacDspDefaultGrooveName);
         m_scriptEngine.setSampleRate(sampleRate);
         for (auto& smoother : m_trackGainSmoother)
         {
             smoother.setMin(0.f);
             smoother.setMax(TapeLooperDetail::kMaxTrackGain);
         }
+        m_extractionChunkLeftScratch.resize(TapeLooperDetail::kLoopIoChunkFrames);
+        m_extractionChunkRightScratch.resize(TapeLooperDetail::kLoopIoChunkFrames);
+        m_installChunkScratch.resize(TapeLooperDetail::kLoopIoChunkFrames * 2);
     }
 
     // A reload resets the script's Lua globals, so resendUiParameters() re-syncs it to
@@ -470,6 +499,78 @@ class TapeLooperImpl final : public EffectBase
         return samplesPerBeat();
     }
 
+    // Test-support only: the applied groove-source mode, independent of whether the style it
+    // resolves to has actually finished loading - see applyGrooveSourceIfChanged().
+    [[nodiscard]] bool isUsingGrooveClickSourceForTest() const noexcept
+    {
+        return m_useClick;
+    }
+
+    // Test-support only.
+    [[nodiscard]] bool isLoopSaveInProgressForTest() const noexcept
+    {
+        return m_extractionInProgress || m_loopStorage.isSavePending();
+    }
+
+    // Test-support only.
+    [[nodiscard]] bool isLoopLoadInProgressForTest() const noexcept
+    {
+        return m_loopStorage.isLoadPending() || m_installInProgress;
+    }
+
+    void setLoopsDirectory(const std::string& dir)
+    {
+        m_loopStorage.setLoopsDirectory(dir);
+    }
+
+    [[nodiscard]] std::vector<std::string> listLoopNames() const
+    {
+        return m_loopStorage.listLoopNames();
+    }
+
+    [[nodiscard]] std::string currentLoopName() const
+    {
+        return m_loopStorage.currentLoopName();
+    }
+
+    // Message thread: sizes and dispatches the save's own scratch buffers (see
+    // TapeLooperLoopStorageService::beginSave()) immediately; the audio thread picks up
+    // m_extractionStartRequested next block to fill them via processLoopExtraction().
+    void requestSaveLoopAs(const std::string& name, const std::string& patchParamsJson)
+    {
+        const auto bars = std::clamp(m_barsReq.load(std::memory_order_relaxed), TapeLooperDetail::kMinBars,
+                                     TapeLooperDetail::kMaxBars);
+        const auto bpm = std::max(m_bpmReq.load(std::memory_order_relaxed), TapeLooperDetail::kMinBpm);
+        const auto loopFrames = TapeLooperDetail::framesForLoop(bars, bpm);
+        m_loopStorage.beginSave(name, patchParamsJson, loopFrames, bars, bpm, sampleRate());
+        m_extractionTotalFramesReq.store(loopFrames, std::memory_order_relaxed);
+        m_extractionStartRequested.store(true, std::memory_order_release);
+    }
+
+    void requestLoadLoop(const std::string& name)
+    {
+        m_loopStorage.requestLoad(name);
+    }
+
+    bool deleteLoopNamed(const std::string& name)
+    {
+        return m_loopStorage.deleteLoopNamed(name);
+    }
+
+    bool renameLoopNamed(const std::string& oldName, const std::string& newName)
+    {
+        return m_loopStorage.renameLoopNamed(oldName, newName);
+    }
+
+    [[nodiscard]] LoopLoadOutcome consumeLoopLoadOutcome()
+    {
+        return m_loopStorage.consumeLoadOutcome();
+    }
+
+    // No-op: LoopLoadOutcome::hasConflict is always false (tapelooper doesn't embed a
+    // second, WAV-side BPM to conflict with) - kept only to satisfy the generic menu's interface.
+    void resolveLoopLoadBpm(float) noexcept {}
+
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
         m_grooveKit.pollAndInstall();
@@ -479,6 +580,11 @@ class TapeLooperImpl final : public EffectBase
         notifyUiParametersIfChanged();
         applyScriptCommands();
         applyParameters();
+        checkLoopSaveStart();
+        processLoopExtraction();
+        m_loopStorage.checkSaveCompletion();
+        checkLoopLoadCompletion();
+        processLoopInstall();
 
         for (size_t track = 0; track < m_tapeTrack.size(); ++track)
         {
@@ -501,7 +607,12 @@ class TapeLooperImpl final : public EffectBase
         }
 
         std::array<float, 2 * BlockSize> mix{};
-        processTapeTracks(gainedIn, mix);
+        // Tracks stay silent for the duration of a chunked load - see processLoopInstall()'s
+        // own comment for why overwriting their buffers mid-playback isn't safe otherwise.
+        if (!m_installInProgress)
+        {
+            processTapeTracks(gainedIn, mix);
+        }
         renderGrooveTrack(mix);
 
         // Live input always reaches the output, so a performer can hear
@@ -571,8 +682,7 @@ class TapeLooperImpl final : public EffectBase
             m_grooveSendLoopBuffer.reset();
         }
         m_groovePlaying = groovePlayReq;
-        m_useClick = m_grooveSourceReq.load(std::memory_order_relaxed);
-
+        applyGrooveSourceIfChanged();
         applyGrooveVariationIfChanged();
     }
 
@@ -867,6 +977,36 @@ class TapeLooperImpl final : public EffectBase
     }
 #pragma GCC diagnostic pop
 
+    // Click is just the Metronome style loaded through the same one conductor
+    // (GrooveDrumPlayer) every other groove uses - not a second playback mechanism.
+    void applyGrooveSourceIfChanged()
+    {
+        const bool useClick = m_grooveSourceReq.load(std::memory_order_relaxed);
+        if (useClick == m_useClick)
+        {
+            return;
+        }
+        m_useClick = useClick;
+        if (m_useClick)
+        {
+            m_grooveKit.requestLoadStyle(
+                kAbacDspDrumSamplesDir, kAbacDspMidiDrumsDir, std::string(TapeLooperDetail::kMetronomeGrooveStyle),
+                TapeLooperDetail::kMetronomeGrooveVariation, AbacDsp::BurstConfig{sampleRate(), m_bpm});
+            return;
+        }
+        std::string style;
+        {
+            std::lock_guard lock(m_grooveStyleMutex);
+            style = m_currentGrooveStyle;
+        }
+        if (!style.empty())
+        {
+            m_grooveKit.requestLoadStyle(kAbacDspDrumSamplesDir, kAbacDspMidiDrumsDir, style,
+                                         static_cast<unsigned>(m_appliedGrooveVariation),
+                                         AbacDsp::BurstConfig{sampleRate(), m_bpm});
+        }
+    }
+
     void applyGrooveVariationIfChanged()
     {
         const int grooveVariation = static_cast<int>(m_grooveVariationReq.load(std::memory_order_relaxed));
@@ -1005,6 +1145,114 @@ class TapeLooperImpl final : public EffectBase
         return {curL, curR};
     }
 
+    // Audio thread: starts a chunked extraction once the message thread's request lands -
+    // writeHead() must be read here, not from requestSaveLoopAs(), since the tape's ring
+    // buffer is only safe to touch from the audio thread.
+    void checkLoopSaveStart() noexcept
+    {
+        if (!m_extractionStartRequested.exchange(false, std::memory_order_acquire) || m_extractionInProgress ||
+            m_installInProgress)
+        {
+            return;
+        }
+        for (size_t t = 0; t < TapeLooperDetail::kFreeTracks; ++t)
+        {
+            m_extractionBaseline[t] = m_tapeTrack[t].writeHead();
+        }
+        m_extractionTotalFrames = m_extractionTotalFramesReq.load(std::memory_order_relaxed);
+        m_extractionCursor = 0;
+        m_extractionInProgress = true;
+    }
+
+    // Audio thread: copies one bounded chunk per track per block - a full loop can be ~7M
+    // frames, far too large to copy in one block - until the whole loop has been extracted,
+    // then hands the assembled buffers to the background save worker.
+    void processLoopExtraction() noexcept
+    {
+        if (!m_extractionInProgress)
+        {
+            return;
+        }
+        const auto chunkFrames =
+            std::min(TapeLooperDetail::kLoopIoChunkFrames, m_extractionTotalFrames - m_extractionCursor);
+        for (size_t t = 0; t < TapeLooperDetail::kFreeTracks; ++t)
+        {
+            const auto& raw = m_tapeTrack[t].getBuffer();
+            for (size_t i = 0; i < chunkFrames; ++i)
+            {
+                const auto srcFrame = (m_extractionBaseline[t] + TapeLooperDetail::kBufferSize -
+                                       m_extractionTotalFrames + m_extractionCursor + i) %
+                                      TapeLooperDetail::kBufferSize;
+                m_extractionChunkLeftScratch[i] = raw[srcFrame * 2];
+                m_extractionChunkRightScratch[i] = raw[srcFrame * 2 + 1];
+            }
+            m_loopStorage.writeSaveChunk(t, m_extractionCursor,
+                                         std::span(m_extractionChunkLeftScratch).first(chunkFrames),
+                                         std::span(m_extractionChunkRightScratch).first(chunkFrames));
+        }
+        m_extractionCursor += chunkFrames;
+        if (m_extractionCursor >= m_extractionTotalFrames)
+        {
+            m_loopStorage.finishSave();
+            m_extractionInProgress = false;
+        }
+    }
+
+    // Audio thread: picks up a completed background load and starts its chunked install.
+    void checkLoopLoadCompletion() noexcept
+    {
+        if (m_installInProgress || m_extractionInProgress)
+        {
+            return;
+        }
+        auto result = m_loopStorage.pollLoadCompletion();
+        if (!result)
+        {
+            return;
+        }
+        m_installResult = std::move(*result);
+        m_installTotalFrames = m_installResult.trackLeft[0].size();
+        m_installCursor = 0;
+        m_installInProgress = m_installTotalFrames > 0;
+    }
+
+    // Audio thread: writes one bounded chunk per track per block, then repositions every
+    // track's read head to the newly loaded length. Tracks stay silent meanwhile (see
+    // processBlock()) since the old loop's read/write heads could land inside this range.
+    void processLoopInstall() noexcept
+    {
+        if (!m_installInProgress)
+        {
+            return;
+        }
+        const auto chunkFrames = std::min(TapeLooperDetail::kLoopIoChunkFrames, m_installTotalFrames - m_installCursor);
+        for (size_t t = 0; t < TapeLooperDetail::kFreeTracks; ++t)
+        {
+            for (size_t i = 0; i < chunkFrames; ++i)
+            {
+                m_installChunkScratch[i * 2] = m_installResult.trackLeft[t][m_installCursor + i];
+                m_installChunkScratch[i * 2 + 1] = m_installResult.trackRight[t][m_installCursor + i];
+            }
+            m_tapeTrack[t].installLoopChunk(m_installCursor, std::span(m_installChunkScratch).first(chunkFrames * 2));
+        }
+        m_installCursor += chunkFrames;
+        if (m_installCursor >= m_installTotalFrames)
+        {
+            for (auto& tape : m_tapeTrack)
+            {
+                tape.finishLoopLoad(m_installTotalFrames);
+                // setReadHead() anchors to the write position readBlock() last reported,
+                // stale here since readBlock() was skipped while installing - prime it first.
+                std::array<float, 2 * BlockSize> primer{};
+                tape.readBlock(0, primer);
+                tape.setReadHead(0, static_cast<float>(m_installTotalFrames), true);
+            }
+            m_barsReq.store(m_installResult.bars, std::memory_order_relaxed);
+            m_bpmReq.store(m_installResult.bpm, std::memory_order_relaxed);
+            m_installInProgress = false;
+        }
+    }
+
     // Reads each track's current tape output before writing this block's
     // input: recording adds live input onto that read-back (overdub, not
     // replace); not recording writes it back unchanged, sustaining the loop.
@@ -1060,32 +1308,12 @@ class TapeLooperImpl final : public EffectBase
         return static_cast<size_t>(sampleRate() * 60.f / std::max(1.f, m_bpm * m_tapeSpeed));
     }
 
-    // Advances the click's own beat clock by BlockSize samples, writing a tempo-locked
-    // click (accented on beat 1 of the bar) into grooveIn instead of the MIDI groove.
-    void renderClick(std::array<float, 2 * BlockSize>& grooveIn) noexcept
-    {
-        const auto spb = std::max<size_t>(samplesPerBeat(), 1);
-        for (size_t i = 0; i < BlockSize; ++i)
-        {
-            if (m_clickPhase == 0)
-            {
-                const bool downbeat = m_clickBeatIndex % static_cast<size_t>(TapeLooperDetail::kBeatsPerBar) == 0;
-                m_clickGen.trigger(downbeat ? AbacDsp::ClickAccent::Downbeat : AbacDsp::ClickAccent::Beat);
-                m_clickBeatIndex = (m_clickBeatIndex + 1) % static_cast<size_t>(TapeLooperDetail::kBeatsPerBar);
-            }
-            const auto sample = m_clickGen.step0();
-            grooveIn[i * 2] = sample;
-            grooveIn[i * 2 + 1] = sample;
-            m_clickPhase = (m_clickPhase + 1) % spb;
-        }
-    }
-
     // The per-instrument reverb send is generated alongside the main groove signal, weighted
     // by m_instrumentSendByTrack, and carried through its own loop buffer + varispeed tape so
     // it stays in sync with the main signal's own tape speed/wow/flutter.
     void renderGrooveTrack(std::array<float, 2 * BlockSize>& mix) noexcept
     {
-        if (m_groovePlaying && !m_useClick)
+        if (m_groovePlaying)
         {
             const auto spb = samplesPerBeat();
             while (m_loopBuffer.framesAhead() < spb)
@@ -1117,21 +1345,14 @@ class TapeLooperImpl final : public EffectBase
         std::array<float, 2 * BlockSize> sendIn{};
         if (m_groovePlaying)
         {
-            if (m_useClick)
+            for (size_t i = 0; i < BlockSize; ++i)
             {
-                renderClick(grooveIn);
-            }
-            else
-            {
-                for (size_t i = 0; i < BlockSize; ++i)
-                {
-                    const auto frame = m_loopBuffer.readFrame();
-                    grooveIn[i * 2] = frame[0];
-                    grooveIn[i * 2 + 1] = frame[1];
-                    const auto sendFrame = m_grooveSendLoopBuffer.readFrame();
-                    sendIn[i * 2] = sendFrame[0];
-                    sendIn[i * 2 + 1] = sendFrame[1];
-                }
+                const auto frame = m_loopBuffer.readFrame();
+                grooveIn[i * 2] = frame[0];
+                grooveIn[i * 2 + 1] = frame[1];
+                const auto sendFrame = m_grooveSendLoopBuffer.readFrame();
+                sendIn[i * 2] = sendFrame[0];
+                sendIn[i * 2 + 1] = sendFrame[1];
             }
         }
         m_grooveTape.feed(grooveIn);
@@ -1171,7 +1392,6 @@ class TapeLooperImpl final : public EffectBase
     GrooveLoopBuffer m_loopBuffer;
     GrooveLoopBuffer m_grooveSendLoopBuffer;
     const AbacDsp::GrooveProgram* m_lastGrooveProgram{nullptr};
-    AbacDsp::ClickGenerator m_clickGen;
     std::array<AbacDsp::LinearSmoothingParameter<BlockSize>, TapeLooperDetail::kFreeTracks> m_trackGainSmoother;
     AbacDsp::StereoTrackBank<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks> m_filter;
     std::array<ReverbBus, TapeLooperDetail::kFreeTracks> m_reverb;
@@ -1277,9 +1497,7 @@ class TapeLooperImpl final : public EffectBase
                                                                    TapeLooperDetail::kDefaultFlutterRate,
                                                                    TapeLooperDetail::kDefaultFlutterRate};
     bool m_groovePlaying{false};
-    bool m_useClick{false};
-    size_t m_clickPhase{0};
-    size_t m_clickBeatIndex{0};
+    bool m_useClick{false}; // applied state; edge-triggers applyGrooveSourceIfChanged()'s style swap
     std::array<bool, TapeLooperDetail::kFreeTracks> m_lastNotifiedRecording{};
     std::array<float, TapeLooperScriptEngine::kMaxLuaParams> m_luaParamValues{};
     std::array<float, TapeLooperScriptEngine::kMaxLuaParams> m_lastNotifiedLuaParamValues{-1.f, -1.f, -1.f, -1.f,
@@ -1308,4 +1526,20 @@ class TapeLooperImpl final : public EffectBase
     std::string m_lastGrooveName; // audio thread only
     mutable std::mutex m_infoTextMutex;
     mutable std::string m_pendingInfoText;
+
+    TapeLooperLoopStorageService<TapeLooperDetail::kFreeTracks> m_loopStorage;
+    std::atomic<bool> m_extractionStartRequested{false};
+    std::atomic<size_t> m_extractionTotalFramesReq{0};
+    bool m_extractionInProgress{false};
+    std::array<size_t, TapeLooperDetail::kFreeTracks> m_extractionBaseline{};
+    size_t m_extractionTotalFrames{0};
+    size_t m_extractionCursor{0};
+    std::vector<float> m_extractionChunkLeftScratch;
+    std::vector<float> m_extractionChunkRightScratch;
+
+    bool m_installInProgress{false};
+    size_t m_installCursor{0};
+    size_t m_installTotalFrames{0};
+    TapeLooperLoopStorageService<TapeLooperDetail::kFreeTracks>::LoopLoadResult m_installResult;
+    std::vector<float> m_installChunkScratch;
 };

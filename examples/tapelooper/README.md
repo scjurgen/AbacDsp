@@ -32,6 +32,11 @@ from a script.
 **Settings > Scripts** manages a named pool of saved scripts, separate from the script embedded
 in the current patch. **Settings > Patches** saves/loads full patches, including whichever
 script is currently applied. **Settings > Groove** picks the loaded MIDI groove style/variation.
+**Settings > Loops** saves/loads tracks A/B/C's own recorded audio (not the groove track, which
+plays a loaded MIDI groove rather than holding recorded audio of its own) by name, alongside the
+current patch parameters and the loop's own bars/BPM - Save writes over the currently loaded
+loop, Save As... prompts for a name, and Load replaces tracks A/B/C's audio and restores that
+loop's own bars/BPM. Large loops save and load in the background without blocking playback.
 
 A script can also pull in a shared library script with `import "name"` (see `../../LUA.md`) -
 useful for boilerplate reused across several patches. Built-in libraries live in this repo's
@@ -195,10 +200,11 @@ onto track C and play it back to hear any of them.
 SetGrooveSource(mode)  -- "groove" (the loaded MIDI groove, the default) or "click"
 ```
 
-`"click"` substitutes a tempo-locked click (accented on beat 1 of the bar) for the groove
-track's input, still passing through the same varispeed tape - so it wow/flutters and
-speed-changes right along with everything else. Only takes effect while the Groove switch is
-playing, same as the MIDI groove path it replaces.
+There is one conductor for the groove track: `GrooveDrumPlayer`, always. `"click"` is not a
+separate playback mechanism - it loads a built-in "Metronome" MIDI groove (plain 4/4, ordinary
+sample pieces `click_low`/`click_high`) through the exact same style-loading path a Groove-menu
+pick uses, so it inherits sample-accurate loop-begin sync for free. `"groove"` switches back to
+whichever style/variation was loaded before switching to click.
 
 ### Per-instrument groove control
 
@@ -218,7 +224,8 @@ hihat, hihat_closed, hihat_open, hihat_open_tip, hihat_closed_pedal, hihat_close
 hihat_open_pedal, hihat_open1, hihat_open2, hihat_open3, hihat_step, hihat_half_open,
 hihat_stopped, hihat_soft_step, hihat_ghost,
 cymbal, crash, crash_stopped, crash_long, ride, ride_bell, china,
-timbale, timbale1, timbale2, timbale3, timbale4, timbale_damped, woodblock
+timbale, timbale1, timbale2, timbale3, timbale4, timbale_damped, woodblock,
+click_low, click_high
 ```
 
 Which of these actually resolve to audio depends on the currently loaded kit - an unknown name,

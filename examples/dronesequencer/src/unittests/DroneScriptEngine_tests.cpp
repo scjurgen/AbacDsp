@@ -124,7 +124,13 @@ TEST(DroneScriptEngine, RuntimeErrorInsideNextNotesIsCaughtPerCallAndClearsOnRec
     EXPECT_TRUE(engine.hasError());
     EXPECT_FALSE(engine.lastError().empty());
 
-    ASSERT_TRUE(engine.loadScript("should_fail = false"));
+    // A reload is a clean slate - nothing survives unless redefined - so recovery needs its
+    // own NextNotes(), not just flipping the old script's should_fail flag.
+    ASSERT_TRUE(engine.loadScript(R"(
+        function NextNotes()
+            return { { note = 61 } }
+        end
+    )"));
     const auto recovered = engine.nextNotes();
     ASSERT_EQ(recovered.count, 1u);
     EXPECT_FLOAT_EQ(recovered.notes[0].noteHeight, 61.f);

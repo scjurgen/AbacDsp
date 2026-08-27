@@ -278,6 +278,28 @@ TEST(GrooveKitTest, TrackForTagResolvesLoadedInstrumentsAndRejectsMissingOnes)
     EXPECT_FALSE(kit.trackForTag(GrooveTag::Snare).has_value()) << "no snare piece was loaded";
 }
 
+// The Metronome groove's two pieces (see MidiDrums/Metronome/) go through the same
+// classifyReggaeKit() code-to-tag table as any real kit piece.
+TEST(GrooveKitTest, ClicklowAndClickhighCodesResolveToTheirOwnTags)
+{
+    const TempGrooveKitDir dir;
+    writeGrooveTake(dir, "clicklow", 1);
+    writeGrooveTake(dir, "clickhigh", 1);
+    writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 100}, {480, 101}});
+
+    GrooveKit kit;
+    kit.requestLoad(dir.dir(), dir.dir(), "groove.mid");
+    ASSERT_TRUE(waitUntilGrooveKitReady(kit));
+
+    const auto lowTrack = kit.trackForTag(GrooveTag::ClickLow);
+    const auto highTrack = kit.trackForTag(GrooveTag::ClickHigh);
+    ASSERT_TRUE(lowTrack.has_value());
+    ASSERT_TRUE(highTrack.has_value());
+    const auto trackNames = kit.installedTrackNames();
+    EXPECT_EQ(trackNames[*lowTrack], "clicklow");
+    EXPECT_EQ(trackNames[*highTrack], "clickhigh");
+}
+
 TEST(GrooveKitTest, MissingSampleDirectoryStillBecomesReadyWithEmptyProgram)
 {
     const TempGrooveKitDir dir; // never populated with any WAV or MIDI file

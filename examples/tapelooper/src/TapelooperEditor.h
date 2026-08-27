@@ -221,6 +221,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()),
                                                   valueTreeState);
             }
+            handleLoopLoadOutcome();
             processorRef.consumeLastLearnedCc();
         }
     }
@@ -442,6 +443,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         juce::StringArray names{"Theme"};
         names.add("Patches");
+        names.add("Loops");
         names.add("Scripts");
         names.add("Groove");
 
@@ -458,6 +460,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         if (menuName == "Patches")
         {
             return buildPatchesMenu();
+        }
+        if (menuName == "Loops")
+        {
+            return buildLoopsMenu();
         }
         if (menuName == "Scripts")
         {
@@ -558,6 +564,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             return;
         }
         handlePatchMenuSelection(menuItemID);
+        handleLoopMenuSelection(menuItemID);
         handleScriptMenuSelection(menuItemID);
         handleGrooveMenuSelection(menuItemID);
     }
@@ -856,6 +863,196 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                           });
     }
 
+    // Reuses buildGroupedMenu() from the PRESETBROWSER section above; a blueprint
+    // with loops but no patches would need that helper pulled out of its guard.
+    juce::PopupMenu buildLoopsMenu()
+    {
+        m_loopMenuNames = processorRef.listLoopNames();
+        const auto currentName = processorRef.getCurrentLoopName();
+
+        auto loadMenu = buildGroupedMenu(m_loopMenuNames, kLoopLoadIdBase, currentName);
+        auto deleteMenu = buildGroupedMenu(m_loopMenuNames, kLoopDeleteIdBase);
+        auto renameMenu = buildGroupedMenu(m_loopMenuNames, kLoopRenameIdBase);
+
+        juce::PopupMenu loops;
+        loops.addSubMenu("Load", loadMenu, !m_loopMenuNames.empty());
+        loops.addItem(kLoopSaveId, "Save", !currentName.isEmpty());
+        loops.addItem(kLoopSaveAsId, "Save As...");
+        loops.addSubMenu("Delete", deleteMenu, !m_loopMenuNames.empty());
+        loops.addSubMenu("Rename", renameMenu, !m_loopMenuNames.empty());
+        return loops;
+    }
+
+    void handleLoopMenuSelection(int menuItemID)
+    {
+        if (menuItemID == kLoopSaveId)
+        {
+            const auto currentName = processorRef.getCurrentLoopName();
+            if (!currentName.isEmpty())
+            {
+                processorRef.saveLoopAs(currentName);
+                m_statusBar.showMessage("Saving '" + currentName + "'...");
+            }
+        }
+        else if (menuItemID == kLoopSaveAsId)
+        {
+            promptSaveLoopAs();
+        }
+        else if (menuItemID >= kLoopLoadIdBase &&
+                 menuItemID < kLoopLoadIdBase + static_cast<int>(m_loopMenuNames.size()))
+        {
+            const auto& name = m_loopMenuNames[static_cast<size_t>(menuItemID - kLoopLoadIdBase)];
+            processorRef.requestLoadLoop(name);
+            m_statusBar.showMessage("Loading '" + name + "'...");
+        }
+        else if (menuItemID >= kLoopDeleteIdBase &&
+                 menuItemID < kLoopDeleteIdBase + static_cast<int>(m_loopMenuNames.size()))
+        {
+            confirmAndDeleteLoop(m_loopMenuNames[static_cast<size_t>(menuItemID - kLoopDeleteIdBase)]);
+        }
+        else if (menuItemID >= kLoopRenameIdBase &&
+                 menuItemID < kLoopRenameIdBase + static_cast<int>(m_loopMenuNames.size()))
+        {
+            promptRenameLoop(m_loopMenuNames[static_cast<size_t>(menuItemID - kLoopRenameIdBase)]);
+        }
+    }
+
+    void promptSaveLoopAs()
+    {
+        m_loopNameDialog =
+            std::make_unique<juce::AlertWindow>("Save Loop", juce::String(), juce::MessageBoxIconType::NoIcon);
+        addFolderComboBox(*m_loopNameDialog, m_loopMenuNames, "");
+        m_loopNameDialog->addTextEditor("name", "", "Name:");
+        m_loopNameDialog->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
+        m_loopNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+        m_loopNameDialog->enterModalState(true,
+                                          juce::ModalCallbackFunction::create(
+                                              [this](int result)
+                                              {
+                                                  const auto folderText = readFolderComboBox(*m_loopNameDialog);
+                                                  const auto nameText =
+                                                      m_loopNameDialog->getTextEditorContents("name").trim();
+                                                  m_loopNameDialog.reset();
+                                                  if (result != 1 || nameText.isEmpty())
+                                                  {
+                                                      return;
+                                                  }
+                                                  const auto fullName = combineFolderAndName(folderText, nameText);
+                                                  processorRef.saveLoopAs(fullName);
+                                                  m_statusBar.showMessage("Saving '" + fullName + "'...");
+                                              }),
+                                          false);
+        focusNameEditor(*m_loopNameDialog);
+    }
+
+    void promptRenameLoop(const juce::String& oldName)
+    {
+        const auto [folder, name] = splitFolderAndName(oldName);
+        m_loopNameDialog = std::make_unique<juce::AlertWindow>("Rename Loop \"" + oldName + "\"", juce::String(),
+                                                               juce::MessageBoxIconType::NoIcon);
+        addFolderComboBox(*m_loopNameDialog, m_loopMenuNames, folder);
+        m_loopNameDialog->addTextEditor("name", name, "Name:");
+        m_loopNameDialog->addButton("Rename", 1, juce::KeyPress(juce::KeyPress::returnKey));
+        m_loopNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+        m_loopNameDialog->enterModalState(true,
+                                          juce::ModalCallbackFunction::create(
+                                              [this, oldName](int result)
+                                              {
+                                                  const auto folderText = readFolderComboBox(*m_loopNameDialog);
+                                                  const auto nameText =
+                                                      m_loopNameDialog->getTextEditorContents("name").trim();
+                                                  m_loopNameDialog.reset();
+                                                  if (result != 1 || nameText.isEmpty())
+                                                  {
+                                                      return;
+                                                  }
+                                                  const auto newName = combineFolderAndName(folderText, nameText);
+                                                  if (newName == oldName)
+                                                  {
+                                                      return;
+                                                  }
+                                                  if (processorRef.renameLoop(oldName, newName))
+                                                  {
+                                                      m_statusBar.showMessage("Renamed to '" + newName + "'");
+                                                  }
+                                                  else
+                                                  {
+                                                      m_statusBar.showMessage("Rename failed");
+                                                  }
+                                              }),
+                                          false);
+        focusNameEditor(*m_loopNameDialog);
+    }
+
+    void confirmAndDeleteLoop(const juce::String& name)
+    {
+        juce::NativeMessageBox::showAsync(juce::MessageBoxOptions()
+                                              .withIconType(juce::MessageBoxIconType::WarningIcon)
+                                              .withTitle("Delete Loop")
+                                              .withMessage("Delete loop \"" + name + "\"?")
+                                              .withButton("Yes")
+                                              .withButton("No"),
+                                          [this, name](int result)
+                                          {
+                                              if (result != 0)
+                                              {
+                                                  return;
+                                              }
+                                              if (processorRef.deleteLoopNamed(name))
+                                              {
+                                                  m_statusBar.showMessage("Deleted '" + name + "'");
+                                              }
+                                              else
+                                              {
+                                                  m_statusBar.showMessage("Delete failed");
+                                              }
+                                          });
+    }
+
+    // Polled every timer tick (see extra_timer_callbacks); surfaces a BPM
+    // conflict prompt or a status message once a background load finishes.
+    void handleLoopLoadOutcome()
+    {
+        const auto outcome = processorRef.consumeLoopLoadOutcome();
+        if (!outcome.attempted)
+        {
+            return;
+        }
+        if (!outcome.success)
+        {
+            m_statusBar.showMessage("Load failed");
+        }
+        else if (!outcome.hasConflict)
+        {
+            if (!outcome.patchParamsJson.empty())
+            {
+                processorRef.applyLoadedLoopPatchParams(juce::String(outcome.patchParamsJson));
+            }
+            m_statusBar.showMessage("Loaded");
+        }
+        else
+        {
+            const auto wavBpm = outcome.wavBpm;
+            const auto jsonBpm = outcome.jsonBpm;
+            const auto patchParamsJson = juce::String(outcome.patchParamsJson);
+            juce::NativeMessageBox::showAsync(
+                juce::MessageBoxOptions()
+                    .withIconType(juce::MessageBoxIconType::QuestionIcon)
+                    .withTitle("Tempo Mismatch")
+                    .withMessage("The saved tempo doesn't match the file's embedded tempo. Which one should be used?")
+                    .withButton(juce::String::fromUTF8("File (") + juce::String(wavBpm, 1) + " BPM)")
+                    .withButton(juce::String::fromUTF8("Saved (") + juce::String(jsonBpm, 1) + " BPM)"),
+                [this, wavBpm, jsonBpm, patchParamsJson](int result)
+                {
+                    processorRef.resolveLoopLoadBpm(result == 0 ? wavBpm : jsonBpm);
+                    if (patchParamsJson.isNotEmpty())
+                    {
+                        processorRef.applyLoadedLoopPatchParams(patchParamsJson);
+                    }
+                    m_statusBar.showMessage("Loaded");
+                });
+        }
+    }
 
     // Reuses buildGroupedMenu() from the PRESETBROWSER section above, same as
     // LOOPBROWSER does - a blueprint with a script port but no patches would need that
@@ -1260,6 +1457,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AlertWindow> m_patchNameDialog;
     std::vector<juce::String> m_patchMenuNames;
 
+    static constexpr int kLoopSaveId = 4999;
+    static constexpr int kLoopSaveAsId = 5000;
+    static constexpr int kLoopLoadIdBase = 6000;
+    static constexpr int kLoopDeleteIdBase = 7000;
+    static constexpr int kLoopRenameIdBase = 8000;
+    std::unique_ptr<juce::AlertWindow> m_loopNameDialog;
+    std::vector<juce::String> m_loopMenuNames;
 
     static constexpr int kScriptEditId = 9004;
     static constexpr int kScriptSaveAsId = 10000;

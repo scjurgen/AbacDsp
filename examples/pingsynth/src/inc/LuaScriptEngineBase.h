@@ -16,6 +16,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <unordered_set>
 #include <vector>
 
 #include "Analysis/YinPitchDetector.h"
@@ -372,6 +373,10 @@ class LuaScriptEngineBase
 
     void bindFunctions();
     void bindApiFunctions();
+    // Global names the outgoing script defined (diffed in loadScript()); nil'd out before
+    // the next script runs, so one that doesn't redefine a handler doesn't inherit a stale one.
+    [[nodiscard]] std::unordered_set<std::string> collectStringGlobalKeys() const;
+    std::unordered_set<std::string> m_previousScriptGlobalKeys;
     void bindMusicMathLibrary();
     void bindTimerApi();
     void bindTransportApi();
@@ -740,6 +745,20 @@ void LuaScriptEngineBase<Derived>::bindFunctions()
 }
 
 template <typename Derived>
+std::unordered_set<std::string> LuaScriptEngineBase<Derived>::collectStringGlobalKeys() const
+{
+    std::unordered_set<std::string> keys;
+    for (const auto& entry : m_lua.globals())
+    {
+        if (entry.first.template is<std::string>())
+        {
+            keys.insert(entry.first.template as<std::string>());
+        }
+    }
+    return keys;
+}
+
+template <typename Derived>
 bool LuaScriptEngineBase<Derived>::loadScript(const std::string_view source)
 {
     m_pendingUiParamSlots = UiParamSlots{};
@@ -748,12 +767,22 @@ bool LuaScriptEngineBase<Derived>::loadScript(const std::string_view source)
     // keep firing into a script that no longer exists.
     m_timerSlots = std::array<LuaTimerSlot, kMaxLuaTimers>{};
 
+    // m_lua is shared across every loadScript() call - a global the outgoing script defined
+    // would otherwise survive into a script that never redefines it, e.g. a handler firing
+    // from code that's no longer active.
+    for (const auto& key : m_previousScriptGlobalKeys)
+    {
+        m_lua.globals()[key] = sol::lua_nil;
+    }
+    m_previousScriptGlobalKeys.clear();
+
     const std::optional<std::string> resolvedSource = resolveImports(source);
     if (!resolvedSource)
     {
         return false;
     }
 
+    const auto globalsBefore = collectStringGlobalKeys();
     try
     {
         sol::protected_function_result result = m_lua.safe_script(*resolvedSource, sol::script_pass_on_error);
@@ -768,6 +797,13 @@ bool LuaScriptEngineBase<Derived>::loadScript(const std::string_view source)
     {
         m_lastError = e.what();
         return false;
+    }
+    for (const auto& key : collectStringGlobalKeys())
+    {
+        if (!globalsBefore.contains(key))
+        {
+            m_previousScriptGlobalKeys.insert(key);
+        }
     }
     m_lastError.clear();
     bindFunctions();

@@ -89,6 +89,8 @@ using VoiceForGrooveNoteFn = GrooveVoice (*)(uint8_t note);
                 return GrooveVoice::Tom;
             case GrooveTag::None:
             case GrooveTag::Woodblock:
+            case GrooveTag::ClickLow:
+            case GrooveTag::ClickHigh:
             case GrooveTag::Count:
             default:
                 break;
