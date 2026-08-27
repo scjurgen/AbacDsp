@@ -94,6 +94,7 @@ class GrooveMidiFile
         m_tempoEvents.clear();
         m_timeSignatures.clear();
         m_ticksPerQuarterNote = kDefaultTicksPerQuarterNote;
+        m_endOfTrackTick = 0;
     }
 
     [[nodiscard]] const std::vector<GrooveNoteEvent>& noteEvents() const noexcept
@@ -114,6 +115,14 @@ class GrooveMidiFile
     [[nodiscard]] uint16_t ticksPerQuarterNote() const noexcept
     {
         return m_ticksPerQuarterNote;
+    }
+
+    // The file's own declared length (End of Track meta event tick) - the
+    // authoritative loop length, unlike inferring one from the last note.
+    // Zero if the file had no EOT event (malformed, or nothing parsed yet).
+    [[nodiscard]] uint32_t endOfTrackTick() const noexcept
+    {
+        return m_endOfTrackTick;
     }
 
   private:
@@ -234,6 +243,12 @@ class GrooveMidiFile
         {
             m_timeSignatures.push_back({tick, bytes[pos], bytes[pos + 1]});
         }
+        else if (isMeta && metaType == 0x2F)
+        {
+            // A format 1 file's tracks can end at different ticks; the file's
+            // own length is the latest of them, not any single track's own end.
+            m_endOfTrackTick = std::max(m_endOfTrackTick, tick);
+        }
         pos += len;
         return true;
     }
@@ -276,6 +291,7 @@ class GrooveMidiFile
     std::vector<GrooveTempoEvent> m_tempoEvents;
     std::vector<MidiTimeSignatureEvent> m_timeSignatures;
     uint16_t m_ticksPerQuarterNote{kDefaultTicksPerQuarterNote};
+    uint32_t m_endOfTrackTick{0};
 };
 
 }

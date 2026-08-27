@@ -260,8 +260,9 @@ class GrooveDrumPlayer
         if (newTickPos >= loopLengthTicks)
         {
             newTickPos -= loopLengthTicks;
-            std::cout << std::format("{:8.3f}s  loop repeat\n",
-                                     static_cast<double>(m_sampleCounter) / static_cast<double>(m_sampleRate));
+            std::cout << std::format("{:10} us  loop repeat (tickPos {:.3f} -> {:.3f}, loopLengthTicks {})\n",
+                                     debugElapsedMicroseconds(), m_tickPos + ticksPerSample, newTickPos,
+                                     loopLengthTicks);
             m_nextTriggerIndex = 0;
             while (m_nextTriggerIndex < triggers.size() &&
                    static_cast<double>(triggers[m_nextTriggerIndex].tick) < newTickPos)

@@ -140,9 +140,11 @@ void appendGrooveU32BE(std::vector<uint8_t>& buf, const uint32_t value)
 }
 
 // One-track, format-0 SMF with a note-on (velocity 100) for every {tick, note}
-// pair given, in ascending tick order.
+// pair given, in ascending tick order. EOT sits at endOfTrackTick if given
+// (must be >= the last note's tick), else immediately after the last note.
 [[nodiscard]] std::vector<uint8_t> buildGrooveMidiBytes(const std::vector<std::pair<uint32_t, uint8_t>>& notes,
-                                                        const uint16_t division = 480)
+                                                        const uint16_t division = 480,
+                                                        const uint32_t endOfTrackTick = 0)
 {
     std::vector<uint8_t> body;
     uint32_t lastTick = 0;
@@ -154,7 +156,7 @@ void appendGrooveU32BE(std::vector<uint8_t>& buf, const uint32_t value)
         body.push_back(100);
         lastTick = tick;
     }
-    appendGrooveVlq(body, 0);
+    appendGrooveVlq(body, endOfTrackTick > lastTick ? endOfTrackTick - lastTick : 0);
     body.push_back(0xFF);
     body.push_back(0x2F);
     body.push_back(0x00);
@@ -174,9 +176,9 @@ void appendGrooveU32BE(std::vector<uint8_t>& buf, const uint32_t value)
 }
 
 void writeGrooveMidiFile(const std::string& path, const std::vector<std::pair<uint32_t, uint8_t>>& notes,
-                         const uint16_t division = 480)
+                         const uint16_t division = 480, const uint32_t endOfTrackTick = 0)
 {
-    const auto bytes = buildGrooveMidiBytes(notes, division);
+    const auto bytes = buildGrooveMidiBytes(notes, division, endOfTrackTick);
     std::ofstream out(path, std::ios::binary);
     out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
 }
@@ -226,7 +228,9 @@ TEST(GrooveKitTest, ResolvesDirectAndFallbackMatchesAndSkipsUnmatchedNotes)
     ASSERT_NE(library, nullptr);
     ASSERT_NE(program, nullptr);
     EXPECT_EQ(program->ticksPerQuarterNote, 480u);
-    EXPECT_EQ(program->loopLengthTicks, 1920u); // last note at tick 1440 -> 4 beats
+    // buildGrooveMidiBytes() places EOT immediately after the last note, so the
+    // file's own declared length (now authoritative) is exactly that tick.
+    EXPECT_EQ(program->loopLengthTicks, 1440u);
     ASSERT_EQ(program->triggers.size(), 3u) << "the unmatched snare note must not become a trigger";
 
     size_t kickTrack = 0;
@@ -256,6 +260,31 @@ TEST(GrooveKitTest, ResolvesDirectAndFallbackMatchesAndSkipsUnmatchedNotes)
     EXPECT_TRUE(foundHihatDirect);
     EXPECT_TRUE(foundHihatFallback);
     EXPECT_NE(kickTrack, hihatTrack);
+}
+
+// Reproduces a reported bug: a 2-bar downbeat-only pattern (hits on 1.1 and
+// 2.1, nothing after) wrapped 3 beats early because the old heuristic could
+// only see the last note's own beat, not the trailing silence past it.
+TEST(GrooveKitTest, LoopLengthUsesDeclaredEndOfTrackNotJustTheLastNote)
+{
+    const TempGrooveKitDir dir;
+    writeGrooveTake(dir, "sd", 1);
+
+    writeGrooveMidiFile(dir.filePath("groove.mid"),
+                        {
+                            {0, 38},    // Snare: bar 1 beat 1
+                            {1920, 38}, // Snare: bar 2 beat 1
+                        },
+                        480, 3840); // EOT at the end of bar 2, not tick 1920
+
+    GrooveKit kit;
+    kit.requestLoad(dir.dir(), dir.dir(), "groove.mid");
+    ASSERT_TRUE(waitUntilGrooveKitReady(kit));
+
+    const auto* program = kit.program();
+    ASSERT_NE(program, nullptr);
+    EXPECT_EQ(program->loopLengthTicks, 3840u) << "must span the full 2 bars the file declares, not just the "
+                                                  "beat containing the last note";
 }
 
 TEST(GrooveKitTest, TrackForTagResolvesLoadedInstrumentsAndRejectsMissingOnes)
@@ -359,7 +388,8 @@ TEST(GrooveKitTest, MetadataParsesSidecarAndComputesBarsFromBeatCount)
 {
     const TempGrooveKitDir dir;
     writeGrooveTake(dir, "bd", 1);
-    writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 36}, {3360, 36}}); // tick 3360/480=7 -> 8 beats
+    // EOT at tick 3840 (8 beats) - the file's own declared length, not the last note's.
+    writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 36}, {3360, 36}}, 480, 3840);
     std::ofstream(dir.filePath("groove.json")) << "even|4/4|91|kick,hihat";
 
     GrooveKit kit;
@@ -380,7 +410,8 @@ TEST(GrooveKitTest, BarCountUsesTimeSignatureNumeratorAsDivisor)
 {
     const TempGrooveKitDir dir;
     writeGrooveTake(dir, "bd", 1);
-    writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 36}, {2400, 36}}); // tick 2400/480=5 -> 6 beats
+    // EOT at tick 2880 (6 beats) - the file's own declared length, not the last note's.
+    writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 36}, {2400, 36}}, 480, 2880);
     std::ofstream(dir.filePath("groove.json")) << "straight|3/4||";
 
     GrooveKit kit;

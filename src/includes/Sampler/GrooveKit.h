@@ -660,9 +660,9 @@ class GrooveKit
         return tagToTrack;
     }
 
-    // loopLengthTicks is the fewest whole beats containing every note - a
-    // groove need not span a whole number of bars. Kit-independent, so this
-    // only needs rerunning when the source MIDI file itself changes.
+    // loopLengthTicks is the file's own declared End of Track tick, not a guess
+    // from note positions - a downbeat-only trailing note gives no signal of
+    // intended silence. Falls back to nearest beat past the last note if no EOT.
     [[nodiscard]] static AnalyzedGroove analyzeGrooveFile(const std::string& midiFile)
     {
         AnalyzedGroove analyzed;
@@ -674,12 +674,17 @@ class GrooveKit
             return analyzed;
         }
         const uint16_t ticksPerQuarterNote = midi.ticksPerQuarterNote();
-        const uint32_t maxTick = midi.noteEvents().back().tick;
-        const uint32_t lastBeatIndex = maxTick / ticksPerQuarterNote;
-        const uint32_t totalBeats = lastBeatIndex + 1;
-
         analyzed.ticksPerQuarterNote = ticksPerQuarterNote;
-        analyzed.loopLengthTicks = totalBeats * static_cast<uint32_t>(ticksPerQuarterNote);
+        if (const uint32_t eot = midi.endOfTrackTick(); eot > 0)
+        {
+            analyzed.loopLengthTicks = eot;
+        }
+        else
+        {
+            const uint32_t maxTick = midi.noteEvents().back().tick;
+            const uint32_t totalBeats = maxTick / ticksPerQuarterNote + 1;
+            analyzed.loopLengthTicks = totalBeats * static_cast<uint32_t>(ticksPerQuarterNote);
+        }
         analyzed.notes = analyzeNotes(midi.noteEvents(), ticksPerQuarterNote, midi.timeSignatures(), kGridResolution);
         analyzed.metadata = readGrooveMetadata(midiFile, analyzed.loopLengthTicks, ticksPerQuarterNote);
         return analyzed;

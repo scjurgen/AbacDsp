@@ -362,6 +362,39 @@ TEST(GrooveMidiFile, ReadsTimeSignatureMetaEvent)
     EXPECT_EQ(midi.timeSignatures()[0].denominatorPower, 2u);
 }
 
+TEST(GrooveMidiFile, EndOfTrackTickReflectsDeclaredLengthNotLastNote)
+{
+    std::vector<uint8_t> body;
+    appendNoteOn(body, 0, 36, 100); // last note at tick 0
+    appendEndOfTrack(body, 1920);   // EOT a full bar later - trailing silence
+
+    std::vector<uint8_t> bytes = buildHeader(0, 1, 480);
+    appendTrackChunk(bytes, body);
+
+    GrooveMidiFile midi;
+    ASSERT_TRUE(midi.readFromBuffer(bytes));
+    EXPECT_EQ(midi.endOfTrackTick(), 1920u);
+}
+
+TEST(GrooveMidiFile, EndOfTrackTickIsTheLatestAcrossMultipleTracks)
+{
+    std::vector<uint8_t> trackA;
+    appendNoteOn(trackA, 0, 36, 100);
+    appendEndOfTrack(trackA, 480);
+
+    std::vector<uint8_t> trackB;
+    appendNoteOn(trackB, 0, 42, 90);
+    appendEndOfTrack(trackB, 960);
+
+    std::vector<uint8_t> bytes = buildHeader(1, 2, 480);
+    appendTrackChunk(bytes, trackA);
+    appendTrackChunk(bytes, trackB);
+
+    GrooveMidiFile midi;
+    ASSERT_TRUE(midi.readFromBuffer(bytes));
+    EXPECT_EQ(midi.endOfTrackTick(), 960u);
+}
+
 TEST(GrooveMidiFile, TempoAndTimeSignatureFromAConductorTrackMergeWithNoteTracks)
 {
     std::vector<uint8_t> conductorTrack;
@@ -391,7 +424,7 @@ TEST(GrooveMidiFile, ClearResetsToDefaults)
 {
     std::vector<uint8_t> body;
     appendNoteOn(body, 0, 36, 100);
-    appendEndOfTrack(body);
+    appendEndOfTrack(body, 240);
     std::vector<uint8_t> bytes = buildHeader(0, 1, 96);
     appendTrackChunk(bytes, body);
 
@@ -400,6 +433,7 @@ TEST(GrooveMidiFile, ClearResetsToDefaults)
     midi.clear();
     EXPECT_TRUE(midi.noteEvents().empty());
     EXPECT_EQ(midi.ticksPerQuarterNote(), 480u);
+    EXPECT_EQ(midi.endOfTrackTick(), 0u);
 }
 
 }
