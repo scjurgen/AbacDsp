@@ -163,6 +163,12 @@ class VariSpeedTapeDelay
         return m_writeHead;
     }
 
+    /// @brief Current ring-buffer position of the given read head, in frames.
+    [[nodiscard]] double readHead(const size_t hdIdx) const noexcept
+    {
+        return m_rdhd[hdIdx].getPosition();
+    }
+
     // Copies the loopFrames frames currently comprising the loop - the ones most recently
     // written, ending at the write head - into out, wraparound-aware. loopFrames must not
     // exceed BufferSize; out must hold at least loopFrames * NumChannels samples.

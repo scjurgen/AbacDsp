@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstddef>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <nlohmann/json.hpp>
@@ -35,6 +36,7 @@
 #include "Sampler/GrooveDrumPlayer.h"
 #include "Sampler/GrooveKit.h"
 #include "Sampler/GrooveNoteMap.h"
+#include "Sequencing/LoopTimeKeeper.h"
 #include "TapeLooperLoopStorageService.h"
 #include "TapeLooperScriptEngine.h"
 
@@ -56,6 +58,9 @@ constexpr float kMinBars = 1.f;
 constexpr float kMaxBars = 32.f;
 constexpr float kMinBpm = 50.f;
 constexpr size_t kFreeTracks{3};
+// Headroom for a future per-bar time-signature timeline; unused while the loop
+// clock stays at the default 4/4 (see LoopTimeKeeper::setTimeSignature()).
+constexpr size_t kMaxTimeSignatureChanges = 8;
 
 // Match VariSpeedTapeDelay's own constructor defaults, so wiring these in
 // doesn't change the default sound.
@@ -231,6 +236,7 @@ class TapeLooperImpl final : public EffectBase
         , m_grooveTape(sampleRate, m_sincFilter)
         , m_grooveSendTape(sampleRate, m_sincFilter)
         , m_grooveSequencer(sampleRate)
+        , m_loopTimeKeeper(sampleRate)
         , m_trackGainSmoother(
               AbacDsp::constructArray<AbacDsp::LinearSmoothingParameter<BlockSize>, TapeLooperDetail::kFreeTracks>(
                   TapeLooperDetail::kDefaultTrackGain))
@@ -535,7 +541,7 @@ class TapeLooperImpl final : public EffectBase
 
     [[nodiscard]] int getOuterRingBars() const noexcept
     {
-        return static_cast<int>(m_appliedBars);
+        return static_cast<int>(m_loopTimeKeeper.bars());
     }
 
     [[nodiscard]] std::string getBarBeatLabel() const
@@ -792,7 +798,7 @@ class TapeLooperImpl final : public EffectBase
         if (groovePlayReq && !m_groovePlaying)
         {
             m_grooveSequencer.resetPosition();
-            m_cleanLoopPositionFrames = 0.0;
+            m_loopTimeKeeper.reset();
         }
         m_groovePlaying = groovePlayReq;
         applyGrooveSourceIfChanged();
@@ -1049,12 +1055,12 @@ class TapeLooperImpl final : public EffectBase
         const float bars = std::clamp(m_barsReq.load(std::memory_order_relaxed), TapeLooperDetail::kMinBars,
                                       TapeLooperDetail::kMaxBars);
         const float bpm = std::max(m_bpm, TapeLooperDetail::kMinBpm);
-        if (bars == m_appliedBars && bpm == m_appliedBpmForLoopLength)
+        if (bars == static_cast<float>(m_loopTimeKeeper.bars()) && bpm == m_loopTimeKeeper.bpm())
         {
             return;
         }
-        m_appliedBars = bars;
-        m_appliedBpmForLoopLength = bpm;
+        m_loopTimeKeeper.setBars(static_cast<unsigned>(bars));
+        m_loopTimeKeeper.setBpm(bpm);
         const auto loopFrames = TapeLooperDetail::framesForLoop(bars, bpm);
         for (auto& tape : m_tapeTrack)
         {
@@ -1063,7 +1069,7 @@ class TapeLooperImpl final : public EffectBase
         // The loop just (re)started at its own beginning - keep the groove from drifting
         // out of sync with it rather than free-running against the old definition.
         m_grooveSequencer.resetPosition();
-        m_cleanLoopPositionFrames = 0.0;
+        m_loopTimeKeeper.reset();
     }
 #pragma GCC diagnostic pop
 
@@ -1080,29 +1086,23 @@ class TapeLooperImpl final : public EffectBase
     // the groove's true beat 1, not the tape's wow/flutter-wobbled position.
     void advanceCleanLoopClock() noexcept
     {
-        const auto loopFrames = TapeLooperDetail::framesForLoop(m_appliedBars, m_appliedBpmForLoopLength);
-        if (loopFrames == 0)
-        {
-            m_cleanLoopPositionFrames = 0.0;
-            return;
-        }
-        m_cleanLoopPositionFrames += static_cast<double>(BlockSize) * static_cast<double>(m_tapeSpeed);
-        m_cleanLoopPositionFrames = std::fmod(m_cleanLoopPositionFrames, static_cast<double>(loopFrames));
+        m_loopTimeKeeper.advance(BlockSize, m_tapeSpeed);
     }
 
     [[nodiscard]] LoopClock computeLoopClock() const noexcept
     {
-        const auto loopFrames = TapeLooperDetail::framesForLoop(m_appliedBars, m_appliedBpmForLoopLength);
+        const auto loopFrames =
+            TapeLooperDetail::framesForLoop(static_cast<float>(m_loopTimeKeeper.bars()), m_loopTimeKeeper.bpm());
         if (loopFrames == 0)
         {
             return {};
         }
-        const auto bars = std::max<size_t>(1, static_cast<size_t>(m_appliedBars));
+        const auto bars = std::max<size_t>(1, m_loopTimeKeeper.bars());
         const auto samplesPerBar = std::max<size_t>(1, loopFrames / bars);
         // Backdated by kGrooveTapeReadHeadFrames so the display tracks what's
         // actually audible, not the instantaneous transport position.
         const auto backdate = static_cast<size_t>(TapeLooperDetail::kGrooveTapeReadHeadFrames) % loopFrames;
-        const auto rawPosition = static_cast<size_t>(m_cleanLoopPositionFrames);
+        const auto rawPosition = static_cast<size_t>(m_loopTimeKeeper.positionFrames());
         const auto loopPositionFrames = (rawPosition + loopFrames - backdate) % loopFrames;
         return {loopFrames, samplesPerBar, loopPositionFrames, loopPositionFrames % samplesPerBar};
     }
@@ -1121,6 +1121,17 @@ class TapeLooperImpl final : public EffectBase
     void feedClockDisplays(const AbacDsp::AudioBuffer<2, BlockSize>& out) noexcept
     {
         const auto clock = computeLoopClock();
+        if (clock.samplesPerBar > 0)
+        {
+            const auto bar = clock.loopPositionFrames / clock.samplesPerBar;
+            if (bar != m_debugLastBar)
+            {
+                std::cout << "bar start: " << bar << " loopPos=" << clock.loopPositionFrames
+                          << " write=" << m_tapeTrack[0].writeHead()
+                          << " read=" << static_cast<size_t>(m_tapeTrack[0].readHead(0)) << std::endl;
+                m_debugLastBar = bar;
+            }
+        }
         std::array<float, BlockSize> monoDecimated{};
         size_t decimatedCount = 0;
         float blockPeak = 0.f;
@@ -1538,6 +1549,13 @@ class TapeLooperImpl final : public EffectBase
                 }
             }
             m_tapeTrack[track].feed(tapeIn);
+            const auto writeHead = m_tapeTrack[track].writeHead();
+            if (writeHead < m_debugLastWriteHead[track])
+            {
+                std::cout << "track " << track << " write head wrapped: " << writeHead
+                          << " readHead=" << static_cast<size_t>(m_tapeTrack[track].readHead(0)) << std::endl;
+            }
+            m_debugLastWriteHead[track] = writeHead;
 
             // Fed only while playing, but ticked every block regardless - its own tail
             // keeps ringing after Play (or the send) drops, the way a real room does.
@@ -1644,6 +1662,7 @@ class TapeLooperImpl final : public EffectBase
         m_grooveSendTape; // carries the per-instrument reverb send through the same varispeed path as m_grooveTape
     GrooveKit m_grooveKit;
     AbacDsp::GrooveDrumPlayer m_grooveSequencer;
+    AbacDsp::LoopTimeKeeper<TapeLooperDetail::kMaxTimeSignatureChanges> m_loopTimeKeeper;
     const AbacDsp::GrooveProgram* m_lastGrooveProgram{nullptr};
     std::array<AbacDsp::LinearSmoothingParameter<BlockSize>, TapeLooperDetail::kFreeTracks> m_trackGainSmoother;
     AbacDsp::StereoTrackBank<AbacDsp::Filter1Pole4StageSmooth, TapeLooperDetail::kFreeTracks> m_filter;
@@ -1731,9 +1750,6 @@ class TapeLooperImpl final : public EffectBase
     std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_tremoloDriveReq{0.f, 0.f, 0.f};
 
     float m_tapeSpeed{1.f};
-    float m_appliedBars{0.f};
-    float m_appliedBpmForLoopLength{0.f};
-    double m_cleanLoopPositionFrames{0.0};
     float m_inputGain{1.f};
     float m_grooveLevel{1.f};
     std::array<bool, TapeLooperDetail::kFreeTracks> m_recording{};
@@ -1753,6 +1769,8 @@ class TapeLooperImpl final : public EffectBase
     bool m_groovePlaying{false};
     bool m_useClick{false}; // applied state; edge-triggers applyGrooveSourceIfChanged()'s style swap
     std::array<bool, TapeLooperDetail::kFreeTracks> m_lastNotifiedRecording{};
+    std::array<size_t, TapeLooperDetail::kFreeTracks> m_debugLastWriteHead{};
+    size_t m_debugLastBar{static_cast<size_t>(-1)};
     std::array<float, TapeLooperScriptEngine::kMaxLuaParams> m_luaParamValues{};
     std::array<float, TapeLooperScriptEngine::kMaxLuaParams> m_lastNotifiedLuaParamValues{-1.f, -1.f, -1.f, -1.f,
                                                                                           -1.f, -1.f, -1.f, -1.f};
