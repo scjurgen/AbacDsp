@@ -41,6 +41,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("subVolume", this);
         m_parameters.addParameterListener("onOff", this);
         m_parameters.addParameterListener("hostSync", this);
+        m_parameters.addParameterListener("analysisMode", this);
         m_parameters.addParameterListener("preset", this);
         m_parameters.addParameterListener("swingRatio", this);
 
@@ -61,6 +62,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("subVolume", this);
         m_parameters.removeParameterListener("onOff", this);
         m_parameters.removeParameterListener("hostSync", this);
+        m_parameters.removeParameterListener("analysisMode", this);
         m_parameters.removeParameterListener("preset", this);
         m_parameters.removeParameterListener("swingRatio", this);
     }
@@ -282,6 +284,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                                                                     juce::String::fromUTF8("Start"), 0));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("hostSync", 1),
                                                                     juce::String::fromUTF8("Host Sync"), 0));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("analysisMode", 1),
+                                                                    juce::String::fromUTF8("Analysis"), 0));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID("preset", 1), juce::String::fromUTF8("Preset"),
             juce::StringArray{juce::String::fromUTF8("3/4"),
@@ -372,6 +376,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                  p.pluginRunner->setHostSync(static_cast<bool>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::hostSync, v);
              }},
+            {"analysisMode",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setAnalysisMode(static_cast<bool>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::analysisMode, v);
+             }},
             {"preset",
              [](AudioPluginAudioProcessor& p, const float v)
              {
@@ -453,6 +463,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("hostSync");
             float normalized = range.convertTo0to1(static_cast<float>(params.hostSync));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("analysisMode"))
+        {
+            const auto& range = m_parameters.getParameterRange("analysisMode");
+            float normalized = range.convertTo0to1(static_cast<float>(params.analysisMode));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("preset"))
@@ -623,6 +639,20 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         static const std::vector<size_t> empty{};
         return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty;
+    }
+    void pollAnalysisReport()
+    {
+        if (!pluginRunner || !pluginRunner->consumeAnalysisReportReady())
+        {
+            return;
+        }
+        auto dir =
+            juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("Metronome Analysis");
+        dir.createDirectory();
+        const auto file =
+            dir.getChildFile("analysis-" + juce::Time::getCurrentTime().formatted("%Y%m%d-%H%M%S") + ".html");
+        file.replaceWithText(pluginRunner->buildAnalysisReportHtml());
+        juce::URL(file).launchInDefaultBrowser();
     }
 
 

@@ -19,6 +19,7 @@
       "cc": {"controller": 23}},
     {"short": "ONF",  "type": "switch", "display": "Start",          "symbol": "onOff",       "default": 0},
     {"short": "SYNC", "type": "switch", "display": "Host Sync",      "symbol": "hostSync",    "default": 0},
+    {"short": "ANLZ", "type": "switch", "display": "Analysis",       "symbol": "analysisMode", "default": 0},
     {"short": "PRE",  "type": "drop",   "display": "Preset",         "symbol": "preset",      "default": 6,
       "listitems": ["3/4", "3/4 8th", "3/4 16th", "3/4 shuffle", "3/4 triplet", "4/4", "4/4 8th", "4/4 16th",
         "4/4 shuffle", "4/4 triplet", "4/4 swing", "5/4 (3+2)", "5/4 8th (3+2)", "5/4 (2+3)", "5/4 8th (2+3)",
@@ -47,7 +48,7 @@
     "WINDOW_WIDTH": "960",
     "WINDOW_HEIGHT": "660",
     "type": "||",
-    "composition": "C=(1:5) A1=(PRE, DRP, SWG, ONF, SYNC, BPM, SVOL, MVOL, IVOL) A2=(SIG%1, IRIS%2)"
+    "composition": "C=(1:5) A1=(PRE, DRP, SWG, ONF, SYNC, ANLZ, BPM, SVOL, MVOL, IVOL) A2=(SIG%1, IRIS%2)"
   },
   "performance-page": {
     "type": "-",
@@ -65,7 +66,8 @@
     "if (processorRef.isHostSynced()) { bpmDial.setValue(bpm); }",
     "onOffSwitch.setEnabled(!processorRef.isHostSynced());",
     "signalGauge.setSamplesPerBeat(spb);",
-    "irisGauge.setSamplesPerBeat(spb); }"
+    "irisGauge.setSamplesPerBeat(spb); }",
+    "processorRef.pollAnalysisReport();"
   ],
   "processor_forwards": [
     {"name": "getCurrentClickBpm", "call": "currentClickBpm", "type": "float", "default": "120.f"},
@@ -77,7 +79,8 @@
   ],
   "extra_processor_methods": [
     "[[nodiscard]] bool presetHasSwing(int idx) const noexcept { return pluginRunner && pluginRunner->isPresetSwing(idx); }",
-    "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }"
+    "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }",
+    "void pollAnalysisReport() {\n        if (!pluginRunner || !pluginRunner->consumeAnalysisReportReady())\n        {\n            return;\n        }\n        auto dir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile(\"Metronome Analysis\");\n        dir.createDirectory();\n        const auto file = dir.getChildFile(\"analysis-\" + juce::Time::getCurrentTime().formatted(\"%Y%m%d-%H%M%S\") + \".html\");\n        file.replaceWithText(pluginRunner->buildAnalysisReportHtml());\n        juce::URL(file).launchInDefaultBrowser();\n    }"
   ],
   "protected_files": [],
   "host_transport": true,

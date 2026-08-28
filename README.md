@@ -80,7 +80,8 @@ JUCE-based plugins under `examples/` (built with `-DBUILD_FULL_PROJECT=ON`, see 
 - `plaingain` (passthrough with metering), `guisandbox` (UI experimentation)
 - `minireverb` / `maxdiffuser` (FDN reverb and diffuser)
 - `delay`, `resonik` (resonator)
-- `metronome` (damped-sine click, circular beat/spectrogram displays)
+- `metronome` (damped-sine click, circular beat/spectrogram displays, input timing-analysis
+  reports)
 - `looper` (bar-quantized slicing looper with a concentric bar/loop clock display)
 - `sampleplayer`, `sampleplayertimestretched`
 - `dronesequencer` (Lua-scripted Karplus-Strong drone sequencer), `tanpura`

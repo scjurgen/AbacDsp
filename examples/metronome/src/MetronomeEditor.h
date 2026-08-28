@@ -135,6 +135,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(analysisModeSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(subVolumeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(metroVolumeDial).withFlex(1).withMargin(knobMarginSmall));
@@ -181,6 +186,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 signalGauge.setSamplesPerBeat(spb);
                 irisGauge.setSamplesPerBeat(spb);
             }
+            processorRef.pollAnalysisReport();
             processorRef.consumeLastLearnedCc();
         }
     }
@@ -242,6 +248,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             valueTreeState, "hostSync", hostSyncSwitch);
         hostSyncSwitch.setTooltip(juce::String::fromUTF8("Host Sync"));
 
+        addAndMakeVisible(analysisModeSwitch);
+        analysisModeSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "analysisMode", analysisModeSwitch);
+        analysisModeSwitch.setTooltip(juce::String::fromUTF8("Analysis"));
+
         addAndMakeVisible(presetDrop);
         presetDrop.addItemList(valueTreeState.getParameter("preset")->getAllValueStrings(), 1);
         presetDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
@@ -295,6 +306,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             subVolumeDial.setVisible(false);
             onOffSwitch.setVisible(false);
             hostSyncSwitch.setVisible(false);
+            analysisModeSwitch.setVisible(false);
             presetDrop.setVisible(false);
             signalGauge.setVisible(true);
             irisGauge.setVisible(true);
@@ -308,6 +320,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             subVolumeDial.setVisible(true);
             onOffSwitch.setVisible(true);
             hostSyncSwitch.setVisible(true);
+            analysisModeSwitch.setVisible(true);
             presetDrop.setVisible(true);
             signalGauge.setVisible(true);
             irisGauge.setVisible(true);
@@ -800,6 +813,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> onOffSwitchAttachment;
     juce::ToggleButton hostSyncSwitch{juce::String::fromUTF8("Host Sync")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> hostSyncSwitchAttachment;
+    juce::ToggleButton analysisModeSwitch{juce::String::fromUTF8("Analysis")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> analysisModeSwitchAttachment;
     juce::ComboBox presetDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> presetDropAttachment;
     CustomRotaryDial swingRatioDial{this};

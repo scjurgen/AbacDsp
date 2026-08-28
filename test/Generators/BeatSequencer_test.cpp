@@ -325,6 +325,125 @@ TEST(BeatSequencerTest, SamplesToNearestBeatTieResolvesToPreviousBoundary)
     EXPECT_EQ(seq.samplesToNearestBeat(), -12000);
 }
 
+TEST(BeatSequencerTest, SamplesToNearestGridFallsBackToBeatGridWithoutSubdivisions)
+{
+    BeatSequencer seq{kSampleRate};
+    seq.setBpm(120.f); // samplesPerBeat = 24000
+    for (int i = 0; i < 1000; ++i)
+    {
+        static_cast<void>(seq.advance());
+    }
+    EXPECT_EQ(seq.samplesToNearestGrid(), -1000);
+}
+
+TEST(BeatSequencerTest, SamplesToNearestGridPicksNearestSubdivision)
+{
+    BeatSequencer seq{kSampleRate};
+    seq.setBpm(120.f); // samplesPerBeat = 24000
+    seq.setSubdivType(SubdivType::Sixteenth);
+    // Subdivisions at 6000, 12000, 18000. Land 1000 samples after the 12000 subdivision.
+    for (int i = 0; i < 13000; ++i)
+    {
+        static_cast<void>(seq.advance());
+    }
+    EXPECT_EQ(seq.samplesToNearestGrid(), -1000);
+}
+
+TEST(BeatSequencerTest, SamplesToNearestGridPrefersSubdivisionOverFartherBeatBoundary)
+{
+    BeatSequencer seq{kSampleRate};
+    seq.setBpm(120.f); // samplesPerBeat = 24000
+    seq.setSubdivType(SubdivType::Eighth);
+    // Subdivision at 12000 (beat midpoint). Land 100 samples before it: much closer to the
+    // subdivision than to either beat boundary (0 or 24000).
+    for (int i = 0; i < 11900; ++i)
+    {
+        static_cast<void>(seq.advance());
+    }
+    EXPECT_EQ(seq.samplesToNearestGrid(), 100);
+}
+
+TEST(BeatSequencerTest, SamplesToNearestGridTieResolvesToEarlierGridPoint)
+{
+    BeatSequencer seq{kSampleRate};
+    seq.setBpm(120.f); // samplesPerBeat = 24000
+    seq.setSubdivType(SubdivType::Sixteenth);
+    // Subdivisions at 6000, 12000, 18000. Land exactly halfway between 6000 and 12000 (9000):
+    // tie resolves to the earlier (negative) grid point.
+    for (int i = 0; i < 9000; ++i)
+    {
+        static_cast<void>(seq.advance());
+    }
+    EXPECT_EQ(seq.samplesToNearestGrid(), -3000);
+}
+
+TEST(BeatSequencerTest, NearestGridPointIdentifiesCurrentBeatWhenEarly)
+{
+    BeatSequencer seq{kSampleRate};
+    seq.setBpm(120.f); // samplesPerBeat = 24000
+    seq.setBeatsPerBar(4);
+    for (int i = 0; i < 1000; ++i)
+    {
+        static_cast<void>(seq.advance());
+    }
+    const auto point = seq.nearestGridPoint();
+    EXPECT_EQ(point.distanceSamples, -1000);
+    EXPECT_TRUE(point.isBeat);
+    EXPECT_EQ(point.beatIndexInBar, 0u);
+}
+
+TEST(BeatSequencerTest, NearestGridPointIdentifiesNextBeatWhenLateWrappingBar)
+{
+    BeatSequencer seq{kSampleRate};
+    seq.setBpm(120.f); // samplesPerBeat = 24000
+    seq.setBeatsPerBar(4);
+    for (int i = 0; i < 23000; ++i)
+    {
+        static_cast<void>(seq.advance());
+    }
+    const auto point = seq.nearestGridPoint();
+    EXPECT_EQ(point.distanceSamples, 1000);
+    EXPECT_TRUE(point.isBeat);
+    EXPECT_EQ(point.beatIndexInBar, 1u);
+}
+
+TEST(BeatSequencerTest, NearestGridPointWrapsToBeatZeroAcrossBarBoundary)
+{
+    BeatSequencer seq{kSampleRate};
+    seq.setBpm(120.f); // samplesPerBeat = 24000
+    seq.setBeatsPerBar(4);
+    for (int i = 0; i < 3; ++i)
+    {
+        for (int s = 0; s < 24000; ++s)
+        {
+            static_cast<void>(seq.advance());
+        }
+    }
+    for (int i = 0; i < 23000; ++i)
+    {
+        static_cast<void>(seq.advance());
+    }
+    const auto point = seq.nearestGridPoint();
+    EXPECT_EQ(point.distanceSamples, 1000);
+    EXPECT_TRUE(point.isBeat);
+    EXPECT_EQ(point.beatIndexInBar, 0u);
+}
+
+TEST(BeatSequencerTest, NearestGridPointIdentifiesSubdivisionIndex)
+{
+    BeatSequencer seq{kSampleRate};
+    seq.setBpm(120.f);                        // samplesPerBeat = 24000
+    seq.setSubdivType(SubdivType::Sixteenth); // subdivisions at 6000, 12000, 18000
+    for (int i = 0; i < 13000; ++i)
+    {
+        static_cast<void>(seq.advance());
+    }
+    const auto point = seq.nearestGridPoint();
+    EXPECT_EQ(point.distanceSamples, -1000);
+    EXPECT_FALSE(point.isBeat);
+    EXPECT_EQ(point.subdivisionIndex, 1u);
+}
+
 TEST(BeatSequencerTest, SamplesToNearestBarAtBoundaryIsZero)
 {
     BeatSequencer seq{kSampleRate};

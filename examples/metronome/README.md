@@ -24,6 +24,7 @@ mute feature for timing training.
 | Sub Volume | −60 – 0 dB | Subdivision tick loudness |
 | Input Volume | −60 – +12 dB | Pass-through instrument level |
 | Start | on/off | Starts or stops the metronome |
+| Analysis | on/off | Starts or stops a timing-analysis take (see below) |
 
 ## Rhythm Presets
 
@@ -74,3 +75,28 @@ Silence the click for N bars to train internal pulse.
 | Play 1 Drop 3 | ■ □ □ □ ■ □ □ □ ■ □ □ □ … |
 
 The cycle always restarts on the downbeat of the next heard bar.
+
+## Timing Analysis
+
+Switching Analysis on starts listening to the input signal for onsets and measures each
+onset's distance to the nearest beat or subdivision, in milliseconds (negative = early,
+positive = late). Onset detection uses a hysteresis (two-threshold) envelope: a hit fires when
+the level rises past the upper threshold, and it only re-arms once the level has since dropped
+past a lower one. This keeps a held or strummed chord's rippling sustain from re-triggering as
+several hits, at the cost of a known tradeoff: a genuinely new attack played while the previous
+one is still loud (within the hysteresis band) will not register as a separate hit.
+
+Switching Analysis back off writes an HTML report and opens it in the default browser. The
+report shows hit count, mean and standard deviation of the collected deviations, an overall
+10 ms-bin histogram, a breakdown of that same histogram per beat (Beat 1, Beat 2, ...) and per
+subdivision slot (Off-beat for a single 8th/shuffle subdivision, Sub 1/Sub 2/... for presets
+with more than one, e.g. 16ths) so uneven timing on a specific beat or the off-beat shows up on
+its own, and a timeline of every hit across the take. Every histogram shares the same fixed
+x-axis, +/- half a beat at the take's tempo (e.g. +/-333 ms at 90 BPM), so the charts are
+directly comparable to each other and never auto-zoom to whatever range a particular beat
+happened to land in. Each Analysis toggle resets the collected data, so one on/off cycle is
+one take (up to 4096 hits; further hits are not recorded once that many have been collected).
+The page's charts are plain inline SVG; its layout uses Bootstrap loaded from a CDN, so it
+needs network access to render correctly.
+
+Reports are written to `~/Documents/Metronome Analysis/`, one timestamped file per take.

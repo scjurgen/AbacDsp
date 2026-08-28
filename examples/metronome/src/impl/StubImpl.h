@@ -46,6 +46,10 @@ class StubImpl final : public EffectBase
     {
         m_hostSync = value;
     }
+    void setAnalysisMode(const bool value)
+    {
+        m_analysisMode = value;
+    }
     void setPreset(const size_t value)
     {
         m_preset = value;
@@ -88,6 +92,7 @@ class StubImpl final : public EffectBase
     float m_subVolume{};
     bool m_onOff{};
     bool m_hostSync{};
+    bool m_analysisMode{};
     size_t m_preset{};
     float m_swingRatio{};
 

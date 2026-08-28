@@ -2,12 +2,16 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
+#include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
 #include "Analysis/Spectrogram.h"
 #include "Audio/AudioBuffer.h"
+#include "BeatAnalysisReport.h"
 #include "EffectBase.h"
 #include "Generators/BeatSequencer.h"
 #include "Generators/ClickGenerator.h"
@@ -38,6 +42,7 @@ class MetronomeImpl final : public EffectBase
         : EffectBase(sampleRate)
         , m_click(sampleRate)
         , m_seq(sampleRate)
+        , m_onsetDetector(sampleRate)
     {
         const auto& preset = kPresets[static_cast<size_t>(m_presetIndex)];
         m_seq.setBeatsPerBar(preset.barBeats);
@@ -95,6 +100,25 @@ class MetronomeImpl final : public EffectBase
         m_running = value;
     }
 
+    void setAnalysisMode(const bool value) noexcept
+    {
+        m_analysisMode = value;
+    }
+
+    // Consumes the "a report is waiting" flag set from the audio thread when analysis mode
+    // is switched off; the caller (message thread) is expected to build and export the report.
+    [[nodiscard]] bool consumeAnalysisReportReady() noexcept
+    {
+        return m_reportReady.exchange(false, std::memory_order_acq_rel);
+    }
+
+    [[nodiscard]] std::string buildAnalysisReportHtml() const
+    {
+        const auto& preset = kPresets[static_cast<size_t>(m_presetIndex)];
+        return MetronomeAnalysis::buildReportHtml(m_deviationCollector.hits(), preset.barBeats,
+                                                  m_seq.subPositions().size(), m_bpm, preset.name);
+    }
+
     void setPreset(const int index)
     {
         m_presetIndex = std::clamp(index, 0, static_cast<int>(kPresets.size()) - 1);
@@ -135,6 +159,7 @@ class MetronomeImpl final : public EffectBase
         {
             syncToHostTransport();
         }
+        updateAnalysisMode();
 
         std::array<float, BlockSize> inMono{};
         for (size_t i = 0; i < BlockSize; ++i)
@@ -161,6 +186,18 @@ class MetronomeImpl final : public EffectBase
 
         for (size_t i = 0; i < BlockSize; ++i)
         {
+            if (m_analysisMode && m_onsetDetector.step(inMono[i]))
+            {
+                const auto gridPoint = m_seq.nearestGridPoint();
+                const float deviationMs = static_cast<float>(gridPoint.distanceSamples) / sampleRate() * 1000.f;
+                const uint8_t role =
+                    gridPoint.isBeat
+                        ? MetronomeAnalysis::roleForBeat(gridPoint.beatIndexInBar)
+                        : MetronomeAnalysis::roleForSubdivision(kPresets[static_cast<size_t>(m_presetIndex)].barBeats,
+                                                                gridPoint.subdivisionIndex);
+                m_deviationCollector.push(deviationMs, role);
+            }
+
             const auto event = m_seq.advance();
             const auto& mode = kDropBarModes[static_cast<size_t>(m_dropModeIndex)];
             const bool isMuted = mode.playBars > 0 && m_barCount >= mode.playBars;
@@ -335,12 +372,34 @@ class MetronomeImpl final : public EffectBase
         m_postWindow = m_seq.samplesPerBeat() - m_preWindow;
     }
 
+    // Detects the analysis on/off edge: activating resets the collector fresh for this take,
+    // deactivating raises the flag the message thread polls to build and export the report.
+    void updateAnalysisMode() noexcept
+    {
+        if (m_analysisMode == m_prevAnalysisMode)
+        {
+            return;
+        }
+        if (m_analysisMode)
+        {
+            m_deviationCollector.reset();
+            m_onsetDetector.reset();
+        }
+        else
+        {
+            m_reportReady.store(true, std::memory_order_release);
+        }
+        m_prevAnalysisMode = m_analysisMode;
+    }
+
     static constexpr float kDefaultSwingRatio = 1.5f;
 
     float m_bpm{120.f};
     float m_inputGain{1.f};
     bool m_running{false};
     bool m_hostSync{false};
+    bool m_analysisMode{false};
+    bool m_prevAnalysisMode{false};
     uint64_t m_lastSyncedUpdateCount{0};
     int m_dropModeIndex{0};
     int m_barCount{0};
@@ -351,6 +410,9 @@ class MetronomeImpl final : public EffectBase
 
     AbacDsp::ClickGenerator m_click;
     AbacDsp::BeatSequencer m_seq;
+    MetronomeAnalysis::OnsetDetector m_onsetDetector;
+    MetronomeAnalysis::DeviationCollector m_deviationCollector;
+    std::atomic<bool> m_reportReady{false};
 
     std::vector<float> m_visualWavedata;
     std::vector<float> m_preparedWavedata;

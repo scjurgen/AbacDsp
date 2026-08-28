@@ -13,15 +13,16 @@ struct PatchParameters
 {
     enum class Id : int
     {
-        bpm        , // dial
-        dropBars   , // drop
-        metroVolume, // dial
-        inputVolume, // dial
-        subVolume  , // dial
-        onOff      , // switch
-        hostSync   , // switch
-        preset     , // drop
-        swingRatio  // dial
+        bpm         , // dial
+        dropBars    , // drop
+        metroVolume , // dial
+        inputVolume , // dial
+        subVolume   , // dial
+        onOff       , // switch
+        hostSync    , // switch
+        analysisMode, // switch
+        preset      , // drop
+        swingRatio   // dial
     };
 float bpm{120.0f};
 size_t dropBars{0};
@@ -30,6 +31,7 @@ float inputVolume{0.0f};
 float subVolume{-15.0f};
 bool onOff{false};
 bool hostSync{false};
+bool analysisMode{false};
 size_t preset{6};
 float swingRatio{1.5f};
 
@@ -42,6 +44,7 @@ float swingRatio{1.5f};
 "subVolume",
 "onOff",
 "hostSync",
+"analysisMode",
 "preset",
 "swingRatio"
     });
@@ -69,6 +72,7 @@ float swingRatio{1.5f};
         else if constexpr (ParamId == Id::subVolume) return subVolume;
         else if constexpr (ParamId == Id::onOff) return onOff;
         else if constexpr (ParamId == Id::hostSync) return hostSync;
+        else if constexpr (ParamId == Id::analysisMode) return analysisMode;
         else if constexpr (ParamId == Id::preset) return preset;
         else if constexpr (ParamId == Id::swingRatio) return swingRatio;
 
@@ -96,6 +100,8 @@ break;
  case Id::onOff: if (!isEqual(get<Id::onOff>(), value)) {get<Id::onOff>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::hostSync: if (!isEqual(get<Id::hostSync>(), value)) {get<Id::hostSync>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::analysisMode: if (!isEqual(get<Id::analysisMode>(), value)) {get<Id::analysisMode>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::preset: if (!isEqual(get<Id::preset>(), value)) {get<Id::preset>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
@@ -134,20 +140,21 @@ private:
     }
     static bool isEqual(const bool a, const float b)
     {
-        return a == (static_cast<int>(round(b)))?false:true;
+        return a == static_cast<int>(round(b));
     }
     bool m_modified = false;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     PatchParameters,
-        bpm        , // dial
-        dropBars   , // drop
-        metroVolume, // dial
-        inputVolume, // dial
-        subVolume  , // dial
-        onOff      , // switch
-        hostSync   , // switch
-        preset     , // drop
-        swingRatio  // dial
+        bpm         , // dial
+        dropBars    , // drop
+        metroVolume , // dial
+        inputVolume , // dial
+        subVolume   , // dial
+        onOff       , // switch
+        hostSync    , // switch
+        analysisMode, // switch
+        preset      , // drop
+        swingRatio   // dial
 )

@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <vector>
 
 namespace AbacDsp
@@ -44,6 +45,15 @@ class BeatSequencer
         bool beatStart{false};    // first sample of a beat
         bool subdivision{false};  // sample lands on a subdivision hit
         bool barWrapped{false};   // advancing past this sample wrapped to a new bar
+    };
+
+    /// @brief Which grid point the current position is nearest to, and how far.
+    struct GridPoint
+    {
+        long distanceSamples{0};    // negative = early, positive = late, same convention as samplesToNearestBeat()
+        bool isBeat{true};          // nearest point is a beat boundary, not a subdivision
+        size_t beatIndexInBar{0};   // valid when isBeat: which beat boundary
+        size_t subdivisionIndex{0}; // valid when !isBeat: index into subPositions()
     };
 
     explicit BeatSequencer(const float sampleRate)
@@ -202,6 +212,49 @@ class BeatSequencer
         const auto pos = static_cast<long>(m_beatSamplePos);
         const auto spb = static_cast<long>(m_samplesPerBeat);
         return (pos * 2 <= spb) ? -pos : (spb - pos);
+    }
+
+    // Same convention as samplesToNearestBeat(), but against the finer grid of subdivision
+    // positions within the beat too (falls back to the beat grid when there are none).
+    [[nodiscard]] long samplesToNearestGrid() const noexcept
+    {
+        return nearestGridPoint().distanceSamples;
+    }
+
+    // Like samplesToNearestGrid(), but also identifies which grid point (a specific beat
+    // boundary, or a specific subdivision slot) the position is nearest to - lets a caller
+    // group hits by their musical role (e.g. "beat 1" vs. "the 8th note after beat 2").
+    [[nodiscard]] GridPoint nearestGridPoint() const noexcept
+    {
+        GridPoint best{};
+        if (m_samplesPerBeat == 0)
+        {
+            return best;
+        }
+        const auto pos = static_cast<long>(m_beatSamplePos);
+        const auto spb = static_cast<long>(m_samplesPerBeat);
+        const long distToPrev = -pos;
+        const long distToNext = spb - pos;
+        if (distToPrev * -2 <= spb)
+        {
+            best = {distToPrev, true, m_beatIndexInBar, 0};
+        }
+        else
+        {
+            const size_t nextBeat = (m_beatsPerBar == 0) ? 0 : (m_beatIndexInBar + 1) % m_beatsPerBar;
+            best = {distToNext, true, nextBeat, 0};
+        }
+        for (size_t i = 0; i < m_subPositions.size(); ++i)
+        {
+            const auto sub = static_cast<long>(m_subPositions[i]);
+            const long distance = sub - pos;
+            if (std::abs(distance) < std::abs(best.distanceSamples) ||
+                (std::abs(distance) == std::abs(best.distanceSamples) && distance <= 0))
+            {
+                best = {distance, false, 0, i};
+            }
+        }
+        return best;
     }
 
     // Same convention as samplesToNearestBeat(), against the bar grid instead.
