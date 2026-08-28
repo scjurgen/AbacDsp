@@ -230,6 +230,7 @@ class CircularTapeDisplay : public juce::Component
         {
             m_irisMagnitudes.assign(kIrisAngularBuckets * s.height, 0.f);
             m_lastConsumedSlice = s.activeSlice;
+            m_hasLastWrittenBucket = false;
             return;
         }
         size_t idx = m_lastConsumedSlice;
@@ -237,11 +238,42 @@ class CircularTapeDisplay : public juce::Component
         while (idx != s.activeSlice && guard < s.width)
         {
             const size_t bucket = std::min(kIrisAngularBuckets - 1, m_sliceBuckets[idx]);
-            std::copy_n(&s.data[idx * s.height], s.height, &m_irisMagnitudes[bucket * s.height]);
+            const float* newRow = &s.data[idx * s.height];
+            interpolateSkippedBuckets(bucket, newRow, s.height);
+            std::copy_n(newRow, s.height, &m_irisMagnitudes[bucket * s.height]);
+            m_lastWrittenBucket = bucket;
+            m_hasLastWrittenBucket = true;
             idx = (idx + 1) % s.width;
             ++guard;
         }
         m_lastConsumedSlice = s.activeSlice;
+    }
+
+    // Blends buckets strictly between the last-written one and bucket toward
+    // newRow, wrapping forward. No-op with no previous bucket, or a gap over
+    // half the ring (a reset, not a sweep).
+    void interpolateSkippedBuckets(const size_t bucket, const float* newRow, const size_t height) noexcept
+    {
+        if (!m_hasLastWrittenBucket)
+        {
+            return;
+        }
+        const size_t gap = (bucket + kIrisAngularBuckets - m_lastWrittenBucket) % kIrisAngularBuckets;
+        if (gap <= 1 || gap > kIrisAngularBuckets / 2)
+        {
+            return;
+        }
+        const float* prevRow = &m_irisMagnitudes[m_lastWrittenBucket * height];
+        for (size_t step = 1; step < gap; ++step)
+        {
+            const size_t midBucket = (m_lastWrittenBucket + step) % kIrisAngularBuckets;
+            const float t = static_cast<float>(step) / static_cast<float>(gap);
+            float* dst = &m_irisMagnitudes[midBucket * height];
+            for (size_t bin = 0; bin < height; ++bin)
+            {
+                dst[bin] = prevRow[bin] + t * (newRow[bin] - prevRow[bin]);
+            }
+        }
     }
 
     // Every annulus pixel maps to a fixed angular bucket and reads whatever was
@@ -505,6 +537,8 @@ class CircularTapeDisplay : public juce::Component
     std::vector<float> m_irisMagnitudes; // kIrisAngularBuckets * fftHalf, position-indexed
     std::vector<size_t> m_sliceBuckets;  // parallel to the spectrogram's own ring
     size_t m_lastConsumedSlice{0};
+    size_t m_lastWrittenBucket{0};
+    bool m_hasLastWrittenBucket{false};
     juce::Image m_iris;
     juce::PixelARGB m_lut[GuiConstants::kLutSize]{};
     std::vector<AnnulusPixel> m_annulus;
