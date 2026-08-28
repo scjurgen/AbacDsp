@@ -153,6 +153,48 @@ TEST(LoopTimeKeeperTest, positionFramesReflectsCurrentBpm)
     EXPECT_NEAR(keeper.positionFrames(), 48000.0, 1e-6);
 }
 
+TEST(LoopTimeKeeperTest, absolutePositionBeatsNeverWraps)
+{
+    Keeper keeper(48000.f);
+    keeper.setBpm(120.f);
+    keeper.setBars(1u); // loop is 4 beats
+
+    keeper.advance(24000 * 10, 1.f); // 10 beats, well past two loop wraps
+    EXPECT_NEAR(keeper.absolutePositionBeats(), 10.0, 1e-9);
+    EXPECT_NEAR(keeper.positionBeats(), 2.0, 1e-9); // 10 mod 4
+}
+
+TEST(LoopTimeKeeperTest, absolutePositionBeatsResetOnlyOnExplicitReset)
+{
+    Keeper keeper(48000.f);
+    keeper.setBpm(120.f);
+    keeper.setBars(2u);
+    keeper.advance(24000 * 3, 1.f);
+    ASSERT_NEAR(keeper.absolutePositionBeats(), 3.0, 1e-9);
+
+    keeper.setBpm(90.f);
+    keeper.setBars(8u);
+    EXPECT_NEAR(keeper.absolutePositionBeats(), 3.0, 1e-9);
+
+    keeper.reset();
+    EXPECT_DOUBLE_EQ(keeper.absolutePositionBeats(), 0.0);
+}
+
+TEST(LoopTimeKeeperTest, absolutePositionBeatsSurvivesThisClockOwnWrapForADifferentSizedLoop)
+{
+    // The motivating case: a consumer whose own loop (7 beats) doesn't evenly
+    // divide this clock's own loop (4 beats) must not glitch when this clock
+    // wraps - its own modulo against the unwrapped absolute value stays smooth.
+    Keeper keeper(48000.f);
+    keeper.setBpm(120.f);
+    keeper.setBars(1u); // this clock's own loop is 4 beats
+
+    keeper.advance(24000 * 5, 1.f); // 5 beats - this clock has already wrapped once
+    const auto consumerLoopBeats = 7.0;
+    const auto consumerPosition = std::fmod(keeper.absolutePositionBeats(), consumerLoopBeats);
+    EXPECT_NEAR(consumerPosition, 5.0, 1e-9); // continuous, not reset to 1.0 by this clock's own wrap
+}
+
 TEST(LoopTimeKeeperTest, defaultTimeSignatureMatchesFourFour)
 {
     // No setTimeSignature() call at all - every bar must behave like the old,

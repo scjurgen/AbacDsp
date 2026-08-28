@@ -5,7 +5,6 @@
 #include <atomic>
 #include <cmath>
 #include <cstddef>
-#include <iostream>
 #include <memory>
 #include <mutex>
 #include <nlohmann/json.hpp>
@@ -794,11 +793,13 @@ class TapeLooperImpl final : public EffectBase
         m_grooveReverb.setDecay(m_reverbDecayReq.load(std::memory_order_relaxed));
         applyGrooveInstrumentParameters();
 
+        // Engaging Play never resets the shared clock - it keeps advancing while
+        // stopped (recording continues regardless), so the groove just resyncs to
+        // wherever it already is instead of restarting the loop from bar 1.
         const bool groovePlayReq = m_groovePlayReq.load(std::memory_order_relaxed);
         if (groovePlayReq && !m_groovePlaying)
         {
-            m_grooveSequencer.resetPosition();
-            m_loopTimeKeeper.reset();
+            m_grooveSequencer.resyncToPosition(m_loopTimeKeeper.absolutePositionBeats());
         }
         m_groovePlaying = groovePlayReq;
         applyGrooveSourceIfChanged();
@@ -1121,17 +1122,6 @@ class TapeLooperImpl final : public EffectBase
     void feedClockDisplays(const AbacDsp::AudioBuffer<2, BlockSize>& out) noexcept
     {
         const auto clock = computeLoopClock();
-        if (clock.samplesPerBar > 0)
-        {
-            const auto bar = clock.loopPositionFrames / clock.samplesPerBar;
-            if (bar != m_debugLastBar)
-            {
-                std::cout << "bar start: " << bar << " loopPos=" << clock.loopPositionFrames
-                          << " write=" << m_tapeTrack[0].writeHead()
-                          << " read=" << static_cast<size_t>(m_tapeTrack[0].readHead(0)) << std::endl;
-                m_debugLastBar = bar;
-            }
-        }
         std::array<float, BlockSize> monoDecimated{};
         size_t decimatedCount = 0;
         float blockPeak = 0.f;
@@ -1279,13 +1269,13 @@ class TapeLooperImpl final : public EffectBase
     }
 
     // repositionGrooveSequencer() undoes setGroove()'s reset-to-0 so a
-    // style/variation swap keeps beat position instead of restarting the pattern.
+    // style/variation swap keeps beat position instead of restarting the pattern -
+    // resyncToPosition() derives it fresh from the shared clock, so a swap needs
+    // no manual previous-tick-to-new-tick math the way it used to.
     void installGrooveProgramIfChanged()
     {
         const auto* program = m_grooveKit.program();
         const bool programChanged = program != m_lastGrooveProgram;
-        const auto* previousProgram = m_lastGrooveProgram;
-        const double previousTickPos = m_grooveSequencer.tickPosition();
         if (programChanged)
         {
             m_lastGrooveProgram = program;
@@ -1293,32 +1283,10 @@ class TapeLooperImpl final : public EffectBase
         m_grooveSequencer.setLibrary(m_grooveKit.library());
         m_grooveSequencer.setTrackNames(m_grooveKit.installedTrackNames());
         m_grooveSequencer.setGroove(program);
-        if (programChanged && previousProgram != nullptr && program != nullptr)
+        if (programChanged && program != nullptr)
         {
-            repositionGrooveSequencer(*program, previousTickPos, *previousProgram);
+            m_grooveSequencer.resyncToPosition(m_loopTimeKeeper.absolutePositionBeats());
         }
-    }
-
-    // Wraps via fmod, so a shorter new groove just loops sooner rather than
-    // reading past its own loopLengthTicks.
-    void repositionGrooveSequencer(const AbacDsp::GrooveProgram& program, const double previousTickPos,
-                                   const AbacDsp::GrooveProgram& previousProgram) noexcept
-    {
-        const double previousTicksPerBeat =
-            static_cast<double>(std::max<uint16_t>(1, previousProgram.ticksPerQuarterNote));
-        const double beatPosition = previousTickPos / previousTicksPerBeat;
-        const double loopLengthTicks = static_cast<double>(std::max<uint32_t>(1, program.loopLengthTicks));
-        double newTickPos = std::fmod(beatPosition * static_cast<double>(program.ticksPerQuarterNote), loopLengthTicks);
-        if (newTickPos < 0.0)
-        {
-            newTickPos += loopLengthTicks;
-        }
-        const auto& triggers = program.triggers;
-        const auto nextTriggerIndex = static_cast<size_t>(std::distance(
-            triggers.begin(), std::upper_bound(triggers.begin(), triggers.end(), newTickPos,
-                                               [](const double tick, const AbacDsp::GrooveTrigger& trigger)
-                                               { return tick < static_cast<double>(trigger.tick); })));
-        m_grooveSequencer.primeTickState(newTickPos, nextTriggerIndex);
     }
 
     void checkGrooveInfoTextChanged()
@@ -1549,13 +1517,6 @@ class TapeLooperImpl final : public EffectBase
                 }
             }
             m_tapeTrack[track].feed(tapeIn);
-            const auto writeHead = m_tapeTrack[track].writeHead();
-            if (writeHead < m_debugLastWriteHead[track])
-            {
-                std::cout << "track " << track << " write head wrapped: " << writeHead
-                          << " readHead=" << static_cast<size_t>(m_tapeTrack[track].readHead(0)) << std::endl;
-            }
-            m_debugLastWriteHead[track] = writeHead;
 
             // Fed only while playing, but ticked every block regardless - its own tail
             // keeps ringing after Play (or the send) drops, the way a real room does.
@@ -1606,13 +1567,20 @@ class TapeLooperImpl final : public EffectBase
         std::array<float, 2 * BlockSize> sendIn{};
         if (m_groovePlaying)
         {
-            const auto spb = samplesPerBeat();
+            // Reconstructs each sample's absolute beat position by walking back
+            // from m_loopTimeKeeper's already-advanced (end-of-block) position,
+            // since applyParameters() advances it before this runs.
+            const double beatsPerSample = static_cast<double>(m_bpm) * static_cast<double>(m_tapeSpeed) /
+                                          (60.0 * static_cast<double>(sampleRate()));
+            const double startOfBlockBeats =
+                m_loopTimeKeeper.absolutePositionBeats() - static_cast<double>(BlockSize) * beatsPerSample;
             for (size_t i = 0; i < BlockSize; ++i)
             {
                 std::array<std::array<float, AbacDsp::GrooveDrumPlayer::kChannels>,
                            AbacDsp::GrooveDrumPlayer::kMaxTracks>
                     perTrack{};
-                const auto frame = m_grooveSequencer.advanceSample(spb, &perTrack);
+                const auto beatsAtSample = startOfBlockBeats + static_cast<double>(i) * beatsPerSample;
+                const auto frame = m_grooveSequencer.advanceToPosition(beatsAtSample, &perTrack);
                 grooveIn[i * 2] = frame[0];
                 grooveIn[i * 2 + 1] = frame[1];
 
@@ -1769,8 +1737,6 @@ class TapeLooperImpl final : public EffectBase
     bool m_groovePlaying{false};
     bool m_useClick{false}; // applied state; edge-triggers applyGrooveSourceIfChanged()'s style swap
     std::array<bool, TapeLooperDetail::kFreeTracks> m_lastNotifiedRecording{};
-    std::array<size_t, TapeLooperDetail::kFreeTracks> m_debugLastWriteHead{};
-    size_t m_debugLastBar{static_cast<size_t>(-1)};
     std::array<float, TapeLooperScriptEngine::kMaxLuaParams> m_luaParamValues{};
     std::array<float, TapeLooperScriptEngine::kMaxLuaParams> m_lastNotifiedLuaParamValues{-1.f, -1.f, -1.f, -1.f,
                                                                                           -1.f, -1.f, -1.f, -1.f};

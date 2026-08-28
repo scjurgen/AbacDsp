@@ -46,7 +46,7 @@ class LoopTimeKeeper
 
     void reset() noexcept
     {
-        m_positionBeats = 0.0;
+        m_absoluteBeats = 0.0;
     }
 
     // Position-preserving: BPM only scales future advance() calls, so the stored
@@ -60,7 +60,6 @@ class LoopTimeKeeper
     {
         m_bars = std::max(bars, kMinBars);
         recomputeLoopBeats();
-        wrapPositionIntoRange();
     }
 
     // Time signature effective from startBar (1-based) onward. Overwrites an
@@ -78,7 +77,6 @@ class LoopTimeKeeper
                 m_timeSignatures[i].numerator = safeNumerator;
                 m_timeSignatures[i].denominator = safeDenominator;
                 recomputeLoopBeats();
-                wrapPositionIntoRange();
                 return true;
             }
         }
@@ -95,7 +93,6 @@ class LoopTimeKeeper
         m_timeSignatures[insertAt] = {startBar, safeNumerator, safeDenominator};
         ++m_timeSignatureCount;
         recomputeLoopBeats();
-        wrapPositionIntoRange();
         return true;
     }
 
@@ -103,8 +100,7 @@ class LoopTimeKeeper
     {
         const auto elapsedBeats = static_cast<double>(numFrames) * static_cast<double>(speedRatio) *
                                   static_cast<double>(m_bpm) / (60.0 * static_cast<double>(m_sampleRate));
-        m_positionBeats += elapsedBeats;
-        wrapPositionIntoRange();
+        m_absoluteBeats += elapsedBeats;
     }
 
     [[nodiscard]] float bpm() const noexcept
@@ -117,9 +113,28 @@ class LoopTimeKeeper
         return m_bars;
     }
 
+    // Wrapped into [0, loopBeats()) - the position within the current loop.
     [[nodiscard]] double positionBeats() const noexcept
     {
-        return m_positionBeats;
+        const auto loop = m_cachedLoopBeats;
+        if (loop <= 0.0)
+        {
+            return 0.0;
+        }
+        auto wrapped = std::fmod(m_absoluteBeats, loop);
+        if (wrapped < 0.0)
+        {
+            wrapped += loop;
+        }
+        return wrapped;
+    }
+
+    // Never wraps, monotonic except across an explicit reset() - the reference a
+    // consumer with its own, differently-sized loop (e.g. a groove player) wraps
+    // against itself, so its phase never glitches at this clock's own loop wrap.
+    [[nodiscard]] double absolutePositionBeats() const noexcept
+    {
+        return m_absoluteBeats;
     }
 
     [[nodiscard]] double loopBeats() const noexcept
@@ -127,12 +142,12 @@ class LoopTimeKeeper
         return m_cachedLoopBeats;
     }
 
-    // Snapshot only: converts the stored beat position to frames at the *current*
+    // Snapshot only: converts the wrapped beat position to frames at the *current*
     // BPM. Callers needing a frame-domain position should call this fresh each
     // time, not cache it - a later BPM change would make a cached value stale.
     [[nodiscard]] double positionFrames() const noexcept
     {
-        return m_positionBeats * 60.0 * static_cast<double>(m_sampleRate) / static_cast<double>(m_bpm);
+        return positionBeats() * 60.0 * static_cast<double>(m_sampleRate) / static_cast<double>(m_bpm);
     }
 
     // Walks bar-by-bar to locate the bar containing the current position, then
@@ -140,7 +155,7 @@ class LoopTimeKeeper
     // O(bar count), not O(1), since bar lengths vary with the signature timeline.
     [[nodiscard]] BarBeatTick positionBBT(const size_t ticksPerQuarterNote) const noexcept
     {
-        double remaining = m_positionBeats;
+        double remaining = positionBeats();
         unsigned bar = 1;
         double barLength = barLengthQuarterNotes(bar);
         while (remaining >= barLength && bar < m_bars)
@@ -178,21 +193,6 @@ class LoopTimeKeeper
         uint16_t denominator;
     };
 
-    void wrapPositionIntoRange() noexcept
-    {
-        const auto loop = m_cachedLoopBeats;
-        if (loop <= 0.0)
-        {
-            m_positionBeats = 0.0;
-            return;
-        }
-        m_positionBeats = std::fmod(m_positionBeats, loop);
-        if (m_positionBeats < 0.0)
-        {
-            m_positionBeats += loop;
-        }
-    }
-
     // Last entry whose startBar is at or before bar - the table is kept sorted
     // ascending, and entry 0 always starts at bar 1, so this always resolves.
     [[nodiscard]] const TimeSignatureChange& activeSignature(const unsigned bar) const noexcept
@@ -227,7 +227,7 @@ class LoopTimeKeeper
     float m_sampleRate;
     float m_bpm{120.f};
     unsigned m_bars{1u};
-    double m_positionBeats{0.0};
+    double m_absoluteBeats{0.0};
     double m_cachedLoopBeats{0.0};
     std::array<TimeSignatureChange, MaxNumTimeSignatureChanges> m_timeSignatures{};
     size_t m_timeSignatureCount{1};

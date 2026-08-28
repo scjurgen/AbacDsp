@@ -433,4 +433,103 @@ TEST(GrooveDrumPlayerTest, PrimedPlayerContinuesEquivalentToDirectRender)
     }
 }
 
+TEST(GrooveDrumPlayerTest, AdvanceToPositionFiresTriggerAtCorrectAbsoluteBeats)
+{
+    const auto loop = makeConstLoop(10, 1.f, 1.f);
+    SliceLibrary library(10);
+    library.extractTrack(loop, std::vector<Slice>{{0, 10}});
+    // 100 ticks/quarter note; trigger at tick 250 -> 2.5 beats.
+    GrooveProgram program{{{250, 0, 1.f}}, 1000, 100};
+
+    GrooveDrumPlayer player(kSampleRate);
+    player.setFadeMs(1.f);
+    player.setLibrary(&library);
+    player.setGroove(&program);
+
+    static_cast<void>(player.advanceToPosition(2.4));
+    EXPECT_EQ(player.activeVoiceCount(), 0u) << "must not fire before its exact beat position";
+
+    static_cast<void>(player.advanceToPosition(2.6));
+    EXPECT_EQ(player.activeVoiceCount(), 1u) << "must fire once the position crosses its tick";
+}
+
+TEST(GrooveDrumPlayerTest, AdvanceToPositionWrapsAndRefiresOnItsOwnPeriod)
+{
+    const auto loop = makeConstLoop(5, 1.f, 1.f); // short slice: fully finishes well before a wrap
+    SliceLibrary library(5);
+    library.extractTrack(loop, std::vector<Slice>{{0, 5}});
+    // loop is 1000 ticks / 100 ticks-per-quarter = 10 beats.
+    GrooveProgram program{{{0, 0, 1.f}}, 1000, 100};
+
+    GrooveDrumPlayer player(kSampleRate);
+    player.setFadeMs(1.f);
+    player.setLibrary(&library);
+    player.setGroove(&program);
+
+    size_t risingEdges = 0;
+    bool wasActive = false;
+    for (int step = 1; step <= 205; ++step) // 0.1 beats/step -> sweeps 3.5 loop periods
+    {
+        static_cast<void>(player.advanceToPosition(static_cast<double>(step) * 0.1));
+        const bool active = player.activeVoiceCount() > 0;
+        if (active && !wasActive)
+        {
+            ++risingEdges;
+        }
+        wasActive = active;
+    }
+    EXPECT_EQ(risingEdges, 3u) << "expected three fires as the swept position crosses beats 0, 10, and 20";
+}
+
+TEST(GrooveDrumPlayerTest, AdvanceToPositionBackwardJumpFiresAtMostOnce)
+{
+    // 2-frame slice: the first firing's voice has finished by the second call's
+    // own render step, so activeVoiceCount() afterward reflects only that call.
+    const auto loop = makeConstLoop(2, 1.f, 1.f);
+    SliceLibrary library(2);
+    library.extractTrack(loop, std::vector<Slice>{{0, 2}});
+    GrooveProgram program{{{0, 0, 1.f}}, 1000, 100}; // 10 beats/loop; single trigger at beat 0.
+
+    GrooveDrumPlayer player(kSampleRate);
+    player.setFadeMs(1.f);
+    player.setLibrary(&library);
+    player.setGroove(&program);
+
+    static_cast<void>(player.advanceToPosition(9.0)); // past the trigger, near loop end
+    static_cast<void>(player.advanceToPosition(1.0)); // discontinuous jump backward - a clock reset
+    EXPECT_EQ(player.activeVoiceCount(), 1u) << "the tick-0 trigger should refire exactly once, not twice";
+}
+
+TEST(GrooveDrumPlayerTest, ResyncToPositionPicksUpTriggerIndexWithoutFiring)
+{
+    const auto loop = makeConstLoop(4, 1.f, 1.f);
+    SliceLibrary library(4);
+    library.extractTrack(loop, std::vector<Slice>{{0, 4}});
+    // 10 beats/loop; triggers at beat 0 and beat 5.
+    GrooveProgram program{{{0, 0, 1.f}, {500, 0, 1.f}}, 1000, 100};
+
+    GrooveDrumPlayer player(kSampleRate);
+    player.setFadeMs(1.f);
+    player.setLibrary(&library);
+    player.setGroove(&program);
+
+    player.resyncToPosition(6.0); // past the beat-5 trigger
+    EXPECT_EQ(player.activeVoiceCount(), 0u) << "resyncToPosition() must not fire anything itself";
+
+    // Advancing on toward the loop end must not refire the already-passed beat-5
+    // trigger, only wrap around to beat 0.
+    static_cast<void>(player.advanceToPosition(9.9));
+    EXPECT_EQ(player.activeVoiceCount(), 0u);
+    static_cast<void>(player.advanceToPosition(10.1));
+    EXPECT_EQ(player.activeVoiceCount(), 1u) << "expected only the wrapped beat-0 trigger to fire";
+}
+
+TEST(GrooveDrumPlayerTest, ResyncToPositionWithNoProgramIsHarmless)
+{
+    GrooveDrumPlayer player(kSampleRate);
+    player.resyncToPosition(3.0);
+    static_cast<void>(player.advanceToPosition(3.1));
+    EXPECT_EQ(player.activeVoiceCount(), 0u);
+}
+
 }

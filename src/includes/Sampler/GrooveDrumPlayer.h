@@ -52,13 +52,14 @@ struct GrooveBurstResult
  * @brief Polyphonic voice pool playing a resolved MIDI groove against a
  * sample library.
  *
- * Tracks its own tick position: a free-running loop of loopLengthTicks, advanced
- * each sample from the caller's live samplesPerBeat, independent of any bar/beat/
- * step grid. Every trigger plays a random slice from its track at unmodified gain
- * (no pitch/reverse/normalization - recorded levels are trusted as-is).
- * syncToPpq()/primeTickState() reposition tick state (host resync, or resuming a
- * renderBurst()-rendered burst); resetPosition() snaps to tick 0. Not thread-safe;
- * library/program pointers are borrowed and must outlive the player.
+ * Tracks its own tick position: a loop of loopLengthTicks, advanced each sample
+ * either from the caller's live samplesPerBeat (advanceSample()) or from an
+ * external absolute-beat clock (advanceToPosition()), independent of any
+ * bar/beat/step grid. Every trigger plays a random slice from its track at
+ * unmodified gain (no pitch/reverse/normalization - recorded levels are trusted
+ * as-is). syncToPpq()/primeTickState()/resyncToPosition() reposition tick state;
+ * resetPosition() snaps to tick 0. Not thread-safe; library/program pointers are
+ * borrowed and must outlive the player.
  *
  * @warning checkTriggers() logs once per loop repeat via std::cout - not
  *          realtime-safe, accepted deliberately.
@@ -143,12 +144,22 @@ class GrooveDrumPlayer
             return false;
         }
         m_tickPos = newTickPos;
-        const auto& triggers = m_program->triggers;
-        m_nextTriggerIndex = static_cast<size_t>(
-            std::distance(triggers.begin(), std::upper_bound(triggers.begin(), triggers.end(), newTickPos,
-                                                             [](const double tick, const GrooveTrigger& trigger)
-                                                             { return tick < static_cast<double>(trigger.tick); })));
+        m_nextTriggerIndex = triggerIndexForTick(newTickPos);
         return true;
+    }
+
+    // Repositions the trigger cursor to absoluteBeats without firing anything -
+    // use after setGroove() swaps programs while driven by advanceToPosition(),
+    // so the new program picks up in phase instead of at tick 0.
+    void resyncToPosition(const double absoluteBeats) noexcept
+    {
+        if (m_program == nullptr || m_program->ticksPerQuarterNote == 0 || m_program->loopLengthTicks == 0)
+        {
+            resetPosition();
+            return;
+        }
+        m_tickPos = wrappedTickFromAbsoluteBeats(absoluteBeats);
+        m_nextTriggerIndex = triggerIndexForTick(m_tickPos);
     }
 
     void setFadeMs(const float ms) noexcept
@@ -181,6 +192,30 @@ class GrooveDrumPlayer
         std::array<std::array<float, kChannels>, kMaxTracks>* perTrackOut = nullptr) noexcept
     {
         checkTriggers(samplesPerBeat);
+        ++m_sampleCounter;
+        std::array<float, kChannels> out{0.f, 0.f};
+        if (perTrackOut != nullptr)
+        {
+            perTrackOut->fill(std::array<float, kChannels>{0.f, 0.f});
+        }
+        for (Voice& voice : m_voices)
+        {
+            if (voice.active)
+            {
+                renderVoice(voice, out, perTrackOut);
+            }
+        }
+        return out;
+    }
+
+    // Advances by one sample to an absolute beat position from an external shared
+    // clock instead of this player's own free-running tick counter. Fires every
+    // trigger crossed since the last call, wrap-aware, same as advanceSample().
+    [[nodiscard]] std::array<float, kChannels> advanceToPosition(
+        const double absoluteBeats,
+        std::array<std::array<float, kChannels>, kMaxTracks>* perTrackOut = nullptr) noexcept
+    {
+        checkTriggersToPosition(absoluteBeats);
         ++m_sampleCounter;
         std::array<float, kChannels> out{0.f, 0.f};
         if (perTrackOut != nullptr)
@@ -270,6 +305,65 @@ class GrooveDrumPlayer
             }
         }
         m_tickPos = newTickPos;
+    }
+
+    // Fires every trigger between the last tick position and the one
+    // absoluteBeats maps to, wrap-aware like checkTriggers() - just
+    // position-driven from an external clock instead of accumulating a step.
+    void checkTriggersToPosition(const double absoluteBeats) noexcept
+    {
+        if (m_program == nullptr || m_library == nullptr || m_program->triggers.empty() ||
+            m_program->loopLengthTicks == 0)
+        {
+            return;
+        }
+        const auto& triggers = m_program->triggers;
+        const double newTickPos = wrappedTickFromAbsoluteBeats(absoluteBeats);
+
+        if (newTickPos < m_tickPos)
+        {
+            // Wrapped (or a discontinuous jump, e.g. a shared-clock reset) - fire
+            // whatever's left in the old range once, then restart from the head.
+            while (m_nextTriggerIndex < triggers.size())
+            {
+                triggerVoice(triggers[m_nextTriggerIndex]);
+                ++m_nextTriggerIndex;
+            }
+            std::cout << std::format("{:8.3f}s  loop repeat\n",
+                                     static_cast<double>(m_sampleCounter) / static_cast<double>(m_sampleRate));
+            m_nextTriggerIndex = 0;
+        }
+        while (m_nextTriggerIndex < triggers.size() &&
+               static_cast<double>(triggers[m_nextTriggerIndex].tick) < newTickPos)
+        {
+            triggerVoice(triggers[m_nextTriggerIndex]);
+            ++m_nextTriggerIndex;
+        }
+        m_tickPos = newTickPos;
+    }
+
+    // Absolute beats mapped into this program's own tick space and wrapped at
+    // its loopLengthTicks. Caller must have already checked m_program is valid.
+    [[nodiscard]] double wrappedTickFromAbsoluteBeats(const double absoluteBeats) const noexcept
+    {
+        const auto loopLengthTicks = static_cast<double>(m_program->loopLengthTicks);
+        auto tick = std::fmod(absoluteBeats * static_cast<double>(m_program->ticksPerQuarterNote), loopLengthTicks);
+        if (tick < 0.0)
+        {
+            tick += loopLengthTicks;
+        }
+        return tick;
+    }
+
+    // Index of the first trigger at or after tick - caller must have already
+    // checked m_program is valid.
+    [[nodiscard]] size_t triggerIndexForTick(const double tick) const noexcept
+    {
+        const auto& triggers = m_program->triggers;
+        return static_cast<size_t>(
+            std::distance(triggers.begin(), std::upper_bound(triggers.begin(), triggers.end(), tick,
+                                                             [](const double t, const GrooveTrigger& trigger)
+                                                             { return t < static_cast<double>(trigger.tick); })));
     }
 
     void triggerVoice(const GrooveTrigger& trigger) noexcept
