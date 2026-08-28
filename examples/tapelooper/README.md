@@ -59,6 +59,10 @@ Take effect on the next audio block:
 SetTapeSpeed(ratio)                 -- 1.0 is nominal, matches the Tape Speed dial's range
 SetBpm(bpm)                         -- groove/click tempo
 SetGrooveVariation(index)           -- 0-based, picks among the loaded style's variations
+SetGrooveStyle(styleName)                  -- styleName is a "<Genre>/<style>" entry, same
+SetGrooveStyle(styleName, variationIndex)  -- form as the Groove menu; variationIndex defaults to 0
+GetLoopPhase()                      -- 0..1 position within the recorded loop, polled;
+                                     -- 0 before a loop length exists
 SetTrackRecord(track, isRecording)  -- track is 0-based: A=0, B=1, C=2
 SetTrackPlay(track, isPlaying)
 SetTrackGain(track, gain)           -- linear multiplier: 0 silent, 1 unity, ~4 is the
@@ -206,6 +210,17 @@ sample pieces `click_low`/`click_high`) through the exact same style-loading pat
 pick uses, so it inherits sample-accurate loop-begin sync for free. `"groove"` switches back to
 whichever style/variation was loaded before switching to click.
 
+### Loop end notified
+
+```lua
+function OnLoopEnd()
+end
+```
+
+Fires once each time the recorded loop wraps back to its start (edge-triggered, not polled) -
+the same wrapped position `GetLoopPhase()` reads. A no-op until a loop length exists (nothing
+recorded yet).
+
 ### Per-instrument groove control
 
 ```lua
@@ -327,6 +342,29 @@ end)
 ### Example: `base-scripts/groove-instrument-mix.lua`
 
 The same mix, ready to run as-is - turn on the Groove switch to hear it.
+
+### Example: loading a new groove style
+
+```lua
+-- Advance to the next style/variation each time the recorded loop wraps.
+local kSequence = {
+    { "Progressive/1_v", 0 },
+    { "Progressive/1_v", 1 },
+    { "Progressive/1_v", 2 },
+    { "educational/four-four/backbeat", 0 },
+}
+local step = 0
+
+function OnLoopEnd()
+    local entry = kSequence[(step % #kSequence) + 1]
+    SetGrooveStyle(entry[1], entry[2])
+    step = step + 1
+end
+```
+
+### Example: `base-scripts/groove-style-cycle.lua`
+
+The same cycle, ready to run as-is - turn on the Groove switch to hear it.
 
 ### Default (stub) script
 

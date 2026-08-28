@@ -481,13 +481,17 @@ class TapeLooperImpl final : public EffectBase
         m_trackGainReq[2].store(std::pow(10.f, valueDb / 20.f), std::memory_order_relaxed);
     }
 
-    // Groove menu click: styleName is one of listGrooveNames()'s own entries.
+    // Groove menu click (and SetGrooveStyle() from a script): styleName is one of
+    // listGrooveNames()'s own entries. Syncs the variation bookkeeping too, so a later
+    // SetGrooveVariation()/host move to variationIndex isn't mistaken for a no-op.
     void requestLoadGroove(const std::string& styleName, const unsigned variationIndex)
     {
         {
             std::lock_guard lock(m_grooveStyleMutex);
             m_currentGrooveStyle = styleName;
         }
+        m_appliedGrooveVariation = static_cast<int>(variationIndex);
+        m_grooveVariationReq.store(static_cast<float>(variationIndex), std::memory_order_relaxed);
         m_grooveKit.requestLoadStyle(kAbacDspDrumSamplesDir, kAbacDspMidiDrumsDir, styleName, variationIndex,
                                      AbacDsp::BurstConfig{sampleRate(), m_bpmReq.load(std::memory_order_relaxed)});
     }
@@ -694,6 +698,7 @@ class TapeLooperImpl final : public EffectBase
         m_grooveKit.pollAndInstall();
         checkGrooveInfoTextChanged();
         installGrooveProgramIfChanged();
+        notifyLoopBoundaryIfChanged();
         m_scriptEngine.tickBlock(BlockSize);
         notifyUiParametersIfChanged();
         applyScriptCommands();
@@ -917,6 +922,10 @@ class TapeLooperImpl final : public EffectBase
         {
             m_grooveVariationReq.store(*v, std::memory_order_relaxed);
         }
+        if (const auto v = m_scriptEngine.drainGrooveStyleCommand())
+        {
+            requestLoadGroove(v->styleName, v->variationIndex);
+        }
         for (size_t track = 0; track < TapeLooperDetail::kFreeTracks; ++track)
         {
             if (const auto v = m_scriptEngine.drainRecordCommand(track))
@@ -1106,6 +1115,25 @@ class TapeLooperImpl final : public EffectBase
         const auto rawPosition = static_cast<size_t>(m_loopTimeKeeper.positionFrames());
         const auto loopPositionFrames = (rawPosition + loopFrames - backdate) % loopFrames;
         return {loopFrames, samplesPerBar, loopPositionFrames, loopPositionFrames % samplesPerBar};
+    }
+
+    // Pushes GetLoopPhase()'s live value and fires OnLoopEnd() on the block loopPositionFrames
+    // wraps back below its previous value - same wrapped position getPlayheadNormalized()
+    // already reads for the UI, so this stays a no-op before a loop length exists.
+    void notifyLoopBoundaryIfChanged() noexcept
+    {
+        const auto clock = computeLoopClock();
+        if (clock.loopFrames == 0)
+        {
+            return;
+        }
+        m_scriptEngine.updateLoopPhase(static_cast<float>(clock.loopPositionFrames) /
+                                       static_cast<float>(clock.loopFrames));
+        if (clock.loopPositionFrames < m_previousLoopPositionFrames)
+        {
+            m_scriptEngine.notifyLoopEnd();
+        }
+        m_previousLoopPositionFrames = clock.loopPositionFrames;
     }
 
     [[nodiscard]] int trackClockState(const size_t track) const noexcept
@@ -1742,6 +1770,7 @@ class TapeLooperImpl final : public EffectBase
                                                                                           -1.f, -1.f, -1.f, -1.f};
     float m_bpm{120.f};
     int m_appliedGrooveVariation{0};
+    size_t m_previousLoopPositionFrames{0};
     std::array<float, TapeLooperDetail::kFreeTracks> m_reverbSend{TapeLooperDetail::kDefaultReverbSend,
                                                                   TapeLooperDetail::kDefaultReverbSend,
                                                                   TapeLooperDetail::kDefaultReverbSend};
