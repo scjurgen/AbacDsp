@@ -82,7 +82,7 @@ private:
     }
     static bool isEqual(const bool a, const float b)
     {
-        return a == (static_cast<int>(round(b)))?false:true;
+        return a == static_cast<int>(round(b));
     }
     bool m_modified = false;
 };
