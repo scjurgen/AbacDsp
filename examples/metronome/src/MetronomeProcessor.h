@@ -42,6 +42,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("onOff", this);
         m_parameters.addParameterListener("hostSync", this);
         m_parameters.addParameterListener("analysisMode", this);
+        m_parameters.addParameterListener("analysisGrid", this);
         m_parameters.addParameterListener("preset", this);
         m_parameters.addParameterListener("swingRatio", this);
 
@@ -63,6 +64,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("onOff", this);
         m_parameters.removeParameterListener("hostSync", this);
         m_parameters.removeParameterListener("analysisMode", this);
+        m_parameters.removeParameterListener("analysisGrid", this);
         m_parameters.removeParameterListener("preset", this);
         m_parameters.removeParameterListener("swingRatio", this);
     }
@@ -287,6 +289,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("analysisMode", 1),
                                                                     juce::String::fromUTF8("Analysis"), 0));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("analysisGrid", 1), juce::String::fromUTF8("Analysis Grid"),
+            juce::StringArray{juce::String::fromUTF8("Quarter"), juce::String::fromUTF8("8th"),
+                              juce::String::fromUTF8("Triplet"), juce::String::fromUTF8("Shuffle"),
+                              juce::String::fromUTF8("16th")},
+            0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID("preset", 1), juce::String::fromUTF8("Preset"),
             juce::StringArray{juce::String::fromUTF8("3/4"),
                               juce::String::fromUTF8("3/4 8th"),
@@ -382,6 +390,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                  p.pluginRunner->setAnalysisMode(static_cast<bool>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::analysisMode, v);
              }},
+            {"analysisGrid",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setAnalysisGrid(static_cast<int>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::analysisGrid, v);
+             }},
             {"preset",
              [](AudioPluginAudioProcessor& p, const float v)
              {
@@ -469,6 +483,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("analysisMode");
             float normalized = range.convertTo0to1(static_cast<float>(params.analysisMode));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("analysisGrid"))
+        {
+            const auto& range = m_parameters.getParameterRange("analysisGrid");
+            float normalized = range.convertTo0to1(static_cast<float>(params.analysisGrid));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("preset"))

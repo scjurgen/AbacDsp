@@ -20,6 +20,8 @@
     {"short": "ONF",  "type": "switch", "display": "Start",          "symbol": "onOff",       "default": 0},
     {"short": "SYNC", "type": "switch", "display": "Host Sync",      "symbol": "hostSync",    "default": 0},
     {"short": "ANLZ", "type": "switch", "display": "Analysis",       "symbol": "analysisMode", "default": 0},
+    {"short": "AGRD", "type": "drop",   "display": "Analysis Grid",  "symbol": "analysisGrid", "default": 0,
+      "listitems": ["Quarter", "8th", "Triplet", "Shuffle", "16th"]},
     {"short": "PRE",  "type": "drop",   "display": "Preset",         "symbol": "preset",      "default": 6,
       "listitems": ["3/4", "3/4 8th", "3/4 16th", "3/4 shuffle", "3/4 triplet", "4/4", "4/4 8th", "4/4 16th",
         "4/4 shuffle", "4/4 triplet", "4/4 swing", "5/4 (3+2)", "5/4 8th (3+2)", "5/4 (2+3)", "5/4 8th (2+3)",
@@ -48,7 +50,7 @@
     "WINDOW_WIDTH": "960",
     "WINDOW_HEIGHT": "660",
     "type": "||",
-    "composition": "C=(1:5) A1=(PRE, DRP, SWG, ONF, SYNC, ANLZ, BPM, SVOL, MVOL, IVOL) A2=(SIG%1, IRIS%2)"
+    "composition": "C=(1:5) A1=(PRE, DRP, SWG, ONF, SYNC, ANLZ, AGRD, BPM, SVOL, MVOL, IVOL) A2=(SIG%1, IRIS%2)"
   },
   "performance-page": {
     "type": "-",

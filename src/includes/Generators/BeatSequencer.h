@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <span>
 #include <vector>
 
 namespace AbacDsp
@@ -21,6 +22,86 @@ enum class SubdivType : uint8_t
     Shuffle,
     Compound3
 };
+
+/// @ingroup generators
+/// @brief Sample offsets, within one beat, of a subdivision grid's hits.
+/// A pure function of beat length, so a grid other than a sequencer's own can be evaluated.
+[[nodiscard]] inline std::vector<size_t> computeSubPositions(const SubdivType type, const size_t samplesPerBeat,
+                                                             const float swingRatio)
+{
+    if (samplesPerBeat == 0)
+    {
+        return {};
+    }
+    const size_t spb = samplesPerBeat;
+    switch (type)
+    {
+        case SubdivType::None:
+            return {};
+        case SubdivType::Eighth:
+            return {spb / 2};
+        case SubdivType::Sixteenth:
+            return {spb / 4, spb / 2, 3 * spb / 4};
+        case SubdivType::Triplet:
+            [[fallthrough]];
+        case SubdivType::Compound3:
+            return {spb / 3, 2 * spb / 3};
+        case SubdivType::Shuffle:
+        {
+            const auto longPart = static_cast<size_t>(static_cast<float>(spb) * swingRatio / (1.f + swingRatio));
+            return {longPart};
+        }
+    }
+    return {};
+}
+
+/// @ingroup generators
+/// @brief Which grid point a beat-relative position is nearest to, and how far.
+struct GridPoint
+{
+    long distanceSamples{0};    // negative = early, positive = late, same convention as samplesToNearestBeat()
+    bool isBeat{true};          // nearest point is a beat boundary, not a subdivision
+    size_t beatIndexInBar{0};   // valid when isBeat: which beat boundary
+    size_t subdivisionIndex{0}; // valid when !isBeat: index into subPositions
+};
+
+/// @ingroup generators
+/// @brief Nearest-grid-point search against an explicit grid, not a live sequencer's own.
+/// Lets a captured position be re-evaluated against a grid its sequencer was never configured with.
+[[nodiscard]] inline GridPoint nearestGridPointOn(const size_t beatSamplePos, const size_t beatIndexInBar,
+                                                  const size_t beatsPerBar, const size_t samplesPerBeat,
+                                                  const std::span<const size_t> subPositions) noexcept
+{
+    GridPoint best{};
+    if (samplesPerBeat == 0)
+    {
+        return best;
+    }
+    const auto pos = static_cast<long>(beatSamplePos);
+    const auto spb = static_cast<long>(samplesPerBeat);
+    const long distToPrev = -pos;
+    const long distToNext = spb - pos;
+    if (distToPrev * -2 <= spb)
+    {
+        best = {distToPrev, true, beatIndexInBar, 0};
+    }
+    else
+    {
+        const size_t nextBeat = (beatsPerBar == 0) ? 0 : (beatIndexInBar + 1) % beatsPerBar;
+        best = {distToNext, true, nextBeat, 0};
+    }
+    for (size_t i = 0; i < subPositions.size(); ++i)
+    {
+        const auto sub = static_cast<long>(subPositions[i]);
+        const long distance = sub - pos;
+        if (std::abs(distance) < std::abs(best.distanceSamples) ||
+            (std::abs(distance) == std::abs(best.distanceSamples) && distance <= 0))
+        {
+            best = {distance, false, 0, i};
+        }
+    }
+    return best;
+}
 
 /**
  * @ingroup generators
@@ -47,14 +128,7 @@ class BeatSequencer
         bool barWrapped{false};   // advancing past this sample wrapped to a new bar
     };
 
-    /// @brief Which grid point the current position is nearest to, and how far.
-    struct GridPoint
-    {
-        long distanceSamples{0};    // negative = early, positive = late, same convention as samplesToNearestBeat()
-        bool isBeat{true};          // nearest point is a beat boundary, not a subdivision
-        size_t beatIndexInBar{0};   // valid when isBeat: which beat boundary
-        size_t subdivisionIndex{0}; // valid when !isBeat: index into subPositions()
-    };
+    using GridPoint = AbacDsp::GridPoint;
 
     explicit BeatSequencer(const float sampleRate)
         : m_sampleRate(sampleRate)
@@ -156,6 +230,11 @@ class BeatSequencer
         return m_bpm;
     }
 
+    [[nodiscard]] float swingRatio() const noexcept
+    {
+        return m_swingRatio;
+    }
+
     [[nodiscard]] size_t samplesPerBeat() const noexcept
     {
         return m_samplesPerBeat;
@@ -226,35 +305,7 @@ class BeatSequencer
     // group hits by their musical role (e.g. "beat 1" vs. "the 8th note after beat 2").
     [[nodiscard]] GridPoint nearestGridPoint() const noexcept
     {
-        GridPoint best{};
-        if (m_samplesPerBeat == 0)
-        {
-            return best;
-        }
-        const auto pos = static_cast<long>(m_beatSamplePos);
-        const auto spb = static_cast<long>(m_samplesPerBeat);
-        const long distToPrev = -pos;
-        const long distToNext = spb - pos;
-        if (distToPrev * -2 <= spb)
-        {
-            best = {distToPrev, true, m_beatIndexInBar, 0};
-        }
-        else
-        {
-            const size_t nextBeat = (m_beatsPerBar == 0) ? 0 : (m_beatIndexInBar + 1) % m_beatsPerBar;
-            best = {distToNext, true, nextBeat, 0};
-        }
-        for (size_t i = 0; i < m_subPositions.size(); ++i)
-        {
-            const auto sub = static_cast<long>(m_subPositions[i]);
-            const long distance = sub - pos;
-            if (std::abs(distance) < std::abs(best.distanceSamples) ||
-                (std::abs(distance) == std::abs(best.distanceSamples) && distance <= 0))
-            {
-                best = {distance, false, 0, i};
-            }
-        }
-        return best;
+        return nearestGridPointOn(m_beatSamplePos, m_beatIndexInBar, m_beatsPerBar, m_samplesPerBeat, m_subPositions);
     }
 
     // Same convention as samplesToNearestBeat(), against the bar grid instead.
@@ -302,35 +353,7 @@ class BeatSequencer
 
     void updateSubPositions()
     {
-        m_subPositions.clear();
-        if (m_samplesPerBeat == 0)
-        {
-            return;
-        }
-        const size_t spb = m_samplesPerBeat;
-        switch (m_subdivType)
-        {
-            case SubdivType::None:
-                break;
-            case SubdivType::Eighth:
-                m_subPositions = {spb / 2};
-                break;
-            case SubdivType::Sixteenth:
-                m_subPositions = {spb / 4, spb / 2, 3 * spb / 4};
-                break;
-            case SubdivType::Triplet:
-                [[fallthrough]];
-            case SubdivType::Compound3:
-                m_subPositions = {spb / 3, 2 * spb / 3};
-                break;
-            case SubdivType::Shuffle:
-            {
-                const auto longPart =
-                    static_cast<size_t>(static_cast<float>(spb) * m_swingRatio / (1.f + m_swingRatio));
-                m_subPositions = {longPart};
-                break;
-            }
-        }
+        m_subPositions = computeSubPositions(m_subdivType, m_samplesPerBeat, m_swingRatio);
     }
 
     [[nodiscard]] size_t beatsToSamples(const float bpm) const noexcept

@@ -140,6 +140,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(analysisGridDrop)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(subVolumeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(metroVolumeDial).withFlex(1).withMargin(knobMarginSmall));
@@ -253,6 +258,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             valueTreeState, "analysisMode", analysisModeSwitch);
         analysisModeSwitch.setTooltip(juce::String::fromUTF8("Analysis"));
 
+        addAndMakeVisible(analysisGridDrop);
+        analysisGridDrop.addItemList(valueTreeState.getParameter("analysisGrid")->getAllValueStrings(), 1);
+        analysisGridDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "analysisGrid", analysisGridDrop);
+        analysisGridDrop.setTooltip(juce::String::fromUTF8("Analysis Grid (Quarter, 8th, Triplet, Shuffle, 16th)"));
         addAndMakeVisible(presetDrop);
         presetDrop.addItemList(valueTreeState.getParameter("preset")->getAllValueStrings(), 1);
         presetDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
@@ -307,6 +317,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             onOffSwitch.setVisible(false);
             hostSyncSwitch.setVisible(false);
             analysisModeSwitch.setVisible(false);
+            analysisGridDrop.setVisible(false);
             presetDrop.setVisible(false);
             signalGauge.setVisible(true);
             irisGauge.setVisible(true);
@@ -321,6 +332,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             onOffSwitch.setVisible(true);
             hostSyncSwitch.setVisible(true);
             analysisModeSwitch.setVisible(true);
+            analysisGridDrop.setVisible(true);
             presetDrop.setVisible(true);
             signalGauge.setVisible(true);
             irisGauge.setVisible(true);
@@ -815,6 +827,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> hostSyncSwitchAttachment;
     juce::ToggleButton analysisModeSwitch{juce::String::fromUTF8("Analysis")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> analysisModeSwitchAttachment;
+    juce::ComboBox analysisGridDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> analysisGridDropAttachment;
     juce::ComboBox presetDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> presetDropAttachment;
     CustomRotaryDial swingRatioDial{this};

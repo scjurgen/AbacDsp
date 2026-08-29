@@ -105,6 +105,13 @@ class MetronomeImpl final : public EffectBase
         m_analysisMode = value;
     }
 
+    // Only ever read when the report is built (see buildAnalysisReportHtml()), never during
+    // capture - so it may be left set to anything, or changed mid-take, without effect until then.
+    void setAnalysisGrid(const int index)
+    {
+        m_analysisGridIndex = std::clamp(index, 0, static_cast<int>(kAnalysisGrids.size()) - 1);
+    }
+
     // Consumes the "a report is waiting" flag set from the audio thread when analysis mode
     // is switched off; the caller (message thread) is expected to build and export the report.
     [[nodiscard]] bool consumeAnalysisReportReady() noexcept
@@ -115,8 +122,9 @@ class MetronomeImpl final : public EffectBase
     [[nodiscard]] std::string buildAnalysisReportHtml() const
     {
         const auto& preset = kPresets[static_cast<size_t>(m_presetIndex)];
-        return MetronomeAnalysis::buildReportHtml(m_deviationCollector.hits(), preset.barBeats,
-                                                  m_seq.subPositions().size(), m_bpm, preset.name);
+        const auto& grid = kAnalysisGrids[static_cast<size_t>(m_analysisGridIndex)];
+        return MetronomeAnalysis::buildReportHtml(m_rawOnsetCollector.hits(), preset.barBeats, m_seq.swingRatio(),
+                                                  grid.type, grid.name, m_bpm, sampleRate(), preset.name);
     }
 
     void setPreset(const int index)
@@ -188,14 +196,7 @@ class MetronomeImpl final : public EffectBase
         {
             if (m_analysisMode && m_onsetDetector.step(inMono[i]))
             {
-                const auto gridPoint = m_seq.nearestGridPoint();
-                const float deviationMs = static_cast<float>(gridPoint.distanceSamples) / sampleRate() * 1000.f;
-                const uint8_t role =
-                    gridPoint.isBeat
-                        ? MetronomeAnalysis::roleForBeat(gridPoint.beatIndexInBar)
-                        : MetronomeAnalysis::roleForSubdivision(kPresets[static_cast<size_t>(m_presetIndex)].barBeats,
-                                                                gridPoint.subdivisionIndex);
-                m_deviationCollector.push(deviationMs, role);
+                m_rawOnsetCollector.push({m_seq.beatIndexInBar(), m_seq.beatSamplePos(), m_seq.samplesPerBeat()});
             }
 
             const auto event = m_seq.advance();
@@ -323,6 +324,21 @@ class MetronomeImpl final : public EffectBase
     });
     // clang-format on
 
+    // Grid the timing analysis measures onset hits against - independent of the preset above,
+    // which only controls what the metronome itself plays.
+    struct AnalysisGrid
+    {
+        std::string_view name;
+        SubdivType type;
+    };
+    static constexpr auto kAnalysisGrids = std::to_array<AnalysisGrid>({
+        {"Quarter", kNo},
+        {"8th", kEi},
+        {"Triplet", kTr},
+        {"Shuffle", kSh},
+        {"16th", kSi},
+    });
+
     void triggerBeatAccent(const ClickAccent level) noexcept
     {
         m_click.trigger(level);
@@ -382,7 +398,7 @@ class MetronomeImpl final : public EffectBase
         }
         if (m_analysisMode)
         {
-            m_deviationCollector.reset();
+            m_rawOnsetCollector.reset();
             m_onsetDetector.reset();
         }
         else
@@ -405,13 +421,14 @@ class MetronomeImpl final : public EffectBase
     int m_barCount{0};
 
     int m_presetIndex{kDefaultPresetIndex};
+    int m_analysisGridIndex{0};
     size_t m_preWindow{0};
     size_t m_postWindow{0};
 
     AbacDsp::ClickGenerator m_click;
     AbacDsp::BeatSequencer m_seq;
     MetronomeAnalysis::OnsetDetector m_onsetDetector;
-    MetronomeAnalysis::DeviationCollector m_deviationCollector;
+    MetronomeAnalysis::RawOnsetCollector m_rawOnsetCollector;
     std::atomic<bool> m_reportReady{false};
 
     std::vector<float> m_visualWavedata;

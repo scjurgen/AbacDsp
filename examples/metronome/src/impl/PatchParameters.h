@@ -21,6 +21,7 @@ struct PatchParameters
         onOff       , // switch
         hostSync    , // switch
         analysisMode, // switch
+        analysisGrid, // drop
         preset      , // drop
         swingRatio   // dial
     };
@@ -32,6 +33,7 @@ float subVolume{-15.0f};
 bool onOff{false};
 bool hostSync{false};
 bool analysisMode{false};
+size_t analysisGrid{0};
 size_t preset{6};
 float swingRatio{1.5f};
 
@@ -45,6 +47,7 @@ float swingRatio{1.5f};
 "onOff",
 "hostSync",
 "analysisMode",
+"analysisGrid",
 "preset",
 "swingRatio"
     });
@@ -73,6 +76,7 @@ float swingRatio{1.5f};
         else if constexpr (ParamId == Id::onOff) return onOff;
         else if constexpr (ParamId == Id::hostSync) return hostSync;
         else if constexpr (ParamId == Id::analysisMode) return analysisMode;
+        else if constexpr (ParamId == Id::analysisGrid) return analysisGrid;
         else if constexpr (ParamId == Id::preset) return preset;
         else if constexpr (ParamId == Id::swingRatio) return swingRatio;
 
@@ -102,6 +106,8 @@ break;
  case Id::hostSync: if (!isEqual(get<Id::hostSync>(), value)) {get<Id::hostSync>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::analysisMode: if (!isEqual(get<Id::analysisMode>(), value)) {get<Id::analysisMode>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::analysisGrid: if (!isEqual(get<Id::analysisGrid>(), value)) {get<Id::analysisGrid>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
  case Id::preset: if (!isEqual(get<Id::preset>(), value)) {get<Id::preset>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
@@ -155,6 +161,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         onOff       , // switch
         hostSync    , // switch
         analysisMode, // switch
+        analysisGrid, // drop
         preset      , // drop
         swingRatio   // dial
 )
