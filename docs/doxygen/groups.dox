@@ -79,6 +79,11 @@
  */
 
 /**
+ * @defgroup dynamics Dynamics
+ * @brief Level-dependent gain control (compression, limiting).
+ */
+
+/**
  * @defgroup filters Filters
  * @brief One-pole, biquad, state variable, ladder and windowed-sinc filters.
  *
@@ -206,6 +211,11 @@
  * The sequencer is driven from the same grid-event stream as the looper's own
  * clock rather than from a clock of its own, which makes drift against the loop
  * impossible rather than merely unlikely.
+ */
+
+/**
+ * @defgroup sequencing Sequencing
+ * @brief BPM-invariant loop position and time-signature timeline keeping.
  */
 
 /**
