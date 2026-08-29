@@ -36,7 +36,7 @@ covers the case, and say so explicitly.
   coverage (see Documentation section of `README.md` for detail).
 - `dev-explore.sh [source.cpp]` / `dev-explore-lua.sh` - throwaway DSP/Lua experiments
   against the header-only library, built in the gitignored `explore/`.
-- `dev-docs.sh` - build the Doxygen API site into `docs/html/`.
+- `dev-docs.sh` - build the Doxygen API site into `docs/doxygen/html/`.
 - `dev-check-urls.sh` - verify documentation reference URLs resolve.
 
 Key CMake options are declared in the top-level `CMakeLists.txt` (`option(...)` calls).

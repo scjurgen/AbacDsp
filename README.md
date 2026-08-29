@@ -1,199 +1,89 @@
 # AbacDsp
-Dsp code for abacad projects
 
-## Goals
-
-Have handy classes for various DSP tasks.
-No dependencies for the dsp code itself (examples and unit-test have submodules based code).
-Support organic interactivity by implementing various types of smoothing and special processes (e.g. OrnsteinUhlenbeck).
-
-### Library
+AbacDsp is a creative DSP library for audio plugins and standalone applications.
+Header-only, zero-dependency C++20 building blocks, with Lua scripting designed for
+LLM-assisted sound design.
 
 Specialized building blocks typical for music/audio engineering, balancing efficiency
-and originality (four-pole filters, diffusers, resonance modeling, delays, ...).
+and originality: four-pole filters, diffusers, resonance modeling, delays, spectral
+processing, samplers and more. See `docs/ARCHITECTURE.md` for the full feature list and
+the class design rules behind them.
 
-### Examples
+The examples under `examples/` showcase the library end to end: JUCE-based plugins that
+combine its processing blocks, focus on accessibility (screen readers, parameter
+labeling, color contrast), and - where noted - stay open-ended through embedded Lua
+scripting (see `LUA.md` for the shared scripting API). Four are highlighted below; the
+full list with a one-paragraph description of each is in `examples/README.md`.
 
-Examples are designed to:
-- showcase the library and how to connect its various processing blocks
-- focus on accessibility (screen readers, parameter labeling, color contrast)
-- focus on interactive performance using various interface methods (including multiple
-  performance-page layouts)
-- explore extended capabilities through embedded scripting (dronesequencer's Lua engine; see
-  `LUA.md` for the scripting API), leaving room for LLM-assisted behavior/scripts.
+## Examples
 
-### Submodules used
-- googletest
-- Audiofile
-- juce v8
-- pffft
-- lua
-- sol2
+### Performance: Tapelooper
 
-### Class design
+<!-- Screenshots are a UI snapshot, not generated - see docs/assets/README.md -->
+![Tapelooper performance view](docs/assets/tapelooper/performance-ui.webp)
 
-- float based unless we really need extra precision for iterative algorithms or reference
-- mostly templates based for adaptive code and better optimisations.
-- classes should ctor with the samplerate
-- blockoperations of BlockSize=8 or 16 Samples for better compiler optimisations
-- operations on simple buffer design with interleaved or mono array
-- raw float operations allowed but with BlockSize only
-- testability
+A varispeed 3-track tape recorder (A, B, C) plus a parallel groove track, all riding one
+shared transport speed. Each track records and plays back independently, overdubbing
+onto whatever is already looping; the groove track plays a loaded MIDI groove (or a
+Lua-scripted click) through the same varispeed transport. Filter, reverb, wow/flutter,
+drive, chorus, echo, compression, ring mod and tremolo are all Lua-scriptable, keeping
+the on-screen UI to the transport and record/play basics - shaped instead through the
+built-in script editor:
 
-### Fixed internal sample rate in example plugins
+![Tapelooper script editor](docs/assets/tapelooper/script-editor.webp)
 
-Every generated example plugin (`examples/*/src/*Processor.h`) wraps its DSP implementation
-in `AbacDsp::InternalRateNormalizingProcessor`
-(`src/includes/SamplerateConverter/InternalRateNormalizingProcessor.h`), which sinc-resamples
-host audio to/from a fixed `kInternalSampleRate = 48000.f` and is bypassed at zero cost when
-the host already runs at 48 kHz. The DSP implementation classes themselves (e.g. `LooperImpl`)
-therefore always see `sampleRate == 48000.f`, never the host's actual rate. Any bundled audio
-asset authored at 48 kHz (samples, impulse responses, etc.) can be loaded and played back
-verbatim by these implementations with no extra resampling.
+See `examples/tapelooper/README.md`.
 
-## What
-- Analysis (FFT, Yin pitch detection, spectrogram, envelope follower, onset/transient
-  slicing, zero-crossings, octave-band analysis)
-- Audio buffers, fader and fixed-size block processor building blocks
-- Delays, Diffuser and Reverbs (FDN with Hadamard mixing)
-- Filters (biquad, ladder, SVF bandpass, one-pole)
-- Generators (naive and band-limited), plus a beat sequencer and metronome click generator
-- Modulation (wow/flutter)
-- Non-linear (hysteresis / saturation)
-- Parameter smoothing and ramping
-- Sampler: loop recorder, beat-locked slice player, sample playback,
-  pitch/time-stretching and sample-rate conversion
-- Spectral processing and Wavetables
-- Numbers: math/conversion helpers (interpolation, easing, dB/frequency)
-- WAV/OGG file I/O
+### Effects: Spectraltap
 
+![Spectraltap performance view](docs/assets/spectraltap/performance-ui.webp)
 
-### Usage
+A Lua-scripted multitap delay: up to 24 taps share one delay buffer, each independently
+timed, panned, and shaped by one of eight spectral voice types (bandpass, lowpass,
+highpass, notch, resonator, formant, comb resonator, or ring modulator). A patch's script
+owns tap topology; the engine owns Hz-to-coefficient mapping, smoothing and DSP safety.
 
-For usage check always the unit-tests or examples, these contain implementations that should cover and 
-which should be self-explanatory.
+![Spectraltap script editor](docs/assets/spectraltap/script-editor.webp)
 
-### Example plugins
+See `examples/spectraltap/README.md`.
 
-JUCE-based plugins under `examples/` (built with `-DBUILD_FULL_PROJECT=ON`, see below):
+### Synth: Pingsynth
 
-- `plaingain` (passthrough with metering), `guisandbox` (UI experimentation)
-- `minireverb` / `maxdiffuser` (FDN reverb and diffuser)
-- `delay`, `resonik` (resonator)
-- `metronome` (damped-sine click, circular beat/spectrogram displays, input timing-analysis
-  reports)
-- `looper` (bar-quantized slicing looper with a concentric bar/loop clock display)
-- `sampleplayer`, `sampleplayertimestretched`
-- `dronesequencer` (Lua-scripted Karplus-Strong drone sequencer), `tanpura`
-  (plucked-string tanpura simulation)
+![Pingsynth settings and script editor](docs/assets/pingsynth/settings-script.webp)
 
-See `examples/README.md` for a description of each one, and how the generated JUCE
-plumbing relates to each example's hand-written DSP. See `LUA.md` for the Lua scripting API
-shared by any script-driven example (currently `dronesequencer`).
+A Lua-scripted modal resonator synth: each voice is a bank of ringing bandpass
+resonators, excited by an impulse (plus an optional soft noise-burst tail) on every
+note-on. A patch's script computes an arbitrary list of partials (frequency, gain, decay,
+entry delay) per note, so odd/even/stretched/inharmonic timbres are all just different
+Lua loops, not different C++ code paths. See `examples/pingsynth/README.md`.
 
-`looper`'s optional drum-groove playback (an alternative to its synthetic click) needs a
-user-supplied sample kit and MIDI groove file under `samples/drums/` and `MidiDrums/`
-respectively - both third-party, copyrighted content not included in this repository. See
-`samples/README.md` and `MidiDrums/README.md` for the expected layout.
+### Education: Metronome
 
-## Building
+![Metronome settings and spectrum iris](docs/assets/metronome/settings-analysis.webp)
 
-By default CMake configures only the header-only library and its unit tests (no
-external toolkits needed). Two option switches pull in the heavier, optional
-parts of the tree:
+A JUCE standalone metronome with damped-sine click sounds, odd-meter support, and a
+drop-bars mute feature for timing training: lock to the click and use the waveform
+display to see how tightly you land on the beat, switch to a shuffle/swing preset to work
+on feel, or use drop-bar mode to test internal time. Its timing-analysis mode records a
+real playing session against the click and reports per-beat timing deviation (mean/std
+deviation, a histogram, a hit timeline) as a standalone HTML report:
 
-- `-DBUILD_FULL_PROJECT=ON` builds the JUCE **example plugins** under `examples/`
-  (metronome, reverbs, looper, ...). This needs the JUCE submodule and a longer
-  build; leave it OFF for a fast tests-only build.
-- `-DEXPLORE_STUFF=ON` builds the standalone **documentation explore programs**
-  under `documentation/` (for example `documentation/Slicer/`, `VelvetNoise/`,
-  `Filters/BandpassImpulses/`). These are small offline tools for prototyping and
-  tuning DSP, not part of the library or its tests.
+![Metronome timing-analysis report](docs/assets/metronome/timing-analysis-report.webp)
 
-The two switches are independent and can be combined:
+See `examples/metronome/README.md`.
+
+## Building and testing
 
 ```bash
 mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..                          # library + tests only
 cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_FULL_PROJECT=ON ..  # + JUCE example plugins
-cmake -DCMAKE_BUILD_TYPE=Release -DEXPLORE_STUFF=ON ..       # + documentation explore tools
 cmake --build .
 ```
 
-Each explore program has its own target (for example `SlicerExplore`), so you can
-also build just one with `cmake --build . --target <name>`.
-
-## Testing
-
-Unit tests use GoogleTest/CTest (see CLAUDE.md for build commands, or `dev-scripts/`
-for wrapper scripts that build and run tests without cd-ing around).
-
-### Test coverage
-
-`./check_test_coverage.sh` is a fast static check (no build required). It walks
-the local `#include` graph starting from every `test/**/*_test.cpp` file and
-flags any `src` header that is never reached, directly or transitively. This
-means grouped test files (one file testing several related headers) and
-headers only reached indirectly (e.g. a coefficient table pulled in by the
-filter that uses it) are recognized automatically, with no per-file
-bookkeeping. It also reports:
-
-- **empty test files** (a `*_test.cpp` exists but has no `TEST`/`TEST_F`/
-  `TEST_P`/`TYPED_TEST`/`INSTANTIATE_TEST_SUITE_P`),
-- **naming mismatches** (a test file that includes exactly one project header
-  but isn't named after it), and
-- **exceptions hygiene**: headers intentionally excluded from the check are
-  declared with a reason in `test/coverage_exceptions.txt`; an entry that has
-  become reachable (stale) or points at a header that no longer exists
-  (invalid) fails the check, so that file can't silently drift out of date.
-
-A Markdown summary is regenerated at `test/COVERAGE_GAPS.md` on every run
-(auto-generated, do not hand-edit).
-
-For real line/branch coverage (which lines are actually exercised, not just
-whether a test file exists), run:
-```bash
-./dev-scripts/dev-coverage.sh
-# or: ./check_test_coverage.sh -c
-```
-This configures a separate `build-coverage/` directory with `-DENABLE_COVERAGE=ON`,
-builds and runs all unit tests instrumented with `--coverage`, and generates a
-per-file Markdown summary at `COVERAGE.md` in the repo root, plus a full annotated
-HTML report at `build-coverage/coverage/index.html`. Requires `gcovr`
-(`brew install gcovr` or `pip install gcovr`).
-
-### Why Valgrind, not AddressSanitizer
-
-Memory checking is done with Valgrind, run through `docker-unit-tests/run-on-mac.sh`
-(a Linux container is used because Valgrind itself has no native Apple Silicon build).
-AddressSanitizer was tried as a native, faster alternative, but its dynamic runtime
-currently hangs during process startup on this toolchain (Apple clang 17 / macOS 26),
-independent of anything in this codebase. Stick with Valgrind for now; revisit ASan
-once that toolchain issue is fixed upstream, or run it inside the Linux container
-instead of natively.
-
-## API documentation
-
-Every public type in `src/includes/` carries a Doxygen brief. Build the site
-with:
-```bash
-./dev-scripts/dev-docs.sh          # writes docs/html/index.html
-./dev-scripts/dev-docs.sh --open   # and opens it
-```
-Requires `doxygen` (`brew install doxygen`); graphviz is used for inheritance
-graphs if present. Output goes to `docs/html/` and is gitignored; the config
-(`docs/Doxyfile`), the vendored theme (`docs/theme/`) and the module pages
-(`docs/groups.dox`, `docs/mainpage.dox`) are tracked.
-
-The build runs with `WARN_AS_ERROR=FAIL_ON_WARNINGS`, so a malformed command or
-an unresolvable cross-reference fails rather than producing a quietly wrong page.
-
-Comments document a class's own contract and the reasoning behind it, not who
-calls it; use cases belong in separate documents. External citations point at
-stable sources and are collected in `WEB-REFERENCES.md`, checked with:
-```bash
-./dev-scripts/dev-check-urls.sh    # every URL in src/includes and WEB-REFERENCES.md
-```
+See `docs/BUILDING.md` for the full set of CMake switches, test/coverage tooling, the
+Valgrind-vs-ASan note, and how to build the Doxygen API site. See `docs/IDE_SETUP.md` for
+clangd/`compile_commands.json` setup.
 
 ## License
 
@@ -204,25 +94,3 @@ commercial JUCE license is configured here, so a built example plugin is
 effectively AGPLv3, not MIT. See `THIRD-PARTY-LICENSES.md` for the full
 breakdown of every submodule's license and what that split means in
 practice.
-
-## IDE Setup
-
-### clangd / static analysis
-
-The repo includes a `.clangd` file that points clangd to `cmake-build-debug/compile_commands.json`,
-so no symlink is needed. You only need to create that build directory once:
-
-**Tests-only build** (no JUCE required):
-```bash
-mkdir cmake-build-debug && cd cmake-build-debug
-cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
-```
-
-**Full build** (includes JUCE examples — required for metronome, reverb, etc.):
-```bash
-mkdir cmake-build-debug && cd cmake-build-debug
-cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_FULL_PROJECT=ON ..
-```
-
-After configuring, restart your language server (or reopen the project). With the full build
-the IDE will resolve all JUCE headers and the `AbacDsp` includes inside `examples/`.

@@ -1,19 +1,19 @@
 # Doxygen config for the AbacDsp API site.
-# Run from the project root: doxygen docs/Doxyfile  (or dev-scripts/dev-docs.sh)
+# Run from the project root: doxygen docs/doxygen/Doxyfile  (or dev-scripts/dev-docs.sh)
 
 PROJECT_NAME           = AbacDsp
 PROJECT_BRIEF          = "Header-only C++20 DSP library"
 PROJECT_NUMBER         =
 
-OUTPUT_DIRECTORY       = docs
+OUTPUT_DIRECTORY       = docs/doxygen
 CREATE_SUBDIRS         = NO
 HTML_OUTPUT            = html
 GENERATE_LATEX         = NO
 GENERATE_HTML          = YES
 
 INPUT                  = src/includes \
-                         docs/mainpage.dox \
-                         docs/groups.dox
+                         docs/doxygen/mainpage.dox \
+                         docs/doxygen/groups.dox
 FILE_PATTERNS          = *.h *.dox
 RECURSIVE              = YES
 STRIP_FROM_PATH        = src/includes
@@ -62,8 +62,8 @@ GENERATE_TREEVIEW      = YES
 DISABLE_INDEX          = NO
 FULL_SIDEBAR           = NO
 HTML_COLORSTYLE        = LIGHT
-HTML_HEADER            = docs/theme/header.html
-HTML_EXTRA_STYLESHEET  = docs/theme/doxygen-awesome.css \
-                         docs/theme/doxygen-awesome-sidebar-only.css
-HTML_EXTRA_FILES       = docs/theme/doxygen-awesome-darkmode-toggle.js
+HTML_HEADER            = docs/doxygen/theme/header.html
+HTML_EXTRA_STYLESHEET  = docs/doxygen/theme/doxygen-awesome.css \
+                         docs/doxygen/theme/doxygen-awesome-sidebar-only.css
+HTML_EXTRA_FILES       = docs/doxygen/theme/doxygen-awesome-darkmode-toggle.js
 HTML_DYNAMIC_SECTIONS  = YES

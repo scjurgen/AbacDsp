@@ -87,7 +87,7 @@ Use `@file` on headers that hold free functions or tables rather than a class.
 ## Groups
 
 Every documented entity carries `@ingroup <id>`, one id per directory under
-`src/includes/`. The ids and their overview pages are in `docs/groups.dox`;
+`src/includes/`. The ids and their overview pages are in `docs/doxygen/groups.dox`;
 each page states the design decision that domain turns on, so a reader gets the
 shared context once instead of once per class.
 

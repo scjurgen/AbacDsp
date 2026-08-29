@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build the API documentation into docs/html/.
+# Build the API documentation into docs/doxygen/html/.
 #
 # Usage:
 #   dev-docs.sh            # build, report warnings, print the output path
@@ -23,10 +23,10 @@ if ! command -v doxygen > /dev/null 2>&1; then
 fi
 
 LOG="$SCRATCH_DIR/doxygen.log"
-OUT="$ROOT_DIR/docs/html/index.html"
+OUT="$ROOT_DIR/docs/doxygen/html/index.html"
 
 # Doxyfile paths are relative to the project root, so run from there.
-if ! (cd "$ROOT_DIR" && doxygen docs/Doxyfile) > "$LOG" 2>&1; then
+if ! (cd "$ROOT_DIR" && doxygen docs/doxygen/Doxyfile) > "$LOG" 2>&1; then
     echo "DOXYGEN FAILED. Last 40 lines:"
     tail -n 40 "$LOG"
     echo "Full log: $LOG"
