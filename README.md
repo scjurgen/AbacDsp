@@ -36,13 +36,16 @@ See `examples/tapelooper/README.md`.
 
 ### Effects: Spectraltap
 
+![Spectraltap performance view](docs/assets/spectraltap/performance-ui.webp)
+
 A Lua-scripted multitap delay: up to 24 taps share one delay buffer, each independently
 timed, panned, and shaped by one of eight spectral voice types (bandpass, lowpass,
 highpass, notch, resonator, formant, comb resonator, or ring modulator). A patch's script
 owns tap topology; the engine owns Hz-to-coefficient mapping, smoothing and DSP safety.
-See `examples/spectraltap/README.md`.
 
-*(Screenshot pending - example is stable but not yet captured for this README.)*
+![Spectraltap script editor](docs/assets/spectraltap/script-editor.webp)
+
+See `examples/spectraltap/README.md`.
 
 ### Synth: Pingsynth
 
