@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <span>
 #include <sstream>
 #include <string>
@@ -254,9 +255,9 @@ struct Histogram
     return histogram;
 }
 
-// Every inline chart is sized by its viewBox only (no pixel width/height attributes) and
-// stretched to its container via CSS, so it scales to whatever column Bootstrap gives it
-// instead of overflowing a narrower one.
+// Sized by its viewBox only, stretched to its container via CSS. Mirrored left-to-right
+// against deviationMs's own sign (positive = early, negative = late) so early-to-late reads
+// left-to-right despite that sign - the "Early"/"Late" labels make the direction explicit.
 [[nodiscard]] inline std::string renderHistogramSvg(const Histogram& histogram)
 {
     constexpr int kWidth{600};
@@ -276,12 +277,13 @@ struct Histogram
         const size_t peak = *std::max_element(histogram.bins.begin(), histogram.bins.end());
         const float maxMs = histogram.minMs + static_cast<float>(histogram.bins.size()) * histogram.binWidthMs;
         const float barWidth = kPlotWidth / static_cast<float>(histogram.bins.size());
+        const size_t binCount = histogram.bins.size();
 
-        for (size_t i = 0; i < histogram.bins.size(); ++i)
+        for (size_t i = 0; i < binCount; ++i)
         {
             const float barHeight =
                 peak == 0 ? 0.f : kPlotHeight * static_cast<float>(histogram.bins[i]) / static_cast<float>(peak);
-            const float x = static_cast<float>(kMargin) + static_cast<float>(i) * barWidth;
+            const float x = static_cast<float>(kMargin) + static_cast<float>(binCount - 1 - i) * barWidth;
             const float y = static_cast<float>(kHeight - kMargin) - barHeight;
             svg << "<rect x=\"" << x << "\" y=\"" << y << "\" width=\"" << std::max(0.5f, barWidth - 0.5f)
                 << "\" height=\"" << barHeight << "\" fill=\"#0d6efd\"/>";
@@ -289,12 +291,16 @@ struct Histogram
 
         if (histogram.minMs <= 0.f && 0.f <= maxMs)
         {
-            const float zeroX =
+            const float naturalZeroX =
                 static_cast<float>(kMargin) + (0.f - histogram.minMs) / (maxMs - histogram.minMs) * kPlotWidth;
+            const float zeroX = static_cast<float>(kWidth) - naturalZeroX;
             svg << "<line x1=\"" << zeroX << "\" y1=\"" << kMargin << "\" x2=\"" << zeroX << "\" y2=\""
                 << (kHeight - kMargin) << "\" stroke=\"#dc3545\" stroke-dasharray=\"4 3\"/>";
         }
     }
+    svg << "<text x=\"" << kMargin << "\" y=\"" << (kMargin - 6) << "\" font-size=\"11\" fill=\"#6c757d\">Early</text>";
+    svg << "<text x=\"" << (kWidth - kMargin) << "\" y=\"" << (kMargin - 6)
+        << "\" font-size=\"11\" fill=\"#6c757d\" text-anchor=\"end\">Late</text>";
     svg << "</svg>";
     return svg.str();
 }
@@ -304,6 +310,21 @@ struct Histogram
     std::ostringstream out;
     out.precision(1);
     out << std::fixed << valueMs << " ms";
+    return out.str();
+}
+
+// A signed ms value read as a direction word instead of a +/- sign: deviationMs's own
+// convention (negative = late, positive = early) - see GridPoint::distanceSamples.
+[[nodiscard]] inline std::string signedMsLabel(const float valueMs)
+{
+    constexpr float kOnBeatToleranceMs = 0.05f;
+    if (std::abs(valueMs) < kOnBeatToleranceMs)
+    {
+        return "on beat";
+    }
+    std::ostringstream out;
+    out.precision(1);
+    out << std::fixed << std::abs(valueMs) << " ms " << (valueMs < 0.f ? "late" : "early");
     return out.str();
 }
 
@@ -369,7 +390,7 @@ inline constexpr std::array<ToleranceBand, 5> kToleranceBands{{
     {10.f, "#2e7d32", "#d7f5db", "#1b5e20", "Locked", "Locked (0-10 ms)"},
     {20.f, "#7cb342", "#eaf6d0", "#33691e", "Very tight", "Very tight (10-20 ms)"},
     {30.f, "#fdd835", "#fff6cf", "#7c6300", "Tight", "Tight (20-30 ms)"},
-    {50.f, "#fb8c00", "#ffe6c7", "#8a4b00", "Laid-back", "Laid-back (30-50 ms)"},
+    {50.f, "#fb8c00", "#ffe6c7", "#8a4b00", "Loose", "Loose (30-50 ms)"},
     {80.f, "#e53935", "#fbdada", "#7a1212", "Off", "Off (>50 ms)"},
 }};
 
@@ -385,17 +406,19 @@ inline constexpr std::array<ToleranceBand, 5> kToleranceBands{{
     return kToleranceBands.back();
 }
 
-[[nodiscard]] inline std::string bandBadge(const std::string_view text, const ToleranceBand& band)
+[[nodiscard]] inline std::string coloredBadge(const std::string_view text, const std::string_view bg,
+                                              const std::string_view textColor)
 {
     std::ostringstream out;
-    out << "<span style=\"display:inline-block;padding:.1rem .5rem;border-radius:.25rem;background:" << band.badgeBg
-        << ";color:" << band.badgeText << ";\">" << text << "</span>";
+    out << "<span style=\"display:inline-block;padding:.1rem .5rem;border-radius:.25rem;background:" << bg
+        << ";color:" << textColor << ";\">" << text << "</span>";
     return out.str();
 }
 
 [[nodiscard]] inline std::string deviationBadge(const float valueMs)
 {
-    return bandBadge(msLabel(valueMs), bandForDeviation(std::abs(valueMs)));
+    const ToleranceBand& band = bandForDeviation(std::abs(valueMs));
+    return coloredBadge(signedMsLabel(valueMs), band.badgeBg, band.badgeText);
 }
 
 // Tightness reads off spread (std deviation), not average bias: a slot can average near zero
@@ -403,7 +426,45 @@ inline constexpr std::array<ToleranceBand, 5> kToleranceBands{{
 [[nodiscard]] inline std::string tightnessBadge(const float stdDevMs)
 {
     const ToleranceBand& band = bandForDeviation(std::abs(stdDevMs));
-    return bandBadge(band.shortLabel, band);
+    return coloredBadge(band.shortLabel, band.badgeBg, band.badgeText);
+}
+
+// Playing feel by signed mean deviation - deliberately a different palette (blue/gray/purple)
+// than ToleranceBand's green-to-red: direction is a style read, not a quality judgement.
+// deviationMs sign: negative = the grid point already passed (late), positive = still ahead
+// (early) - see GridPoint::distanceSamples.
+struct DirectionBand
+{
+    float atMostMs{0.f};
+    std::string_view badgeBg;
+    std::string_view badgeText;
+    std::string_view label;
+};
+
+inline constexpr std::array<DirectionBand, 5> kDirectionBands{{
+    {-30.f, "#cfe2ff", "#084298", "Dragging"},
+    {-10.f, "#e7f1ff", "#0a58ca", "Laid-back"},
+    {10.f, "#e9ecef", "#495057", "On-beat"},
+    {30.f, "#f3e8ff", "#6f42c1", "Pushing"},
+    {std::numeric_limits<float>::max(), "#e0cffc", "#59359a", "Rushing"},
+}};
+
+[[nodiscard]] inline const DirectionBand& bandForMeanDeviation(const float meanMs) noexcept
+{
+    for (const auto& band : kDirectionBands)
+    {
+        if (meanMs <= band.atMostMs)
+        {
+            return band;
+        }
+    }
+    return kDirectionBands.back();
+}
+
+[[nodiscard]] inline std::string directionBadge(const float meanMs)
+{
+    const DirectionBand& band = bandForMeanDeviation(meanMs);
+    return coloredBadge(band.label, band.badgeBg, band.badgeText);
 }
 
 [[nodiscard]] inline std::string toleranceLegend()
@@ -420,8 +481,8 @@ inline constexpr std::array<ToleranceBand, 5> kToleranceBands{{
     return out.str();
 }
 
-// One row per exact slot: position label, hit count, a color-coded mean deviation badge, a
-// tightness comment from the spread (see tightnessBadge()) - dashes when a slot saw no hits.
+// One row per exact slot: position label, hit count, a color-coded mean deviation badge, and a
+// comment combining tightness (spread) and direction (bias) - dashes when a slot saw no hits.
 [[nodiscard]] inline std::string resultsTable(const std::span<const std::string> labels,
                                               const std::span<const EvaluatedHit> hits)
 {
@@ -441,10 +502,11 @@ inline constexpr std::array<ToleranceBand, 5> kToleranceBands{{
     for (size_t slot = 0; slot < labels.size(); ++slot)
     {
         const DeviationStats stats = computeStats(perSlot[slot]);
+        const std::string comment =
+            stats.count == 0 ? "-" : tightnessBadge(stats.stdDevMs) + " " + directionBadge(stats.meanMs);
         out << "<tr><td>" << labels[slot] << "</td><td>" << stats.count << "</td><td>"
             << (stats.count == 0 ? "-" : deviationBadge(stats.meanMs)) << "</td><td>"
-            << (stats.count == 0 ? "-" : msLabel(stats.stdDevMs)) << "</td><td>"
-            << (stats.count == 0 ? "-" : tightnessBadge(stats.stdDevMs)) << "</td></tr>";
+            << (stats.count == 0 ? "-" : msLabel(stats.stdDevMs)) << "</td><td>" << comment << "</td></tr>";
     }
     out << "</tbody></table></div>";
     return out.str();
@@ -621,7 +683,8 @@ inline void renderToleranceZones(std::ostringstream& svg, const float marker, co
          << "<body class=\"bg-light\"><div class=\"container py-4\">"
          << "<h1 class=\"mb-4\">Metronome Timing Analysis</h1>"
          << "<div class=\"row g-3 mb-4\">" << statCard("Hits", std::to_string(stats.count))
-         << statCard("Mean deviation", msLabel(stats.meanMs)) << statCard("Std deviation", msLabel(stats.stdDevMs))
+         << statCard("Mean deviation", signedMsLabel(stats.meanMs))
+         << statCard("Std deviation", msLabel(stats.stdDevMs))
          << statCard("Tempo / rhythm",
                      std::to_string(static_cast<int>(std::lround(bpm))) + " BPM, " + std::string(presetName))
          << "</div>"

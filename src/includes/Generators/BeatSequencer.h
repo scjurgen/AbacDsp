@@ -59,7 +59,7 @@ enum class SubdivType : uint8_t
 /// @brief Which grid point a beat-relative position is nearest to, and how far.
 struct GridPoint
 {
-    long distanceSamples{0};    // negative = early, positive = late, same convention as samplesToNearestBeat()
+    long distanceSamples{0};    // negative = grid point already passed (late), positive = still ahead (early)
     bool isBeat{true};          // nearest point is a beat boundary, not a subdivision
     size_t beatIndexInBar{0};   // valid when isBeat: which beat boundary
     size_t subdivisionIndex{0}; // valid when !isBeat: index into subPositions
