@@ -111,6 +111,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(grooveVariationDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(grooveHumanizePushDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(grooveHumanizeLifeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(recordASwitch)
                                   .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
@@ -198,6 +200,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(grooveVariationDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(grooveLevelDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(grooveHumanizePushDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(grooveHumanizeLifeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[1].toFloat());
             }
             {
@@ -400,6 +404,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         grooveVariationDial.reset(valueTreeState, "grooveVariation");
         grooveVariationDial.setLabelText(juce::String::fromUTF8("Groove Var"));
         grooveVariationDial.setTooltip(juce::String::fromUTF8("Groove Var (0 to 31)"));
+        addAndMakeVisible(grooveHumanizePushDial);
+        grooveHumanizePushDial.reset(valueTreeState, "grooveHumanizePush");
+        grooveHumanizePushDial.setLabelText(juce::String::fromUTF8("Groove Push"));
+        grooveHumanizePushDial.setTooltip(juce::String::fromUTF8("Groove Push (-100 to 100 %)"));
+        addAndMakeVisible(grooveHumanizeLifeDial);
+        grooveHumanizeLifeDial.reset(valueTreeState, "grooveHumanizeLife");
+        grooveHumanizeLifeDial.setLabelText(juce::String::fromUTF8("Groove Life"));
+        grooveHumanizeLifeDial.setTooltip(juce::String::fromUTF8("Groove Life (0 to 100 %)"));
         addAndMakeVisible(trackGainADial);
         trackGainADial.reset(valueTreeState, "trackGainA");
         trackGainADial.setLabelText(juce::String::fromUTF8("Track Gain A"));
@@ -538,6 +550,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             groovePlaySwitch.setVisible(true);
             bpmDial.setVisible(true);
             grooveVariationDial.setVisible(true);
+            grooveHumanizePushDial.setVisible(true);
+            grooveHumanizeLifeDial.setVisible(true);
             trackGainADial.setVisible(false);
             trackGainBDial.setVisible(false);
             trackGainCDial.setVisible(false);
@@ -572,6 +586,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             groovePlaySwitch.setVisible(true);
             bpmDial.setVisible(true);
             grooveVariationDial.setVisible(true);
+            grooveHumanizePushDial.setVisible(true);
+            grooveHumanizeLifeDial.setVisible(true);
             trackGainADial.setVisible(true);
             trackGainBDial.setVisible(true);
             trackGainCDial.setVisible(true);
@@ -1705,6 +1721,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> groovePlaySwitchAttachment;
     CustomRotaryDial bpmDial{this};
     CustomRotaryDial grooveVariationDial{this};
+    CustomRotaryDial grooveHumanizePushDial{this};
+    CustomRotaryDial grooveHumanizeLifeDial{this};
     CustomRotaryDial trackGainADial{this};
     CustomRotaryDial trackGainBDial{this};
     CustomRotaryDial trackGainCDial{this};

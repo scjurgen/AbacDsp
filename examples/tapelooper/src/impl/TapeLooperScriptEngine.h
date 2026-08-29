@@ -162,6 +162,8 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
 "--   SetTapeSpeed(ratio)                 1.0 is nominal\n"
 "--   SetBpm(bpm)                         groove/click tempo\n"
 "--   SetGrooveVariation(index)           0-based, picks among the loaded style's variations\n"
+"--   SetGroovePush(percent)              -100 laid-back .. 0 neutral .. +100 driving\n"
+"--   SetGrooveLife(percent)               0 fully quantized .. 100 the source MIDI's own feel\n"
 "--   SetGrooveStyle(styleName[, variationIndex])  styleName is one of listGrooveNames()'s\n"
 "--     own \"<Genre>/<style>\" entries; variationIndex defaults to 0\n"
 "--   GetLoopPhase()                      0..1 position within the recorded loop, polled\n"
@@ -225,6 +227,8 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     [[nodiscard]] std::optional<float> drainTapeSpeedCommand() noexcept;
     [[nodiscard]] std::optional<float> drainBpmCommand() noexcept;
     [[nodiscard]] std::optional<float> drainGrooveVariationCommand() noexcept;
+    [[nodiscard]] std::optional<float> drainGroovePushCommand() noexcept;
+    [[nodiscard]] std::optional<float> drainGrooveLifeCommand() noexcept;
     [[nodiscard]] std::optional<TapeLooperGrooveStyleCommand> drainGrooveStyleCommand() noexcept;
     [[nodiscard]] std::optional<bool> drainRecordCommand(size_t track) noexcept;
     [[nodiscard]] std::optional<bool> drainPlayCommand(size_t track) noexcept;
@@ -261,6 +265,8 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     void luaSetTapeSpeed(float value) noexcept;
     void luaSetBpm(float value) noexcept;
     void luaSetGrooveVariation(float value) noexcept;
+    void luaSetGroovePush(float value) noexcept;
+    void luaSetGrooveLife(float value) noexcept;
     void luaSetGrooveStyle(const std::string& styleName, sol::optional<int> variationIndex) noexcept;
     void luaSetGrooveSource(const std::string& mode) noexcept;
     void luaSetTrackWow(size_t track, float depth, float rate, float drift) noexcept;
@@ -283,6 +289,8 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
     std::optional<float> m_pendingTapeSpeed;
     std::optional<float> m_pendingBpm;
     std::optional<float> m_pendingGrooveVariation;
+    std::optional<float> m_pendingGroovePush;
+    std::optional<float> m_pendingGrooveLife;
     std::optional<TapeLooperGrooveStyleCommand> m_pendingGrooveStyle;
     std::array<std::optional<bool>, kTracks> m_pendingRecord{};
     std::array<std::optional<bool>, kTracks> m_pendingPlay{};
@@ -329,6 +337,8 @@ inline void TapeLooperScriptEngine::bindScriptFunctions()
     m_lua.set_function("SetTapeSpeed", &TapeLooperScriptEngine::luaSetTapeSpeed, this);
     m_lua.set_function("SetBpm", &TapeLooperScriptEngine::luaSetBpm, this);
     m_lua.set_function("SetGrooveVariation", &TapeLooperScriptEngine::luaSetGrooveVariation, this);
+    m_lua.set_function("SetGroovePush", &TapeLooperScriptEngine::luaSetGroovePush, this);
+    m_lua.set_function("SetGrooveLife", &TapeLooperScriptEngine::luaSetGrooveLife, this);
     m_lua.set_function("SetGrooveStyle", &TapeLooperScriptEngine::luaSetGrooveStyle, this);
     m_lua.set_function("SetGrooveSource", &TapeLooperScriptEngine::luaSetGrooveSource, this);
     m_lua.set_function("SetTrackWow", &TapeLooperScriptEngine::luaSetTrackWow, this);
@@ -434,6 +444,16 @@ inline void TapeLooperScriptEngine::luaSetBpm(const float value) noexcept
 inline void TapeLooperScriptEngine::luaSetGrooveVariation(const float value) noexcept
 {
     m_pendingGrooveVariation = value;
+}
+
+inline void TapeLooperScriptEngine::luaSetGroovePush(const float value) noexcept
+{
+    m_pendingGroovePush = value;
+}
+
+inline void TapeLooperScriptEngine::luaSetGrooveLife(const float value) noexcept
+{
+    m_pendingGrooveLife = value;
 }
 
 inline void TapeLooperScriptEngine::luaSetGrooveStyle(const std::string& styleName,
@@ -603,6 +623,20 @@ inline std::optional<float> TapeLooperScriptEngine::drainGrooveVariationCommand(
 {
     const auto result = m_pendingGrooveVariation;
     m_pendingGrooveVariation.reset();
+    return result;
+}
+
+inline std::optional<float> TapeLooperScriptEngine::drainGroovePushCommand() noexcept
+{
+    const auto result = m_pendingGroovePush;
+    m_pendingGroovePush.reset();
+    return result;
+}
+
+inline std::optional<float> TapeLooperScriptEngine::drainGrooveLifeCommand() noexcept
+{
+    const auto result = m_pendingGrooveLife;
+    m_pendingGrooveLife.reset();
     return result;
 }
 

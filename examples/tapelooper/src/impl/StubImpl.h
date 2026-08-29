@@ -82,6 +82,14 @@ class StubImpl final : public EffectBase
     {
         m_grooveVariation = value;
     }
+    void setGrooveHumanizePush(const float value)
+    {
+        m_grooveHumanizePush = value;
+    }
+    void setGrooveHumanizeLife(const float value)
+    {
+        m_grooveHumanizeLife = value;
+    }
     void setTrackGainA(const float value)
     {
         m_trackGainA = std::pow(10.f, value / 20.f);
@@ -169,6 +177,8 @@ class StubImpl final : public EffectBase
     bool m_groovePlay{};
     float m_bpm{};
     float m_grooveVariation{};
+    float m_grooveHumanizePush{};
+    float m_grooveHumanizeLife{};
     float m_trackGainA{};
     float m_trackGainB{};
     float m_trackGainC{};

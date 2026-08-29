@@ -55,6 +55,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("groovePlay", this);
         m_parameters.addParameterListener("bpm", this);
         m_parameters.addParameterListener("grooveVariation", this);
+        m_parameters.addParameterListener("grooveHumanizePush", this);
+        m_parameters.addParameterListener("grooveHumanizeLife", this);
         m_parameters.addParameterListener("trackGainA", this);
         m_parameters.addParameterListener("trackGainB", this);
         m_parameters.addParameterListener("trackGainC", this);
@@ -93,6 +95,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("groovePlay", this);
         m_parameters.removeParameterListener("bpm", this);
         m_parameters.removeParameterListener("grooveVariation", this);
+        m_parameters.removeParameterListener("grooveHumanizePush", this);
+        m_parameters.removeParameterListener("grooveHumanizeLife", this);
         m_parameters.removeParameterListener("trackGainA", this);
         m_parameters.removeParameterListener("trackGainB", this);
         m_parameters.removeParameterListener("trackGainC", this);
@@ -350,6 +354,16 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 0) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("grooveHumanizePush", 1), juce::String::fromUTF8("Groove Push"),
+            juce::NormalisableRange<float>(-100, 100, 1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " %"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("grooveHumanizeLife", 1), juce::String::fromUTF8("Groove Life"),
+            juce::NormalisableRange<float>(0, 100, 1, 1, false), 100,
+            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " %"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("trackGainA", 1), juce::String::fromUTF8("Track Gain A"),
             juce::NormalisableRange<float>(-60, 12, 0.1, 1, false), 0,
             juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
@@ -513,6 +527,18 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setGrooveVariation(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::grooveVariation, v);
+             }},
+            {"grooveHumanizePush",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setGrooveHumanizePush(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::grooveHumanizePush, v);
+             }},
+            {"grooveHumanizeLife",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setGrooveHumanizeLife(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::grooveHumanizeLife, v);
              }},
             {"trackGainA",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -703,6 +729,18 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("grooveVariation");
             float normalized = range.convertTo0to1(static_cast<float>(params.grooveVariation));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("grooveHumanizePush"))
+        {
+            const auto& range = m_parameters.getParameterRange("grooveHumanizePush");
+            float normalized = range.convertTo0to1(static_cast<float>(params.grooveHumanizePush));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("grooveHumanizeLife"))
+        {
+            const auto& range = m_parameters.getParameterRange("grooveHumanizeLife");
+            float normalized = range.convertTo0to1(static_cast<float>(params.grooveHumanizeLife));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("trackGainA"))

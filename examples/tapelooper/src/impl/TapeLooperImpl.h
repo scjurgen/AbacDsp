@@ -466,6 +466,16 @@ class TapeLooperImpl final : public EffectBase
         m_grooveVariationReq.store(value, std::memory_order_relaxed);
     }
 
+    void setGrooveHumanizePush(const float value) noexcept
+    {
+        m_grooveHumanizePushReq.store(value, std::memory_order_relaxed);
+    }
+
+    void setGrooveHumanizeLife(const float value) noexcept
+    {
+        m_grooveHumanizeLifeReq.store(value, std::memory_order_relaxed);
+    }
+
     void setTrackGainA(const float valueDb) noexcept
     {
         m_trackGainReq[0].store(std::pow(10.f, valueDb / 20.f), std::memory_order_relaxed);
@@ -809,6 +819,7 @@ class TapeLooperImpl final : public EffectBase
         m_groovePlaying = groovePlayReq;
         applyGrooveSourceIfChanged();
         applyGrooveVariationIfChanged();
+        applyGrooveHumanizeIfChanged();
         advanceCleanLoopClock();
     }
 
@@ -921,6 +932,14 @@ class TapeLooperImpl final : public EffectBase
         if (const auto v = m_scriptEngine.drainGrooveVariationCommand())
         {
             m_grooveVariationReq.store(*v, std::memory_order_relaxed);
+        }
+        if (const auto v = m_scriptEngine.drainGroovePushCommand())
+        {
+            m_grooveHumanizePushReq.store(*v, std::memory_order_relaxed);
+        }
+        if (const auto v = m_scriptEngine.drainGrooveLifeCommand())
+        {
+            m_grooveHumanizeLifeReq.store(*v, std::memory_order_relaxed);
         }
         if (const auto v = m_scriptEngine.drainGrooveStyleCommand())
         {
@@ -1295,6 +1314,24 @@ class TapeLooperImpl final : public EffectBase
                                          AbacDsp::BurstConfig{sampleRate(), m_bpm});
         }
     }
+
+    // Same exact-equality reasoning as GrooverImpl's own applyHumanizeIfChanged():
+    // a stored float either stays bit-identical or is genuinely a new UI value.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+    void applyGrooveHumanizeIfChanged() noexcept
+    {
+        const float pushPercent = m_grooveHumanizePushReq.load(std::memory_order_relaxed);
+        const float lifePercent = m_grooveHumanizeLifeReq.load(std::memory_order_relaxed);
+        if (pushPercent == m_appliedGrooveHumanizePush && lifePercent == m_appliedGrooveHumanizeLife)
+        {
+            return;
+        }
+        m_appliedGrooveHumanizePush = pushPercent;
+        m_appliedGrooveHumanizeLife = lifePercent;
+        m_grooveKit.requestHumanizeChange(pushPercent / 100.f, lifePercent / 100.f);
+    }
+#pragma GCC diagnostic pop
 
     // repositionGrooveSequencer() undoes setGroove()'s reset-to-0 so a
     // style/variation swap keeps beat position instead of restarting the pattern -
@@ -1682,6 +1719,8 @@ class TapeLooperImpl final : public EffectBase
     std::atomic<bool> m_groovePlayReq{false};
     std::atomic<float> m_bpmReq{120.f};
     std::atomic<float> m_grooveVariationReq{0.f};
+    std::atomic<float> m_grooveHumanizePushReq{0.f};
+    std::atomic<float> m_grooveHumanizeLifeReq{100.f};
     std::atomic<bool> m_grooveSourceReq{false}; // false = groove, true = click
 
     std::array<std::atomic<float>, TapeLooperDetail::kFreeTracks> m_wowDepthReq{
@@ -1770,6 +1809,8 @@ class TapeLooperImpl final : public EffectBase
                                                                                           -1.f, -1.f, -1.f, -1.f};
     float m_bpm{120.f};
     int m_appliedGrooveVariation{0};
+    float m_appliedGrooveHumanizePush{0.f};
+    float m_appliedGrooveHumanizeLife{100.f};
     size_t m_previousLoopPositionFrames{0};
     std::array<float, TapeLooperDetail::kFreeTracks> m_reverbSend{TapeLooperDetail::kDefaultReverbSend,
                                                                   TapeLooperDetail::kDefaultReverbSend,

@@ -38,6 +38,10 @@
       "range": [50, 250, 0.5, 1, false], "precision": 1, "unit": "BPM", "enabled_query": "canEditBpm"},
     {"short": "GVAR", "type": "dial", "display": "Groove Var", "symbol": "grooveVariation", "default": 0,
       "range": [0, 31, 1, 1, false], "precision": 0},
+    {"short": "GPSH", "type": "dial", "display": "Groove Push", "symbol": "grooveHumanizePush", "default": 0,
+      "range": [-100, 100, 1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "GLFE", "type": "dial", "display": "Groove Life", "symbol": "grooveHumanizeLife", "default": 100,
+      "range": [0, 100, 1, 1, false], "precision": 1, "unit": "%"},
 
     {"short": "TGA", "type": "dial", "display": "Track Gain A", "symbol": "trackGainA", "default": 0,
       "range": [-60, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
@@ -71,11 +75,11 @@
     "WINDOW_WIDTH": "1100",
     "WINDOW_HEIGHT": "700",
     "type": "||||||",
-    "composition": "C=(1:1:1:1:1:1) A1=(SPD, BARS, IGAIN, LVL*100, CPU*100) A2=(GPLY, GBPM, GVAR, GLVL) A3=(RECA, PLAA, CLRA, TGA) A4=(RECB, PLAB, CLRB, TGB) A5=(RECC, PLAC, CLRC, TGC) A6=(LUACTL)"
+    "composition": "C=(1:1:1:1:1:1) A1=(SPD, BARS, IGAIN, LVL*100, CPU*100) A2=(GPLY, GBPM, GVAR, GLVL, GPSH, GLFE) A3=(RECA, PLAA, CLRA, TGA) A4=(RECB, PLAB, CLRB, TGB) A5=(RECC, PLAC, CLRC, TGC) A6=(LUACTL)"
   },
   "performance-page": {
     "type": "||",
-    "composition": "C=(3:1) A1=(CLOCK) A2=(SPD, BARS, GPLY, GBPM, GVAR, RECA, PLAA, CLRA, RECB, PLAB, CLRB, RECC, PLAC, CLRC)"
+    "composition": "C=(3:1) A1=(CLOCK) A2=(SPD, BARS, GPLY, GBPM, GVAR, GPSH, GLFE, RECA, PLAA, CLRA, RECB, PLAB, CLRB, RECC, PLAC, CLRC)"
   },
   "processor_forwards": [
     {"name": "isGroovePlaying", "type": "bool"},

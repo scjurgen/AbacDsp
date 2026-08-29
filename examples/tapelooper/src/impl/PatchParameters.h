@@ -13,34 +13,36 @@ struct PatchParameters
 {
     enum class Id : int
     {
-        tapeSpeed      , // dial
-        bars           , // dial
-        inputGain      , // dial
-        grooveLevel    , // dial
-        recordA        , // switch
-        playA          , // switch
-        clearA         , // switch
-        recordB        , // switch
-        playB          , // switch
-        clearB         , // switch
-        recordC        , // switch
-        playC          , // switch
-        clearC         , // switch
-        groovePlay     , // switch
-        bpm            , // dial
-        grooveVariation, // dial
-        trackGainA     , // dial
-        trackGainB     , // dial
-        trackGainC     , // dial
-        luaParam1      , // dial
-        luaParam2      , // dial
-        luaParam3      , // dial
-        luaParam4      , // dial
-        luaParam5      , // dial
-        luaParam6      , // dial
-        luaParam7      , // dial
-        luaParam8      , // dial
-        script          // script
+        tapeSpeed         , // dial
+        bars              , // dial
+        inputGain         , // dial
+        grooveLevel       , // dial
+        recordA           , // switch
+        playA             , // switch
+        clearA            , // switch
+        recordB           , // switch
+        playB             , // switch
+        clearB            , // switch
+        recordC           , // switch
+        playC             , // switch
+        clearC            , // switch
+        groovePlay        , // switch
+        bpm               , // dial
+        grooveVariation   , // dial
+        grooveHumanizePush, // dial
+        grooveHumanizeLife, // dial
+        trackGainA        , // dial
+        trackGainB        , // dial
+        trackGainC        , // dial
+        luaParam1         , // dial
+        luaParam2         , // dial
+        luaParam3         , // dial
+        luaParam4         , // dial
+        luaParam5         , // dial
+        luaParam6         , // dial
+        luaParam7         , // dial
+        luaParam8         , // dial
+        script             // script
     };
 float tapeSpeed{1.0f};
 float bars{8.0f};
@@ -58,6 +60,8 @@ bool clearC{false};
 bool groovePlay{false};
 float bpm{120.0f};
 float grooveVariation{0.0f};
+float grooveHumanizePush{0.0f};
+float grooveHumanizeLife{100.0f};
 float trackGainA{0.0f};
 float trackGainB{0.0f};
 float trackGainC{0.0f};
@@ -89,6 +93,8 @@ std::string script{};
 "groovePlay",
 "bpm",
 "grooveVariation",
+"grooveHumanizePush",
+"grooveHumanizeLife",
 "trackGainA",
 "trackGainB",
 "trackGainC",
@@ -134,6 +140,8 @@ std::string script{};
         else if constexpr (ParamId == Id::groovePlay) return groovePlay;
         else if constexpr (ParamId == Id::bpm) return bpm;
         else if constexpr (ParamId == Id::grooveVariation) return grooveVariation;
+        else if constexpr (ParamId == Id::grooveHumanizePush) return grooveHumanizePush;
+        else if constexpr (ParamId == Id::grooveHumanizeLife) return grooveHumanizeLife;
         else if constexpr (ParamId == Id::trackGainA) return trackGainA;
         else if constexpr (ParamId == Id::trackGainB) return trackGainB;
         else if constexpr (ParamId == Id::trackGainC) return trackGainC;
@@ -189,6 +197,10 @@ break;
  case Id::bpm: if (!isEqual(get<Id::bpm>(), value)) {get<Id::bpm>() = value;m_modified = true;}
 break;
  case Id::grooveVariation: if (!isEqual(get<Id::grooveVariation>(), value)) {get<Id::grooveVariation>() = value;m_modified = true;}
+break;
+ case Id::grooveHumanizePush: if (!isEqual(get<Id::grooveHumanizePush>(), value)) {get<Id::grooveHumanizePush>() = value;m_modified = true;}
+break;
+ case Id::grooveHumanizeLife: if (!isEqual(get<Id::grooveHumanizeLife>(), value)) {get<Id::grooveHumanizeLife>() = value;m_modified = true;}
 break;
  case Id::trackGainA: if (!isEqual(get<Id::trackGainA>(), value)) {get<Id::trackGainA>() = value;m_modified = true;}
 break;
@@ -254,32 +266,34 @@ private:
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     PatchParameters,
-        tapeSpeed      , // dial
-        bars           , // dial
-        inputGain      , // dial
-        grooveLevel    , // dial
-        recordA        , // switch
-        playA          , // switch
-        clearA         , // switch
-        recordB        , // switch
-        playB          , // switch
-        clearB         , // switch
-        recordC        , // switch
-        playC          , // switch
-        clearC         , // switch
-        groovePlay     , // switch
-        bpm            , // dial
-        grooveVariation, // dial
-        trackGainA     , // dial
-        trackGainB     , // dial
-        trackGainC     , // dial
-        luaParam1      , // dial
-        luaParam2      , // dial
-        luaParam3      , // dial
-        luaParam4      , // dial
-        luaParam5      , // dial
-        luaParam6      , // dial
-        luaParam7      , // dial
-        luaParam8      , // dial
-        script          // script
+        tapeSpeed         , // dial
+        bars              , // dial
+        inputGain         , // dial
+        grooveLevel       , // dial
+        recordA           , // switch
+        playA             , // switch
+        clearA            , // switch
+        recordB           , // switch
+        playB             , // switch
+        clearB            , // switch
+        recordC           , // switch
+        playC             , // switch
+        clearC            , // switch
+        groovePlay        , // switch
+        bpm               , // dial
+        grooveVariation   , // dial
+        grooveHumanizePush, // dial
+        grooveHumanizeLife, // dial
+        trackGainA        , // dial
+        trackGainB        , // dial
+        trackGainC        , // dial
+        luaParam1         , // dial
+        luaParam2         , // dial
+        luaParam3         , // dial
+        luaParam4         , // dial
+        luaParam5         , // dial
+        luaParam6         , // dial
+        luaParam7         , // dial
+        luaParam8         , // dial
+        script             // script
 )
