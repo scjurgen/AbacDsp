@@ -85,6 +85,17 @@ See `docs/BUILDING.md` for the full set of CMake switches, test/coverage tooling
 Valgrind-vs-ASan note, and how to build the Doxygen API site. See `docs/IDE_SETUP.md` for
 clangd/`compile_commands.json` setup.
 
+## Background
+
+This library grew out of 30+ years in the audio sector: optimizing filters at Steinberg as
+a student, experimental music, language-training audio, the karaoke boom's exaggerated
+delay and reverb chains, consumer audio electronics at Teufel, and most recently the
+ffosso product at Orchestral Tools. Most of the DSP here is shaped by live performance -
+what stays expressive and controllable on stage, not just what measures well offline.
+
+This project also fully embraces LLM-driven development: it turns ideas into working,
+interesting products far faster than working alone.
+
 ## License
 
 AbacDsp's own code is MIT licensed (see `LICENSE`). That covers the
