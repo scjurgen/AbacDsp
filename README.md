@@ -49,13 +49,13 @@ See `examples/spectraltap/README.md`.
 
 ### Synth: Pingsynth
 
+![Pingsynth settings and script editor](docs/assets/pingsynth/settings-script.webp)
+
 A Lua-scripted modal resonator synth: each voice is a bank of ringing bandpass
 resonators, excited by an impulse (plus an optional soft noise-burst tail) on every
 note-on. A patch's script computes an arbitrary list of partials (frequency, gain, decay,
 entry delay) per note, so odd/even/stretched/inharmonic timbres are all just different
 Lua loops, not different C++ code paths. See `examples/pingsynth/README.md`.
-
-*(Screenshot pending - example is stable but not yet captured for this README.)*
 
 ### Education: Metronome
 
