@@ -19,6 +19,7 @@ full list with a one-paragraph description of each is in `examples/README.md`.
 
 ### Performance: Tapelooper
 
+<!-- Screenshots are a UI snapshot, not generated - see docs/assets/README.md -->
 ![Tapelooper performance view](docs/assets/tapelooper/performance-ui.webp)
 
 A varispeed 3-track tape recorder (A, B, C) plus a parallel groove track, all riding one
