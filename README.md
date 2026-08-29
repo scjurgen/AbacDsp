@@ -4,6 +4,13 @@ AbacDsp is a creative DSP library for audio plugins and standalone applications.
 Header-only, zero-dependency C++20 building blocks, with Lua scripting designed for
 LLM-assisted sound design.
 
+Realistic simulation is explicitly not a goal here: not natural instruments or acoustic
+spaces (no convolution IRs), and not emulating specific pedals, amps or cabs on the market.
+The point is to get creative and go beyond the physical limitations of an acoustic
+instrument, room or piece of gear, using what digital audio makes possible instead of
+imitating what it doesn't need to - with the help of LLMs (often just called "AI", a name
+this project doesn't love but has stopped fighting).
+
 Specialized building blocks typical for music/audio engineering, balancing efficiency
 and originality: four-pole filters, diffusers, resonance modeling, delays, spectral
 processing, samplers and more. See `docs/ARCHITECTURE.md` for the full feature list and
