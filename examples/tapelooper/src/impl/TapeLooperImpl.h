@@ -1095,10 +1095,15 @@ class TapeLooperImpl final : public EffectBase
         {
             tape.setReadHead(0, static_cast<float>(loopFrames), true);
         }
-        // The loop just (re)started at its own beginning - keep the groove from drifting
-        // out of sync with it rather than free-running against the old definition.
-        m_grooveSequencer.resetPosition();
-        m_loopTimeKeeper.reset();
+        // Nothing to resync while idle - LoopTimeKeeper is itself BPM/bar-invariant, so
+        // resetting anyway would just yank the idle playhead back to 0 on every tweak.
+        const bool anyTrackActive = std::ranges::any_of(m_recording, [](const bool v) { return v; }) ||
+                                    std::ranges::any_of(m_playing, [](const bool v) { return v; });
+        if (m_groovePlaying || anyTrackActive)
+        {
+            m_grooveSequencer.resetPosition();
+            m_loopTimeKeeper.reset();
+        }
     }
 #pragma GCC diagnostic pop
 

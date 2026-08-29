@@ -162,7 +162,7 @@ class TapeLooperScriptEngine : public LuaScriptEngineBase<TapeLooperScriptEngine
 "--   SetTapeSpeed(ratio)                 1.0 is nominal\n"
 "--   SetBpm(bpm)                         groove/click tempo\n"
 "--   SetGrooveVariation(index)           0-based, picks among the loaded style's variations\n"
-"--   SetGroovePush(percent)              -100 laid-back .. 0 neutral .. +100 driving\n"
+"--   SetGroovePush(percent)              -100 driving .. 0 neutral .. +100 laid-back\n"
 "--   SetGrooveLife(percent)               0 fully quantized .. 100 the source MIDI's own feel\n"
 "--   SetGrooveStyle(styleName[, variationIndex])  styleName is one of listGrooveNames()'s\n"
 "--     own \"<Genre>/<style>\" entries; variationIndex defaults to 0\n"

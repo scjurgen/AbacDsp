@@ -21,7 +21,7 @@ at a fixed rate.
 | Groove | (switch) | Play/stop the groove track |
 | BPM | 50 - 250 | Groove/click tempo |
 | Groove Var | 0 - 31 | Selects among the loaded style's variations |
-| Groove Push | -100 - 100% | Timing/velocity bias per drum role: negative laid-back, positive driving |
+| Groove Push | -100 - 100% | Timing/velocity bias per drum role: positive laid-back, negative driving |
 | Groove Life | 0 - 100% | Blends the groove's timing/velocity from fully quantized (0) to the source MIDI's own feel (100) |
 | Script | (button) | Opens the popup editor for the current patch's script. The editor's own Reset button replaces the text with a full skeleton (every available hook, stubbed out) - Cancel discards it, Apply commits it. |
 
@@ -63,7 +63,7 @@ SetBpm(bpm)                         -- groove/click tempo
 SetGrooveVariation(index)           -- 0-based, picks among the loaded style's variations
 SetGrooveStyle(styleName)                  -- styleName is a "<Genre>/<style>" entry, same
 SetGrooveStyle(styleName, variationIndex)  -- form as the Groove menu; variationIndex defaults to 0
-SetGroovePush(percent)               -- -100 laid-back .. 0 neutral .. +100 driving,
+SetGroovePush(percent)               -- -100 driving .. 0 neutral .. +100 laid-back,
                                      -- matches the Groove Push dial's own range
 SetGrooveLife(percent)               -- 0 fully quantized .. 100 the source MIDI's own feel,
                                      -- matches the Groove Life dial's own range
