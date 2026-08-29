@@ -59,12 +59,18 @@ Lua loops, not different C++ code paths. See `examples/pingsynth/README.md`.
 
 ### Education: Metronome
 
+![Metronome settings and spectrum iris](docs/assets/metronome/settings-analysis.webp)
+
 A JUCE standalone metronome with damped-sine click sounds, odd-meter support, and a
 drop-bars mute feature for timing training: lock to the click and use the waveform
 display to see how tightly you land on the beat, switch to a shuffle/swing preset to work
-on feel, or use drop-bar mode to test internal time. See `examples/metronome/README.md`.
+on feel, or use drop-bar mode to test internal time. Its timing-analysis mode records a
+real playing session against the click and reports per-beat timing deviation (mean/std
+deviation, a histogram, a hit timeline) as a standalone HTML report:
 
-*(Screenshot pending - example is stable but not yet captured for this README.)*
+![Metronome timing-analysis report](docs/assets/metronome/timing-analysis-report.webp)
+
+See `examples/metronome/README.md`.
 
 ## Building and testing
 
