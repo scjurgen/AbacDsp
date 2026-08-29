@@ -90,13 +90,14 @@ instead of natively.
 Every public type in `src/includes/` carries a Doxygen brief. Build the site
 with:
 ```bash
-./dev-scripts/dev-docs.sh          # writes docs/html/index.html
+./dev-scripts/dev-docs.sh          # writes docs/doxygen/html/index.html
 ./dev-scripts/dev-docs.sh --open   # and opens it
 ```
 Requires `doxygen` (`brew install doxygen`); graphviz is used for inheritance
-graphs if present. Output goes to `docs/html/` and is gitignored; the config
-(`docs/Doxyfile`), the vendored theme (`docs/theme/`) and the module pages
-(`docs/groups.dox`, `docs/mainpage.dox`) are tracked.
+graphs if present. Output goes to `docs/doxygen/html/` and is gitignored; the
+config (`docs/doxygen/Doxyfile`), the vendored theme (`docs/doxygen/theme/`)
+and the module pages (`docs/doxygen/groups.dox`, `docs/doxygen/mainpage.dox`)
+are tracked.
 
 The build runs with `WARN_AS_ERROR=FAIL_ON_WARNINGS`, so a malformed command or
 an unresolvable cross-reference fails rather than producing a quietly wrong page.

@@ -36,8 +36,8 @@ JuceStandaloneGenerator/.gm_scratch
 # Temp
 TEMP_TODO.md
 
-# Generated API documentation (docs/Doxyfile and docs/theme are tracked)
-docs/html
+# Generated API documentation (docs/doxygen/Doxyfile and docs/doxygen/theme are tracked)
+docs/doxygen/html
 
 # Prerequisites
 *.d
