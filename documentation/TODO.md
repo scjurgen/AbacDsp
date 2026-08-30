@@ -5,15 +5,10 @@ plots, or where the existing documentation is out of date.
 
 ## Missing plots
 
-- **Modulation** (`Modulation/Wow.h`, `Flutter.h`, `Tremolo.h`,
-  `RingModulator.h`) - no documentation folder. Wow/Flutter in particular
-  are only exercised indirectly (via `VariSpeedTapeDelay.h` in tapelooper);
-  a standalone plot of their LFO characteristics (rate, depth, waveform)
-  would help future tuning.
-
 - **Delays** (`Delays/VariSpeedTapeDelay.h`, `MultiTapDelay.h`) - no
-  documentation folder; tape-delay wow/flutter interaction and multi-tap
-  spacing/decay would be useful alongside the Modulation plots above.
+  documentation folder; tape-delay wow/flutter interaction (now that
+  `Modulation/` covers `Wow`/`Flutter` in isolation) and multi-tap
+  spacing/decay would be worth a look.
 
 - **Biquads** 
   there is no documentation at all for them although they a part of important designs.

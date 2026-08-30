@@ -28,6 +28,7 @@ all. See `TODO.md` for folders and algorithms still missing plots.
 | `Filters/SincFilterDesign/` | generation | Regenerates the windowed-sinc FIR tables in `src/includes/Filters/Sinc/` |
 | `KarplusStrong/` | documentation | `KarplusStrongString`/`KarplusStrongVoice`: spectral brightness loss, decay-time accuracy, pitch bend behavior |
 | `Metronome/` | generation | Click samples and MIDI pattern library for tapelooper's built-in groove, not a library-algorithm write-up |
+| `Modulation/` | documentation | `Wow`/`Flutter` LFO character (timeline, spectrum, Poincare orbit plot), `Tremolo` drive morph, `RingModulator` sidebands |
 | `Numbers/` | generation | Sollya setup for the minimax sin/cos polynomials in `src/includes/Numbers/Approximation.h` |
 | `OrnsteinUhlenbeck/` | documentation | `OrnsteinUhlenbeckProcess`: mean-reverting noise timelines across `sigma` speeds |
 | `Plot/` | shared tooling | `PyConPlot.py` - the matplotlib wrapper most other folders' plots are rendered with |
