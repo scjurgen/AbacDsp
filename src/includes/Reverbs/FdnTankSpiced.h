@@ -168,7 +168,9 @@ class FdnTankSpiced
             return;
         }
         m_currentWidth[index] = value;
-        m_delay.setSize(index, value - 2 * BlockSize);
+        // value can be shorter than the two-block write/read offset below (a small room size at
+        // a large BlockSize); clamp rather than let the unsigned subtraction wrap.
+        m_delay.setSize(index, value > 2 * BlockSize ? value - 2 * BlockSize : 0);
         const auto tmp =
             std::pow(0.001f, static_cast<float>(m_currentWidth[index]) / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;

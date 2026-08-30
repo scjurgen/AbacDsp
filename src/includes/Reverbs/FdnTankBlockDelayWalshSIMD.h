@@ -1,11 +1,10 @@
 #pragma once
 
-#include "HadamardWalsh4.h"
-#include "HadamardWalsh8.h"
+#include "Delays/ParallelPlainDelay.h"
 #include "HadamardWalsh16.h"
 #include "HadamardWalsh32.h"
-
-#include "Delays/ParallelPlainDelay.h"
+#include "HadamardWalsh4.h"
+#include "HadamardWalsh8.h"
 #include "Numbers/PrimeDispatcher.h"
 
 namespace AbacDsp
@@ -83,7 +82,9 @@ class FdnTankBlockDelayWalshSIMD
         }
 
         m_currentWidth[index] = value;
-        m_delay.setSize(index, value - 2 * BlockSize);
+        // value can be shorter than the two-block write/read offset below (a small room size at
+        // a large BlockSize); clamp rather than let the unsigned subtraction wrap.
+        m_delay.setSize(index, value > 2 * BlockSize ? value - 2 * BlockSize : 0);
         const auto tmp = std::pow(0.001f, m_currentWidth[index] / m_sampleRate / (m_msecs / 1000.0f));
         m_gain[index] = tmp * m_feedBackGain;
     }

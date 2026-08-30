@@ -32,5 +32,6 @@ all. See `TODO.md` for folders and algorithms still missing plots.
 | `OrnsteinUhlenbeck/` | documentation | `OrnsteinUhlenbeckProcess`: mean-reverting noise timelines across `sigma` speeds |
 | `Plot/` | shared tooling | `PyConPlot.py` - the matplotlib wrapper most other folders' plots are rendered with |
 | `Reverbs/FDN/` | generation | Hadamard-matrix coefficients via SageMath, used to regenerate `src/includes/Reverbs/HadamardWalsh{4,8,16,32}.h` |
+| `Reverbs/Tanks/` | documentation | `FdnTankGlide`/`FdnTankSpicedBase`/`FdnTankBlockDelayWalshSIMD`: late-tail spectral flatness, RT60 vs. frequency band, Schroeder energy decay curves |
 | `Slicer/` | exploration | Offline harness for tuning `Analysis::Slicer` against hand-labelled audio |
 | `VelvetNoise/` | exploration | `Generators/RandomStyle/VelvetCrackle.h` explore program; no README yet - see `TODO.md` |

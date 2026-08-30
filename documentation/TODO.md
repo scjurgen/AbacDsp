@@ -5,18 +5,6 @@ plots, or where the existing documentation is out of date.
 
 ## Missing plots
 
-- **Reverbs** (`Reverbs/FdnTankGlide.h`, `FdnTankSpiced.h`,
-  `FdnTankSpicedBase.h`, `FdnTankBlockDelayWalshSIMD.h`) - `Reverbs/FDN/`
-  only covers generating the Hadamard matrices these tanks are built from;
-  none of these tank classes actually used by examples (dronesequencer,
-  maxdiffuser, minireverb, pingsynth, sampleplayer, spectraltap, tanpura,
-  tapelooper) have verification plots of their own yet. Needs:
-  - spectral characteristics: modal density/echo density over frequency,
-    flatness of the late-reverb spectrum
-  - decay behaviour: RT60 measurement per band, comparison of `FdnTankGlide`
-    vs `FdnTankSpiced` decay curves, effect of the "glide"/"spice" parameters
-    on decay shape
-
 - **Modulation** (`Modulation/Wow.h`, `Flutter.h`, `Tremolo.h`,
   `RingModulator.h`) - no documentation folder. Wow/Flutter in particular
   are only exercised indirectly (via `VariSpeedTapeDelay.h` in tapelooper);
@@ -26,6 +14,10 @@ plots, or where the existing documentation is out of date.
 - **Delays** (`Delays/VariSpeedTapeDelay.h`, `MultiTapDelay.h`) - no
   documentation folder; tape-delay wow/flutter interaction and multi-tap
   spacing/decay would be useful alongside the Modulation plots above.
+
+- **Biquads** 
+  there is no documentation at all for them although they a part of important designs.
+  check here, there is already some stuff: ~/projects/modabacad/ZY/documentation
 
 ## Missing README
 
