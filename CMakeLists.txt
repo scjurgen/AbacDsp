@@ -91,6 +91,7 @@ endif()
 
 option(EXPLORE_STUFF "Explore" OFF)
 if(EXPLORE_STUFF)
+    add_subdirectory(documentation/Delays)
     add_subdirectory(documentation/Diffuser)
     add_subdirectory(documentation/Filters/BandpassImpulses)
     add_subdirectory(documentation/Filters/PoleMixing)

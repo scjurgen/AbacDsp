@@ -5,11 +5,6 @@ plots, or where the existing documentation is out of date.
 
 ## Missing plots
 
-- **Delays** (`Delays/VariSpeedTapeDelay.h`, `MultiTapDelay.h`) - no
-  documentation folder; tape-delay wow/flutter interaction (now that
-  `Modulation/` covers `Wow`/`Flutter` in isolation) and multi-tap
-  spacing/decay would be worth a look.
-
 - **Biquads** 
   there is no documentation at all for them although they a part of important designs.
   check here, there is already some stuff: ~/projects/modabacad/ZY/documentation
