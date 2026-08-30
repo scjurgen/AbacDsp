@@ -25,6 +25,7 @@ all. See `TODO.md` for folders and algorithms still missing plots.
 | `Delays/` | documentation | `VariSpeedTapeDelay`: wow/flutter baked into recorded pitch, octave-based transport-speed glide; `MultiTapDelay`: whole-sample-only tap spacing |
 | `Diffuser/` | documentation | `DiffuserDelayChain`: Schroeder vs. Direct allpass magnitude flatness, echo-density growth vs. element count |
 | `Filters/BandpassImpulses/` | documentation, exploration | Resonant-bandpass family: `SvfResoBP`, `BiquadResoBP`, `BiquadResoBandPassParallel`, `BiquadResoBPParallelSIMD` - magnitude response, topology agreement, decay accuracy, resonance compensation |
+| `Filters/Biquads/` | documentation | `Biquad<type>` family magnitude/phase response, `ChebyshevBiquad` Type1/Type2, empirical stability under frequency/Q stress, `PeakBiquad` boost/cut symmetry |
 | `Filters/PoleMixing/` | generation, documentation, exploration | `PoleMixingFilter`: `fitPoleMixingCorrections.py` generates `src/includes/Filters/PoleMixingCorrections_generated.h`; `PoleMixingExplore.cpp` plots magnitude/phase, resonance, saturator overdrive behavior |
 | `Filters/SincFilterDesign/` | generation | Regenerates the windowed-sinc FIR tables in `src/includes/Filters/Sinc/` |
 | `KarplusStrong/` | documentation | `KarplusStrongString`/`KarplusStrongVoice`: spectral brightness loss, decay-time accuracy, pitch bend behavior |
