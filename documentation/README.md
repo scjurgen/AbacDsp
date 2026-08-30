@@ -22,6 +22,7 @@ all. See `TODO.md` for folders and algorithms still missing plots.
 
 | Folder | Kind | Covers |
 |---|---|---|
+| `Diffuser/` | documentation | `DiffuserDelayChain`: Schroeder vs. Direct allpass magnitude flatness, echo-density growth vs. element count |
 | `Filters/BandpassImpulses/` | documentation, exploration | Resonant-bandpass family: `SvfResoBP`, `BiquadResoBP`, `BiquadResoBandPassParallel`, `BiquadResoBPParallelSIMD` - magnitude response, topology agreement, decay accuracy, resonance compensation |
 | `Filters/PoleMixing/` | generation, documentation, exploration | `PoleMixingFilter`: `fitPoleMixingCorrections.py` generates `src/includes/Filters/PoleMixingCorrections_generated.h`; `PoleMixingExplore.cpp` plots magnitude/phase, resonance, saturator overdrive behavior |
 | `Filters/SincFilterDesign/` | generation | Regenerates the windowed-sinc FIR tables in `src/includes/Filters/Sinc/` |

@@ -5,13 +5,6 @@ plots, or where the existing documentation is out of date.
 
 ## Missing plots
 
-- **Diffuser** (`Diffuser/DiffusorDelayChain.h`, `AllpassDelay.h`,
-  `SchroederDiffuser.h`) - no documentation folder exists yet. Needs:
-  - spectral characteristics: magnitude/phase flatness (an allpass diffuser
-    should be flat in magnitude), density of the impulse response over time
-  - decay behaviour: how quickly the diffuser smears a transient into a dense
-    tail, and how that varies with `SizeSpreadControl`/allpass count
-
 - **Reverbs** (`Reverbs/FdnTankGlide.h`, `FdnTankSpiced.h`,
   `FdnTankSpicedBase.h`, `FdnTankBlockDelayWalshSIMD.h`) - `Reverbs/FDN/`
   only covers generating the Hadamard matrices these tanks are built from;
