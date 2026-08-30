@@ -27,7 +27,9 @@ in this folder. The sections below explain what it's doing and how to run each s
 ## Generating the data
 
 The C++ side only writes plain text; all plotting is done by the shared
-`documentation/Plot/PyConPlot.py` tool, avoiding a C++ plotting dependency.
+`documentation/Plot/PyConPlot.py` tool, avoiding a C++ plotting dependency. `generate.sh` writes
+that text into a gitignored `generated/` subfolder, leaving only the checked-in `.png`s at the
+top level of this folder.
 
 Build (enabled behind the `EXPLORE_STUFF` CMake option; no `dev-scripts/` wrapper covers
 this, so configure/build directly) and run it, from the repo root (optional arguments are
@@ -87,6 +89,8 @@ comparison already belongs to the timeline/autocorrelation plots.
 
 ## Why the timelines look the way they do
 
+![Timelines at four sigma speeds, one shared y-axis](ou_timeline.png)
+
 `OrnsteinUhlenbeckProcess::setSigma()` derives both the reversion rate `theta` and the mean
 `mu` from `sigma` (`theta = sigma * 20 + 1`, `mu = sigma`) - one control moves speed and
 amplitude together, by that class's own design (see its doc comment). Three consequences
@@ -111,7 +115,11 @@ worth knowing before reading the plots:
   that visible as a spread around the theoretical curve instead of one arbitrarily noisy
   line, and show that the spread, not the theoretical line itself, is what widens with lag.
 
+![Empirical autocorrelation vs. theoretical exp(-theta*tau) decay](ou_autocorr.png)
+
 ## Is it actually Gaussian?
+
+![Empirical distribution vs. theoretical stationary Gaussian](ou_distribution.png)
 
 An Ornstein-Uhlenbeck process's defining property isn't just "mean-reverting" - its
 stationary distribution is provably Gaussian. The distribution plot checks that directly,

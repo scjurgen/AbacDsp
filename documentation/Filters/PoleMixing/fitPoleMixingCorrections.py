@@ -139,7 +139,7 @@ namespace AbacDsp
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("-f", "--infile", default="pm_raw_correction_data.txt")
+    parser.add_argument("-f", "--infile", default="generated/pm_raw_correction_data.txt")
     parser.add_argument("-o", "--outfile", default="PoleMixingCorrections_generated.h")
     parser.add_argument("--cutoff-degree", type=int, default=7, help="log-space degree for the cutoff fit")
     parser.add_argument("--resonance-degree", type=int, default=7, help="log-space degree for the resonance fit")

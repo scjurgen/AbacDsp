@@ -28,7 +28,9 @@ below explain what it's doing and how to run each step by hand.
 ## Generating the data
 
 The C++ side only writes plain text; all plotting is done by the shared
-`documentation/Plot/PyConPlot.py` tool, avoiding a C++ plotting dependency.
+`documentation/Plot/PyConPlot.py` tool, avoiding a C++ plotting dependency. `generate.sh` writes
+that text into a gitignored `generated/` subfolder, leaving only the checked-in `.png`s at the
+top level of this folder.
 
 Build (enabled behind the `EXPLORE_STUFF` CMake option; no `dev-scripts/` wrapper covers
 this, so configure/build directly) and run it, from the repo root (optional arguments are
@@ -54,7 +56,7 @@ sweeps for the topology that has no closed form (see below) and to locate resona
 
 - `pm_response.txt`: two subplots, magnitude and phase, for a representative subset of
   `poleMixingList` (`LP1`/`LP2`/`LP4`, `HP1`/`HP2`/`HP4`, `BP2`/`BP4`, `AP2`/`AP4`, `Notch`)
-  at a fixed 1 kHz cutoff, resonance 0 - not all ~48 presets, to keep the plot legible. Both
+  at a fixed 1 kHz cutoff, resonance 0 - not all approx. 48 presets, to keep the plot legible. Both
   curves come from `FourStageFilterTheoretical`: magnitude via `magnitudeBP()` (the discrete
   cascade, accurate across the whole sweep), phase via `phase()` (the analog approximation,
   which the class itself documents as accurate only well below Nyquist - matched here by the
@@ -111,22 +113,22 @@ not in `build/`):
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-python3 ../../Plot/PyConPlot.py -f ../../../build/pm_response.txt -o pm_response.png \
+python3 ../../Plot/PyConPlot.py -f generated/pm_response.txt -o pm_response.png \
     --labelx "frequency (Hz)" --labely "magnitude (dB) / phase (deg)" --width 1200 --height 450 --cols 1
 
-python3 ../../Plot/PyConPlot.py -f ../../../build/pm_resonance.txt -o pm_resonance.png \
+python3 ../../Plot/PyConPlot.py -f generated/pm_resonance.txt -o pm_resonance.png \
     --labelx "frequency (Hz) / time (s)" --labely "magnitude (dB) / amplitude" --width 1200 --height 350 --cols 1
 
-python3 ../../Plot/PyConPlot.py -f ../../../build/pm_overdrive.txt -o pm_overdrive.png \
+python3 ../../Plot/PyConPlot.py -f generated/pm_overdrive.txt -o pm_overdrive.png \
     --labelx "input / frequency (Hz)" --labely "output / magnitude (dB)" --width 1200 --height 350 --cols 1
 
-python3 ../../Plot/PyConPlot.py -f ../../../build/pm_cutoff_accuracy.txt -o pm_cutoff_accuracy.png \
+python3 ../../Plot/PyConPlot.py -f generated/pm_cutoff_accuracy.txt -o pm_cutoff_accuracy.png \
     --labelx "requested cutoff (Hz)" --labely "measured resonant-peak frequency (Hz)" --width 1200 --height 500 --cols 1
 
-python3 ../../Plot/PyConPlot.py -f ../../../build/pm_realtime.txt -o pm_realtime.png \
+python3 ../../Plot/PyConPlot.py -f generated/pm_realtime.txt -o pm_realtime.png \
     --labelx "time (s)" --labely "output amplitude" --width 1200 --height 350 --cols 1
 
-python3 ../../Plot/PyConPlot.py -f ../../../build/pm_topology.txt -o pm_topology.png \
+python3 ../../Plot/PyConPlot.py -f generated/pm_topology.txt -o pm_topology.png \
     --labelx "frequency (Hz) / time (s)" --labely "magnitude (dB) / amplitude" --width 1200 --height 350 --cols 1
 ```
 
@@ -139,7 +141,7 @@ measure -> `curve_fit` -> emit-C++ pattern as
 `documentation/Filters/BandpassImpulses/fitBandPassCompensation.py`:
 
 ```bash
-python3 fitPoleMixingCorrections.py -f pm_raw_correction_data.txt \
+python3 fitPoleMixingCorrections.py -f generated/pm_raw_correction_data.txt \
     -o ../../../src/includes/Filters/PoleMixingCorrections_generated.h \
     --cutoff-degree 7 --resonance-degree 7
 ```
@@ -209,12 +211,16 @@ time.
 
 ## What the plots show
 
+![Magnitude and phase for a representative preset subset](pm_response.png)
+
 **Response curves** (`pm_response.png`) match every represented preset's own name: the `LPn`
 family rolls off above 1 kHz at increasingly steep slopes (`LP4` reaches roughly -80 dB by
 12 kHz), `HPn` mirrors that below 1 kHz, `BP2`/`BP4` peak at the cutoff and roll off both
 sides, `AP2`/`AP4` stay close to 0 dB everywhere (an allpass moves phase, not magnitude) while
 their phase subplot sweeps through the expected wide range, and `Notch` shows a clear dip
 right at 1 kHz.
+
+![Resonance sharpening up to self-oscillation](pm_resonance.png)
 
 **Resonance behavior** (`pm_resonance.png`): both `LP4` and `BP4` sharpen smoothly as
 resonance rises from `0` toward `1.0` (normalized: the measured self-oscillation threshold,
@@ -223,6 +229,8 @@ before the threshold. Past it, the third subplot's `LP4` impulse response rings 
 60 ms and then holds flat near amplitude `0.087` indefinitely - self-oscillation, not
 inferred from a peaky curve but actually rendered as a sustained, saturator-bounded
 oscillation.
+
+![Saturator transfer curves and harmonic growth](pm_overdrive.png)
 
 **Overdrive** (`pm_overdrive.png`): the two saturators' transfer curves are close but not
 identical - `atan(x)` reaches roughly `+/-1.41` at `x=+/-6` where `x/sqrt(1+x^2)` has already
@@ -233,18 +241,22 @@ point, and the harmonic ladder (300 Hz probe, harmonics stepping up through the 
 grows the same way with level in both. The two saturators' curves only pull apart
 noticeably at much larger `x`, outside what's driven here.
 
+![Requested vs. measured cutoff frequency](pm_cutoff_accuracy.png)
+
 **Cutoff-frequency correctness** (`pm_cutoff_accuracy.png`): after regenerating
 `Filter1Pole4StageSmooth`'s correction from direct raw-filter measurement (see
 "Regenerating the cutoff correction" above), the bandpass-tap curve now tracks `y=x` closely
 across essentially the whole range that was previously broken - visually indistinguishable
 from the reference line from 100 Hz up to about 8.5 kHz, where the old correction's error had
-peaked near `+47%`. Above ~8.5 kHz the curve goes flat at its fit domain's own edge (by
+peaked near `+47%`. Above approx. 8.5 kHz the curve goes flat at its fit domain's own edge (by
 design - see above - rather than the old correction's unbounded overshoot). Note this domain
 limit is a property of the *correction*, regenerated to stay honest about how far its
 measurement covered, not evidence the underlying filter itself cannot resonate higher.
 `FixedFourStageFilter`'s `warpCutoffForSampleRate` is untouched by this work and shows the
 same behavior as before: tracks within about 4% up to roughly 8-9 kHz, then increasingly
 overshoots, reaching `+30%` (`~15.6 kHz` measured) by a 12 kHz request.
+
+![Cutoff and resonance jumps while the filter is running](pm_realtime.png)
 
 **Real-time behavior** (`pm_realtime.png`): the cutoff jump shows the documented difference
 directly - `FixedFourStageFilter`'s linear ramp (driven through `processBlock()`, since
@@ -256,6 +268,8 @@ arrives". The resonance jump is the sharper contrast: `FixedFourStageFilter::set
 has no smoothing at all, so the step produces a visible transient overshoot/ring before
 settling, while `Filter1Pole4StageSmooth` smooths resonance the same way it smooths cutoff,
 producing a clean monotonic glide with no overshoot at all.
+
+![Classic vs. bandpass-tap resonance topology](pm_topology.png)
 
 **Topology comparison** (`pm_topology.png`): the first subplot's `LP4` peaks land at almost
 the same frequency for both topologies, with the bandpass-tap curve slightly broader/less

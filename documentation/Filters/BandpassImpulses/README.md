@@ -25,7 +25,9 @@ explain what it's doing and how to run each step by hand.
 ## Generating the data
 
 The C++ side only writes plain text; all plotting is done by the shared
-`documentation/Plot/PyConPlot.py` tool, avoiding a C++ plotting dependency.
+`documentation/Plot/PyConPlot.py` tool, avoiding a C++ plotting dependency. `generate.sh` writes
+that text into a gitignored `generated/` subfolder, leaving only the checked-in `.png`s at the
+top level of this folder.
 
 Build (enabled behind the `EXPLORE_STUFF` CMake option; no `dev-scripts/` wrapper covers this,
 so configure/build directly) and run it, from the repo root (optional arguments are the six
@@ -64,12 +66,12 @@ cmake --build . --target BandpassImpulseExplore
   `SvfResoBPTest.checkCompensationModelForWaveExcitation` (2000 samples: the compensated `reset()`
   is meant to place the state at the target amplitude directly, not ring up to it, so a short,
   fixed window is the right measurement regardless of decay time). The sweep starts at 0.15 s so
-  even the lowest note plotted (36, ~65 Hz) gets several full periods before the 60 dB point;
+  even the lowest note plotted (36, approx. 65 Hz) gets several full periods before the 60 dB point;
   below that, decay time and period length become comparable and "peak amplitude" stops being a
   meaningful measurement of this fix specifically. Kept as one overlay, unlike the plots above:
   the four notes' curves separate cleanly on their own.
 - `rb_pitchbend.txt`: two subplots - frequency error in cents (`1200 * log2(measured / expected)`,
-  the natural unit for a pitch error, immediately comparable to the ~5-10 cent range commonly
+  the natural unit for a pitch error, immediately comparable to the approx. 5-10 cent range commonly
   cited as the just-noticeable difference for pitch) vs. requested cents, swept in 10-cent steps
   (241 points), measured right after `pitchBendCents()`, and again after a `damp()` switch to the
   coefficient set that was never bent under the old code. Plotted as error against the expected
@@ -107,22 +109,22 @@ not in `build/`):
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-python3 ../../Plot/PyConPlot.py -f ../../../build/rb_response.txt -o rb_response.png \
+python3 ../../Plot/PyConPlot.py -f generated/rb_response.txt -o rb_response.png \
     --labelx "frequency (Hz)" --labely "magnitude (dB, normalized to peak)" --width 900 --height 450 --cols 2
 
-python3 ../../Plot/PyConPlot.py -f ../../../build/rb_decay_accuracy.txt -o rb_decay_accuracy.png \
+python3 ../../Plot/PyConPlot.py -f generated/rb_decay_accuracy.txt -o rb_decay_accuracy.png \
     --labelx "requested 60 dB decay time (s)" --labely "error (%)" --width 900 --height 450 --cols 2
 
-python3 ../../Plot/PyConPlot.py -f ../../../build/rb_compensation_accuracy.txt -o rb_compensation_accuracy.png \
+python3 ../../Plot/PyConPlot.py -f generated/rb_compensation_accuracy.txt -o rb_compensation_accuracy.png \
     --labelx "decay time (s)" --labely "peak amplitude (dB, 0 dB = exact)" --width 1200 --height 450 --cols 1
 
-python3 ../../Plot/PyConPlot.py -f ../../../build/rb_pitchbend.txt -o rb_pitchbend.png \
+python3 ../../Plot/PyConPlot.py -f generated/rb_pitchbend.txt -o rb_pitchbend.png \
     --labelx "pitch bend (cents)" --labely "error (cents)" --width 900 --height 450 --cols 2
 
-python3 ../../Plot/PyConPlot.py -f ../../../build/rb_topology.txt -o rb_topology.png \
+python3 ../../Plot/PyConPlot.py -f generated/rb_topology.txt -o rb_topology.png \
     --labelx "frequency (Hz)" --labely "magnitude (dB, normalized to peak)" --width 900 --height 450 --cols 2
 
-python3 ../../Plot/PyConPlot.py -f ../../../build/rb_isactive.txt -o rb_isactive.png \
+python3 ../../Plot/PyConPlot.py -f generated/rb_isactive.txt -o rb_isactive.png \
     --labelx "sample index" --labely "dB (envelope; isActive() at 0/-80)" --width 900 --height 450 --cols 2
 ```
 
@@ -159,9 +161,13 @@ all inconsistencies or design questions, not bugs with a single clear fix.
 
 ## What the plots show
 
+![SvfResoBP vs. BiquadResoBP magnitude response](rb_response.png)
+
 **Response** (`rb_response.png`): `SvfResoBP` and `BiquadResoBP`'s side-by-side panels are visually
 indistinguishable from each other - the same bandpass shape, peaking at 1 kHz - confirming the
 topology-preserving and direct-form designs agree.
+
+![60 dB decay-time relative error vs. requested decay](rb_decay_accuracy.png)
 
 **Decay accuracy** (`rb_decay_accuracy.png`): both panels show a shrinking sawtooth on a symlog
 axis (linear within +/-1%, log beyond, so both the large early spike and the small settled region
@@ -178,6 +184,8 @@ filter. Before the fix, `setByDecay()`'s constructor-time default and `setDecay(
 would have put this error in the tens-of-percent to 1000x range throughout - far outside the
 reference band for its entire length, not converging toward it.
 
+![ResonanceCompensation peak-amplitude accuracy across a decay sweep](rb_compensation_accuracy.png)
+
 **Compensation accuracy** (`rb_compensation_accuracy.png`): all four notes stay within a fraction
 of a dB of 0 dB across most of their range, including the fine, off-LUT-column decay steps this
 sweep uses - direct evidence the log-space interpolation fix is smooth between columns, not just
@@ -189,19 +197,25 @@ addressed by this pass - the interpolation axis and the underlying per-cell meas
 accuracy are independent things - but it is a real gap worth a future re-fit or note in the class
 documentation.
 
+![Pitch-bend error before and after a damp() coefficient-set switch](rb_pitchbend.png)
+
 **Pitch bend** (`rb_pitchbend.png`): the two panels - before and after the `damp()` switch - are
 pixel-identical, error bounded to about +/-0.39 cents and clearly dominated by zero-crossing
 measurement noise (it has the same jagged shape in both panels, not a trend). That is roughly an
-order of magnitude below the ~5-10 cents commonly cited as the threshold at which a pitch
+order of magnitude below the approx. 5-10 cents commonly cited as the threshold at which a pitch
 difference becomes audible, i.e. inaudible by a comfortable margin. Before the fix, the "after
 switch" panel would have shown a large, cents-dependent error instead: the unbent 440 Hz carrier
 compared against the bent expected frequency - a difference easily in the audible range for large
 bend amounts.
 
+![Magnitude response across all four resonant-bandpass classes](rb_topology.png)
+
 **Topology** (`rb_topology.png`): all four panels show the same normalized peak shape at 800 Hz.
 `BiquadResoBP`, `BiquadResoBandPassParallel` and `BiquadResoBPParallelSIMD` share the exact same
 per-element coefficient formulas, which shows here as three visually identical panels;
 `SvfResoBP` is the only genuinely different topology, and its panel still agrees in shape.
+
+![isActive() against the real output envelope](rb_isactive.png)
 
 **isActive timeline** (`rb_isactive.png`): in both panels, `isActive()` (blue) drops from 0 dB to
 -80 dB right where the real envelope (red) has already run into the display floor - not early,

@@ -20,7 +20,9 @@ below explain what it's doing and how to run each step by hand.
 ## Generating the data
 
 The C++ side only writes plain text; all plotting is done by the shared
-`documentation/Plot/PyConPlot.py` tool, avoiding a C++ plotting dependency.
+`documentation/Plot/PyConPlot.py` tool, avoiding a C++ plotting dependency. `generate.sh` writes
+that text into a gitignored `generated/` subfolder, leaving only the checked-in `.png`s at the
+top level of this folder.
 
 Build (enabled behind the `EXPLORE_STUFF` CMake option; no `dev-scripts/` wrapper covers
 this, so configure/build directly) and run it, from the repo root (optional arguments are the
@@ -48,7 +50,7 @@ section per subplot:
 - `ks_bend.txt`: two subplots, both a self-seeded autocorrelation pitch track (narrow +/-10%
   search radius per window, same idea as the unit tests' own
   `measureFrequencyByAutocorrelation`, not a raw zero-crossing count - that conflates harmonic
-  content with the fundamental and reads several kHz on a ~262 Hz string). The first tracks a
+  content with the fundamental and reads several kHz on a approx. 262 Hz string). The first tracks a
   `bendInCents(+1200)` slide (seeded at the known target frequency either side of the jump,
   since a bend is a real, intentional pitch step); the second tracks a live
   `setDamper(0.2 -> 0.8)` change mid-note - the actual verification for the pitch-compensation
@@ -84,18 +86,24 @@ python3 ../Plot/PyConPlot.py -f ../../build/ks_excitation.txt -o ks_excitation.p
 
 ## What the plots show
 
+![Spectral behavior: brightness loss over decay and by PluckType](ks_spectral.png)
+
 **Spectral behavior** confirms the damper does what its own doc comment claims: the loop's
 upper harmonics decay faster than its fundamental, so a string played into a room over time
 loses brightness before it loses level - the `t=2s` trace in `ks_spectral.png`'s top subplot
-has essentially nothing left above ~1.5 kHz while the fundamental region is still present. The
+has essentially nothing left above approx. 1.5 kHz while the fundamental region is still present. The
 bottom subplot's three `PluckType` colors are visibly different but not dramatically so at a
 single note/short window - White and Pink are close together, with Brown rolling off faster
 into the highs, matching what each noise color's own name implies.
+
+![Decay verification against the theoretical -20dB reference](ks_decay.png)
 
 **Decay verification** is a direct, plotted version of the `decayScalesPerOctave` unit test:
 `decayOctaveFactor=1` should make each octave up decay twice as fast in real time, and the
 `-20 dB per decayTime` theoretical line should track the actual empirical peak-level trace
 closely at all three notes - which it does.
+
+![Bend and live damper-change pitch tracking](ks_bend.png)
 
 **Bend/pitch-compensation behavior** is the one plot in this set built specifically to catch a
 regression rather than just illustrate a feature. `KarplusStrongString::setDamper()`/
@@ -106,6 +114,8 @@ live damper change would audibly nudge pitch. `recomputePitchRatio()` (factored 
 `setSizeByNote()`, now also called from the live setters) is the fix; `ks_bend.png`'s second
 subplot is the actual evidence it works, not just "compiles and doesn't crash" - genuinely
 unverified beyond this and the unit tests until it's been checked by ear too.
+
+![Excitation-technique envelope timelines](ks_excitation.png)
 
 **Excitation techniques**: `Bow` sustains as a fairly steady noise feed once woken; `Wind` and
 `Rub` are both the same mechanism at different `OrnsteinUhlenbeckProcess` tunings, and the
