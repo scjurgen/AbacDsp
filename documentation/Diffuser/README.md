@@ -47,7 +47,7 @@ arbitrary test setting.
   deviation, normalized against the 0.3173 value a true Gaussian would give) over the first 200ms,
   for 4/8/16 elements.
 - `df_buildup.txt`: three subplots, one series each - windowed peak level (dB, 1ms window,
-  ~0.17ms hop) over 2 seconds, fed the same positive unit impulse (a Dirac delta: one sample at
+  approx. 0.17ms hop) over 2 seconds, fed the same positive unit impulse (a Dirac delta: one sample at
   1.0, everything else 0) as the other two plots, all at feedback=0.65:
   1. a hand-wired, unmodulated 4-tap chain at Dattorro's (1997) plate-reverb prime delay sizes
      (229/173/613/449 samples @48kHz) - the classic fixed-size reference point
@@ -69,8 +69,8 @@ where the delay line's own periodicity starts becoming audible as metallic ringi
 literature consistently flags as an issue once the coefficient climbs toward 0.8-0.9.
 `examples/maxdiffuser`'s default of 0.65 sits solidly in that commonly-cited range, just under the
 often-quoted g=0.7 reference value. Measured directly (not shown as a plot here): time to the
-noise floor for the 6-element bulge-formula chain is ~0.22s at feedback=0.3, ~0.35s at 0.5, ~0.52s
-at 0.65, and ~0.93s at 0.8 - each step up roughly doubling how long the tail rings on, which is
+noise floor for the 6-element bulge-formula chain is approx. 0.22s at feedback=0.3, approx. 0.35s at 0.5, approx. 0.52s
+at 0.65, and approx. 0.93s at 0.8 - each step up roughly doubling how long the tail rings on, which is
 the practical cost of pushing feedback higher than the literature's sweet spot.
 
 ## What the plots show
@@ -88,9 +88,9 @@ an obvious frequency-dependent coloration in this view.
 ![Normalized echo density vs. element count](df_density.png)
 
 **Echo density growth**: all three element counts start below full density (NED < 1) at t=0 and
-climb through the first ~30-40ms as the chain fills - the basic claim (fewer elements take longer
+climb through the first approx. 30-40ms as the chain fills - the basic claim (fewer elements take longer
 to reach a dense tail) holds most clearly early on, where elements=4 (red) is visibly the slowest
-to reach NED~1. Past that fill-in window the three settle into overlapping, noisy bands rather
+to reach NED approx. 1. Past that fill-in window the three settle into overlapping, noisy bands rather
 than a clean ordering by element count - elements=8 (blue) ends up with the highest plateau of
 the three, not elements=16 (green), which tracks elements=4 for most of the window. This isn't
 smoothed away by generosity in the window/hop size (a 2400-sample window, 120-sample hop was used
@@ -104,12 +104,12 @@ look if this ever needs tuning for a specific reverb character, not a settled ex
 **Build-up/decay envelope, three topologies**: the Dattorro-style 4-tap chain shows a clean,
 regular sawtooth-like ripple during build-up (the coarse echo train of just 4 distinct delay
 lengths beating against each other) before settling into a smooth exponential decay to the floor
-by ~0.55s - genuinely different in character from the bulge-formula chains, not just "the same
+by approx. 0.55s - genuinely different in character from the bulge-formula chains, not just "the same
 shape with fewer echoes." The 8-element chain builds up faster and denser (no individually
-resolvable echoes, just texture) and decays smoothly to the floor by ~0.95s. The 20-element chain
+resolvable echoes, just texture) and decays smoothly to the floor by approx. 0.95s. The 20-element chain
 is the odd one out: instead of a clean transition from build-up to decay, its envelope dips into
 two deep, narrow notches around t=0.4s and t=0.65s (over 40dB down from the surrounding level)
-before settling into ordinary exponential decay past ~0.75s, reaching the floor by ~1.5s. This
+before settling into ordinary exponential decay past approx. 0.75s, reaching the floor by approx. 1.5s. This
 reads as a real interference/beating effect between elements at this specific size/bulge
 configuration, not a bug or a rendering artifact (the notches are narrow and land at consistent
 times across independent runs) - worth investigating further if a 20-element diffuser is ever
@@ -123,7 +123,7 @@ plain delay (`output = delayed`, no allpass term), so the whole "diffuser" is ju
 series - the plot shows exactly that: silence, then a single clean pulse at the sum of the four
 sizes (1464 samples = 30.5ms), nothing else. The other extreme is the more interesting one: at
 feedback=0.6/0.8/1, a sample-0 spike dominates the linear view, with amplitude matching
-feedback^4 almost exactly (0.6^4=0.130, 0.8^4=0.410, 0.999^4~1.0 - all match the rendered peaks).
+feedback^4 almost exactly (0.6^4=0.130, 0.8^4=0.410, 0.999^4 is approx. 1.0 - all match the rendered peaks).
 This is the textbook instantaneous term of a cascaded Schroeder allpass: each section's transfer
 function `(-g + z^-D) / (1 - g*z^-D)` reduces to exactly `-g` at the very first sample (before any
 delayed energy has had time to arrive), so four sections in series compound to `(-g)^4 = g^4`
