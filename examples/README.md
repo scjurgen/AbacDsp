@@ -8,6 +8,25 @@ hand-written class in that example's `src/impl/` (for example
 `src/impl/TanpuraImpl.h`); the generator wires parameters to it but never
 generates or overwrites it.
 
+| Name                      | Type       | Lua | Samples | Custom UI                  | DSP                                                                                                                            |
+|---------------------------|------------|-----|---------|-----------------------------|---------------------------------------------------------------------------------------------------------------------------------|
+| Delay                     | Effect     |     |         |                             | modulated feedback delay, one-pole low/high/all-pass filters                                                                    |
+| Dronesequencer            | Instrument | x   |         |                             | Karplus-Strong string ensemble, Ornstein-Uhlenbeck excitation drift, ADS envelope, biquad, FDN reverb                           |
+| Groover                   | Effect     |     | x       |                             | sample-based drum kit playback (GrooveKit/GrooveDrumPlayer)                                                                     |
+| Guisandbox                | Effect     |     |         | widget sandbox              | none (passthrough, UI-only)                                                                                                     |
+| Looper                    | Effect     |     | x       | slice/loop clock displays  | transient slicing (FFT-based), beat/click sequencer, loop recorder, MIDI/pattern sequencer, sample-based drum kit for the click |
+| Maxdiffuser               | Effect     |     |         | processing-size displays   | series allpass diffuser chain, FDN reverb, pitch shifting, biquad, waveshaping distortion                                       |
+| Metronome                 | Effect     |     |         | beat/spectrogram displays  | beat sequencer, click generator, onset/timing analysis against the beat grid                                                    |
+| Minireverb                | Effect     |     |         |                             | order-32 FDN reverb (Walsh-Hadamard mix), two in-tank pitch shifters, per-line hi/lo-pass filtering, vibrato                     |
+| Pingsynth                 | Instrument | x   |         |                             | modal resonator (ringing bandpass) bank, FDN reverb, pitch detection for Lua-side tuning                                        |
+| Plaingain                 | Effect     |     |         |                             | gain staging, biquad shelving filters, latency-compensation delay                                                               |
+| Resonik                   | Effect     | x   |         |                             | resonator bank (biquad + SVF bandpass), multi-tap delay, pitch detection                                                        |
+| Sampleplayer              | Instrument |     | x       |                             | sample playback (Ogg), samplerate conversion, pitch/hi/lo-pass block processors, FDN send reverb                                |
+| Sampleplayertimestretched | Instrument |     | x       |                             | independent time-stretch/pitch sample playback, resampling pitch shifter                                                        |
+| Spectraltap               | Effect     | x   |         |                             | comb resonator, multi-mode SVF and SVF bandpass filters, multi-tap delay, FDN reverb, pitch detection                           |
+| Tanpura                   | Instrument |     |         |                             | Karplus-Strong string ensemble, Ornstein-Uhlenbeck excitation drift, ADS envelope, biquad, FDN send reverb                      |
+| Tapelooper                | Effect     | x   | x       | tape display                | variable-speed sinc-interpolated tape delay, tape hysteresis, compressor, ring modulator, tremolo, pole-mixing filter, multi-tap delay, FDN reverb, sample-based drum kit, beat-locked loop timekeeping |
+
 Here the list in alphabetical order.
 ## Delay
 Feedback delay with host-synced or free time, low/high/all-pass filtering in
