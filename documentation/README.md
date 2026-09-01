@@ -40,3 +40,4 @@ all. See `TODO.md` for folders and algorithms still missing plots.
 | `Reverbs/Tanks/` | documentation | `FdnTankGlide`/`FdnTankSpicedBase`/`FdnTankBlockDelayWalshSIMD`: late-tail spectral flatness, RT60 vs. frequency band, Schroeder energy decay curves |
 | `Slicer/` | exploration | Offline harness for tuning `Analysis::Slicer` against hand-labelled audio |
 | `VelvetNoise/` | exploration | `Generators/RandomStyle/VelvetCrackle.h` explore program; no README yet - see `TODO.md` |
+| `Wavetables/` | documentation | `WaveTableOscillator`/`WaveTableStorage`: mipmap band-limiting across the pitch range, at a mip-table boundary, under PWM and morph; `changeFrequency()` vs. `setFrequency()` aliasing comparison |

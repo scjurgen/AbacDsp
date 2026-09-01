@@ -14,7 +14,8 @@ Scope: only `documentation/*/*.cpp` (and nested) files that `#include` a
 
 | Header | Used by | CMake target | Built? |
 |---|---|---|---|
-| Analysis/FftMisc.h | KarplusStrong/KarplusStrongExplore.cpp, Filters/PoleMixing/PoleMixingExplore.cpp | KarplusStrongExplore, PoleMixingExplore | yes |
+| Analysis/FftMisc.h | KarplusStrong/KarplusStrongExplore.cpp, Filters/PoleMixing/PoleMixingExplore.cpp, Wavetables/WavetablesExplore.cpp | KarplusStrongExplore, PoleMixingExplore, WavetablesExplore | yes |
+| Analysis/Spectrogram.h | Wavetables/WavetablesExplore.cpp | WavetablesExplore | yes |
 | Analysis/SimpleStats.h | Filters/BandpassImpulses/BpImpulseExplore.cpp, ResoVoiceExplore.cpp | BandpassImpulseExplore, ResoVoiceExplore | yes |
 | Analysis/Slicer.h | Slicer/SlicerExplore.cpp | SlicerExplore | yes |
 | Analysis/ZeroCrossings.h | Filters/BandpassImpulses/BpImpulseExplore.cpp | BandpassImpulseExplore | yes |
@@ -30,6 +31,8 @@ Scope: only `documentation/*/*.cpp` (and nested) files that `#include` a
 | Generators/ResoGenerator.h | Filters/BandpassImpulses/BpImpulseExplore.cpp, ResoVoiceExplore.cpp | BandpassImpulseExplore, ResoVoiceExplore | yes |
 | Generators/OrnsteinUhlenbeckProcess.h | OrnsteinUhlenbeck/OrnsteinUhlenbeckTimeline.cpp | OrnsteinUhlenbeckTimeline | yes |
 | Numbers/Convert.h | KarplusStrongExplore.cpp, BpImpulseExplore.cpp, ResoVoiceExplore.cpp | KarplusStrongExplore, BandpassImpulseExplore, ResoVoiceExplore | yes |
+| Wavetables/WaveTableOscillator.h | Wavetables/WavetablesExplore.cpp | WavetablesExplore | yes |
+| Wavetables/WaveTableStorage.h | Wavetables/WavetablesExplore.cpp | WavetablesExplore | yes |
 
 ## Not used by examples, but alive here
 
