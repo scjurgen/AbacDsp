@@ -13,6 +13,8 @@
 #include <utility>
 #include <vector>
 
+#include "AudioFile/SaveWav.h"
+
 #include "Analysis/FftMisc.h"
 #include "Analysis/Spectrogram.h"
 #include "Wavetables/WaveTableOscillator.h"
@@ -192,9 +194,9 @@ void writePitchBendSpectra(std::ofstream& out)
 constexpr unsigned kSpecFftLength = 2048;
 constexpr float kSpecBendSeconds = 1.f;
 
-// SimpleSpectrogram's FFT runs on a background worker; feeding it in hop-sized chunks with
-// a short sleep between (rather than one bulk call) avoids overrunning its 4-slot queue -
-// the same idiom test/Analysis/Spectrogram_test.cpp uses for offline/batch feeding.
+// SimpleSpectrogram's worker queue silently drops a frame fed while full (fine for its
+// realtime UI use case, not for a batch capture). queueHasRoom() is its documented way for
+// a producer that can't tolerate drops to avoid that - poll it before every feed.
 void writeSpectrogramGrid(std::ofstream& out, const std::vector<float>& audio)
 {
     AbacDsp::SimpleSpectrogram spec;
@@ -206,10 +208,13 @@ void writeSpectrogramGrid(std::ofstream& out, const std::vector<float>& audio)
 
     for (size_t fed = 0; fed < audio.size();)
     {
+        while (!spec.queueHasRoom())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
         const size_t chunk = std::min(hop, audio.size() - fed);
         spec.processBlock(audio.data() + fed, chunk);
         fed += chunk;
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (spec.getImageSet().activeSlice < expectedFrames && std::chrono::steady_clock::now() < deadline)
@@ -229,7 +234,8 @@ void writeSpectrogramGrid(std::ofstream& out, const std::vector<float>& audio)
     }
 }
 
-void writePitchBendSpectrogram(std::ofstream& upOut, std::ofstream& downOut)
+void writePitchBendSpectrogram(std::ofstream& upOut, std::ofstream& downOut, const std::string& upWavPath,
+                               const std::string& downWavPath)
 {
     constexpr float freq = 880.f;
 
@@ -237,13 +243,17 @@ void writePitchBendSpectrogram(std::ofstream& upOut, std::ofstream& downOut)
     upOsc.setWaveset(0, AbacDsp::BasicWave::Sine);
     upOsc.setMorph(-1.f);
     upOsc.setFrequency(freq);
-    writeSpectrogramGrid(upOut, renderContinuousBend(upOsc, freq, 1.f, kSpecBendSeconds));
+    const auto upAudio = renderContinuousBend(upOsc, freq, 1.f, kSpecBendSeconds);
+    AudioUtility::SaveWav::saveMonoAs(upWavPath, upAudio, kSampleRate);
+    writeSpectrogramGrid(upOut, upAudio);
 
     AbacDsp::WaveTableOscillator downOsc(kSampleRate);
     downOsc.setWaveset(0, AbacDsp::BasicWave::Sine);
     downOsc.setMorph(-1.f);
     downOsc.setFrequency(freq);
-    writeSpectrogramGrid(downOut, renderContinuousBend(downOsc, freq, -1.f, kSpecBendSeconds));
+    const auto downAudio = renderContinuousBend(downOsc, freq, -1.f, kSpecBendSeconds);
+    AudioUtility::SaveWav::saveMonoAs(downWavPath, downAudio, kSampleRate);
+    writeSpectrogramGrid(downOut, downAudio);
 }
 }
 
@@ -257,6 +267,8 @@ int main(int argc, char* argv[])
     const std::string pitchBendPath = argc > 6 ? argv[6] : "wt_pitch_bend.txt";
     const std::string specUpPath = argc > 7 ? argv[7] : "wt_pitch_bend_spectrogram_up.txt";
     const std::string specDownPath = argc > 8 ? argv[8] : "wt_pitch_bend_spectrogram_down.txt";
+    const std::string upWavPath = argc > 9 ? argv[9] : "wt_pitch_bend_up.wav";
+    const std::string downWavPath = argc > 10 ? argv[10] : "wt_pitch_bend_down.wav";
 
     std::ofstream pitchRangeOut(pitchRangePath);
     std::ofstream mipBoundaryOut(mipBoundaryPath);
@@ -279,9 +291,9 @@ int main(int argc, char* argv[])
     writeMorphSpectra(morphOut);
     writeChangeVsSetFrequency(changeVsSetOut);
     writePitchBendSpectra(pitchBendOut);
-    writePitchBendSpectrogram(specUpOut, specDownOut);
+    writePitchBendSpectrogram(specUpOut, specDownOut, upWavPath, downWavPath);
 
     std::cout << "WavetablesExplore: wrote " << pitchRangePath << ", " << mipBoundaryPath << ", " << pwmPath << ", "
-              << morphPath << ", " << changeVsSetPath << ", " << pitchBendPath << ", " << specUpPath << ", and "
-              << specDownPath << std::endl;
+              << morphPath << ", " << changeVsSetPath << ", " << pitchBendPath << ", " << specUpPath << ", "
+              << specDownPath << ", " << upWavPath << ", and " << downWavPath << std::endl;
 }

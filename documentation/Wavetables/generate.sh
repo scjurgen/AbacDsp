@@ -18,7 +18,8 @@ mkdir -p "$DATA_DIR"
 "$BUILD_DIR/documentation/Wavetables/WavetablesExplore" \
     "$DATA_DIR/wt_pitch_range.txt" "$DATA_DIR/wt_mip_boundary.txt" "$DATA_DIR/wt_pwm.txt" \
     "$DATA_DIR/wt_morph.txt" "$DATA_DIR/wt_change_vs_set_frequency.txt" "$DATA_DIR/wt_pitch_bend.txt" \
-    "$DATA_DIR/wt_pitch_bend_spectrogram_up.txt" "$DATA_DIR/wt_pitch_bend_spectrogram_down.txt"
+    "$DATA_DIR/wt_pitch_bend_spectrogram_up.txt" "$DATA_DIR/wt_pitch_bend_spectrogram_down.txt" \
+    "$DATA_DIR/wt_pitch_bend_up.wav" "$DATA_DIR/wt_pitch_bend_down.wav"
 
 if [ ! -d "$SCRIPT_DIR/.venv" ]; then
     python3 -m venv "$SCRIPT_DIR/.venv"
@@ -56,3 +57,4 @@ python3 "$SCRIPT_DIR/spectrogram_plot.py" \
 
 echo "Done: $SCRIPT_DIR/wt_pitch_range.png, wt_mip_boundary.png, wt_pwm.png, wt_morph.png," \
      "wt_change_vs_set_frequency.png, wt_pitch_bend.png, wt_pitch_bend_spectrogram.png"
+echo "Listening test audio (not checked in): $DATA_DIR/wt_pitch_bend_up.wav, wt_pitch_bend_down.wav"

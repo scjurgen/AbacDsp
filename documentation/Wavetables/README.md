@@ -86,13 +86,18 @@ spans up to Nyquist, which is exactly what's being checked here.
   out with nothing to visually separate them from) at 880Hz, bent up to
   1760Hz and separately down to 440Hz over 1s (same 16-sample
   `setFrequency()` cadence as `wt_pitch_bend.txt`). Captured with
-  `AbacDsp::SimpleSpectrogram` (`Analysis/Spectrogram.h`) - `setFftLength
-  (2048)`, default 1/3 hop - fed in hop-sized chunks with a short sleep
-  between (the same offline-feeding idiom `test/Analysis/
-  Spectrogram_test.cpp` already uses for this class, since its FFT runs on
-  a background worker thread). Rendered as a heatmap by this folder's own
-  `spectrogram_plot.py`, since `PyConPlot.py` only draws named x/y line
-  series, not a 2D grid.
+  `AbacDsp::SimpleSpectrogram` (`Analysis/Spectrogram.h`, `setFftLength
+  (2048)`, default 1/3 hop): its FFT runs on a background worker behind a
+  4-slot queue that silently drops a frame fed while full, so each hop-
+  sized chunk is only fed once `queueHasRoom()` (the class's own
+  documented mechanism for a producer that can't tolerate drops) confirms
+  there is room - not a fixed sleep, which let exactly one frame drop
+  through in an earlier run of this generator and showed up as a false
+  "jump" in the bend trace before this was caught and fixed. Rendered as a
+  heatmap by this folder's own `spectrogram_plot.py`, since `PyConPlot.py`
+  only draws named x/y line series, not a 2D grid. The same two renders
+  are also saved as `wt_pitch_bend_up.wav` / `_down.wav` in the gitignored
+  `generated/` folder (not checked in) for listening.
 
 ## What the plots show
 
@@ -162,13 +167,15 @@ skips is exactly what keeps a real pitch bend safe.
 **Bend spectrogram**: a single clean ridge tracks the sweep in both
 directions - 880Hz to 1760Hz smoothly rising, 880Hz to 440Hz smoothly
 falling - with no second trace, no discontinuity at any point along
-either bend, and the same broadband noise floor throughout as every other
-plot in this document. The faint diagonal line well above the main ridge
-(roughly -120dB, over 100dB down) is spectral leakage from the moving tone
-through the 2048-point Hann window, not an alias of the bend itself - it
-tracks the analysis window's own resolution limit, not the oscillator.
-This is the clearest single picture in this document of what "no stale
-mip table" actually looks like over time, not just before and after.
+either bend (verified deterministic across repeated regenerations after
+the `queueHasRoom()` fix above), and the same broadband noise floor
+throughout as every other plot in this document. The faint diagonal line
+well above the main ridge (roughly -120dB, over 100dB down) is spectral
+leakage from the moving tone through the 2048-point Hann window, not an
+alias of the bend itself - confirmed both by the number (100dB+ down is
+below normal hearing) and by ear against the `.wav` renders. This is the
+clearest single picture in this document of what "no stale mip table"
+actually looks like over time, not just before and after.
 
 ## Finding: `changeFrequency()` is a real aliasing footgun
 
