@@ -227,6 +227,134 @@ TEST(Morphexsynth, sustainPedalDefersNoteOffUntilReleased)
     }
 }
 
+TEST(Morphexsynth, oscillatorSustainsADecayingToneNotJustAnInitialClick)
+{
+    Impl impl{kSampleRate};
+    // Explicit oscillator level, filter wide open (high cutoff, no resonance/MPE/LFO/contour
+    // routing to it), decay-only envelope: isolates the oscillator+envelope path from the
+    // filter (reported symptom: sound only with resonance up - oscillator output suspected).
+    ASSERT_TRUE(
+        impl.setScript("function OnStart()\n"
+                       "    SetOscillator(0, { waveform = 2, level = 1.0, pitchFactor = 1.0 })\n"
+                       "    SetFilter({ cutoff = 127, resonance = 0, type = \"LP4\" })\n"
+                       "    SetAmpEnvelope({ attackMs = 0, decayMs = 1000, sustainLevel = 0.5, releaseMs = 100 })\n"
+                       "end\n"));
+
+    const auto on = noteOn(0, 60, 127);
+    impl.processMidi(on.data());
+
+    AbacDsp::AudioBuffer<2, kBlockSize> in{};
+    AbacDsp::AudioBuffer<2, kBlockSize> out{};
+
+    constexpr size_t kBlocksPerMs = static_cast<size_t>(kSampleRate) / 1000 / kBlockSize;
+    static_assert(kBlocksPerMs * 1000 * kBlockSize == static_cast<size_t>(kSampleRate),
+                  "kSampleRate must divide evenly for the ms-based windows below");
+
+    auto renderSilently = [&](const size_t blocks)
+    {
+        for (size_t b = 0; b < blocks; ++b)
+        {
+            impl.processBlock(in, out);
+        }
+    };
+    auto measureRms = [&](const size_t blocks)
+    {
+        double sumSquares = 0.0;
+        size_t count = 0;
+        for (size_t b = 0; b < blocks; ++b)
+        {
+            impl.processBlock(in, out);
+            for (size_t i = 0; i < kBlockSize; ++i)
+            {
+                sumSquares += static_cast<double>(out(i, 0)) * static_cast<double>(out(i, 0));
+                ++count;
+            }
+        }
+        return static_cast<float>(std::sqrt(sumSquares / static_cast<double>(count)));
+    };
+
+    const float earlyRms = measureRms(10 * kBlocksPerMs); // 0-10ms: right after trigger
+    EXPECT_GT(earlyRms, 0.05f) << "note-on should produce an immediately audible tone";
+
+    renderSilently(490 * kBlocksPerMs);                 // advance to the 500ms mark
+    const float midRms = measureRms(10 * kBlocksPerMs); // 500-510ms: well inside the 1s decay
+    EXPECT_GT(midRms, 0.3f * earlyRms)
+        << "the tone must still be sounding mid-decay, not have already died out to a brief click "
+        << "(early=" << earlyRms << ", mid=" << midRms << ")";
+
+    renderSilently(590 * kBlocksPerMs);                     // advance to the 1100ms mark, past the 1s decay
+    const float sustainRms = measureRms(10 * kBlocksPerMs); // 1100-1110ms: in sustain
+    EXPECT_GT(sustainRms, 0.3f * earlyRms) << "sustain must still be clearly audible";
+
+    const auto off = noteOff(0, 60);
+    impl.processMidi(off.data());
+    renderSilently(200 * kBlocksPerMs); // past the 100ms release
+
+    const float afterReleaseRms = measureRms(10 * kBlocksPerMs);
+    EXPECT_LT(afterReleaseRms, 0.01f) << "release must have finished silencing the note by now";
+}
+
+TEST(Morphexsynth, loadingANewScriptDoesNotInheritThePreviousScriptsOscillatorLevel)
+{
+    Impl impl{kSampleRate};
+    ASSERT_TRUE(
+        impl.setScript("function OnStart()\n"
+                       "    SetOscillator(0, { waveform = 2, level = 1.0, pitchFactor = 1.0 })\n"
+                       "    SetFilter({ cutoff = 127, resonance = 0, type = \"LP4\" })\n"
+                       "    SetAmpEnvelope({ attackMs = 0, decayMs = 50, sustainLevel = 1.0, releaseMs = 50 })\n"
+                       "end\n"));
+
+    // A second script that never calls SetOscillator: if the first script's level leaked
+    // through, this note would still be audible.
+    ASSERT_TRUE(impl.setScript("function OnStart()\nend\n"));
+
+    const auto on = noteOn(0, 60, 127);
+    impl.processMidi(on.data());
+
+    AbacDsp::AudioBuffer<2, kBlockSize> in{};
+    AbacDsp::AudioBuffer<2, kBlockSize> out{};
+    for (int block = 0; block < 20; ++block)
+    {
+        impl.processBlock(in, out);
+    }
+    for (size_t i = 0; i < kBlockSize; ++i)
+    {
+        EXPECT_NEAR(out(i, 0), 0.f, 1e-3f);
+    }
+}
+
+TEST(Morphexsynth, loadingANewScriptDoesNotInheritThePreviousScriptsMpeZone)
+{
+    Impl impl{kSampleRate};
+    ASSERT_TRUE(impl.setScript("function OnStart()\n"
+                               "    SetMpeZone(5, 6, 8)\n"
+                               "end\n"));
+
+    // A second script that never calls SetMpeZone(): the zone must revert to the default.
+    ASSERT_TRUE(
+        impl.setScript("function OnStart()\n"
+                       "    SetOscillator(0, { waveform = 2, level = 1.0 })\n"
+                       "    SetAmpEnvelope({ attackMs = 0, decayMs = 50, sustainLevel = 1.0, releaseMs = 50 })\n"
+                       "end\n"));
+
+    // MIDI channel 10 was outside the first script's zone (master 5, members 6..8) but is
+    // inside the restored default (master 1, members 2..16).
+    AbacDsp::AudioBuffer<2, kBlockSize> in{};
+    AbacDsp::AudioBuffer<2, kBlockSize> out{};
+    const auto on = noteOn(9, 60, 127);
+    impl.processMidi(on.data());
+    for (int block = 0; block < 20; ++block)
+    {
+        impl.processBlock(in, out);
+    }
+    bool sawNonZero = false;
+    for (size_t i = 0; i < kBlockSize; ++i)
+    {
+        sawNonZero = sawNonZero || out(i, 0) != 0.f;
+    }
+    EXPECT_TRUE(sawNonZero);
+}
+
 TEST(Morphexsynth, onNoteOnScriptCustomizationAppliesToTheTriggeringNoteItself)
 {
     Impl impl{kSampleRate};

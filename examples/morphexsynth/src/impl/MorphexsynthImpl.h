@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -98,7 +99,16 @@ class MorphexsynthImpl final : public EffectBase
         const bool ok = m_scriptEngine.loadScript(source);
         if (ok)
         {
+            // Every patch parameter a script can touch (oscillators, envelopes, LFO, filter,
+            // distortion, the MPE matrix, the MPE zone) must not carry over from whatever the
+            // previous script left behind - a script's behavior must not depend on load order.
+            resetVoicesToDefaults();
             resendUiParameters();
+            // The constructor fires OnStart() once for the initial stub load; every later
+            // setScript() (a new patch, the script editor's Apply) needs its own OnStart()
+            // too, or that script's own one-time setup (SetOscillator, ...) never runs.
+            m_scriptEngine.notifyStart();
+            applyPendingScriptCommands();
         }
         return ok;
     }
@@ -368,6 +378,25 @@ class MorphexsynthImpl final : public EffectBase
         }
     }
 #pragma GCC diagnostic pop
+
+    // Destroys and reconstructs every voice in place, guaranteeing every patch parameter
+    // lands back at MorphexsynthVoice's own as-constructed defaults - by construction, not
+    // by a hand-maintained list that could silently miss a future SetXxx() addition.
+    void resetVoicesToDefaults()
+    {
+        for (auto& voice : m_voices)
+        {
+            std::destroy_at(&voice);
+            std::construct_at(&voice, sampleRate(), m_waveShaperTables, m_curveMap);
+        }
+        m_voiceState = std::array<VoiceState, kMaxVoices>{};
+        m_noteCounter = 0;
+        m_lastNote = 60;
+        m_mpeMaster = 0;
+        m_mpeLower = 1;
+        m_mpeUpper = 15;
+        m_sustainPedal.allNotesOff();
+    }
 
     // Drains every SetXxx() command a script queued since the last block and, if present,
     // broadcasts it to every voice - the same all-voice-broadcast pattern setCutoff()/
