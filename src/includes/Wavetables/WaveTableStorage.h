@@ -64,7 +64,7 @@ struct WaveTableSet
     [[nodiscard]] size_t getIndexByFrequency(const float inc) const noexcept
     {
         const auto it = std::ranges::find_if(tables, [inc](const auto& wt) { return inc < wt.topFreq; });
-        return it != tables.end() ? std::distance(tables.begin(), it) : tables.size() - 1;
+        return it != tables.end() ? static_cast<size_t>(std::distance(tables.begin(), it)) : tables.size() - 1;
     }
 };
 
@@ -208,6 +208,7 @@ class WaveTableStore
                 std::ranges::generate(waveData, [&dist, &gen]() mutable { return dist(gen); });
                 break;
             }
+            case BasicWave::Last: // count marker only, never a real waveform
             default:
                 break;
         }

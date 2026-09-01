@@ -1,0 +1,65 @@
+{
+  "name": "morphexsynth",
+  "plugintype": "InstrumentPlugin",
+  "lookAndFeel": "LookAndFeel.h",
+  "boxy": "boxy",
+  "plugintype-see-also": "http://lv2plug.in/ns/lv2core#InstrumentPlugin",
+  "description": [
+    "MPE subtractive synth: three oscillators through a resonant filter, with a 10-slot MPE routing matrix, scripted in Lua."
+  ],
+  "patches": true,
+  "use-lua": true,
+  "ports-control": [
+    {"short": "VOL", "type": "dial", "display": "Vol", "symbol": "vol", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "CUTOFF", "type": "dial", "display": "Cutoff", "symbol": "cutoff", "default": 72, "range": [0, 127, 1, 1, false], "precision": 0, "unit": ""},
+    {"short": "RESO", "type": "dial", "display": "Reso", "symbol": "resonance", "default": 0, "range": [0, 120, 1, 1, false], "precision": 0, "unit": "%"},
+
+    {"short": "CPU", "type": "gauge", "gaugetype": "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "LVL", "type": "gauge", "gaugetype": "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+
+    {"short": "LUACTL", "type": "luacontrolarea", "display": "Lua Controls", "symbol": "luaControls"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1000",
+    "WINDOW_HEIGHT": "600",
+    "type": "|=",
+    "composition": "C=(1:4) R=(1:2) A1=(CPU*200, LVL*500) A2=(VOL, CUTOFF, RESO) A3=(LUACTL)"
+  },
+  "performance-page": {
+    "type": "-",
+    "composition": "A1=(LVL)"
+  },
+  "processor_forwards": [
+    {
+      "name": "hasScriptError",
+      "type": "bool"
+    },
+    {
+      "name": "scriptErrorMessage",
+      "call": "scriptError",
+      "type": "std::string"
+    },
+    {
+      "name": "getScriptSkeleton",
+      "call": "scriptSkeleton",
+      "type": "std::string"
+    },
+    {
+      "name": "getLuaUiParamSlots",
+      "call": "uiParamSlots",
+      "type": "MorphexsynthScriptEngine::UiParamSlots"
+    }
+  ],
+  "extra_timer_callbacks": [
+    "pollScriptError();",
+    "if (processorRef.hasRunner()) { luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()), valueTreeState); }"
+  ],
+  "extra_ui_includes": [
+    "impl/LuaControlBridge.h"
+  ],
+  "CPP": {
+    "CLASS_NAME": "MorphexsynthImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/MorphexsynthImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

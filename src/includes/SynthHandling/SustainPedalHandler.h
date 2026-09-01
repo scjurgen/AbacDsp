@@ -98,7 +98,7 @@ class SustainPedalHandler
             if (slotIndex == -1)
             {
                 slotIndex = findVoiceToSteal();
-                auto& stolenSlot = m_activeNotes[slotIndex];
+                auto& stolenSlot = m_activeNotes[static_cast<size_t>(slotIndex)];
                 if (m_noteOff)
                 {
                     m_noteOff(stolenSlot.channel, stolenSlot.note, stolenSlot.noteOffVelocity);
@@ -107,7 +107,7 @@ class SustainPedalHandler
             }
         }
 
-        auto& slot = m_activeNotes[slotIndex];
+        auto& slot = m_activeNotes[static_cast<size_t>(slotIndex)];
         slot = {true, false, channel, note, velocity, m_counter++};
 
         // Always trigger noteOn (MIDI spec requirement)

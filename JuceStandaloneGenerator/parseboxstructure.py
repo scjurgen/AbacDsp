@@ -191,7 +191,6 @@ def construct_boxes(m: dict, section: str = 'layout'):
             result += saveAreaRow(areas, 1)
         case '|':
             result += f"""std::vector<juce::Rectangle<int>> areas(1);
-                    const auto colWidth = area.getWidth() / {virtual_columns};
                     areas[0] = area.reduced(Constants::Margins::small);\n\n"""
             result += saveAreaColumn(areas, 1)
         case '||':

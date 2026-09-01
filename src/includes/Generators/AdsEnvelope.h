@@ -94,6 +94,27 @@ class EnvelopeShaper
         m_holdValues = false;
     }
 
+    /// @brief Retargets the segment mid-flight: keeps the remaining sample count, restarts the
+    /// curve from the current gain toward a new endGain. For a live control change (e.g. a
+    /// sustain-level tweak) that should finish on schedule rather than restart the ramp.
+    void modifyTarget(const float endGain) noexcept
+    {
+        m_startGain = m_lastGain;
+        m_endGain = endGain;
+        if (m_numOfSamples == 0)
+        {
+            m_startGain = endGain;
+            m_gainDelta = 0.f;
+            m_x = 0.f;
+            m_dx = 0.f;
+            return;
+        }
+        m_x = 0.f;
+        m_dx = 1.f / static_cast<float>(m_numOfSamples);
+        m_gainDelta = m_endGain - m_startGain;
+        m_holdValues = m_dx == 0.f;
+    }
+
     [[nodiscard]] float step() noexcept
     {
         if (m_holdValues)
@@ -208,6 +229,39 @@ class Envelope
     void noSustain() noexcept
     {
         m_sustainIndex = SegmentCount;
+    }
+
+    /// @brief If the given segment is the one currently playing, retargets it in place (keeping
+    /// its remaining time) to the target gain it's now configured with. A no-op otherwise: it
+    /// only catches a live change to a segment already in flight, not one still ahead.
+    void modifyTargetIfActive(const size_t index) noexcept
+    {
+        if (m_currentIndex == index)
+        {
+            m_currentSegment.modifyTarget(m_segments[m_currentIndex].targetGain);
+        }
+    }
+
+    /// @brief If the given segment is the one currently playing, restarts it over numSamples
+    /// toward its configured target. Unlike modifyTargetIfActive(), this also changes the
+    /// remaining duration - for a change that should land quickly rather than finish on schedule.
+    void quickModifyIfSegmentActive(const size_t index, const size_t numSamples = 100) noexcept
+    {
+        if (m_currentIndex == index)
+        {
+            m_currentSegment.setNewFramesAndTarget(numSamples, m_segments[m_currentIndex].targetGain,
+                                                   m_segments[m_currentIndex].curve);
+        }
+    }
+
+    /// @brief Jumps straight to the last segment with a caller-chosen (typically short) release
+    /// time, overriding whatever segment was playing. For voice stealing: a declick that doesn't
+    /// wait for the normal release to reach its turn.
+    void emergencyRelease(const float timeInMilliseconds) noexcept
+    {
+        m_currentIndex = SegmentCount - 1;
+        m_currentSegment.setNewFramesAndTarget(static_cast<size_t>(timeInMilliseconds * m_samplesPerMillisecond),
+                                               m_segments[m_currentIndex].targetGain, m_segments[m_currentIndex].curve);
     }
 
     void triggerFrom(const float startValue) noexcept

@@ -3,7 +3,7 @@
 This covers the Lua scripting API shared by every Lua-scripted JUCE example generated via
 `JuceStandaloneGenerator` - the machinery lives in `LuaScriptEngineBase.h` and
 `LuaMusicMathLib.h`, both fixed, always-copied components (`CPP_SOURCE_FILES_FIXED` in
-`generate-juce-standalone.py`) that any generated example can pull in. Five examples use it
+`generate-juce-standalone.py`) that any generated example can pull in. Six examples use it
 today - each one's own additional hooks are documented in its own README.md's "Scripting"
 section, not repeated here:
 
@@ -14,6 +14,7 @@ section, not repeated here:
 | `pingsynth` | `examples/pingsynth/README.md` | `SetHarmonics`/`SetPitchBendRange`, `OnMpeModeChanged` |
 | `spectraltap` | `examples/spectraltap/README.md` | `SetMaxTaps`/`SetTap`, `SetFrequency`/`SetResonance`/`SetFormant`/`SetPan`/`SetGain` |
 | `tapelooper` | `examples/tapelooper/README.md` | `SetTapeSpeed`/`SetBpm`/`SetGrooveVariation`/`SetTrackRecord`/`SetTrackPlay`/`SetTrackGain`/`SetTrackFilter`/`SetTrackReverbSend`/`SetReverbSize`/`SetReverbDecay`/`SetGrooveSource`/`SetTrackWow`/`SetTrackFlutter`/`SetTrackDrive`/`SetTrackChorus`/`SetTrackEcho`/`SetTrackCompressor`/`SetTrackRingMod`/`SetTrackTremolo`/`SetTrackChain`/`SetInstrumentGain`/`MuteInstrument`/`SetInstrumentReverbSend`, `OnRecordStateChanged` |
+| `morphexsynth` | `examples/morphexsynth/README.md` | `SetOscillator`/`SetAmpEnvelope`/`SetFilterEnvelope`/`SetPitchEnvelope`/`SetLfo`/`SetFilter`/`SetDistortion`/`SetCtrlSlot`/`SetMpeZone` |
 
 ## Sandbox
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <functional>
 #include <vector>
 
 #include "Parameters/SmoothingParameter.h"
@@ -48,7 +49,7 @@ class WaveTableOscillator
 
     void changeFrequency(const float frequency) noexcept
     {
-        if (m_frequency == frequency)
+        if (std::equal_to<float>{}(m_frequency, frequency))
         {
             return;
         }
@@ -59,7 +60,7 @@ class WaveTableOscillator
 
     void setFrequency(const float frequency) noexcept
     {
-        if (m_frequency == frequency)
+        if (std::equal_to<float>{}(m_frequency, frequency))
         {
             return;
         }
@@ -105,7 +106,8 @@ class WaveTableOscillator
             }
         }
 
-        if (const size_t samplesUntilWrap = (1.f - m_phasor) * m_invPhaseInc; samplesUntilWrap >= numSamples)
+        if (const auto samplesUntilWrap = static_cast<size_t>((1.f - m_phasor) * m_invPhaseInc);
+            samplesUntilWrap >= numSamples)
         {
             std::generate_n(target, numSamples,
                             [this]()
@@ -177,9 +179,9 @@ class WaveTableOscillator
 
     void applyMorph()
     {
-        const auto morph = std::clamp((m_morphValue + 1) * 0.5f, 0.f, 1.f) * (m_set.size() - 1);
+        const auto morph = std::clamp((m_morphValue + 1) * 0.5f, 0.f, 1.f) * static_cast<float>(m_set.size() - 1);
         m_tblSubIdx = static_cast<size_t>(std::floor(morph));
-        m_morph = morph - m_tblSubIdx;
+        m_morph = morph - static_cast<float>(m_tblSubIdx);
         if (m_tblSubIdx >= m_set.size() - 1)
         {
             m_tblSubIdx = m_set.size() - 2;
@@ -217,9 +219,9 @@ class WaveTableOscillator
     {
         const auto& wt1 = m_set[m_tblSubIdx].tables[m_curTableIdx[0]];
         const auto& wt2 = m_set[m_tblSubIdx + 1].tables[m_curTableIdx[1]];
-        const float pos = m_phasor * TableSize;
+        const float pos = m_phasor * static_cast<float>(TableSize);
         const auto idx = static_cast<size_t>(pos);
-        const float frac = pos - idx;
+        const float frac = pos - static_cast<float>(idx);
         const auto v1 = std::lerp(wt1.data[idx], wt1.data[idx + 1], frac);
         const auto v2 = std::lerp(wt2.data[idx], wt2.data[idx + 1], frac);
         return m_morph * v2 + (1 - m_morph) * v1;
@@ -229,9 +231,9 @@ class WaveTableOscillator
     {
         const auto& wt1 = m_set[m_tblSubIdx].tables[m_curTableIdx[0]];
         const auto& wt2 = m_set[m_tblSubIdx + 1].tables[m_curTableIdx[1]];
-        const float pos = m_phasorWithOffset * TableSize;
+        const float pos = m_phasorWithOffset * static_cast<float>(TableSize);
         const auto idx = static_cast<size_t>(pos);
-        const float frac = pos - idx;
+        const float frac = pos - static_cast<float>(idx);
         const auto v1 = std::lerp(wt1.data[idx], wt1.data[idx + 1], frac);
         const auto v2 = std::lerp(wt2.data[idx], wt2.data[idx + 1], frac);
         return m_morph * v2 + (1 - m_morph) * v1;
@@ -272,7 +274,8 @@ class WaveTableOscillator
 
     void subtractPwmBlock(float* target, const size_t numSamples, const float factor)
     {
-        if (const size_t samplesUntilWrap = (1.f - m_phasorWithOffset) * m_invPhaseInc; samplesUntilWrap >= numSamples)
+        if (const auto samplesUntilWrap = static_cast<size_t>((1.f - m_phasorWithOffset) * m_invPhaseInc);
+            samplesUntilWrap >= numSamples)
         {
             std::transform(target, target + numSamples, target,
                            [&](const float in)
