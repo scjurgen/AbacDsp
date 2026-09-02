@@ -46,7 +46,6 @@
     "bpmDial.setEnabled(!processorRef.isHostSynced());",
     "if (processorRef.isHostSynced()) { bpmDial.setValue(processorRef.getCurrentBpm()); }",
     "pollScriptError();",
-    "pollLlmAssistWatcher();",
     "if (processorRef.hasRunner()) { luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()), valueTreeState); }"
   ],
   "host_transport": true,

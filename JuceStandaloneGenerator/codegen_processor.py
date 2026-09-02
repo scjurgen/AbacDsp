@@ -394,6 +394,26 @@ def create_fileio_script_methods(blueprint: Blueprint) -> str:
         return dir;
     }}
 
+    // Raw JSON text of a saved named patch (unlike currentParametersAsJson(), which only
+    // exposes the live in-memory one), or nullopt if the name is invalid or nothing is
+    // saved under it - used by the Authoring HTTP API's GET /patches/{{name}}.
+    [[nodiscard]] std::optional<std::string> readPatchJson(const std::string& name) const
+    {{
+        const std::string filename = getNamedPatchFilename(name);
+        if (filename.empty())
+        {{
+            return std::nullopt;
+        }}
+        std::ifstream in(filename);
+        if (!in)
+        {{
+            return std::nullopt;
+        }}
+        std::ostringstream buffer;
+        buffer << in.rdbuf();
+        return buffer.str();
+    }}
+
 """
 
 # Private helpers backing create_fileio_script_methods() above: the on-disk pool
@@ -451,6 +471,26 @@ def create_fileio_script_private(blueprint: Blueprint) -> str:
 #endif
     }}
 
+    // Refreshes Patches/Factory/ from the repo's factory-patches/ directory (only available
+    // in a dev build from a real checkout - {module_macro}_FACTORY_PATCHES_DIR is undefined
+    // otherwise, in which case this is a no-op and whatever is already on disk is used).
+    static void syncFactoryPatches()
+    {{
+#ifdef {module_macro}_FACTORY_PATCHES_DIR
+        const juce::File repoDir({module_macro}_FACTORY_PATCHES_DIR);
+        if (!repoDir.isDirectory())
+        {{
+            return;
+        }}
+        const juce::File targetDir = getPatchDirectory().getChildFile("Factory");
+        targetDir.createDirectory();
+        for (const auto& source : repoDir.findChildFiles(juce::File::findFiles, false, "*.json"))
+        {{
+            source.copyFileTo(targetDir.getChildFile(source.getFileName()));
+        }}
+#endif
+    }}
+
     static std::string get{upper}Filename(const std::string& name)
     {{
         juce::StringArray segments;
@@ -502,7 +542,7 @@ def create_fileio_script_includes(blueprint: Blueprint) -> str:
 def create_fileio_script_initialize(blueprint: Blueprint) -> str:
     if not uses_lua(blueprint):
         return ""
-    return "syncBaseLibraryScripts();"
+    return "syncBaseLibraryScripts();\n        syncFactoryPatches();"
 
 # Fixed-name convenience wrappers (getScriptText, applyScriptText, listScriptNames, ...)
 # around the FileIo/DSP methods above, so the Editor's popup/menu code (also fixed-name,
@@ -592,7 +632,121 @@ def create_processor_script_methods(blueprint: Blueprint) -> str:
     {{
         return FileIo::saveUserLibraryScript(name.toStdString(), content.toStdString());
     }}
+
+    // Raw JSON of a saved named patch, for the Authoring HTTP API's GET /patches/{{name}}.
+    [[nodiscard]] std::optional<juce::String> getPatchJson(const juce::String& name) const
+    {{
+        const auto json = m_fileIo.readPatchJson(name.toStdString());
+        return json ? std::optional<juce::String>(juce::String(*json)) : std::nullopt;
+    }}
+
+    // Loads and applies a named patch directly, no "save unsaved changes first?" prompt -
+    // requestLoadPatch()'s modal dialog would otherwise block the HTTP request forever.
+    bool applyPatchNamed(const juce::String& name)
+    {{
+        if (!m_fileIo.loadPatchNamed(name.toStdString()))
+        {{
+            return false;
+        }}
+        applyLoadedParametersToHost();
+        return true;
+    }}
+
+    // Raw source of an installed library, for the Authoring HTTP API's GET /libraries/{{name}}
+    // - unlike getLibraryScriptText(), which returns a friendly placeholder comment on a
+    // miss (for the in-app dropdown), this reports a real 404 the HTTP layer can act on.
+    [[nodiscard]] std::optional<juce::String> getLibraryScriptSource(const juce::String& name) const
+    {{
+        const auto lookup = FileIo::resolveLibraryScript(name.toStdString());
+        return lookup.source ? std::optional<juce::String>(juce::String(*lookup.source)) : std::nullopt;
+    }}
+
+    // Mirrors the old LlmAssistWatcher's applyLibraryAndPull(): saves to Library/User/,
+    // then re-applies the current script so any import "{{name}}" is genuinely re-resolved
+    // and validated - compiled/error describe that re-apply, not the library file alone.
+    std::pair<bool, juce::String> applyLibraryScript(const juce::String& name, const juce::String& content)
+    {{
+        if (!saveUserLibraryScript(name, content))
+        {{
+            return {{false, "failed to save library script (invalid name or write error)"}};
+        }}
+        const bool compiled = applyScriptText(getScriptText());
+        return {{compiled, compiled ? juce::String{{}} : juce::String(scriptErrorMessage())}};
+    }}
+
+    // Cross-thread-safe by design (see juce_MidiMessageCollector.h) - AuthoringHttpServer
+    // calls this straight from its own worker thread, no message-thread hop needed.
+    void injectAuthoringMidi(const juce::MidiMessage& message)
+    {{
+        m_authoringMidiCollector.addMessageToQueue(message);
+    }}
+
+    // Wires the callback surface AuthoringHttpServer needs to reach the running instance's
+    // script/patch state - same callbacks the old LlmAssistWatcher used, plus context reads.
+    void initAuthoringServer()
+    {{
+        m_authoringServer.applyScriptText = [this](const juce::String& text) {{ return applyScriptText(text); }};
+        m_authoringServer.scriptErrorMessage = [this] {{ return juce::String(scriptErrorMessage()); }};
+        m_authoringServer.hasScriptError = [this] {{ return hasScriptError(); }};
+        m_authoringServer.currentScriptText = [this] {{ return getScriptText(); }};
+        m_authoringServer.currentScriptName = [this] {{ return getCurrentScriptName(); }};
+        m_authoringServer.currentPatchName = [this] {{ return getCurrentPatchName(); }};
+        m_authoringServer.libraryScriptNames = [this] {{ return getLibraryScriptNames(); }};
+        m_authoringServer.uiParamSlots = [this]
+        {{
+            const auto slots = getLuaUiParamSlots();
+            return std::vector<LuaUiParamSlot>(slots.begin(), slots.end());
+        }};
+        m_authoringServer.cpuLoadPercent = [this] {{ return getCpuLoad(); }};
+        m_authoringServer.wrapperTypeDescription = [this]
+        {{ return juce::AudioProcessor::getWrapperTypeDescription(wrapperType); }};
+        m_authoringServer.patchNames = [this] {{ return listPatchNames(); }};
+        m_authoringServer.patchJson = [this](const juce::String& name) {{ return getPatchJson(name); }};
+        m_authoringServer.savePatchNamed = [this](const juce::String& name) {{ return saveCurrentPatchAs(name); }};
+        m_authoringServer.loadPatchNamed = [this](const juce::String& name) {{ return applyPatchNamed(name); }};
+        m_authoringServer.deletePatchNamed = [this](const juce::String& name) {{ return deletePatchNamed(name); }};
+        m_authoringServer.libraryScriptSource = [this](const juce::String& name) {{ return getLibraryScriptSource(name); }};
+        m_authoringServer.applyLibraryScript = [this](const juce::String& name, const juce::String& content)
+        {{ return applyLibraryScript(name, content); }};
+        m_authoringServer.injectMidi = [this](const juce::MidiMessage& message) {{ injectAuthoringMidi(message); }};
+    }}
+
+    // Never auto-started from a saved setting - Authoring Mode requires an explicit
+    // toggle every session (see the Editor's Authoring menu), the same "always off on a
+    // fresh instance" guarantee the old LlmAssistWatcher's m_llmAssistActive already had.
+    bool setAuthoringModeEnabled(const bool enabled)
+    {{
+        if (enabled)
+        {{
+            return m_authoringServer.start(JucePlugin_Name);
+        }}
+        m_authoringServer.stop();
+        return false;
+    }}
+
+    [[nodiscard]] bool isAuthoringModeEnabled() const noexcept
+    {{
+        return m_authoringServer.isRunning();
+    }}
+
+    [[nodiscard]] juce::URL authoringDashboardUrl() const
+    {{
+        return m_authoringServer.dashboardUrl();
+    }}
 """
+
+# Declared last so it is destroyed first: its destructor blocks until every in-flight
+# HTTP request finishes, and a request handler reaches back into this processor's other
+# members while running - none of them may be torn down first (see FileIo m_fileIo above).
+def create_authoring_server_member(blueprint: Blueprint) -> str:
+    if not uses_lua(blueprint):
+        return ""
+    return (
+        "juce::MidiMessageCollector m_authoringMidiCollector;\n"
+        "// Declared last so it is destroyed first - its destructor blocks until every\n"
+        "// in-flight request finishes, and a handler reaches into this processor meanwhile.\n"
+        "AuthoringHttpServer m_authoringServer;\n"
+    )
 
 def create_variables_implementation(blueprint: Blueprint) -> str:
     result = ""

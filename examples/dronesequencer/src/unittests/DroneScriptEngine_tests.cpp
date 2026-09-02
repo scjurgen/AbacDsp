@@ -1203,3 +1203,93 @@ TEST(DroneScriptEngine, PitchAnalysisGranularityChangesHopCadence)
     ASSERT_EQ(result.count, 1u);
     EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 10.f);
 }
+
+TEST(DroneScriptEngine, LoadTimeInfiniteLoopIsRejectedWithoutHanging)
+{
+    DroneScriptEngine engine;
+    EXPECT_FALSE(engine.loadScript("while true do end\nfunction NextNotes() return {} end"));
+    EXPECT_TRUE(engine.hasError());
+    EXPECT_NE(engine.lastError().find("infinite loop"), std::string::npos) << engine.lastError();
+}
+
+TEST(DroneScriptEngine, LoadTimeInfiniteLoopKeepsPreviousScriptRunning)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript("function NextNotes() return { { note = 61 } } end"));
+
+    EXPECT_FALSE(engine.loadScript("while true do end\nfunction NextNotes() return {} end"));
+    EXPECT_TRUE(engine.hasError());
+
+    const auto result = engine.nextNotes();
+    ASSERT_EQ(result.count, 1u);
+    EXPECT_FLOAT_EQ(result.notes[0].noteHeight, 61.f);
+}
+
+TEST(DroneScriptEngine, BoundedButExpensiveLoadDoesNotFalsePositiveOnStallGuard)
+{
+    // 500k simple-arithmetic iterations at load time should run in low tens of ms - well
+    // under the guard's wall-clock budget - so this must not be mistaken for a stall.
+    DroneScriptEngine engine;
+    EXPECT_TRUE(engine.loadScript(R"(
+        local sum = 0
+        for i = 1, 500000 do sum = sum + i end
+        function NextNotes() return {} end
+    )"));
+    EXPECT_FALSE(engine.hasError());
+}
+
+TEST(DroneScriptEngine, HandlerInfiniteLoopInNextNotesIsRejectedWithoutHanging)
+{
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        function NextNotes()
+            while true do end
+        end
+    )"));
+    const auto result = engine.nextNotes();
+    EXPECT_EQ(result.count, 0u);
+    EXPECT_TRUE(engine.hasError());
+    EXPECT_NE(engine.lastError().find("infinite loop"), std::string::npos) << engine.lastError();
+}
+
+TEST(DroneScriptEngine, BoundedButExpensiveHandlerCallDoesNotFalsePositiveOnStallGuard)
+{
+    // 10k simple-arithmetic iterations per call is well under the guard's instruction
+    // ceiling - must not be mistaken for a stall.
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        function NextNotes()
+            local sum = 0
+            for i = 1, 10000 do sum = sum + i end
+            return { { note = sum, velocity = 0, channel = 0, length = 0, delay = 0 } }
+        end
+    )"));
+    const auto result = engine.nextNotes();
+    EXPECT_FALSE(engine.hasError());
+    ASSERT_EQ(result.count, 1u);
+}
+
+TEST(DroneScriptEngine, StallGuardDoesNotLingerAfterATrippedHandlerCall)
+{
+    // Regression guard for the RAII cleanup itself: a tripped call must not leave the Lua
+    // debug hook installed for whatever runs next on this same Lua state.
+    DroneScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript(R"(
+        Bad = true
+        function NextNotes()
+            if Bad then
+                while true do end
+            end
+            return { { note = 61 } }
+        end
+    )"));
+    const auto tripped = engine.nextNotes();
+    EXPECT_EQ(tripped.count, 0u);
+    EXPECT_TRUE(engine.hasError());
+
+    ASSERT_TRUE(engine.loadScript("function NextNotes() return { { note = 61 } } end"));
+    const auto recovered = engine.nextNotes();
+    ASSERT_EQ(recovered.count, 1u);
+    EXPECT_FLOAT_EQ(recovered.notes[0].noteHeight, 61.f);
+    EXPECT_FALSE(engine.hasError());
+}

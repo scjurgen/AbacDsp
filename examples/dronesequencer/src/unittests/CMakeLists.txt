@@ -57,9 +57,10 @@ package_add_test(DroneSequencerImplTests
         DroneSequencerImpl_tests.cpp
 )
 
-package_add_test(LlmAssistWatcherCoreTests
-        LlmAssistWatcherCore_tests.cpp
+package_add_test(AuthoringHttpServerCoreTests
+        AuthoringHttpServerCore_tests.cpp
 )
+target_link_libraries(AuthoringHttpServerCoreTests nlohmann_json::nlohmann_json)
 
 package_add_test(FileIoTests
         FileIo_tests.cpp
@@ -69,9 +70,23 @@ target_compile_definitions(
     FileIoTests
     PRIVATE
         DRONESEQUENCER_BASE_SCRIPTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/base-scripts-fixture"
+        DRONESEQUENCER_FACTORY_PATCHES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/factory-patches-fixture"
 )
 
-package_add_test(LlmAssistWatcherTests
-        LlmAssistWatcher_tests.cpp
+package_add_test(AuthoringHttpServerTests
+        AuthoringHttpServer_tests.cpp
 )
-target_link_libraries(LlmAssistWatcherTests juce::juce_core)
+target_link_libraries(
+    AuthoringHttpServerTests
+    juce::juce_audio_basics
+    juce::juce_core
+    juce::juce_events
+    httplib::httplib
+    nlohmann_json::nlohmann_json
+)
+# runDispatchLoopUntil() is compiled out unless this is set - the shipped plugin never
+# needs it, only this test's own message-pumping helper does.
+target_compile_definitions(
+    AuthoringHttpServerTests
+    PRIVATE JUCE_MODAL_LOOPS_PERMITTED=1
+)

@@ -35,9 +35,13 @@ useful for boilerplate reused across several patches. Built-in libraries live in
 `base-scripts/` folder and are synced to disk on every launch; your own go alongside them in
 `Library/User/`, under the same per-app data directory as the Scripts pool above. The script
 editor's dropdown (see the Script control above) lets you view any of them read-only; there's
-still no way to create/edit/remove a library script directly from the UI in this version - do
-that as plain `.lua` files (or via LLM-Assist's `generated/libraries/`, see
-`../../llm-genscripts/CLAUDE.md`), and type the `import` line into your patch yourself.
+still no way to create/edit/remove a library script from the UI or the Authoring HTTP API in
+this version - edit the plain `.lua` file directly and type the `import` line into your patch
+yourself.
+
+**Scripts > Authoring Mode** enables a localhost HTTP API for submitting and auditioning a
+patch script programmatically (e.g. from Claude Code) instead of the in-app popup editor -
+see `../../authoring/CLAUDE.md`. It replaces the old LLM-Assist watched-folder workflow.
 
 ## Scripting
 

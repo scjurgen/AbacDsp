@@ -66,7 +66,6 @@
     "playStopSwitch.setEnabled(!processorRef.isHostSynced());",
     "if (processorRef.isHostSynced()) { playStopSwitch.setToggleState(processorRef.getIsEffectivelyPlaying(), juce::dontSendNotification); }",
     "pollScriptError();",
-    "pollLlmAssistWatcher();",
     "if (processorRef.hasRunner()) { luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()), valueTreeState); }"
   ],
   "processor_forwards": [

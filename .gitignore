@@ -29,7 +29,6 @@ tmp
 *.lv2
 __pycache__
 explore
-llm-genscripts/generated
 JuceStandaloneGenerator/theme-review/output
 JuceStandaloneGenerator/.gm_scratch
 

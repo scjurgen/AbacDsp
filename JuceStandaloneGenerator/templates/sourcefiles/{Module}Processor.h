@@ -6,6 +6,9 @@
  */
 
 #include <juce_audio_processors/juce_audio_processors.h>
+/*START_SCRIPTBROWSER*/
+#include <juce_audio_devices/juce_audio_devices.h>
+/*END_SCRIPTBROWSER*/
 
 #include "/*INCLUDE_PEDAL*/"
 #include "Analysis/EnvelopeFollower.h"
@@ -53,6 +56,9 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
         /*END_MIDICC*/
         m_fileIo.initialize(m_patchIndex);
+        /*START_SCRIPTBROWSER*/
+        initAuthoringServer();
+        /*END_SCRIPTBROWSER*/
     }
     ~AudioPluginAudioProcessor() override
     {
@@ -91,6 +97,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             }
         }
         /*END_MIDICC*/
+        /*START_SCRIPTBROWSER*/
+        m_authoringMidiCollector.reset(sampleRate);
+        m_authoringMidiCollector.ensureStorageAllocated(2048);
+        /*END_SCRIPTBROWSER*/
 
         juce::ignoreUnused(samplesPerBlock);
         m_fileIo.enable();
@@ -425,6 +435,14 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         /*START_SHOWCPULOAD*/
         const auto beginTime = std::chrono::high_resolution_clock::now();
         /*END_SHOWCPULOAD*/
+        /*START_SCRIPTBROWSER*/
+        // Merges HTTP-injected MIDI (POST /midi) into the real buffer below; gated on
+        // Authoring Mode so a normal shipped instance pays no cost when it's off.
+        if (isAuthoringModeEnabled())
+        {
+            m_authoringMidiCollector.removeNextBlockOfMessages(midiMessages, buffer.getNumSamples());
+        }
+        /*END_SCRIPTBROWSER*/
 
         if (!midiMessages.isEmpty())
         {
@@ -680,5 +698,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     /*END_SHOWSPECTROGRAM*/
     std::vector<int> m_patchIndex;
     FileIo m_fileIo;
+    /*START_SCRIPTBROWSER*/
+    /*AuthoringServerMember*/
+    /*END_SCRIPTBROWSER*/
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessor)
 };

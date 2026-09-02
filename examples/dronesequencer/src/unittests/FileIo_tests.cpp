@@ -114,3 +114,37 @@ TEST(FileIo, InitializeSyncsBaseLibraryScriptsFromFixtureDirectory)
     ASSERT_TRUE(lookup.source.has_value());
     EXPECT_NE(lookup.source->find("FileIoSyncFixtureMarker"), std::string::npos);
 }
+
+// Same shape as the sync test above, but for DRONESEQUENCER_FACTORY_PATCHES_DIR ->
+// Patches/Factory/, exercising readPatchJson()'s "/"-splitting on a synced subfolder name.
+TEST(FileIo, InitializeSyncsFactoryPatchesFromFixtureDirectoryAndReadPatchJsonFindsIt)
+{
+    FileIo fileIo;
+    fileIo.initialize({0});
+    const auto names = fileIo.listPatchNames();
+    ASSERT_NE(std::find(names.begin(), names.end(), "Factory/fileio-sync-fixture"), names.end());
+
+    const auto json = fileIo.readPatchJson("Factory/fileio-sync-fixture");
+    ASSERT_TRUE(json.has_value());
+    EXPECT_NE(json->find("FileIoFactoryPatchSyncFixtureMarker"), std::string::npos);
+}
+
+TEST(FileIo, ReadPatchJsonReturnsNulloptForUnknownName)
+{
+    FileIo fileIo;
+    fileIo.initialize({0});
+    EXPECT_FALSE(fileIo.readPatchJson("zz_fileio_test_nonexistent_patch").has_value());
+}
+
+TEST(FileIo, ReadPatchJsonRoundTripsASavedPatch)
+{
+    FileIo fileIo;
+    fileIo.initialize({0});
+    ASSERT_TRUE(fileIo.savePatchNamed("zz_fileio_test_roundtrip"));
+    const auto json = fileIo.readPatchJson("zz_fileio_test_roundtrip");
+    ASSERT_TRUE(json.has_value());
+    // Parsed comparison, not string equality: savePatchNamed() pretty-prints (dump(2)),
+    // currentParametersAsJson() doesn't (dump()) - same content, different formatting.
+    EXPECT_EQ(nlohmann::json::parse(*json), nlohmann::json::parse(fileIo.currentParametersAsJson()));
+    fileIo.deletePatchNamed("zz_fileio_test_roundtrip");
+}

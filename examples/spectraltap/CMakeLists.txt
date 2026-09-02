@@ -53,6 +53,23 @@ FetchContent_Declare(
     GIT_SHALLOW TRUE
 )
 
+# Authoring Mode's embedded HTTP server (see AuthoringHttpServer.h). Loopback-only, HTTP
+# never HTTPS - explicitly off, not just left at cpp-httplib's own defaults, so the build
+# doesn't silently start linking OpenSSL/zlib/etc. just because they happen to be present
+# on whatever machine is building it.
+set(HTTPLIB_USE_OPENSSL_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_USE_ZLIB_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_USE_BROTLI_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_USE_ZSTD_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_INSTALL OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    httplib
+    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+    GIT_TAG v0.54.1
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(httplib)
+
 set(PLIST_EXTRAS_CONTENT
     [=[
 <?xml version="1.0" encoding="UTF-8"?>
@@ -135,6 +152,10 @@ target_compile_definitions(
     "${PROJECT_NAME}"
     PRIVATE SPECTRALTAP_BASE_SCRIPTS_DIR="${SPECTRALTAP_DIR}/base-scripts"
 )
+target_compile_definitions(
+    "${PROJECT_NAME}"
+    PRIVATE SPECTRALTAP_FACTORY_PATCHES_DIR="${SPECTRALTAP_DIR}/factory-patches"
+)
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
 
@@ -182,6 +203,7 @@ target_link_libraries(
         ${JUCE_DEPENDENCIES}
         nlohmann_json::nlohmann_json
         spectraltap_lua
+        httplib::httplib
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags

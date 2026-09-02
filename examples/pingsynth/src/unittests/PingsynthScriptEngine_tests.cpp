@@ -169,3 +169,20 @@ TEST(PingsynthScriptEngine, SetPitchBendRangeOverridesTheDefaultInEitherMode)
     engine.notifyMpeMode(false);
     EXPECT_FLOAT_EQ(engine.pitchBendRangeSemitones(), 7.f);
 }
+
+TEST(PingsynthScriptEngine, LoadTimeInfiniteLoopIsRejectedWithoutHanging)
+{
+    PingsynthScriptEngine engine;
+    EXPECT_FALSE(engine.loadScript("while true do end"));
+    EXPECT_TRUE(engine.hasError());
+    EXPECT_NE(engine.lastError().find("infinite loop"), std::string::npos) << engine.lastError();
+}
+
+TEST(PingsynthScriptEngine, HandlerInfiniteLoopIsRejectedWithoutHanging)
+{
+    PingsynthScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript("function OnNoteOn(channel, note, velocity) while true do end end"));
+    engine.notifyNoteOn(0, 60, 100);
+    EXPECT_TRUE(engine.hasError());
+    EXPECT_NE(engine.lastError().find("infinite loop"), std::string::npos) << engine.lastError();
+}

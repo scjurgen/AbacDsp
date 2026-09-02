@@ -5,6 +5,7 @@
  * Keep the file readonly
  */
 
+#include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "Analysis/EnvelopeFollower.h"
@@ -76,6 +77,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_ccActive[i].valueHigh.store(kDefaultCcMappings[i].valueHigh, std::memory_order_relaxed);
         }
         m_fileIo.initialize(m_patchIndex);
+        initAuthoringServer();
     }
     ~AudioPluginAudioProcessor() override
     {
@@ -146,6 +148,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                 m_ccActive[i].valueHigh.store(clampToParamRange(i, entry.valueHigh), std::memory_order_relaxed);
             }
         }
+        m_authoringMidiCollector.reset(sampleRate);
+        m_authoringMidiCollector.ensureStorageAllocated(2048);
 
         juce::ignoreUnused(samplesPerBlock);
         m_fileIo.enable();
@@ -957,6 +961,108 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         return FileIo::saveUserLibraryScript(name.toStdString(), content.toStdString());
     }
 
+    // Raw JSON of a saved named patch, for the Authoring HTTP API's GET /patches/{name}.
+    [[nodiscard]] std::optional<juce::String> getPatchJson(const juce::String& name) const
+    {
+        const auto json = m_fileIo.readPatchJson(name.toStdString());
+        return json ? std::optional<juce::String>(juce::String(*json)) : std::nullopt;
+    }
+
+    // Loads and applies a named patch directly, no "save unsaved changes first?" prompt -
+    // requestLoadPatch()'s modal dialog would otherwise block the HTTP request forever.
+    bool applyPatchNamed(const juce::String& name)
+    {
+        if (!m_fileIo.loadPatchNamed(name.toStdString()))
+        {
+            return false;
+        }
+        applyLoadedParametersToHost();
+        return true;
+    }
+
+    // Raw source of an installed library, for the Authoring HTTP API's GET /libraries/{name}
+    // - unlike getLibraryScriptText(), which returns a friendly placeholder comment on a
+    // miss (for the in-app dropdown), this reports a real 404 the HTTP layer can act on.
+    [[nodiscard]] std::optional<juce::String> getLibraryScriptSource(const juce::String& name) const
+    {
+        const auto lookup = FileIo::resolveLibraryScript(name.toStdString());
+        return lookup.source ? std::optional<juce::String>(juce::String(*lookup.source)) : std::nullopt;
+    }
+
+    // Mirrors the old LlmAssistWatcher's applyLibraryAndPull(): saves to Library/User/,
+    // then re-applies the current script so any import "{name}" is genuinely re-resolved
+    // and validated - compiled/error describe that re-apply, not the library file alone.
+    std::pair<bool, juce::String> applyLibraryScript(const juce::String& name, const juce::String& content)
+    {
+        if (!saveUserLibraryScript(name, content))
+        {
+            return {false, "failed to save library script (invalid name or write error)"};
+        }
+        const bool compiled = applyScriptText(getScriptText());
+        return {compiled, compiled ? juce::String{} : juce::String(scriptErrorMessage())};
+    }
+
+    // Cross-thread-safe by design (see juce_MidiMessageCollector.h) - AuthoringHttpServer
+    // calls this straight from its own worker thread, no message-thread hop needed.
+    void injectAuthoringMidi(const juce::MidiMessage& message)
+    {
+        m_authoringMidiCollector.addMessageToQueue(message);
+    }
+
+    // Wires the callback surface AuthoringHttpServer needs to reach the running instance's
+    // script/patch state - same callbacks the old LlmAssistWatcher used, plus context reads.
+    void initAuthoringServer()
+    {
+        m_authoringServer.applyScriptText = [this](const juce::String& text) { return applyScriptText(text); };
+        m_authoringServer.scriptErrorMessage = [this] { return juce::String(scriptErrorMessage()); };
+        m_authoringServer.hasScriptError = [this] { return hasScriptError(); };
+        m_authoringServer.currentScriptText = [this] { return getScriptText(); };
+        m_authoringServer.currentScriptName = [this] { return getCurrentScriptName(); };
+        m_authoringServer.currentPatchName = [this] { return getCurrentPatchName(); };
+        m_authoringServer.libraryScriptNames = [this] { return getLibraryScriptNames(); };
+        m_authoringServer.uiParamSlots = [this]
+        {
+            const auto slots = getLuaUiParamSlots();
+            return std::vector<LuaUiParamSlot>(slots.begin(), slots.end());
+        };
+        m_authoringServer.cpuLoadPercent = [this] { return getCpuLoad(); };
+        m_authoringServer.wrapperTypeDescription = [this]
+        { return juce::AudioProcessor::getWrapperTypeDescription(wrapperType); };
+        m_authoringServer.patchNames = [this] { return listPatchNames(); };
+        m_authoringServer.patchJson = [this](const juce::String& name) { return getPatchJson(name); };
+        m_authoringServer.savePatchNamed = [this](const juce::String& name) { return saveCurrentPatchAs(name); };
+        m_authoringServer.loadPatchNamed = [this](const juce::String& name) { return applyPatchNamed(name); };
+        m_authoringServer.deletePatchNamed = [this](const juce::String& name) { return deletePatchNamed(name); };
+        m_authoringServer.libraryScriptSource = [this](const juce::String& name)
+        { return getLibraryScriptSource(name); };
+        m_authoringServer.applyLibraryScript = [this](const juce::String& name, const juce::String& content)
+        { return applyLibraryScript(name, content); };
+        m_authoringServer.injectMidi = [this](const juce::MidiMessage& message) { injectAuthoringMidi(message); };
+    }
+
+    // Never auto-started from a saved setting - Authoring Mode requires an explicit
+    // toggle every session (see the Editor's Authoring menu), the same "always off on a
+    // fresh instance" guarantee the old LlmAssistWatcher's m_llmAssistActive already had.
+    bool setAuthoringModeEnabled(const bool enabled)
+    {
+        if (enabled)
+        {
+            return m_authoringServer.start(JucePlugin_Name);
+        }
+        m_authoringServer.stop();
+        return false;
+    }
+
+    [[nodiscard]] bool isAuthoringModeEnabled() const noexcept
+    {
+        return m_authoringServer.isRunning();
+    }
+
+    [[nodiscard]] juce::URL authoringDashboardUrl() const
+    {
+        return m_authoringServer.dashboardUrl();
+    }
+
 
     void computeCpuLoad(std::chrono::nanoseconds elapsed, size_t numSamples)
     {
@@ -984,6 +1090,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         juce::ScopedNoDenormals noDenormals;
         const auto beginTime = std::chrono::high_resolution_clock::now();
+        // Merges HTTP-injected MIDI (POST /midi) into the real buffer below; gated on
+        // Authoring Mode so a normal shipped instance pays no cost when it's off.
+        if (isAuthoringModeEnabled())
+        {
+            m_authoringMidiCollector.removeNextBlockOfMessages(midiMessages, buffer.getNumSamples());
+        }
 
         if (!midiMessages.isEmpty())
         {
@@ -1372,5 +1484,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     std::array<AbacDsp::RmsFollower, 2> m_envOutput;
     std::vector<int> m_patchIndex;
     FileIo m_fileIo;
+    juce::MidiMessageCollector m_authoringMidiCollector;
+    // Declared last so it is destroyed first - its destructor blocks until every
+    // in-flight request finishes, and a handler reaches into this processor meanwhile.
+    AuthoringHttpServer m_authoringServer;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessor)
 };

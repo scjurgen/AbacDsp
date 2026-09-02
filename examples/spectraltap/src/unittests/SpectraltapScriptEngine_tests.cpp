@@ -302,3 +302,20 @@ TEST(SpectraltapScriptEngine, StubScriptConfiguresFourTapsOnTiming)
     ASSERT_TRUE(resonance.has_value());
     EXPECT_GT(resonance->freqHz, 0.f);
 }
+
+TEST(SpectraltapScriptEngine, LoadTimeInfiniteLoopIsRejectedWithoutHanging)
+{
+    SpectraltapScriptEngine engine;
+    EXPECT_FALSE(engine.loadScript("while true do end"));
+    EXPECT_TRUE(engine.hasError());
+    EXPECT_NE(engine.lastError().find("infinite loop"), std::string::npos) << engine.lastError();
+}
+
+TEST(SpectraltapScriptEngine, HandlerInfiniteLoopIsRejectedWithoutHanging)
+{
+    SpectraltapScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript("function OnNoteOn(channel, note, velocity) while true do end end"));
+    engine.notifyNoteOn(0, 60, 100);
+    EXPECT_TRUE(engine.hasError());
+    EXPECT_NE(engine.lastError().find("infinite loop"), std::string::npos) << engine.lastError();
+}

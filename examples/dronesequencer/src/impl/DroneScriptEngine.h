@@ -156,6 +156,7 @@ inline DroneScriptEngine::NextNotesResult DroneScriptEngine::nextNotes() noexcep
     }
     try
     {
+        const auto stallGuard = guardHandlerCall();
         const sol::protected_function_result result = m_nextNotesFn();
         if (!result.valid())
         {

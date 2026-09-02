@@ -21,13 +21,16 @@ therefore plain MIT in practice, plus that attribution requirement.
 
 ## Example plugins (`examples/`)
 
-Additionally link JUCE and, for `dronesequencer`, Lua/sol2:
+Additionally link JUCE and, for the six Lua-scripted examples (`dronesequencer`,
+`resonik`, `pingsynth`, `spectraltap`, `tapelooper`, `morphexsynth`), Lua/sol2 and
+(Authoring Mode's embedded HTTP server) cpp-httplib:
 
-| Submodule | License | Full text |
+| Dependency | License | Full text |
 |---|---|---|
-| `JUCE` | AGPLv3 or JUCE commercial licence (dual) | `3rdparty/JUCE/LICENSE.md` |
-| `lua` | MIT | license text embedded in `3rdparty/lua/lua.h` |
-| `sol2` | MIT | `3rdparty/sol2/LICENSE.txt` |
+| `JUCE` (submodule) | AGPLv3 or JUCE commercial licence (dual) | `3rdparty/JUCE/LICENSE.md` |
+| `lua` (submodule) | MIT | license text embedded in `3rdparty/lua/lua.h` |
+| `sol2` (submodule) | MIT | `3rdparty/sol2/LICENSE.txt` |
+| `cpp-httplib` (CMake FetchContent) | MIT | https://github.com/yhirose/cpp-httplib/blob/master/LICENSE |
 
 `googletest` (BSD-3-Clause, `3rdparty/googletest/LICENSE`) is test-only and
 never linked into a distributed plugin.

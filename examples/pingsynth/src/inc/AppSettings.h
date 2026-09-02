@@ -70,19 +70,6 @@ class AppSettings
         props->saveIfNeeded();
     }
 
-    [[nodiscard]] static juce::String loadLlmAssistFolder()
-    {
-        const auto props = makePropsFile();
-        return props->getValue("llmAssistFolder");
-    }
-
-    static void saveLlmAssistFolder(const juce::String& folder)
-    {
-        const auto props = makePropsFile();
-        props->setValue("llmAssistFolder", folder);
-        props->saveIfNeeded();
-    }
-
   private:
     [[nodiscard]] static std::unique_ptr<juce::PropertiesFile> makePropsFile()
     {

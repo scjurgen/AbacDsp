@@ -241,3 +241,20 @@ TEST(MorphexsynthScriptEngine, NoteOnHookFiresWithChannelNoteVelocity)
     ASSERT_TRUE(command.has_value());
     EXPECT_EQ(*command, 7u);
 }
+
+TEST(MorphexsynthScriptEngine, LoadTimeInfiniteLoopIsRejectedWithoutHanging)
+{
+    MorphexsynthScriptEngine engine;
+    EXPECT_FALSE(engine.loadScript("while true do end"));
+    EXPECT_TRUE(engine.hasError());
+    EXPECT_NE(engine.lastError().find("infinite loop"), std::string::npos) << engine.lastError();
+}
+
+TEST(MorphexsynthScriptEngine, HandlerInfiniteLoopIsRejectedWithoutHanging)
+{
+    MorphexsynthScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript("function OnNoteOn(channel, note, velocity) while true do end end"));
+    engine.notifyNoteOn(0, 60, 100);
+    EXPECT_TRUE(engine.hasError());
+    EXPECT_NE(engine.lastError().find("infinite loop"), std::string::npos) << engine.lastError();
+}

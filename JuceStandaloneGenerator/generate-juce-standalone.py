@@ -34,6 +34,7 @@ from codegen_processor import (
     create_fileio_script_methods, create_fileio_script_private,
     create_fileio_script_members, create_fileio_script_includes,
     create_fileio_script_initialize, create_processor_script_methods,
+    create_authoring_server_member,
     uses_lua, create_about_text,
 )
 from codegen_widgets import (
@@ -91,8 +92,8 @@ CPP_SOURCE_FILES_FIXED = [
 # Only copied/included for blueprints with "use-lua": true - these need sol2, which is
 # only wired into a blueprint's own (protected, hand-maintained) CMakeLists.txt.
 CPP_SOURCE_FILES_LUA = [
-    "inc/LlmAssistWatcher.h",
-    "inc/LlmAssistWatcherCore.h",
+    "inc/AuthoringHttpServer.h",
+    "inc/AuthoringHttpServerCore.h",
     "inc/LuaControlArea.h",
     "inc/LuaMusicMathLib.h",
     "inc/LuaParamRangeMath.h",
@@ -169,6 +170,7 @@ CPP_JUCE_FILE_VARS = [
     "NUM_CC_TARGETS",
     "ScriptUpdateMethods",
     "LoadScriptCalls",
+    "AuthoringServerMember",
     "FileIoScriptMethods",
     "FileIoScriptPrivate",
     "FileIoScriptMembers",
@@ -265,6 +267,7 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
     blueprint["CPP"]["FileIoScriptIncludes"] = create_fileio_script_includes(blueprint)
     blueprint["CPP"]["FileIoScriptInitialize"] = create_fileio_script_initialize(blueprint)
     blueprint["CPP"]["ProcessorScriptMethods"] = create_processor_script_methods(blueprint)
+    blueprint["CPP"]["AuthoringServerMember"] = create_authoring_server_member(blueprint)
 
     blueprint["CPP"]["INIT_WIDGETS"] = create_init_widgets(blueprint)
     blueprint["CPP"]["WIDGETS_DECL"] = create_widgets_decl(blueprint)

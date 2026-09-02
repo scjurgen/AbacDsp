@@ -78,9 +78,7 @@ order:
 
 Both live under the same per-app data directory as the existing named Scripts pool (see
 `Settings > Scripts` in an example's own README), e.g.
-`~/Library/Application Support/AbacDsp/<Example>/Library/` on macOS. For dronesequencer,
-a `Library/User/` script can also be pushed via the `llm-genscripts/generated/libraries/`
-watched-folder workflow instead of editing the file by hand - see `llm-genscripts/CLAUDE.md`.
+`~/Library/Application Support/AbacDsp/<Example>/Library/` on macOS.
 
 An `import` naming a library neither directory has fails `loadScript()` immediately, before
 anything is compiled - the same "rejected at Apply time, previous script keeps playing

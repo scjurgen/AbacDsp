@@ -30,7 +30,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         addAndMakeVisible(m_menuBar);
         addAndMakeVisible(m_statusBar);
         initWidgets();
-        initLlmAssist();
         setResizable(true, true);
         setResizeLimits(GuiConstants::instance().init.WindowWidth, GuiConstants::instance().init.WindowHeight, 4000,
                         3000);
@@ -180,7 +179,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 bpmDial.setValue(processorRef.getCurrentBpm());
             }
             pollScriptError();
-            pollLlmAssistWatcher();
             if (processorRef.hasRunner())
             {
                 luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()),
@@ -867,9 +865,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
         auto* editorComponent = new ScriptEditorWindow();
         editorComponent->setScriptText(processorRef.getScriptText());
-        // While LLM-Assist is active, a manual edit could race with (and silently lose
-        // to) a script the watcher applies from the folder - view-only instead of blocked.
-        editorComponent->setReadOnly(m_llmAssistActive);
+        // While Authoring Mode is active, a manual edit could race with (and silently
+        // lose to) a script an HTTP POST /script call applies - view-only instead of blocked.
+        editorComponent->setReadOnly(processorRef.isAuthoringModeEnabled());
         editorComponent->setLibraryScripts(libraryScriptNames, [this](const juce::String& name)
                                            { return processorRef.getLibraryScriptText(name); });
         editorComponent->onApply = [this](const juce::String& text) -> juce::String
@@ -947,27 +945,28 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         scripts.addSubMenu("Delete", deleteMenu, !m_scriptMenuNames.empty());
         scripts.addSubMenu("Rename", renameMenu, !m_scriptMenuNames.empty());
         scripts.addSeparator();
-        scripts.addSubMenu("LLM-Assist", buildLlmAssistMenu());
+        scripts.addSubMenu("Authoring Mode", buildAuthoringModeMenu());
         return scripts;
     }
 
-    juce::PopupMenu buildLlmAssistMenu()
+    juce::PopupMenu buildAuthoringModeMenu()
     {
+        const bool active = processorRef.isAuthoringModeEnabled();
         juce::PopupMenu menu;
-        menu.addItem(kLlmAssistToggleId, m_llmAssistActive ? "Disable" : "Enable", true, m_llmAssistActive);
-        menu.addItem(kLlmAssistChooseFolderId, "Choose Folder...");
+        menu.addItem(kAuthoringModeToggleId, active ? "Disable" : "Enable", true, active);
+        menu.addItem(kAuthoringModeOpenBrowserId, "Open in Browser", active);
         return menu;
     }
 
     void handleScriptMenuSelection(int menuItemID)
     {
-        if (menuItemID == kLlmAssistToggleId)
+        if (menuItemID == kAuthoringModeToggleId)
         {
-            toggleLlmAssist();
+            toggleAuthoringMode();
         }
-        else if (menuItemID == kLlmAssistChooseFolderId)
+        else if (menuItemID == kAuthoringModeOpenBrowserId)
         {
-            chooseLlmAssistFolder(false);
+            processorRef.authoringDashboardUrl().launchInDefaultBrowser();
         }
         else if (menuItemID == kScriptEditId)
         {
@@ -1100,103 +1099,29 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                           });
     }
 
-    void initLlmAssist()
+    void toggleAuthoringMode()
     {
-        m_llmAssistWatcher.applyScriptText = [this](const juce::String& text)
-        { return processorRef.applyScriptText(text); };
-        m_llmAssistWatcher.scriptErrorMessage = [this] { return juce::String(processorRef.scriptErrorMessage()); };
-        m_llmAssistWatcher.currentPatchName = [this] { return processorRef.getCurrentPatchName(); };
-        m_llmAssistWatcher.currentScriptText = [this] { return processorRef.getScriptText(); };
-        m_llmAssistWatcher.saveUserLibraryScript = [this](const juce::String& name, const juce::String& content)
-        { return processorRef.saveUserLibraryScript(name, content); };
-    }
-
-    void toggleLlmAssist()
-    {
-        if (m_llmAssistActive)
+        const bool nowEnabled = processorRef.setAuthoringModeEnabled(!processorRef.isAuthoringModeEnabled());
+        if (nowEnabled)
         {
-            m_llmAssistActive = false;
-            m_statusBar.showMessage("LLM-Assist disabled");
-            updateScriptEditorReadOnlyState();
-            return;
+            const auto url = processorRef.authoringDashboardUrl();
+            m_statusBar.showMessage("Authoring Mode listening on 127.0.0.1:" + juce::String(url.getPort()));
+            url.launchInDefaultBrowser();
         }
-        if (m_llmAssistFolder.isEmpty())
+        else
         {
-            chooseLlmAssistFolder(true);
-            return;
+            m_statusBar.showMessage("Authoring Mode disabled");
         }
-        m_llmAssistActive = true;
-        m_statusBar.showMessage("LLM-Assist watching " + m_llmAssistFolder);
         updateScriptEditorReadOnlyState();
     }
 
-    // Pushed into an already-open editor whenever LLM-Assist toggles, so its read-only
-    // state always reflects whether a watched-folder pull could currently race an edit.
+    // Pushed into an already-open editor whenever Authoring Mode toggles, so its
+    // read-only state always reflects whether an HTTP POST /script call could race an edit.
     void updateScriptEditorReadOnlyState()
     {
         if (m_scriptEditorContent != nullptr)
         {
-            m_scriptEditorContent->setReadOnly(m_llmAssistActive);
-        }
-    }
-
-    void chooseLlmAssistFolder(bool activateOnPick)
-    {
-        m_llmAssistFolderChooser =
-            std::make_unique<juce::FileChooser>("Choose LLM-Assist Folder", juce::File(m_llmAssistFolder));
-        m_llmAssistFolderChooser->launchAsync(juce::FileBrowserComponent::openMode |
-                                                  juce::FileBrowserComponent::canSelectDirectories,
-                                              [this, activateOnPick](const juce::FileChooser& fc)
-                                              {
-                                                  const auto result = fc.getResult();
-                                                  if (!result.isDirectory())
-                                                  {
-                                                      return;
-                                                  }
-                                                  m_llmAssistFolder = result.getFullPathName();
-                                                  AppSettings::saveLlmAssistFolder(m_llmAssistFolder);
-                                                  m_llmAssistActive = m_llmAssistActive || activateOnPick;
-                                                  m_statusBar.showMessage("LLM-Assist folder: " + m_llmAssistFolder);
-                                                  updateScriptEditorReadOnlyState();
-                                              });
-    }
-
-    // Runs at a fraction of the timer rate (see kLlmAssistPollEveryNTicks) - a folder
-    // scan every tick is unnecessary for a workflow driven by an LLM/human editing text.
-    void pollLlmAssistWatcher()
-    {
-        if (!m_llmAssistActive)
-        {
-            return;
-        }
-        if (++m_llmAssistPollCounter % kLlmAssistPollEveryNTicks != 0)
-        {
-            return;
-        }
-        const auto result = m_llmAssistWatcher.poll(juce::File(m_llmAssistFolder));
-        if (!result)
-        {
-            return;
-        }
-        if (result->kind == LlmAssistResultKind::Library)
-        {
-            m_statusBar.showMessage(result->compiled
-                                        ? "LLM-Assist library '" + result->scriptName + "' saved, current script OK"
-                                        : "LLM-Assist library '" + result->scriptName +
-                                              "' saved, current script error: " + result->error,
-                                    true);
-        }
-        else if (result->compiled)
-        {
-            m_statusBar.showMessage("LLM-Assist applied '" + result->scriptName + "'", true);
-            if (m_scriptEditorContent != nullptr)
-            {
-                m_scriptEditorContent->setScriptText(processorRef.getScriptText());
-            }
-        }
-        else
-        {
-            m_statusBar.showMessage("LLM-Assist error in '" + result->scriptName + "': " + result->error, true);
+            m_scriptEditorContent->setReadOnly(processorRef.isAuthoringModeEnabled());
         }
     }
 
@@ -1240,17 +1165,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     // Non-modal; deletes itself on close (see ScriptEditorDialogWindow), hence SafePointer
     // rather than an owning pointer here.
     juce::Component::SafePointer<ScriptEditorDialogWindow> m_scriptEditorWindow;
-    // Points at the window's content component, so pollLlmAssistWatcher()/toggleLlmAssist()
-    // can push a refresh/read-only update without reaching into ScriptEditorDialogWindow.
+    // Points at the window's content component, so toggleAuthoringMode() can push a
+    // read-only update without reaching into ScriptEditorDialogWindow.
     juce::Component::SafePointer<ScriptEditorWindow> m_scriptEditorContent;
-    static constexpr int kLlmAssistToggleId = 15000;
-    static constexpr int kLlmAssistChooseFolderId = 15001;
-    static constexpr int kLlmAssistPollEveryNTicks = 15;
-    bool m_llmAssistActive{false};
-    int m_llmAssistPollCounter{0};
-    juce::String m_llmAssistFolder{AppSettings::loadLlmAssistFolder()};
-    LlmAssistWatcher m_llmAssistWatcher;
-    std::unique_ptr<juce::FileChooser> m_llmAssistFolderChooser;
+    static constexpr int kAuthoringModeToggleId = 15000;
+    static constexpr int kAuthoringModeOpenBrowserId = 15001;
 
     CustomRotaryDial dryDial{this};
     CustomRotaryDial wetDial{this};

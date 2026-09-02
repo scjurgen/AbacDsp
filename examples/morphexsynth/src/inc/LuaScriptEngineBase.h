@@ -6,6 +6,7 @@
 #include <array>
 #include <cassert>
 #include <cctype>
+#include <chrono>
 #include <cstddef>
 #include <functional>
 #include <iostream>
@@ -311,6 +312,53 @@ class LuaScriptEngineBase
         }
     };
 
+    enum class StallGuardMode
+    {
+        Idle,
+        WallClockBudget,
+        InstructionBudget
+    };
+
+    // Wall-clock budget for a top-level loadScript() compile - guards against e.g.
+    // `while true do end` at load time hanging the UI/host indefinitely.
+    static constexpr std::chrono::milliseconds kLoadStallBudget{500};
+    // VM instructions between wall-clock checks while guarding loadScript() - coarse
+    // enough that the check's own overhead stays negligible.
+    static constexpr int kLoadCheckInstructionInterval{100'000};
+    // Pure VM-instruction ceiling for one audio-thread call - realtime-safe (no clock
+    // reads); a first-cut default, not yet blueprint-configurable.
+    static constexpr int kHandlerInstructionBudget{2'000'000};
+
+    StallGuardMode m_stallGuardMode{StallGuardMode::Idle};
+    std::chrono::steady_clock::time_point m_stallDeadline{};
+
+    // Reads back the engine `this` pointer lua_sethook()'s hook stashed in the Lua state's
+    // own per-state extra space (LUAI_EXTRASPACE, Lua 5.4) - the hook itself is a free
+    // function and only ever receives a lua_State*, no user-data slot of its own.
+    static void stallHookTrampoline(lua_State* L, lua_Debug*)
+    {
+        auto* self = *static_cast<LuaScriptEngineBase**>(lua_getextraspace(L));
+        self->onStallHookTripped(L);
+    }
+
+    // Aborts the in-flight Lua call by raising a Lua error - unwinds as a C++ exception
+    // (SOL_USING_CXX_LUA=1) into the caller's existing try/catch around the guarded call,
+    // the same path any other script error already takes.
+    void onStallHookTripped(lua_State* L) const
+    {
+        if (m_stallGuardMode == StallGuardMode::WallClockBudget)
+        {
+            if (std::chrono::steady_clock::now() < m_stallDeadline)
+            {
+                return;
+            }
+            luaL_error(L, "script exceeded %dms while loading (possible infinite loop)",
+                       static_cast<int>(kLoadStallBudget.count()));
+            return;
+        }
+        luaL_error(L, "script call exceeded %d Lua instructions (possible infinite loop)", kHandlerInstructionBudget);
+    }
+
   protected:
     // Shared body for every optional-handler dispatch: no-op if the script didn't
     // define this handler, catches anything the call throws, and clears/sets
@@ -324,6 +372,7 @@ class LuaScriptEngineBase
         }
         try
         {
+            const auto stallGuard = guardHandlerCall();
             const sol::protected_function_result result = fn(std::forward<Args>(args)...);
             if (!result.valid())
             {
@@ -337,6 +386,54 @@ class LuaScriptEngineBase
         {
             m_lastError = e.what();
         }
+    }
+
+    // Bounds exactly one Lua call (top-level loadScript(), or one handler/per-tick
+    // dispatch such as callHandler() or a Derived's own NextNotes()-style entry point)
+    // against an infinite loop, via Lua's own debug-hook facility - not a redesign of
+    // script execution, just a watchdog wrapped around the existing call. RAII: the guard
+    // is cleared on scope exit whether the call returns normally or raises, so a tripped
+    // guard never lingers into whatever runs next on this Lua state. Construct via
+    // guardLoadCall()/guardHandlerCall() below rather than directly.
+    class ScopedStallGuard
+    {
+      public:
+        ScopedStallGuard(LuaScriptEngineBase& engine, const StallGuardMode mode, const int instructionCount) noexcept
+            : m_engine(engine)
+        {
+            m_engine.m_stallGuardMode = mode;
+            if (mode == StallGuardMode::WallClockBudget)
+            {
+                m_engine.m_stallDeadline = std::chrono::steady_clock::now() + kLoadStallBudget;
+            }
+            lua_sethook(m_engine.m_state.get(), &stallHookTrampoline, LUA_MASKCOUNT, instructionCount);
+        }
+
+        ~ScopedStallGuard()
+        {
+            lua_sethook(m_engine.m_state.get(), nullptr, 0, 0);
+            m_engine.m_stallGuardMode = StallGuardMode::Idle;
+        }
+
+        ScopedStallGuard(const ScopedStallGuard&) = delete;
+        ScopedStallGuard& operator=(const ScopedStallGuard&) = delete;
+
+      private:
+        LuaScriptEngineBase& m_engine;
+    };
+
+    // Message-thread guard for loadScript(): a generous wall-clock budget, checked every
+    // kLoadCheckInstructionInterval VM instructions rather than every single one.
+    [[nodiscard]] ScopedStallGuard guardLoadCall() noexcept
+    {
+        return ScopedStallGuard(*this, StallGuardMode::WallClockBudget, kLoadCheckInstructionInterval);
+    }
+
+    // Audio-thread guard for one handler/per-tick dispatch: a pure VM-instruction ceiling,
+    // no clock reads, to stay realtime-safe.
+    [[nodiscard]] ScopedStallGuard guardHandlerCall() noexcept
+    {
+        return ScopedStallGuard(*this, StallGuardMode::InstructionBudget, kHandlerInstructionBudget);
     }
 
     LuaScriptMemoryPool m_pool;
@@ -448,6 +545,7 @@ LuaScriptEngineBase<Derived>::LuaScriptEngineBase(const size_t poolBytes)
     , m_lua(m_state.get())
 {
     assert(m_state != nullptr);
+    *static_cast<LuaScriptEngineBase**>(lua_getextraspace(m_state.get())) = this;
     m_lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::table, sol::lib::string);
     bindApiFunctions();
 }
@@ -785,6 +883,7 @@ bool LuaScriptEngineBase<Derived>::loadScript(const std::string_view source)
     const auto globalsBefore = collectStringGlobalKeys();
     try
     {
+        const auto stallGuard = guardLoadCall();
         sol::protected_function_result result = m_lua.safe_script(*resolvedSource, sol::script_pass_on_error);
         if (!result.valid())
         {

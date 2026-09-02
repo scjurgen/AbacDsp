@@ -28,6 +28,7 @@ class FileIo
     {
         m_currentPatch = patchIndex;
         syncBaseLibraryScripts();
+        syncFactoryPatches();
         loadPatch(patchIndex);
         m_currentParams.clearModified();
         m_isInitialized = true;
@@ -386,6 +387,26 @@ class FileIo
         return dir;
     }
 
+    // Raw JSON text of a saved named patch (unlike currentParametersAsJson(), which only
+    // exposes the live in-memory one), or nullopt if the name is invalid or nothing is
+    // saved under it - used by the Authoring HTTP API's GET /patches/{name}.
+    [[nodiscard]] std::optional<std::string> readPatchJson(const std::string& name) const
+    {
+        const std::string filename = getNamedPatchFilename(name);
+        if (filename.empty())
+        {
+            return std::nullopt;
+        }
+        std::ifstream in(filename);
+        if (!in)
+        {
+            return std::nullopt;
+        }
+        std::ostringstream buffer;
+        buffer << in.rdbuf();
+        return buffer.str();
+    }
+
 
   private:
     // JUCE's userApplicationDataDirectory is bare "~/Library" on macOS; the
@@ -503,6 +524,26 @@ class FileIo
         }
         const juce::File targetDir = getLibraryBaseDirectory();
         for (const auto& source : repoDir.findChildFiles(juce::File::findFiles, false, "*.lua"))
+        {
+            source.copyFileTo(targetDir.getChildFile(source.getFileName()));
+        }
+#endif
+    }
+
+    // Refreshes Patches/Factory/ from the repo's factory-patches/ directory (only available
+    // in a dev build from a real checkout - SPECTRALTAP_FACTORY_PATCHES_DIR is undefined
+    // otherwise, in which case this is a no-op and whatever is already on disk is used).
+    static void syncFactoryPatches()
+    {
+#ifdef SPECTRALTAP_FACTORY_PATCHES_DIR
+        const juce::File repoDir(SPECTRALTAP_FACTORY_PATCHES_DIR);
+        if (!repoDir.isDirectory())
+        {
+            return;
+        }
+        const juce::File targetDir = getPatchDirectory().getChildFile("Factory");
+        targetDir.createDirectory();
+        for (const auto& source : repoDir.findChildFiles(juce::File::findFiles, false, "*.json"))
         {
             source.copyFileTo(targetDir.getChildFile(source.getFileName()));
         }
