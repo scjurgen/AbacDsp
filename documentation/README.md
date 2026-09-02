@@ -24,6 +24,7 @@ all. See `TODO.md` for folders and algorithms still missing plots.
 |---|---|---|
 | `Delays/` | documentation | `VariSpeedTapeDelay`: wow/flutter baked into recorded pitch, octave-based transport-speed glide; `MultiTapDelay`: whole-sample-only tap spacing |
 | `Diffuser/` | documentation | `DiffuserDelayChain`: Schroeder vs. Direct allpass magnitude flatness, echo-density growth vs. element count |
+| `DrumKit808/` | generation | Synthesizes a full TR-808-style drum kit into `samples/drums/808/` - a copyright-free alternative to a real recorded pack, see `samples/README.md` |
 | `Filters/BandpassImpulses/` | documentation, exploration | Resonant-bandpass family: `SvfResoBP`, `BiquadResoBP`, `BiquadResoBandPassParallel`, `BiquadResoBPParallelSIMD` - magnitude response, topology agreement, decay accuracy, resonance compensation |
 | `Filters/Biquads/` | documentation | `Biquad<type>` family magnitude/phase response, `ChebyshevBiquad` Type1/Type2, empirical stability under frequency/Q stress, `PeakBiquad` boost/cut symmetry |
 | `Filters/OnePoleFilter/` | documentation | `OnePoleFilter`: magnitude response across all four characteristics, `setDecayTime()` exact timing, `AllPass` flat magnitude/90-degree-at-cutoff phase |
