@@ -1,5 +1,5 @@
-#include "Generators/RandomStyle/VelvetCrackle.h"
 #include "AudioFile.h"
+#include "Generators/RandomStyle/VelvetCrackle.h"
 
 void modelVelvetCrackling()
 {
@@ -10,7 +10,7 @@ void modelVelvetCrackling()
     audioFile.setBitDepth(16);
     audioFile.setAudioBufferSize(1, numSamples);
 
-    VelvetCrackleGenerator sut;
+    AbacDsp::VelvetCrackleGenerator sut;
     for (size_t i = 0; i < numSamples; ++i)
     {
         audioFile.samples[0][i] = sut.process(3.5, 0.1f);
