@@ -44,3 +44,29 @@ package_add_test(MorphexsynthTests
 package_add_test(MorphexsynthScriptEngineTests
         MorphexsynthScriptEngine_tests.cpp
 )
+
+package_add_test(MorphexsynthAuthoringHttpServerCoreTests
+        AuthoringHttpServerCore_tests.cpp
+)
+target_link_libraries(
+    MorphexsynthAuthoringHttpServerCoreTests
+    nlohmann_json::nlohmann_json
+)
+
+package_add_test(MorphexsynthAuthoringHttpServerTests
+        AuthoringHttpServer_tests.cpp
+)
+target_link_libraries(
+    MorphexsynthAuthoringHttpServerTests
+    juce::juce_audio_basics
+    juce::juce_core
+    juce::juce_events
+    httplib::httplib
+    nlohmann_json::nlohmann_json
+)
+# runDispatchLoopUntil() is compiled out unless this is set - the shipped plugin never
+# needs it, only this test's own message-pumping helper does.
+target_compile_definitions(
+    MorphexsynthAuthoringHttpServerTests
+    PRIVATE JUCE_MODAL_LOOPS_PERMITTED=1
+)

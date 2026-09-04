@@ -196,5 +196,16 @@ def inject_midi(instance: dict[str, Any], message: dict[str, Any]) -> None:
     _request(instance, "POST", "/midi", body=message)
 
 
+def record_start(instance: dict[str, Any]) -> dict[str, Any]:
+    """Starts capturing this instance's own audio output to a WAV file; the response's
+    "path" is where it's being written - see CLAUDE.md for the temp-folder/cleanup contract."""
+    return _request(instance, "POST", "/record/start")
+
+
+def record_stop(instance: dict[str, Any]) -> dict[str, Any]:
+    """Stops the current recording, if any, and finalizes its WAV file."""
+    return _request(instance, "POST", "/record/stop")
+
+
 def current_epoch_ms() -> int:
     return int(time.time() * 1000)

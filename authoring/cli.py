@@ -19,6 +19,8 @@ Usage:
   python3 cli.py midi <instance> <note-on|note-off|cc|program-change|pitch-bend|
                                    aftertouch|poly-pressure> [--channel N] [--note N]
                                    [--velocity N] [--controller N] [--value N] [--program N]
+  python3 cli.py record-start <instance>
+  python3 cli.py record-stop <instance>
 
 <instance> is a pid, a port, or a module name (only if it names exactly one
 running instance) - see client.resolve_instance(). Run "list" first to see
@@ -176,6 +178,27 @@ def cmd_midi(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_record_start(args: argparse.Namespace) -> int:
+    instance = client.resolve_instance(args.instance)
+    result = client.record_start(instance)
+    if result.get("started"):
+        print(f"recording -> {result.get('path')}")
+        return 0
+    print(f"error: {result.get('error')}", file=sys.stderr)
+    return 1
+
+
+def cmd_record_stop(args: argparse.Namespace) -> int:
+    instance = client.resolve_instance(args.instance)
+    result = client.record_stop(instance)
+    if not result.get("wasRecording"):
+        print("error: not recording", file=sys.stderr)
+        return 1
+    capped_note = " (capped at max duration)" if result.get("capped") else ""
+    print(f"stopped -> {result.get('path')} ({result.get('durationSeconds'):.1f}s){capped_note}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -245,6 +268,14 @@ def build_parser() -> argparse.ArgumentParser:
     midi_parser.add_argument("--value", type=int, help="value (cc/pitch-bend/aftertouch/poly-pressure)")
     midi_parser.add_argument("--program", type=int, help="program number (program-change)")
     midi_parser.set_defaults(func=cmd_midi)
+
+    for name, func, help_text in [
+        ("record-start", cmd_record_start, "start capturing this instance's audio output to a WAV file"),
+        ("record-stop", cmd_record_stop, "stop the current recording and finalize its WAV file"),
+    ]:
+        sub = subparsers.add_parser(name, help=help_text)
+        sub.add_argument("instance", help="pid, port, or module name of a running instance")
+        sub.set_defaults(func=func)
 
     return parser
 

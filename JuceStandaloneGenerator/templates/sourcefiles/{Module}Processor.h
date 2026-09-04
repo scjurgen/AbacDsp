@@ -100,6 +100,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         /*START_SCRIPTBROWSER*/
         m_authoringMidiCollector.reset(sampleRate);
         m_authoringMidiCollector.ensureStorageAllocated(2048);
+        m_authoringRecorder.prepare(sampleRate, getTotalNumOutputChannels());
         /*END_SCRIPTBROWSER*/
 
         juce::ignoreUnused(samplesPerBlock);
@@ -499,6 +500,15 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             fixedRunner->processBlock(buffer);
         }
+        /*START_SCRIPTBROWSER*/
+        // Feeds POST /record's WAV capture when a recording is in progress; pushBlock()
+        // itself is a no-op otherwise, and this whole call costs nothing when Authoring
+        // Mode is off.
+        if (isAuthoringModeEnabled())
+        {
+            m_authoringRecorder.pushBlock(buffer);
+        }
+        /*END_SCRIPTBROWSER*/
         /*START_SHOWVUMETER*/
         for (int c = 0; c < std::min(2, buffer.getNumChannels()); ++c)
         {

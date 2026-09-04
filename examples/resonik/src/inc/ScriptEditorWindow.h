@@ -12,11 +12,11 @@
 // so the main plugin window stays interactive while this is open. The dropdown picks
 // between the current patch script and any installed library script - a library is always
 // shown read-only; the patch script's own read-only state is pushed in via setReadOnly()
-// (true while LLM-Assist is active, so a live refresh from a watched-folder pull can never
-// clobber an in-progress edit). Apply calls onApply and never closes the window itself, so
-// the user can keep iterating; a non-empty return is shown inline, an empty one clears any
-// prior error. Cancel always closes (via the parent window's closeButtonPressed()). Reset
-// replaces the editor's text with onReset()'s skeleton but does not apply or close.
+// (true while Authoring Mode is active, banner shown to make that state visible). Apply
+// calls onApply and never closes the window itself, so the user can keep iterating; a
+// non-empty return is shown inline, an empty one clears any prior error. Cancel always
+// closes (via the parent window's closeButtonPressed()). Reset replaces the editor's text
+// with onReset()'s skeleton but does not apply or close.
 class ScriptEditorWindow final : public juce::Component
 {
   public:
@@ -42,6 +42,13 @@ class ScriptEditorWindow final : public juce::Component
         m_errorLabel.setColour(juce::Label::textColourId, juce::Colours::orangered);
         m_errorLabel.setJustificationType(juce::Justification::centredLeft);
         addAndMakeVisible(m_errorLabel);
+
+        m_authoringBanner.setJustificationType(juce::Justification::centred);
+        m_authoringBanner.setFont(juce::Font(juce::FontOptions(13.f, juce::Font::bold)));
+        m_authoringBanner.setColour(juce::Label::textColourId, juce::Colours::black);
+        m_authoringBanner.setColour(juce::Label::backgroundColourId, juce::Colours::orange);
+        addAndMakeVisible(m_authoringBanner);
+        m_authoringBanner.setVisible(false);
 
         m_resetButton.setButtonText("Reset");
         m_resetButton.onClick = [this] { reset(); };
@@ -79,6 +86,7 @@ class ScriptEditorWindow final : public juce::Component
         {
             applyReadOnlyState(readOnly);
         }
+        refreshAuthoringBanner();
     }
 
     // Populates the dropdown with "Patch Script" plus each of `names`; textForName is
@@ -106,6 +114,11 @@ class ScriptEditorWindow final : public juce::Component
         area.removeFromBottom(4);
         m_errorLabel.setBounds(area.removeFromBottom(20));
         area.removeFromBottom(4);
+        if (m_authoringBanner.isVisible())
+        {
+            m_authoringBanner.setBounds(area.removeFromTop(22));
+            area.removeFromTop(4);
+        }
         m_sourceCombo.setBounds(area.removeFromTop(24));
         area.removeFromTop(4);
         m_editor.setBounds(area);
@@ -184,11 +197,28 @@ class ScriptEditorWindow final : public juce::Component
         {
             m_editor.loadContent(m_patchScriptText);
             applyReadOnlyState(m_patchReadOnly);
+            refreshAuthoringBanner();
             return;
         }
         const auto text = m_libraryScriptText ? m_libraryScriptText(m_sourceCombo.getText()) : juce::String{};
         m_editor.loadContent(text);
         applyReadOnlyState(true);
+        refreshAuthoringBanner();
+    }
+
+    // Distinct from a library script's always-read-only state: this banner only appears
+    // when the patch script itself is view-only because Authoring Mode is running.
+    void refreshAuthoringBanner()
+    {
+        const bool active = isShowingPatchScript() && m_patchReadOnly;
+        if (m_authoringBanner.isVisible() == active)
+        {
+            return;
+        }
+        m_authoringBanner.setText(active ? "Authoring Mode active - script is view-only" : juce::String{},
+                                  juce::dontSendNotification);
+        m_authoringBanner.setVisible(active);
+        resized();
     }
 
     void apply()
@@ -224,6 +254,7 @@ class ScriptEditorWindow final : public juce::Component
     juce::LuaTokeniser m_tokeniser;
     juce::CodeEditorComponent m_editor;
     juce::Label m_errorLabel;
+    juce::Label m_authoringBanner;
     juce::TextButton m_resetButton;
     juce::TextButton m_applyButton;
     juce::TextButton m_cancelButton;

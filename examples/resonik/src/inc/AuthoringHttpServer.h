@@ -30,6 +30,14 @@
 #endif
 }
 
+// Where POST /record writes its WAV files - one subfolder per module under the OS temp
+// directory. Shared by AuthoringHttpServer's own stale-file sweep and each processor's
+// startAuthoringRecording() (see codegen_processor.py), so this path is defined once.
+[[nodiscard]] inline juce::File authoringRecordingsDirectory(const juce::String& moduleName)
+{
+    return juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("abacdsp").getChildFile(moduleName);
+}
+
 /**
  * Localhost-only authoring API for a running Lua-scripted plugin instance - the
  * replacement for the old folder-watchdog LLM-Assist workflow. Binds 127.0.0.1 at an
@@ -66,6 +74,10 @@ class AuthoringHttpServer
     // Called straight from this server's own worker thread, not marshaled through
     // callSync - juce::MidiMessageCollector::addMessageToQueue() is already thread-safe.
     std::function<void(const juce::MidiMessage&)> injectMidi;
+    std::function<AuthoringRecordStartResult()> startRecording;
+    std::function<AuthoringRecordStopResult()> stopRecording;
+    std::function<bool()> isRecordingActive;
+    std::function<float()> recordingElapsedSeconds;
 
     ~AuthoringHttpServer()
     {
@@ -83,6 +95,7 @@ class AuthoringHttpServer
         }
         m_moduleName = moduleName;
         m_token = generateAuthoringToken();
+        sweepStaleRecordings();
         registerRoutes();
 
         const int port = m_server.bind_to_any_port("127.0.0.1", 0);
@@ -182,6 +195,8 @@ class AuthoringHttpServer
                 s.scriptErrorMessage = scriptErrorMessage ? scriptErrorMessage().toStdString() : std::string{};
                 s.cpuLoadPercent = cpuLoadPercent ? cpuLoadPercent() : 0.f;
                 s.poolBytesInUse = poolBytesInUse ? poolBytesInUse() : 0;
+                s.isRecording = isRecordingActive && isRecordingActive();
+                s.recordingElapsedSeconds = recordingElapsedSeconds ? recordingElapsedSeconds() : 0.f;
                 return s;
             });
         return result.value_or(AuthoringStatusSnapshot{});
@@ -384,6 +399,27 @@ class AuthoringHttpServer
                           }
                           res.set_content(R"({"injected":true})", "application/json");
                       });
+
+        m_server.Post("/record/start",
+                      [this](const httplib::Request&, httplib::Response& res)
+                      {
+                          const auto result = onMessageThread<AuthoringRecordStartResult>(
+                              [this]
+                              {
+                                  return startRecording
+                                             ? startRecording()
+                                             : AuthoringRecordStartResult{false, {}, "server not wired to a processor"};
+                              });
+                          res.set_content(makeRecordStartResultJson(result), "application/json");
+                      });
+
+        m_server.Post("/record/stop",
+                      [this](const httplib::Request&, httplib::Response& res)
+                      {
+                          const auto result = onMessageThread<AuthoringRecordStopResult>(
+                              [this] { return stopRecording ? stopRecording() : AuthoringRecordStopResult{}; });
+                          res.set_content(makeRecordStopResultJson(result), "application/json");
+                      });
     }
 
     [[nodiscard]] ApplyResult applyScriptFromRequestBody(const std::string& body) const
@@ -554,6 +590,24 @@ class AuthoringHttpServer
         return dir;
     }
 
+    // Crash/forgotten-cleanup safety net for POST /record's output folder: deletes only
+    // files older than kStaleRecordingAge, leaving a same-module instance's fresh, still
+    // in-progress recording alone.
+    void sweepStaleRecordings() const
+    {
+        constexpr double kStaleRecordingAgeHours = 6.0;
+        const auto now = juce::Time::getCurrentTime();
+        for (const auto& entry : juce::RangedDirectoryIterator(authoringRecordingsDirectory(m_moduleName), false, "*",
+                                                               juce::File::findFiles))
+        {
+            const juce::File file = entry.getFile();
+            if ((now - file.getLastModificationTime()).inHours() > kStaleRecordingAgeHours)
+            {
+                file.deleteFile();
+            }
+        }
+    }
+
     void writeDiscoveryFile() const
     {
         AuthoringInstanceInfo info;
@@ -598,6 +652,7 @@ class AuthoringHttpServer
 "<div class=\"row\"><span class=\"label\">Current patch</span><span id=\"patchName\">-</span></div>\n"
 "<div class=\"row\"><span class=\"label\">CPU load</span><span id=\"cpu\">-</span></div>\n"
 "<div class=\"row\"><span class=\"label\">Lua pool</span><span id=\"pool\">-</span></div>\n"
+"<div class=\"row\"><span class=\"label\">Recording</span><span id=\"recording\">-</span></div>\n"
 "<h2>Quick start</h2>\n"
 "<pre id=\"quickstart\"></pre>\n"
 "<script>\n"
@@ -617,6 +672,8 @@ class AuthoringHttpServer
 "      document.getElementById('patchName').textContent = s.currentPatchName || '(none)';\n"
 "      document.getElementById('cpu').textContent = s.cpuLoadPercent.toFixed(1) + '%';\n"
 "      document.getElementById('pool').textContent = s.poolBytesInUse + ' bytes';\n"
+"      document.getElementById('recording').textContent =\n"
+"        s.isRecording ? 'yes (' + s.recordingElapsedSeconds.toFixed(1) + 's)' : 'no';\n"
 "      const err = document.getElementById('error');\n"
 "      if (s.hasScriptError) { err.style.display = 'block'; err.textContent = s.scriptErrorMessage; }\n"
 "      else { err.style.display = 'none'; }\n"

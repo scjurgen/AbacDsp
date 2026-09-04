@@ -92,6 +92,7 @@ CPP_SOURCE_FILES_FIXED = [
 # Only copied/included for blueprints with "use-lua": true - these need sol2, which is
 # only wired into a blueprint's own (protected, hand-maintained) CMakeLists.txt.
 CPP_SOURCE_FILES_LUA = [
+    "inc/AuthoringAudioRecorder.h",
     "inc/AuthoringHttpServer.h",
     "inc/AuthoringHttpServerCore.h",
     "inc/LuaControlArea.h",

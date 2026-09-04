@@ -93,6 +93,8 @@ struct AuthoringStatusSnapshot
     std::string scriptErrorMessage;
     float cpuLoadPercent{0.f};
     std::size_t poolBytesInUse{0};
+    bool isRecording{false};
+    float recordingElapsedSeconds{0.f};
 };
 
 [[nodiscard]] inline std::string makeStatusJson(const AuthoringStatusSnapshot& s)
@@ -108,6 +110,8 @@ struct AuthoringStatusSnapshot
         {"scriptErrorMessage", s.scriptErrorMessage},
         {"cpuLoadPercent", s.cpuLoadPercent},
         {"poolBytesInUse", s.poolBytesInUse},
+        {"isRecording", s.isRecording},
+        {"recordingElapsedSeconds", s.recordingElapsedSeconds},
     };
     return j.dump();
 }
@@ -117,5 +121,39 @@ struct AuthoringStatusSnapshot
 [[nodiscard]] inline std::string makeApplyScriptResultJson(const bool compiled, const std::string_view error)
 {
     const nlohmann::json j{{"compiled", compiled}, {"error", std::string(error)}};
+    return j.dump();
+}
+
+// POST /record/start's response - a caller-chosen filename is never accepted (no
+// path-traversal surface to validate), so `path` is always the server's own choice.
+struct AuthoringRecordStartResult
+{
+    bool started{false};
+    std::string path;
+    std::string error;
+};
+
+[[nodiscard]] inline std::string makeRecordStartResultJson(const AuthoringRecordStartResult& r)
+{
+    const nlohmann::json j{{"started", r.started}, {"path", r.path}, {"error", r.error}};
+    return j.dump();
+}
+
+// POST /record/stop's response. `capped` means the safety-duration ceiling was hit before
+// this call - the file is still valid, just shorter than whatever was actually requested.
+struct AuthoringRecordStopResult
+{
+    bool wasRecording{false};
+    std::string path;
+    double durationSeconds{0.0};
+    bool capped{false};
+};
+
+[[nodiscard]] inline std::string makeRecordStopResultJson(const AuthoringRecordStopResult& r)
+{
+    const nlohmann::json j{{"wasRecording", r.wasRecording},
+                           {"path", r.path},
+                           {"durationSeconds", r.durationSeconds},
+                           {"capped", r.capped}};
     return j.dump();
 }

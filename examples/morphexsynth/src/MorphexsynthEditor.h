@@ -869,7 +869,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         const bool active = processorRef.isAuthoringModeEnabled();
         juce::PopupMenu menu;
-        menu.addItem(kAuthoringModeToggleId, active ? "Disable" : "Enable", true, active);
+        menu.addItem(kAuthoringModeToggleId, active ? "Enabled" : "Enable", true, active);
         menu.addItem(kAuthoringModeOpenBrowserId, "Open in Browser", active);
         return menu;
     }

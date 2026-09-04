@@ -128,6 +128,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         }
         m_authoringMidiCollector.reset(sampleRate);
         m_authoringMidiCollector.ensureStorageAllocated(2048);
+        m_authoringRecorder.prepare(sampleRate, getTotalNumOutputChannels());
 
         juce::ignoreUnused(samplesPerBlock);
         m_fileIo.enable();
@@ -831,6 +832,21 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_authoringMidiCollector.addMessageToQueue(message);
     }
 
+    // For the Authoring HTTP API's POST /record/start - see AuthoringHttpServer.h's
+    // authoringRecordingsDirectory() for why the target folder is shared, not chosen here.
+    AuthoringRecordStartResult startAuthoringRecording()
+    {
+        const auto file = authoringRecordingsDirectory(JucePlugin_Name)
+                              .getChildFile("rec-" + juce::String(currentProcessId()) + "-" +
+                                            juce::String(juce::Time::currentTimeMillis()) + ".wav");
+        return m_authoringRecorder.start(file);
+    }
+
+    AuthoringRecordStopResult stopAuthoringRecording()
+    {
+        return m_authoringRecorder.stop();
+    }
+
     // Wires the callback surface AuthoringHttpServer needs to reach the running instance's
     // script/patch state - same callbacks the old LlmAssistWatcher used, plus context reads.
     void initAuthoringServer()
@@ -860,6 +876,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_authoringServer.applyLibraryScript = [this](const juce::String& name, const juce::String& content)
         { return applyLibraryScript(name, content); };
         m_authoringServer.injectMidi = [this](const juce::MidiMessage& message) { injectAuthoringMidi(message); };
+        m_authoringServer.startRecording = [this] { return startAuthoringRecording(); };
+        m_authoringServer.stopRecording = [this] { return stopAuthoringRecording(); };
+        m_authoringServer.isRecordingActive = [this] { return m_authoringRecorder.isRecording(); };
+        m_authoringServer.recordingElapsedSeconds = [this] { return m_authoringRecorder.elapsedSeconds(); };
     }
 
     // Never auto-started from a saved setting - Authoring Mode requires an explicit
@@ -967,6 +987,13 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         if (getTotalNumOutputChannels() == 2)
         {
             fixedRunner->processBlock(buffer);
+        }
+        // Feeds POST /record's WAV capture when a recording is in progress; pushBlock()
+        // itself is a no-op otherwise, and this whole call costs nothing when Authoring
+        // Mode is off.
+        if (isAuthoringModeEnabled())
+        {
+            m_authoringRecorder.pushBlock(buffer);
         }
         for (int c = 0; c < std::min(2, buffer.getNumChannels()); ++c)
         {
@@ -1161,6 +1188,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     AbacDsp::SimpleSpectrogram m_spectrogram;
     std::vector<int> m_patchIndex;
     FileIo m_fileIo;
+    AuthoringAudioRecorder m_authoringRecorder;
     juce::MidiMessageCollector m_authoringMidiCollector;
     // Declared last so it is destroyed first - its destructor blocks until every
     // in-flight request finishes, and a handler reaches into this processor meanwhile.

@@ -22,6 +22,7 @@
 #include "inc/ThemeOrbit.h"
 #include "inc/VuMeter.h"
 #include "inc/WaveformMeter.h"
+#include "inc/AuthoringAudioRecorder.h"
 #include "inc/AuthoringHttpServer.h"
 #include "inc/AuthoringHttpServerCore.h"
 #include "inc/LuaControlArea.h"
