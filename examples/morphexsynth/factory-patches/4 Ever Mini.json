@@ -1,0 +1,14 @@
+{
+  "vol": -2.401,
+  "cutoff": 72.0,
+  "resonance": 0.0,
+  "luaParam1": 0.0,
+  "luaParam2": 0.0,
+  "luaParam3": 0.0,
+  "luaParam4": 0.0,
+  "luaParam5": 0.0,
+  "luaParam6": 0.0,
+  "luaParam7": 0.0,
+  "luaParam8": 0.0,
+  "script": "function OnStart()\n    SetOscillator(0, { waveform = 3, level = 0.6786, pitchFactor = 0.5, pwm = 0.3 })\n    SetOscillator(1, { waveform = 1, level = 0.7833, detune = -0.1724, pitchFactor = 0.5 })\n    SetOscillator(2, { waveform = 4, level = 0.3108 })  -- noise\n\n    SetAmpEnvelope({ attackMs = 2, decayMs = 9.89, sustainLevel = 1, releaseMs = 9.89 })\n    SetFilterEnvelope({ attackMs = 41.39, decayMs = 374.1, sustainLevel = 0.2814, releaseMs = 374.1 })\n    SetFilter({ cutoff = 54.49, resonance = 0.4807, type = \"LP4\" })\n\n    -- Filter envelope has no cutoff path of its own yet (engine gap, see\n    -- port-minimoog-presets.md Gap 2) - routed through the MPE matrix instead.\n    SetCtrlSlot(0, { source = 5, curve = 2, target = 3, valueType = 0, depth = 0.4058 })\n\n    -- osc3 is Minimoog's free-running pitch-wobble modulator (oscMod=1,\n    -- filtModEnable=0), approximated via the LFO's oscDepth.\n    SetLfo({ waveform = 1, speedHz = 1.461, oscDepth = 0.06829, keyFollow = 0 })\nend\n"
+}
