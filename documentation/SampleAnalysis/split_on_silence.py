@@ -8,6 +8,8 @@ before per-note analysis makes sense.
 Usage:
     split_on_silence.py <wav_file> [-o/--output-dir DIR] [--silence-db -50]
                          [--min-silence-sec 0.3] [--min-segment-sec 0.15] [--padding-sec 0.05]
+
+DIR defaults to the repo's SynthSamples/ folder, written flat as <stem>_NNN.wav.
 """
 from __future__ import annotations
 
@@ -19,6 +21,7 @@ import soundfile as sf
 
 FRAME_SEC = 0.02
 HOP_SEC = 0.01
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def to_db(linear, floor=-180.0):
@@ -120,7 +123,7 @@ def main():
     parser.add_argument("--padding-sec", type=float, default=0.05)
     args = parser.parse_args()
 
-    output_dir = args.output_dir or (Path(__file__).parent / "generated" / "split" / args.wav_file.stem)
+    output_dir = args.output_dir or (REPO_ROOT / "SynthSamples")
     written = split_file(args.wav_file, output_dir, args.silence_db, args.min_silence_sec,
                           args.min_segment_sec, args.padding_sec)
 

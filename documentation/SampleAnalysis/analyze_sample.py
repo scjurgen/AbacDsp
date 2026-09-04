@@ -25,6 +25,7 @@ import matplotlib
 import numpy as np
 import soundfile as sf
 from scipy.signal import butter, sosfiltfilt
+from scipy.signal.windows import hann
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -679,15 +680,24 @@ def _plot_waveform_envelope(ax, mono, sr, times, db, segments, plot_end_sec):
     ax.set_title("Waveform + envelope")
 
 
+SPECTROGRAM_MIN_HZ = 20.0
+
+
 def _plot_spectrogram(fig, ax, mono, sr, times, segments, f0, f0_times, plot_end_sec):
     stft = librosa.stft(mono, n_fft=FRAME_LENGTH, hop_length=HOP_LENGTH)
-    spec_db = to_db(np.abs(stft))
-    extent = [0.0, len(mono) / sr, 0.0, sr / 2.0]
-    image = ax.imshow(spec_db, origin="lower", aspect="auto", extent=extent, cmap="magma", vmin=-100.0, vmax=0.0)
+    # librosa.stft's default window is a periodic Hann; normalizing by its coherent gain
+    # (sum(window)/2) makes 0dB correspond to a full-scale sinusoid, matching the dBFS
+    # scale used everywhere else in this script - raw FFT magnitude does not.
+    coherent_gain = float(np.sum(hann(FRAME_LENGTH, sym=False)) / 2.0)
+    spec_db = to_db(np.abs(stft) / coherent_gain)
+    freqs = librosa.fft_frequencies(sr=sr, n_fft=FRAME_LENGTH)
+    frame_times = librosa.frames_to_time(np.arange(spec_db.shape[1]), sr=sr, hop_length=HOP_LENGTH)
+    image = ax.pcolormesh(frame_times, freqs, spec_db, cmap="magma", vmin=-100.0, vmax=0.0, shading="auto")
+    ax.set_yscale("log")
     ax.set_ylabel("frequency (Hz)")
     ax.set_xlabel("time (s)")
     ax.set_xlim(0, plot_end_sec)
-    ax.set_ylim(0, sr / 2.0)
+    ax.set_ylim(SPECTROGRAM_MIN_HZ, sr / 2.0)
     valid = ~np.isnan(f0)
     if np.any(valid):
         ax.plot(f0_times[valid], f0[valid], color="#00ffcc", linewidth=1.0, label="f0")
@@ -725,9 +735,10 @@ def _plot_fft_slices(ax, mono, sr, times, segments, harmonics):
     if harmonics:
         for p in harmonics["partials"][:8]:
             ax.axvline(p["ideal_freq_hz"], color="#999999", linestyle=":", linewidth=0.6)
-            ax.text(p["ideal_freq_hz"], ax.get_ylim()[1], str(p["n"]), fontsize=6, ha="center", va="bottom", color="#666666")
+            ax.text(p["ideal_freq_hz"], ax.get_ylim()[1], str(p["n"]), fontsize=6, ha="center", va="top", color="#666666")
 
-    ax.set_xlim(0, min(sr / 2.0, 8000.0 if not harmonics else max(8000.0, harmonics["partials"][-1]["ideal_freq_hz"] * 1.2)))
+    ax.set_xscale("log")
+    ax.set_xlim(SPECTROGRAM_MIN_HZ, min(sr / 2.0, 8000.0 if not harmonics else max(8000.0, harmonics["partials"][-1]["ideal_freq_hz"] * 1.2)))
     ax.set_xlabel("frequency (Hz)")
     ax.set_ylabel("magnitude (dB, relative)")
     ax.set_title("FFT slices (attack / sustain / release)")
