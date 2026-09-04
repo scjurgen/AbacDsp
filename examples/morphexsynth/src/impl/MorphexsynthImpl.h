@@ -454,6 +454,7 @@ class MorphexsynthImpl final : public EffectBase
                 voice.setLfoWaveForm(static_cast<AbacDsp::LfoType>(lfo->waveform));
                 voice.setLfoPitchFactor(lfo->speedHz);
                 voice.setLfoFilterModulationDepth(lfo->filterDepth);
+                voice.setLfoOscModulationDepth(lfo->oscDepth);
                 voice.setLfoKeyFollow(lfo->keyFollow);
             }
         }

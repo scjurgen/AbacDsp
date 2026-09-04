@@ -45,6 +45,7 @@ struct MorphexLfoSettings
     size_t waveform{0};
     float speedHz{1.f};
     float filterDepth{0.f};
+    float oscDepth{0.f}; ///< semitones; applies uniformly to all 3 oscillators, via the pitch-bend bus
     float keyFollow{0.f};
 };
 
@@ -136,9 +137,10 @@ class MorphexsynthScriptEngine : public LuaScriptEngineBase<MorphexsynthScriptEn
 "-- SetFilterEnvelope({ attackMs, decayMs, sustainLevel, releaseMs })\n"
 "-- SetPitchEnvelope({ attackMs, decayMs, depthSemitones, glideMsPerOctave })\n"
 "\n"
-"-- SetLfo({ waveform, speedHz, filterDepth, keyFollow })\n"
+"-- SetLfo({ waveform, speedHz, filterDepth, oscDepth, keyFollow })\n"
 "--   waveform: 0 Sine, 1 Triangle, 2 Saw, 3 Square, 4 Noise, 5 SampleHoldNoise,\n"
 "--             6 SampleHoldFlipFlop, 7 BrownNoise\n"
+"--   oscDepth: semitones of pitch modulation, applied to all 3 oscillators uniformly\n"
 "\n"
 "-- SetFilter({ cutoff, resonance, type })  cutoff matches the Cutoff dial's own scale;\n"
 "--   resonance 0..~1.2 (1 is near self-oscillation); type is a PoleMixingFilter.h preset\n"
@@ -290,14 +292,15 @@ inline void MorphexsynthScriptEngine::luaSetLfo(const sol::table& params) noexce
     const size_t waveform = params.get_or("waveform", size_t{0});
     const float speedHz = params.get_or("speedHz", 1.f);
     const float filterDepth = params.get_or("filterDepth", 0.f);
+    const float oscDepth = params.get_or("oscDepth", 0.f);
     const float keyFollow = params.get_or("keyFollow", 0.f);
     if (waveform >= kNumLfoWaveforms || !std::isfinite(speedHz) || !std::isfinite(filterDepth) ||
-        !std::isfinite(keyFollow))
+        !std::isfinite(oscDepth) || !std::isfinite(keyFollow))
     {
         return;
     }
     m_pendingLfo = MorphexLfoSettings{waveform, std::clamp(speedHz, 0.01f, 50.f), std::clamp(filterDepth, -4.f, 4.f),
-                                      std::clamp(keyFollow, -4.f, 4.f)};
+                                      std::clamp(oscDepth, -4.f, 4.f), std::clamp(keyFollow, -4.f, 4.f)};
 }
 
 inline void MorphexsynthScriptEngine::luaSetFilter(const sol::table& params) noexcept

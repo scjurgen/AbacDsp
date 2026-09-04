@@ -141,13 +141,15 @@ TEST(MorphexsynthScriptEngine, SetLfoRejectsOutOfRangeWaveform)
 TEST(MorphexsynthScriptEngine, SetLfoIsDrainedOnceThenClears)
 {
     MorphexsynthScriptEngine engine;
-    ASSERT_TRUE(engine.loadScript("SetLfo({ waveform = 3, speedHz = 4, filterDepth = 0.5, keyFollow = 0.25 })"));
+    ASSERT_TRUE(engine.loadScript(
+        "SetLfo({ waveform = 3, speedHz = 4, filterDepth = 0.5, oscDepth = 0.7, keyFollow = 0.25 })"));
 
     const auto command = engine.drainLfoCommand();
     ASSERT_TRUE(command.has_value());
     EXPECT_EQ(command->waveform, 3u);
     EXPECT_FLOAT_EQ(command->speedHz, 4.f);
     EXPECT_FLOAT_EQ(command->filterDepth, 0.5f);
+    EXPECT_FLOAT_EQ(command->oscDepth, 0.7f);
     EXPECT_FLOAT_EQ(command->keyFollow, 0.25f);
     EXPECT_FALSE(engine.drainLfoCommand().has_value());
 }

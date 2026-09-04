@@ -1,7 +1,9 @@
 #include <cmath>
+#include <vector>
 
 #include "gtest/gtest.h"
 
+#include "Analysis/ZeroCrossings.h"
 #include "Synthesizer/MorphexsynthVoice.h"
 
 namespace AbacDsp::Test
@@ -118,6 +120,47 @@ TEST_F(MorphexsynthVoiceTest, filterCharacterSwitchDoesNotProduceNonFiniteOutput
             ASSERT_TRUE(std::isfinite(left[i])) << "filter " << preset.name;
         }
     }
+}
+
+TEST_F(MorphexsynthVoiceTest, lfoOscDepthAudiblyModulatesPitchAcrossAllOscillators)
+{
+    constexpr size_t kBlockSize{512};
+    constexpr size_t kSettleBlocks{20};
+    constexpr size_t kMeasureBlocks{200};
+
+    const auto measurePeriodStdDev = [](const float oscDepth)
+    {
+        WaveShaperTableStore localWaveShaperTables;
+        MpeCurveMap localCurveMap;
+        MorphexsynthVoice v{kSampleRate, localWaveShaperTables, localCurveMap};
+        v.setLevelOscillator(0, 1.f);
+        v.setEnvelopeSustainLevel(1.f);
+        v.setLfoWaveForm(LfoType::Sine);
+        v.setLfoPitchFactor(4.f);
+        v.setLfoOscModulationDepth(oscDepth);
+        v.triggerVoice(60, 100, 0);
+
+        std::array<float, kBlockSize> left{};
+        std::array<float, kBlockSize> right{};
+        for (size_t b = 0; b < kSettleBlocks; ++b)
+        {
+            v.processBlock(left.data(), right.data(), left.size());
+        }
+
+        std::vector<float> measured;
+        measured.reserve(kMeasureBlocks * kBlockSize);
+        for (size_t b = 0; b < kMeasureBlocks; ++b)
+        {
+            v.processBlock(left.data(), right.data(), left.size());
+            measured.insert(measured.end(), left.begin(), left.end());
+        }
+        return calculateZeroCrossingStatistics(measured.data(), measured.size(), true).standardDeviation;
+    };
+
+    const auto noDepthStdDev = measurePeriodStdDev(0.f);
+    const auto withDepthStdDev = measurePeriodStdDev(0.5f);
+
+    EXPECT_GT(withDepthStdDev, noDepthStdDev);
 }
 
 TEST_F(MorphexsynthVoiceTest, distortionStagePassesThroughFiniteOutput)

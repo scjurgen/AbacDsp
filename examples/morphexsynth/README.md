@@ -95,13 +95,16 @@ far apart they are (0 disables glide).
 ### LFO
 
 ```lua
-SetLfo({ waveform = 0, speedHz = 1, filterDepth = 0, keyFollow = 0 })
+SetLfo({ waveform = 0, speedHz = 1, filterDepth = 0, oscDepth = 0, keyFollow = 0 })
 ```
 
 `waveform`: `0` Sine, `1` Triangle, `2` Saw, `3` Square, `4` Noise, `5` SampleHoldNoise,
 `6` SampleHoldFlipFlop, `7` BrownNoise. `filterDepth` scales how many semitones of filter
-cutoff modulation the LFO contributes. `keyFollow` scales how much the LFO's own rate rises
-with the played note (0 = fixed rate regardless of note).
+cutoff modulation the LFO contributes. `oscDepth` scales how many semitones of pitch
+modulation the LFO contributes, applied uniformly to all 3 oscillators (the same bus MIDI
+pitch bend and `SetPitchEnvelope` use, so it stacks with both rather than targeting any one
+oscillator). `keyFollow` scales how much the LFO's own rate rises with the played note (0 =
+fixed rate regardless of note).
 
 ### Filter and distortion
 

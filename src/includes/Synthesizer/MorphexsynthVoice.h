@@ -135,8 +135,8 @@ struct MorphexsynthConnectors
         [](const auto& v) { return std::clamp(v[0] + v[1], 0.f, 120.f); }};
 
     ValueConnector<32, CtrlSource, CtrlSource::BaseValue, CtrlSource::Dimension, CtrlSource::EnvelopePitch,
-                   CtrlSource::EnvelopeGlide>
-        pitchBend{[](const auto& v) { return Convert::noteIntervalToRatio(v[0] + v[1] + v[2] + v[3]); }};
+                   CtrlSource::EnvelopeGlide, CtrlSource::Lfo>
+        pitchBend{[](const auto& v) { return Convert::noteIntervalToRatio(v[0] + v[1] + v[2] + v[3] + v[4]); }};
 
     FixedSmoothing<128> panning{};
     FixedSmoothing<128> distortion{};
@@ -796,6 +796,7 @@ class MorphexsynthVoice
         applyCtrl(CtrlDimension::EnvelopeFilter, static_cast<int>(envFilterValue * 8191.f));
         const auto cf = m_connectors.filterCutoff.getSmoothed();
         m_connectors.filterCutoff.set(CtrlSource::Lfo, lfoValue * m_lfoFilterModulationDepth * 12.f);
+        m_connectors.pitchBend.set(CtrlSource::Lfo, lfoValue * m_lfoOscModulationDepth * 12.f);
         m_filter.setCutoffFrequency(Convert::noteToFrequency<float>(cf));
         const auto reso = std::clamp(m_connectors.filterResonance.getSmoothed(), 0.f, 2.f);
         m_filter.setResonance(reso);
