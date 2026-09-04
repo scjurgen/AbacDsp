@@ -88,18 +88,8 @@ class SamplePlayerBasic
             const auto y1_R = samples[pPos + 5];
             const auto y2_R = samples[pPos + 7];
 
-            const auto c0_L = y0_L;
-            const auto c1_L = 0.5f * (y1_L - ym1_L);
-            const auto c2_L = ym1_L - 2.5f * y0_L + 2.0f * y1_L - 0.5f * y2_L;
-            const auto c3_L = 0.5f * (y2_L - ym1_L) + 1.5f * (y0_L - y1_L);
-
-            const auto c0_R = y0_R;
-            const auto c1_R = 0.5f * (y1_R - ym1_R);
-            const auto c2_R = ym1_R - 2.5f * y0_R + 2.0f * y1_R - 0.5f * y2_R;
-            const auto c3_R = 0.5f * (y2_R - ym1_R) + 1.5f * (y0_R - y1_R);
-
-            const auto outL = ((c3_L * m_frac + c2_L) * m_frac + c1_L) * m_frac + c0_L;
-            const auto outR = ((c3_R * m_frac + c2_R) * m_frac + c1_R) * m_frac + c0_R;
+            const auto outL = hermiteInterpolation(ym1_L, y0_L, y1_L, y2_L, m_frac);
+            const auto outR = hermiteInterpolation(ym1_R, y0_R, y1_R, y2_R, m_frac);
 
             targetAddLeft[i] += outL;
             targetAddRight[i] += outR;
@@ -123,6 +113,16 @@ class SamplePlayerBasic
     }
 
   private:
+    [[nodiscard]] static float hermiteInterpolation(const float ym1, const float y0, const float y1, const float y2,
+                                                    const float frac) noexcept
+    {
+        const auto c0 = y0;
+        const auto c1 = 0.5f * (y1 - ym1);
+        const auto c2 = ym1 - 2.5f * y0 + 2.0f * y1 - 0.5f * y2;
+        const auto c3 = 0.5f * (y2 - ym1) + 1.5f * (y0 - y1);
+        return ((c3 * frac + c2) * frac + c1) * frac + c0;
+    }
+
     std::shared_ptr<std::vector<float>> m_data{};
     size_t m_intPlayPos{0};
     float m_frac{0.0f};
