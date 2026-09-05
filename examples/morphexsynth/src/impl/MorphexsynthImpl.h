@@ -609,6 +609,7 @@ class MorphexsynthImpl final : public EffectBase
                 voice.setEnvelopeDecayFilter(filterEnv->decayMs);
                 voice.setEnvelopeSustainLevelFilter(filterEnv->sustainLevel);
                 voice.setEnvelopeReleaseFilter(filterEnv->releaseMs);
+                voice.setContourF(filterEnv->contour);
             }
         }
         if (const auto pitchEnv = m_scriptEngine.drainPitchEnvelopeCommand())

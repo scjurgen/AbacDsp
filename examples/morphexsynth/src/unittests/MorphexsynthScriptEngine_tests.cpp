@@ -147,13 +147,29 @@ TEST(MorphexsynthScriptEngine, SetAmpEnvelopeClampsSustainToUnitRange)
 TEST(MorphexsynthScriptEngine, SetFilterEnvelopeIsDrainedOnceThenClears)
 {
     MorphexsynthScriptEngine engine;
-    ASSERT_TRUE(
-        engine.loadScript("SetFilterEnvelope({ attackMs = 1, decayMs = 2, sustainLevel = 0.3, releaseMs = 4 })"));
+    ASSERT_TRUE(engine.loadScript(
+        "SetFilterEnvelope({ attackMs = 1, decayMs = 2, sustainLevel = 0.3, releaseMs = 4, contour = 1.5 })"));
 
     const auto command = engine.drainFilterEnvelopeCommand();
     ASSERT_TRUE(command.has_value());
     EXPECT_FLOAT_EQ(command->sustainLevel, 0.3f);
+    EXPECT_FLOAT_EQ(command->contour, 1.5f);
     EXPECT_FALSE(engine.drainFilterEnvelopeCommand().has_value());
+}
+
+TEST(MorphexsynthScriptEngine, SetFilterEnvelopeClampsContourToItsRange)
+{
+    MorphexsynthScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript("SetFilterEnvelope({ contour = 99 })"));
+
+    const auto command = engine.drainFilterEnvelopeCommand();
+    ASSERT_TRUE(command.has_value());
+    EXPECT_FLOAT_EQ(command->contour, 4.f);
+
+    ASSERT_TRUE(engine.loadScript("SetFilterEnvelope({ contour = -99 })"));
+    const auto negativeCommand = engine.drainFilterEnvelopeCommand();
+    ASSERT_TRUE(negativeCommand.has_value());
+    EXPECT_FLOAT_EQ(negativeCommand->contour, -4.f);
 }
 
 TEST(MorphexsynthScriptEngine, SetPitchEnvelopeIsDrainedOnceThenClears)

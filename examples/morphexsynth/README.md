@@ -85,14 +85,19 @@ an octave down).
 
 ```lua
 SetAmpEnvelope({ attackMs = 10, decayMs = 200, sustainLevel = 0.5, releaseMs = 100 })
-SetFilterEnvelope({ attackMs = 10, decayMs = 200, sustainLevel = 0.5, releaseMs = 100 })
+SetFilterEnvelope({ attackMs = 10, decayMs = 200, sustainLevel = 0.5, releaseMs = 100, contour = 0 })
 SetPitchEnvelope({ attackMs = 0, decayMs = 0, depthSemitones = 0, glideMsPerOctave = 0 })
 ```
 
-`SetAmpEnvelope`/`SetFilterEnvelope` are both plain ADSR shapes. `SetPitchEnvelope` is a
-two-stage attack/decay pitch envelope (`depthSemitones` is how far it swings, positive or
-negative) plus `glideMsPerOctave` - portamento time between consecutive notes, scaled by how
-far apart they are (0 disables glide).
+`SetAmpEnvelope`/`SetFilterEnvelope` are both plain ADSR shapes. `SetFilterEnvelope`'s
+`contour` (`-4..4`, same scale as `SetLfo`'s `filterDepth`) is how much this envelope
+additionally sweeps the filter cutoff as it runs - positive opens the filter as the
+envelope rises, negative closes it; `0` (the default) leaves cutoff untouched, so
+`SetFilterEnvelope` without `contour` only shapes what the MPE routing matrix's own
+`EnvelopeFilter` source reads (see `SetCtrlSlot` below), not the cutoff directly.
+`SetPitchEnvelope` is a two-stage attack/decay pitch envelope (`depthSemitones` is how far
+it swings, positive or negative) plus `glideMsPerOctave` - portamento time between
+consecutive notes, scaled by how far apart they are (0 disables glide).
 
 ### LFO
 

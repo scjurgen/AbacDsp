@@ -20,13 +20,25 @@ struct MorphexOscillatorSettings
     float pitchFactor{1.f};
 };
 
-/// @brief SetAmpEnvelope/SetFilterEnvelope's payload: one ADSR shape.
+/// @brief SetAmpEnvelope's payload: one ADSR shape.
 struct MorphexEnvelopeSettings
 {
     float attackMs{10.f};
     float decayMs{200.f};
     float sustainLevel{0.5f};
     float releaseMs{100.f};
+};
+
+/// @brief SetFilterEnvelope's payload: an ADSR shape plus how much it sweeps the filter
+/// cutoff. contour is semitones-ish, same scale as SetLfo's filterDepth; positive opens
+/// the filter as the envelope rises, negative closes it.
+struct MorphexFilterEnvelopeSettings
+{
+    float attackMs{10.f};
+    float decayMs{200.f};
+    float sustainLevel{0.5f};
+    float releaseMs{100.f};
+    float contour{0.f};
 };
 
 /// @brief SetPitchEnvelope's payload: the pitch-EG depth/time plus note-to-note glide.
@@ -166,7 +178,10 @@ class MorphexsynthScriptEngine : public LuaScriptEngineBase<MorphexsynthScriptEn
 "--   detune: semitones. level: -1..1. pwm: -1..1. pitchFactor: frequency multiplier (1 = unison)\n"
 "\n"
 "-- SetAmpEnvelope({ attackMs, decayMs, sustainLevel, releaseMs })\n"
-"-- SetFilterEnvelope({ attackMs, decayMs, sustainLevel, releaseMs })\n"
+"-- SetFilterEnvelope({ attackMs, decayMs, sustainLevel, releaseMs, contour })\n"
+"--   contour: -4..4, how much this envelope sweeps the filter cutoff (same scale as\n"
+"--   SetLfo's filterDepth); positive opens the filter as the envelope rises, negative\n"
+"--   closes it. 0 (default) leaves the filter cutoff untouched by this envelope.\n"
 "-- SetPitchEnvelope({ attackMs, decayMs, depthSemitones, glideMsPerOctave })\n"
 "\n"
 "-- SetLfo({ waveform, speedHz, filterDepth, oscDepth, keyFollow })\n"
@@ -219,7 +234,7 @@ class MorphexsynthScriptEngine : public LuaScriptEngineBase<MorphexsynthScriptEn
 
     [[nodiscard]] std::optional<MorphexOscillatorSettings> drainOscillatorCommand(size_t index) noexcept;
     [[nodiscard]] std::optional<MorphexEnvelopeSettings> drainAmpEnvelopeCommand() noexcept;
-    [[nodiscard]] std::optional<MorphexEnvelopeSettings> drainFilterEnvelopeCommand() noexcept;
+    [[nodiscard]] std::optional<MorphexFilterEnvelopeSettings> drainFilterEnvelopeCommand() noexcept;
     [[nodiscard]] std::optional<MorphexPitchEnvelopeSettings> drainPitchEnvelopeCommand() noexcept;
     [[nodiscard]] std::optional<MorphexLfoSettings> drainLfoCommand() noexcept;
     [[nodiscard]] std::optional<MorphexFilterSettings> drainFilterCommand() noexcept;
@@ -251,7 +266,7 @@ class MorphexsynthScriptEngine : public LuaScriptEngineBase<MorphexsynthScriptEn
 
     OscillatorCommands m_pendingOscillator{};
     std::optional<MorphexEnvelopeSettings> m_pendingAmpEnvelope;
-    std::optional<MorphexEnvelopeSettings> m_pendingFilterEnvelope;
+    std::optional<MorphexFilterEnvelopeSettings> m_pendingFilterEnvelope;
     std::optional<MorphexPitchEnvelopeSettings> m_pendingPitchEnvelope;
     std::optional<MorphexLfoSettings> m_pendingLfo;
     std::optional<MorphexFilterSettings> m_pendingFilter;
@@ -325,7 +340,10 @@ inline void MorphexsynthScriptEngine::luaSetAmpEnvelope(const sol::table& params
 
 inline void MorphexsynthScriptEngine::luaSetFilterEnvelope(const sol::table& params) noexcept
 {
-    m_pendingFilterEnvelope = parseEnvelope(params);
+    const auto envelope = parseEnvelope(params);
+    const float contour = std::clamp(static_cast<float>(params.get_or("contour", 0.f)), -4.f, 4.f);
+    m_pendingFilterEnvelope = MorphexFilterEnvelopeSettings{envelope.attackMs, envelope.decayMs, envelope.sustainLevel,
+                                                            envelope.releaseMs, contour};
 }
 
 inline void MorphexsynthScriptEngine::luaSetPitchEnvelope(const sol::table& params) noexcept
@@ -461,7 +479,7 @@ inline std::optional<MorphexEnvelopeSettings> MorphexsynthScriptEngine::drainAmp
     return result;
 }
 
-inline std::optional<MorphexEnvelopeSettings> MorphexsynthScriptEngine::drainFilterEnvelopeCommand() noexcept
+inline std::optional<MorphexFilterEnvelopeSettings> MorphexsynthScriptEngine::drainFilterEnvelopeCommand() noexcept
 {
     const auto result = m_pendingFilterEnvelope;
     m_pendingFilterEnvelope.reset();
