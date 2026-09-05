@@ -291,11 +291,13 @@ class MorphexsynthImpl final : public EffectBase
                 mpeZ(channel, msg[1] << 7);
                 m_scriptEngine.notifyAftertouch(channel, msg[1]);
                 break;
-            case 0xE0: // Pitch Bend: 14-bit 0..16383 (center 8192), re-centered to -8192..8191
+            case 0xE0: // Pitch Bend: 14-bit 0..16383, center 8192
             {
-                const int bendValue = ((static_cast<int>(msg[2]) << 7) | msg[1]) - 8192;
-                mpeX(channel, bendValue);
-                m_scriptEngine.notifyPitchBend(channel, bendValue);
+                const int raw14Bit = (static_cast<int>(msg[2]) << 7) | msg[1];
+                // mpeX() expects the raw uncentered value (matching every other MPE
+                // dimension); only the Lua callback needs it re-centered, per LUA.md.
+                mpeX(channel, raw14Bit);
+                m_scriptEngine.notifyPitchBend(channel, raw14Bit - 8192);
                 break;
             }
             default:
@@ -467,6 +469,9 @@ class MorphexsynthImpl final : public EffectBase
         m_lastNote = note;
     }
 
+    // Releases every voice tagged with this (channel, note), not just the first: a retrigger
+    // during a still-sounding release leaves two such voices at once, and a single note-off
+    // must reach both, or the newer one hangs with nothing left to ever release it.
     void releaseVoice(const int channel, const int note) noexcept
     {
         for (size_t i = 0; i < kMaxVoices; ++i)
@@ -474,7 +479,6 @@ class MorphexsynthImpl final : public EffectBase
             if (m_voiceState[i].channel == channel && m_voiceState[i].note == note)
             {
                 m_voices[i].stopVoice();
-                return;
             }
         }
     }

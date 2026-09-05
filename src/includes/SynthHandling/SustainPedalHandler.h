@@ -7,12 +7,10 @@
 
 /* rules:
  * noteOn Handler:
- *     if queue full: search note with lowest count and send noteOff, mark slow isUsed=false
- *     if not in sustain mode:
- *             call m_noteOn
- *             save as active note
- *     in sustain mode:
- *         save as active note (reset the scheduled for off state, call m_noteOn)
+ *     retrigger of an already-active (channel, note): send noteOff for its old slot and
+ *         free it first, sustain held or not
+ *     if queue full: search note with lowest count and send noteOff, mark slot isUsed=false
+ *     call m_noteOn, save as active note (reset the scheduled-for-off state)
  *
  * noteOff Handler:
  *     if not sustaining:
@@ -21,11 +19,10 @@
  *         mark active note as scheduled for off
  *
  * sustain from off to on:
- *     guess nothing to do
- * sustain from on to off
+ *     nothing to do
+ * sustain from on to off:
  *     retrieve notes scheduled for off and send note_off, remove from active notes
- *     don't touch notes that are still currently hold
- *
+ *     don't touch notes that are still currently held
  *
  * allNotesOff
  */
@@ -40,8 +37,10 @@ namespace AbacDsp
  * when the pedal lifts, so its note-off is recorded rather than dropped and
  * replayed on release.
  *
- * Re-attacking a held note has to clear its pending release, otherwise the
- * pedal lift would cut off a note that was struck again after the release.
+ * Retriggering any still-active note - held under the pedal or not - has to clear its
+ * old slot first: otherwise a second note-on either leaves the original slot stuck
+ * active forever (no pedal), or lets the pedal lift cut off a note struck again after
+ * its first release (pedal held).
  */
 class SustainPedalHandler
 {
@@ -73,21 +72,21 @@ class SustainPedalHandler
     {
         int slotIndex = -1;
 
-        if (m_sustainActive)
+        // A retrigger of a still-active note (no note-off in between) must close out its
+        // old slot before opening a new one, sustain held or not - otherwise the old slot
+        // stays marked active forever, since noteOff() only ever clears one matching slot.
+        for (size_t i = 0; i < m_activeNotes.size(); ++i)
         {
-            for (size_t i = 0; i < m_activeNotes.size(); ++i)
+            auto& slot = m_activeNotes[i];
+            if (slot.isUsed && slot.channel == channel && slot.note == note)
             {
-                auto& slot = m_activeNotes[i];
-                if (slot.isUsed && slot.channel == channel && slot.note == note)
+                if (m_noteOff)
                 {
-                    if (m_noteOff)
-                    {
-                        m_noteOff(channel, note, slot.noteOffVelocity);
-                    }
-                    slot.isUsed = false;
-                    slotIndex = static_cast<int>(i);
-                    break;
+                    m_noteOff(channel, note, slot.noteOffVelocity);
                 }
+                slot.isUsed = false;
+                slotIndex = static_cast<int>(i);
+                break;
             }
         }
 

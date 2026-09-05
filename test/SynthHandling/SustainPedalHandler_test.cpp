@@ -35,6 +35,23 @@ TEST(SustainPedalHandler, noteOnAndOffWithoutSustainFireImmediately)
     EXPECT_EQ(offEvents[0].note, 60);
 }
 
+TEST(SustainPedalHandler, RetriggeringAnActiveNoteWithoutSustainClosesTheOldSlotFirst)
+{
+    SustainPedalHandler handler(4);
+    std::vector<MidiEvent> onEvents;
+    std::vector<MidiEvent> offEvents;
+    handler.configureCallbacks([&](int ch, int note, int vel) { onEvents.push_back({ch, note, vel}); },
+                               [&](int ch, int note, int vel) { offEvents.push_back({ch, note, vel}); });
+
+    handler.noteOn(0, 60, 100);
+    handler.noteOn(0, 60, 110); // retrigger before any note-off arrives
+    ASSERT_EQ(onEvents.size(), 2u);
+    ASSERT_EQ(offEvents.size(), 1u) << "the retrigger must close the first instance's slot itself";
+
+    handler.noteOff(0, 60, 0);
+    EXPECT_EQ(offEvents.size(), 2u) << "the single physical note-off must still reach the retriggered instance";
+}
+
 TEST(SustainPedalHandler, sustainHoldsNoteOffUntilPedalReleased)
 {
     SustainPedalHandler handler(4);
