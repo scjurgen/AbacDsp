@@ -43,6 +43,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("vol", this);
         m_parameters.addParameterListener("cutoff", this);
         m_parameters.addParameterListener("resonance", this);
+        m_parameters.addParameterListener("reverbSize", this);
+        m_parameters.addParameterListener("reverbDecay", this);
+        m_parameters.addParameterListener("reverbMix", this);
+        m_parameters.addParameterListener("reverbDry", this);
         m_parameters.addParameterListener("luaParam1", this);
         m_parameters.addParameterListener("luaParam2", this);
         m_parameters.addParameterListener("luaParam3", this);
@@ -66,6 +70,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("vol", this);
         m_parameters.removeParameterListener("cutoff", this);
         m_parameters.removeParameterListener("resonance", this);
+        m_parameters.removeParameterListener("reverbSize", this);
+        m_parameters.removeParameterListener("reverbDecay", this);
+        m_parameters.removeParameterListener("reverbMix", this);
+        m_parameters.removeParameterListener("reverbDry", this);
         m_parameters.removeParameterListener("luaParam1", this);
         m_parameters.removeParameterListener("luaParam2", this);
         m_parameters.removeParameterListener("luaParam3", this);
@@ -287,6 +295,26 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 0) + " %"; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("reverbSize", 1), juce::String::fromUTF8("Rev Size"),
+            juce::NormalisableRange<float>(1, 60, 0.1, 1, false), 12,
+            juce::AudioParameterFloatAttributes{}.withLabel("m").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " m"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("reverbDecay", 1), juce::String::fromUTF8("Rev Decay"),
+            juce::NormalisableRange<float>(0, 20000, 1, 0.5, false), 1500,
+            juce::AudioParameterFloatAttributes{}.withLabel("ms").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " ms"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("reverbMix", 1), juce::String::fromUTF8("Rev Mix"),
+            juce::NormalisableRange<float>(-100, 12, 0.1, 1, false), -100,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("reverbDry", 1), juce::String::fromUTF8("Rev Dry"),
+            juce::NormalisableRange<float>(-100, 12, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("dB").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " dB"; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("luaParam1", 1), juce::String::fromUTF8("Lua Param 1"),
             juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
@@ -357,6 +385,30 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setResonance(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::resonance, v);
+             }},
+            {"reverbSize",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setReverbSize(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbSize, v);
+             }},
+            {"reverbDecay",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setReverbDecay(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbDecay, v);
+             }},
+            {"reverbMix",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setReverbMix(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbMix, v);
+             }},
+            {"reverbDry",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setReverbDry(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::reverbDry, v);
              }},
             {"luaParam1",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -451,6 +503,30 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("resonance");
             float normalized = range.convertTo0to1(static_cast<float>(params.resonance));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("reverbSize"))
+        {
+            const auto& range = m_parameters.getParameterRange("reverbSize");
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbSize));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("reverbDecay"))
+        {
+            const auto& range = m_parameters.getParameterRange("reverbDecay");
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbDecay));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("reverbMix"))
+        {
+            const auto& range = m_parameters.getParameterRange("reverbMix");
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbMix));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("reverbDry"))
+        {
+            const auto& range = m_parameters.getParameterRange("reverbDry");
+            float normalized = range.convertTo0to1(static_cast<float>(params.reverbDry));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("luaParam1"))

@@ -13,22 +13,30 @@ struct PatchParameters
 {
     enum class Id : int
     {
-        vol      , // dial
-        cutoff   , // dial
-        resonance, // dial
-        luaParam1, // dial
-        luaParam2, // dial
-        luaParam3, // dial
-        luaParam4, // dial
-        luaParam5, // dial
-        luaParam6, // dial
-        luaParam7, // dial
-        luaParam8, // dial
-        script    // script
+        vol        , // dial
+        cutoff     , // dial
+        resonance  , // dial
+        reverbSize , // dial
+        reverbDecay, // dial
+        reverbMix  , // dial
+        reverbDry  , // dial
+        luaParam1  , // dial
+        luaParam2  , // dial
+        luaParam3  , // dial
+        luaParam4  , // dial
+        luaParam5  , // dial
+        luaParam6  , // dial
+        luaParam7  , // dial
+        luaParam8  , // dial
+        script      // script
     };
 float vol{0.0f};
 float cutoff{72.0f};
 float resonance{0.0f};
+float reverbSize{12.0f};
+float reverbDecay{1500.0f};
+float reverbMix{-100.0f};
+float reverbDry{0.0f};
 float luaParam1{0.0f};
 float luaParam2{0.0f};
 float luaParam3{0.0f};
@@ -44,6 +52,10 @@ std::string script{};
         "vol",
 "cutoff",
 "resonance",
+"reverbSize",
+"reverbDecay",
+"reverbMix",
+"reverbDry",
 "luaParam1",
 "luaParam2",
 "luaParam3",
@@ -73,6 +85,10 @@ std::string script{};
         if constexpr (ParamId == Id::vol) return vol;
         else if constexpr (ParamId == Id::cutoff) return cutoff;
         else if constexpr (ParamId == Id::resonance) return resonance;
+        else if constexpr (ParamId == Id::reverbSize) return reverbSize;
+        else if constexpr (ParamId == Id::reverbDecay) return reverbDecay;
+        else if constexpr (ParamId == Id::reverbMix) return reverbMix;
+        else if constexpr (ParamId == Id::reverbDry) return reverbDry;
         else if constexpr (ParamId == Id::luaParam1) return luaParam1;
         else if constexpr (ParamId == Id::luaParam2) return luaParam2;
         else if constexpr (ParamId == Id::luaParam3) return luaParam3;
@@ -99,6 +115,14 @@ break;
  case Id::cutoff: if (!isEqual(get<Id::cutoff>(), value)) {get<Id::cutoff>() = value;m_modified = true;}
 break;
  case Id::resonance: if (!isEqual(get<Id::resonance>(), value)) {get<Id::resonance>() = value;m_modified = true;}
+break;
+ case Id::reverbSize: if (!isEqual(get<Id::reverbSize>(), value)) {get<Id::reverbSize>() = value;m_modified = true;}
+break;
+ case Id::reverbDecay: if (!isEqual(get<Id::reverbDecay>(), value)) {get<Id::reverbDecay>() = value;m_modified = true;}
+break;
+ case Id::reverbMix: if (!isEqual(get<Id::reverbMix>(), value)) {get<Id::reverbMix>() = value;m_modified = true;}
+break;
+ case Id::reverbDry: if (!isEqual(get<Id::reverbDry>(), value)) {get<Id::reverbDry>() = value;m_modified = true;}
 break;
  case Id::luaParam1: if (!isEqual(get<Id::luaParam1>(), value)) {get<Id::luaParam1>() = value;m_modified = true;}
 break;
@@ -158,16 +182,20 @@ private:
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     PatchParameters,
-        vol      , // dial
-        cutoff   , // dial
-        resonance, // dial
-        luaParam1, // dial
-        luaParam2, // dial
-        luaParam3, // dial
-        luaParam4, // dial
-        luaParam5, // dial
-        luaParam6, // dial
-        luaParam7, // dial
-        luaParam8, // dial
-        script    // script
+        vol        , // dial
+        cutoff     , // dial
+        resonance  , // dial
+        reverbSize , // dial
+        reverbDecay, // dial
+        reverbMix  , // dial
+        reverbDry  , // dial
+        luaParam1  , // dial
+        luaParam2  , // dial
+        luaParam3  , // dial
+        luaParam4  , // dial
+        luaParam5  , // dial
+        luaParam6  , // dial
+        luaParam7  , // dial
+        luaParam8  , // dial
+        script      // script
 )

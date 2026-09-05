@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -11,9 +12,14 @@
 #include "Audio/AudioBuffer.h"
 #include "EffectBase.h"
 #include "Filters/OnePoleFilter.h"
+#include "Filters/PoleMixingFilter.h"
+#include "Generators/SynthLfo.h"
 #include "Helpers/ConstructArray.h"
 #include "MorphexsynthScriptEngine.h"
 #include "Numbers/Convert.h"
+#include "Parameters/SmoothingParameter.h"
+#include "Reverbs/FdnTankGlide.h"
+#include "Reverbs/ModulationDelayNoFeedback.h"
 #include "SynthHandling/SustainPedalHandler.h"
 #include "Synthesizer/MorphexsynthVoice.h"
 
@@ -30,10 +36,33 @@ class MorphexsynthImpl final : public EffectBase
         , m_dcBlocker(
               AbacDsp::constructArray<AbacDsp::OnePoleFilter<AbacDsp::OnePoleFilterCharacteristic::HighPass>, 2>(
                   sampleRate, 20.f))
+        , m_phaser(AbacDsp::constructArray<AbacDsp::Phaser24Smooth, kPhaserTotalStages>(sampleRate))
+        , m_phaserLfo(sampleRate)
+        , m_chorusDelay(
+              AbacDsp::constructArray<AbacDsp::ModulationDelayNoFeedback<kChorusMaxDelaySamples>, 2>(sampleRate))
+        , m_reverb(sampleRate)
     {
         m_sustainPedal.configureCallbacks(
             [this](const int channel, const int note, const int velocity) { allocateVoice(channel, note, velocity); },
             [this](const int channel, const int note, const int) { releaseVoice(channel, note); });
+        for (auto& stage : m_phaser)
+        {
+            stage.setSmoothingSteps(BlockSize);
+        }
+        m_phaserLfo.setWaveForm(AbacDsp::LfoType::Sine);
+        for (auto& delay : m_chorusDelay)
+        {
+            delay.setWidthInMsecs(kChorusBaseDelayMs);
+        }
+        setChorus(kDefaultChorusRateHz, kDefaultChorusDepth, m_chorusMix);
+        // Stereo width: prime the right channel a half modulation cycle out of phase with
+        // the left by running it through that many silent samples once, up front.
+        const auto halfPeriodSamples = static_cast<size_t>(sampleRate / (2.f * kDefaultChorusRateHz));
+        for (size_t i = 0; i < halfPeriodSamples; ++i)
+        {
+            (void) m_chorusDelay[1].step(0.f); // priming the phase offset, not producing audio yet
+        }
+        setPhaser(kDefaultPhaserRateHz, m_phaserDepth, kDefaultPhaserFeedback, m_phaserMix);
         // morphexsynth has no Play switch/Host Sync concept (unlike most OnStart() users -
         // see LuaScriptEngineBase's own skeleton comment): fires exactly once here, when the
         // engine is ready, the usual place for a script to set its patch's static config.
@@ -58,6 +87,52 @@ class MorphexsynthImpl final : public EffectBase
         for (auto& voice : m_voices)
         {
             voice.setResonance(value * 0.01f);
+        }
+    }
+
+    void setReverbSize(const float meters) noexcept
+    {
+        m_reverb.setMinSize(meters / kFdnSizeSpread);
+        m_reverb.setMaxSize(meters * kFdnSizeSpread);
+    }
+
+    void setReverbDecay(const float milliseconds) noexcept
+    {
+        m_reverb.setDecay(milliseconds);
+    }
+
+    void setReverbMix(const float valueDb) noexcept
+    {
+        m_reverbMix.newTransition(Convert::dbToGain(valueDb), kFxSmoothingSeconds, sampleRate());
+    }
+
+    void setReverbDry(const float valueDb) noexcept
+    {
+        m_reverbDry.newTransition(Convert::dbToGain(valueDb), kFxSmoothingSeconds, sampleRate());
+    }
+
+    // Both stages of both channels share one sweep and one feedback amount - a deliberately
+    // mono-swept phaser, not a stereo-width one (see the plan's flagged risk).
+    void setPhaser(const float rateHz, const float depth, const float feedback, const float mix) noexcept
+    {
+        m_phaserDepth = depth;
+        m_phaserMix = mix;
+        // Stepped once per block rather than per sample (see updatePhaserCutoff()), so its
+        // per-call phase advance must cover a whole block's worth of samples at once.
+        m_phaserLfo.setFrequency(rateHz * static_cast<float>(BlockSize));
+        for (auto& stage : m_phaser)
+        {
+            stage.setResonance(feedback);
+        }
+    }
+
+    void setChorus(const float rateHz, const float depth, const float mix) noexcept
+    {
+        m_chorusMix = mix;
+        for (auto& delay : m_chorusDelay)
+        {
+            delay.setModSpeed(rateHz);
+            delay.setModDepth(depth * kChorusMaxModDepth);
         }
     }
 
@@ -251,6 +326,10 @@ class MorphexsynthImpl final : public EffectBase
         m_dcBlocker[0].processBlock(left.data(), BlockSize);
         m_dcBlocker[1].processBlock(right.data(), BlockSize);
 
+        processPhaser(left, right);
+        processChorus(left, right);
+        processReverb(left, right);
+
         for (size_t s = 0; s < BlockSize; ++s)
         {
             out(s, 0) = in(s, 0) + left[s] * m_vol;
@@ -263,6 +342,89 @@ class MorphexsynthImpl final : public EffectBase
     static constexpr uint8_t kCcModWheel{1};
     static constexpr uint8_t kCcTimbre{74};
     static constexpr uint8_t kCcAllNotesOff{123};
+
+    static constexpr size_t kPhaserStagesPerChannel{2}; // 2 in series = 8 allpass poles total
+    static constexpr size_t kPhaserTotalStages{kPhaserStagesPerChannel * 2};
+    static constexpr float kPhaserMinHz{200.f};
+    static constexpr float kPhaserMaxHz{2000.f};
+    static constexpr float kDefaultPhaserRateHz{0.3f};
+    static constexpr float kDefaultPhaserFeedback{0.f};
+
+    static constexpr size_t kChorusMaxDelaySamples{4096}; // covers kChorusBaseDelayMs at 48 kHz with headroom
+    static constexpr float kChorusBaseDelayMs{18.f};
+    static constexpr float kChorusMaxModDepth{0.6f}; // fraction of ModulationDelayNoFeedback's own depth scale
+    static constexpr float kDefaultChorusRateHz{0.6f};
+    static constexpr float kDefaultChorusDepth{0.5f};
+
+    static constexpr size_t kFdnOrder{32};
+    static constexpr size_t kFdnMaxSizePerElement{100000};
+    static constexpr float kFdnSizeSpread{2.3f}; // Size dial value / *this .. Size dial value * this
+    static constexpr float kFxSmoothingSeconds{0.01f};
+
+    using Fdn = AbacDsp::FdnTankGlide<kFdnMaxSizePerElement, kFdnOrder, BlockSize>;
+
+    // One sweep per block (not per sample) into every phaser stage's own ramped setCutoff();
+    // see setPhaser()'s comment on why the LFO's frequency is pre-scaled for this.
+    void updatePhaserCutoff() noexcept
+    {
+        const float lfo = m_phaserLfo.step();
+        const float logMin = std::log(kPhaserMinHz);
+        const float logMax = std::log(kPhaserMaxHz);
+        const float center = 0.5f * (logMin + logMax);
+        const float halfRange = 0.5f * (logMax - logMin) * m_phaserDepth;
+        const float cutoffHz = std::exp(center + halfRange * lfo);
+        for (auto& stage : m_phaser)
+        {
+            stage.setCutoff(cutoffHz);
+        }
+    }
+
+    void processPhaser(std::array<float, BlockSize>& left, std::array<float, BlockSize>& right) noexcept
+    {
+        updatePhaserCutoff();
+        const std::array<float, BlockSize> dryLeft{left};
+        const std::array<float, BlockSize> dryRight{right};
+        std::array<float, BlockSize> tmp{};
+        m_phaser[0].processBlock(left.data(), tmp.data(), BlockSize);
+        m_phaser[1].processBlock(tmp.data(), left.data(), BlockSize);
+        m_phaser[2].processBlock(right.data(), tmp.data(), BlockSize);
+        m_phaser[3].processBlock(tmp.data(), right.data(), BlockSize);
+        for (size_t s = 0; s < BlockSize; ++s)
+        {
+            left[s] = dryLeft[s] * (1.f - m_phaserMix) + left[s] * m_phaserMix;
+            right[s] = dryRight[s] * (1.f - m_phaserMix) + right[s] * m_phaserMix;
+        }
+    }
+
+    void processChorus(std::array<float, BlockSize>& left, std::array<float, BlockSize>& right) noexcept
+    {
+        for (size_t s = 0; s < BlockSize; ++s)
+        {
+            const float wetLeft = m_chorusDelay[0].step(left[s]);
+            const float wetRight = m_chorusDelay[1].step(right[s]);
+            left[s] = left[s] * (1.f - m_chorusMix) + wetLeft * m_chorusMix;
+            right[s] = right[s] * (1.f - m_chorusMix) + wetRight * m_chorusMix;
+        }
+    }
+
+    void processReverb(std::array<float, BlockSize>& left, std::array<float, BlockSize>& right) noexcept
+    {
+        std::array<float, BlockSize> mono{};
+        for (size_t s = 0; s < BlockSize; ++s)
+        {
+            mono[s] = 0.5f * (left[s] + right[s]);
+        }
+        std::array<float, BlockSize> wetLeft{};
+        std::array<float, BlockSize> wetRight{};
+        m_reverb.processBlockSplit(mono.data(), wetLeft.data(), wetRight.data());
+        for (size_t s = 0; s < BlockSize; ++s)
+        {
+            const float dry = m_reverbDry.getValue();
+            const float wet = m_reverbMix.getValue();
+            left[s] = left[s] * dry + wetLeft[s] * wet;
+            right[s] = right[s] * dry + wetRight[s] * wet;
+        }
+    }
 
     struct VoiceState
     {
@@ -494,6 +656,14 @@ class MorphexsynthImpl final : public EffectBase
             setMpeRangeLowerChannel(zone->lower);
             setMpeRangeUpperChannel(zone->upper);
         }
+        if (const auto phaser = m_scriptEngine.drainPhaserCommand())
+        {
+            setPhaser(phaser->rateHz, phaser->depth, phaser->feedback, phaser->mix);
+        }
+        if (const auto chorus = m_scriptEngine.drainChorusCommand())
+        {
+            setChorus(chorus->rateHz, chorus->depth, chorus->mix);
+        }
     }
 
     AbacDsp::WaveShaperTableStore m_waveShaperTables{};
@@ -501,6 +671,19 @@ class MorphexsynthImpl final : public EffectBase
     std::array<AbacDsp::MorphexsynthVoice, kMaxVoices> m_voices;
     std::array<AbacDsp::OnePoleFilter<AbacDsp::OnePoleFilterCharacteristic::HighPass>, 2> m_dcBlocker;
     std::array<VoiceState, kMaxVoices> m_voiceState{};
+
+    // [channel * kPhaserStagesPerChannel + stage]
+    std::array<AbacDsp::Phaser24Smooth, kPhaserTotalStages> m_phaser;
+    AbacDsp::LfoGenerators m_phaserLfo;
+    float m_phaserDepth{0.5f};
+    float m_phaserMix{0.f};
+
+    std::array<AbacDsp::ModulationDelayNoFeedback<kChorusMaxDelaySamples>, 2> m_chorusDelay;
+    float m_chorusMix{0.f};
+
+    Fdn m_reverb;
+    AbacDsp::LinearSmoothing m_reverbDry{1.f};
+    AbacDsp::LinearSmoothing m_reverbMix{0.f};
 
     AbacDsp::SustainPedalHandler m_sustainPedal{kMaxVoices};
     size_t m_noteCounter{0};

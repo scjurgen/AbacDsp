@@ -29,6 +29,22 @@ class StubImpl final : public EffectBase
     {
         m_resonance = value;
     }
+    void setReverbSize(const float value)
+    {
+        m_reverbSize = value;
+    }
+    void setReverbDecay(const float value)
+    {
+        m_reverbDecay = value;
+    }
+    void setReverbMix(const float value)
+    {
+        m_reverbMix = std::pow(10.f, value / 20.f);
+    }
+    void setReverbDry(const float value)
+    {
+        m_reverbDry = std::pow(10.f, value / 20.f);
+    }
     void setLuaParam1(const float value)
     {
         m_luaParam1 = value;
@@ -75,6 +91,10 @@ class StubImpl final : public EffectBase
     float m_vol{};
     float m_cutoff{};
     float m_resonance{};
+    float m_reverbSize{};
+    float m_reverbDecay{};
+    float m_reverbMix{};
+    float m_reverbDry{};
     float m_luaParam1{};
     float m_luaParam2{};
     float m_luaParam3{};

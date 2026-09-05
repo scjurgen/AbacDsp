@@ -223,6 +223,46 @@ TEST(MorphexsynthScriptEngine, SetMpeZoneRejectsOutOfRangeChannels)
     EXPECT_FALSE(engine.drainMpeZoneCommand().has_value());
 }
 
+TEST(MorphexsynthScriptEngine, SetPhaserIsDrainedOnceThenClears)
+{
+    MorphexsynthScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript("SetPhaser({ rateHz = 0.5, depth = 0.8, feedback = 0.3, mix = 0.7 })"));
+
+    const auto command = engine.drainPhaserCommand();
+    ASSERT_TRUE(command.has_value());
+    EXPECT_FLOAT_EQ(command->rateHz, 0.5f);
+    EXPECT_FLOAT_EQ(command->depth, 0.8f);
+    EXPECT_FLOAT_EQ(command->feedback, 0.3f);
+    EXPECT_FLOAT_EQ(command->mix, 0.7f);
+    EXPECT_FALSE(engine.drainPhaserCommand().has_value());
+}
+
+TEST(MorphexsynthScriptEngine, SetPhaserClampsOutOfRangeFields)
+{
+    MorphexsynthScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript("SetPhaser({ rateHz = 50, depth = 5, feedback = 9, mix = -3 })"));
+
+    const auto command = engine.drainPhaserCommand();
+    ASSERT_TRUE(command.has_value());
+    EXPECT_FLOAT_EQ(command->rateHz, 10.f);
+    EXPECT_FLOAT_EQ(command->depth, 1.f);
+    EXPECT_FLOAT_EQ(command->feedback, 1.1f);
+    EXPECT_FLOAT_EQ(command->mix, 0.f);
+}
+
+TEST(MorphexsynthScriptEngine, SetChorusIsDrainedOnceThenClears)
+{
+    MorphexsynthScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript("SetChorus({ rateHz = 1.2, depth = 0.4, mix = 0.6 })"));
+
+    const auto command = engine.drainChorusCommand();
+    ASSERT_TRUE(command.has_value());
+    EXPECT_FLOAT_EQ(command->rateHz, 1.2f);
+    EXPECT_FLOAT_EQ(command->depth, 0.4f);
+    EXPECT_FLOAT_EQ(command->mix, 0.6f);
+    EXPECT_FALSE(engine.drainChorusCommand().has_value());
+}
+
 TEST(MorphexsynthScriptEngine, NonFiniteArgumentIsSilentlyDropped)
 {
     MorphexsynthScriptEngine engine;

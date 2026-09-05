@@ -77,6 +77,25 @@ struct MorphexMpeZoneSettings
     int upper{16};
 };
 
+/// @brief SetPhaser's payload: the master-bus phaser (8 allpass poles total - 2 stages
+/// in series per channel, both swept by one shared LFO).
+struct MorphexPhaserSettings
+{
+    float rateHz{0.3f};
+    float depth{0.5f};   ///< 0..1, how far the sweep spans the fixed 200 Hz..2 kHz range
+    float feedback{0.f}; ///< 0..~1, resonance around the allpass chain; near 1 approaches self-oscillation
+    float mix{0.5f};     ///< 0 dry, 1 fully phased
+};
+
+/// @brief SetChorus's payload: the master-bus stereo chorus (one modulated delay per
+/// channel, right channel phase-offset from left for width).
+struct MorphexChorusSettings
+{
+    float rateHz{0.6f};
+    float depth{0.5f}; ///< 0..1
+    float mix{0.5f};   ///< 0 dry, 1 fully wet
+};
+
 /**
  * Adds morphexsynth's own scripted entry points on top of LuaScriptEngineBase's shared
  * MIDI/UI-parameter machinery. Unlike Pingsynth (whose C++ voice makes no sound at all
@@ -164,6 +183,15 @@ class MorphexsynthScriptEngine : public LuaScriptEngineBase<MorphexsynthScriptEn
 "-- SetMpeZone(masterChannel, lowerChannel, upperChannel)  1-indexed MIDI channels.\n"
 "-- Default Lower Zone: master=1, lower=2, upper=16. A note-on outside [master, lower..upper]\n"
 "-- is ignored.\n"
+"\n"
+"-- SetPhaser({ rateHz, depth, feedback, mix })  master-bus phaser, 8 allpass poles total\n"
+"--   (2 stages in series per channel), both channels swept by one shared LFO.\n"
+"--   rateHz: 0.01..10. depth: 0..1, how far the sweep spans 200 Hz..2 kHz.\n"
+"--   feedback: 0..~1.1, resonance around the allpass chain. mix: 0 dry..1 fully phased\n"
+"\n"
+"-- SetChorus({ rateHz, depth, mix })  master-bus stereo chorus, one modulated delay per\n"
+"--   channel, right channel phase-offset from left for width.\n"
+"--   rateHz: 0.01..8. depth: 0..1. mix: 0 dry..1 fully wet\n"
 "\n";
     // clang-format on
 
@@ -181,6 +209,8 @@ class MorphexsynthScriptEngine : public LuaScriptEngineBase<MorphexsynthScriptEn
     [[nodiscard]] std::optional<size_t> drainDistortionCommand() noexcept;
     [[nodiscard]] std::optional<MorphexCtrlSlotSettings> drainCtrlSlotCommand(size_t slot) noexcept;
     [[nodiscard]] std::optional<MorphexMpeZoneSettings> drainMpeZoneCommand() noexcept;
+    [[nodiscard]] std::optional<MorphexPhaserSettings> drainPhaserCommand() noexcept;
+    [[nodiscard]] std::optional<MorphexChorusSettings> drainChorusCommand() noexcept;
 
   private:
     friend class LuaScriptEngineBase<MorphexsynthScriptEngine>;
@@ -195,6 +225,8 @@ class MorphexsynthScriptEngine : public LuaScriptEngineBase<MorphexsynthScriptEn
     void luaSetDistortion(size_t presetIndex) noexcept;
     void luaSetCtrlSlot(size_t slot, const sol::table& params) noexcept;
     void luaSetMpeZone(int master, int lower, int upper) noexcept;
+    void luaSetPhaser(const sol::table& params) noexcept;
+    void luaSetChorus(const sol::table& params) noexcept;
 
     static MorphexEnvelopeSettings parseEnvelope(const sol::table& params) noexcept;
 
@@ -207,6 +239,8 @@ class MorphexsynthScriptEngine : public LuaScriptEngineBase<MorphexsynthScriptEn
     std::optional<size_t> m_pendingDistortion;
     CtrlSlotCommands m_pendingCtrlSlot{};
     std::optional<MorphexMpeZoneSettings> m_pendingMpeZone;
+    std::optional<MorphexPhaserSettings> m_pendingPhaser;
+    std::optional<MorphexChorusSettings> m_pendingChorus;
 };
 
 inline const std::string MorphexsynthScriptEngine::kFullSkeletonScript =
@@ -229,6 +263,8 @@ inline void MorphexsynthScriptEngine::bindScriptFunctions()
     m_lua.set_function("SetDistortion", &MorphexsynthScriptEngine::luaSetDistortion, this);
     m_lua.set_function("SetCtrlSlot", &MorphexsynthScriptEngine::luaSetCtrlSlot, this);
     m_lua.set_function("SetMpeZone", &MorphexsynthScriptEngine::luaSetMpeZone, this);
+    m_lua.set_function("SetPhaser", &MorphexsynthScriptEngine::luaSetPhaser, this);
+    m_lua.set_function("SetChorus", &MorphexsynthScriptEngine::luaSetChorus, this);
 }
 
 inline void MorphexsynthScriptEngine::luaSetOscillator(const size_t index, const sol::table& params) noexcept
@@ -348,6 +384,33 @@ inline void MorphexsynthScriptEngine::luaSetMpeZone(const int master, const int 
     m_pendingMpeZone = MorphexMpeZoneSettings{master, lower, upper};
 }
 
+inline void MorphexsynthScriptEngine::luaSetPhaser(const sol::table& params) noexcept
+{
+    const float rateHz = params.get_or("rateHz", 0.3f);
+    const float depth = params.get_or("depth", 0.5f);
+    const float feedback = params.get_or("feedback", 0.f);
+    const float mix = params.get_or("mix", 0.5f);
+    if (!std::isfinite(rateHz) || !std::isfinite(depth) || !std::isfinite(feedback) || !std::isfinite(mix))
+    {
+        return;
+    }
+    m_pendingPhaser = MorphexPhaserSettings{std::clamp(rateHz, 0.01f, 10.f), std::clamp(depth, 0.f, 1.f),
+                                            std::clamp(feedback, 0.f, 1.1f), std::clamp(mix, 0.f, 1.f)};
+}
+
+inline void MorphexsynthScriptEngine::luaSetChorus(const sol::table& params) noexcept
+{
+    const float rateHz = params.get_or("rateHz", 0.6f);
+    const float depth = params.get_or("depth", 0.5f);
+    const float mix = params.get_or("mix", 0.5f);
+    if (!std::isfinite(rateHz) || !std::isfinite(depth) || !std::isfinite(mix))
+    {
+        return;
+    }
+    m_pendingChorus =
+        MorphexChorusSettings{std::clamp(rateHz, 0.01f, 8.f), std::clamp(depth, 0.f, 1.f), std::clamp(mix, 0.f, 1.f)};
+}
+
 inline std::optional<MorphexOscillatorSettings> MorphexsynthScriptEngine::drainOscillatorCommand(
     const size_t index) noexcept
 {
@@ -409,5 +472,19 @@ inline std::optional<MorphexMpeZoneSettings> MorphexsynthScriptEngine::drainMpeZ
 {
     const auto result = m_pendingMpeZone;
     m_pendingMpeZone.reset();
+    return result;
+}
+
+inline std::optional<MorphexPhaserSettings> MorphexsynthScriptEngine::drainPhaserCommand() noexcept
+{
+    const auto result = m_pendingPhaser;
+    m_pendingPhaser.reset();
+    return result;
+}
+
+inline std::optional<MorphexChorusSettings> MorphexsynthScriptEngine::drainChorusCommand() noexcept
+{
+    const auto result = m_pendingChorus;
+    m_pendingChorus.reset();
     return result;
 }
