@@ -1,0 +1,14 @@
+{
+  "vol": -1.0,
+  "cutoff": 72.0,
+  "resonance": 0.0,
+  "luaParam1": 0.0,
+  "luaParam2": 0.0,
+  "luaParam3": 0.0,
+  "luaParam4": 0.0,
+  "luaParam5": 0.0,
+  "luaParam6": 0.0,
+  "luaParam7": 0.0,
+  "luaParam8": 0.0,
+  "script": "-- Kick Punch: a low fundamental with a fast pitch drop (the classic kick-drum\n-- trick) and a filter that starts bright then slams shut for the click-into-thud\n-- character. One-shot percussion - no MPE or pitch-bend routing, since it isn't a\n-- held, expressive voice.\nimport \"constants\"\n\nfunction OnStart()\n    SetOscillator(0, { waveform = OscWaveform.Triangle, level = 0.9, pitchFactor = 0.5 })\n    SetOscillator(1, { waveform = OscWaveform.White, level = 0.15, pitchFactor = 1.0 })\n\n    SetAmpEnvelope({ attackMs = 1, decayMs = 180, sustainLevel = 0, releaseMs = 60 })\n    SetFilterEnvelope({ attackMs = 1, decayMs = 45, sustainLevel = 0, releaseMs = 45, contour = 2.2 })\n    SetFilter({ cutoff = 42, resonance = 0.15, type = \"LP4\" })\n\n    -- The pitch drop that gives a kick its thump\n    SetPitchEnvelope({ attackMs = 0, decayMs = 55, depthSemitones = -30, glideMsPerOctave = 0 })\nend\n"
+}

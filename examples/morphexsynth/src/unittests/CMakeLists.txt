@@ -10,7 +10,9 @@ macro(package_add_test TESTNAME)
     target_compile_definitions(${TESTNAME} PRIVATE SOL_USING_CXX_LUA=1)
     target_compile_definitions(
         ${TESTNAME}
-        PRIVATE MORPHEXSYNTH_BASE_SCRIPTS_DIR="${MORPHEXSYNTH_DIR}/base-scripts"
+        PRIVATE
+            MORPHEXSYNTH_BASE_SCRIPTS_DIR="${MORPHEXSYNTH_DIR}/base-scripts"
+            MORPHEXSYNTH_FACTORY_PATCHES_DIR="${MORPHEXSYNTH_DIR}/factory-patches"
     )
     gtest_discover_tests(
         ${TESTNAME}
@@ -43,6 +45,10 @@ package_add_test(MorphexsynthTests
 
 package_add_test(MorphexsynthScriptEngineTests
         MorphexsynthScriptEngine_tests.cpp
+)
+target_link_libraries(
+    MorphexsynthScriptEngineTests
+    nlohmann_json::nlohmann_json
 )
 
 package_add_test(MorphexsynthAuthoringHttpServerCoreTests

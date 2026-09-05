@@ -1,5 +1,7 @@
 #include <cstddef>
+#include <filesystem>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <sstream>
 
 #include "gtest/gtest.h"
@@ -69,6 +71,39 @@ TEST(MorphexsynthScriptEngineBaseScripts, ConstantsLibraryResolvesToDocumentedVa
     EXPECT_EQ(command->curve, 2u);
     EXPECT_EQ(command->target, 3u);
     EXPECT_EQ(command->valueType, 0u);
+}
+
+// Each factory-patches/*.json's own "script" field must load without a parse/runtime
+// error; catches Lua syntax or API-name mistakes, not whether a patch sounds right.
+TEST(MorphexsynthScriptEngineFactoryPatches, AllFactoryPatchesLoadWithoutError)
+{
+    const std::filesystem::path dir{MORPHEXSYNTH_FACTORY_PATCHES_DIR};
+    ASSERT_TRUE(std::filesystem::exists(dir)) << dir;
+
+    size_t checked = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(dir))
+    {
+        if (entry.path().extension() != ".json")
+        {
+            continue;
+        }
+        const auto raw = readFile(entry.path().string());
+        ASSERT_FALSE(raw.empty()) << entry.path();
+        const auto patch = nlohmann::json::parse(raw, nullptr, false);
+        ASSERT_FALSE(patch.is_discarded()) << "invalid JSON: " << entry.path();
+        ASSERT_TRUE(patch.contains("script")) << entry.path();
+
+        MorphexsynthScriptEngine engine;
+        engine.setImportResolver(testImportResolver());
+        ASSERT_TRUE(engine.loadScript(patch["script"].get<std::string>()))
+            << entry.path() << ": " << engine.lastError();
+        // Also runs OnStart(), not just compiles it - a call to a misspelled/nonexistent
+        // Lua function only ever surfaces here, since loadScript() alone never executes it.
+        engine.notifyStart();
+        EXPECT_FALSE(engine.hasError()) << entry.path() << ": " << engine.lastError();
+        ++checked;
+    }
+    EXPECT_GE(checked, 1u) << "no factory patches found in " << dir;
 }
 
 TEST(MorphexsynthScriptEngine, NoCommandsPendingByDefault)

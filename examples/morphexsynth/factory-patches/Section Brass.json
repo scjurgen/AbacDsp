@@ -1,0 +1,14 @@
+{
+  "vol": -4.0,
+  "cutoff": 72.0,
+  "resonance": 0.0,
+  "luaParam1": 0.0,
+  "luaParam2": 0.0,
+  "luaParam3": 0.0,
+  "luaParam4": 0.0,
+  "luaParam5": 0.0,
+  "luaParam6": 0.0,
+  "luaParam7": 0.0,
+  "luaParam8": 0.0,
+  "script": "-- Section Brass: two detuned saw/square oscillators with a swelling attack shared\n-- between the amp and filter envelopes (contour matched to the swell), like a\n-- horn section building in. Z (pressure) adds breath-style brightening while\n-- held - the classic MPE wind/brass technique; Y adds bite via resonance.\nimport \"constants\"\n\nfunction OnStart()\n    SetOscillator(0, { waveform = OscWaveform.Saw, level = 0.6, pitchFactor = 1.0 })\n    SetOscillator(1, { waveform = OscWaveform.Square, level = 0.4, detune = 0.1, pitchFactor = 1.0 })\n\n    SetAmpEnvelope({ attackMs = 80, decayMs = 100, sustainLevel = 0.85, releaseMs = 180 })\n    SetFilterEnvelope({ attackMs = 80, decayMs = 150, sustainLevel = 0.6, releaseMs = 180, contour = 2.0 })\n    SetFilter({ cutoff = 68, resonance = 0.4, type = \"LP4\" })\n\n    -- Z (pressure): breath-style brightening while a note is held\n    SetCtrlSlot(0, { source = CtrlSource.Z, curve = CtrlCurve.Linear, target = CtrlTarget.FilterCutoff,\n                     valueType = CtrlValueType.Abs, depth = 0.7 })\n    -- Y (mod wheel / slide): extra bite via resonance\n    SetCtrlSlot(1, { source = CtrlSource.Y, curve = CtrlCurve.Linear, target = CtrlTarget.FilterResonance,\n                     valueType = CtrlValueType.Abs, depth = 0.4 })\n    -- X (pitch bend): standard +/-2 semitones, for falls and scoops\n    SetCtrlSlot(2, { source = CtrlSource.X, curve = CtrlCurve.Linear, target = CtrlTarget.PitchBend,\n                     valueType = CtrlValueType.BiPolar, depth = 2 / 12 })\nend\n"
+}

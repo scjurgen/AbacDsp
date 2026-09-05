@@ -1,0 +1,14 @@
+{
+  "vol": -4.0,
+  "cutoff": 72.0,
+  "resonance": 0.0,
+  "luaParam1": 0.0,
+  "luaParam2": 0.0,
+  "luaParam3": 0.0,
+  "luaParam4": 0.0,
+  "luaParam5": 0.0,
+  "luaParam6": 0.0,
+  "luaParam7": 0.0,
+  "luaParam8": 0.0,
+  "script": "-- Cutting Lead: two detuned unison saws through a bright, open filter, with a\n-- subtle always-on LFO vibrato. Z (pressure) and the mod wheel (Y) both brighten\n-- the filter for expressive lead lines; X bends a standard +/-2 semitones.\nimport \"constants\"\n\nfunction OnStart()\n    SetOscillator(0, { waveform = OscWaveform.Saw, level = 0.6, detune = 0.08, pitchFactor = 1.0 })\n    SetOscillator(1, { waveform = OscWaveform.Saw, level = 0.6, detune = -0.08, pitchFactor = 1.0 })\n\n    SetAmpEnvelope({ attackMs = 8, decayMs = 60, sustainLevel = 0.9, releaseMs = 150 })\n    SetFilterEnvelope({ attackMs = 5, decayMs = 200, sustainLevel = 0.6, releaseMs = 150, contour = 1.2 })\n    SetFilter({ cutoff = 92, resonance = 0.3, type = \"LP4\" })\n\n    SetLfo({ waveform = LfoWaveform.Sine, speedHz = 5.2, oscDepth = 0.08 })\n\n    -- Z (pressure): aftertouch brightening while a note is held\n    SetCtrlSlot(0, { source = CtrlSource.Z, curve = CtrlCurve.Linear, target = CtrlTarget.FilterCutoff,\n                     valueType = CtrlValueType.Abs, depth = 0.6 })\n    -- Y (mod wheel / slide): brighten further\n    SetCtrlSlot(1, { source = CtrlSource.Y, curve = CtrlCurve.Linear, target = CtrlTarget.FilterCutoff,\n                     valueType = CtrlValueType.Abs, depth = 0.5 })\n    -- X (pitch bend): standard +/-2 semitones\n    SetCtrlSlot(2, { source = CtrlSource.X, curve = CtrlCurve.Linear, target = CtrlTarget.PitchBend,\n                     valueType = CtrlValueType.BiPolar, depth = 2 / 12 })\nend\n"
+}

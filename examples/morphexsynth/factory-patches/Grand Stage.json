@@ -1,0 +1,14 @@
+{
+  "vol": -3.0,
+  "cutoff": 72.0,
+  "resonance": 0.0,
+  "luaParam1": 0.0,
+  "luaParam2": 0.0,
+  "luaParam3": 0.0,
+  "luaParam4": 0.0,
+  "luaParam5": 0.0,
+  "luaParam6": 0.0,
+  "luaParam7": 0.0,
+  "luaParam8": 0.0,
+  "script": "-- Grand Stage: a triangle body with a touch of detuned saw edge for hammer\n-- brightness, a fast attack and a long natural decay rather than a held plateau.\n-- Velocity brightens the tone (harder hit = brighter) - deliberately no\n-- pitch-bend or vibrato routing, since neither suits this voicing.\nimport \"constants\"\n\nfunction OnStart()\n    SetOscillator(0, { waveform = OscWaveform.Triangle, level = 0.7, pitchFactor = 1.0 })\n    SetOscillator(1, { waveform = OscWaveform.Saw, level = 0.2, detune = 0.05, pitchFactor = 1.0 })\n\n    SetAmpEnvelope({ attackMs = 2, decayMs = 3500, sustainLevel = 0.15, releaseMs = 250 })\n    SetFilterEnvelope({ attackMs = 2, decayMs = 2000, sustainLevel = 0.3, releaseMs = 250, contour = 0.8 })\n    SetFilter({ cutoff = 88, resonance = 0.05, type = \"LP4\" })\n\n    -- Velocity: harder hits are brighter\n    SetCtrlSlot(0, { source = CtrlSource.Velocity, curve = CtrlCurve.Linear, target = CtrlTarget.FilterCutoff,\n                     valueType = CtrlValueType.Abs, depth = 0.6 })\nend\n"
+}

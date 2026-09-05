@@ -1,0 +1,14 @@
+{
+  "vol": -6.0,
+  "cutoff": 72.0,
+  "resonance": 0.0,
+  "luaParam1": 0.0,
+  "luaParam2": 0.0,
+  "luaParam3": 0.0,
+  "luaParam4": 0.0,
+  "luaParam5": 0.0,
+  "luaParam6": 0.0,
+  "luaParam7": 0.0,
+  "luaParam8": 0.0,
+  "script": "-- Airy Pad: three detuned saws with a slow attack/release and a slow filter sweep,\n-- widened by the master chorus and set in space by the master reverb. The mod\n-- wheel (Y) opens the filter for a gentle brightening swell.\nimport \"constants\"\n\nfunction OnStart()\n    SetOscillator(0, { waveform = OscWaveform.Saw, level = 0.5, detune = 0.15, pitchFactor = 1.0 })\n    SetOscillator(1, { waveform = OscWaveform.Saw, level = 0.5, detune = -0.15, pitchFactor = 1.0 })\n    SetOscillator(2, { waveform = OscWaveform.Triangle, level = 0.3, pitchFactor = 2.0 })\n\n    SetAmpEnvelope({ attackMs = 800, decayMs = 400, sustainLevel = 0.8, releaseMs = 1200 })\n    SetFilterEnvelope({ attackMs = 1500, decayMs = 500, sustainLevel = 0.7, releaseMs = 1000, contour = 1.6 })\n    SetFilter({ cutoff = 66, resonance = 0.15, type = \"LP4\" })\n\n    SetLfo({ waveform = LfoWaveform.Triangle, speedHz = 0.18, filterDepth = 0.5 })\n\n    SetChorus({ rateHz = 0.5, depth = 0.6, mix = 0.6 })\n    SetReverb({ sizeMeters = 24, decayMs = 3200, dryDb = 0, mixDb = -10 })\n\n    -- Y (mod wheel / slide): slow additional brightening\n    SetCtrlSlot(0, { source = CtrlSource.Y, curve = CtrlCurve.Linear, target = CtrlTarget.FilterCutoff,\n                     valueType = CtrlValueType.Abs, depth = 0.7 })\nend\n"
+}

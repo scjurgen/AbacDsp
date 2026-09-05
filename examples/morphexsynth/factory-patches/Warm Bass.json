@@ -1,0 +1,14 @@
+{
+  "vol": -3.0,
+  "cutoff": 72.0,
+  "resonance": 0.0,
+  "luaParam1": 0.0,
+  "luaParam2": 0.0,
+  "luaParam3": 0.0,
+  "luaParam4": 0.0,
+  "luaParam5": 0.0,
+  "luaParam6": 0.0,
+  "luaParam7": 0.0,
+  "luaParam8": 0.0,
+  "script": "-- Warm Bass: classic subtractive bass - square + sub-octave saw through a resonant\n-- filter with a fast, punchy envelope sweep. Z (MPE pressure) adds growl via\n-- resonance; the mod wheel (Y) brightens the tone; X bends a full octave for slides.\nimport \"constants\"\n\nfunction OnStart()\n    SetOscillator(0, { waveform = OscWaveform.Square, level = 0.7, pwm = 0.2, pitchFactor = 1.0 })\n    SetOscillator(1, { waveform = OscWaveform.Saw, level = 0.6, pitchFactor = 0.5 })\n\n    SetAmpEnvelope({ attackMs = 2, decayMs = 40, sustainLevel = 0.85, releaseMs = 120 })\n    SetFilterEnvelope({ attackMs = 1, decayMs = 90, sustainLevel = 0.2, releaseMs = 150, contour = 2.6 })\n    SetFilter({ cutoff = 46, resonance = 0.35, type = \"LP4\" })\n\n    -- Z (pressure): push harder for more resonance/growl\n    SetCtrlSlot(0, { source = CtrlSource.Z, curve = CtrlCurve.SquareRoot, target = CtrlTarget.FilterResonance,\n                     valueType = CtrlValueType.Abs, depth = 0.5 })\n    -- Y (mod wheel / slide): brighten the tone\n    SetCtrlSlot(1, { source = CtrlSource.Y, curve = CtrlCurve.Linear, target = CtrlTarget.FilterCutoff,\n                     valueType = CtrlValueType.Abs, depth = 0.8 })\n    -- X (pitch bend): a full octave, for classic bass slides\n    SetCtrlSlot(2, { source = CtrlSource.X, curve = CtrlCurve.Linear, target = CtrlTarget.PitchBend,\n                     valueType = CtrlValueType.BiPolar, depth = 1.0 })\nend\n"
+}

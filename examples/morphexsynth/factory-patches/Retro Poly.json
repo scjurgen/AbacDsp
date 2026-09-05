@@ -1,0 +1,14 @@
+{
+  "vol": -6.0,
+  "cutoff": 72.0,
+  "resonance": 0.0,
+  "luaParam1": 0.0,
+  "luaParam2": 0.0,
+  "luaParam3": 0.0,
+  "luaParam4": 0.0,
+  "luaParam5": 0.0,
+  "luaParam6": 0.0,
+  "luaParam7": 0.0,
+  "luaParam8": 0.0,
+  "script": "-- Retro Poly: two detuned saws plus a square sub, moderate attack and full\n-- sustain for chords, with the master chorus giving the classic poly-synth\n-- ensemble width. The mod wheel (Y) brightens the filter; X bends a standard\n-- +/-2 semitones.\nimport \"constants\"\n\nfunction OnStart()\n    SetOscillator(0, { waveform = OscWaveform.Saw, level = 0.5, detune = 0.12, pitchFactor = 1.0 })\n    SetOscillator(1, { waveform = OscWaveform.Saw, level = 0.5, detune = -0.12, pitchFactor = 1.0 })\n    SetOscillator(2, { waveform = OscWaveform.Square, level = 0.3, pitchFactor = 0.5 })\n\n    SetAmpEnvelope({ attackMs = 40, decayMs = 200, sustainLevel = 0.85, releaseMs = 400 })\n    SetFilterEnvelope({ attackMs = 30, decayMs = 300, sustainLevel = 0.55, releaseMs = 400, contour = 1.8 })\n    SetFilter({ cutoff = 74, resonance = 0.2, type = \"LP4\" })\n\n    SetLfo({ waveform = LfoWaveform.Sine, speedHz = 4.8, oscDepth = 0.04 })\n\n    SetChorus({ rateHz = 0.6, depth = 0.5, mix = 0.5 })\n    SetReverb({ sizeMeters = 16, decayMs = 1800, dryDb = 0, mixDb = -14 })\n\n    -- Y (mod wheel / slide): brighten the filter\n    SetCtrlSlot(0, { source = CtrlSource.Y, curve = CtrlCurve.Linear, target = CtrlTarget.FilterCutoff,\n                     valueType = CtrlValueType.Abs, depth = 0.6 })\n    -- X (pitch bend): standard +/-2 semitones\n    SetCtrlSlot(1, { source = CtrlSource.X, curve = CtrlCurve.Linear, target = CtrlTarget.PitchBend,\n                     valueType = CtrlValueType.BiPolar, depth = 2 / 12 })\nend\n"
+}
