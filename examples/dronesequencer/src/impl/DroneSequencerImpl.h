@@ -70,12 +70,12 @@ class DroneSequencerImpl final : public EffectBase
 
     void setReverbDry(const float valueDb)
     {
-        m_reverbDryGain = Convert::dbToGain(valueDb);
+        m_reverbDryGain.newTransition(Convert::dbToGain(valueDb), kParamSmoothingSeconds, sampleRate());
     }
 
     void setReverbWet(const float valueDb)
     {
-        m_reverbWetGain = Convert::dbToGain(valueDb);
+        m_reverbWetGain.newTransition(Convert::dbToGain(valueDb), kParamSmoothingSeconds, sampleRate());
     }
 
     void setReverbSize(const float meters)
@@ -379,9 +379,13 @@ class DroneSequencerImpl final : public EffectBase
         }
 
         std::array<float, BlockSize> levelBlock{};
+        std::array<float, BlockSize> dryGainBlock{};
+        std::array<float, BlockSize> wetGainBlock{};
         for (size_t i = 0; i < BlockSize; ++i)
         {
             levelBlock[i] = m_level.getValue();
+            dryGainBlock[i] = m_reverbDryGain.getValue();
+            wetGainBlock[i] = m_reverbWetGain.getValue();
         }
 
         std::array<std::array<float, BlockSize>, 2> wet{};
@@ -393,7 +397,7 @@ class DroneSequencerImpl final : public EffectBase
 
             for (size_t i = 0; i < BlockSize; ++i)
             {
-                out(i, c) = (dry[i] * m_reverbDryGain + wet[c][i] * m_reverbWetGain) * levelBlock[i];
+                out(i, c) = (dry[i] * dryGainBlock[i] + wet[c][i] * wetGainBlock[i]) * levelBlock[i];
             }
         }
     }
@@ -613,8 +617,8 @@ class DroneSequencerImpl final : public EffectBase
 
     static constexpr float kParamSmoothingSeconds{0.01f};
     AbacDsp::LinearSmoothing m_level{1.f};
-    float m_reverbDryGain{1.f};
-    float m_reverbWetGain{0.f};
+    AbacDsp::LinearSmoothing m_reverbDryGain{1.f};
+    AbacDsp::LinearSmoothing m_reverbWetGain{0.f};
     float m_manualBpm{120.f};
     bool m_hostSync{false};
     bool m_manualPlaying{false};
