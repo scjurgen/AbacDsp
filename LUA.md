@@ -10,34 +10,72 @@ section, not repeated here:
 | Example | README | Its own hooks |
 |---|---|---|
 | `dronesequencer` | `examples/dronesequencer/README.md` | `NextNotes`/`OnTiming`, note-table format, `Excite()` playing techniques |
-| `resonik` | `examples/resonik/README.md` | `SetFreqRange`/`SetDecayRange`/`SetGainRange`/`SetDelayRange`/`SetQ`/`SetResonanceBody` |
+| `morphexsynth` | `examples/morphexsynth/README.md` | `SetOscillator`/`SetAmpEnvelope`/`SetFilterEnvelope`/`SetPitchEnvelope`/`SetLfo`/`SetFilter`/`SetDistortion`/`SetCtrlSlot`/`SetMpeZone` |
 | `pingsynth` | `examples/pingsynth/README.md` | `SetHarmonics`/`SetPitchBendRange`, `OnMpeModeChanged` |
+| `resonik` | `examples/resonik/README.md` | `SetFreqRange`/`SetDecayRange`/`SetGainRange`/`SetDelayRange`/`SetQ`/`SetResonanceBody` |
 | `spectraltap` | `examples/spectraltap/README.md` | `SetMaxTaps`/`SetTap`, `SetFrequency`/`SetResonance`/`SetFormant`/`SetPan`/`SetGain` |
 | `tapelooper` | `examples/tapelooper/README.md` | `SetTapeSpeed`/`SetBpm`/`SetGrooveVariation`/`SetTrackRecord`/`SetTrackPlay`/`SetTrackGain`/`SetTrackFilter`/`SetTrackReverbSend`/`SetReverbSize`/`SetReverbDecay`/`SetGrooveSource`/`SetTrackWow`/`SetTrackFlutter`/`SetTrackDrive`/`SetTrackChorus`/`SetTrackEcho`/`SetTrackCompressor`/`SetTrackRingMod`/`SetTrackTremolo`/`SetTrackChain`/`SetInstrumentGain`/`MuteInstrument`/`SetInstrumentReverbSend`, `OnRecordStateChanged` |
-| `morphexsynth` | `examples/morphexsynth/README.md` | `SetOscillator`/`SetAmpEnvelope`/`SetFilterEnvelope`/`SetPitchEnvelope`/`SetLfo`/`SetFilter`/`SetDistortion`/`SetCtrlSlot`/`SetMpeZone` |
+
+## How a script talks to the engine
+
+Everything below happens inside one `LuaScriptEngineBase<Derived>` instance: loading a
+script is message-thread work (may touch the heap), while dispatching to an already-loaded
+script is realtime-safe and happens once per audio block.
+
+```mermaid
+flowchart TB
+    subgraph EDIT["Message thread: editing a script"]
+        A[Script editor: Apply] --> B[resolveImports splices in<br/>any leading import lines]
+        B -->|library missing| R[Reject at Apply time:<br/>previous script keeps running]
+        B -->|resolved| C[safe_script compiles and runs<br/>top-level code, wall-clock guarded]
+        C -->|compile or runtime error| R
+        C -->|ok| D[bindFunctions looks up On* handlers,<br/>registers UI param slots]
+    end
+
+    D --> L[(Lua state: globals, handler<br/>closures, timers, UI param slots)]
+
+    subgraph RT["Audio thread: once per block, realtime-safe"]
+        H[Host: MIDI in, transport, audio in] --> N["notify* / tickBlock /<br/>feedPitchAnalysis"]
+        N --> G[ScopedStallGuard:<br/>instruction-count watchdog]
+        G --> HFN["callHandler: OnNoteOn / OnCC /<br/>OnPitchDetected / Timer callback / ..."]
+        HFN -->|script calls example's own API| API[Derived engine's C++ setters,<br/>e.g. NextNotes, SetOscillator]
+        API --> DSP[DSP objects: oscillators,<br/>filters, envelopes, ...]
+        DSP --> OUT[Audio out]
+    end
+
+    UI[UI: knob / dropdown / switch] --> UP[notifyUiParameterChanged] --> HFN
+    HFN <-.reads state.-> L
+```
+
+A rejected "Apply" (bad import, compile error, or a runtime error in code that runs
+immediately at load time) never touches `bindFunctions()`, so whatever script was running
+before keeps playing underneath - see "Notes on the sandbox" below. Once loaded, every
+handler call (MIDI, timers, transport, pitch, UI params) goes through the same
+`callHandler()` path, guarded by a pure instruction-count watchdog so a script bug can't
+stall the audio thread.
 
 ## Sandbox
 
 Only Lua's `base`, `math`, `table`, and `string` standard libraries are loaded - there is no
-`io`, `os`, or `require`. 
- lu
+`io`, `os`, or `require`.
+
 | Call | Returns |
 |---|---|
+| `math.abs(x)`, `math.max(a, b, ...)`, `math.min(a, b, ...)` | |
+| `math.floor(x)`, `math.ceil(x)` | round down/up to an integer (as a float) |
+| `math.fmod(x, y)` | floating-point remainder |
+| `math.pi`, `math.huge` | constants |
 | `math.random()` | float in `[0, 1)` |
 | `math.random(m)` | integer in `[1, m]` |
 | `math.random(m, n)` | integer in `[m, n]` |
 | `math.randomseed(x)` | reseeds the generator (scripts don't need this; each load starts freshly seeded) |
-| `math.floor(x)`, `math.ceil(x)` | round down/up to an integer (as a float) |
-| `math.abs(x)`, `math.max(a, b, ...)`, `math.min(a, b, ...)` | |
 | `math.sin(x)`, `math.cos(x)`, `math.tan(x)` | radians |
 | `math.sqrt(x)`, `math.exp(x)`, `math.log(x)`, `math.log(x, base)` | |
-| `math.fmod(x, y)` | floating-point remainder |
-| `math.pi`, `math.huge` | constants |
+| `string.format(fmt, ...)`, `string.sub`, `string.len`, `#s` | mainly useful for building error messages |
+| `table.insert(t, v)`, `table.remove(t)`, `table.concat(t, sep)`, `table.sort(t)` | |
+| `tostring(x)`, `tonumber(x)`, `type(x)` | |
 | `x ^ y` | power (there is no `math.pow` in this Lua version - use the `^` operator) |
 | `#t` | length of table/array `t` |
-| `table.insert(t, v)`, `table.remove(t)`, `table.concat(t, sep)`, `table.sort(t)` | |
-| `string.format(fmt, ...)`, `string.sub`, `string.len`, `#s` | mainly useful for building error messages |
-| `tostring(x)`, `tonumber(x)`, `type(x)` | |
 
 Since `os` is not loaded, there is no wall clock: keep any notion of "elapsed time" in your
 own counter (a `local step` incremented once per call), or use `Timer.After`/`Timer.Every`
