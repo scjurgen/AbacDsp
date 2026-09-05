@@ -103,7 +103,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
             std::vector<juce::Rectangle<int>> areas(3);
             const auto colWidth = area.getWidth() / 5;
-            const auto rowHeight = area.getHeight() / 4;
+            const auto rowHeight = area.getHeight() / 3;
             areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
             areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
             areas[2] = area.reduced(Constants::Margins::small);
@@ -132,10 +132,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
                 box.flexDirection = juce::FlexBox::Direction::row;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(reverbSizeDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(reverbDecayDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(reverbMixDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(reverbDryDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(luaControlsLuaControlArea).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[2].toFloat());
             }
         }
@@ -173,22 +170,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         resonanceDial.reset(valueTreeState, "resonance");
         resonanceDial.setLabelText(juce::String::fromUTF8("Reso"));
         resonanceDial.setTooltip(juce::String::fromUTF8("Reso (0 to 120 %)"));
-        addAndMakeVisible(reverbSizeDial);
-        reverbSizeDial.reset(valueTreeState, "reverbSize");
-        reverbSizeDial.setLabelText(juce::String::fromUTF8("Rev Size"));
-        reverbSizeDial.setTooltip(juce::String::fromUTF8("Rev Size (1 to 60 m)"));
-        addAndMakeVisible(reverbDecayDial);
-        reverbDecayDial.reset(valueTreeState, "reverbDecay");
-        reverbDecayDial.setLabelText(juce::String::fromUTF8("Rev Decay"));
-        reverbDecayDial.setTooltip(juce::String::fromUTF8("Rev Decay (0 to 20000 ms)"));
-        addAndMakeVisible(reverbMixDial);
-        reverbMixDial.reset(valueTreeState, "reverbMix");
-        reverbMixDial.setLabelText(juce::String::fromUTF8("Rev Mix"));
-        reverbMixDial.setTooltip(juce::String::fromUTF8("Rev Mix (-100 to 12 dB)"));
-        addAndMakeVisible(reverbDryDial);
-        reverbDryDial.reset(valueTreeState, "reverbDry");
-        reverbDryDial.setLabelText(juce::String::fromUTF8("Rev Dry"));
-        reverbDryDial.setTooltip(juce::String::fromUTF8("Rev Dry (-100 to 12 dB)"));
         addAndMakeVisible(cpuGauge);
         cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
         cpuGauge.setTooltip(juce::String::fromUTF8("CPU (0 to 100 %)"));
@@ -300,10 +281,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             volDial.setVisible(false);
             cutoffDial.setVisible(false);
             resonanceDial.setVisible(false);
-            reverbSizeDial.setVisible(false);
-            reverbDecayDial.setVisible(false);
-            reverbMixDial.setVisible(false);
-            reverbDryDial.setVisible(false);
             cpuGauge.setVisible(false);
             levelGauge.setVisible(true);
             luaControlsLuaControlArea.setVisible(false);
@@ -321,10 +298,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             volDial.setVisible(true);
             cutoffDial.setVisible(true);
             resonanceDial.setVisible(true);
-            reverbSizeDial.setVisible(true);
-            reverbDecayDial.setVisible(true);
-            reverbMixDial.setVisible(true);
-            reverbDryDial.setVisible(true);
             cpuGauge.setVisible(true);
             levelGauge.setVisible(true);
             luaControlsLuaControlArea.setVisible(true);
@@ -1117,10 +1090,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial volDial{this};
     CustomRotaryDial cutoffDial{this};
     CustomRotaryDial resonanceDial{this};
-    CustomRotaryDial reverbSizeDial{this};
-    CustomRotaryDial reverbDecayDial{this};
-    CustomRotaryDial reverbMixDial{this};
-    CustomRotaryDial reverbDryDial{this};
     CpuGauge cpuGauge{};
     Gauge levelGauge{};
     LuaControlArea luaControlsLuaControlArea{};

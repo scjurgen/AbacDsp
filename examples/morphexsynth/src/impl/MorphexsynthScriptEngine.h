@@ -96,6 +96,16 @@ struct MorphexChorusSettings
     float mix{0.5f};   ///< 0 dry, 1 fully wet
 };
 
+/// @brief SetReverb's payload: the master-bus FDN reverb (order 32). mixDb defaults to
+/// off, so a patch that never calls SetReverb sounds exactly as it did before this existed.
+struct MorphexReverbSettings
+{
+    float sizeMeters{12.f};
+    float decayMs{1500.f};
+    float dryDb{0.f};
+    float mixDb{-100.f};
+};
+
 /**
  * Adds morphexsynth's own scripted entry points on top of LuaScriptEngineBase's shared
  * MIDI/UI-parameter machinery. Unlike Pingsynth (whose C++ voice makes no sound at all
@@ -192,6 +202,10 @@ class MorphexsynthScriptEngine : public LuaScriptEngineBase<MorphexsynthScriptEn
 "-- SetChorus({ rateHz, depth, mix })  master-bus stereo chorus, one modulated delay per\n"
 "--   channel, right channel phase-offset from left for width.\n"
 "--   rateHz: 0.01..8. depth: 0..1. mix: 0 dry..1 fully wet\n"
+"\n"
+"-- SetReverb({ sizeMeters, decayMs, dryDb, mixDb })  master-bus FDN reverb, order 32.\n"
+"--   sizeMeters: 1..60. decayMs: 0..20000. dryDb/mixDb: -100..12 (mixDb defaults to -100,\n"
+"--   i.e. off, so a patch that never calls this sounds unchanged)\n"
 "\n";
     // clang-format on
 
@@ -211,6 +225,7 @@ class MorphexsynthScriptEngine : public LuaScriptEngineBase<MorphexsynthScriptEn
     [[nodiscard]] std::optional<MorphexMpeZoneSettings> drainMpeZoneCommand() noexcept;
     [[nodiscard]] std::optional<MorphexPhaserSettings> drainPhaserCommand() noexcept;
     [[nodiscard]] std::optional<MorphexChorusSettings> drainChorusCommand() noexcept;
+    [[nodiscard]] std::optional<MorphexReverbSettings> drainReverbCommand() noexcept;
 
   private:
     friend class LuaScriptEngineBase<MorphexsynthScriptEngine>;
@@ -227,6 +242,7 @@ class MorphexsynthScriptEngine : public LuaScriptEngineBase<MorphexsynthScriptEn
     void luaSetMpeZone(int master, int lower, int upper) noexcept;
     void luaSetPhaser(const sol::table& params) noexcept;
     void luaSetChorus(const sol::table& params) noexcept;
+    void luaSetReverb(const sol::table& params) noexcept;
 
     static MorphexEnvelopeSettings parseEnvelope(const sol::table& params) noexcept;
 
@@ -241,6 +257,7 @@ class MorphexsynthScriptEngine : public LuaScriptEngineBase<MorphexsynthScriptEn
     std::optional<MorphexMpeZoneSettings> m_pendingMpeZone;
     std::optional<MorphexPhaserSettings> m_pendingPhaser;
     std::optional<MorphexChorusSettings> m_pendingChorus;
+    std::optional<MorphexReverbSettings> m_pendingReverb;
 };
 
 inline const std::string MorphexsynthScriptEngine::kFullSkeletonScript =
@@ -265,6 +282,7 @@ inline void MorphexsynthScriptEngine::bindScriptFunctions()
     m_lua.set_function("SetMpeZone", &MorphexsynthScriptEngine::luaSetMpeZone, this);
     m_lua.set_function("SetPhaser", &MorphexsynthScriptEngine::luaSetPhaser, this);
     m_lua.set_function("SetChorus", &MorphexsynthScriptEngine::luaSetChorus, this);
+    m_lua.set_function("SetReverb", &MorphexsynthScriptEngine::luaSetReverb, this);
 }
 
 inline void MorphexsynthScriptEngine::luaSetOscillator(const size_t index, const sol::table& params) noexcept
@@ -411,6 +429,20 @@ inline void MorphexsynthScriptEngine::luaSetChorus(const sol::table& params) noe
         MorphexChorusSettings{std::clamp(rateHz, 0.01f, 8.f), std::clamp(depth, 0.f, 1.f), std::clamp(mix, 0.f, 1.f)};
 }
 
+inline void MorphexsynthScriptEngine::luaSetReverb(const sol::table& params) noexcept
+{
+    const float sizeMeters = params.get_or("sizeMeters", 12.f);
+    const float decayMs = params.get_or("decayMs", 1500.f);
+    const float dryDb = params.get_or("dryDb", 0.f);
+    const float mixDb = params.get_or("mixDb", -100.f);
+    if (!std::isfinite(sizeMeters) || !std::isfinite(decayMs) || !std::isfinite(dryDb) || !std::isfinite(mixDb))
+    {
+        return;
+    }
+    m_pendingReverb = MorphexReverbSettings{std::clamp(sizeMeters, 1.f, 60.f), std::clamp(decayMs, 0.f, 20000.f),
+                                            std::clamp(dryDb, -100.f, 12.f), std::clamp(mixDb, -100.f, 12.f)};
+}
+
 inline std::optional<MorphexOscillatorSettings> MorphexsynthScriptEngine::drainOscillatorCommand(
     const size_t index) noexcept
 {
@@ -486,5 +518,12 @@ inline std::optional<MorphexChorusSettings> MorphexsynthScriptEngine::drainChoru
 {
     const auto result = m_pendingChorus;
     m_pendingChorus.reset();
+    return result;
+}
+
+inline std::optional<MorphexReverbSettings> MorphexsynthScriptEngine::drainReverbCommand() noexcept
+{
+    const auto result = m_pendingReverb;
+    m_pendingReverb.reset();
     return result;
 }

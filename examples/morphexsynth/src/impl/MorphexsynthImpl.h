@@ -63,6 +63,10 @@ class MorphexsynthImpl final : public EffectBase
             (void) m_chorusDelay[1].step(0.f); // priming the phase offset, not producing audio yet
         }
         setPhaser(kDefaultPhaserRateHz, m_phaserDepth, kDefaultPhaserFeedback, m_phaserMix);
+        setReverbSize(kDefaultReverbSizeMeters);
+        setReverbDecay(kDefaultReverbDecayMs);
+        setReverbDry(kDefaultReverbDryDb);
+        setReverbMix(kDefaultReverbMixDb);
         // morphexsynth has no Play switch/Host Sync concept (unlike most OnStart() users -
         // see LuaScriptEngineBase's own skeleton comment): fires exactly once here, when the
         // engine is ready, the usual place for a script to set its patch's static config.
@@ -358,8 +362,12 @@ class MorphexsynthImpl final : public EffectBase
 
     static constexpr size_t kFdnOrder{32};
     static constexpr size_t kFdnMaxSizePerElement{100000};
-    static constexpr float kFdnSizeSpread{2.3f}; // Size dial value / *this .. Size dial value * this
+    static constexpr float kFdnSizeSpread{2.3f}; // sizeMeters / *this .. sizeMeters * this
     static constexpr float kFxSmoothingSeconds{0.01f};
+    static constexpr float kDefaultReverbSizeMeters{12.f};
+    static constexpr float kDefaultReverbDecayMs{1500.f};
+    static constexpr float kDefaultReverbDryDb{0.f};
+    static constexpr float kDefaultReverbMixDb{-100.f}; // off by default
 
     using Fdn = AbacDsp::FdnTankGlide<kFdnMaxSizePerElement, kFdnOrder, BlockSize>;
 
@@ -663,6 +671,13 @@ class MorphexsynthImpl final : public EffectBase
         if (const auto chorus = m_scriptEngine.drainChorusCommand())
         {
             setChorus(chorus->rateHz, chorus->depth, chorus->mix);
+        }
+        if (const auto reverb = m_scriptEngine.drainReverbCommand())
+        {
+            setReverbSize(reverb->sizeMeters);
+            setReverbDecay(reverb->decayMs);
+            setReverbDry(reverb->dryDb);
+            setReverbMix(reverb->mixDb);
         }
     }
 

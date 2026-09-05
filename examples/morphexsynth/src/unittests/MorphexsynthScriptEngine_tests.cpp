@@ -263,6 +263,33 @@ TEST(MorphexsynthScriptEngine, SetChorusIsDrainedOnceThenClears)
     EXPECT_FALSE(engine.drainChorusCommand().has_value());
 }
 
+TEST(MorphexsynthScriptEngine, SetReverbIsDrainedOnceThenClears)
+{
+    MorphexsynthScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript("SetReverb({ sizeMeters = 20, decayMs = 3000, dryDb = -6, mixDb = -12 })"));
+
+    const auto command = engine.drainReverbCommand();
+    ASSERT_TRUE(command.has_value());
+    EXPECT_FLOAT_EQ(command->sizeMeters, 20.f);
+    EXPECT_FLOAT_EQ(command->decayMs, 3000.f);
+    EXPECT_FLOAT_EQ(command->dryDb, -6.f);
+    EXPECT_FLOAT_EQ(command->mixDb, -12.f);
+    EXPECT_FALSE(engine.drainReverbCommand().has_value());
+}
+
+TEST(MorphexsynthScriptEngine, SetReverbClampsOutOfRangeFields)
+{
+    MorphexsynthScriptEngine engine;
+    ASSERT_TRUE(engine.loadScript("SetReverb({ sizeMeters = 999, decayMs = -5, dryDb = -200, mixDb = 50 })"));
+
+    const auto command = engine.drainReverbCommand();
+    ASSERT_TRUE(command.has_value());
+    EXPECT_FLOAT_EQ(command->sizeMeters, 60.f);
+    EXPECT_FLOAT_EQ(command->decayMs, 0.f);
+    EXPECT_FLOAT_EQ(command->dryDb, -100.f);
+    EXPECT_FLOAT_EQ(command->mixDb, 12.f);
+}
+
 TEST(MorphexsynthScriptEngine, NonFiniteArgumentIsSilentlyDropped)
 {
     MorphexsynthScriptEngine engine;

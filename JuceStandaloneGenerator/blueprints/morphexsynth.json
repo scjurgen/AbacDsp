@@ -14,11 +14,6 @@
     {"short": "CUTOFF", "type": "dial", "display": "Cutoff", "symbol": "cutoff", "default": 72, "range": [0, 127, 1, 1, false], "precision": 0, "unit": ""},
     {"short": "RESO", "type": "dial", "display": "Reso", "symbol": "resonance", "default": 0, "range": [0, 120, 1, 1, false], "precision": 0, "unit": "%"},
 
-    {"short": "REVSZ", "type": "dial", "display": "Rev Size", "symbol": "reverbSize", "default": 12, "range": [1, 60, 0.1, 1, false], "precision": 1, "unit": "m"},
-    {"short": "REVDCY", "type": "dial", "display": "Rev Decay", "symbol": "reverbDecay", "default": 1500, "range": [0, 20000, 1, 0.5, false], "precision": 0, "unit": "ms"},
-    {"short": "REVMIX", "type": "dial", "display": "Rev Mix", "symbol": "reverbMix", "default": -100, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
-    {"short": "REVDRY", "type": "dial", "display": "Rev Dry", "symbol": "reverbDry", "default": 0, "range": [-100, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
-
     {"short": "CPU", "type": "gauge", "gaugetype": "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
     {"short": "LVL", "type": "gauge", "gaugetype": "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
 
@@ -26,9 +21,9 @@
   ],
   "layout": {
     "WINDOW_WIDTH": "1000",
-    "WINDOW_HEIGHT": "700",
+    "WINDOW_HEIGHT": "600",
     "type": "|=",
-    "composition": "C=(1:4) R=(1:1:2) A1=(CPU*200, LVL*500) A2=(VOL, CUTOFF, RESO) A3=(REVSZ, REVDCY, REVMIX, REVDRY) A4=(LUACTL)"
+    "composition": "C=(1:4) R=(1:2) A1=(CPU*200, LVL*500) A2=(VOL, CUTOFF, RESO) A3=(LUACTL)"
   },
   "performance-page": {
     "type": "-",

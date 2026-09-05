@@ -8,10 +8,9 @@ dozen-plus destinations, shaped through a curve and scaled by depth. Ported from
 
 The C++ voice is a complete instrument on its own - the dials below already play a useful
 sound. Lua scripting (see below) customizes it further: oscillator waveform/tuning, envelope
-times, filter type, the LFO, distortion, the whole MPE routing matrix, and two of the three
-master-bus effects (phaser, chorus) are all Lua-only, not blueprint dials, per this project's
-minimal-dial-Lua-first-UI convention. The master reverb is the exception - it gets 4 dedicated
-dials since it's the one effect most patches will want quick hands-on access to.
+times, filter type, the LFO, distortion, the whole MPE routing matrix, and all three
+master-bus effects (phaser, chorus, reverb) are all Lua-only, not blueprint dials, per this
+project's minimal-dial-Lua-first-UI convention.
 
 ## Controls
 
@@ -20,10 +19,6 @@ dials since it's the one effect most patches will want quick hands-on access to.
 | Vol | -100 - 12 dB | Output level |
 | Cutoff | 0 - 127 | Filter cutoff, MIDI-note-ish scale (matches `SetFilter`'s own `cutoff` field) |
 | Reso | 0 - 120 % | Filter resonance (0 none, 100 near self-oscillation) |
-| Rev Size | 1 - 60 m | Master reverb room size |
-| Rev Decay | 0 - 20000 ms | Master reverb decay time |
-| Rev Mix | -100 - 12 dB | Master reverb wet level (default -100 dB, i.e. off) |
-| Rev Dry | -100 - 12 dB | Master reverb dry level (the synth's own signal, passed alongside the wet reverb tail) |
 | Script | (button) | Opens the popup editor for the current patch's script. The editor's own Reset button replaces the text with a full skeleton (every available hook, stubbed out) - Cancel discards it, Apply commits it. A dropdown in the editor also lets you view any installed library script, always read-only. |
 
 **Settings > Scripts** manages a named pool of saved scripts (Load / Save As / Delete / Rename),
@@ -157,12 +152,13 @@ MPE above). Default: `SetMpeZone(1, 2, 16)`, the standard MPE Lower Zone.
 ```lua
 SetPhaser({ rateHz = 0.3, depth = 0.5, feedback = 0, mix = 0.5 })
 SetChorus({ rateHz = 0.6, depth = 0.5, mix = 0.5 })
+SetReverb({ sizeMeters = 12, decayMs = 1500, dryDb = 0, mixDb = -100 })
 ```
 
-Both run on the final stereo mix, after every voice - not per voice - in the order
-phaser -> chorus -> reverb (the Rev Size/Decay/Mix/Dry dials, see Controls above). Both
-default to `mix = 0` at startup, so an existing patch's sound is unaffected until a script
-turns one on.
+All three run on the final stereo mix, after every voice - not per voice - in the order
+phaser -> chorus -> reverb. Each defaults to off at startup (phaser/chorus `mix = 0`,
+reverb `mixDb = -100`), so an existing patch's sound is unaffected until a script turns one
+on.
 
 `SetPhaser`: 8 allpass poles total (two 4-pole stages in series per channel, both channels
 swept by one shared LFO - a deliberately mono sweep, not a stereo-width one). `rateHz` is
@@ -173,6 +169,12 @@ self-oscillation; `mix` is `0` dry to `1` fully phased.
 `SetChorus`: one modulated delay line per channel, the right channel phase-offset from the
 left for stereo width. `rateHz` is `0.01..8`; `depth` is `0..1`; `mix` is `0` dry to `1` fully
 wet.
+
+`SetReverb`: an order-32 FDN. `sizeMeters` (`1..60`) sets the room size (internally spread
+`sizeMeters / 2.3 .. sizeMeters * 2.3` across the 32 delay lines); `decayMs` is `0..20000`;
+`dryDb`/`mixDb` are independent dry and wet levels in dB (`-100..12`), not a single crossfade
+- so both can be turned up together for a wet+dry blend, unlike `SetPhaser`/`SetChorus`'s
+single `mix`.
 
 ### Example scripts
 
