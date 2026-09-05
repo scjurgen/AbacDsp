@@ -75,7 +75,8 @@ SetOscillator(index, { waveform = 0, detune = 0, level = 0, pwm = 0, pitchFactor
 ```
 
 `index` is `0`, `1`, or `2` (the three oscillators). `waveform`: `0` Triangle, `1` SharkFin,
-`2` Saw, `3` Square, `4` White noise. `detune` is semitones; `level` is `-1..1`; `pwm` is
+`2` Saw, `3` Square, `4` White noise - or `import "constants"` and use `OscWaveform.Triangle`
+etc. (see `base-scripts/constants.lua`). `detune` is semitones; `level` is `-1..1`; `pwm` is
 `-1..1` (a phase-distortion pulse-width effect, not a literal duty-cycle change); `pitchFactor`
 is a frequency multiplier relative to the note played (`1` = unison, `2` = an octave up, `0.5`
 an octave down).
@@ -100,7 +101,8 @@ SetLfo({ waveform = 0, speedHz = 1, filterDepth = 0, oscDepth = 0, keyFollow = 0
 ```
 
 `waveform`: `0` Sine, `1` Triangle, `2` Saw, `3` Square, `4` Noise, `5` SampleHoldNoise,
-`6` SampleHoldFlipFlop, `7` BrownNoise. `filterDepth` scales how many semitones of filter
+`6` SampleHoldFlipFlop, `7` BrownNoise - or `import "constants"` and use `LfoWaveform.Sine`
+etc. `filterDepth` scales how many semitones of filter
 cutoff modulation the LFO contributes. `oscDepth` scales how many semitones of pitch
 modulation the LFO contributes, applied uniformly to all 3 oscillators (the same bus MIDI
 pitch bend and `SetPitchEnvelope` use, so it stacks with both rather than targeting any one
@@ -129,7 +131,9 @@ SetCtrlSlot(slot, { source = 0, curve = 2, target = 0, valueType = 0, depth = 0 
 
 `slot` is `0..9` - one of 10 independent routing entries. Each slot reads one `source`, shapes
 it through `curve`, scales by `depth`, and adds the result into `target`. Multiple slots can
-target the same destination; their contributions sum.
+target the same destination; their contributions sum. `import "constants"` gives named
+alternatives for all four enum fields below (`CtrlSource`, `CtrlCurve`, `CtrlValueType`,
+`CtrlTarget` - see `base-scripts/constants.lua`).
 
 | Field | Values |
 |---|---|

@@ -15,11 +15,27 @@ std::string readFile(const std::string& path)
     ss << f.rdbuf();
     return ss.str();
 }
+
+// Resolves only "constants" (see base-scripts/constants.lua), reading it straight off
+// disk - a minimal stand-in for the real app's FileIo::resolveLibraryScript.
+MorphexsynthScriptEngine::ImportResolver testImportResolver()
+{
+    return [](const std::string_view name) -> ImportLookup
+    {
+        if (name != "constants")
+        {
+            return {std::nullopt, "test resolver only knows \"constants\""};
+        }
+        const auto source = readFile(std::string(MORPHEXSYNTH_BASE_SCRIPTS_DIR) + "/constants.lua");
+        return {source, {}};
+    };
+}
 }
 
 TEST(MorphexsynthScriptEngineBaseScripts, MpeExpressiveLeadLoadsWithoutError)
 {
     MorphexsynthScriptEngine engine;
+    engine.setImportResolver(testImportResolver());
     const auto source = readFile(std::string(MORPHEXSYNTH_BASE_SCRIPTS_DIR) + "/mpe-expressive-lead.lua");
     ASSERT_FALSE(source.empty());
     EXPECT_TRUE(engine.loadScript(source)) << engine.lastError();
@@ -28,9 +44,31 @@ TEST(MorphexsynthScriptEngineBaseScripts, MpeExpressiveLeadLoadsWithoutError)
 TEST(MorphexsynthScriptEngineBaseScripts, WobbleBassLoadsWithoutError)
 {
     MorphexsynthScriptEngine engine;
+    engine.setImportResolver(testImportResolver());
     const auto source = readFile(std::string(MORPHEXSYNTH_BASE_SCRIPTS_DIR) + "/wobble-bass.lua");
     ASSERT_FALSE(source.empty());
     EXPECT_TRUE(engine.loadScript(source)) << engine.lastError();
+}
+
+TEST(MorphexsynthScriptEngineBaseScripts, ConstantsLibraryResolvesToDocumentedValues)
+{
+    MorphexsynthScriptEngine engine;
+    engine.setImportResolver(testImportResolver());
+    ASSERT_TRUE(engine.loadScript("import \"constants\"\n"
+                                  "function OnStart()\n"
+                                  "    SetCtrlSlot(0, { source = CtrlSource.EnvelopeFilter, curve = CtrlCurve.Linear,\n"
+                                  "                     target = CtrlTarget.FilterCutoff, valueType = "
+                                  "CtrlValueType.Abs, depth = 0.5 })\n"
+                                  "end\n"))
+        << engine.lastError();
+    engine.notifyStart();
+
+    const auto command = engine.drainCtrlSlotCommand(0);
+    ASSERT_TRUE(command.has_value());
+    EXPECT_EQ(command->source, 5u);
+    EXPECT_EQ(command->curve, 2u);
+    EXPECT_EQ(command->target, 3u);
+    EXPECT_EQ(command->valueType, 0u);
 }
 
 TEST(MorphexsynthScriptEngine, NoCommandsPendingByDefault)

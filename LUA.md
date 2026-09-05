@@ -10,7 +10,7 @@ section, not repeated here:
 | Example | README | Its own hooks |
 |---|---|---|
 | `dronesequencer` | `examples/dronesequencer/README.md` | `NextNotes`/`OnTiming`, note-table format, `Excite()` playing techniques |
-| `morphexsynth` | `examples/morphexsynth/README.md` | `SetOscillator`/`SetAmpEnvelope`/`SetFilterEnvelope`/`SetPitchEnvelope`/`SetLfo`/`SetFilter`/`SetDistortion`/`SetCtrlSlot`/`SetMpeZone` |
+| `morphexsynth` | `examples/morphexsynth/README.md` | `SetOscillator`/`SetAmpEnvelope`/`SetFilterEnvelope`/`SetPitchEnvelope`/`SetLfo`/`SetFilter`/`SetDistortion`/`SetCtrlSlot`/`SetMpeZone`/`SetPhaser`/`SetChorus`/`SetReverb` |
 | `pingsynth` | `examples/pingsynth/README.md` | `SetHarmonics`/`SetPitchBendRange`, `OnMpeModeChanged` |
 | `resonik` | `examples/resonik/README.md` | `SetFreqRange`/`SetDecayRange`/`SetGainRange`/`SetDelayRange`/`SetQ`/`SetResonanceBody` |
 | `spectraltap` | `examples/spectraltap/README.md` | `SetMaxTaps`/`SetTap`, `SetFrequency`/`SetResonance`/`SetFormant`/`SetPan`/`SetGain` |
@@ -123,6 +123,29 @@ anything is compiled - the same "rejected at Apply time, previous script keeps p
 underneath" behavior as any other compile failure. The error names both full paths that
 were checked, and is also printed to the console, so a missing/misspelled library is easy
 to track down even without the in-app error display visible.
+
+## Named constants for numeric fields
+
+Some `SetXxx()` calls take a small integer enum (a waveform index, a curve type, a routing
+target, ...) where the bare number is opaque - `source = 5` gives no hint it means
+"EnvelopeFilter". Where an example has these, it ships a `constants.lua` base-script with
+plain named tables for them, pulled in the usual way:
+
+```lua
+import "constants"
+...
+SetCtrlSlot(0, { source = CtrlSource.EnvelopeFilter, curve = CtrlCurve.Linear, ... })
+```
+
+Check an example's own `base-scripts/constants.lua` (and its README's "Scripting" section)
+for what it offers - table names and coverage vary per example, matching whatever `SetXxx()`
+calls that example actually has.
+
+**These tables are hand-maintained plain data, not generated from the C++ side.** Nothing
+catches a mismatch automatically: whoever changes an enum's values, order, or membership in
+C++ must update the matching Lua table by hand in the same change, or scripts silently start
+passing the wrong number. `constants.lua` names exactly which C++ types each table mirrors
+in its own header comment - check that comment before touching either side.
 
 ## Incoming MIDI
 
