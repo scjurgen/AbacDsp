@@ -4,7 +4,7 @@ Python client and CLI for AbacDsp's Authoring HTTP API - the localhost-only inte
 running Lua-scripted plugin instance exposes once Authoring Mode is enabled, for
 discovering an instance, reading its current script/patch context, and submitting a new
 script to audition. See `CLAUDE.md` in this folder for the full protocol and workflow, and
-root `LUA.md` for the Lua scripting API itself.
+root `LUA-MANUAL.md` for the Lua scripting API itself.
 
 Stdlib-only - no `pip install` needed, matching `JuceStandaloneGenerator`'s own Python
 tooling in this repo. Requires Python 3.10+.

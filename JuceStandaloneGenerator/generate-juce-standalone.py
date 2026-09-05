@@ -127,6 +127,8 @@ CPP_CONSTANTS = [
 CPP_JUCE_FILE_VARS = [
     "MODULE",
     "MODULE_UPPER",
+    "MODULE_ALLCAPS",
+    "SCRIPTING_DOCS_FILE_MACRO",
     "ADD_PARAMETER_LISTENERS",
     "REMOVE_PARAMETER_LISTENERS",
     "CLASS_NAME",
@@ -220,6 +222,8 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
     blueprint["CPP"]["name"] = blueprint["name"]
     blueprint["CPP"]["MODULE"] = blueprint["name"]
     blueprint["CPP"]["MODULE_UPPER"] = blueprint["Module"]
+    blueprint["CPP"]["MODULE_ALLCAPS"] = blueprint["Module"].upper()
+    blueprint["CPP"]["SCRIPTING_DOCS_FILE_MACRO"] = blueprint["CPP"]["MODULE_ALLCAPS"] + "_SCRIPTING_DOCS_FILE"
     blueprint["CPP"]["ABOUT_TEXT"] = create_about_text(blueprint)
     blueprint["CPP"]["ADD_PARAMETERS"] = ""
     blueprint["CPP"]["ID_PARAMETERS"] = ""

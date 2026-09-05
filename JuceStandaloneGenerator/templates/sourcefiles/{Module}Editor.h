@@ -833,6 +833,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             return juce::String(processorRef.scriptErrorMessage());
         };
         editorComponent->onReset = [this] { return juce::String(processorRef.getScriptSkeleton()); };
+#ifdef /*SCRIPTING_DOCS_FILE_MACRO*/
+        editorComponent->onOpenDocs = []
+        { juce::URL(juce::File(/*SCRIPTING_DOCS_FILE_MACRO*/)).launchInDefaultBrowser(); };
+        editorComponent->setDocsAvailable(true);
+#endif
 
         auto* dialogWindow =
             new ScriptEditorDialogWindow("Edit Script", juce::Colour(GuiConstants::instance().colors.background));

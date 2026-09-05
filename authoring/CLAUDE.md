@@ -8,7 +8,7 @@ longer watches any folder, and there is no more polling for a `state-*.json` sib
 
 Full Lua scripting API (MIDI handlers, `OnStart`/`OnStop`, dynamic UI parameters, the
 `Music`/`Vel`/`Rr`/`Rhythm` helper library, `Timer`, `Transport`, sandboxed stdlib) is in
-root `LUA.md`; each example's own extra hooks are documented in its own README.md under
+root `LUA-MANUAL.md`; each example's own extra hooks are documented in its own README.md under
 "Scripting". This file only covers the HTTP protocol and CLI.
 
 ## Precondition
@@ -59,7 +59,7 @@ curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/js
 | `GET /libraries` | `{"libraries": [...]}` - installed library names (User + Base combined) |
 | `GET /libraries/{name}` | `{"content": "..."}` - a library's Lua source; 404 if it doesn't exist |
 | `POST /libraries/{name}` | body `{"content": "..."}`; saves to `Library/User/`, then re-applies the current script so any `import "{name}"` is actually re-resolved and validated - response `{"compiled": bool, "error": "..."}` describes *that re-apply*, not the library file in isolation (a library the current script doesn't import returns `compiled: true` even if the library itself is broken) |
-| `POST /midi` | body `{"type": "noteOn"\|"noteOff"\|"cc"\|"programChange"\|"pitchBend"\|"aftertouch"\|"polyPressure", "channel": 0-15, ...}` - injects a synthetic MIDI event on the next audio block, merged with any real incoming MIDI; `channel` is 0-based, matching `LUA.md`'s `OnNoteOn`/etc. Type-specific fields: `note`+`velocity` (noteOn/noteOff), `controller`+`value` (cc), `program` (programChange), `value` (pitchBend/aftertouch), `note`+`value` (polyPressure) |
+| `POST /midi` | body `{"type": "noteOn"\|"noteOff"\|"cc"\|"programChange"\|"pitchBend"\|"aftertouch"\|"polyPressure", "channel": 0-15, ...}` - injects a synthetic MIDI event on the next audio block, merged with any real incoming MIDI; `channel` is 0-based, matching `LUA-MANUAL.md`'s `OnNoteOn`/etc. Type-specific fields: `note`+`velocity` (noteOn/noteOff), `controller`+`value` (cc), `program` (programChange), `value` (pitchBend/aftertouch), `note`+`value` (polyPressure) |
 | `POST /record/start` | no body; response `{"started": bool, "path": "...", "error": "..."}` - begins capturing this instance's own audio output to a 32-bit float WAV at `path`; `started: false` if already recording or the file couldn't be opened |
 | `POST /record/stop` | no body; response `{"wasRecording": bool, "path": "...", "durationSeconds": N, "capped": bool}` - finalizes the WAV file; `capped: true` means the 30 s safety ceiling was hit before this call |
 

@@ -25,7 +25,7 @@ project's minimal-dial-Lua-first-UI convention.
 separate from the script embedded in the current patch. **Settings > Patches** saves/loads full
 patches, including whichever script is currently applied.
 
-A script can also pull in a shared library script with `import "name"` (see `../../LUA.md`) -
+A script can also pull in a shared library script with `import "name"` (see `../../LUA-MANUAL.md`) -
 useful for boilerplate reused across several patches. Built-in libraries live in this repo's
 `base-scripts/` folder and are synced to disk on every launch; your own go alongside them in
 `Library/User/`, under the same per-app data directory as the Scripts pool above. The script
@@ -52,9 +52,9 @@ ramp-from-current-gain behavior (not a hard jump) as its declick.
 This section covers what's specific to Morphexsynth. For everything shared with any other
 Lua-scripted example - MIDI handlers, `OnStart`/`OnStop`, dynamic UI parameters, the
 `Music`/`Vel`/`Rr`/`Rhythm` helper library, `Timer`, `Transport`, the available stdlib
-functions, and sandbox/error-handling notes - see `../../LUA.md`.
+functions, and sandbox/error-handling notes - see `../../LUA-MANUAL.md`.
 
-Morphexsynth has no Play switch or Host Sync concept (unlike most `../../LUA.md`-documented
+Morphexsynth has no Play switch or Host Sync concept (unlike most `../../LUA-MANUAL.md`-documented
 `OnStart`/`OnStop` users): `OnStart()` fires exactly once, right after the plugin's engine is
 constructed - the usual place to set a patch's static configuration. `OnStop()` is never fired.
 

@@ -153,6 +153,10 @@ target_compile_definitions(
     "${PROJECT_NAME}"
     PRIVATE RESONIK_FACTORY_PATCHES_DIR="${RESONIK_DIR}/factory-patches"
 )
+target_compile_definitions(
+    "${PROJECT_NAME}"
+    PRIVATE RESONIK_SCRIPTING_DOCS_FILE="${RESONIK_DIR}/scripting.html"
+)
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
 

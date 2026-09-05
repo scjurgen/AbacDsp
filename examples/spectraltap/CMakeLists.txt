@@ -156,6 +156,10 @@ target_compile_definitions(
     "${PROJECT_NAME}"
     PRIVATE SPECTRALTAP_FACTORY_PATCHES_DIR="${SPECTRALTAP_DIR}/factory-patches"
 )
+target_compile_definitions(
+    "${PROJECT_NAME}"
+    PRIVATE SPECTRALTAP_SCRIPTING_DOCS_FILE="${SPECTRALTAP_DIR}/scripting.html"
+)
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
 

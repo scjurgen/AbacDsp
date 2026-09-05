@@ -30,7 +30,7 @@ asked to keep up with.
 separate from the script embedded in the current patch. **Settings > Patches** saves/loads full
 patches, including whichever script is currently applied.
 
-A script can also pull in a shared library script with `import "name"` (see `../../LUA.md`) -
+A script can also pull in a shared library script with `import "name"` (see `../../LUA-MANUAL.md`) -
 useful for boilerplate reused across several patches. Built-in libraries live in this repo's
 `base-scripts/` folder and are synced to disk on every launch; your own go alongside them in
 `Library/User/`, under the same per-app data directory as the Scripts pool above. The script
@@ -49,7 +49,7 @@ This section covers what's specific to DroneSequencer: the `OnTiming`/`NextNotes
 the note-table shape. For everything shared with any other Lua-scripted example - MIDI
 handlers, `OnStart`/`OnStop`, dynamic UI parameters, the `Music`/`Vel`/`Rr`/`Rhythm` helper
 library, `Timer`, `Transport`, the available stdlib functions, and sandbox/error-handling
-notes - see `../../LUA.md`.
+notes - see `../../LUA-MANUAL.md`.
 
 The script controls two things: what happens when the clock's BPM/division changes, and what to
 play on each beat.
@@ -86,7 +86,7 @@ Each note is a table with:
 
 `NextNotes()` returning more than 8 notes in one call has the extras dropped.
 
-`OnStart`/`OnStop` (see `../../LUA.md`) fire on a start/stop transition of the clock here
+`OnStart`/`OnStop` (see `../../LUA-MANUAL.md`) fire on a start/stop transition of the clock here
 specifically: the manual Play switch toggling, or the host transport's play state when Host
 Sync is on - whichever one is actually driving playback. Useful for resetting your own
 counters/state (e.g. the `step` variable in the example below) so a script restarts from a

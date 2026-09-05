@@ -40,7 +40,7 @@ current patch parameters and the loop's own bars/BPM - Save writes over the curr
 loop, Save As... prompts for a name, and Load replaces tracks A/B/C's audio and restores that
 loop's own bars/BPM. Large loops save and load in the background without blocking playback.
 
-A script can also pull in a shared library script with `import "name"` (see `../../LUA.md`) -
+A script can also pull in a shared library script with `import "name"` (see `../../LUA-MANUAL.md`) -
 useful for boilerplate reused across several patches. Built-in libraries live in this repo's
 `base-scripts/` folder and are synced to disk on every launch; your own go alongside them in
 `Library/User/`, under the same per-app data directory as the Scripts pool above. The script
@@ -51,7 +51,7 @@ editor's dropdown lets you view any of them read-only.
 This section covers what's specific to Tapelooper: transport/track control and the groove/click
 source switch. For everything shared with any other Lua-scripted example - MIDI handlers,
 `OnStart`/`OnStop`, dynamic UI parameters, `Timer`, `Transport`, and sandbox/error-handling
-notes - see `../../LUA.md`.
+notes - see `../../LUA-MANUAL.md`.
 
 ### Transport and track control
 

@@ -20,7 +20,7 @@ C++ code paths.
 separate from the script embedded in the current patch. **Settings > Patches** saves/loads full
 patches, including whichever script is currently applied.
 
-A script can also pull in a shared library script with `import "name"` (see `../../LUA.md`) -
+A script can also pull in a shared library script with `import "name"` (see `../../LUA-MANUAL.md`) -
 useful for boilerplate reused across several patches. Built-in libraries live in this repo's
 `base-scripts/` folder and are synced to disk on every launch; your own go alongside them in
 `Library/User/`, under the same per-app data directory as the Scripts pool above. The script
@@ -32,7 +32,7 @@ This section covers what's specific to Pingsynth: the `SetHarmonics`/`SetPitchBe
 and the `OnMpeModeChanged` hook. For everything shared with any other Lua-scripted example -
 MIDI handlers, `OnStart`/`OnStop`, dynamic UI parameters, the `Music`/`Vel`/`Rr`/`Rhythm` helper
 library, `Timer`, `Transport`, the available stdlib functions, and sandbox/error-handling notes
-- see `../../LUA.md`.
+- see `../../LUA-MANUAL.md`.
 
 The script decides what a note sounds like; C++ only handles voice bookkeeping (which of the
 16 voices a note-on/note-off maps to, per the Mode dial above) and mixing.
@@ -83,7 +83,7 @@ SetPitchBendRange(7)  -- semitones; call once, e.g. at the top level of the scri
 A MIDI pitch-bend message bends whichever voice(s) are on that channel (in `mpe` mode, at most
 one; in `polyphonic` mode, every active voice a note-on last claimed on that channel) directly
 - no `OnPitchBend` handling required for this to work, though the script still receives
-`OnPitchBend` too (see `../../LUA.md`) if it wants to react separately. Without an explicit
+`OnPitchBend` too (see `../../LUA-MANUAL.md`) if it wants to react separately. Without an explicit
 `SetPitchBendRange` call, the range defaults to 12 semitones (a full octave) in `mpe` mode -
 per-note bends are expected to be expressive there - and 2 semitones in `polyphonic` mode, the
 conventional MIDI default. Note: the underlying resonator bank only bends the first entry of

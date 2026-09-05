@@ -146,6 +146,11 @@ target_compile_definitions(
     PRIVATE
         DRONESEQUENCER_FACTORY_PATCHES_DIR="${DRONESEQUENCER_DIR}/factory-patches"
 )
+target_compile_definitions(
+    "${PROJECT_NAME}"
+    PRIVATE
+        DRONESEQUENCER_SCRIPTING_DOCS_FILE="${DRONESEQUENCER_DIR}/scripting.html"
+)
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
 

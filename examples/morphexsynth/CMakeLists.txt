@@ -157,6 +157,11 @@ target_compile_definitions(
     PRIVATE
         MORPHEXSYNTH_FACTORY_PATCHES_DIR="${MORPHEXSYNTH_DIR}/factory-patches"
 )
+target_compile_definitions(
+    "${PROJECT_NAME}"
+    PRIVATE
+        MORPHEXSYNTH_SCRIPTING_DOCS_FILE="${MORPHEXSYNTH_DIR}/scripting.html"
+)
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
 

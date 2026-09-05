@@ -820,6 +820,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             return juce::String(processorRef.scriptErrorMessage());
         };
         editorComponent->onReset = [this] { return juce::String(processorRef.getScriptSkeleton()); };
+#ifdef PINGSYNTH_SCRIPTING_DOCS_FILE
+        editorComponent->onOpenDocs = []
+        { juce::URL(juce::File(PINGSYNTH_SCRIPTING_DOCS_FILE)).launchInDefaultBrowser(); };
+        editorComponent->setDocsAvailable(true);
+#endif
 
         auto* dialogWindow =
             new ScriptEditorDialogWindow("Edit Script", juce::Colour(GuiConstants::instance().colors.background));

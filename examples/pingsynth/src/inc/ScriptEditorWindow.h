@@ -16,7 +16,8 @@
 // calls onApply and never closes the window itself, so the user can keep iterating; a
 // non-empty return is shown inline, an empty one clears any prior error. Cancel always
 // closes (via the parent window's closeButtonPressed()). Reset replaces the editor's text
-// with onReset()'s skeleton but does not apply or close.
+// with onReset()'s skeleton but does not apply or close. Docs calls onOpenDocs and is
+// disabled until setDocsAvailable(true) is called.
 class ScriptEditorWindow final : public juce::Component
 {
   public:
@@ -25,6 +26,8 @@ class ScriptEditorWindow final : public juce::Component
     std::function<juce::String(const juce::String&)> onApply;
     // Returns the skeleton text to load into the editor.
     std::function<juce::String()> onReset;
+    // Opens this example's scripting reference (called only while setDocsAvailable(true)).
+    std::function<void()> onOpenDocs;
 
     ScriptEditorWindow()
         : m_editor(m_codeDocument, &m_tokeniser)
@@ -49,6 +52,17 @@ class ScriptEditorWindow final : public juce::Component
         m_authoringBanner.setColour(juce::Label::backgroundColourId, juce::Colours::orange);
         addAndMakeVisible(m_authoringBanner);
         m_authoringBanner.setVisible(false);
+
+        m_docsButton.setButtonText("Docs");
+        m_docsButton.onClick = [this]
+        {
+            if (onOpenDocs)
+            {
+                onOpenDocs();
+            }
+        };
+        m_docsButton.setEnabled(false);
+        addAndMakeVisible(m_docsButton);
 
         m_resetButton.setButtonText("Reset");
         m_resetButton.onClick = [this] { reset(); };
@@ -89,6 +103,14 @@ class ScriptEditorWindow final : public juce::Component
         refreshAuthoringBanner();
     }
 
+    // Enables the Docs button; left disabled otherwise, so it never invites a click that
+    // silently does nothing (e.g. when this example's scripting.html isn't available - see
+    // onOpenDocs and the <Module>_SCRIPTING_DOCS_FILE compile definition).
+    void setDocsAvailable(const bool available)
+    {
+        m_docsButton.setEnabled(available);
+    }
+
     // Populates the dropdown with "Patch Script" plus each of `names`; textForName is
     // called lazily, only once a name is actually selected, not all fetched up front.
     void setLibraryScripts(const juce::StringArray& names, std::function<juce::String(const juce::String&)> textForName)
@@ -111,6 +133,8 @@ class ScriptEditorWindow final : public juce::Component
         buttonRow.removeFromRight(8);
         m_applyButton.setBounds(buttonRow.removeFromRight(90));
         m_resetButton.setBounds(buttonRow.removeFromLeft(90));
+        buttonRow.removeFromLeft(8);
+        m_docsButton.setBounds(buttonRow.removeFromLeft(90));
         area.removeFromBottom(4);
         m_errorLabel.setBounds(area.removeFromBottom(20));
         area.removeFromBottom(4);
@@ -255,6 +279,7 @@ class ScriptEditorWindow final : public juce::Component
     juce::CodeEditorComponent m_editor;
     juce::Label m_errorLabel;
     juce::Label m_authoringBanner;
+    juce::TextButton m_docsButton;
     juce::TextButton m_resetButton;
     juce::TextButton m_applyButton;
     juce::TextButton m_cancelButton;

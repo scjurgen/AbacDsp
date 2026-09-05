@@ -19,7 +19,7 @@ fixed distribution dials left to fight with it.
 separate from the script embedded in the current patch. **Settings > Patches** saves/loads full
 patches, including whichever script is currently applied.
 
-A script can also pull in a shared library script with `import "name"` (see `../../LUA.md`) -
+A script can also pull in a shared library script with `import "name"` (see `../../LUA-MANUAL.md`) -
 useful for boilerplate reused across several patches. Built-in libraries live in this repo's
 `base-scripts/` folder and are synced to disk on every launch; your own go alongside them in
 `Library/User/`, under the same per-app data directory as the Scripts pool above. The script
@@ -32,7 +32,7 @@ This section covers what's specific to Resonik: the aggregate `SetFreqRange`/`Se
 shared with any other Lua-scripted example - MIDI handlers, `OnStart`/`OnStop`, dynamic UI
 parameters, the `Music`/`Vel`/`Rr`/`Rhythm` helper library, `Timer`, `Transport`, pitch tracking
 (`OnPitchDetected`/`Pitch.*` - Resonik is the example that feeds its input through the YIN
-tracker), and sandbox/error-handling notes - see `../../LUA.md`.
+tracker), and sandbox/error-handling notes - see `../../LUA-MANUAL.md`.
 
 ### Aggregate controls
 
@@ -95,7 +95,7 @@ end
 
 A fuller showcase: harmonizes the resonator bank to the incoming signal's detected pitch,
 quantized to a selectable key (`Root`/`Scale` dials declared via `UICreateParameterSet`, see
-`../../LUA.md`), and sweeps a moving window of individually-tuned chains across the whole bank
+`../../LUA-MANUAL.md`), and sweeps a moving window of individually-tuned chains across the whole bank
 each pitch-detection hop, so a large number of chains stay actively - and distinctly - engaged
 over time instead of always retuning the same handful. Load it directly as a patch script to
 try it, or read it as a template for a more elaborate per-chain scripting scheme than the

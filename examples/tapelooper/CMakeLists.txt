@@ -156,6 +156,10 @@ target_compile_definitions(
     "${PROJECT_NAME}"
     PRIVATE TAPELOOPER_FACTORY_PATCHES_DIR="${TAPELOOPER_DIR}/factory-patches"
 )
+target_compile_definitions(
+    "${PROJECT_NAME}"
+    PRIVATE TAPELOOPER_SCRIPTING_DOCS_FILE="${TAPELOOPER_DIR}/scripting.html"
+)
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
 

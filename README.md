@@ -19,7 +19,7 @@ the class design rules behind them.
 The examples under `examples/` showcase the library end to end: JUCE-based plugins that
 combine its processing blocks, focus on accessibility (screen readers, parameter
 labeling, color contrast), and - where noted - stay open-ended through embedded Lua
-scripting (see `LUA.md` for the shared scripting API). Four are highlighted below; the
+scripting (see `LUA-MANUAL.md` for the shared scripting API). Four are highlighted below; the
 full list with a one-paragraph description of each is in `examples/README.md`.
 
 ## Examples

@@ -182,5 +182,5 @@ See `.claude/rules/generated-files.md` (loads automatically when working under `
   shapes) - see `examples/dronesequencer/README.md`, `examples/resonik/README.md`, or
   `examples/pingsynth/README.md` for the shape to follow. This is not optional polish: it is
   the reference a human (or an LLM-assist session) needs to write a working script for that
-  example at all, and it belongs alongside root `LUA.md` (the API shared by every such
-  example) rather than only inline in the engine header's script-skeleton comments.
+  example at all, and it belongs alongside root `LUA-MANUAL.md` (the API shared by every
+  such example) rather than only inline in the engine header's script-skeleton comments.

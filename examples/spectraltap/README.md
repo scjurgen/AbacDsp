@@ -27,7 +27,7 @@ mapping, smoothing, and DSP safety.
 separate from the script embedded in the current patch. **Settings > Patches** saves/loads full
 patches, including whichever script is currently applied.
 
-A script can also pull in a shared library script with `import "name"` (see `../../LUA.md`) -
+A script can also pull in a shared library script with `import "name"` (see `../../LUA-MANUAL.md`) -
 useful for boilerplate reused across several patches.
 
 ## Scripting
@@ -37,7 +37,7 @@ the five real-time per-tap setters (`SetFrequency`/`SetResonance`/`SetFormant`/`
 `SetGain`), and the `OnTiming` hook the BPM/Host Sync/Division controls drive. For everything
 shared with any other Lua-scripted example - MIDI handlers, `OnStart`/`OnStop`, dynamic UI
 parameters, the `Music`/`Vel`/`Rr`/`Rhythm` helper library, `Timer`, `Transport`, and
-sandbox/error-handling notes - see `../../LUA.md`.
+sandbox/error-handling notes - see `../../LUA-MANUAL.md`.
 
 ### `OnTiming`: BPM / Host Sync / Division
 
