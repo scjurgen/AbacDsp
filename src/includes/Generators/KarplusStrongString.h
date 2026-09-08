@@ -72,6 +72,13 @@ class KarplusStrongString
         m_pluckType = pluckType;
     }
 
+    /// @brief Reseeds the excitation RNG (WhiteRoundRobin's pluck offset, White/Brown noise) -
+    /// construction seeds it from entropy for real use; this is for reproducible tests.
+    void seed(const std::mt19937::result_type value) noexcept
+    {
+        m_rng.seed(value);
+    }
+
     [[nodiscard]] float step() noexcept
     {
         switch (m_phase)

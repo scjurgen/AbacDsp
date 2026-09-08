@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <random>
 
 #include "Filters/PoleMixingFilter.h"
 #include "Generators/AdsEnvelope.h"
@@ -87,6 +88,11 @@ class KarplusStrongVoice
     void setDamper(const float damperFactor) noexcept
     {
         m_string.setDamper(damperFactor);
+    }
+
+    void seed(const std::mt19937::result_type value) noexcept
+    {
+        m_string.seed(value);
     }
 
     [[nodiscard]] float damperFactor() const noexcept

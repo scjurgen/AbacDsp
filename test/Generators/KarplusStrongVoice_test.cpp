@@ -48,7 +48,10 @@ TEST(KarplusStrongVoice, keyTrackingBrightensHighNotesRelativeToFixedCutoff)
 {
     constexpr float highNote = 96.f;
 
+    // Fixed seeds: WhiteRoundRobin's pluck offset is otherwise entropy-seeded, which made this
+    // comparison intermittently flaky (a different noise-buffer starting point each run).
     TestVoice fixedCutoff{kSampleRate};
+    fixedCutoff.seed(1u);
     fixedCutoff.setPluckType(PluckType::WhiteRoundRobin);
     fixedCutoff.setFilterCutoffSemitones(0.f);
     fixedCutoff.setFilterResonance(0.1f);
@@ -56,6 +59,7 @@ TEST(KarplusStrongVoice, keyTrackingBrightensHighNotesRelativeToFixedCutoff)
     const auto fixedOut = renderAfterTrigger(fixedCutoff, highNote, 8000);
 
     TestVoice tracked{kSampleRate};
+    tracked.seed(2u);
     tracked.setPluckType(PluckType::WhiteRoundRobin);
     tracked.setFilterCutoffSemitones(0.f);
     tracked.setFilterResonance(0.1f);
@@ -71,7 +75,10 @@ TEST(KarplusStrongVoice, keyTrackingBrightensHighNotesRelativeToFixedCutoff)
 
 TEST(KarplusStrongVoice, zeroKeyTrackingKeepsCutoffSimilarAcrossNotes)
 {
+    // Fixed seeds: WhiteRoundRobin's pluck offset is otherwise entropy-seeded, which made this
+    // ratio comparison intermittently flaky (a different noise-buffer starting point each run).
     TestVoice low{kSampleRate};
+    low.seed(1u);
     low.setPluckType(PluckType::WhiteRoundRobin);
     low.setFilterCutoffSemitones(0.f);
     low.setFilterResonance(0.1f);
@@ -79,6 +86,7 @@ TEST(KarplusStrongVoice, zeroKeyTrackingKeepsCutoffSimilarAcrossNotes)
     const auto lowOut = renderAfterTrigger(low, 36.f, 8000);
 
     TestVoice high{kSampleRate};
+    high.seed(2u);
     high.setPluckType(PluckType::WhiteRoundRobin);
     high.setFilterCutoffSemitones(0.f);
     high.setFilterResonance(0.1f);
