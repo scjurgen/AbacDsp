@@ -72,9 +72,12 @@ class AmbientPadImpl final : public EffectBase
         m_level.newTransition(Convert::dbToGain(valueDb), kFxSmoothingSeconds, sampleRate());
     }
 
+    /// @brief Repitches channel 1's voice live, whether it is currently playing or not
+    /// (a silent voice just picks up the new note whenever it is next triggered).
     void setNote(const float value) noexcept
     {
         m_manualNote = static_cast<int>(std::lround(value));
+        m_voices[0].setNote(m_manualNote);
     }
 
     /// @brief Manual exploration control: gates channel 1's voice directly (no MIDI in this phase).

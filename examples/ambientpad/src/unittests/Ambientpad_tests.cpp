@@ -124,6 +124,29 @@ TEST_F(AmbientpadTest, manualPlaySwitchGatesChannelOneDirectly)
     EXPECT_TRUE(sawNonZero);
 }
 
+TEST_F(AmbientpadTest, setNoteRepitchesAPlayingVoiceLive)
+{
+    Impl freshImpl{kSampleRate};
+    freshImpl.setNote(kNote);
+    freshImpl.setPlay(true);
+    renderBlocksOn(freshImpl, 2000);
+
+    AbacDsp::AudioBuffer<2, kBlockSize> in{};
+    AbacDsp::AudioBuffer<2, kBlockSize> out{};
+    bool sawNonZero = false;
+    for (int b = 0; b < 50; ++b)
+    {
+        freshImpl.setNote(static_cast<float>(kNote) + static_cast<float>(b) * 0.2f);
+        freshImpl.processBlock(in, out);
+        for (size_t i = 0; i < kBlockSize; ++i)
+        {
+            ASSERT_TRUE(std::isfinite(out(i, 0)));
+            sawNonZero = sawNonZero || out(i, 0) != 0.f;
+        }
+    }
+    EXPECT_TRUE(sawNonZero);
+}
+
 TEST_F(AmbientpadTest, noteOffEventuallySilencesTheVoice)
 {
     // Play(false) reaches the same voice NoteOn(1,...) triggered; reloading a second

@@ -115,7 +115,7 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
 "-- SetLight(value)     0..1, filter cutoff and character (dark/Velvet .. bright/Glass)\n"
 "-- SetMotion(value)    0..1, shared range/speed of the Breath/Material/Lens/Drift wander\n"
 "-- SetBreath(value)    0..1, how much the Breath process moves level and cutoff\n"
-"-- SetStability(value) 0..1, firm (0 drift/detune) .. fragile (1 more of both)\n"
+"-- SetStability(value) 0..1, fragile (0, full drift/detune/wobble) .. firm (1, none)\n"
 "-- SetBloom(value)     0..1, amplitude attack/release time\n"
 "-- SetHold(hold)       true freezes all four modulation sources at their current value\n"
 "\n"

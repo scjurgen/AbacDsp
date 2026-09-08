@@ -61,8 +61,15 @@ flowchart TD
     OUB --> RIPPLE
 
     OUD --> DRIFT["Per-oscillator drift cents, opposite sign"]
-    STABILITY -.->|scales down| DRIFT
-    STABILITY -.->|scales down| DETUNE["Fixed inter-oscillator detune"]
+    DETUNE["Fixed inter-oscillator detune"]
+
+    STABILITY -.->|restrains OU depth, 1 = none reaches the voice| MORPH
+    STABILITY -.->|restrains OU depth| CUTOFF
+    STABILITY -.->|restrains OU depth| CHAR
+    STABILITY -.->|restrains OU depth| RESO
+    STABILITY -.->|restrains OU depth| RIPPLE
+    STABILITY -.->|restrains OU depth| DRIFT
+    STABILITY -.->|restrains OU depth| DETUNE
 
     BLOOM --> ENV["Envelope attack/release time"]
 
@@ -78,8 +85,10 @@ flowchart TD
 
 Motion sets one shared wander range/speed for all four processes; each still reaches a
 different destination at its own depth, so the voice reads as one weather system rather than
-four independent LFOs. Hold pauses every process's own `step()` call, freezing modulation at
-whatever value it currently holds rather than resetting it to a center.
+four independent LFOs. Stability then scales how much of that wander actually reaches every
+destination, so Stability=1 is genuinely stable (no wander reaches the voice) regardless of
+Motion, not just firmer pitch. Hold pauses every process's own `step()` call, freezing
+modulation at whatever value it currently holds rather than resetting it to a center.
 
 ## Controls
 
@@ -92,7 +101,7 @@ whatever value it currently holds rather than resetting it to a center.
 | Light | 0 - 1 | Filter cutoff and character, dark (Velvet) to bright (Glass) |
 | Motion | 0 - 1 | Shared range/speed of the Breath/Material/Lens/Drift wander |
 | Breath | 0 - 1 | How much the Breath process moves level and cutoff |
-| Stability | 0 - 1 | Firm (0: no drift/detune) to fragile (1: more of both) |
+| Stability | 0 - 1 | Fragile (0: full drift/detune/wobble) to firm (1: none reaches the voice) |
 | Bloom | 0 - 1 | Amplitude attack/release time - short/direct to slow/lingering |
 | Hold | on/off | Freezes all four modulation processes at their current value |
 | Script | (button) | Opens the popup editor for the current patch's script |

@@ -194,15 +194,20 @@ class AmbientPadVoice
                 .gain = m_gainSmoothed.getLastValue()};
     }
 
+    /// @brief Repitches the held note live - oscillator frequencies update immediately,
+    /// the envelope and every modulation source stay exactly as they were.
+    void setNote(const int note) noexcept
+    {
+        m_note = note;
+        updateAllOscillatorFrequencies();
+    }
+
     // --- voice lifecycle ---
 
     void triggerVoice(const int note, const int velocity) noexcept
     {
         m_note = note;
-        for (size_t i = 0; i < m_oscillators.size(); ++i)
-        {
-            updateOscillatorFrequency(i);
-        }
+        updateAllOscillatorFrequencies();
         m_gain = getVelocityResponse(static_cast<float>(velocity) / 127.f);
         m_ampEnvelope.trigger();
     }
@@ -283,6 +288,14 @@ class AmbientPadVoice
         osc.oscillator->setFrequency(osc.currentHz);
     }
 
+    void updateAllOscillatorFrequencies() noexcept
+    {
+        for (size_t i = 0; i < m_oscillators.size(); ++i)
+        {
+            updateOscillatorFrequency(i);
+        }
+    }
+
     [[nodiscard]] static float getVelocityResponse(const float x) noexcept
     {
         return x * x;
@@ -324,7 +337,12 @@ class AmbientPadVoice
         m_lastLens = lensValue;
         m_lastDrift = driftValue;
 
-        const auto materialTarget = std::clamp(m_material * 2.f - 1.f + materialValue * kMaterialOuDepth, -1.f, 1.f);
+        // Stability=1 must mean stable: it scales down how much of every OU source
+        // reaches its destination, not just pitch drift/detune.
+        const auto stabilityRestraint = 1.f - m_stability;
+
+        const auto materialTarget =
+            std::clamp(m_material * 2.f - 1.f + materialValue * kMaterialOuDepth * stabilityRestraint, -1.f, 1.f);
         m_materialSmoothed.newTransition(materialTarget, kControlSmoothingSeconds, controlRate());
         const auto material = m_materialSmoothed.getValue();
         for (auto& osc : m_oscillators)
@@ -332,28 +350,26 @@ class AmbientPadVoice
             osc.oscillator->setMorph(material);
         }
 
-        const auto cutoffNote =
-            kMinCutoffNote + m_light * (kMaxCutoffNote - kMinCutoffNote) + lensValue * kLensCutoffDepthSemitones;
+        const auto cutoffNote = kMinCutoffNote + m_light * (kMaxCutoffNote - kMinCutoffNote) +
+                                lensValue * kLensCutoffDepthSemitones * stabilityRestraint;
         m_diagCutoffHz = Convert::noteToFrequency<float>(std::clamp(cutoffNote, 0.f, 127.f));
         m_filter.setCutoffFrequency(m_diagCutoffHz);
-        m_diagResonance = std::clamp(kBaseResonance + lensValue * kLensResonanceDepth, 0.f, 1.f);
+        m_diagResonance = std::clamp(kBaseResonance + lensValue * kLensResonanceDepth * stabilityRestraint, 0.f, 1.f);
         m_filter.setResonance(m_diagResonance);
 
-        const auto characterTarget = std::clamp(m_light + lensValue * kLensCharacterDepth, 0.f, 1.f);
+        const auto characterTarget =
+            std::clamp(m_light + lensValue * kLensCharacterDepth * stabilityRestraint, 0.f, 1.f);
         m_filterCharacterPos.newTransition(characterTarget, kControlSmoothingSeconds, controlRate());
 
-        const auto driftDepth = kDriftDepthCents * (1.f - m_stability);
+        const auto driftDepth = kDriftDepthCents * stabilityRestraint;
         m_oscillators[0].driftCents = driftValue * driftDepth;
         m_oscillators[1].driftCents = -driftValue * driftDepth;
-        const auto instability = kInterOscDetuneCents * (1.f - m_stability);
+        const auto instability = kInterOscDetuneCents * stabilityRestraint;
         m_oscillators[0].instabilityCents = -0.5f * instability;
         m_oscillators[1].instabilityCents = 0.5f * instability;
-        for (size_t i = 0; i < m_oscillators.size(); ++i)
-        {
-            updateOscillatorFrequency(i);
-        }
+        updateAllOscillatorFrequencies();
 
-        m_breathRippleGain = 1.f + breathValue * m_breath * kBreathVcaDepth;
+        m_breathRippleGain = 1.f + breathValue * m_breath * kBreathVcaDepth * stabilityRestraint;
     }
 
     [[nodiscard]] float controlRate() const noexcept
