@@ -192,6 +192,16 @@ TEST_F(AmbientpadTest, sweepingMusicalIntentControlsStaysFiniteAndBounded)
     }
 }
 
+TEST_F(AmbientpadTest, scriptedSetPitchGlidesChannelOneLive)
+{
+    ASSERT_TRUE(impl.setScript(std::format("function OnStart()\n"
+                                           "    NoteOn(1, {}, {})\n"
+                                           "    SetPitch(1, {}, 0, 0.5)\n"
+                                           "end\n",
+                                           kNote, kVelocity, kNote + 12)));
+    EXPECT_TRUE(expectFiniteAndBoundedTrackingNonZero(2000, 8.f));
+}
+
 TEST_F(AmbientpadTest, secondOscillatorCanBeRetunedViaScript)
 {
     ASSERT_TRUE(

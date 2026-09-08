@@ -100,7 +100,7 @@ class AmbientPadVoice
         osc.level = std::clamp(level, -1.f, 1.f);
         osc.heightSemitones = heightSemitones;
         osc.cents = cents;
-        updateOscillatorFrequency(index);
+        updateOscillatorFrequency(index, m_pitch.getLastValue());
     }
 
     /// @brief Smoothed per-voice output trim, independent of the oscillator level balance.
@@ -194,20 +194,25 @@ class AmbientPadVoice
                 .gain = m_gainSmoothed.getLastValue()};
     }
 
-    /// @brief Repitches the held note live - oscillator frequencies update immediately,
-    /// the envelope and every modulation source stay exactly as they were.
+    /// @brief Repitches the held note live, over glideTimeSeconds (0 = instant) - the envelope
+    /// and every modulation source stay exactly as they were.
+    void setPitch(const int note, const float cents, const float glideTimeSeconds) noexcept
+    {
+        m_pitch.newTransition(static_cast<float>(note) + cents / 100.f, glideTimeSeconds, controlRate());
+        updateAllOscillatorFrequencies();
+    }
+
+    /// @brief Instant repitch - `setPitch(note, 0.f, 0.f)`.
     void setNote(const int note) noexcept
     {
-        m_note = note;
-        updateAllOscillatorFrequencies();
+        setPitch(note, 0.f, 0.f);
     }
 
     // --- voice lifecycle ---
 
     void triggerVoice(const int note, const int velocity) noexcept
     {
-        m_note = note;
-        updateAllOscillatorFrequencies();
+        setPitch(note, 0.f, 0.f);
         m_gain = getVelocityResponse(static_cast<float>(velocity) / 127.f);
         m_ampEnvelope.trigger();
     }
@@ -279,20 +284,23 @@ class AmbientPadVoice
         }
     }
 
-    void updateOscillatorFrequency(const size_t index) noexcept
+    void updateOscillatorFrequency(const size_t index, const float pitchSemitones) noexcept
     {
         auto& osc = m_oscillators[index];
-        const auto baseFrequency = Convert::noteToFrequency<float>(static_cast<float>(m_note));
+        const auto baseFrequency = Convert::noteToFrequency<float>(pitchSemitones);
         const auto totalInterval = osc.heightSemitones + (osc.cents + osc.driftCents + osc.instabilityCents) / 100.f;
         osc.currentHz = baseFrequency * Convert::noteIntervalToRatio(totalInterval);
         osc.oscillator->setFrequency(osc.currentHz);
     }
 
+    /// @brief Reflects the pitch glide's current position onto both oscillators, without
+    /// advancing it - advancing happens once per control-rate tick, in controlRateUpdate().
     void updateAllOscillatorFrequencies() noexcept
     {
+        const auto pitchSemitones = m_pitch.getLastValue();
         for (size_t i = 0; i < m_oscillators.size(); ++i)
         {
-            updateOscillatorFrequency(i);
+            updateOscillatorFrequency(i, pitchSemitones);
         }
     }
 
@@ -367,6 +375,7 @@ class AmbientPadVoice
         const auto instability = kInterOscDetuneCents * stabilityRestraint;
         m_oscillators[0].instabilityCents = -0.5f * instability;
         m_oscillators[1].instabilityCents = 0.5f * instability;
+        (void) m_pitch.getValue(); // advances any pending pitch glide by one control-rate step
         updateAllOscillatorFrequencies();
 
         m_breathRippleGain = 1.f + breathValue * m_breath * kBreathVcaDepth * stabilityRestraint;
@@ -442,6 +451,7 @@ class AmbientPadVoice
     LinearSmoothing m_filterCharacterPos{0.5f};
     LinearSmoothing m_materialSmoothed{0.f};
     LinearSmoothing m_gainSmoothed{1.f};
+    LinearSmoothing m_pitch{69.f}; ///< continuous semitones (note + cents/100), glide target/position
 
     float m_material{0.5f};
     float m_light{0.5f};
@@ -455,7 +465,6 @@ class AmbientPadVoice
     float m_diagResonance{0.f};
     float m_lastEnvelope{0.f};
 
-    int m_note{69};
     float m_gain{1.f};
 
     const WaveShaperTableStore& m_waveShaperTables;

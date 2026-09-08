@@ -135,6 +135,50 @@ TEST_F(AmbientPadVoiceTest, setNoteRepitchesLiveWithoutRetriggeringEnvelope)
     EXPECT_NEAR(after.osc0Hz / before.osc0Hz, 2.f, 0.05f);
 }
 
+TEST_F(AmbientPadVoiceTest, setPitchGlidesGraduallyThenReachesTarget)
+{
+    voice->triggerVoice(69, 100);
+    std::array<float, 512> mono{};
+    voice->processBlock(mono.data(), mono.size());
+    const auto before = voice->snapshot();
+
+    constexpr float glideSeconds = 0.5f;
+    voice->setPitch(81, 0.f, glideSeconds); // +12 semitones (x2 Hz), glided
+    voice->processBlock(mono.data(), mono.size());
+    assertFiniteAndBounded(mono);
+    const auto justStarted = voice->snapshot();
+    EXPECT_LT(justStarted.osc0Hz / before.osc0Hz, 1.5f); // nowhere near the target yet
+
+    const auto blocksForGlide = static_cast<int>(glideSeconds * kSampleRate / static_cast<float>(mono.size())) + 5;
+    for (int block = 0; block < blocksForGlide; ++block)
+    {
+        voice->processBlock(mono.data(), mono.size());
+        assertFiniteAndBounded(mono);
+    }
+    const auto after = voice->snapshot();
+    EXPECT_NEAR(after.osc0Hz / before.osc0Hz, 2.f, 0.05f);
+}
+
+TEST_F(AmbientPadVoiceTest, setPitchCentsCombineWithNoteLikeSetNoteOnAWholeSemitone)
+{
+    voice->triggerVoice(69, 100);
+    std::array<float, 512> mono{};
+    voice->processBlock(mono.data(), mono.size());
+
+    voice->setPitch(69, 100.f, 0.f); // +100 cents == +1 semitone, instant
+    voice->processBlock(mono.data(), mono.size());
+    const auto viaCents = voice->snapshot();
+
+    voice = std::make_unique<AmbientPadVoice>(kSampleRate, waveShaperTables);
+    voice->triggerVoice(69, 100);
+    voice->processBlock(mono.data(), mono.size());
+    voice->setNote(70);
+    voice->processBlock(mono.data(), mono.size());
+    const auto viaNote = voice->snapshot();
+
+    EXPECT_NEAR(viaCents.osc0Hz, viaNote.osc0Hz, 0.01f);
+}
+
 TEST_F(AmbientPadVoiceTest, gainSmoothingReachesTargetWithoutDiscontinuity)
 {
     voice->triggerVoice(69, 100);

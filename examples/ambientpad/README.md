@@ -157,6 +157,16 @@ SetGain(channel, gainInDb)
 A smoothed output trim for one voice, independent of the master Level dial - useful once several
 channels are sounding together.
 
+### Pitch glide
+
+```lua
+SetPitch(channel, note, cents, glideTimeSeconds)
+```
+
+Repitches a channel's held voice without retriggering its envelope or modulation state -
+`glideTimeSeconds = 0` is instant (equivalent to setting `NoteOn`'s own note), a positive value
+glides smoothly to `note + cents` over that many seconds. `cents` is `-100..100`.
+
 ### The four musical-intent controls
 
 ```lua

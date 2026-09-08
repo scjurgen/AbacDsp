@@ -26,8 +26,8 @@ struct AmbientOscillatorSettings
  * standalone's own Note/Play controls.
  *
  * `channel` addresses a voice slot directly (1..kMaxChannels, no stealing - see
- * AmbientPadImpl) rather than picking from a pool. SetOscillator/SetGain/NoteOn/NoteOff are
- * per-channel; SetMaterial/SetLight/SetMotion/SetBreath/SetStability/SetBloom/SetHold and the
+ * AmbientPadImpl) rather than picking from a pool. SetOscillator/SetGain/SetPitch/NoteOn/NoteOff
+ * are per-channel; SetMaterial/SetLight/SetMotion/SetBreath/SetStability/SetBloom/SetHold and the
  * effects setters describe the one shared patch and broadcast to every voice, mirroring the
  * standalone's own dials.
  *
@@ -54,6 +54,15 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     using OscillatorCommands = std::array<std::optional<AmbientOscillatorSettings>, kNumOscillators>;
     using PerChannelOscillatorCommands = std::array<OscillatorCommands, kMaxChannels>;
     using GainCommands = std::array<std::optional<float>, kMaxChannels>;
+
+    /// @brief SetPitch's payload: a channel's held note, glide time in seconds (0 = instant).
+    struct AmbientPitchSettings
+    {
+        int note{69};
+        float cents{0.f};
+        float glideTimeSeconds{0.f};
+    };
+    using PitchCommands = std::array<std::optional<AmbientPitchSettings>, kMaxChannels>;
 
     /// @brief SetPhaser's payload: the master-bus phaser (8 allpass poles total).
     struct PhaserSettings
@@ -111,6 +120,10 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
 "\n"
 "-- SetGain(channel, gainInDb)  smoothed per-voice output trim, independent of Level\n"
 "\n"
+"-- SetPitch(channel, note, cents, glideTimeSeconds)  repitches a channel's held voice.\n"
+"--   glideTimeSeconds: 0 repitches instantly (same as NoteOn's own note), otherwise\n"
+"--   glides smoothly to note+cents over that many seconds. cents: fine tune -100..100\n"
+"\n"
 "-- SetMaterial(value)  0..1, wavetable position along each oscillator's material path\n"
 "-- SetLight(value)     0..1, filter cutoff and character (dark/Velvet .. bright/Glass)\n"
 "-- SetMotion(value)    0..1, shared range/speed of the Breath/Material/Lens/Drift wander\n"
@@ -150,6 +163,7 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     [[nodiscard]] std::optional<AmbientOscillatorSettings> drainOscillatorCommand(size_t voiceIndex,
                                                                                   size_t index) noexcept;
     [[nodiscard]] std::optional<float> drainGainCommand(size_t voiceIndex) noexcept;
+    [[nodiscard]] std::optional<AmbientPitchSettings> drainPitchCommand(size_t voiceIndex) noexcept;
     [[nodiscard]] std::optional<float> drainMaterialCommand() noexcept;
     [[nodiscard]] std::optional<float> drainLightCommand() noexcept;
     [[nodiscard]] std::optional<float> drainMotionCommand() noexcept;
@@ -170,6 +184,7 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     void luaNoteOff(size_t channel, int note) noexcept;
     void luaSetOscillator(size_t channel, size_t index, const sol::table& params) noexcept;
     void luaSetGain(size_t channel, float gainDb) noexcept;
+    void luaSetPitch(size_t channel, int note, float cents, float glideTimeSeconds) noexcept;
     void luaSetMaterial(float value) noexcept;
     void luaSetLight(float value) noexcept;
     void luaSetMotion(float value) noexcept;
@@ -189,6 +204,7 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
 
     PerChannelOscillatorCommands m_pendingOscillator{};
     GainCommands m_pendingGain{};
+    PitchCommands m_pendingPitch{};
     std::optional<float> m_pendingMaterial;
     std::optional<float> m_pendingLight;
     std::optional<float> m_pendingMotion;
@@ -217,6 +233,7 @@ inline void AmbientPadScriptEngine::bindScriptFunctions()
     m_lua.set_function("NoteOff", &AmbientPadScriptEngine::luaNoteOff, this);
     m_lua.set_function("SetOscillator", &AmbientPadScriptEngine::luaSetOscillator, this);
     m_lua.set_function("SetGain", &AmbientPadScriptEngine::luaSetGain, this);
+    m_lua.set_function("SetPitch", &AmbientPadScriptEngine::luaSetPitch, this);
     m_lua.set_function("SetMaterial", &AmbientPadScriptEngine::luaSetMaterial, this);
     m_lua.set_function("SetLight", &AmbientPadScriptEngine::luaSetLight, this);
     m_lua.set_function("SetMotion", &AmbientPadScriptEngine::luaSetMotion, this);
@@ -279,6 +296,17 @@ inline void AmbientPadScriptEngine::luaSetGain(const size_t channel, const float
         return;
     }
     m_pendingGain[channel - 1] = std::clamp(gainDb, -100.f, 12.f);
+}
+
+inline void AmbientPadScriptEngine::luaSetPitch(const size_t channel, const int note, const float cents,
+                                                const float glideTimeSeconds) noexcept
+{
+    if (!isValidChannel(channel) || !std::isfinite(cents) || !std::isfinite(glideTimeSeconds))
+    {
+        return;
+    }
+    m_pendingPitch[channel - 1] =
+        AmbientPitchSettings{note, std::clamp(cents, -100.f, 100.f), std::clamp(glideTimeSeconds, 0.f, 60.f)};
 }
 
 inline void AmbientPadScriptEngine::luaSetMaterial(const float value) noexcept
@@ -401,6 +429,14 @@ inline std::optional<float> AmbientPadScriptEngine::drainGainCommand(const size_
 {
     const auto result = m_pendingGain[voiceIndex];
     m_pendingGain[voiceIndex].reset();
+    return result;
+}
+
+inline std::optional<AmbientPadScriptEngine::AmbientPitchSettings> AmbientPadScriptEngine::drainPitchCommand(
+    const size_t voiceIndex) noexcept
+{
+    const auto result = m_pendingPitch[voiceIndex];
+    m_pendingPitch[voiceIndex].reset();
     return result;
 }
 

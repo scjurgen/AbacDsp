@@ -488,6 +488,10 @@ class AmbientPadImpl final : public EffectBase
             {
                 m_voices[v].setGain(*gain);
             }
+            if (const auto pitch = m_scriptEngine.drainPitchCommand(v))
+            {
+                m_voices[v].setPitch(pitch->note, pitch->cents, pitch->glideTimeSeconds);
+            }
         }
 
         if (const auto material = m_scriptEngine.drainMaterialCommand())
