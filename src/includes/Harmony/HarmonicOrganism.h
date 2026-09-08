@@ -18,6 +18,19 @@ inline constexpr int kLargeJumpSemitones{7};
 inline constexpr int kLowRegisterThreshold{-6};
 inline constexpr float kBrightnessLimit{0.85f};
 inline constexpr size_t kDensityLimit{6};
+// Chosen empirically (see dev-explore.sh probes during Character-control tuning): the
+// ChromaticWeather region's entries all violate KeepHomeAudible (Usually, -0.6 penalty) by
+// design, so a bonus much below this barely moves them at all against candidates that don't.
+inline constexpr float kPreferredRegionBonus{0.7f};
+
+/// @brief A soft nudge toward one palette region - preferredRegion's own region gets
+/// kPreferredRegionBonus added to its score; nullopt (no preference) or any other region
+/// gets nothing. A bonus rather than a filter, so an unreachable region never dead-ends.
+[[nodiscard]] constexpr float regionBonus(const HarmonicState& candidate,
+                                          const std::optional<PaletteRegion>& preferredRegion) noexcept
+{
+    return preferredRegion && candidate.region == *preferredRegion ? kPreferredRegionBonus : 0.f;
+}
 
 /// @brief This candidate's affinity (0..1) for one wish axis: how close candidate's own
 /// value on that axis sits to weights' current target. The five intrinsic axes read
@@ -142,6 +155,13 @@ class HarmonicOrganism
     {
         m_homeOffsetSemitones = pitchClass;
         m_palette = transposedPalette(pitchClass);
+    }
+
+    /// @brief Soft-biases future transitions toward one palette region (see regionBonus()) -
+    /// nullopt clears the preference. Persistent, like setHome(), not an impulse.
+    void setPreferredRegion(const std::optional<PaletteRegion> region) noexcept
+    {
+        m_preferredRegion = region;
     }
 
     /// @brief Starts (or refreshes) one impulse's life cycle; Release instead fast-decays
@@ -272,6 +292,7 @@ class HarmonicOrganism
             score += wishAffinity(current, candidate, static_cast<WishKind>(k), weights);
         }
         score /= static_cast<float>(kNumWishKinds);
+        score += regionBonus(candidate, m_preferredRegion);
 
         for (const auto& vow : kDefaultVows)
         {
@@ -343,6 +364,7 @@ class HarmonicOrganism
     std::array<HarmonicState, kDefaultPaletteSize> m_palette;
     size_t m_currentIndex{0};
     std::optional<size_t> m_pendingIndex;
+    std::optional<PaletteRegion> m_preferredRegion;
 
     std::array<OrnsteinUhlenbeckProcess, kNumWishKinds> m_climate{
         OrnsteinUhlenbeckProcess(kClimateRateHz), OrnsteinUhlenbeckProcess(kClimateRateHz),

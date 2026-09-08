@@ -94,14 +94,16 @@ modulation at whatever value it currently holds rather than resetting it to a ce
 
 ## Harmony
 
-Lua-only in this phase (see Scripting below for the full API): a slow, seedable decision
-process that chooses which notes the channel array plays over time, layered on top of - not
-instead of - the per-voice modulation above. Off by default.
+A slow, seedable decision process that chooses which notes the channel array plays over time,
+layered on top of - not instead of - the per-voice modulation above. Off by default; the
+Harmony/Home/Character dials and their Lua equivalents (see Scripting below) reach the same
+settings either way.
 
 ```mermaid
 flowchart TD
     subgraph SETUP["Patch setup"]
         HOME["SetHarmonyHome"]
+        CHAR["SetHarmonyCharacter"]
         PEDAL["SetPedalChannels"]
     end
 
@@ -118,6 +120,7 @@ flowchart TD
     PALETTE --> ORGANISM(("HarmonicOrganism"))
     VOWS --> ORGANISM
     WEIGHTS --> ORGANISM
+    CHAR -.->|soft region bonus| ORGANISM
 
     ORGANISM -->|every dwell period| TRANSITION["Chosen next state"]
     TRANSITION --> REALIZER["Voice-leading realizer"]
@@ -132,6 +135,12 @@ flowchart TD
 
 A dwell period is tens of seconds; the organism reconsiders roughly that often, and mostly
 either stays or moves to a nearby state rather than jumping freely through the whole palette.
+Character sets a soft preference for one of the five palette regions ("Chromatic" for brief
+foreign colour, "Minor Home" to stay close, ...) - a bonus toward matching candidates, not a
+filter, so it never forces a jump the vows wouldn't otherwise allow; how strongly it pulls
+varies by region, since a region's own tags can already work against or with it (the
+chromatic-weather entries, for instance, are inherently at odds with keeping the tonal home
+audible, so "Chromatic" reads as "more foreign colour than usual", not "only foreign colour").
 A chosen state's notes are realized per channel: a channel whose pitch is close to a note in
 the new state glides to it (`setPitch`, keeping that voice's own envelope/modulation state
 exactly as it was); everything else cross-fades - a free channel triggers the added note, a
@@ -152,6 +161,9 @@ they hold their own note independently.
 | Stability | 0 - 1 | Fragile (0: full drift/detune/wobble) to firm (1: none reaches the voice) |
 | Bloom | 0 - 1 | Amplitude attack/release time - short/direct to slow/lingering |
 | Hold | on/off | Freezes all four modulation processes at their current value |
+| Harmony | on/off | Enables the harmonic organism (see Harmony above); off by default |
+| Home | C - B, default E | The harmonic organism's tonal home |
+| Character | Any/Minor Home/Major Light/Modal Warmth/Open-Suspended/Chromatic | Soft preference for one palette region |
 | Script | (button) | Opens the popup editor for the current patch's script |
 
 **Settings > Scripts** manages a named pool of saved scripts, separate from the script embedded
@@ -254,22 +266,28 @@ where this instrument's stereo depth actually comes from.
 
 ### Harmonic organism
 
-See the Harmony diagram above for the full picture; this is the scripted surface.
+See the Harmony diagram above for the full picture; this is the scripted surface. `SetHarmony`,
+`SetHarmonyHome`, and `SetHarmonyCharacter` are the same Harmony/Home/Character dials described
+in Controls above, also reachable from a script - whichever sets a value last wins, same as
+any other dial.
 
 ```lua
 SetHarmony(enabled)                 -- off by default
 SetHarmonyHome(pitchClass)          -- 0..11, e.g. 4 = E; retunes the palette to a new home
+SetHarmonyCharacter(region)         -- 0 no preference, 1..5 the five regions in palette order
 SetPedalChannels({ channel, ... })  -- any subset of 1..10, including none or all
 ```
 
 With harmony off, the instrument behaves exactly as described above - every voice stays under
 direct `NoteOn`/`NoteOff`/`SetPitch` control. `SetPedalChannels` replaces the whole pedal set
 each call; a channel newly added to it is triggered at the current home note, a channel
-removed from it is left sounding rather than stopped.
+removed from it is left sounding rather than stopped - there is no dial for this, Lua-only.
 
 A handful of impulse gestures nudge the organism's moving preferences temporarily - each rises,
 holds, then fades over roughly the same tens-of-seconds timescale as the organism's own
-decisions, a bias with a life cycle rather than an instant switch:
+decisions, a bias with a life cycle rather than an instant switch. There's no dial for these
+either (9 gestures don't fit the dial budget); `base-scripts/harmonic-scene.lua` shows the
+usual way to reach them instead - a `UICreateParameterSet` dropdown in the Lua Controls area:
 
 | Impulse | Effect |
 |---|---|
@@ -289,4 +307,5 @@ decisions, a bias with a life cycle rather than an instant switch:
 setting, and turns the chorus on for width - harmony stays off, a single static voice.
 
 `base-scripts/harmonic-scene.lua` hands the instrument to the organism instead: an E home,
-channel 10 as a pedal, and `Open`/`Arrive`/`Stay` nudges on a timer.
+channel 10 as a pedal, an Impulse dropdown wired to all 9 gestures, and `Open`/`Arrive`/`Stay`
+nudges on a timer too.

@@ -97,6 +97,24 @@ TEST(VowViolatedTest, sparseLowEndFlagsMoreThanOneLowNote)
     EXPECT_TRUE(vowViolated(VowKind::SparseLowEnd, 0, current, twoLowNotes));
 }
 
+TEST(RegionBonusTest, matchingRegionGetsTheBonus)
+{
+    const HarmonicState candidate{.region = PaletteRegion::ChromaticWeather};
+    EXPECT_FLOAT_EQ(regionBonus(candidate, PaletteRegion::ChromaticWeather), kPreferredRegionBonus);
+}
+
+TEST(RegionBonusTest, nonMatchingRegionGetsNothing)
+{
+    const HarmonicState candidate{.region = PaletteRegion::Home};
+    EXPECT_FLOAT_EQ(regionBonus(candidate, PaletteRegion::ChromaticWeather), 0.f);
+}
+
+TEST(RegionBonusTest, noPreferenceGetsNothing)
+{
+    const HarmonicState candidate{.region = PaletteRegion::Home};
+    EXPECT_FLOAT_EQ(regionBonus(candidate, std::nullopt), 0.f);
+}
+
 class HarmonicOrganismTest : public ::testing::Test
 {
   protected:
@@ -120,6 +138,22 @@ TEST_F(HarmonicOrganismTest, eventuallyTransitionsAcrossManyDwellCycles)
         sawTransition = organism.takePendingTransition().has_value();
     }
     EXPECT_TRUE(sawTransition);
+}
+
+TEST_F(HarmonicOrganismTest, preferredRegionShowsUpAmongVisitedStates)
+{
+    organism.setPreferredRegion(PaletteRegion::ChromaticWeather);
+    const auto samplesPerDwell = static_cast<size_t>(HarmonicOrganism::kDwellSeconds * kSampleRate);
+    bool sawPreferredRegion = false;
+    for (int cycle = 0; cycle < 50 && !sawPreferredRegion; ++cycle)
+    {
+        organism.step(samplesPerDwell);
+        if (const auto after = organism.takePendingTransition())
+        {
+            sawPreferredRegion = after->region == PaletteRegion::ChromaticWeather;
+        }
+    }
+    EXPECT_TRUE(sawPreferredRegion);
 }
 
 TEST_F(HarmonicOrganismTest, neverVowIsNeverViolatedAcrossManySimulatedCycles)

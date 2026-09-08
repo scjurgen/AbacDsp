@@ -51,6 +51,9 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("stability", this);
         m_parameters.addParameterListener("bloom", this);
         m_parameters.addParameterListener("hold", this);
+        m_parameters.addParameterListener("harmonyEnabled", this);
+        m_parameters.addParameterListener("harmonyHome", this);
+        m_parameters.addParameterListener("harmonyCharacter", this);
         m_parameters.addParameterListener("luaParam1", this);
         m_parameters.addParameterListener("luaParam2", this);
         m_parameters.addParameterListener("luaParam3", this);
@@ -81,6 +84,9 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("stability", this);
         m_parameters.removeParameterListener("bloom", this);
         m_parameters.removeParameterListener("hold", this);
+        m_parameters.removeParameterListener("harmonyEnabled", this);
+        m_parameters.removeParameterListener("harmonyHome", this);
+        m_parameters.removeParameterListener("harmonyCharacter", this);
         m_parameters.removeParameterListener("luaParam1", this);
         m_parameters.removeParameterListener("luaParam2", this);
         m_parameters.removeParameterListener("luaParam3", this);
@@ -330,6 +336,21 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                 [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("hold", 1),
                                                                     juce::String::fromUTF8("Hold"), 0));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("harmonyEnabled", 1),
+                                                                    juce::String::fromUTF8("Harmony"), 0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("harmonyHome", 1), juce::String::fromUTF8("Home"),
+            juce::StringArray{juce::String::fromUTF8("C"), juce::String::fromUTF8("C#"), juce::String::fromUTF8("D"),
+                              juce::String::fromUTF8("D#"), juce::String::fromUTF8("E"), juce::String::fromUTF8("F"),
+                              juce::String::fromUTF8("F#"), juce::String::fromUTF8("G"), juce::String::fromUTF8("G#"),
+                              juce::String::fromUTF8("A"), juce::String::fromUTF8("A#"), juce::String::fromUTF8("B")},
+            4));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("harmonyCharacter", 1), juce::String::fromUTF8("Character"),
+            juce::StringArray{juce::String::fromUTF8("Any"), juce::String::fromUTF8("Minor Home"),
+                              juce::String::fromUTF8("Major Light"), juce::String::fromUTF8("Modal Warmth"),
+                              juce::String::fromUTF8("Open/Suspended"), juce::String::fromUTF8("Chromatic")},
+            0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("luaParam1", 1), juce::String::fromUTF8("Lua Param 1"),
             juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
@@ -443,6 +464,24 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setHold(static_cast<bool>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::hold, v);
+             }},
+            {"harmonyEnabled",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setHarmonyEnabled(static_cast<bool>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::harmonyEnabled, v);
+             }},
+            {"harmonyHome",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setHarmonyHome(static_cast<int>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::harmonyHome, v);
+             }},
+            {"harmonyCharacter",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setHarmonyCharacter(static_cast<int>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::harmonyCharacter, v);
              }},
             {"luaParam1",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -579,6 +618,24 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("hold");
             float normalized = range.convertTo0to1(static_cast<float>(params.hold));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("harmonyEnabled"))
+        {
+            const auto& range = m_parameters.getParameterRange("harmonyEnabled");
+            float normalized = range.convertTo0to1(static_cast<float>(params.harmonyEnabled));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("harmonyHome"))
+        {
+            const auto& range = m_parameters.getParameterRange("harmonyHome");
+            float normalized = range.convertTo0to1(static_cast<float>(params.harmonyHome));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("harmonyCharacter"))
+        {
+            const auto& range = m_parameters.getParameterRange("harmonyCharacter");
+            float normalized = range.convertTo0to1(static_cast<float>(params.harmonyCharacter));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("luaParam1"))

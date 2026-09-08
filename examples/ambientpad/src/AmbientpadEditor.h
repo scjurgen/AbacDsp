@@ -109,6 +109,21 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::center)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(harmonyEnabledSwitch)
+                                  .withWidth(Constants::Text::labelWidth)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(harmonyHomeDrop)
+                                  .withFlex(1)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(harmonyCharacterDrop)
+                                  .withFlex(1)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withMargin(knobMarginSmall));
                 box.performLayout(areas[0].toFloat());
             }
         }
@@ -155,6 +170,21 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.items.add(juce::FlexItem(bloomDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(holdSwitch)
                                   .withWidth(Constants::Text::labelWidth)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(harmonyEnabledSwitch)
+                                  .withWidth(Constants::Text::labelWidth)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(harmonyHomeDrop)
+                                  .withFlex(1)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::center)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(harmonyCharacterDrop)
+                                  .withFlex(1)
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::center)
                                   .withMargin(knobMarginSmall));
@@ -234,6 +264,22 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(valueTreeState, "hold", holdSwitch);
         holdSwitch.setTooltip(juce::String::fromUTF8("Hold"));
 
+        addAndMakeVisible(harmonyEnabledSwitch);
+        harmonyEnabledSwitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            valueTreeState, "harmonyEnabled", harmonyEnabledSwitch);
+        harmonyEnabledSwitch.setTooltip(juce::String::fromUTF8("Harmony"));
+
+        addAndMakeVisible(harmonyHomeDrop);
+        harmonyHomeDrop.addItemList(valueTreeState.getParameter("harmonyHome")->getAllValueStrings(), 1);
+        harmonyHomeDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "harmonyHome", harmonyHomeDrop);
+        harmonyHomeDrop.setTooltip(juce::String::fromUTF8("Home (C, C#, D, D#, E, F, F#, G, G#, A, A#, B)"));
+        addAndMakeVisible(harmonyCharacterDrop);
+        harmonyCharacterDrop.addItemList(valueTreeState.getParameter("harmonyCharacter")->getAllValueStrings(), 1);
+        harmonyCharacterDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "harmonyCharacter", harmonyCharacterDrop);
+        harmonyCharacterDrop.setTooltip(juce::String::fromUTF8(
+            "Character (Any, Minor Home, Major Light, Modal Warmth, Open/Suspended, Chromatic)"));
         addAndMakeVisible(cpuGauge);
         cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
         cpuGauge.setTooltip(juce::String::fromUTF8("CPU (0 to 100 %)"));
@@ -355,6 +401,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             stabilityDial.setVisible(true);
             bloomDial.setVisible(true);
             holdSwitch.setVisible(true);
+            harmonyEnabledSwitch.setVisible(true);
+            harmonyHomeDrop.setVisible(true);
+            harmonyCharacterDrop.setVisible(true);
             cpuGauge.setVisible(false);
             levelMeterGauge.setVisible(false);
             spectrogramGauge.setVisible(false);
@@ -380,6 +429,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             stabilityDial.setVisible(true);
             bloomDial.setVisible(true);
             holdSwitch.setVisible(true);
+            harmonyEnabledSwitch.setVisible(true);
+            harmonyHomeDrop.setVisible(true);
+            harmonyCharacterDrop.setVisible(true);
             cpuGauge.setVisible(true);
             levelMeterGauge.setVisible(true);
             spectrogramGauge.setVisible(true);
@@ -1190,6 +1242,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     CustomRotaryDial bloomDial{this};
     juce::ToggleButton holdSwitch{juce::String::fromUTF8("Hold")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> holdSwitchAttachment;
+    juce::ToggleButton harmonyEnabledSwitch{juce::String::fromUTF8("Harmony")};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> harmonyEnabledSwitchAttachment;
+    juce::ComboBox harmonyHomeDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> harmonyHomeDropAttachment;
+    juce::ComboBox harmonyCharacterDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> harmonyCharacterDropAttachment;
     CpuGauge cpuGauge{};
     Gauge levelMeterGauge{};
     SpectrogramDisplay spectrogramGauge{AppSettings::loadTheme()};

@@ -57,6 +57,18 @@ class StubImpl final : public EffectBase
     {
         m_hold = value;
     }
+    void setHarmonyEnabled(const bool value)
+    {
+        m_harmonyEnabled = value;
+    }
+    void setHarmonyHome(const size_t value)
+    {
+        m_harmonyHome = value;
+    }
+    void setHarmonyCharacter(const size_t value)
+    {
+        m_harmonyCharacter = value;
+    }
     void setLuaParam1(const float value)
     {
         m_luaParam1 = value;
@@ -110,6 +122,9 @@ class StubImpl final : public EffectBase
     float m_stability{};
     float m_bloom{};
     bool m_hold{};
+    bool m_harmonyEnabled{};
+    size_t m_harmonyHome{};
+    size_t m_harmonyCharacter{};
     float m_luaParam1{};
     float m_luaParam2{};
     float m_luaParam3{};

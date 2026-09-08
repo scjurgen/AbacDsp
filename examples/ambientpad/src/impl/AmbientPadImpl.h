@@ -211,6 +211,18 @@ class AmbientPadImpl final : public EffectBase
         m_harmonyHomeNote = kHarmonyHomeOctaveBase + (((pitchClass % 12) + 12) % 12);
     }
 
+    /// @brief Soft-biases the organism toward one palette region: 0 = no preference,
+    /// 1..5 = Home/MajorLight/ModalWarmth/OpenSuspended/ChromaticWeather in that order.
+    void setHarmonyCharacter(const int index) noexcept
+    {
+        if (index <= 0 || index > 5)
+        {
+            m_organism.setPreferredRegion(std::nullopt);
+            return;
+        }
+        m_organism.setPreferredRegion(static_cast<AbacDsp::PaletteRegion>(index - 1));
+    }
+
     /// @brief Replaces the pedal-channel set; a channel newly added is triggered at the
     /// current home note (a channel removed is left sounding, not stopped).
     void setPedalChannels(const std::span<const int> channels) noexcept
@@ -242,6 +254,17 @@ class AmbientPadImpl final : public EffectBase
     [[nodiscard]] size_t harmonyTransitionCount() const noexcept
     {
         return m_harmonyTransitionCount;
+    }
+
+    /// @brief channel is 1-indexed, matching every other per-channel call - diagnostics/testing only.
+    [[nodiscard]] bool voiceIsPlaying(const size_t channel) const noexcept
+    {
+        return m_voices[channel - 1].isPlaying();
+    }
+
+    [[nodiscard]] float voicePitchSemitones(const size_t channel) const noexcept
+    {
+        return m_voices[channel - 1].currentPitchSemitones();
     }
 
     void setLuaParam1(const float value) noexcept
@@ -552,6 +575,11 @@ class AmbientPadImpl final : public EffectBase
         }
 
         const auto targetNotes = target.voicing.notes();
+        std::array<int, AbacDsp::Voicing::kMaxNotes> absoluteTargets{};
+        for (size_t t = 0; t < targetNotes.size(); ++t)
+        {
+            absoluteTargets[t] = m_harmonyHomeNote + targetNotes[t];
+        }
         std::array<bool, AbacDsp::Voicing::kMaxNotes> targetMatched{};
         std::array<bool, kMaxVoices> playingMatched{};
         const auto pairCount = std::min(playingCount, targetNotes.size());
@@ -572,7 +600,7 @@ class AmbientPadImpl final : public EffectBase
                     {
                         continue;
                     }
-                    const int diff = playing[p].pitch - targetNotes[t];
+                    const int diff = playing[p].pitch - absoluteTargets[t];
                     const int distance = diff < 0 ? -diff : diff;
                     if (bestDistance < 0 || distance < bestDistance)
                     {
@@ -587,7 +615,7 @@ class AmbientPadImpl final : public EffectBase
             if (bestDistance <= kGlideRepitchMaxSemitones)
             {
                 targetMatched[bestTarget] = true;
-                m_voices[channelIndex].setPitch(targetNotes[bestTarget], 0.f, kTransitionGlideSeconds);
+                m_voices[channelIndex].setPitch(absoluteTargets[bestTarget], 0.f, kTransitionGlideSeconds);
             }
             else
             {
@@ -610,7 +638,7 @@ class AmbientPadImpl final : public EffectBase
             {
                 continue;
             }
-            m_voices[freeChannels[nextFree]].triggerVoice(targetNotes[t], kManualPlayVelocity);
+            m_voices[freeChannels[nextFree]].triggerVoice(absoluteTargets[t], kManualPlayVelocity);
             ++nextFree;
         }
 
@@ -661,6 +689,10 @@ class AmbientPadImpl final : public EffectBase
         if (const auto home = m_scriptEngine.drainHarmonyHomeCommand())
         {
             setHarmonyHome(*home);
+        }
+        if (const auto character = m_scriptEngine.drainHarmonyCharacterCommand())
+        {
+            setHarmonyCharacter(*character);
         }
         if (const auto pedal = m_scriptEngine.drainPedalChannelsCommand())
         {

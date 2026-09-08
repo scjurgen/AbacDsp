@@ -22,6 +22,10 @@
     {"short": "BLOOM", "type": "dial", "display": "Bloom", "symbol": "bloom", "default": 0.3, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
     {"short": "HOLD", "type": "switch", "display": "Hold", "symbol": "hold", "default": 0},
 
+    {"short": "HARM", "type": "switch", "display": "Harmony", "symbol": "harmonyEnabled", "default": 0},
+    {"short": "HOME", "type": "drop", "display": "Home", "symbol": "harmonyHome", "default": 4, "listitems": ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]},
+    {"short": "CHAR", "type": "drop", "display": "Character", "symbol": "harmonyCharacter", "default": 0, "listitems": ["Any", "Minor Home", "Major Light", "Modal Warmth", "Open/Suspended", "Chromatic"]},
+
     {"short": "CPU", "type": "gauge", "gaugetype": "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
     {"short": "LVL", "type": "gauge", "gaugetype": "levels", "display": "Level", "symbol": "levelMeter", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
     {"short": "FFT", "type": "gauge", "gaugetype": "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"},
@@ -32,11 +36,11 @@
     "WINDOW_WIDTH": "1100",
     "WINDOW_HEIGHT": "760",
     "type": "|=",
-    "composition": "C=(1:4) R=(1:2) A1=(CPU*200, LVL*300, FFT) A2=(LEVEL, NOTE, PLAY, MATRL, LIGHT, MOTION, BREATH, STABL, BLOOM, HOLD) A3=(LUACTL)"
+    "composition": "C=(1:4) R=(1:2) A1=(CPU*200, LVL*300, FFT) A2=(LEVEL, NOTE, PLAY, MATRL, LIGHT, MOTION, BREATH, STABL, BLOOM, HOLD, HARM, HOME, CHAR) A3=(LUACTL)"
   },
   "performance-page": {
     "type": "-",
-    "composition": "A1=(PLAY, LEVEL, NOTE, MATRL, LIGHT, MOTION, BREATH, STABL, BLOOM, HOLD)"
+    "composition": "A1=(PLAY, LEVEL, NOTE, MATRL, LIGHT, MOTION, BREATH, STABL, BLOOM, HOLD, HARM, HOME, CHAR)"
   },
   "processor_forwards": [
     {

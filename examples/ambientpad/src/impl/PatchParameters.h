@@ -13,25 +13,28 @@ struct PatchParameters
 {
     enum class Id : int
     {
-        level    , // dial
-        note     , // dial
-        play     , // switch
-        material , // dial
-        light    , // dial
-        motion   , // dial
-        breath   , // dial
-        stability, // dial
-        bloom    , // dial
-        hold     , // switch
-        luaParam1, // dial
-        luaParam2, // dial
-        luaParam3, // dial
-        luaParam4, // dial
-        luaParam5, // dial
-        luaParam6, // dial
-        luaParam7, // dial
-        luaParam8, // dial
-        script    // script
+        level           , // dial
+        note            , // dial
+        play            , // switch
+        material        , // dial
+        light           , // dial
+        motion          , // dial
+        breath          , // dial
+        stability       , // dial
+        bloom           , // dial
+        hold            , // switch
+        harmonyEnabled  , // switch
+        harmonyHome     , // drop
+        harmonyCharacter, // drop
+        luaParam1       , // dial
+        luaParam2       , // dial
+        luaParam3       , // dial
+        luaParam4       , // dial
+        luaParam5       , // dial
+        luaParam6       , // dial
+        luaParam7       , // dial
+        luaParam8       , // dial
+        script           // script
     };
 float level{-30.0f};
 float note{69.0f};
@@ -43,6 +46,9 @@ float breath{0.3f};
 float stability{0.5f};
 float bloom{0.3f};
 bool hold{false};
+bool harmonyEnabled{false};
+size_t harmonyHome{4};
+size_t harmonyCharacter{0};
 float luaParam1{0.0f};
 float luaParam2{0.0f};
 float luaParam3{0.0f};
@@ -65,6 +71,9 @@ std::string script{};
 "stability",
 "bloom",
 "hold",
+"harmonyEnabled",
+"harmonyHome",
+"harmonyCharacter",
 "luaParam1",
 "luaParam2",
 "luaParam3",
@@ -101,6 +110,9 @@ std::string script{};
         else if constexpr (ParamId == Id::stability) return stability;
         else if constexpr (ParamId == Id::bloom) return bloom;
         else if constexpr (ParamId == Id::hold) return hold;
+        else if constexpr (ParamId == Id::harmonyEnabled) return harmonyEnabled;
+        else if constexpr (ParamId == Id::harmonyHome) return harmonyHome;
+        else if constexpr (ParamId == Id::harmonyCharacter) return harmonyCharacter;
         else if constexpr (ParamId == Id::luaParam1) return luaParam1;
         else if constexpr (ParamId == Id::luaParam2) return luaParam2;
         else if constexpr (ParamId == Id::luaParam3) return luaParam3;
@@ -141,6 +153,12 @@ break;
  case Id::bloom: if (!isEqual(get<Id::bloom>(), value)) {get<Id::bloom>() = value;m_modified = true;}
 break;
  case Id::hold: if (!isEqual(get<Id::hold>(), value)) {get<Id::hold>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::harmonyEnabled: if (!isEqual(get<Id::harmonyEnabled>(), value)) {get<Id::harmonyEnabled>() = static_cast<bool>(value) ;m_modified = true;}
+break;
+ case Id::harmonyHome: if (!isEqual(get<Id::harmonyHome>(), value)) {get<Id::harmonyHome>() = static_cast<size_t>(value) ;m_modified = true;}
+break;
+ case Id::harmonyCharacter: if (!isEqual(get<Id::harmonyCharacter>(), value)) {get<Id::harmonyCharacter>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
  case Id::luaParam1: if (!isEqual(get<Id::luaParam1>(), value)) {get<Id::luaParam1>() = value;m_modified = true;}
 break;
@@ -200,23 +218,26 @@ private:
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     PatchParameters,
-        level    , // dial
-        note     , // dial
-        play     , // switch
-        material , // dial
-        light    , // dial
-        motion   , // dial
-        breath   , // dial
-        stability, // dial
-        bloom    , // dial
-        hold     , // switch
-        luaParam1, // dial
-        luaParam2, // dial
-        luaParam3, // dial
-        luaParam4, // dial
-        luaParam5, // dial
-        luaParam6, // dial
-        luaParam7, // dial
-        luaParam8, // dial
-        script    // script
+        level           , // dial
+        note            , // dial
+        play            , // switch
+        material        , // dial
+        light           , // dial
+        motion          , // dial
+        breath          , // dial
+        stability       , // dial
+        bloom           , // dial
+        hold            , // switch
+        harmonyEnabled  , // switch
+        harmonyHome     , // drop
+        harmonyCharacter, // drop
+        luaParam1       , // dial
+        luaParam2       , // dial
+        luaParam3       , // dial
+        luaParam4       , // dial
+        luaParam5       , // dial
+        luaParam6       , // dial
+        luaParam7       , // dial
+        luaParam8       , // dial
+        script           // script
 )

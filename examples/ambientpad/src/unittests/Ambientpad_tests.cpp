@@ -252,6 +252,19 @@ TEST_F(AmbientpadTest, harmonicOrganismRealizesTransitionsSafely)
         }
     }
     EXPECT_GE(freshImpl.harmonyTransitionCount(), 1u);
+
+    // Regression guard: the realizer once used home-relative offsets as absolute MIDI notes
+    // directly (e.g. offset 3 played as note 3, ~9.7 Hz) - finite/bounded above doesn't catch it.
+    for (size_t channel = 1; channel <= Impl::kMaxVoices; ++channel)
+    {
+        if (!freshImpl.voiceIsPlaying(channel))
+        {
+            continue;
+        }
+        const auto pitch = freshImpl.voicePitchSemitones(channel);
+        EXPECT_GE(pitch, 30.f) << "channel " << channel;
+        EXPECT_LE(pitch, 110.f) << "channel " << channel;
+    }
 }
 
 TEST_F(AmbientpadTest, harmonyLuaBindingsReachTheOrganism)
