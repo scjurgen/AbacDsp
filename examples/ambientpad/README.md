@@ -1,9 +1,11 @@
 # Ambientpad
 
-A single, monophonic ambient-pad voice: two morphing wavetable layers through a resonant
-pole-mixing filter, a long attack/release amplitude envelope, a distortion stage, and the same
-phaser/chorus/reverb master-bus effects as Morphexsynth. There is no MIDI input in this phase -
-the voice is played from the Note/Play controls, or scripted via Lua's `NoteOn`/`NoteOff`.
+A monophonic ambient-pad voice, times up to 10: two morphing wavetable layers through a
+resonant pole-mixing filter, a long attack/release amplitude envelope, a distortion stage, and
+the same phaser/chorus/reverb master-bus effects as Morphexsynth. There is no MIDI input in this
+phase - a voice is played from the Note/Play controls, scripted directly via Lua's
+`NoteOn`/`NoteOff`, or, with the harmonic organism enabled (see Harmony below), driven
+automatically as it moves through its own palette of harmonic states.
 
 Rather than a conventional LFO and per-destination ADSR envelopes, the voice's motion comes from
 four correlated Ornstein-Uhlenbeck (mean-reverting random walk) processes - Breath, Material,
@@ -12,9 +14,9 @@ Breath/Stability/Bloom dials speak in musical intentions (substance, darkness/li
 drift, presence, firmness, emergence) rather than raw filter/envelope parameters; Hold freezes
 all four processes at their current value.
 
-The voice keeps an array of 10 slots (channels) for future polyphony, but only channel 1 is
-driven by the standalone's own Note/Play controls in this phase - the rest sit idle unless a
-script addresses them directly with `NoteOn`/`NoteOff`.
+The voice keeps an array of 10 slots (channels) for polyphony: only channel 1 is driven by the
+standalone's own Note/Play controls, and the rest sit idle unless a script addresses them
+directly with `NoteOn`/`NoteOff` - or the harmonic organism is driving them itself.
 
 ## Modulation
 
@@ -89,6 +91,52 @@ four independent LFOs. Stability then scales how much of that wander actually re
 destination, so Stability=1 is genuinely stable (no wander reaches the voice) regardless of
 Motion, not just firmer pitch. Hold pauses every process's own `step()` call, freezing
 modulation at whatever value it currently holds rather than resetting it to a center.
+
+## Harmony
+
+Lua-only in this phase (see Scripting below for the full API): a slow, seedable decision
+process that chooses which notes the channel array plays over time, layered on top of - not
+instead of - the per-voice modulation above. Off by default.
+
+```mermaid
+flowchart TD
+    subgraph SETUP["Patch setup"]
+        HOME["SetHarmonyHome"]
+        PEDAL["SetPedalChannels"]
+    end
+
+    subgraph PREF["Vows and wishes"]
+        VOWS["Default vow set (hard constraints)"]
+        CLIMATE["Slow climate drift"]
+        IMPULSES["Impulse gestures: Stay, Lean, Open, Gather, Darken, Brighten, Disturb, Arrive, Release"]
+    end
+
+    CLIMATE --> WEIGHTS["Wish weights"]
+    IMPULSES -.->|temporary bias| WEIGHTS
+
+    HOME --> PALETTE["Curated palette, transposed to home"]
+    PALETTE --> ORGANISM(("HarmonicOrganism"))
+    VOWS --> ORGANISM
+    WEIGHTS --> ORGANISM
+
+    ORGANISM -->|every dwell period| TRANSITION["Chosen next state"]
+    TRANSITION --> REALIZER["Voice-leading realizer"]
+    PEDAL -.->|excluded from the realizer| REALIZER
+
+    REALIZER -->|close pitch pair| GLIDE["setPitch, glide"]
+    REALIZER -->|no close partner| FADE["triggerVoice / stopVoice"]
+
+    GLIDE --> VOICES(("Channels 1..10"))
+    FADE --> VOICES
+```
+
+A dwell period is tens of seconds; the organism reconsiders roughly that often, and mostly
+either stays or moves to a nearby state rather than jumping freely through the whole palette.
+A chosen state's notes are realized per channel: a channel whose pitch is close to a note in
+the new state glides to it (`setPitch`, keeping that voice's own envelope/modulation state
+exactly as it was); everything else cross-fades - a free channel triggers the added note, a
+channel with no partner in the new state releases. Pedal channels are never touched by this -
+they hold their own note independently.
 
 ## Controls
 
@@ -204,7 +252,41 @@ on the summed mix of every voice, in the order phaser -> chorus -> reverb. Each 
 at startup. Note that the oscillator/filter chain itself runs mono per voice - `SetChorus` is
 where this instrument's stereo depth actually comes from.
 
-### Example script
+### Harmonic organism
+
+See the Harmony diagram above for the full picture; this is the scripted surface.
+
+```lua
+SetHarmony(enabled)                 -- off by default
+SetHarmonyHome(pitchClass)          -- 0..11, e.g. 4 = E; retunes the palette to a new home
+SetPedalChannels({ channel, ... })  -- any subset of 1..10, including none or all
+```
+
+With harmony off, the instrument behaves exactly as described above - every voice stays under
+direct `NoteOn`/`NoteOff`/`SetPitch` control. `SetPedalChannels` replaces the whole pedal set
+each call; a channel newly added to it is triggered at the current home note, a channel
+removed from it is left sounding rather than stopped.
+
+A handful of impulse gestures nudge the organism's moving preferences temporarily - each rises,
+holds, then fades over roughly the same tens-of-seconds timescale as the organism's own
+decisions, a bias with a life cycle rather than an instant switch:
+
+| Impulse | Effect |
+|---|---|
+| `Stay()` | Delay departure; stay close to the current state |
+| `Lean()` | Encourage a small move toward a nearby state |
+| `Open()` | Favour open intervals, wider registers, more ambiguity |
+| `Gather()` | Favour fewer notes, closer affinity, less ambiguity |
+| `Darken()` | Favour darker, more minor-leaning colour |
+| `Brighten()` | Favour brighter, more major-leaning colour |
+| `Disturb()` | Temporarily admit more tension/friction |
+| `Arrive()` | Favour a calm, stable, close resting place |
+| `Release()` | Fade out every other currently active impulse |
+
+### Example scripts
 
 `base-scripts/breathing-drone.lua` plays channel 1 at `OnStart`, leans into a slow, wide Motion
-setting, and turns the chorus on for width.
+setting, and turns the chorus on for width - harmony stays off, a single static voice.
+
+`base-scripts/harmonic-scene.lua` hands the instrument to the organism instead: an E home,
+channel 10 as a pedal, and `Open`/`Arrive`/`Stay` nudges on a timer.
