@@ -16,6 +16,71 @@ The voice keeps an array of 10 slots (channels) for future polyphony, but only c
 driven by the standalone's own Note/Play controls in this phase - the rest sit idle unless a
 script addresses them directly with `NoteOn`/`NoteOff`.
 
+## Modulation
+
+How the seven dials and the four Ornstein-Uhlenbeck processes reach the voice:
+
+```mermaid
+flowchart TD
+    subgraph DIALS["Musical-intent dials"]
+        MATERIAL["Material"]
+        LIGHT["Light"]
+        MOTION["Motion"]
+        BREATH["Breath"]
+        STABILITY["Stability"]
+        BLOOM["Bloom"]
+        HOLD["Hold"]
+    end
+
+    subgraph OU["Ornstein-Uhlenbeck modulators"]
+        OUB["OU Breath"]
+        OUM["OU Material"]
+        OUL["OU Lens"]
+        OUD["OU Drift"]
+    end
+
+    MOTION -->|shared sigma| OUB
+    MOTION -->|shared sigma| OUM
+    MOTION -->|shared sigma| OUL
+    MOTION -->|shared sigma| OUD
+    HOLD -.->|freezes step| OUB
+    HOLD -.->|freezes step| OUM
+    HOLD -.->|freezes step| OUL
+    HOLD -.->|freezes step| OUD
+
+    MATERIAL --> MORPH["Oscillator morph, both layers"]
+    OUM --> MORPH
+
+    LIGHT --> CUTOFF["Filter cutoff Hz"]
+    OUL --> CUTOFF
+    LIGHT --> CHAR["Filter character: Velvet..Glass"]
+    OUL --> CHAR
+    OUL --> RESO["Filter resonance"]
+
+    BREATH --> RIPPLE["VCA ripple gain"]
+    OUB --> RIPPLE
+
+    OUD --> DRIFT["Per-oscillator drift cents, opposite sign"]
+    STABILITY -.->|scales down| DRIFT
+    STABILITY -.->|scales down| DETUNE["Fixed inter-oscillator detune"]
+
+    BLOOM --> ENV["Envelope attack/release time"]
+
+    MORPH --> VOICE(("AmbientPadVoice"))
+    CUTOFF --> VOICE
+    CHAR --> VOICE
+    RESO --> VOICE
+    RIPPLE --> VOICE
+    DRIFT --> VOICE
+    DETUNE --> VOICE
+    ENV --> VOICE
+```
+
+Motion sets one shared wander range/speed for all four processes; each still reaches a
+different destination at its own depth, so the voice reads as one weather system rather than
+four independent LFOs. Hold pauses every process's own `step()` call, freezing modulation at
+whatever value it currently holds rather than resetting it to a center.
+
 ## Controls
 
 | Control | Range | Description |
