@@ -37,6 +37,8 @@ DB_FLOOR = -180.0
 STEREO_BANDS_HZ = [(20, 200), (200, 800), (800, 3000), (3000, 8000), (8000, None)]
 PLATEAU_SLOPE_DB_PER_SEC = 6.0
 PLATEAU_MIN_DUR_SEC = 0.15
+SLOPE_SMOOTH_SEC = 0.1
+SLOPE_RUN_PERCENTILE = 90
 AM_FREQ_RANGE_HZ = (0.5, 20.0)
 VIBRATO_FREQ_RANGE_HZ = (2.0, 12.0)
 FILTER_SWEEP_FREQ_RANGE_HZ = (0.2, 10.0)
@@ -116,6 +118,14 @@ def compute_envelope(mono, sr):
     return times, to_db(rms), rms
 
 
+def moving_average(x, window):
+    if window <= 1:
+        return x
+    pad_before = window // 2
+    padded = np.pad(x, (pad_before, window - 1 - pad_before), mode="edge")
+    return np.convolve(padded, np.ones(window) / window, mode="valid")
+
+
 def detect_segments(times, db, noise_floor_db) -> Segments:
     peak_idx = int(np.argmax(db))
     peak_db = db[peak_idx]
@@ -126,16 +136,21 @@ def detect_segments(times, db, noise_floor_db) -> Segments:
 
     frame_dur = times[1] - times[0] if len(times) > 1 else HOP_LENGTH / 44100.0
     plateau_frames = max(3, int(round(PLATEAU_MIN_DUR_SEC / frame_dur)))
-    slope = np.abs(np.diff(db) / np.diff(times)) if len(times) > 1 else np.zeros(0)
+    # Frame-to-frame dB slope is far noisier than "dB/sec" suggests at this frame rate (a
+    # single frame's worth of jitter reads as a huge rate), so smooth before differentiating
+    # rather than requiring every raw frame to individually pass the flatness threshold.
+    smooth_frames = max(1, int(round(SLOPE_SMOOTH_SEC / frame_dur)))
+    db_smooth = moving_average(db, smooth_frames)
+    deriv = np.diff(db_smooth) / np.diff(times) if len(times) > 1 else np.zeros(0)
 
-    decay_end_idx = _find_flat_run(slope, peak_idx, len(db), plateau_frames, db, noise_floor_db)
+    decay_end_idx = _find_flat_run(deriv, peak_idx, len(db), plateau_frames, db, noise_floor_db)
     if decay_end_idx is None:
         # No plateau above the noise floor at all: nothing principled separates "decay"
         # from "release" here, so the whole post-peak tail is treated as one release stage.
         release_end_idx = _trim_release_tail(db, peak_idx, noise_floor_db)
         return Segments(peak_idx, attack_start_idx, peak_idx, peak_idx, release_end_idx)
 
-    release_start_idx = _find_decline_run(slope, decay_end_idx, len(db), plateau_frames)
+    release_start_idx = _find_decline_run(deriv, decay_end_idx, len(db), plateau_frames)
     if release_start_idx is None:
         return Segments(peak_idx, attack_start_idx, decay_end_idx, None, len(db) - 1)
 
@@ -148,19 +163,20 @@ def _trim_release_tail(db, release_start_idx, noise_floor_db, margin_db=3.0):
     return release_start_idx + int(tail[-1]) if len(tail) else len(db) - 1
 
 
-def _find_flat_run(slope, start, n, run_len, db, noise_floor_db, margin_db=6.0):
+def _find_flat_run(deriv, start, n, run_len, db, noise_floor_db, margin_db=6.0):
     for i in range(start, n - run_len):
-        if np.all(slope[i : i + run_len] < PLATEAU_SLOPE_DB_PER_SEC) and np.mean(db[i : i + run_len]) > noise_floor_db + margin_db:
+        window = np.abs(deriv[i : i + run_len])
+        if np.percentile(window, SLOPE_RUN_PERCENTILE) < PLATEAU_SLOPE_DB_PER_SEC and \
+                np.mean(db[i : i + run_len]) > noise_floor_db + margin_db:
             return i
     return None
 
 
-def _find_decline_run(slope, start, n, run_len):
+def _find_decline_run(deriv, start, n, run_len):
     for i in range(start, n - run_len):
-        window = slope[i : i + run_len]
-        if np.all(window >= PLATEAU_SLOPE_DB_PER_SEC) or np.all(window <= -PLATEAU_SLOPE_DB_PER_SEC):
-            if np.mean(window) > 0:  # magnitude was large because it's genuinely declining, not just noisy
-                return i
+        window = deriv[i : i + run_len]
+        if np.percentile(window, SLOPE_RUN_PERCENTILE) <= -PLATEAU_SLOPE_DB_PER_SEC:
+            return i
     return None
 
 

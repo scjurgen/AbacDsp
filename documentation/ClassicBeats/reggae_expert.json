@@ -1,0 +1,64 @@
+{
+  "_comment": "Expert-authored config, not derived from any corpus or pack - see .claude/classic-beats-full-kit.md and the cited sources there (Wikipedia's One-drop rhythm, bassculture.substack.com, MusicRadar's one-drop-fill tutorial, Modern Drummer's steppers article). Each style's 'variations' are the genuinely different arrangement choice a real drummer plays for a second take (articulation swap, an added accent) - not timing/velocity noise.",
+  "styles": [
+    {
+      "id": "one-drop",
+      "display_name": "One-drop groove",
+      "bpm": 76,
+      "expert_notes": "Carlton Barrett's one-drop: beat 1 is left empty (no kick at all), and the kick lands together with the snare accent on beat 3 - the 'drop'. The snare accent is a cross-stick/rimshot click, not a full snare hit; that dry, woody sound is the style's defining signature. Hihat plays steady 8ths throughout.",
+      "hihat_steps": [0, 2, 4, 6, 8, 10, 12, 14],
+      "kick_steps": [8],
+      "snare_accent_step": 8,
+      "fill_device": "hihat_triplet",
+      "fill_beats": 1,
+      "variations": [
+        {"name": "verse", "snare_articulation": "rimshot"},
+        {
+          "name": "chorus",
+          "snare_articulation": "rimshot",
+          "extra_accents": [{"note": "SIDESTICK", "step": 14, "symbol": "x"}],
+          "expert_notes": "A documented busier-chorus move: an extra cross-stick on the 'and' of beat 4, layered on top of the same rimshot-on-3 foundation."
+        }
+      ]
+    },
+    {
+      "id": "rockers",
+      "display_name": "Rockers groove",
+      "bpm": 82,
+      "expert_notes": "Rockers puts the emphasis back on the downbeat: it adds a kick on beat 1 to the one-drop's own beat-3 kick+rimshot, filling in what one-drop leaves empty, for a more forward-driving feel. Sources disagree on whether rockers' backbeat sits on beat 3 alone or on 2-and-4; this config follows the throughline version connecting all three styles (kick on 1 and 3, accent on 3) since it reads as a clear intensification of one-drop rather than an unrelated pattern.",
+      "hihat_steps": [0, 2, 4, 6, 8, 10, 12, 14],
+      "kick_steps": [0, 8],
+      "snare_accent_step": 8,
+      "fill_device": "hihat_triplet",
+      "fill_beats": 1,
+      "variations": [
+        {"name": "verse", "snare_articulation": "rimshot"},
+        {
+          "name": "chorus",
+          "snare_articulation": "full_snare",
+          "expert_notes": "Swapping the verse's rimshot for a full snare hit - the same rimshot-vs-full-snare device one-drop's chorus variation uses differently - is a common, simple way to raise the energy into a chorus."
+        }
+      ]
+    },
+    {
+      "id": "steppers",
+      "display_name": "Steppers groove",
+      "bpm": 88,
+      "expert_notes": "Steppers takes rockers' kick density further: a steady four-on-the-floor kick on every beat (a driving, 'marching' quality), while the beat-3 rimshot accent and steady hihat carry over from one-drop/rockers.",
+      "hihat_steps": [0, 2, 4, 6, 8, 10, 12, 14],
+      "kick_steps": [0, 4, 8, 12],
+      "snare_accent_step": 8,
+      "fill_device": "hihat_triplet",
+      "fill_beats": 1,
+      "variations": [
+        {"name": "verse", "snare_articulation": "rimshot"},
+        {
+          "name": "chorus",
+          "snare_articulation": "rimshot",
+          "extra_accents": [{"note": "HIHAT_OPEN", "step": 6, "symbol": "o"}],
+          "expert_notes": "Opening the hihat on an 'and' between beats for a dubbier chorus texture, a commonly cited reggae hihat device."
+        }
+      ]
+    }
+  ]
+}
