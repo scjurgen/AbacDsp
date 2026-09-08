@@ -104,7 +104,8 @@ flowchart TD
     subgraph SETUP["Patch setup"]
         HOME["SetHarmonyHome"]
         CHAR["SetHarmonyCharacter"]
-        PEDAL["SetPedalChannels"]
+        PEDALCH["SetPedalChannels"]
+        PEDAL["SetPedalNote"]
     end
 
     subgraph PREF["Vows and wishes"]
@@ -124,13 +125,14 @@ flowchart TD
 
     ORGANISM -->|every dwell period| TRANSITION["Chosen next state"]
     TRANSITION --> REALIZER["Voice-leading realizer"]
-    PEDAL -.->|excluded from the realizer| REALIZER
+    PEDALCH -.->|excluded from the realizer| REALIZER
 
     REALIZER -->|close pitch pair| GLIDE["setPitch, glide"]
     REALIZER -->|no close partner| FADE["triggerVoice / stopVoice"]
 
     GLIDE --> VOICES(("Channels 1..16"))
     FADE --> VOICES
+    PEDAL -->|channel 16, always excluded| VOICES
 ```
 
 A dwell period is tens of seconds; the organism reconsiders roughly that often, and mostly
@@ -144,14 +146,18 @@ audible, so "Chromatic" reads as "more foreign colour than usual", not "only for
 A chosen state's notes are realized per channel: a channel whose pitch is close to a note in
 the new state glides to it (`setPitch`, keeping that voice's own envelope/modulation state
 exactly as it was); everything else cross-fades - a free channel triggers the added note, a
-channel with no partner in the new state releases. Pedal channels are never touched by this -
+channel with no partner in the new state releases. Pedal channels (from `SetPedalChannels`) are never touched by this -
 they hold their own note independently.
 
 Each region also has a bass-forward variant (named with a trailing `/lo`, e.g. `1m9/lo`) - the
 same upper structure with a dominant low bass two octaves down, genuinely separated rather than
 clustered against the rest of the chord. Since the bass is usually the only note that differs
 from its plain counterpart, moving to or from one of these is often just that one note fading
-in or out - one of the smoothest transitions the palette has, not the biggest.
+in or out - one of the smoothest transitions the palette has, not the biggest. The organism
+picks these on its own merits and only sometimes, so relying on them alone doesn't guarantee an
+audible bass; channel 16 is instead a dedicated pedal voice, driven by the Pedal dial or
+`SetPedalNote` and always excluded from the realizer, for a bass presence that's always there
+when wanted.
 
 ## Controls
 
@@ -170,6 +176,7 @@ in or out - one of the smoothest transitions the palette has, not the biggest.
 | Harmony | on/off | Enables the harmonic organism (see Harmony above); off by default |
 | Home | C - B, default E | The harmonic organism's tonal home |
 | Character | Any/Minor Home/Major Light/Modal Warmth/Open-Suspended/Chromatic | Soft preference for one palette region |
+| Pedal | 0 - 127, default 0 (off) | Dedicated bass note on channel 16, always excluded from the realizer |
 | Script | (button) | Opens the popup editor for the current patch's script |
 
 **Settings > Scripts** manages a named pool of saved scripts, separate from the script embedded
@@ -273,21 +280,27 @@ where this instrument's stereo depth actually comes from.
 ### Harmonic organism
 
 See the Harmony diagram above for the full picture; this is the scripted surface. `SetHarmony`,
-`SetHarmonyHome`, and `SetHarmonyCharacter` are the same Harmony/Home/Character dials described
-in Controls above, also reachable from a script - whichever sets a value last wins, same as
-any other dial.
+`SetHarmonyHome`, `SetHarmonyCharacter`, and `SetPedalNote` are the same Harmony/Home/Character/
+Pedal dials described in Controls above, also reachable from a script - whichever sets a value
+last wins, same as any other dial.
 
 ```lua
 SetHarmony(enabled)                 -- off by default
 SetHarmonyHome(pitchClass)          -- 0..11, e.g. 4 = E; retunes the palette to a new home
 SetHarmonyCharacter(region)         -- 0 no preference, 1..5 the five regions in palette order
+SetPedalNote(note)                  -- 0 no bass, 1..127 a MIDI note held on channel 16
 SetPedalChannels({ channel, ... })  -- any subset of 1..16, including none or all
 ```
 
 With harmony off, the instrument behaves exactly as described above - every voice stays under
-direct `NoteOn`/`NoteOff`/`SetPitch` control. `SetPedalChannels` replaces the whole pedal set
-each call; a channel newly added to it is triggered at the current home note, a channel
-removed from it is left sounding rather than stopped - there is no dial for this, Lua-only.
+direct `NoteOn`/`NoteOff`/`SetPitch` control. `SetPedalNote` drives channel 16 directly: `0`
+stops it, any other value triggers it (or glides it, if it's already sounding) to that note -
+channel 16 is always excluded from the realizer regardless of `SetPedalChannels`, so it never
+competes with the organism's own voice leading. `SetPedalChannels` is a separate, more general
+mechanism for marking any subset of channels pedal (excluded from the realizer, left under
+manual control); it replaces the whole pedal set each call, a channel newly added to it is
+triggered at the current home note, and a channel removed from it is left sounding rather than
+stopped - there is no dial for this, Lua-only.
 
 A handful of impulse gestures nudge the organism's moving preferences temporarily - each rises,
 holds, then fades over roughly the same tens-of-seconds timescale as the organism's own
@@ -313,16 +326,21 @@ usual way to reach them instead - a `UICreateParameterSet` dropdown in the Lua C
 setting, and turns the chorus on for width - harmony stays off, a single static voice.
 
 `base-scripts/harmonic-scene.lua` hands the instrument to the organism instead: an E home, a
-dominant low bass on channel 16, an Impulse dropdown wired to all 9 gestures, and
+dedicated low pedal note on channel 16, an Impulse dropdown wired to all 9 gestures, and
 `Open`/`Arrive`/`Stay` nudges on a slow timer too.
 
-One script per `Character`, all otherwise sharing the same baseline patch and bass, each
+One script per `Character`, all otherwise sharing the same baseline patch and pedal note, each
 naming a different home and firing its region's own signature gesture once after 5 seconds:
 
-| Script | Home | Character | Gesture |
-|---|---|---|---|
-| `base-scripts/minor-home.lua` | E | Minor Home | `Arrive()` |
-| `base-scripts/major-light.lua` | C | Major Light | `Brighten()` |
-| `base-scripts/modal-warmth.lua` | G | Modal Warmth | `Lean()` |
-| `base-scripts/open-suspended.lua` | D | Open/Suspended | `Open()` |
-| `base-scripts/chromatic-weather.lua` | A | Chromatic | `Disturb()` |
+| Script | Home | Character | Pedal | Gesture |
+|---|---|---|---|---|
+| `base-scripts/minor-home.lua` | E | Minor Home | E1 (34) | `Arrive()` |
+| `base-scripts/major-light.lua` | C | Major Light | C1 (30) | `Brighten()` |
+| `base-scripts/modal-warmth.lua` | G | Modal Warmth | G1 (37) | `Lean()` |
+| `base-scripts/open-suspended.lua` | D | Open/Suspended | D1 (32) | `Open()` |
+| `base-scripts/chromatic-weather.lua` | A | Chromatic | A1 (39) | `Disturb()` |
+
+`base-scripts/pedal-modulation.lua` moves Home, Character, and Pedal together to modulate the
+whole instrument to a new key: C major for a minute, then D minor (also centred on D) for a
+minute, then F major for a minute, then back to C, looping - a demonstration that the pedal and
+the organism's own harmony choices can be kept pointing at the same tonal centre as it moves.

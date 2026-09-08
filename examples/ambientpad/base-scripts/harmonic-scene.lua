@@ -1,10 +1,10 @@
 -- harmonic-scene: hands the instrument over to the harmonic organism instead of playing a
--- single fixed note. Channel 16 carries a deliberate low, boosted, single-oscillator bass
--- (claimed as a pedal so it's never touched by voice-leading); every other channel shares the
--- same richer two-oscillator texture and is left for the organism itself to trigger/glide/
--- release as it moves through the palette. A few impulse gestures on a slow timer show the
--- performance vocabulary - in real use these come from the player, either the Impulse dropdown
--- below (Lua Controls area) or the Home/Harmony/Character dials.
+-- single fixed note. The Pedal is a dedicated, always-excluded-from-voice-leading bass channel,
+-- set here to a genuinely low note; every other channel shares the same richer two-oscillator
+-- texture and is left for the organism itself to trigger/glide/release as it moves through the
+-- palette. A few impulse gestures on a slow timer show the performance vocabulary - in real
+-- use these come from the player, either the Impulse dropdown below (Lua Controls area) or the
+-- Home/Harmony/Character/Pedal dials.
 
 -- One dropdown for all 9 gestures, since only 8 dynamic-UI slots exist in total - picking a
 -- different item each time fires it; re-picking the same item twice in a row does not.
@@ -32,6 +32,9 @@ function OnStart()
         SetOscillator(ch, 0, { waveform = 0, level = 0.7, height = 0, cents = 0 })
         SetOscillator(ch, 1, { waveform = 1, level = 0.6, height = 0, cents = 3 })
     end
+    SetOscillator(16, 0, { waveform = 0, level = 0.9, height = 0, cents = 0 })
+    SetOscillator(16, 1, { waveform = 0, level = 0.0, height = 0, cents = 0 })
+    SetGain(16, 4)
 
     SetMaterial(0.4)
     SetLight(0.4)
@@ -45,18 +48,7 @@ function OnStart()
 
     SetHarmony(true)
     SetHarmonyHome(4)          -- E
-    SetPedalChannels({ 16 })
-
-    -- SetPedalChannels always triggers a newly-claimed pedal at the home register first;
-    -- this deliberately overrides that a beat later with the real, low, boosted bass voice -
-    -- NoteOn is applied before SetPedalChannels within a single tick, so doing both at once
-    -- would have the home-register trigger win instead.
-    Timer.After(50, function()
-        SetOscillator(16, 0, { waveform = 0, level = 0.9, height = 0, cents = 0 })
-        SetOscillator(16, 1, { waveform = 0, level = 0.0, height = 0, cents = 0 })
-        SetGain(16, 4)
-        NoteOn(16, 34, 100)     -- E1, two and a half octaves below home
-    end)
+    SetPedalNote(34)           -- E1, two and a half octaves below home
 
     -- A slow arc: settle in for a while, admit some open/ambiguous colour, then seek a
     -- resting place - each gesture's own life cycle (see the impulse table above) does the

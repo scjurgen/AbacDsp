@@ -345,7 +345,7 @@ TEST(BaseScriptBassOverrideTest, minorHomeChannel16EndsUpAtTheOverrideNoteNotHom
 
 INSTANTIATE_TEST_SUITE_P(EveryBaseScript, BaseScriptTest,
                          ::testing::Values("breathing-drone", "harmonic-scene", "minor-home", "major-light",
-                                           "modal-warmth", "open-suspended", "chromatic-weather"),
+                                           "modal-warmth", "open-suspended", "chromatic-weather", "pedal-modulation"),
                          [](const ::testing::TestParamInfo<std::string>& info)
                          {
                              std::string name = info.param;

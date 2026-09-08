@@ -54,6 +54,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("harmonyEnabled", this);
         m_parameters.addParameterListener("harmonyHome", this);
         m_parameters.addParameterListener("harmonyCharacter", this);
+        m_parameters.addParameterListener("pedalNote", this);
         m_parameters.addParameterListener("luaParam1", this);
         m_parameters.addParameterListener("luaParam2", this);
         m_parameters.addParameterListener("luaParam3", this);
@@ -87,6 +88,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("harmonyEnabled", this);
         m_parameters.removeParameterListener("harmonyHome", this);
         m_parameters.removeParameterListener("harmonyCharacter", this);
+        m_parameters.removeParameterListener("pedalNote", this);
         m_parameters.removeParameterListener("luaParam1", this);
         m_parameters.removeParameterListener("luaParam2", this);
         m_parameters.removeParameterListener("luaParam3", this);
@@ -352,6 +354,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                               juce::String::fromUTF8("Open/Suspended"), juce::String::fromUTF8("Chromatic")},
             0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("pedalNote", 1), juce::String::fromUTF8("Pedal"),
+            juce::NormalisableRange<float>(0, 127, 1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 0) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("luaParam1", 1), juce::String::fromUTF8("Lua Param 1"),
             juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
@@ -482,6 +489,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setHarmonyCharacter(static_cast<int>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::harmonyCharacter, v);
+             }},
+            {"pedalNote",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setPedalNote(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::pedalNote, v);
              }},
             {"luaParam1",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -636,6 +649,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("harmonyCharacter");
             float normalized = range.convertTo0to1(static_cast<float>(params.harmonyCharacter));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("pedalNote"))
+        {
+            const auto& range = m_parameters.getParameterRange("pedalNote");
+            float normalized = range.convertTo0to1(static_cast<float>(params.pedalNote));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("luaParam1"))

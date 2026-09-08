@@ -26,6 +26,7 @@ struct PatchParameters
         harmonyEnabled  , // switch
         harmonyHome     , // drop
         harmonyCharacter, // drop
+        pedalNote       , // dial
         luaParam1       , // dial
         luaParam2       , // dial
         luaParam3       , // dial
@@ -49,6 +50,7 @@ bool hold{false};
 bool harmonyEnabled{false};
 size_t harmonyHome{4};
 size_t harmonyCharacter{0};
+float pedalNote{0.0f};
 float luaParam1{0.0f};
 float luaParam2{0.0f};
 float luaParam3{0.0f};
@@ -74,6 +76,7 @@ std::string script{};
 "harmonyEnabled",
 "harmonyHome",
 "harmonyCharacter",
+"pedalNote",
 "luaParam1",
 "luaParam2",
 "luaParam3",
@@ -113,6 +116,7 @@ std::string script{};
         else if constexpr (ParamId == Id::harmonyEnabled) return harmonyEnabled;
         else if constexpr (ParamId == Id::harmonyHome) return harmonyHome;
         else if constexpr (ParamId == Id::harmonyCharacter) return harmonyCharacter;
+        else if constexpr (ParamId == Id::pedalNote) return pedalNote;
         else if constexpr (ParamId == Id::luaParam1) return luaParam1;
         else if constexpr (ParamId == Id::luaParam2) return luaParam2;
         else if constexpr (ParamId == Id::luaParam3) return luaParam3;
@@ -159,6 +163,8 @@ break;
  case Id::harmonyHome: if (!isEqual(get<Id::harmonyHome>(), value)) {get<Id::harmonyHome>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
  case Id::harmonyCharacter: if (!isEqual(get<Id::harmonyCharacter>(), value)) {get<Id::harmonyCharacter>() = static_cast<size_t>(value) ;m_modified = true;}
+break;
+ case Id::pedalNote: if (!isEqual(get<Id::pedalNote>(), value)) {get<Id::pedalNote>() = value;m_modified = true;}
 break;
  case Id::luaParam1: if (!isEqual(get<Id::luaParam1>(), value)) {get<Id::luaParam1>() = value;m_modified = true;}
 break;
@@ -231,6 +237,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         harmonyEnabled  , // switch
         harmonyHome     , // drop
         harmonyCharacter, // drop
+        pedalNote       , // dial
         luaParam1       , // dial
         luaParam2       , // dial
         luaParam3       , // dial

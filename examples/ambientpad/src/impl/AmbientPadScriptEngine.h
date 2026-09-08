@@ -29,8 +29,8 @@ struct AmbientOscillatorSettings
  * `channel` addresses a voice slot directly (1..kMaxChannels, no stealing - see
  * AmbientPadImpl) rather than picking from a pool. SetOscillator/SetGain/SetPitch/NoteOn/NoteOff
  * are per-channel; the musical-intent, effects, and harmonic-organism setters (SetHarmony*,
- * SetPedalChannels, the impulse gestures) describe the one shared patch and broadcast to every
- * voice, mirroring the standalone's own dials.
+ * SetPedalNote, SetPedalChannels, the impulse gestures) describe the one shared patch and
+ * broadcast to every voice, mirroring the standalone's own dials.
  *
  * Every setter validates and clamps at this boundary, then stores a one-shot pending command -
  * drained once per block by AmbientPadImpl, the same pattern MorphexsynthScriptEngine uses. A
@@ -162,6 +162,8 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
 "-- SetHarmonyHome(note)  retunes the harmonic organism's palette to a new tonal home\n"
 "-- SetHarmonyCharacter(region)  soft-biases toward one palette region: 0 no preference,\n"
 "--   1 Home, 2 MajorLight, 3 ModalWarmth, 4 OpenSuspended, 5 ChromaticWeather\n"
+"-- SetPedalNote(note)  the dedicated bass pedal (always channel 16, always excluded from\n"
+"--   the organism's own voice-leading): 0 is off, 1..127 is a literal MIDI note\n"
 "-- SetPedalChannels({ channel, ... })  which channels (1..16) are pedal channels - any\n"
 "--   subset, including none or all; a newly added one is triggered at the home note\n"
 "\n"
@@ -197,6 +199,7 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     [[nodiscard]] std::optional<bool> drainHarmonyEnabledCommand() noexcept;
     [[nodiscard]] std::optional<int> drainHarmonyHomeCommand() noexcept;
     [[nodiscard]] std::optional<int> drainHarmonyCharacterCommand() noexcept;
+    [[nodiscard]] std::optional<int> drainPedalNoteCommand() noexcept;
     [[nodiscard]] std::optional<PedalChannelsCommand> drainPedalChannelsCommand() noexcept;
 
     struct PendingImpulseEventsResult
@@ -230,6 +233,7 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     void luaSetHarmony(bool enabled) noexcept;
     void luaSetHarmonyHome(int note) noexcept;
     void luaSetHarmonyCharacter(int region) noexcept;
+    void luaSetPedalNote(int note) noexcept;
     void luaSetPedalChannels(const sol::table& channels) noexcept;
     void pushImpulse(AbacDsp::ImpulseKind kind) noexcept;
     void luaSetMaterial(float value) noexcept;
@@ -255,6 +259,7 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     std::optional<bool> m_pendingHarmonyEnabled;
     std::optional<int> m_pendingHarmonyHome;
     std::optional<int> m_pendingHarmonyCharacter;
+    std::optional<int> m_pendingPedalNote;
     std::optional<PedalChannelsCommand> m_pendingPedalChannels;
     std::array<AbacDsp::ImpulseKind, kMaxPendingImpulsesPerBlock> m_pendingImpulses{};
     size_t m_pendingImpulseCount{0};
@@ -290,6 +295,7 @@ inline void AmbientPadScriptEngine::bindScriptFunctions()
     m_lua.set_function("SetHarmony", &AmbientPadScriptEngine::luaSetHarmony, this);
     m_lua.set_function("SetHarmonyHome", &AmbientPadScriptEngine::luaSetHarmonyHome, this);
     m_lua.set_function("SetHarmonyCharacter", &AmbientPadScriptEngine::luaSetHarmonyCharacter, this);
+    m_lua.set_function("SetPedalNote", &AmbientPadScriptEngine::luaSetPedalNote, this);
     m_lua.set_function("SetPedalChannels", &AmbientPadScriptEngine::luaSetPedalChannels, this);
     m_lua.set_function("Stay", [this]() { pushImpulse(AbacDsp::ImpulseKind::Stay); });
     m_lua.set_function("Lean", [this]() { pushImpulse(AbacDsp::ImpulseKind::Lean); });
@@ -388,6 +394,11 @@ inline void AmbientPadScriptEngine::luaSetHarmonyHome(const int note) noexcept
 inline void AmbientPadScriptEngine::luaSetHarmonyCharacter(const int region) noexcept
 {
     m_pendingHarmonyCharacter = region;
+}
+
+inline void AmbientPadScriptEngine::luaSetPedalNote(const int note) noexcept
+{
+    m_pendingPedalNote = note;
 }
 
 inline void AmbientPadScriptEngine::luaSetPedalChannels(const sol::table& channels) noexcept
@@ -564,6 +575,13 @@ inline std::optional<int> AmbientPadScriptEngine::drainHarmonyCharacterCommand()
 {
     const auto result = m_pendingHarmonyCharacter;
     m_pendingHarmonyCharacter.reset();
+    return result;
+}
+
+inline std::optional<int> AmbientPadScriptEngine::drainPedalNoteCommand() noexcept
+{
+    const auto result = m_pendingPedalNote;
+    m_pendingPedalNote.reset();
     return result;
 }
 

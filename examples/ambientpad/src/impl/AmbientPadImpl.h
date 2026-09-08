@@ -222,6 +222,28 @@ class AmbientPadImpl final : public EffectBase
         m_organism.setPreferredRegion(static_cast<AbacDsp::PaletteRegion>(index - 1));
     }
 
+    /// @brief The last channel is a dedicated bass pedal, always excluded from voice-leading
+    /// (see realizeHarmonicTransition()). 0 is off; 1..127 is a literal MIDI note - triggered
+    /// fresh from off, repitched instantly otherwise (matching the Note dial's own behaviour).
+    void setPedalNote(const float value) noexcept
+    {
+        const auto note = static_cast<int>(std::lround(value));
+        auto& voice = m_voices[kMaxVoices - 1];
+        if (note <= 0)
+        {
+            voice.stopVoice();
+            return;
+        }
+        if (voice.isPlaying())
+        {
+            voice.setPitch(note, 0.f, 0.f);
+        }
+        else
+        {
+            voice.triggerVoice(note, kManualPlayVelocity);
+        }
+    }
+
     /// @brief Replaces the pedal-channel set; a channel newly added is triggered at the
     /// current home note (a channel removed is left sounding, not stopped).
     void setPedalChannels(const std::span<const int> channels) noexcept
@@ -544,7 +566,7 @@ class AmbientPadImpl final : public EffectBase
         size_t freeCount = 0;
         for (size_t v = 0; v < kMaxVoices; ++v)
         {
-            if (m_pedalChannels[v])
+            if (m_pedalChannels[v] || v == kMaxVoices - 1)
             {
                 continue;
             }
@@ -677,6 +699,10 @@ class AmbientPadImpl final : public EffectBase
         if (const auto character = m_scriptEngine.drainHarmonyCharacterCommand())
         {
             setHarmonyCharacter(*character);
+        }
+        if (const auto pedalNote = m_scriptEngine.drainPedalNoteCommand())
+        {
+            setPedalNote(*pedalNote);
         }
         if (const auto pedal = m_scriptEngine.drainPedalChannelsCommand())
         {

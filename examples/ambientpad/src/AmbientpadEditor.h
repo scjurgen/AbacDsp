@@ -124,6 +124,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::center)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(pedalNoteDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[0].toFloat());
             }
         }
@@ -188,6 +189,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::center)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(pedalNoteDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[1].toFloat());
             }
             {
@@ -280,6 +282,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             valueTreeState, "harmonyCharacter", harmonyCharacterDrop);
         harmonyCharacterDrop.setTooltip(juce::String::fromUTF8(
             "Character (Any, Minor Home, Major Light, Modal Warmth, Open/Suspended, Chromatic)"));
+        addAndMakeVisible(pedalNoteDial);
+        pedalNoteDial.reset(valueTreeState, "pedalNote");
+        pedalNoteDial.setLabelText(juce::String::fromUTF8("Pedal"));
+        pedalNoteDial.setTooltip(juce::String::fromUTF8("Pedal (0 to 127)"));
         addAndMakeVisible(cpuGauge);
         cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
         cpuGauge.setTooltip(juce::String::fromUTF8("CPU (0 to 100 %)"));
@@ -404,6 +410,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             harmonyEnabledSwitch.setVisible(true);
             harmonyHomeDrop.setVisible(true);
             harmonyCharacterDrop.setVisible(true);
+            pedalNoteDial.setVisible(true);
             cpuGauge.setVisible(false);
             levelMeterGauge.setVisible(false);
             spectrogramGauge.setVisible(false);
@@ -432,6 +439,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             harmonyEnabledSwitch.setVisible(true);
             harmonyHomeDrop.setVisible(true);
             harmonyCharacterDrop.setVisible(true);
+            pedalNoteDial.setVisible(true);
             cpuGauge.setVisible(true);
             levelMeterGauge.setVisible(true);
             spectrogramGauge.setVisible(true);
@@ -1248,6 +1256,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> harmonyHomeDropAttachment;
     juce::ComboBox harmonyCharacterDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> harmonyCharacterDropAttachment;
+    CustomRotaryDial pedalNoteDial{this};
     CpuGauge cpuGauge{};
     Gauge levelMeterGauge{};
     SpectrogramDisplay spectrogramGauge{AppSettings::loadTheme()};

@@ -69,6 +69,10 @@ class StubImpl final : public EffectBase
     {
         m_harmonyCharacter = value;
     }
+    void setPedalNote(const float value)
+    {
+        m_pedalNote = value;
+    }
     void setLuaParam1(const float value)
     {
         m_luaParam1 = value;
@@ -125,6 +129,7 @@ class StubImpl final : public EffectBase
     bool m_harmonyEnabled{};
     size_t m_harmonyHome{};
     size_t m_harmonyCharacter{};
+    float m_pedalNote{};
     float m_luaParam1{};
     float m_luaParam2{};
     float m_luaParam3{};
