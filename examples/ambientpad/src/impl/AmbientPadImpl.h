@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -14,6 +15,7 @@
 #include "Filters/OnePoleFilter.h"
 #include "Filters/PoleMixingFilter.h"
 #include "Generators/SynthLfo.h"
+#include "Harmony/HarmonicOrganism.h"
 #include "Helpers/ConstructArray.h"
 #include "NonLinear/WaveShaperTables.h"
 #include "Numbers/Convert.h"
@@ -39,6 +41,7 @@ class AmbientPadImpl final : public EffectBase
         , m_chorusDelay(
               AbacDsp::constructArray<AbacDsp::ModulationDelayNoFeedback<kChorusMaxDelaySamples>, 2>(sampleRate))
         , m_reverb(sampleRate)
+        , m_organism(sampleRate)
         , m_logIntervalSamples(static_cast<size_t>(kLogIntervalSeconds * sampleRate))
     {
         for (auto& stage : m_phaser)
@@ -193,6 +196,54 @@ class AmbientPadImpl final : public EffectBase
         }
     }
 
+    /// @brief Off by default: with harmony disabled, the organism never steps and every voice
+    /// stays exactly as driven by Note/Play/NoteOn/NoteOff, as today.
+    void setHarmonyEnabled(const bool enabled) noexcept
+    {
+        m_harmonyEnabled = enabled;
+    }
+
+    /// @brief Retunes the organism's palette and where the realizer anchors it in register
+    /// (always the octave at and above MIDI 60, regardless of which pitch class home is).
+    void setHarmonyHome(const int pitchClass) noexcept
+    {
+        m_organism.setHome(pitchClass);
+        m_harmonyHomeNote = kHarmonyHomeOctaveBase + (((pitchClass % 12) + 12) % 12);
+    }
+
+    /// @brief Replaces the pedal-channel set; a channel newly added is triggered at the
+    /// current home note (a channel removed is left sounding, not stopped).
+    void setPedalChannels(const std::span<const int> channels) noexcept
+    {
+        std::array<bool, kMaxVoices> newPedalChannels{};
+        for (const auto channel : channels)
+        {
+            if (channel >= 1 && channel <= static_cast<int>(kMaxVoices))
+            {
+                newPedalChannels[static_cast<size_t>(channel - 1)] = true;
+            }
+        }
+        for (size_t v = 0; v < kMaxVoices; ++v)
+        {
+            if (newPedalChannels[v] && !m_pedalChannels[v])
+            {
+                m_voices[v].triggerVoice(m_harmonyHomeNote, kManualPlayVelocity);
+            }
+        }
+        m_pedalChannels = newPedalChannels;
+    }
+
+    void triggerHarmonyImpulse(const AbacDsp::ImpulseKind kind) noexcept
+    {
+        m_organism.triggerImpulse(kind);
+    }
+
+    /// @brief Count of harmonic transitions realized so far - diagnostics/testing only.
+    [[nodiscard]] size_t harmonyTransitionCount() const noexcept
+    {
+        return m_harmonyTransitionCount;
+    }
+
     void setLuaParam1(const float value) noexcept
     {
         m_luaParamValues[0] = value;
@@ -270,6 +321,15 @@ class AmbientPadImpl final : public EffectBase
         notifyUiParametersIfChanged();
         applyPendingScriptCommands();
 
+        if (m_harmonyEnabled)
+        {
+            m_organism.step(BlockSize);
+            if (const auto transition = m_organism.takePendingTransition())
+            {
+                realizeHarmonicTransition(*transition);
+            }
+        }
+
         std::array<float, BlockSize> mono{};
         std::array<float, BlockSize> voiceMono{};
         for (auto& voice : m_voices)
@@ -314,6 +374,10 @@ class AmbientPadImpl final : public EffectBase
     static constexpr float kDefaultLevelDb{-30.f};
     static constexpr int kManualPlayVelocity{100};
     static constexpr float kLogIntervalSeconds{2.f};
+
+    static constexpr int kHarmonyHomeOctaveBase{60};      ///< C4; home always sits in this octave
+    static constexpr int kGlideRepitchMaxSemitones{2};    ///< beyond this, cross-fade, don't glide
+    static constexpr float kTransitionGlideSeconds{10.f}; ///< human-perceptible, not instant
 
     static constexpr size_t kPhaserStagesPerChannel{2};
     static constexpr size_t kPhaserTotalStages{kPhaserStagesPerChannel * 2};
@@ -457,6 +521,102 @@ class AmbientPadImpl final : public EffectBase
         }
     }
 
+    /// @brief Matches currently-playing non-pedal channels against target's voicing by pitch
+    /// proximity: a close pair glides via setPitch(), a pitch with no close partner cross-fades
+    /// (release the old channel, trigger a free one) - see the plan's design decision 3.
+    void realizeHarmonicTransition(const AbacDsp::HarmonicState& target) noexcept
+    {
+        struct PlayingChannel
+        {
+            size_t channelIndex{0};
+            int pitch{0};
+        };
+        std::array<PlayingChannel, kMaxVoices> playing{};
+        size_t playingCount = 0;
+        std::array<size_t, kMaxVoices> freeChannels{};
+        size_t freeCount = 0;
+        for (size_t v = 0; v < kMaxVoices; ++v)
+        {
+            if (m_pedalChannels[v])
+            {
+                continue;
+            }
+            if (m_voices[v].isPlaying())
+            {
+                playing[playingCount++] = {v, static_cast<int>(std::lround(m_voices[v].currentPitchSemitones()))};
+            }
+            else
+            {
+                freeChannels[freeCount++] = v;
+            }
+        }
+
+        const auto targetNotes = target.voicing.notes();
+        std::array<bool, AbacDsp::Voicing::kMaxNotes> targetMatched{};
+        std::array<bool, kMaxVoices> playingMatched{};
+        const auto pairCount = std::min(playingCount, targetNotes.size());
+        for (size_t pair = 0; pair < pairCount; ++pair)
+        {
+            int bestDistance = -1;
+            size_t bestPlaying = 0;
+            size_t bestTarget = 0;
+            for (size_t p = 0; p < playingCount; ++p)
+            {
+                if (playingMatched[p])
+                {
+                    continue;
+                }
+                for (size_t t = 0; t < targetNotes.size(); ++t)
+                {
+                    if (targetMatched[t])
+                    {
+                        continue;
+                    }
+                    const int diff = playing[p].pitch - targetNotes[t];
+                    const int distance = diff < 0 ? -diff : diff;
+                    if (bestDistance < 0 || distance < bestDistance)
+                    {
+                        bestDistance = distance;
+                        bestPlaying = p;
+                        bestTarget = t;
+                    }
+                }
+            }
+            playingMatched[bestPlaying] = true;
+            const auto channelIndex = playing[bestPlaying].channelIndex;
+            if (bestDistance <= kGlideRepitchMaxSemitones)
+            {
+                targetMatched[bestTarget] = true;
+                m_voices[channelIndex].setPitch(targetNotes[bestTarget], 0.f, kTransitionGlideSeconds);
+            }
+            else
+            {
+                m_voices[channelIndex].stopVoice();
+            }
+        }
+
+        for (size_t p = 0; p < playingCount; ++p)
+        {
+            if (!playingMatched[p])
+            {
+                m_voices[playing[p].channelIndex].stopVoice();
+            }
+        }
+
+        size_t nextFree = 0;
+        for (size_t t = 0; t < targetNotes.size(); ++t)
+        {
+            if (targetMatched[t] || nextFree >= freeCount)
+            {
+                continue;
+            }
+            m_voices[freeChannels[nextFree]].triggerVoice(targetNotes[t], kManualPlayVelocity);
+            ++nextFree;
+        }
+
+        ++m_harmonyTransitionCount;
+    }
+
     void applyPendingScriptCommands() noexcept
     {
         const auto noteEvents = m_scriptEngine.drainNoteEvents();
@@ -559,6 +719,7 @@ class AmbientPadImpl final : public EffectBase
     float m_chorusMix{0.f};
 
     Fdn m_reverb;
+    AbacDsp::HarmonicOrganism m_organism;
     const size_t m_logIntervalSamples;
     size_t m_logCounter{0};
     AbacDsp::LinearSmoothing m_reverbDry{1.f};
@@ -566,6 +727,11 @@ class AmbientPadImpl final : public EffectBase
 
     AbacDsp::LinearSmoothing m_level{1.f};
     int m_manualNote{69};
+
+    bool m_harmonyEnabled{false};
+    int m_harmonyHomeNote{kHarmonyHomeOctaveBase};
+    std::array<bool, kMaxVoices> m_pedalChannels{};
+    size_t m_harmonyTransitionCount{0};
 
     AmbientPadScriptEngine m_scriptEngine{};
     std::array<float, AmbientPadScriptEngine::kMaxLuaParams> m_luaParamValues{};

@@ -227,6 +227,13 @@ class AmbientPadVoice
         return !m_ampEnvelope.isDone();
     }
 
+    /// @brief The pitch (note + cents/100) this voice is currently at - mid-glide, this is
+    /// where it presently sits, not the glide's eventual target.
+    [[nodiscard]] float currentPitchSemitones() const noexcept
+    {
+        return m_pitch.getLastValue();
+    }
+
     void processBlock(float* mono, const size_t numSamples) noexcept
     {
         std::generate_n(mono, numSamples, [this]() { return step(); });

@@ -228,3 +228,28 @@ TEST_F(AmbientpadTest, loadingANewScriptResetsVoicesToDefaults)
                                            kNote, kVelocity)));
     EXPECT_TRUE(expectFiniteAndBoundedTrackingNonZero(2000, 8.f));
 }
+
+TEST_F(AmbientpadTest, harmonicOrganismRealizesTransitionsSafely)
+{
+    Impl freshImpl{kSampleRate};
+    freshImpl.setHarmonyEnabled(true);
+
+    // One dwell period plus margin, at the organism's own default seed - long enough to see at
+    // least one real transition (see the Phase 5 robustness probe: it happens almost every cycle).
+    const auto samplesNeeded = static_cast<size_t>((AbacDsp::HarmonicOrganism::kDwellSeconds + 1.f) * kSampleRate);
+    const auto blocksNeeded = static_cast<int>(samplesNeeded / kBlockSize);
+
+    AbacDsp::AudioBuffer<2, kBlockSize> in{};
+    AbacDsp::AudioBuffer<2, kBlockSize> out{};
+    for (int b = 0; b < blocksNeeded; ++b)
+    {
+        freshImpl.processBlock(in, out);
+        for (size_t i = 0; i < kBlockSize; ++i)
+        {
+            ASSERT_TRUE(std::isfinite(out(i, 0)));
+            ASSERT_TRUE(std::isfinite(out(i, 1)));
+            ASSERT_LE(std::abs(out(i, 0)), 8.f);
+        }
+    }
+    EXPECT_GE(freshImpl.harmonyTransitionCount(), 1u);
+}
