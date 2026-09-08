@@ -6,6 +6,11 @@ include(GoogleTest)
 macro(package_add_test TESTNAME)
     add_executable(${TESTNAME} ${ARGN})
     target_link_libraries(${TESTNAME} gtest gmock gtest_main)
+    target_compile_definitions(
+        ${TESTNAME}
+        PRIVATE
+            AMBIENTPAD_BASE_SCRIPTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../base-scripts"
+    )
     gtest_discover_tests(
         ${TESTNAME}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}

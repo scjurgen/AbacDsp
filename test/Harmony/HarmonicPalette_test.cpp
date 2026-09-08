@@ -9,7 +9,8 @@ namespace AbacDsp::Test
 
 namespace
 {
-constexpr int kRegisterBoundSemitones{24}; // 2 octaves either side of home is a generous bound
+constexpr int kRegisterBoundSemitones{30}; // 2.5 octaves either side - the bass-forward "/lo"
+                                           // entries sit right at 2 octaves down; leave headroom
 }
 
 TEST(StateTagTest, returnsTheMatchingIntrinsicTag)

@@ -28,7 +28,7 @@ template <size_t BlockSize>
 class AmbientPadImpl final : public EffectBase
 {
   public:
-    static constexpr size_t kMaxVoices{10}; ///< must match AmbientPadScriptEngine::kMaxChannels
+    static constexpr size_t kMaxVoices{16}; ///< must match AmbientPadScriptEngine::kMaxChannels
 
     explicit AmbientPadImpl(const float sampleRate)
         : EffectBase(sampleRate)
@@ -42,7 +42,6 @@ class AmbientPadImpl final : public EffectBase
               AbacDsp::constructArray<AbacDsp::ModulationDelayNoFeedback<kChorusMaxDelaySamples>, 2>(sampleRate))
         , m_reverb(sampleRate)
         , m_organism(sampleRate)
-        , m_logIntervalSamples(static_cast<size_t>(kLogIntervalSeconds * sampleRate))
     {
         for (auto& stage : m_phaser)
         {
@@ -384,19 +383,11 @@ class AmbientPadImpl final : public EffectBase
             out(s, 0) = in(s, 0) + left[s] * level;
             out(s, 1) = in(s, 1) + right[s] * level;
         }
-
-        m_logCounter += BlockSize;
-        if (m_logCounter >= m_logIntervalSamples)
-        {
-            m_logCounter = 0;
-            logModulationTable();
-        }
     }
 
   private:
     static constexpr float kDefaultLevelDb{-30.f};
     static constexpr int kManualPlayVelocity{100};
-    static constexpr float kLogIntervalSeconds{2.f};
 
     static constexpr int kHarmonyHomeOctaveBase{60};      ///< C4; home always sits in this octave
     static constexpr int kGlideRepitchMaxSemitones{2};    ///< beyond this, cross-fade, don't glide
@@ -523,25 +514,16 @@ class AmbientPadImpl final : public EffectBase
     }
 #pragma GCC diagnostic pop
 
-    // One line per playing voice; short inline labels (see AmbientPadVoice::ModulationSnapshot)
-    // rather than a header row, so a single line stands on its own in a scrolling console.
-    void logModulationTable() const
+    /// @brief Prints the just-realized state's name and its intervals from home, e.g.
+    /// "1m9/lo: 0 -24 -2 2 3 7" - only called on a real transition, never periodically.
+    void logHarmonicState(const AbacDsp::HarmonicState& state) const
     {
-        for (size_t v = 0; v < kMaxVoices; ++v)
+        std::fprintf(stderr, "harmony: %.*s:", static_cast<int>(state.name.size()), state.name.data());
+        for (const auto note : state.voicing.notes())
         {
-            if (!m_voices[v].isPlaying())
-            {
-                continue;
-            }
-            const auto s = m_voices[v].snapshot();
-            std::fprintf(stderr,
-                         "ch%-2zu mat:%5.2f lgt:%5.2f mot:%5.2f brt:%5.2f stb:%5.2f blm:%5.2f hld:%d  "
-                         "ou-b:%6.2f ou-m:%6.2f ou-l:%6.2f ou-d:%6.2f  "
-                         "cf-f:%6.0fHz cf-c:%4.2f cf-r:%4.2f  o0-f:%7.1fHz o1-f:%7.1fHz  env:%5.2f gan:%5.2f\n",
-                         v + 1, s.material, s.light, s.motion, s.breath, s.stability, s.bloom, s.hold ? 1 : 0,
-                         s.ouBreath, s.ouMaterial, s.ouLens, s.ouDrift, s.filterCutoffHz, s.filterCharacterPos,
-                         s.filterResonance, s.osc0Hz, s.osc1Hz, s.envelope, s.gain);
+            std::fprintf(stderr, " %d", note);
         }
+        std::fprintf(stderr, "\n");
     }
 
     /// @brief Matches currently-playing non-pedal channels against target's voicing by pitch
@@ -549,6 +531,8 @@ class AmbientPadImpl final : public EffectBase
     /// (release the old channel, trigger a free one) - see the plan's design decision 3.
     void realizeHarmonicTransition(const AbacDsp::HarmonicState& target) noexcept
     {
+        logHarmonicState(target);
+
         struct PlayingChannel
         {
             size_t channelIndex{0};
@@ -770,8 +754,6 @@ class AmbientPadImpl final : public EffectBase
 
     Fdn m_reverb;
     AbacDsp::HarmonicOrganism m_organism;
-    const size_t m_logIntervalSamples;
-    size_t m_logCounter{0};
     AbacDsp::LinearSmoothing m_reverbDry{1.f};
     AbacDsp::LinearSmoothing m_reverbMix{0.f};
 

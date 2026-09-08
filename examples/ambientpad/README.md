@@ -1,6 +1,6 @@
 # Ambientpad
 
-A monophonic ambient-pad voice, times up to 10: two morphing wavetable layers through a
+A monophonic ambient-pad voice, times up to 16: two morphing wavetable layers through a
 resonant pole-mixing filter, a long attack/release amplitude envelope, a distortion stage, and
 the same phaser/chorus/reverb master-bus effects as Morphexsynth. There is no MIDI input in this
 phase - a voice is played from the Note/Play controls, scripted directly via Lua's
@@ -14,7 +14,7 @@ Breath/Stability/Bloom dials speak in musical intentions (substance, darkness/li
 drift, presence, firmness, emergence) rather than raw filter/envelope parameters; Hold freezes
 all four processes at their current value.
 
-The voice keeps an array of 10 slots (channels) for polyphony: only channel 1 is driven by the
+The voice keeps an array of 16 slots (channels) for polyphony: only channel 1 is driven by the
 standalone's own Note/Play controls, and the rest sit idle unless a script addresses them
 directly with `NoteOn`/`NoteOff` - or the harmonic organism is driving them itself.
 
@@ -129,7 +129,7 @@ flowchart TD
     REALIZER -->|close pitch pair| GLIDE["setPitch, glide"]
     REALIZER -->|no close partner| FADE["triggerVoice / stopVoice"]
 
-    GLIDE --> VOICES(("Channels 1..10"))
+    GLIDE --> VOICES(("Channels 1..16"))
     FADE --> VOICES
 ```
 
@@ -146,6 +146,12 @@ the new state glides to it (`setPitch`, keeping that voice's own envelope/modula
 exactly as it was); everything else cross-fades - a free channel triggers the added note, a
 channel with no partner in the new state releases. Pedal channels are never touched by this -
 they hold their own note independently.
+
+Each region also has a bass-forward variant (named with a trailing `/lo`, e.g. `1m9/lo`) - the
+same upper structure with a dominant low bass two octaves down, genuinely separated rather than
+clustered against the rest of the chord. Since the bass is usually the only note that differs
+from its plain counterpart, moving to or from one of these is often just that one note fading
+in or out - one of the smoothest transitions the palette has, not the biggest.
 
 ## Controls
 
@@ -191,7 +197,7 @@ NoteOn(channel, note, velocity)
 NoteOff(channel, note)
 ```
 
-`channel` is `1..10` and addresses a voice slot directly - there is no voice stealing, a channel
+`channel` is `1..16` and addresses a voice slot directly - there is no voice stealing, a channel
 number *is* a voice. Only channel 1 is wired to the standalone's own Note/Play controls; the
 rest are for a script's own use (future polyphony). `note` is a MIDI-style note number (`69` =
 A4 = 440 Hz); `velocity` is `0..127`.
@@ -202,7 +208,7 @@ A4 = 440 Hz); `velocity` is `0..127`.
 SetOscillator(channel, index, { waveform = 0, level = 0.7, height = 0, cents = 0 })
 ```
 
-`channel` is `1..10` (see above); `index` is `0` or `1` (the two oscillators). `waveform`
+`channel` is `1..16` (see above); `index` is `0` or `1` (the two oscillators). `waveform`
 selects the material *path* this layer's Material position sweeps along: `0` Saw-Sine-Square
 (the default - warm through hollow to reedy), `1` Triangle-Sine-SharkFin (softer), `2`
 Square-White-Saw (noisier, using the noise waveform). `level` is `-1..1`; `height` is a semitone
@@ -275,7 +281,7 @@ any other dial.
 SetHarmony(enabled)                 -- off by default
 SetHarmonyHome(pitchClass)          -- 0..11, e.g. 4 = E; retunes the palette to a new home
 SetHarmonyCharacter(region)         -- 0 no preference, 1..5 the five regions in palette order
-SetPedalChannels({ channel, ... })  -- any subset of 1..10, including none or all
+SetPedalChannels({ channel, ... })  -- any subset of 1..16, including none or all
 ```
 
 With harmony off, the instrument behaves exactly as described above - every voice stays under
@@ -306,6 +312,17 @@ usual way to reach them instead - a `UICreateParameterSet` dropdown in the Lua C
 `base-scripts/breathing-drone.lua` plays channel 1 at `OnStart`, leans into a slow, wide Motion
 setting, and turns the chorus on for width - harmony stays off, a single static voice.
 
-`base-scripts/harmonic-scene.lua` hands the instrument to the organism instead: an E home,
-channel 10 as a pedal, an Impulse dropdown wired to all 9 gestures, and `Open`/`Arrive`/`Stay`
-nudges on a timer too.
+`base-scripts/harmonic-scene.lua` hands the instrument to the organism instead: an E home, a
+dominant low bass on channel 16, an Impulse dropdown wired to all 9 gestures, and
+`Open`/`Arrive`/`Stay` nudges on a slow timer too.
+
+One script per `Character`, all otherwise sharing the same baseline patch and bass, each
+naming a different home and firing its region's own signature gesture once after 5 seconds:
+
+| Script | Home | Character | Gesture |
+|---|---|---|---|
+| `base-scripts/minor-home.lua` | E | Minor Home | `Arrive()` |
+| `base-scripts/major-light.lua` | C | Major Light | `Brighten()` |
+| `base-scripts/modal-warmth.lua` | G | Modal Warmth | `Lean()` |
+| `base-scripts/open-suspended.lua` | D | Open/Suspended | `Open()` |
+| `base-scripts/chromatic-weather.lua` | A | Chromatic | `Disturb()` |

@@ -39,7 +39,7 @@ struct AmbientOscillatorSettings
 class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine>
 {
   public:
-    static constexpr size_t kMaxChannels{10}; ///< must match AmbientPadImpl::kMaxVoices
+    static constexpr size_t kMaxChannels{16}; ///< must match AmbientPadImpl::kMaxVoices
     static constexpr size_t kNumOscillators{2};
     static constexpr size_t kNumMaterialPaths{3};
     static constexpr size_t kMaxNoteEventsPerBlock{16};
@@ -119,7 +119,7 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
 "-- a UICreateParameterSet callback, a Timer.After callback, ...), never at this script's\n"
 "-- own top level.\n"
 "\n"
-"-- NoteOn(channel, note, velocity)  channel 1..10 addresses a voice slot directly (no\n"
+"-- NoteOn(channel, note, velocity)  channel 1..16 addresses a voice slot directly (no\n"
 "--   stealing - only channel 1 is driven by the standalone's own Note/Play controls).\n"
 "--   note: MIDI-style note number, 69 = A4 = 440 Hz. velocity: 0..127.\n"
 "-- NoteOff(channel, note)\n"
@@ -162,7 +162,7 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
 "-- SetHarmonyHome(note)  retunes the harmonic organism's palette to a new tonal home\n"
 "-- SetHarmonyCharacter(region)  soft-biases toward one palette region: 0 no preference,\n"
 "--   1 Home, 2 MajorLight, 3 ModalWarmth, 4 OpenSuspended, 5 ChromaticWeather\n"
-"-- SetPedalChannels({ channel, ... })  which channels (1..10) are pedal channels - any\n"
+"-- SetPedalChannels({ channel, ... })  which channels (1..16) are pedal channels - any\n"
 "--   subset, including none or all; a newly added one is triggered at the home note\n"
 "\n"
 "-- Impulse gestures - performance nudges with a life cycle, not an instant hard switch:\n"

@@ -26,7 +26,7 @@ namespace AbacDsp
                          .tension = tension};
 }
 
-inline constexpr size_t kDefaultPaletteSize{15};
+inline constexpr size_t kDefaultPaletteSize{20};
 
 /// @ingroup harmony
 /// @brief The hand-curated palette of harmonic states around an E-centred home, authored
@@ -35,28 +35,28 @@ inline constexpr size_t kDefaultPaletteSize{15};
 {
     return {{
         // -- Home: minor tonic (1) --
-        makeHarmonicState("1m(add9)", PaletteRegion::Home, std::to_array<int>({0, 2, 3, 7}), 0.35f, 0.85f, 0.35f, 0.2f,
+        makeHarmonicState("1m(add9)", PaletteRegion::Home, std::to_array<int>({0, 14, 3, 7}), 0.35f, 0.85f, 0.35f, 0.2f,
                           0.15f),
-        makeHarmonicState("1m9", PaletteRegion::Home, std::to_array<int>({-2, 0, 2, 3, 7}), 0.35f, 0.85f, 0.5f, 0.3f,
+        makeHarmonicState("1m9", PaletteRegion::Home, std::to_array<int>({-2, 0, 14, 3, 7}), 0.35f, 0.85f, 0.5f, 0.3f,
                           0.2f),
-        makeHarmonicState("1m11", PaletteRegion::Home, std::to_array<int>({-2, 0, 2, 3, 5, 7}), 0.3f, 0.8f, 0.6f, 0.4f,
+        makeHarmonicState("1m11", PaletteRegion::Home, std::to_array<int>({-2, 0, 14, 3, 5, 7}), 0.3f, 0.8f, 0.6f, 0.4f,
                           0.25f),
         // -- Major-light: major tonic (1) --
-        makeHarmonicState("1maj7", PaletteRegion::MajorLight, std::to_array<int>({-1, 0, 4, 7}), 0.75f, 0.1f, 0.35f,
+        makeHarmonicState("1maj7", PaletteRegion::MajorLight, std::to_array<int>({11, 0, 4, 7}), 0.75f, 0.1f, 0.35f,
                           0.2f, 0.2f),
-        makeHarmonicState("16/9", PaletteRegion::MajorLight, std::to_array<int>({0, 2, 4, 7, 9}), 0.8f, 0.15f, 0.5f,
+        makeHarmonicState("16/9", PaletteRegion::MajorLight, std::to_array<int>({0, 14, 4, 7, 9}), 0.8f, 0.15f, 0.5f,
                           0.3f, 0.15f),
-        makeHarmonicState("1maj9", PaletteRegion::MajorLight, std::to_array<int>({0, 2, 4, 7, 11}), 0.8f, 0.1f, 0.55f,
+        makeHarmonicState("1maj9", PaletteRegion::MajorLight, std::to_array<int>({0, 14, 4, 7, 11}), 0.8f, 0.1f, 0.55f,
                           0.25f, 0.2f),
         // -- Modal warmth and shared-tone --
-        makeHarmonicState("b6maj7", PaletteRegion::ModalWarmth, std::to_array<int>({-4, 0, 3, 7}), 0.55f, 0.4f, 0.3f,
+        makeHarmonicState("b6maj7", PaletteRegion::ModalWarmth, std::to_array<int>({8, 0, 3, 11}), 0.55f, 0.4f, 0.3f,
                           0.5f, 0.3f),
         makeHarmonicState("b36", PaletteRegion::ModalWarmth, std::to_array<int>({-2, 0, 3, 7}), 0.6f, 0.45f, 0.3f, 0.5f,
                           0.25f),
-        makeHarmonicState("4m9", PaletteRegion::ModalWarmth, std::to_array<int>({-7, -4, 0, 3, 7}), 0.45f, 0.6f, 0.5f,
+        makeHarmonicState("4m9", PaletteRegion::ModalWarmth, std::to_array<int>({5, -4, 0, 3, 7}), 0.45f, 0.6f, 0.5f,
                           0.55f, 0.3f),
         // -- Open and suspended --
-        makeHarmonicState("b7maj9", PaletteRegion::OpenSuspended, std::to_array<int>({-2, 0, 2, 5, 9}), 0.65f, 0.3f,
+        makeHarmonicState("b7maj9", PaletteRegion::OpenSuspended, std::to_array<int>({-2, 0, 14, 5, 9}), 0.65f, 0.3f,
                           0.5f, 0.55f, 0.3f),
         makeHarmonicState("4(add9)", PaletteRegion::OpenSuspended, std::to_array<int>({-7, -3, 0, 7}), 0.6f, 0.35f,
                           0.35f, 0.5f, 0.25f),
@@ -69,6 +69,18 @@ inline constexpr size_t kDefaultPaletteSize{15};
                           0.8f, 0.75f),
         makeHarmonicState("b5maj7", PaletteRegion::ChromaticWeather, std::to_array<int>({-2, 1, 5, 6}), 0.55f, 0.35f,
                           0.35f, 0.85f, 0.8f),
+        // -- Bass-forward variants: one per region, a dominant low bass (2 octaves down) with
+        // a genuine gap before that region's own upper structure, not a dense cluster --
+        makeHarmonicState("1m9/lo", PaletteRegion::Home, std::to_array<int>({-24, -2, 0, 2, 3, 7}), 0.3f, 0.85f, 0.6f,
+                          0.3f, 0.2f),
+        makeHarmonicState("1maj9/lo", PaletteRegion::MajorLight, std::to_array<int>({-24, 0, 2, 4, 7, 11}), 0.75f, 0.1f,
+                          0.65f, 0.25f, 0.2f),
+        makeHarmonicState("4m9/lo", PaletteRegion::ModalWarmth, std::to_array<int>({-24, -7, -4, 0, 3, 7}), 0.4f, 0.6f,
+                          0.65f, 0.55f, 0.35f),
+        makeHarmonicState("b7maj9/lo", PaletteRegion::OpenSuspended, std::to_array<int>({-24, -2, 0, 2, 5, 9}), 0.6f,
+                          0.3f, 0.6f, 0.55f, 0.3f),
+        makeHarmonicState("6maj/lo", PaletteRegion::ChromaticWeather, std::to_array<int>({-24, -3, 1, 4}), 0.45f, 0.3f,
+                          0.35f, 0.8f, 0.75f),
     }};
 }
 

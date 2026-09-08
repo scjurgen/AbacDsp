@@ -1,8 +1,11 @@
+#include <algorithm>
 #include <cmath>
 #include <format>
+#include <fstream>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <limits>
+#include <sstream>
 
 #include "Audio/AudioBuffer.h"
 #include "impl/AmbientPadImpl.h"
@@ -21,6 +24,14 @@ void renderBlocksOn(Impl& target, const int count)
     {
         target.processBlock(in, out);
     }
+}
+
+std::string readFile(const std::string& path)
+{
+    std::ifstream file(path);
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    return buffer.str();
 }
 }
 
@@ -289,3 +300,55 @@ TEST_F(AmbientpadTest, harmonyLuaBindingsReachTheOrganism)
     }
     EXPECT_GE(impl.harmonyTransitionCount(), 1u);
 }
+
+class BaseScriptTest : public ::testing::TestWithParam<std::string>
+{
+};
+
+TEST_P(BaseScriptTest, loadsAndProducesFiniteBoundedOutput)
+{
+    const auto source = readFile(std::string(AMBIENTPAD_BASE_SCRIPTS_DIR) + "/" + GetParam() + ".lua");
+    ASSERT_FALSE(source.empty()) << GetParam();
+
+    Impl impl{kSampleRate};
+    ASSERT_TRUE(impl.setScript(source)) << impl.scriptError();
+    ASSERT_FALSE(impl.hasScriptError()) << impl.scriptError();
+
+    // A few seconds - enough to hear the pedal/initial voice and one Timer-scheduled gesture,
+    // without waiting out a full 30s harmonic-organism dwell period.
+    AbacDsp::AudioBuffer<2, kBlockSize> in{};
+    AbacDsp::AudioBuffer<2, kBlockSize> out{};
+    for (int b = 0; b < 20000; ++b)
+    {
+        impl.processBlock(in, out);
+        for (size_t i = 0; i < kBlockSize; ++i)
+        {
+            ASSERT_TRUE(std::isfinite(out(i, 0)));
+            ASSERT_LE(std::abs(out(i, 0)), 8.f);
+        }
+    }
+}
+
+TEST(BaseScriptBassOverrideTest, minorHomeChannel16EndsUpAtTheOverrideNoteNotHomeRegister)
+{
+    const auto source = readFile(std::string(AMBIENTPAD_BASE_SCRIPTS_DIR) + "/minor-home.lua");
+    ASSERT_FALSE(source.empty());
+
+    Impl impl{kSampleRate};
+    ASSERT_TRUE(impl.setScript(source)) << impl.scriptError();
+
+    renderBlocksOn(impl, static_cast<int>(0.5f * kSampleRate) / static_cast<int>(kBlockSize));
+
+    ASSERT_TRUE(impl.voiceIsPlaying(16));
+    EXPECT_NEAR(impl.voicePitchSemitones(16), 34.f, 0.5f);
+}
+
+INSTANTIATE_TEST_SUITE_P(EveryBaseScript, BaseScriptTest,
+                         ::testing::Values("breathing-drone", "harmonic-scene", "minor-home", "major-light",
+                                           "modal-warmth", "open-suspended", "chromatic-weather"),
+                         [](const ::testing::TestParamInfo<std::string>& info)
+                         {
+                             std::string name = info.param;
+                             std::replace(name.begin(), name.end(), '-', '_');
+                             return name;
+                         });

@@ -78,7 +78,7 @@ class PitchClassSet
 class Voicing
 {
   public:
-    static constexpr size_t kMaxNotes{9};
+    static constexpr size_t kMaxNotes{12};
 
     constexpr Voicing() noexcept = default;
 
