@@ -253,3 +253,26 @@ TEST_F(AmbientpadTest, harmonicOrganismRealizesTransitionsSafely)
     }
     EXPECT_GE(freshImpl.harmonyTransitionCount(), 1u);
 }
+
+TEST_F(AmbientpadTest, harmonyLuaBindingsReachTheOrganism)
+{
+    ASSERT_TRUE(impl.setScript("function OnStart()\n"
+                               "    SetHarmony(true)\n"
+                               "    SetHarmonyHome(4)\n"
+                               "    SetPedalChannels({10})\n"
+                               "    Arrive()\n"
+                               "end\n"));
+
+    const auto samplesNeeded = static_cast<size_t>((AbacDsp::HarmonicOrganism::kDwellSeconds + 1.f) * kSampleRate);
+    const auto blocksNeeded = static_cast<int>(samplesNeeded / kBlockSize);
+    for (int b = 0; b < blocksNeeded; ++b)
+    {
+        const auto out = processOneBlock();
+        for (size_t i = 0; i < kBlockSize; ++i)
+        {
+            ASSERT_TRUE(std::isfinite(out(i, 0)));
+            ASSERT_LE(std::abs(out(i, 0)), 8.f);
+        }
+    }
+    EXPECT_GE(impl.harmonyTransitionCount(), 1u);
+}

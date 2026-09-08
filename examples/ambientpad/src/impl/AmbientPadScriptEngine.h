@@ -9,6 +9,7 @@
 #include <string_view>
 
 #include "../inc/LuaScriptEngineBase.h"
+#include "Harmony/HarmonicPreferences.h"
 
 /// @brief SetOscillator's payload: one of a channel's 2 oscillators' material path/tuning/level.
 struct AmbientOscillatorSettings
@@ -27,9 +28,9 @@ struct AmbientOscillatorSettings
  *
  * `channel` addresses a voice slot directly (1..kMaxChannels, no stealing - see
  * AmbientPadImpl) rather than picking from a pool. SetOscillator/SetGain/SetPitch/NoteOn/NoteOff
- * are per-channel; SetMaterial/SetLight/SetMotion/SetBreath/SetStability/SetBloom/SetHold and the
- * effects setters describe the one shared patch and broadcast to every voice, mirroring the
- * standalone's own dials.
+ * are per-channel; the musical-intent, effects, and harmonic-organism setters (SetHarmony*,
+ * SetPedalChannels, the impulse gestures) describe the one shared patch and broadcast to every
+ * voice, mirroring the standalone's own dials.
  *
  * Every setter validates and clamps at this boundary, then stores a one-shot pending command -
  * drained once per block by AmbientPadImpl, the same pattern MorphexsynthScriptEngine uses. A
@@ -63,6 +64,16 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
         float glideTimeSeconds{0.f};
     };
     using PitchCommands = std::array<std::optional<AmbientPitchSettings>, kMaxChannels>;
+
+    static constexpr size_t kMaxPendingImpulsesPerBlock{8};
+
+    /// @brief SetPedalChannels' payload: which channels (1-indexed) are pedal channels - see
+    /// the plan's design decision 4. Replaces the whole set each call.
+    struct PedalChannelsCommand
+    {
+        std::array<int, kMaxChannels> channels{};
+        size_t count{0};
+    };
 
     /// @brief SetPhaser's payload: the master-bus phaser (8 allpass poles total).
     struct PhaserSettings
@@ -145,6 +156,23 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
 "-- SetReverb({ sizeMeters, decayMs, dryDb, mixDb })  master-bus FDN reverb, order 32.\n"
 "--   sizeMeters: 1..60. decayMs: 0..20000. dryDb/mixDb: -100..12 (mixDb defaults to -100,\n"
 "--   i.e. off)\n"
+"\n"
+"-- SetHarmony(enabled)  off by default - with it off, nothing below this line does anything;\n"
+"--   every voice stays exactly as driven by Note/Play/NoteOn/NoteOff, as usual.\n"
+"-- SetHarmonyHome(note)  retunes the harmonic organism's palette to a new tonal home\n"
+"-- SetPedalChannels({ channel, ... })  which channels (1..10) are pedal channels - any\n"
+"--   subset, including none or all; a newly added one is triggered at the home note\n"
+"\n"
+"-- Impulse gestures - performance nudges with a life cycle, not an instant hard switch:\n"
+"-- Stay()      delay harmonic departure, retain the current voicing relationship\n"
+"-- Lean()      move toward a nearby plausible colour\n"
+"-- Open()      admit space and ambiguity - open intervals, wider registers\n"
+"-- Gather()    become intimate and coherent - fewer notes, closer affinity\n"
+"-- Darken()    reduce light and certainty\n"
+"-- Brighten()  allow more light\n"
+"-- Disturb()   permit a small rupture, temporarily widen permitted friction\n"
+"-- Arrive()    seek a meaningful resting place - calmer, more stable\n"
+"-- Release()   fade out every other currently active impulse\n"
 "\n";
     // clang-format on
 
@@ -164,6 +192,17 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
                                                                                   size_t index) noexcept;
     [[nodiscard]] std::optional<float> drainGainCommand(size_t voiceIndex) noexcept;
     [[nodiscard]] std::optional<AmbientPitchSettings> drainPitchCommand(size_t voiceIndex) noexcept;
+    [[nodiscard]] std::optional<bool> drainHarmonyEnabledCommand() noexcept;
+    [[nodiscard]] std::optional<int> drainHarmonyHomeCommand() noexcept;
+    [[nodiscard]] std::optional<PedalChannelsCommand> drainPedalChannelsCommand() noexcept;
+
+    struct PendingImpulseEventsResult
+    {
+        std::array<AbacDsp::ImpulseKind, kMaxPendingImpulsesPerBlock> events{};
+        size_t count{0};
+    };
+    [[nodiscard]] PendingImpulseEventsResult drainImpulseEvents() noexcept;
+
     [[nodiscard]] std::optional<float> drainMaterialCommand() noexcept;
     [[nodiscard]] std::optional<float> drainLightCommand() noexcept;
     [[nodiscard]] std::optional<float> drainMotionCommand() noexcept;
@@ -185,6 +224,10 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     void luaSetOscillator(size_t channel, size_t index, const sol::table& params) noexcept;
     void luaSetGain(size_t channel, float gainDb) noexcept;
     void luaSetPitch(size_t channel, int note, float cents, float glideTimeSeconds) noexcept;
+    void luaSetHarmony(bool enabled) noexcept;
+    void luaSetHarmonyHome(int note) noexcept;
+    void luaSetPedalChannels(const sol::table& channels) noexcept;
+    void pushImpulse(AbacDsp::ImpulseKind kind) noexcept;
     void luaSetMaterial(float value) noexcept;
     void luaSetLight(float value) noexcept;
     void luaSetMotion(float value) noexcept;
@@ -205,6 +248,11 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     PerChannelOscillatorCommands m_pendingOscillator{};
     GainCommands m_pendingGain{};
     PitchCommands m_pendingPitch{};
+    std::optional<bool> m_pendingHarmonyEnabled;
+    std::optional<int> m_pendingHarmonyHome;
+    std::optional<PedalChannelsCommand> m_pendingPedalChannels;
+    std::array<AbacDsp::ImpulseKind, kMaxPendingImpulsesPerBlock> m_pendingImpulses{};
+    size_t m_pendingImpulseCount{0};
     std::optional<float> m_pendingMaterial;
     std::optional<float> m_pendingLight;
     std::optional<float> m_pendingMotion;
@@ -234,6 +282,18 @@ inline void AmbientPadScriptEngine::bindScriptFunctions()
     m_lua.set_function("SetOscillator", &AmbientPadScriptEngine::luaSetOscillator, this);
     m_lua.set_function("SetGain", &AmbientPadScriptEngine::luaSetGain, this);
     m_lua.set_function("SetPitch", &AmbientPadScriptEngine::luaSetPitch, this);
+    m_lua.set_function("SetHarmony", &AmbientPadScriptEngine::luaSetHarmony, this);
+    m_lua.set_function("SetHarmonyHome", &AmbientPadScriptEngine::luaSetHarmonyHome, this);
+    m_lua.set_function("SetPedalChannels", &AmbientPadScriptEngine::luaSetPedalChannels, this);
+    m_lua.set_function("Stay", [this]() { pushImpulse(AbacDsp::ImpulseKind::Stay); });
+    m_lua.set_function("Lean", [this]() { pushImpulse(AbacDsp::ImpulseKind::Lean); });
+    m_lua.set_function("Open", [this]() { pushImpulse(AbacDsp::ImpulseKind::Open); });
+    m_lua.set_function("Gather", [this]() { pushImpulse(AbacDsp::ImpulseKind::Gather); });
+    m_lua.set_function("Darken", [this]() { pushImpulse(AbacDsp::ImpulseKind::Darken); });
+    m_lua.set_function("Brighten", [this]() { pushImpulse(AbacDsp::ImpulseKind::Brighten); });
+    m_lua.set_function("Disturb", [this]() { pushImpulse(AbacDsp::ImpulseKind::Disturb); });
+    m_lua.set_function("Arrive", [this]() { pushImpulse(AbacDsp::ImpulseKind::Arrive); });
+    m_lua.set_function("Release", [this]() { pushImpulse(AbacDsp::ImpulseKind::Release); });
     m_lua.set_function("SetMaterial", &AmbientPadScriptEngine::luaSetMaterial, this);
     m_lua.set_function("SetLight", &AmbientPadScriptEngine::luaSetLight, this);
     m_lua.set_function("SetMotion", &AmbientPadScriptEngine::luaSetMotion, this);
@@ -307,6 +367,41 @@ inline void AmbientPadScriptEngine::luaSetPitch(const size_t channel, const int 
     }
     m_pendingPitch[channel - 1] =
         AmbientPitchSettings{note, std::clamp(cents, -100.f, 100.f), std::clamp(glideTimeSeconds, 0.f, 60.f)};
+}
+
+inline void AmbientPadScriptEngine::luaSetHarmony(const bool enabled) noexcept
+{
+    m_pendingHarmonyEnabled = enabled;
+}
+
+inline void AmbientPadScriptEngine::luaSetHarmonyHome(const int note) noexcept
+{
+    m_pendingHarmonyHome = note;
+}
+
+inline void AmbientPadScriptEngine::luaSetPedalChannels(const sol::table& channels) noexcept
+{
+    PedalChannelsCommand command{};
+    const size_t luaCount = channels.size();
+    for (size_t i = 1; i <= luaCount && command.count < kMaxChannels; ++i)
+    {
+        const sol::optional<int> channel = channels[i];
+        if (!channel || *channel < 1 || *channel > static_cast<int>(kMaxChannels))
+        {
+            continue;
+        }
+        command.channels[command.count++] = *channel;
+    }
+    m_pendingPedalChannels = command;
+}
+
+inline void AmbientPadScriptEngine::pushImpulse(const AbacDsp::ImpulseKind kind) noexcept
+{
+    if (m_pendingImpulseCount >= kMaxPendingImpulsesPerBlock)
+    {
+        return;
+    }
+    m_pendingImpulses[m_pendingImpulseCount++] = kind;
 }
 
 inline void AmbientPadScriptEngine::luaSetMaterial(const float value) noexcept
@@ -437,6 +532,37 @@ inline std::optional<AmbientPadScriptEngine::AmbientPitchSettings> AmbientPadScr
 {
     const auto result = m_pendingPitch[voiceIndex];
     m_pendingPitch[voiceIndex].reset();
+    return result;
+}
+
+inline std::optional<bool> AmbientPadScriptEngine::drainHarmonyEnabledCommand() noexcept
+{
+    const auto result = m_pendingHarmonyEnabled;
+    m_pendingHarmonyEnabled.reset();
+    return result;
+}
+
+inline std::optional<int> AmbientPadScriptEngine::drainHarmonyHomeCommand() noexcept
+{
+    const auto result = m_pendingHarmonyHome;
+    m_pendingHarmonyHome.reset();
+    return result;
+}
+
+inline std::optional<AmbientPadScriptEngine::PedalChannelsCommand>
+AmbientPadScriptEngine::drainPedalChannelsCommand() noexcept
+{
+    const auto result = m_pendingPedalChannels;
+    m_pendingPedalChannels.reset();
+    return result;
+}
+
+inline AmbientPadScriptEngine::PendingImpulseEventsResult AmbientPadScriptEngine::drainImpulseEvents() noexcept
+{
+    PendingImpulseEventsResult result{};
+    result.events = m_pendingImpulses;
+    result.count = m_pendingImpulseCount;
+    m_pendingImpulseCount = 0;
     return result;
 }
 

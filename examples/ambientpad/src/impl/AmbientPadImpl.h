@@ -654,6 +654,24 @@ class AmbientPadImpl final : public EffectBase
             }
         }
 
+        if (const auto enabled = m_scriptEngine.drainHarmonyEnabledCommand())
+        {
+            setHarmonyEnabled(*enabled);
+        }
+        if (const auto home = m_scriptEngine.drainHarmonyHomeCommand())
+        {
+            setHarmonyHome(*home);
+        }
+        if (const auto pedal = m_scriptEngine.drainPedalChannelsCommand())
+        {
+            setPedalChannels(std::span<const int>(pedal->channels.data(), pedal->count));
+        }
+        const auto impulses = m_scriptEngine.drainImpulseEvents();
+        for (size_t i = 0; i < impulses.count; ++i)
+        {
+            triggerHarmonyImpulse(impulses.events[i]);
+        }
+
         if (const auto material = m_scriptEngine.drainMaterialCommand())
         {
             setMaterial(*material);
