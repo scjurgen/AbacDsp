@@ -115,6 +115,20 @@ TEST(RegionBonusTest, noPreferenceGetsNothing)
     EXPECT_FLOAT_EQ(regionBonus(candidate, std::nullopt), 0.f);
 }
 
+TEST(RegionBonusTest, matchingRegionGetsTheOverriddenAmount)
+{
+    const HarmonicState candidate{.region = PaletteRegion::ChromaticWeather};
+    EXPECT_FLOAT_EQ(regionBonus(candidate, PaletteRegion::ChromaticWeather, 2.5f), 2.5f);
+}
+
+TEST(VowViolatedTest, noLargeVoiceJumpsUsesTheOverriddenThreshold)
+{
+    const HarmonicState current{.voicing = Voicing::fromSemitones(std::to_array<int>({0, 4, 7}))};
+    const HarmonicState candidate{.voicing = Voicing::fromSemitones(std::to_array<int>({0, 4, 10}))};
+    EXPECT_FALSE(vowViolated(VowKind::NoLargeVoiceJumps, 0, current, candidate, 3));
+    EXPECT_TRUE(vowViolated(VowKind::NoLargeVoiceJumps, 0, current, candidate, 2));
+}
+
 class HarmonicOrganismTest : public ::testing::Test
 {
   protected:
@@ -174,8 +188,8 @@ TEST_F(HarmonicOrganismTest, neverVowIsNeverViolatedAcrossManySimulatedCycles)
 TEST_F(HarmonicOrganismTest, setCustomPaletteReplacesCurrentState)
 {
     const std::array<HarmonicState, 2> custom{
-        makeCustomHarmonicState(PaletteRegion::Home, std::to_array<int>({0, 3, 7})),
-        makeCustomHarmonicState(PaletteRegion::MajorLight, std::to_array<int>({0, 4, 7}))};
+        makeCustomHarmonicState(PaletteRegion::Home, std::to_array<float>({0.f, 3.f, 7.f})),
+        makeCustomHarmonicState(PaletteRegion::MajorLight, std::to_array<float>({0.f, 4.f, 7.f}))};
     organism.setCustomPalette(custom);
     EXPECT_EQ(organism.currentState().voicing.size(), 3u);
     EXPECT_EQ(organism.currentState().region, PaletteRegion::Home);
@@ -184,7 +198,7 @@ TEST_F(HarmonicOrganismTest, setCustomPaletteReplacesCurrentState)
 TEST_F(HarmonicOrganismTest, setCustomPaletteWithEmptySpanRevertsToDefault)
 {
     const std::array<HarmonicState, 1> custom{
-        makeCustomHarmonicState(PaletteRegion::Home, std::to_array<int>({0, 3, 7}))};
+        makeCustomHarmonicState(PaletteRegion::Home, std::to_array<float>({0.f, 3.f, 7.f}))};
     organism.setCustomPalette(custom);
     organism.setCustomPalette(std::span<const HarmonicState>{});
     EXPECT_EQ(organism.currentState().name, defaultPalette()[0].name);
@@ -193,7 +207,7 @@ TEST_F(HarmonicOrganismTest, setCustomPaletteWithEmptySpanRevertsToDefault)
 TEST_F(HarmonicOrganismTest, setHomeAfterCustomPaletteStillTransposes)
 {
     const std::array<HarmonicState, 1> custom{
-        makeCustomHarmonicState(PaletteRegion::Home, std::to_array<int>({0, 4, 7}))};
+        makeCustomHarmonicState(PaletteRegion::Home, std::to_array<float>({0.f, 4.f, 7.f}))};
     organism.setCustomPalette(custom);
     organism.setHome(3);
     const auto notes = organism.currentState().voicing.notes();
@@ -205,9 +219,9 @@ TEST_F(HarmonicOrganismTest, setHomeAfterCustomPaletteStillTransposes)
 TEST_F(HarmonicOrganismTest, considerTransitionWorksWithASmallCustomPalette)
 {
     const std::array<HarmonicState, 3> custom{
-        makeCustomHarmonicState(PaletteRegion::Home, std::to_array<int>({0, 3, 7})),
-        makeCustomHarmonicState(PaletteRegion::MajorLight, std::to_array<int>({0, 4, 7})),
-        makeCustomHarmonicState(PaletteRegion::OpenSuspended, std::to_array<int>({0, 5, 7}))};
+        makeCustomHarmonicState(PaletteRegion::Home, std::to_array<float>({0.f, 3.f, 7.f})),
+        makeCustomHarmonicState(PaletteRegion::MajorLight, std::to_array<float>({0.f, 4.f, 7.f})),
+        makeCustomHarmonicState(PaletteRegion::OpenSuspended, std::to_array<float>({0.f, 5.f, 7.f}))};
     organism.setCustomPalette(custom);
 
     const auto samplesPerDwell = static_cast<size_t>(HarmonicOrganism::kDwellSeconds * kSampleRate);
@@ -227,8 +241,8 @@ TEST_F(HarmonicOrganismTest, considerTransitionWorksWithALargerThanDefaultCustom
     for (size_t i = 0; i < kCount; ++i)
     {
         const auto region = static_cast<PaletteRegion>(i % 5);
-        const int third = (i % 2 == 0) ? 3 : 4;
-        custom[i] = makeCustomHarmonicState(region, std::to_array<int>({0, third, 7}));
+        const float third = (i % 2 == 0) ? 3.f : 4.f;
+        custom[i] = makeCustomHarmonicState(region, std::to_array<float>({0.f, third, 7.f}));
     }
     organism.setCustomPalette(custom);
 
@@ -265,6 +279,34 @@ TEST_F(HarmonicOrganismTest, setDwellSecondsClampsNegativeValuesToTheMinimum)
     for (int cycle = 0; cycle < 20 && !sawTransition; ++cycle)
     {
         organism.step(samplesPerClampedDwell);
+        sawTransition = organism.takePendingTransition().has_value();
+    }
+    EXPECT_TRUE(sawTransition);
+}
+
+TEST_F(HarmonicOrganismTest, setMaxVoiceJumpSemitonesAllowsAPreviouslyRejectedCandidate)
+{
+    const std::array<HarmonicState, 2> custom{
+        makeCustomHarmonicState(PaletteRegion::Home, std::to_array<float>({0.f, 4.f, 7.f})),
+        makeCustomHarmonicState(PaletteRegion::Home, std::to_array<float>({0.f, 4.f, 30.f}))};
+    organism.setCustomPalette(custom);
+    organism.setDwellSeconds(1.f);
+
+    const auto samplesPerDwell = static_cast<size_t>(1.5f * kSampleRate);
+    bool sawTransition = false;
+    for (int cycle = 0; cycle < 10 && !sawTransition; ++cycle)
+    {
+        organism.step(samplesPerDwell);
+        sawTransition = organism.takePendingTransition().has_value();
+    }
+    // Default threshold (7 semitones) rejects the 23-semitone jump to the other state
+    // outright, so the only survivor each cycle is the current state itself.
+    EXPECT_FALSE(sawTransition);
+
+    organism.setMaxVoiceJumpSemitones(30);
+    for (int cycle = 0; cycle < 10 && !sawTransition; ++cycle)
+    {
+        organism.step(samplesPerDwell);
         sawTransition = organism.takePendingTransition().has_value();
     }
     EXPECT_TRUE(sawTransition);

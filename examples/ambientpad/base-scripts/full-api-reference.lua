@@ -63,6 +63,8 @@ function OnStart()
     -- Optional: override the organism's usual tens-of-seconds pace - see
     -- base-scripts/custom-harmony.lua for why you'd actually want this
     SetHarmonyTiming({ dwellSeconds = 30, cooldownSeconds = 20, glideSeconds = 10 }) -- today's defaults
+    SetHarmonyRegionBonus(0.7)     -- today's default
+    SetHarmonyMaxVoiceJump(7)      -- today's default
 
     SetHarmony(true)
 

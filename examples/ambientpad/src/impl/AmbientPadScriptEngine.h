@@ -200,11 +200,19 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
 "--   (no AddHarmonicState calls after it) reverts to the 20 built-in states\n"
 "-- AddHarmonicState({ semitones = {...}, region })  appends one custom chord - semitones\n"
 "--   are literal, home-relative, already spread across registers exactly as wanted (e.g.\n"
-"--   { -24, 0, 4, 7, 10 } for a dominant 7th with a low bass added). region: 1..5 as\n"
+"--   { -24, 0, 4, 7, 10 } for a dominant 7th with a low bass added). A fractional value\n"
+"--   (e.g. 3.5) keeps its own rounded semitone for scoring/naming/voice-leading, plus a\n"
+"--   cents-level fine tune only on the actual sounding pitch. region: 1..5 as\n"
 "--   SetHarmonyCharacter above, default 1. Every wish-axis tag is left neutral (0.5)\n"
 "-- SetHarmonyTiming({ dwellSeconds, cooldownSeconds, glideSeconds })  overrides how often\n"
 "--   the organism reconsiders, its post-transition pause, and the per-voice glide time -\n"
 "--   default 30/20/10 (today's fixed pace); each missing field resets to that default too\n"
+"-- SetHarmonyRegionBonus(bonus)  the score bonus SetHarmonyCharacter's matching region\n"
+"--   gets, default 0.7 - 0 makes Character a no-op without clearing the preference itself\n"
+"-- SetHarmonyMaxVoiceJump(semitones)  the NoLargeVoiceJumps vow's threshold, default 7 -\n"
+"--   a candidate moving any voice further than this from the current chord is rejected\n"
+"--   outright, region preference notwithstanding; raise it if a custom palette's own\n"
+"--   chords are too far apart for Character to ever reach some of them\n"
 "\n"
 "-- Impulse gestures - performance nudges with a life cycle, not an instant hard switch:\n"
 "-- Stay()      delay harmonic departure, retain the current voicing relationship\n"
@@ -242,6 +250,8 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     [[nodiscard]] std::optional<PedalChannelsCommand> drainPedalChannelsCommand() noexcept;
     [[nodiscard]] std::optional<CustomPaletteCommand> drainCustomPaletteCommand() noexcept;
     [[nodiscard]] std::optional<HarmonyTimingSettings> drainHarmonyTimingCommand() noexcept;
+    [[nodiscard]] std::optional<float> drainHarmonyRegionBonusCommand() noexcept;
+    [[nodiscard]] std::optional<float> drainHarmonyMaxVoiceJumpCommand() noexcept;
 
     struct PendingImpulseEventsResult
     {
@@ -284,6 +294,8 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     void luaClearHarmonicPalette() noexcept;
     void luaAddHarmonicState(const sol::table& params) noexcept;
     void luaSetHarmonyTiming(const sol::table& params) noexcept;
+    void luaSetHarmonyRegionBonus(float bonus) noexcept;
+    void luaSetHarmonyMaxVoiceJump(float semitones) noexcept;
     void pushImpulse(AbacDsp::ImpulseKind kind) noexcept;
     void luaSetMaterial(float value) noexcept;
     void luaSetMaterialRange(float value) noexcept;
@@ -319,6 +331,8 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     size_t m_customPaletteCount{0};
     bool m_customPaletteDirty{false};
     std::optional<HarmonyTimingSettings> m_pendingHarmonyTiming;
+    std::optional<float> m_pendingHarmonyRegionBonus;
+    std::optional<float> m_pendingHarmonyMaxVoiceJump;
     std::array<AbacDsp::ImpulseKind, kMaxPendingImpulsesPerBlock> m_pendingImpulses{};
     size_t m_pendingImpulseCount{0};
     std::optional<float> m_pendingMaterial;
@@ -363,6 +377,8 @@ inline void AmbientPadScriptEngine::bindScriptFunctions()
     m_lua.set_function("ClearHarmonicPalette", &AmbientPadScriptEngine::luaClearHarmonicPalette, this);
     m_lua.set_function("AddHarmonicState", &AmbientPadScriptEngine::luaAddHarmonicState, this);
     m_lua.set_function("SetHarmonyTiming", &AmbientPadScriptEngine::luaSetHarmonyTiming, this);
+    m_lua.set_function("SetHarmonyRegionBonus", &AmbientPadScriptEngine::luaSetHarmonyRegionBonus, this);
+    m_lua.set_function("SetHarmonyMaxVoiceJump", &AmbientPadScriptEngine::luaSetHarmonyMaxVoiceJump, this);
     m_lua.set_function("Stay", [this]() { pushImpulse(AbacDsp::ImpulseKind::Stay); });
     m_lua.set_function("Lean", [this]() { pushImpulse(AbacDsp::ImpulseKind::Lean); });
     m_lua.set_function("Open", [this]() { pushImpulse(AbacDsp::ImpulseKind::Open); });
@@ -506,13 +522,13 @@ inline void AmbientPadScriptEngine::luaAddHarmonicState(const sol::table& params
         return;
     }
     const auto& semitonesTable = *semitonesOpt;
-    std::array<int, AbacDsp::Voicing::kMaxNotes> semitones{};
+    std::array<float, AbacDsp::Voicing::kMaxNotes> semitones{};
     size_t semitoneCount = 0;
     const size_t luaCount = semitonesTable.size();
     for (size_t i = 1; i <= luaCount && semitoneCount < AbacDsp::Voicing::kMaxNotes; ++i)
     {
-        const sol::optional<int> semitone = semitonesTable[i];
-        if (!semitone)
+        const sol::optional<float> semitone = semitonesTable[i];
+        if (!semitone || !std::isfinite(*semitone))
         {
             return;
         }
@@ -529,7 +545,7 @@ inline void AmbientPadScriptEngine::luaAddHarmonicState(const sol::table& params
     }
     const auto region = static_cast<AbacDsp::PaletteRegion>(regionIndex - 1);
     m_customPaletteEntries[m_customPaletteCount++] =
-        AbacDsp::makeCustomHarmonicState(region, std::span<const int>(semitones.data(), semitoneCount));
+        AbacDsp::makeCustomHarmonicState(region, std::span<const float>(semitones.data(), semitoneCount));
     m_customPaletteDirty = true;
 }
 
@@ -545,6 +561,22 @@ inline void AmbientPadScriptEngine::luaSetHarmonyTiming(const sol::table& params
     m_pendingHarmonyTiming =
         HarmonyTimingSettings{std::clamp(dwellSeconds, 0.1f, 300.f), std::clamp(cooldownSeconds, 0.f, 300.f),
                               std::clamp(glideSeconds, 0.f, 60.f)};
+}
+
+inline void AmbientPadScriptEngine::luaSetHarmonyRegionBonus(const float bonus) noexcept
+{
+    if (std::isfinite(bonus))
+    {
+        m_pendingHarmonyRegionBonus = std::clamp(bonus, 0.f, 5.f);
+    }
+}
+
+inline void AmbientPadScriptEngine::luaSetHarmonyMaxVoiceJump(const float semitones) noexcept
+{
+    if (std::isfinite(semitones))
+    {
+        m_pendingHarmonyMaxVoiceJump = std::clamp(semitones, 1.f, 48.f);
+    }
 }
 
 inline void AmbientPadScriptEngine::pushImpulse(const AbacDsp::ImpulseKind kind) noexcept
@@ -782,6 +814,20 @@ AmbientPadScriptEngine::drainHarmonyTimingCommand() noexcept
 {
     const auto result = m_pendingHarmonyTiming;
     m_pendingHarmonyTiming.reset();
+    return result;
+}
+
+inline std::optional<float> AmbientPadScriptEngine::drainHarmonyRegionBonusCommand() noexcept
+{
+    const auto result = m_pendingHarmonyRegionBonus;
+    m_pendingHarmonyRegionBonus.reset();
+    return result;
+}
+
+inline std::optional<float> AmbientPadScriptEngine::drainHarmonyMaxVoiceJumpCommand() noexcept
+{
+    const auto result = m_pendingHarmonyMaxVoiceJump;
+    m_pendingHarmonyMaxVoiceJump.reset();
     return result;
 }
 

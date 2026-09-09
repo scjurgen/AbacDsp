@@ -595,13 +595,24 @@ class AmbientPadImpl final : public EffectBase
 #pragma GCC diagnostic pop
 
     /// @brief Prints the just-realized state's name and its intervals from home, e.g.
-    /// "1m9/lo: 0 -24 -2 2 3 7" - only called on a real transition, never periodically.
+    /// "1m9/lo: 0 -24 -2 2 3+20 7-15" (a trailing +/-cents shown only when nonzero) - only
+    /// called on a real transition, never periodically.
     void logHarmonicState(const AbacDsp::HarmonicState& state) const
     {
         std::fprintf(stderr, "harmony: %.*s:", static_cast<int>(state.name.size()), state.name.data());
-        for (const auto note : state.voicing.notes())
+        const auto notes = state.voicing.notes();
+        const auto cents = state.voicing.centsValues();
+        for (size_t i = 0; i < notes.size(); ++i)
         {
-            std::fprintf(stderr, " %d", note);
+            const auto centsRounded = static_cast<int>(std::lround(cents[i]));
+            if (centsRounded == 0)
+            {
+                std::fprintf(stderr, " %d", notes[i]);
+            }
+            else
+            {
+                std::fprintf(stderr, " %d%+d", notes[i], centsRounded);
+            }
         }
         std::fprintf(stderr, "\n");
     }
@@ -639,6 +650,7 @@ class AmbientPadImpl final : public EffectBase
         }
 
         const auto targetNotes = target.voicing.notes();
+        const auto targetCents = target.voicing.centsValues();
         std::array<int, AbacDsp::Voicing::kMaxNotes> absoluteTargets{};
         for (size_t t = 0; t < targetNotes.size(); ++t)
         {
@@ -679,7 +691,8 @@ class AmbientPadImpl final : public EffectBase
             if (bestDistance <= kGlideRepitchMaxSemitones)
             {
                 targetMatched[bestTarget] = true;
-                m_voices[channelIndex].setPitch(absoluteTargets[bestTarget], 0.f, m_transitionGlideSeconds);
+                m_voices[channelIndex].setPitch(absoluteTargets[bestTarget], targetCents[bestTarget],
+                                                m_transitionGlideSeconds);
             }
             else
             {
@@ -703,6 +716,7 @@ class AmbientPadImpl final : public EffectBase
                 continue;
             }
             m_voices[freeChannels[nextFree]].triggerVoice(absoluteTargets[t], kManualPlayVelocity);
+            m_voices[freeChannels[nextFree]].setPitch(absoluteTargets[t], targetCents[t], 0.f);
             ++nextFree;
         }
 
@@ -776,6 +790,14 @@ class AmbientPadImpl final : public EffectBase
             m_organism.setDwellSeconds(timing->dwellSeconds);
             m_organism.setCooldownSeconds(timing->cooldownSeconds);
             m_transitionGlideSeconds = timing->glideSeconds;
+        }
+        if (const auto regionBonus = m_scriptEngine.drainHarmonyRegionBonusCommand())
+        {
+            m_organism.setRegionBonus(*regionBonus);
+        }
+        if (const auto maxVoiceJump = m_scriptEngine.drainHarmonyMaxVoiceJumpCommand())
+        {
+            m_organism.setMaxVoiceJumpSemitones(static_cast<int>(std::lround(*maxVoiceJump)));
         }
         const auto impulses = m_scriptEngine.drainImpulseEvents();
         for (size_t i = 0; i < impulses.count; ++i)

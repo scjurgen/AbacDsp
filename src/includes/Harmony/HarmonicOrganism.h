@@ -25,12 +25,12 @@ inline constexpr size_t kDensityLimit{6};
 inline constexpr float kPreferredRegionBonus{0.7f};
 
 /// @brief A soft nudge toward one palette region - preferredRegion's own region gets
-/// kPreferredRegionBonus added to its score; nullopt (no preference) or any other region
-/// gets nothing. A bonus rather than a filter, so an unreachable region never dead-ends.
+/// bonusAmount (default kPreferredRegionBonus) added; any other region gets nothing.
 [[nodiscard]] constexpr float regionBonus(const HarmonicState& candidate,
-                                          const std::optional<PaletteRegion>& preferredRegion) noexcept
+                                          const std::optional<PaletteRegion>& preferredRegion,
+                                          const float bonusAmount = kPreferredRegionBonus) noexcept
 {
-    return preferredRegion && candidate.region == *preferredRegion ? kPreferredRegionBonus : 0.f;
+    return preferredRegion && candidate.region == *preferredRegion ? bonusAmount : 0.f;
 }
 
 /// @brief This candidate's affinity (0..1) for one wish axis: how close candidate's own
@@ -60,9 +60,11 @@ inline constexpr float kPreferredRegionBonus{0.7f};
 }
 
 /// @brief Whether candidate breaks one vow kind, judged against homeOffsetSemitones (the
-/// current tonal home) and, for the motion-based kind, against current's own voicing.
+/// current tonal home) and, for the motion-based kind, against current's own voicing and
+/// maxVoiceJumpSemitones (default kLargeJumpSemitones).
 [[nodiscard]] constexpr bool vowViolated(const VowKind kind, const int homeOffsetSemitones,
-                                         const HarmonicState& current, const HarmonicState& candidate) noexcept
+                                         const HarmonicState& current, const HarmonicState& candidate,
+                                         const int maxVoiceJumpSemitones = kLargeJumpSemitones) noexcept
 {
     switch (kind)
     {
@@ -78,7 +80,7 @@ inline constexpr float kPreferredRegionBonus{0.7f};
             return lowCount > 1;
         }
         case VowKind::NoLargeVoiceJumps:
-            return voiceLeadingMotion(current.voicing, candidate.voicing).maxMotionSemitones > kLargeJumpSemitones;
+            return voiceLeadingMotion(current.voicing, candidate.voicing).maxMotionSemitones > maxVoiceJumpSemitones;
         case VowKind::PreserveOpenIntervals:
         {
             const auto notes = candidate.voicing.notes();
@@ -197,6 +199,21 @@ class HarmonicOrganism
     void setCooldownSeconds(const float seconds) noexcept
     {
         m_cooldownSeconds = std::max(seconds, 0.f);
+    }
+
+    /// @brief Overrides the score bonus a matching-region candidate gets (see regionBonus(),
+    /// default kPreferredRegionBonus), clamped to zero or more.
+    void setRegionBonus(const float bonus) noexcept
+    {
+        m_regionBonus = std::max(bonus, 0.f);
+    }
+
+    /// @brief Overrides the NoLargeVoiceJumps vow's threshold (default kLargeJumpSemitones) -
+    /// a candidate moving any voice further than this from the current chord is rejected
+    /// outright, region preference notwithstanding. Clamped to 1 or more.
+    void setMaxVoiceJumpSemitones(const int semitones) noexcept
+    {
+        m_maxVoiceJumpSemitones = std::max(semitones, 1);
     }
 
     /// @brief Starts (or refreshes) one impulse's life cycle; Release instead fast-decays
@@ -327,11 +344,12 @@ class HarmonicOrganism
             score += wishAffinity(current, candidate, static_cast<WishKind>(k), weights);
         }
         score /= static_cast<float>(kNumWishKinds);
-        score += regionBonus(candidate, m_preferredRegion);
+        score += regionBonus(candidate, m_preferredRegion, m_regionBonus);
 
         for (const auto& vow : kDefaultVows)
         {
-            const auto violated = vowViolated(vow.kind, m_homeOffsetSemitones, current, candidate);
+            const auto violated =
+                vowViolated(vow.kind, m_homeOffsetSemitones, current, candidate, m_maxVoiceJumpSemitones);
             const auto judged = applyVow(vow, violated, score);
             if (!judged)
             {
@@ -425,6 +443,8 @@ class HarmonicOrganism
     std::optional<PaletteRegion> m_preferredRegion;
     float m_dwellSeconds{kDwellSeconds};
     float m_cooldownSeconds{kCooldownSeconds};
+    float m_regionBonus{kPreferredRegionBonus};
+    int m_maxVoiceJumpSemitones{kLargeJumpSemitones};
 
     std::array<OrnsteinUhlenbeckProcess, kNumWishKinds> m_climate{
         OrnsteinUhlenbeckProcess(kClimateRateHz), OrnsteinUhlenbeckProcess(kClimateRateHz),

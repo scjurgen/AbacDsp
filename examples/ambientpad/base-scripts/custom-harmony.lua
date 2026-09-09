@@ -1,11 +1,12 @@
 -- custom-harmony: builds its own harmonic vocabulary from scratch via AddHarmonicState,
 -- instead of drawing on the library's 20 built-in states, and puts two hand-picked regions
 -- to use: region 1 stays diatonic (triads drawn from a single C major scale), region 5 is
--- deliberately foreign (whole-tone and diminished shapes, some without the tonal home at
--- all - the same spirit as the built-in palette's own ChromaticWeather region). It starts in
--- the diatonic region and switches to the chromatic one after 60 seconds via
--- SetHarmonyCharacter. SetHarmonyTiming speeds the organism's usual tens-of-seconds pace way
--- up so several transitions are actually audible within that time, rather than one or two.
+-- deliberately foreign (whole-tone, diminished, and one microtonal "neutral third" shape,
+-- some without the tonal home at all - the same spirit as the built-in palette's own
+-- ChromaticWeather region). It starts in the diatonic region and switches to the chromatic
+-- one after 60 seconds via SetHarmonyCharacter. SetHarmonyTiming speeds the organism's usual
+-- tens-of-seconds pace way up so several transitions are actually audible within that time,
+-- rather than one or two.
 
 function OnStart()
     for ch = 1, 16 do
@@ -40,6 +41,7 @@ function OnStart()
     AddHarmonicState({ semitones = { 0, 3, 6, 9 }, region = 5 })         -- diminished 7th, with home
     AddHarmonicState({ semitones = { 1, 4, 7, 10 }, region = 5 })        -- diminished 7th, without home
     AddHarmonicState({ semitones = { 11, 0, 1 }, region = 5 })           -- tight cluster around home
+    AddHarmonicState({ semitones = { 0, 3.5, 7 }, region = 5 })          -- neutral third, half sharp
 
     -- Much faster than the default 30s/20s/10s pace, so the region switch below actually
     -- plays through several chords rather than one or two

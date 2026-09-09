@@ -56,6 +56,17 @@ TEST(TransposeStateTest, preservesNameRegionAndTags)
     EXPECT_FLOAT_EQ(transposed.tension, original.tension);
 }
 
+TEST(TransposeStateTest, preservesEachNotesCentsOffset)
+{
+    const auto original = makeCustomHarmonicState(PaletteRegion::Home, std::to_array<float>({0.f, 3.5f, 7.f}));
+    const auto transposed = transposeState(original, 2);
+    ASSERT_EQ(transposed.voicing.size(), original.voicing.size());
+    for (size_t i = 0; i < original.voicing.size(); ++i)
+    {
+        EXPECT_FLOAT_EQ(transposed.voicing.centsValues()[i], original.voicing.centsValues()[i]);
+    }
+}
+
 class HarmonicPaletteTest : public ::testing::TestWithParam<size_t>
 {
 };
@@ -117,29 +128,50 @@ TEST(HarmonicPaletteTest, coversEveryRegionAtLeastOnce)
 
 TEST(MakeCustomHarmonicStateTest, voicingMatchesTheGivenSemitonesExactly)
 {
-    const auto semitones = std::to_array<int>({-24, 0, 4, 7, 10});
+    const auto semitones = std::to_array<float>({-24.f, 0.f, 4.f, 7.f, 10.f});
     const auto state = makeCustomHarmonicState(PaletteRegion::OpenSuspended, semitones);
     ASSERT_EQ(state.voicing.size(), semitones.size());
     for (size_t i = 0; i < semitones.size(); ++i)
     {
-        EXPECT_EQ(state.voicing.notes()[i], semitones[i]);
+        EXPECT_EQ(state.voicing.notes()[i], static_cast<int>(semitones[i]));
+        EXPECT_FLOAT_EQ(state.voicing.centsValues()[i], 0.f);
     }
 }
 
 TEST(MakeCustomHarmonicStateTest, setsTheGivenRegion)
 {
-    const auto state = makeCustomHarmonicState(PaletteRegion::ChromaticWeather, std::to_array<int>({0, 3, 7}));
+    const auto state = makeCustomHarmonicState(PaletteRegion::ChromaticWeather, std::to_array<float>({0.f, 3.f, 7.f}));
     EXPECT_EQ(state.region, PaletteRegion::ChromaticWeather);
 }
 
 TEST(MakeCustomHarmonicStateTest, everyTagDefaultsToNeutral)
 {
-    const auto state = makeCustomHarmonicState(PaletteRegion::Home, std::to_array<int>({0, 4, 7}));
+    const auto state = makeCustomHarmonicState(PaletteRegion::Home, std::to_array<float>({0.f, 4.f, 7.f}));
     EXPECT_FLOAT_EQ(state.luminosity, 0.5f);
     EXPECT_FLOAT_EQ(state.minorColor, 0.5f);
     EXPECT_FLOAT_EQ(state.density, 0.5f);
     EXPECT_FLOAT_EQ(state.ambiguity, 0.5f);
     EXPECT_FLOAT_EQ(state.tension, 0.5f);
+}
+
+TEST(MakeCustomHarmonicStateTest, fractionalSemitonesKeepTheirRoundedIdentityAndCents)
+{
+    const auto state = makeCustomHarmonicState(PaletteRegion::ChromaticWeather, std::to_array<float>({3.3f, 7.8f}));
+    ASSERT_EQ(state.voicing.size(), 2u);
+    EXPECT_EQ(state.voicing.notes()[0], 3);
+    EXPECT_NEAR(state.voicing.centsValues()[0], 30.f, 1e-3f);
+    EXPECT_EQ(state.voicing.notes()[1], 8);
+    EXPECT_NEAR(state.voicing.centsValues()[1], -20.f, 1e-3f);
+}
+
+TEST(VoicingFromFractionalSemitonesTest, roundsHalfAwayFromZero)
+{
+    const auto voicing = Voicing::fromFractionalSemitones(std::to_array<float>({0.5f, -0.5f, 1.5f, -1.5f}));
+    ASSERT_EQ(voicing.size(), 4u);
+    EXPECT_EQ(voicing.notes()[0], 1);
+    EXPECT_EQ(voicing.notes()[1], -1);
+    EXPECT_EQ(voicing.notes()[2], 2);
+    EXPECT_EQ(voicing.notes()[3], -2);
 }
 
 TEST(TransposedPaletteTest, everyEntryMatchesTheDefaultShiftedByHome)

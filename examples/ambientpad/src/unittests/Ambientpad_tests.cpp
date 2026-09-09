@@ -413,6 +413,122 @@ TEST_F(AmbientpadTest, customHarmonicPaletteReachesTheOrganism)
     }
 }
 
+TEST_F(AmbientpadTest, fractionalCustomHarmonicStateProducesADetunedPitch)
+{
+    ASSERT_TRUE(impl.setScript("function OnStart()\n"
+                               "    SetHarmony(true)\n"
+                               "    ClearHarmonicPalette()\n"
+                               "    AddHarmonicState({ semitones = {0, 3, 7} })\n"
+                               "    AddHarmonicState({ semitones = {0, 3.5, 7} })\n"
+                               "end\n"));
+
+    // Sample every dwell cycle, not just once at the end - with only 2 candidates, which
+    // one is live at any single moment is close to a coin flip (see the comment above).
+    const auto samplesPerDwell = static_cast<size_t>((AbacDsp::HarmonicOrganism::kDwellSeconds + 0.1f) * kSampleRate);
+    const auto blocksPerDwell = static_cast<int>(samplesPerDwell / kBlockSize);
+    bool sawFractionalPitch = false;
+    for (int cycle = 0; cycle < 20 && !sawFractionalPitch; ++cycle)
+    {
+        for (int b = 0; b < blocksPerDwell; ++b)
+        {
+            const auto out = processOneBlock();
+            for (size_t i = 0; i < kBlockSize; ++i)
+            {
+                ASSERT_TRUE(std::isfinite(out(i, 0)));
+                ASSERT_LE(std::abs(out(i, 0)), 8.f);
+            }
+        }
+        for (size_t channel = 1; channel <= Impl::kMaxVoices && !sawFractionalPitch; ++channel)
+        {
+            if (!impl.voiceIsPlaying(channel))
+            {
+                continue;
+            }
+            sawFractionalPitch = std::abs(impl.voicePitchSemitones(channel) - 63.5f) < 0.01f;
+        }
+    }
+    EXPECT_TRUE(sawFractionalPitch);
+}
+
+TEST_F(AmbientpadTest, defaultMaxVoiceJumpRejectsAFarCandidate)
+{
+    ASSERT_TRUE(impl.setScript("function OnStart()\n"
+                               "    SetHarmony(true)\n"
+                               "    ClearHarmonicPalette()\n"
+                               "    AddHarmonicState({ semitones = {0, 4, 7} })\n"
+                               "    AddHarmonicState({ semitones = {0, 4, 30} })\n"
+                               "    SetHarmonyTiming({ dwellSeconds = 1, cooldownSeconds = 0.5, glideSeconds = 0.1 })\n"
+                               "end\n"));
+
+    const auto samplesPerDwell = static_cast<size_t>(1.5f * kSampleRate);
+    const auto blocksPerDwell = static_cast<int>(samplesPerDwell / kBlockSize);
+    for (int cycle = 0; cycle < 10; ++cycle)
+    {
+        for (int b = 0; b < blocksPerDwell; ++b)
+        {
+            const auto out = processOneBlock();
+            for (size_t i = 0; i < kBlockSize; ++i)
+            {
+                ASSERT_TRUE(std::isfinite(out(i, 0)));
+                ASSERT_LE(std::abs(out(i, 0)), 8.f);
+            }
+        }
+    }
+    // The 23-semitone jump between the two states exceeds the default 7-semitone cap, so
+    // only one candidate ever survives and no real transition is ever recorded.
+    EXPECT_EQ(impl.harmonyTransitionCount(), 0u);
+}
+
+TEST_F(AmbientpadTest, harmonyMaxVoiceJumpOverrideAllowsAPreviouslyRejectedCandidate)
+{
+    ASSERT_TRUE(impl.setScript("function OnStart()\n"
+                               "    SetHarmony(true)\n"
+                               "    ClearHarmonicPalette()\n"
+                               "    AddHarmonicState({ semitones = {0, 4, 7} })\n"
+                               "    AddHarmonicState({ semitones = {0, 4, 30} })\n"
+                               "    SetHarmonyTiming({ dwellSeconds = 1, cooldownSeconds = 0.5, glideSeconds = 0.1 })\n"
+                               "    SetHarmonyMaxVoiceJump(30)\n"
+                               "end\n"));
+
+    const auto samplesPerDwell = static_cast<size_t>(1.5f * kSampleRate);
+    const auto blocksPerDwell = static_cast<int>(samplesPerDwell / kBlockSize);
+    for (int cycle = 0; cycle < 10 && impl.harmonyTransitionCount() == 0; ++cycle)
+    {
+        for (int b = 0; b < blocksPerDwell; ++b)
+        {
+            const auto out = processOneBlock();
+            for (size_t i = 0; i < kBlockSize; ++i)
+            {
+                ASSERT_TRUE(std::isfinite(out(i, 0)));
+                ASSERT_LE(std::abs(out(i, 0)), 8.f);
+            }
+        }
+    }
+    EXPECT_GE(impl.harmonyTransitionCount(), 1u);
+}
+
+TEST_F(AmbientpadTest, harmonyRegionBonusLuaBindingReachesTheOrganism)
+{
+    ASSERT_TRUE(impl.setScript("function OnStart()\n"
+                               "    SetHarmony(true)\n"
+                               "    SetHarmonyCharacter(1)\n"
+                               "    SetHarmonyRegionBonus(3)\n"
+                               "end\n"));
+
+    const auto samplesNeeded = static_cast<size_t>((AbacDsp::HarmonicOrganism::kDwellSeconds + 1.f) * kSampleRate);
+    const auto blocksNeeded = static_cast<int>(samplesNeeded / kBlockSize);
+    for (int b = 0; b < blocksNeeded; ++b)
+    {
+        const auto out = processOneBlock();
+        for (size_t i = 0; i < kBlockSize; ++i)
+        {
+            ASSERT_TRUE(std::isfinite(out(i, 0)));
+            ASSERT_LE(std::abs(out(i, 0)), 8.f);
+        }
+    }
+    EXPECT_GE(impl.harmonyTransitionCount(), 1u);
+}
+
 class BaseScriptTest : public ::testing::TestWithParam<std::string>
 {
 };

@@ -33,12 +33,12 @@ inline constexpr size_t kDefaultPaletteSize{20};
 inline constexpr size_t kMaxPaletteSize{32};
 
 /// @brief Builds one script-authored custom state: semitones taken literally (home-relative,
-/// already spread across registers exactly as given - no voicing generation), every tag left
-/// at its neutral default (0.5).
+/// already spread as given). A fractional value keeps its rounded identity for
+/// scoring/naming, plus a cents offset only used when actually realized.
 [[nodiscard]] constexpr HarmonicState makeCustomHarmonicState(const PaletteRegion region,
-                                                              const std::span<const int> semitones) noexcept
+                                                              const std::span<const float> semitones) noexcept
 {
-    return HarmonicState{.name = "custom", .region = region, .voicing = Voicing::fromSemitones(semitones)};
+    return HarmonicState{.name = "custom", .region = region, .voicing = Voicing::fromFractionalSemitones(semitones)};
 }
 
 /// @ingroup harmony

@@ -161,6 +161,18 @@ filter, so it never forces a jump the vows wouldn't otherwise allow; how strongl
 varies by region, since a region's own tags can already work against or with it (the
 chromatic-weather entries, for instance, are inherently at odds with keeping the tonal home
 audible, so "Chromatic" reads as "more foreign colour than usual", not "only foreign colour").
+Of the default vows, `NoLargeVoiceJumps` is the one hard ("Never") rule: a candidate is
+rejected outright, before Character's bonus is even applied, if realizing it would move any
+voice more than 7 semitones from the current chord. With compact, few-note voicings (the
+built-in palette, or a modest custom one) this rarely matters. With large or duplicate-heavy
+custom voicings (e.g. `AddHarmonicState` chords with 10+ notes) it can - it may leave only a
+small handful of your states mutually reachable at all, and Character can only bias among
+whichever of those happen to survive that cut; it cannot pull in a state the cap has excluded.
+If a custom palette seems to keep landing on the "wrong" region more than Character should
+allow, this is usually why - not a bug, but the cap doing its job on chords it wasn't tuned
+around. Prefer chords voiced as their actual pitch-class content (no repeated notes) if you
+want Character's pull to feel closer to absolute.
+
 A chosen state's notes are realized per channel: a channel whose pitch is close to a note in
 the new state glides to it (`setPitch`, keeping that voice's own envelope/modulation state
 exactly as it was); everything else cross-fades - a free channel triggers the added note, a
@@ -354,16 +366,24 @@ AddHarmonicState({ semitones = {...}, region })  -- appends one custom chord
 `semitones` is a literal, home-relative list, already spread across registers exactly as
 wanted - the same convention the library's own 20 states are authored in (e.g.
 `{ -24, 0, 4, 7, 10 }` for a dominant 7th with a low bass added two octaves down). There is no
-voicing-generation step: what you write is what sounds. `region` is optional, 1..5 as
-`SetHarmonyCharacter` above, defaulting to 1 (Home). Every wish-axis tag (luminosity,
-minorColor, density, ambiguity, tension) is left at its neutral default (0.5) - a custom state
-is a plausible candidate on every axis, neither favoured nor disfavoured by the organism's
-climate or impulses.
+voicing-generation step: what you write is what sounds. A value may be fractional
+(e.g. `3.5`): it keeps its own rounded-to-nearest semitone for scoring, naming, and
+voice-leading (so it competes and glides exactly as that integer chord would), while the
+fractional remainder becomes a cents-level fine tune applied only to the actual sounding pitch
+- a chord voiced with a slightly sharp or flat tone, not a different chord shape. `region` is
+optional, 1..5 as `SetHarmonyCharacter` above, defaulting to 1 (Home). Every wish-axis tag
+(luminosity, minorColor, density, ambiguity, tension) is left at its neutral default (0.5) - a
+custom state is a plausible candidate on every axis, neither favoured nor disfavoured by the
+organism's climate or impulses.
 
 `AddHarmonicState` appends; a script builds its whole custom vocabulary by calling it several
 times, typically once in `OnStart`. `ClearHarmonicPalette()` alone, with no `AddHarmonicState`
 calls after it, reverts to the 20 built-in states - a well-defined way to go back to the
-defaults, not an empty/undefined palette. See `base-scripts/custom-harmony.lua`.
+defaults, not an empty/undefined palette. See `base-scripts/custom-harmony.lua`. Keep each
+chord's note count modest and free of repeated notes - see the `NoLargeVoiceJumps` note under
+Character above, since large or duplicate-heavy custom chords are exactly where that cap tends
+to surprise people; or use `SetHarmonyMaxVoiceJump` below if you'd rather keep the chords as
+written.
 
 The organism's own pace - how often it reconsiders, how long it pauses after a transition, how
 long each voice takes to glide into the new chord - is fixed by default (30s/20s/10s) but can
@@ -376,6 +396,20 @@ SetHarmonyTiming({ dwellSeconds = 4, cooldownSeconds = 2, glideSeconds = 1.5 })
 All three fields are optional and independently reset to their default if omitted (`{}` resets
 every one of them). Useful for a demo/preview patch, or any script that wants a livelier pace
 than the tens-of-seconds default - see `base-scripts/custom-harmony.lua`.
+
+Character's strength and the `NoLargeVoiceJumps` cap discussed above are also overridable:
+
+```lua
+SetHarmonyRegionBonus(bonus)          -- default 0.7, clamped to zero or more
+SetHarmonyMaxVoiceJump(semitones)     -- default 7, clamped to 1 or more
+```
+
+`SetHarmonyRegionBonus` raises or lowers how strongly Character pulls toward its region -
+`0` makes Character a no-op without clearing the preference itself, a large value makes it
+close to absolute (as close as the vows still allow). `SetHarmonyMaxVoiceJump` raises or
+lowers the `NoLargeVoiceJumps` threshold itself: since that vow is a hard rejection, not a
+bias, it's the one setting that can turn an unreachable custom state into a reachable one,
+independent of Character's own pull.
 
 A handful of impulse gestures nudge the organism's moving preferences temporarily - each rises,
 holds, then fades over roughly the same tens-of-seconds timescale as the organism's own

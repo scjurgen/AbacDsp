@@ -92,18 +92,48 @@ class Voicing
         return voicing;
     }
 
+    /// @brief Rounds each value to its nearest semitone (the identity every other member -
+    /// pitch classes, vow checks, voice-leading motion - scores against) plus the remainder
+    /// as cents, read only when a note is actually realized. See centsValues().
+    [[nodiscard]] static constexpr Voicing fromFractionalSemitones(const std::span<const float> semitones) noexcept
+    {
+        Voicing voicing{};
+        for (const auto semitone : semitones)
+        {
+            const auto rounded = roundToNearestSemitone(semitone);
+            voicing.add(rounded, (semitone - static_cast<float>(rounded)) * 100.f);
+        }
+        return voicing;
+    }
+
     /// @brief Appends a note; silently drops it once kMaxNotes is reached.
     constexpr void add(const int semitone) noexcept
     {
+        add(semitone, 0.f);
+    }
+
+    /// @brief Appends a note with a cents-level fine offset (see fromFractionalSemitones());
+    /// silently drops it once kMaxNotes is reached.
+    constexpr void add(const int semitone, const float cents) noexcept
+    {
         if (m_count < kMaxNotes)
         {
-            m_notes[m_count++] = semitone;
+            m_notes[m_count] = semitone;
+            m_cents[m_count] = cents;
+            ++m_count;
         }
     }
 
     [[nodiscard]] constexpr std::span<const int> notes() const noexcept
     {
         return {m_notes.data(), m_count};
+    }
+
+    /// @brief Per-note cents offset (see fromFractionalSemitones()) - 0 for every note added
+    /// via the plain add(int)/fromSemitones() path.
+    [[nodiscard]] constexpr std::span<const float> centsValues() const noexcept
+    {
+        return {m_cents.data(), m_count};
     }
 
     [[nodiscard]] constexpr size_t size() const noexcept
@@ -117,7 +147,16 @@ class Voicing
     }
 
   private:
+    /// @brief Round-half-away-from-zero, matching how sol2/Lua already rounds a fractional
+    /// Lua number down to an int - no <cmath> call, so this stays usable in a constexpr
+    /// context (std::round/std::lround are not constexpr).
+    [[nodiscard]] static constexpr int roundToNearestSemitone(const float value) noexcept
+    {
+        return static_cast<int>(value + (value >= 0.f ? 0.5f : -0.5f));
+    }
+
     std::array<int, kMaxNotes> m_notes{};
+    std::array<float, kMaxNotes> m_cents{};
     size_t m_count{0};
 };
 

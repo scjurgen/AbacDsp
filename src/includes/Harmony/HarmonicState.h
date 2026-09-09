@@ -63,15 +63,18 @@ struct HarmonicState
     }
 }
 
-/// @brief Shifts every note in state's voicing by homeOffsetSemitones; name/region/tags are
-/// unaffected - transposition only moves where the voicing actually sits in pitch.
+/// @brief Shifts every note in state's voicing by homeOffsetSemitones, preserving each note's
+/// own cents offset; name/region/tags are unaffected - transposition only moves where the
+/// voicing sits in pitch.
 [[nodiscard]] constexpr HarmonicState transposeState(const HarmonicState& state, const int homeOffsetSemitones) noexcept
 {
     HarmonicState transposed = state;
     Voicing voicing{};
-    for (const auto note : state.voicing.notes())
+    const auto notes = state.voicing.notes();
+    const auto cents = state.voicing.centsValues();
+    for (size_t i = 0; i < notes.size(); ++i)
     {
-        voicing.add(note + homeOffsetSemitones);
+        voicing.add(notes[i] + homeOffsetSemitones, cents[i]);
     }
     transposed.voicing = voicing;
     return transposed;
