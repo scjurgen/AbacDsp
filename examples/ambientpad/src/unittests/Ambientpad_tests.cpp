@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <format>
 #include <fstream>
@@ -6,6 +8,7 @@
 #include <gtest/gtest.h>
 #include <limits>
 #include <sstream>
+#include <thread>
 
 #include "Audio/AudioBuffer.h"
 #include "impl/AmbientPadImpl.h"
@@ -254,6 +257,32 @@ TEST_F(AmbientpadTest, loadingANewScriptResetsVoicesToDefaults)
                                            "end\n",
                                            kNote, kVelocity)));
     EXPECT_TRUE(expectFiniteAndBoundedTrackingNonZero(2000, 8.f));
+}
+
+// Regression guard: setScript() (e.g. the editor's Apply button) rebuilds every voice in
+// place while processBlock() (the audio thread) may be mid-flight on the same voices -
+// AmbientPadImpl::m_scriptMutex now serializes the two.
+TEST_F(AmbientpadTest, concurrentSetScriptAndProcessBlockDoesNotCrash)
+{
+    std::atomic<bool> stop{false};
+    std::jthread scriptThread(
+        [this, &stop]()
+        {
+            int i = 0;
+            while (!stop.load(std::memory_order_relaxed))
+            {
+                const bool playsANote = (i++ % 2) == 0;
+                impl.setScript(playsANote ? "function OnStart()\n    NoteOn(1, 69, 100)\nend\n"
+                                          : "function OnStart()\nend\n");
+            }
+        });
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(300);
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        renderBlocks(4);
+    }
+    stop.store(true, std::memory_order_relaxed);
 }
 
 TEST_F(AmbientpadTest, harmonicOrganismRealizesTransitionsSafely)

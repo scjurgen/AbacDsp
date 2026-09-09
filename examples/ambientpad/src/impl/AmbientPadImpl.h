@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <memory>
+#include <mutex>
 #include <span>
 #include <string>
 #include <string_view>
@@ -373,8 +374,12 @@ class AmbientPadImpl final : public EffectBase
         m_luaParamValues[7] = value;
     }
 
+    /// @brief May run on a different thread than processBlock() (e.g. the editor's Apply
+    /// button) - m_scriptMutex keeps the two from ever overlapping while this rebuilds
+    /// every voice in place.
     bool setScript(const std::string_view source)
     {
+        const std::lock_guard<std::mutex> lock(m_scriptMutex);
         const bool ok = m_scriptEngine.loadScript(source);
         if (ok)
         {
@@ -413,6 +418,7 @@ class AmbientPadImpl final : public EffectBase
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
+        const std::lock_guard<std::mutex> lock(m_scriptMutex);
         m_scriptEngine.tickBlock(BlockSize);
         notifyUiParametersIfChanged();
         applyPendingScriptCommands();
@@ -873,6 +879,7 @@ class AmbientPadImpl final : public EffectBase
     int m_harmonyHomeNote{kHarmonyHomeOctaveBase};
     std::array<bool, kMaxVoices> m_pedalChannels{};
     size_t m_harmonyTransitionCount{0};
+    std::mutex m_scriptMutex;
     float m_transitionGlideSeconds{kTransitionGlideSeconds};
 
     AmbientPadScriptEngine m_scriptEngine{};
