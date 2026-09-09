@@ -58,7 +58,6 @@ flowchart TD
     LIGHT --> CUTOFF["Filter cutoff Hz"]
     OUL --> CUTOFF
     LIGHT --> CHAR["Filter character: Velvet..Glass"]
-    OUL --> CHAR
     OUL --> RESO["Filter resonance"]
 
     BREATH --> RIPPLE["VCA ripple gain"]
@@ -67,9 +66,14 @@ flowchart TD
     OUD --> DRIFT["Per-oscillator drift cents, opposite sign"]
     DETUNE["Fixed inter-oscillator detune"]
 
+    LUARANGES["SetCutoffRange/SetResonanceRange/SetPitchDriftRange/\nSetBreathVcaRange - Lua only, no dial"]
+    LUARANGES -.->|OU depth| CUTOFF
+    LUARANGES -.->|OU depth| RESO
+    LUARANGES -.->|OU depth| DRIFT
+    LUARANGES -.->|OU depth| RIPPLE
+
     STABILITY -.->|restrains OU depth, 1 = none reaches the voice| MORPH
     STABILITY -.->|restrains OU depth| CUTOFF
-    STABILITY -.->|restrains OU depth| CHAR
     STABILITY -.->|restrains OU depth| RESO
     STABILITY -.->|restrains OU depth| RIPPLE
     STABILITY -.->|restrains OU depth| DRIFT
@@ -89,12 +93,16 @@ flowchart TD
 
 Motion sets one shared wander range/speed for all four processes; each still reaches a
 different destination at its own depth, so the voice reads as one weather system rather than
-four independent LFOs. Material is the only one of the four whose own depth is itself a dial:
-Range sets the full width, in Material's own 0..1 units, that OU Material can pull the morph
-position away from Material's center - center 0.5 (sine) with Range 0.5 wanders roughly
-between 0.25 and 0.75. Stability then scales how much of that wander actually reaches every
-destination, so Stability=1 is genuinely stable (no wander reaches the voice) regardless of
-Motion, not just firmer pitch. Hold pauses every process's own `step()` call, freezing
+four independent LFOs. Material's own depth is a dial (Range): it sets the full width, in
+Material's own 0..1 units, that OU Material can pull the morph position away from Material's
+center - center 0.5 (sine) with Range 0.5 wanders roughly between 0.25 and 0.75. Filter cutoff,
+resonance, per-oscillator drift, and the Breath VCA ripple each have their own depth too, but as
+Lua-only fine-tuning controls rather than dials (see Scripting below) - by default they're subtle
+enough to read as texture, not an obvious sweep. Filter character (Velvet..Glass) tracks Light
+directly and never wanders on its own, unlike the other destinations. Stability then scales how
+much of that wander actually reaches every destination, so Stability=1 is genuinely stable (no
+wander reaches the voice) regardless of Motion, not just firmer pitch. Hold pauses every
+process's own `step()` call, freezing
 modulation at whatever value it currently holds rather than resetting it to a center.
 
 ## Harmony
@@ -163,6 +171,15 @@ picks these on its own merits and only sometimes, so relying on them alone doesn
 audible bass; channel 16 is instead a dedicated pedal voice, driven by the Pedal dial or
 `SetPedalNote` and always excluded from the realizer, for a bass presence that's always there
 when wanted.
+
+## Monitor
+
+An always-on live view, on both the Settings and Performance pages: one thin row per channel
+slot, always all 16, each a 1-minute Material/Volume timeline rather than a single instantaneous
+value - Volume is the actual VCA output level (envelope x velocity response x Breath ripple x
+per-voice gain trim), not just the raw amplitude envelope. Every row sweeps left to right like an
+oscilloscope trace - a fixed 600-point ring buffer per row whose write cursor wraps back to the
+start once it reaches the end, rather than scrolling the whole history along each frame.
 
 ## Controls
 
@@ -261,6 +278,18 @@ SetHold(hold)          -- true/false
 
 Each is the scripted equivalent of its dial (see the Controls table above) and, like the dials,
 applies to every voice in the array - there is one shared patch, not a per-channel one.
+
+### Modulation depth (Lua only, no dial)
+
+How far each OU-driven destination can wander - Motion and Stability still scale how much of
+this actually reaches the voice, same as everything else. Each defaults to a subtle depth.
+
+```lua
+SetCutoffRange(semitones)    -- 0..48, Lens's max pull on the filter cutoff
+SetResonanceRange(amount)    -- 0..1, Lens's max pull on resonance
+SetPitchDriftRange(cents)    -- 0..100, Drift's max per-oscillator detune
+SetBreathVcaRange(amount)    -- 0..10, Breath's max VCA gain boost
+```
 
 ### Distortion
 

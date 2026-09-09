@@ -32,17 +32,19 @@
     {"short": "LVL", "type": "gauge", "gaugetype": "levels", "display": "Level", "symbol": "levelMeter", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
     {"short": "FFT", "type": "gauge", "gaugetype": "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"},
 
-    {"short": "LUACTL", "type": "luacontrolarea", "display": "Lua Controls", "symbol": "luaControls"}
+    {"short": "LUACTL", "type": "luacontrolarea", "display": "Lua Controls", "symbol": "luaControls"},
+
+    {"short": "VROWS", "type": "gauge", "gaugetype": "processingbins", "display": "Voices", "symbol": "voiceRows", "customtype": "ShowVoiceRows"}
   ],
   "layout": {
     "WINDOW_WIDTH": "1100",
-    "WINDOW_HEIGHT": "760",
-    "type": "|=",
-    "composition": "C=(1:4) R=(1:2) A1=(CPU*200, LVL*300, FFT) A2=(LEVEL, NOTE, PLAY, MATRL, MRANGE, LIGHT, MOTION, BREATH, STABL, BLOOM, HOLD, HARM, HOME, CHAR, PEDAL) A3=(LUACTL)"
+    "WINDOW_HEIGHT": "1500",
+    "type": "|=3",
+    "composition": "C=(1:4) R=(1:1:8) A1=(CPU*200, LVL*300, FFT) A2=(LEVEL, NOTE, PLAY, MATRL, MRANGE, LIGHT, MOTION, BREATH, STABL, BLOOM, HOLD, HARM, HOME, CHAR, PEDAL) A3=(LUACTL) A4=(VROWS)"
   },
   "performance-page": {
-    "type": "-",
-    "composition": "A1=(PLAY, LEVEL, NOTE, MATRL, MRANGE, LIGHT, MOTION, BREATH, STABL, BLOOM, HOLD, HARM, HOME, CHAR, PEDAL)"
+    "type": "≡",
+    "composition": "R=(1:1:8) A1=(PLAY, LEVEL, NOTE, MATRL, MRANGE, LIGHT, MOTION, BREATH, STABL, BLOOM, HOLD, HARM, HOME, CHAR, PEDAL) A2=(LUACTL) A3=(VROWS)"
   },
   "processor_forwards": [
     {
@@ -63,14 +65,21 @@
       "name": "getLuaUiParamSlots",
       "call": "uiParamSlots",
       "type": "AmbientPadScriptEngine::UiParamSlots"
+    },
+    {
+      "name": "getVoiceSnapshots",
+      "type": "std::array<AbacDsp::AmbientPadVoice::ModulationSnapshot, 16>",
+      "noexcept": true
     }
   ],
   "extra_timer_callbacks": [
     "pollScriptError();",
-    "if (processorRef.hasRunner()) { luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()), valueTreeState); }"
+    "if (processorRef.hasRunner()) { luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()), valueTreeState); }",
+    "voiceRowsGauge.update(processorRef.getVoiceSnapshots());"
   ],
   "extra_ui_includes": [
-    "impl/LuaControlBridge.h"
+    "impl/LuaControlBridge.h",
+    "impl/ShowVoiceRows.h"
   ],
   "CPP": {
     "CLASS_NAME": "AmbientPadImpl<NumSamplesPerBlock>",

@@ -1088,6 +1088,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner ? pluginRunner->uiParamSlots() : AmbientPadScriptEngine::UiParamSlots{};
     }
+    [[nodiscard]] std::array<AbacDsp::AmbientPadVoice::ModulationSnapshot, 16> getVoiceSnapshots() const noexcept
+    {
+        return pluginRunner ? pluginRunner->getVoiceSnapshots()
+                            : std::array<AbacDsp::AmbientPadVoice::ModulationSnapshot, 16>{};
+    }
 
     [[nodiscard]] std::pair<float, float> getInputDbLoad() const
     {

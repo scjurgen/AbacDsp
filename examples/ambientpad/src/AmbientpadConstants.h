@@ -32,7 +32,7 @@ constexpr float maxSize = 180.0f;
 namespace InitJuce
 {
 constexpr auto WindowWidth{1100};
-constexpr auto WindowHeight{760};
+constexpr auto WindowHeight{1500};
 constexpr auto TimerHertz = 60;
 }
 

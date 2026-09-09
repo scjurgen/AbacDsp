@@ -159,6 +159,38 @@ class AmbientPadImpl final : public EffectBase
         }
     }
 
+    void setCutoffRange(const float semitones) noexcept
+    {
+        for (auto& voice : m_voices)
+        {
+            voice.setCutoffRange(semitones);
+        }
+    }
+
+    void setResonanceRange(const float amount) noexcept
+    {
+        for (auto& voice : m_voices)
+        {
+            voice.setResonanceRange(amount);
+        }
+    }
+
+    void setPitchDriftRange(const float cents) noexcept
+    {
+        for (auto& voice : m_voices)
+        {
+            voice.setPitchDriftRange(cents);
+        }
+    }
+
+    void setBreathVcaRange(const float amount) noexcept
+    {
+        for (auto& voice : m_voices)
+        {
+            voice.setBreathVcaRange(amount);
+        }
+    }
+
     void setReverbSize(const float meters) noexcept
     {
         m_reverb.setMinSize(meters / kFdnSizeSpread);
@@ -294,6 +326,18 @@ class AmbientPadImpl final : public EffectBase
     [[nodiscard]] float voicePitchSemitones(const size_t channel) const noexcept
     {
         return m_voices[channel - 1].currentPitchSemitones();
+    }
+
+    /// @brief A modulation snapshot for every voice slot, for the voice-monitor UI.
+    [[nodiscard]] std::array<AbacDsp::AmbientPadVoice::ModulationSnapshot, kMaxVoices> getVoiceSnapshots()
+        const noexcept
+    {
+        std::array<AbacDsp::AmbientPadVoice::ModulationSnapshot, kMaxVoices> snapshots{};
+        for (size_t v = 0; v < kMaxVoices; ++v)
+        {
+            snapshots[v] = m_voices[v].snapshot();
+        }
+        return snapshots;
     }
 
     void setLuaParam1(const float value) noexcept
@@ -753,6 +797,22 @@ class AmbientPadImpl final : public EffectBase
         if (const auto hold = m_scriptEngine.drainHoldCommand())
         {
             setHold(*hold);
+        }
+        if (const auto cutoffRange = m_scriptEngine.drainCutoffRangeCommand())
+        {
+            setCutoffRange(*cutoffRange);
+        }
+        if (const auto resonanceRange = m_scriptEngine.drainResonanceRangeCommand())
+        {
+            setResonanceRange(*resonanceRange);
+        }
+        if (const auto pitchDriftRange = m_scriptEngine.drainPitchDriftRangeCommand())
+        {
+            setPitchDriftRange(*pitchDriftRange);
+        }
+        if (const auto breathVcaRange = m_scriptEngine.drainBreathVcaRangeCommand())
+        {
+            setBreathVcaRange(*breathVcaRange);
         }
         if (const auto distortion = m_scriptEngine.drainDistortionCommand())
         {

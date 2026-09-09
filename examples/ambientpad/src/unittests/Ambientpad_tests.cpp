@@ -203,6 +203,22 @@ TEST_F(AmbientpadTest, sweepingMusicalIntentControlsStaysFiniteAndBounded)
     }
 }
 
+TEST_F(AmbientpadTest, scriptedRangeControlsReachTheVoicesAndStayBounded)
+{
+    ASSERT_TRUE(impl.setScript(std::format("function OnStart()\n"
+                                           "    SetMotion(1)\n"
+                                           "    SetStability(0)\n"
+                                           "    SetBreath(1)\n"
+                                           "    SetCutoffRange(24)\n"
+                                           "    SetResonanceRange(1)\n"
+                                           "    SetPitchDriftRange(100)\n"
+                                           "    SetBreathVcaRange(10)\n"
+                                           "    NoteOn(1, {}, {})\n"
+                                           "end\n",
+                                           kNote, kVelocity)));
+    EXPECT_TRUE(expectFiniteAndBoundedTrackingNonZero(2000, 8.f));
+}
+
 TEST_F(AmbientpadTest, scriptedSetPitchGlidesChannelOneLive)
 {
     ASSERT_TRUE(impl.setScript(std::format("function OnStart()\n"
@@ -345,7 +361,8 @@ TEST(BaseScriptBassOverrideTest, minorHomeChannel16EndsUpAtTheOverrideNoteNotHom
 
 INSTANTIATE_TEST_SUITE_P(EveryBaseScript, BaseScriptTest,
                          ::testing::Values("breathing-drone", "harmonic-scene", "minor-home", "major-light",
-                                           "modal-warmth", "open-suspended", "chromatic-weather", "pedal-modulation"),
+                                           "modal-warmth", "open-suspended", "chromatic-weather", "pedal-modulation",
+                                           "full-api-reference"),
                          [](const ::testing::TestParamInfo<std::string>& info)
                          {
                              std::string name = info.param;

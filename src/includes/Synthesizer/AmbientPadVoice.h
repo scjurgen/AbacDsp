@@ -128,6 +128,31 @@ class AmbientPadVoice
         m_light = std::clamp(value, 0.f, 1.f);
     }
 
+    /// @brief Max semitone depth the Lens process can pull the filter cutoff away from Light's
+    /// own setting.
+    void setCutoffRange(const float semitones) noexcept
+    {
+        m_cutoffRange = std::clamp(semitones, 0.f, 48.f);
+    }
+
+    /// @brief Max depth (0..1, on top of the fixed base resonance) the Lens process can add.
+    void setResonanceRange(const float amount) noexcept
+    {
+        m_resonanceRange = std::clamp(amount, 0.f, 1.f);
+    }
+
+    /// @brief Max cents of Drift-driven detune applied to each oscillator (opposite sign).
+    void setPitchDriftRange(const float cents) noexcept
+    {
+        m_driftRange = std::clamp(cents, 0.f, 100.f);
+    }
+
+    /// @brief Max Breath-driven VCA gain boost (0 = no swell at all).
+    void setBreathVcaRange(const float amount) noexcept
+    {
+        m_breathVcaRange = std::clamp(amount, 0.f, 10.f);
+    }
+
     void setMotion(const float value) noexcept
     {
         m_motion = std::clamp(value, 0.f, 1.f);
@@ -173,10 +198,16 @@ class AmbientPadVoice
     {
         float material{}, materialRange{}, light{}, motion{}, breath{}, stability{}, bloom{};
         bool hold{};
+        float materialMorph{}; ///< actual OU-modulated morph position (0..1), unlike `material`
+
         float ouBreath{}, ouMaterial{}, ouLens{}, ouDrift{};
         float filterCutoffHz{}, filterCharacterPos{}, filterResonance{};
         float osc0Hz{}, osc1Hz{};
         float envelope{}, gain{};
+        float breathRippleGain{}; ///< slow Breath-driven VCA wobble, multiplies onto envelope
+        float velocityGain{};     ///< fixed per-note velocity response, set once at trigger
+        float pitchSemitones{};
+        bool isPlaying{};
     };
 
     [[nodiscard]] ModulationSnapshot snapshot() const noexcept
@@ -189,6 +220,7 @@ class AmbientPadVoice
                 .stability = m_stability,
                 .bloom = m_bloom,
                 .hold = m_hold,
+                .materialMorph = (m_materialSmoothed.getLastValue() + 1.f) * 0.5f,
                 .ouBreath = m_lastBreath,
                 .ouMaterial = m_lastMaterial,
                 .ouLens = m_lastLens,
@@ -199,7 +231,11 @@ class AmbientPadVoice
                 .osc0Hz = m_oscillators[0].currentHz,
                 .osc1Hz = m_oscillators[1].currentHz,
                 .envelope = m_lastEnvelope,
-                .gain = m_gainSmoothed.getLastValue()};
+                .gain = m_gainSmoothed.getLastValue(),
+                .breathRippleGain = m_breathRippleGain,
+                .velocityGain = m_gain,
+                .pitchSemitones = m_pitch.getLastValue(),
+                .isPlaying = isPlaying()};
     }
 
     /// @brief Repitches the held note live, over glideTimeSeconds (0 = instant) - the envelope
@@ -374,17 +410,17 @@ class AmbientPadVoice
         }
 
         const auto cutoffNote = kMinCutoffNote + m_light * (kMaxCutoffNote - kMinCutoffNote) +
-                                lensValue * kLensCutoffDepthSemitones * stabilityRestraint;
+                                lensValue * m_cutoffRange * stabilityRestraint;
         m_diagCutoffHz = Convert::noteToFrequency<float>(std::clamp(cutoffNote, 0.f, 127.f));
         m_filter.setCutoffFrequency(m_diagCutoffHz);
-        m_diagResonance = std::clamp(kBaseResonance + lensValue * kLensResonanceDepth * stabilityRestraint, 0.f, 1.f);
+        m_diagResonance = std::clamp(kBaseResonance + lensValue * m_resonanceRange * stabilityRestraint, 0.f, 1.f);
         m_filter.setResonance(m_diagResonance);
 
-        const auto characterTarget =
-            std::clamp(m_light + lensValue * kLensCharacterDepth * stabilityRestraint, 0.f, 1.f);
-        m_filterCharacterPos.newTransition(characterTarget, kControlSmoothingSeconds, controlRate());
+        // Character tracks Light directly - a chosen filter character should hold still, not
+        // wander with the other OU-driven destinations.
+        m_filterCharacterPos.newTransition(m_light, kControlSmoothingSeconds, controlRate());
 
-        const auto driftDepth = kDriftDepthCents * stabilityRestraint;
+        const auto driftDepth = m_driftRange * stabilityRestraint;
         m_oscillators[0].driftCents = driftValue * driftDepth;
         m_oscillators[1].driftCents = -driftValue * driftDepth;
         const auto instability = kInterOscDetuneCents * stabilityRestraint;
@@ -393,7 +429,7 @@ class AmbientPadVoice
         (void) m_pitch.getValue(); // advances any pending pitch glide by one control-rate step
         updateAllOscillatorFrequencies();
 
-        m_breathRippleGain = 1.f + breathValue * m_breath * kBreathVcaDepth * stabilityRestraint;
+        m_breathRippleGain = 1.f + breathValue * m_breath * m_breathVcaRange * stabilityRestraint;
     }
 
     [[nodiscard]] float controlRate() const noexcept
@@ -437,12 +473,7 @@ class AmbientPadVoice
     static constexpr float kMinCutoffNote{48.f};
     static constexpr float kMaxCutoffNote{110.f};
     static constexpr float kMotionMaxSigma{0.4f};
-    static constexpr float kLensCutoffDepthSemitones{6.f};
-    static constexpr float kLensResonanceDepth{0.15f};
-    static constexpr float kLensCharacterDepth{0.3f};
-    static constexpr float kDriftDepthCents{15.f};
     static constexpr float kInterOscDetuneCents{6.f};
-    static constexpr float kBreathVcaDepth{0.08f};
     static constexpr float kGainSmoothingSeconds{0.05f};
     static constexpr float kControlSmoothingSeconds{0.05f};
     static constexpr float kDistortionDriveGain{2.f};
@@ -469,6 +500,10 @@ class AmbientPadVoice
 
     float m_material{0.5f};
     float m_materialRange{0.35f};
+    float m_cutoffRange{6.f};
+    float m_resonanceRange{0.15f};
+    float m_driftRange{15.f};
+    float m_breathVcaRange{2.f};
     float m_light{0.5f};
     float m_motion{0.f};
     float m_breath{0.f};

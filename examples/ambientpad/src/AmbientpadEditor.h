@@ -83,8 +83,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // auto generated
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-            std::vector<juce::Rectangle<int>> areas(1);
-            areas[0] = area.reduced(Constants::Margins::small);
+            std::vector<juce::Rectangle<int>> areas(3);
+            const auto rowHeight = area.getHeight() / 10;
+            areas[0] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[2] = area.reduced(Constants::Margins::small);
 
             {
                 juce::FlexBox box;
@@ -128,6 +131,22 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.items.add(juce::FlexItem(pedalNoteDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[0].toFloat());
             }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(luaControlsLuaControlArea).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[1].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(voiceRowsGauge).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[2].toFloat());
+            }
         }
         else
         {
@@ -135,12 +154,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
 
-            std::vector<juce::Rectangle<int>> areas(3);
+            std::vector<juce::Rectangle<int>> areas(4);
             const auto colWidth = area.getWidth() / 5;
-            const auto rowHeight = area.getHeight() / 3;
+            const auto rowHeight = area.getHeight() / 10;
             areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
             areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-            areas[2] = area.reduced(Constants::Margins::small);
+            areas[2] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
+            areas[3] = area.reduced(Constants::Margins::small);
 
             {
                 juce::FlexBox box;
@@ -202,6 +222,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.items.add(juce::FlexItem(luaControlsLuaControlArea).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[2].toFloat());
             }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::row;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(voiceRowsGauge).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[3].toFloat());
+            }
         }
     }
 #pragma GCC diagnostic pop
@@ -220,6 +248,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()),
                                                   valueTreeState);
             }
+            voiceRowsGauge.update(processorRef.getVoiceSnapshots());
             processorRef.consumeLastLearnedCc();
         }
     }
@@ -302,6 +331,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         spectrogramGauge.setLabelText(juce::String::fromUTF8("Spectrogram"));
         spectrogramGauge.setTooltip(juce::String::fromUTF8("Spectrogram"));
         addAndMakeVisible(luaControlsLuaControlArea);
+        addAndMakeVisible(voiceRowsGauge);
+        voiceRowsGauge.setLabelText(juce::String::fromUTF8("Voices"));
         addAndMakeVisible(luaParam1Dial);
         luaParam1Dial.reset(valueTreeState, "luaParam1");
         luaParam1Dial.setLabelText(juce::String::fromUTF8("Lua Param 1"));
@@ -421,7 +452,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             cpuGauge.setVisible(false);
             levelMeterGauge.setVisible(false);
             spectrogramGauge.setVisible(false);
-            luaControlsLuaControlArea.setVisible(false);
+            luaControlsLuaControlArea.setVisible(true);
+            voiceRowsGauge.setVisible(true);
             luaParam1Dial.setVisible(false);
             luaParam2Dial.setVisible(false);
             luaParam3Dial.setVisible(false);
@@ -452,6 +484,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             levelMeterGauge.setVisible(true);
             spectrogramGauge.setVisible(true);
             luaControlsLuaControlArea.setVisible(true);
+            voiceRowsGauge.setVisible(true);
             luaParam1Dial.setVisible(false);
             luaParam2Dial.setVisible(false);
             luaParam3Dial.setVisible(false);
@@ -631,6 +664,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         cpuGauge.updateColors();
         levelMeterGauge.updateColors();
         spectrogramGauge.setGradientPreset(preset);
+        voiceRowsGauge.updateColors();
 
         repaint();
     }
@@ -1270,6 +1304,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     Gauge levelMeterGauge{};
     SpectrogramDisplay spectrogramGauge{AppSettings::loadTheme()};
     LuaControlArea luaControlsLuaControlArea{};
+    ShowVoiceRows voiceRowsGauge{};
     CustomRotaryDial luaParam1Dial{this};
     CustomRotaryDial luaParam2Dial{this};
     CustomRotaryDial luaParam3Dial{this};

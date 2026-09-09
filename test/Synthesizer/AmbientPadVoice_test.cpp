@@ -89,6 +89,38 @@ TEST_F(AmbientPadVoiceTest, materialRangeAtExtremesStaysFiniteAndBounded)
     }
 }
 
+TEST_F(AmbientPadVoiceTest, modulationRangesAtMaximumStayFiniteAndBounded)
+{
+    voice->setMotion(1.f);
+    voice->setStability(0.f);
+    voice->setCutoffRange(48.f);
+    voice->setResonanceRange(1.f);
+    voice->setPitchDriftRange(100.f);
+    voice->setBreathVcaRange(10.f);
+    voice->setBreath(1.f);
+    voice->triggerVoice(69, 100);
+    std::array<float, 512> mono{};
+    for (int block = 0; block < 40; ++block)
+    {
+        voice->processBlock(mono.data(), mono.size());
+        assertFiniteAndBounded(mono);
+    }
+}
+
+TEST_F(AmbientPadVoiceTest, characterFollowsLightWithoutWandering)
+{
+    voice->setMotion(1.f);
+    voice->setStability(0.f);
+    voice->setLight(0.75f);
+    voice->triggerVoice(69, 100);
+    std::array<float, 512> mono{};
+    for (int block = 0; block < 40; ++block)
+    {
+        voice->processBlock(mono.data(), mono.size());
+    }
+    EXPECT_NEAR(voice->snapshot().filterCharacterPos, 0.75f, 1e-3f);
+}
+
 TEST_F(AmbientPadVoiceTest, holdFreezesModulationWithoutBreakingOutput)
 {
     voice->setMotion(1.f);

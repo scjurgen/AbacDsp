@@ -144,6 +144,13 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
 "-- SetBloom(value)     0..1, amplitude attack/release time\n"
 "-- SetHold(hold)       true freezes all four modulation sources at their current value\n"
 "\n"
+"-- Fine-tuning how far each OU-driven destination can wander (all default to a modest\n"
+"-- depth; Motion/Stability still scale how much of it actually reaches the voice):\n"
+"-- SetCutoffRange(semitones)   0..48, Lens's max pull on the filter cutoff\n"
+"-- SetResonanceRange(amount)   0..1, Lens's max pull on resonance\n"
+"-- SetPitchDriftRange(cents)   0..100, Drift's max per-oscillator detune\n"
+"-- SetBreathVcaRange(amount)   0..10, Breath's max VCA gain boost\n"
+"\n"
 "-- SetDistortion(presetIndex)  0 = off/bypass, 1.. = WaveShaperTables.h preset (1-indexed)\n"
 "\n"
 "-- SetPhaser({ rateHz, depth, feedback, mix })  master-bus phaser, 8 allpass poles total.\n"
@@ -218,6 +225,10 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     [[nodiscard]] std::optional<float> drainStabilityCommand() noexcept;
     [[nodiscard]] std::optional<float> drainBloomCommand() noexcept;
     [[nodiscard]] std::optional<bool> drainHoldCommand() noexcept;
+    [[nodiscard]] std::optional<float> drainCutoffRangeCommand() noexcept;
+    [[nodiscard]] std::optional<float> drainResonanceRangeCommand() noexcept;
+    [[nodiscard]] std::optional<float> drainPitchDriftRangeCommand() noexcept;
+    [[nodiscard]] std::optional<float> drainBreathVcaRangeCommand() noexcept;
     [[nodiscard]] std::optional<size_t> drainDistortionCommand() noexcept;
     [[nodiscard]] std::optional<PhaserSettings> drainPhaserCommand() noexcept;
     [[nodiscard]] std::optional<ChorusSettings> drainChorusCommand() noexcept;
@@ -246,6 +257,10 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     void luaSetStability(float value) noexcept;
     void luaSetBloom(float value) noexcept;
     void luaSetHold(bool hold) noexcept;
+    void luaSetCutoffRange(float semitones) noexcept;
+    void luaSetResonanceRange(float amount) noexcept;
+    void luaSetPitchDriftRange(float cents) noexcept;
+    void luaSetBreathVcaRange(float amount) noexcept;
     void luaSetDistortion(size_t presetIndex) noexcept;
     void luaSetPhaser(const sol::table& params) noexcept;
     void luaSetChorus(const sol::table& params) noexcept;
@@ -274,6 +289,10 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     std::optional<float> m_pendingStability;
     std::optional<float> m_pendingBloom;
     std::optional<bool> m_pendingHold;
+    std::optional<float> m_pendingCutoffRange;
+    std::optional<float> m_pendingResonanceRange;
+    std::optional<float> m_pendingPitchDriftRange;
+    std::optional<float> m_pendingBreathVcaRange;
     std::optional<size_t> m_pendingDistortion;
     std::optional<PhaserSettings> m_pendingPhaser;
     std::optional<ChorusSettings> m_pendingChorus;
@@ -318,6 +337,10 @@ inline void AmbientPadScriptEngine::bindScriptFunctions()
     m_lua.set_function("SetStability", &AmbientPadScriptEngine::luaSetStability, this);
     m_lua.set_function("SetBloom", &AmbientPadScriptEngine::luaSetBloom, this);
     m_lua.set_function("SetHold", &AmbientPadScriptEngine::luaSetHold, this);
+    m_lua.set_function("SetCutoffRange", &AmbientPadScriptEngine::luaSetCutoffRange, this);
+    m_lua.set_function("SetResonanceRange", &AmbientPadScriptEngine::luaSetResonanceRange, this);
+    m_lua.set_function("SetPitchDriftRange", &AmbientPadScriptEngine::luaSetPitchDriftRange, this);
+    m_lua.set_function("SetBreathVcaRange", &AmbientPadScriptEngine::luaSetBreathVcaRange, this);
     m_lua.set_function("SetDistortion", &AmbientPadScriptEngine::luaSetDistortion, this);
     m_lua.set_function("SetPhaser", &AmbientPadScriptEngine::luaSetPhaser, this);
     m_lua.set_function("SetChorus", &AmbientPadScriptEngine::luaSetChorus, this);
@@ -490,6 +513,38 @@ inline void AmbientPadScriptEngine::luaSetBloom(const float value) noexcept
 inline void AmbientPadScriptEngine::luaSetHold(const bool hold) noexcept
 {
     m_pendingHold = hold;
+}
+
+inline void AmbientPadScriptEngine::luaSetCutoffRange(const float semitones) noexcept
+{
+    if (std::isfinite(semitones))
+    {
+        m_pendingCutoffRange = std::clamp(semitones, 0.f, 48.f);
+    }
+}
+
+inline void AmbientPadScriptEngine::luaSetResonanceRange(const float amount) noexcept
+{
+    if (std::isfinite(amount))
+    {
+        m_pendingResonanceRange = std::clamp(amount, 0.f, 1.f);
+    }
+}
+
+inline void AmbientPadScriptEngine::luaSetPitchDriftRange(const float cents) noexcept
+{
+    if (std::isfinite(cents))
+    {
+        m_pendingPitchDriftRange = std::clamp(cents, 0.f, 100.f);
+    }
+}
+
+inline void AmbientPadScriptEngine::luaSetBreathVcaRange(const float amount) noexcept
+{
+    if (std::isfinite(amount))
+    {
+        m_pendingBreathVcaRange = std::clamp(amount, 0.f, 10.f);
+    }
 }
 
 inline void AmbientPadScriptEngine::luaSetDistortion(const size_t presetIndex) noexcept
@@ -668,6 +723,34 @@ inline std::optional<bool> AmbientPadScriptEngine::drainHoldCommand() noexcept
 {
     const auto result = m_pendingHold;
     m_pendingHold.reset();
+    return result;
+}
+
+inline std::optional<float> AmbientPadScriptEngine::drainCutoffRangeCommand() noexcept
+{
+    const auto result = m_pendingCutoffRange;
+    m_pendingCutoffRange.reset();
+    return result;
+}
+
+inline std::optional<float> AmbientPadScriptEngine::drainResonanceRangeCommand() noexcept
+{
+    const auto result = m_pendingResonanceRange;
+    m_pendingResonanceRange.reset();
+    return result;
+}
+
+inline std::optional<float> AmbientPadScriptEngine::drainPitchDriftRangeCommand() noexcept
+{
+    const auto result = m_pendingPitchDriftRange;
+    m_pendingPitchDriftRange.reset();
+    return result;
+}
+
+inline std::optional<float> AmbientPadScriptEngine::drainBreathVcaRangeCommand() noexcept
+{
+    const auto result = m_pendingBreathVcaRange;
+    m_pendingBreathVcaRange.reset();
     return result;
 }
 
