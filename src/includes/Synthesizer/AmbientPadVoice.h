@@ -116,6 +116,13 @@ class AmbientPadVoice
         m_material = std::clamp(value, 0.f, 1.f);
     }
 
+    /// @brief Full width, in Material's own 0..1 units, of the OU-driven sweep around the
+    /// Material center - e.g. center 0.5 / range 0.5 wanders roughly between 0.25 and 0.75.
+    void setMaterialRange(const float value) noexcept
+    {
+        m_materialRange = std::clamp(value, 0.f, 1.f);
+    }
+
     void setLight(const float value) noexcept
     {
         m_light = std::clamp(value, 0.f, 1.f);
@@ -164,7 +171,7 @@ class AmbientPadVoice
     /// @brief A snapshot of this voice's current modulation state, for diagnostics/logging.
     struct ModulationSnapshot
     {
-        float material{}, light{}, motion{}, breath{}, stability{}, bloom{};
+        float material{}, materialRange{}, light{}, motion{}, breath{}, stability{}, bloom{};
         bool hold{};
         float ouBreath{}, ouMaterial{}, ouLens{}, ouDrift{};
         float filterCutoffHz{}, filterCharacterPos{}, filterResonance{};
@@ -175,6 +182,7 @@ class AmbientPadVoice
     [[nodiscard]] ModulationSnapshot snapshot() const noexcept
     {
         return {.material = m_material,
+                .materialRange = m_materialRange,
                 .light = m_light,
                 .motion = m_motion,
                 .breath = m_breath,
@@ -357,7 +365,7 @@ class AmbientPadVoice
         const auto stabilityRestraint = 1.f - m_stability;
 
         const auto materialTarget =
-            std::clamp(m_material * 2.f - 1.f + materialValue * kMaterialOuDepth * stabilityRestraint, -1.f, 1.f);
+            std::clamp(m_material * 2.f - 1.f + materialValue * m_materialRange * stabilityRestraint, -1.f, 1.f);
         m_materialSmoothed.newTransition(materialTarget, kControlSmoothingSeconds, controlRate());
         const auto material = m_materialSmoothed.getValue();
         for (auto& osc : m_oscillators)
@@ -429,7 +437,6 @@ class AmbientPadVoice
     static constexpr float kMinCutoffNote{48.f};
     static constexpr float kMaxCutoffNote{110.f};
     static constexpr float kMotionMaxSigma{0.4f};
-    static constexpr float kMaterialOuDepth{0.35f};
     static constexpr float kLensCutoffDepthSemitones{6.f};
     static constexpr float kLensResonanceDepth{0.15f};
     static constexpr float kLensCharacterDepth{0.3f};
@@ -461,6 +468,7 @@ class AmbientPadVoice
     LinearSmoothing m_pitch{69.f}; ///< continuous semitones (note + cents/100), glide target/position
 
     float m_material{0.5f};
+    float m_materialRange{0.35f};
     float m_light{0.5f};
     float m_motion{0.f};
     float m_breath{0.f};

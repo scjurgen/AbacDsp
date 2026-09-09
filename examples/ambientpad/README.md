@@ -20,12 +20,13 @@ directly with `NoteOn`/`NoteOff` - or the harmonic organism is driving them itse
 
 ## Modulation
 
-How the seven dials and the four Ornstein-Uhlenbeck processes reach the voice:
+How the eight dials and the four Ornstein-Uhlenbeck processes reach the voice:
 
 ```mermaid
 flowchart TD
     subgraph DIALS["Musical-intent dials"]
         MATERIAL["Material"]
+        MRANGE["Range"]
         LIGHT["Light"]
         MOTION["Motion"]
         BREATH["Breath"]
@@ -51,6 +52,7 @@ flowchart TD
     HOLD -.->|freezes step| OUD
 
     MATERIAL --> MORPH["Oscillator morph, both layers"]
+    MRANGE -.->|OU depth| MORPH
     OUM --> MORPH
 
     LIGHT --> CUTOFF["Filter cutoff Hz"]
@@ -87,7 +89,10 @@ flowchart TD
 
 Motion sets one shared wander range/speed for all four processes; each still reaches a
 different destination at its own depth, so the voice reads as one weather system rather than
-four independent LFOs. Stability then scales how much of that wander actually reaches every
+four independent LFOs. Material is the only one of the four whose own depth is itself a dial:
+Range sets the full width, in Material's own 0..1 units, that OU Material can pull the morph
+position away from Material's center - center 0.5 (sine) with Range 0.5 wanders roughly
+between 0.25 and 0.75. Stability then scales how much of that wander actually reaches every
 destination, so Stability=1 is genuinely stable (no wander reaches the voice) regardless of
 Motion, not just firmer pitch. Hold pauses every process's own `step()` call, freezing
 modulation at whatever value it currently holds rather than resetting it to a center.
@@ -167,6 +172,7 @@ when wanted.
 | Note | 0 - 127, default 69 (A4) | Pitch for the Play switch (no MIDI input in this phase) |
 | Play | on/off | Gates channel 1's voice at the Note pitch |
 | Material | 0 - 1 | Wavetable position along each oscillator's material path |
+| Range | 0 - 1, default 0.35 | Full width of the OU sweep around Material's center |
 | Light | 0 - 1 | Filter cutoff and character, dark (Velvet) to bright (Glass) |
 | Motion | 0 - 1 | Shared range/speed of the Breath/Material/Lens/Drift wander |
 | Breath | 0 - 1 | How much the Breath process moves level and cutoff |
@@ -243,7 +249,8 @@ glides smoothly to `note + cents` over that many seconds. `cents` is `-100..100`
 ### The four musical-intent controls
 
 ```lua
-SetMaterial(value)   -- 0..1
+SetMaterial(value)      -- 0..1
+SetMaterialRange(value) -- 0..1, full width of the OU sweep around Material's center
 SetLight(value)      -- 0..1
 SetMotion(value)      -- 0..1
 SetBreath(value)      -- 0..1

@@ -99,6 +99,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.items.add(juce::FlexItem(levelDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(noteDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(materialDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(materialRangeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(lightDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(motionDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(breathDial).withFlex(1).withMargin(knobMarginSmall));
@@ -164,6 +165,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withAlignSelf(juce::FlexItem::AlignSelf::center)
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(materialDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(materialRangeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(lightDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(motionDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(breathDial).withFlex(1).withMargin(knobMarginSmall));
@@ -241,6 +243,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         materialDial.reset(valueTreeState, "material");
         materialDial.setLabelText(juce::String::fromUTF8("Material"));
         materialDial.setTooltip(juce::String::fromUTF8("Material (0 to 1)"));
+        addAndMakeVisible(materialRangeDial);
+        materialRangeDial.reset(valueTreeState, "materialRange");
+        materialRangeDial.setLabelText(juce::String::fromUTF8("Range"));
+        materialRangeDial.setTooltip(juce::String::fromUTF8("Range (0 to 1)"));
         addAndMakeVisible(lightDial);
         lightDial.reset(valueTreeState, "light");
         lightDial.setLabelText(juce::String::fromUTF8("Light"));
@@ -401,6 +407,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             noteDial.setVisible(true);
             playSwitch.setVisible(true);
             materialDial.setVisible(true);
+            materialRangeDial.setVisible(true);
             lightDial.setVisible(true);
             motionDial.setVisible(true);
             breathDial.setVisible(true);
@@ -430,6 +437,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             noteDial.setVisible(true);
             playSwitch.setVisible(true);
             materialDial.setVisible(true);
+            materialRangeDial.setVisible(true);
             lightDial.setVisible(true);
             motionDial.setVisible(true);
             breathDial.setVisible(true);
@@ -1243,6 +1251,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::ToggleButton playSwitch{juce::String::fromUTF8("Play")};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> playSwitchAttachment;
     CustomRotaryDial materialDial{this};
+    CustomRotaryDial materialRangeDial{this};
     CustomRotaryDial lightDial{this};
     CustomRotaryDial motionDial{this};
     CustomRotaryDial breathDial{this};

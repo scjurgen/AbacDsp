@@ -15,6 +15,7 @@
     {"short": "PLAY", "type": "switch", "display": "Play", "symbol": "play", "default": 0},
 
     {"short": "MATRL", "type": "dial", "display": "Material", "symbol": "material", "default": 0.5, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
+    {"short": "MRANGE", "type": "dial", "display": "Range", "symbol": "materialRange", "default": 0.35, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
     {"short": "LIGHT", "type": "dial", "display": "Light", "symbol": "light", "default": 0.5, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
     {"short": "MOTION", "type": "dial", "display": "Motion", "symbol": "motion", "default": 0.3, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
     {"short": "BREATH", "type": "dial", "display": "Breath", "symbol": "breath", "default": 0.3, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
@@ -37,11 +38,11 @@
     "WINDOW_WIDTH": "1100",
     "WINDOW_HEIGHT": "760",
     "type": "|=",
-    "composition": "C=(1:4) R=(1:2) A1=(CPU*200, LVL*300, FFT) A2=(LEVEL, NOTE, PLAY, MATRL, LIGHT, MOTION, BREATH, STABL, BLOOM, HOLD, HARM, HOME, CHAR, PEDAL) A3=(LUACTL)"
+    "composition": "C=(1:4) R=(1:2) A1=(CPU*200, LVL*300, FFT) A2=(LEVEL, NOTE, PLAY, MATRL, MRANGE, LIGHT, MOTION, BREATH, STABL, BLOOM, HOLD, HARM, HOME, CHAR, PEDAL) A3=(LUACTL)"
   },
   "performance-page": {
     "type": "-",
-    "composition": "A1=(PLAY, LEVEL, NOTE, MATRL, LIGHT, MOTION, BREATH, STABL, BLOOM, HOLD, HARM, HOME, CHAR, PEDAL)"
+    "composition": "A1=(PLAY, LEVEL, NOTE, MATRL, MRANGE, LIGHT, MOTION, BREATH, STABL, BLOOM, HOLD, HARM, HOME, CHAR, PEDAL)"
   },
   "processor_forwards": [
     {

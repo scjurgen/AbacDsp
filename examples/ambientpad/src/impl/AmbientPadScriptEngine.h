@@ -136,6 +136,7 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
 "--   glides smoothly to note+cents over that many seconds. cents: fine tune -100..100\n"
 "\n"
 "-- SetMaterial(value)  0..1, wavetable position along each oscillator's material path\n"
+"-- SetMaterialRange(value)  0..1, full width of the OU sweep around Material's center\n"
 "-- SetLight(value)     0..1, filter cutoff and character (dark/Velvet .. bright/Glass)\n"
 "-- SetMotion(value)    0..1, shared range/speed of the Breath/Material/Lens/Drift wander\n"
 "-- SetBreath(value)    0..1, how much the Breath process moves level and cutoff\n"
@@ -210,6 +211,7 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     [[nodiscard]] PendingImpulseEventsResult drainImpulseEvents() noexcept;
 
     [[nodiscard]] std::optional<float> drainMaterialCommand() noexcept;
+    [[nodiscard]] std::optional<float> drainMaterialRangeCommand() noexcept;
     [[nodiscard]] std::optional<float> drainLightCommand() noexcept;
     [[nodiscard]] std::optional<float> drainMotionCommand() noexcept;
     [[nodiscard]] std::optional<float> drainBreathCommand() noexcept;
@@ -237,6 +239,7 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     void luaSetPedalChannels(const sol::table& channels) noexcept;
     void pushImpulse(AbacDsp::ImpulseKind kind) noexcept;
     void luaSetMaterial(float value) noexcept;
+    void luaSetMaterialRange(float value) noexcept;
     void luaSetLight(float value) noexcept;
     void luaSetMotion(float value) noexcept;
     void luaSetBreath(float value) noexcept;
@@ -264,6 +267,7 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     std::array<AbacDsp::ImpulseKind, kMaxPendingImpulsesPerBlock> m_pendingImpulses{};
     size_t m_pendingImpulseCount{0};
     std::optional<float> m_pendingMaterial;
+    std::optional<float> m_pendingMaterialRange;
     std::optional<float> m_pendingLight;
     std::optional<float> m_pendingMotion;
     std::optional<float> m_pendingBreath;
@@ -307,6 +311,7 @@ inline void AmbientPadScriptEngine::bindScriptFunctions()
     m_lua.set_function("Arrive", [this]() { pushImpulse(AbacDsp::ImpulseKind::Arrive); });
     m_lua.set_function("Release", [this]() { pushImpulse(AbacDsp::ImpulseKind::Release); });
     m_lua.set_function("SetMaterial", &AmbientPadScriptEngine::luaSetMaterial, this);
+    m_lua.set_function("SetMaterialRange", &AmbientPadScriptEngine::luaSetMaterialRange, this);
     m_lua.set_function("SetLight", &AmbientPadScriptEngine::luaSetLight, this);
     m_lua.set_function("SetMotion", &AmbientPadScriptEngine::luaSetMotion, this);
     m_lua.set_function("SetBreath", &AmbientPadScriptEngine::luaSetBreath, this);
@@ -431,6 +436,14 @@ inline void AmbientPadScriptEngine::luaSetMaterial(const float value) noexcept
     if (std::isfinite(value))
     {
         m_pendingMaterial = std::clamp(value, 0.f, 1.f);
+    }
+}
+
+inline void AmbientPadScriptEngine::luaSetMaterialRange(const float value) noexcept
+{
+    if (std::isfinite(value))
+    {
+        m_pendingMaterialRange = std::clamp(value, 0.f, 1.f);
     }
 }
 
@@ -606,6 +619,13 @@ inline std::optional<float> AmbientPadScriptEngine::drainMaterialCommand() noexc
 {
     const auto result = m_pendingMaterial;
     m_pendingMaterial.reset();
+    return result;
+}
+
+inline std::optional<float> AmbientPadScriptEngine::drainMaterialRangeCommand() noexcept
+{
+    const auto result = m_pendingMaterialRange;
+    m_pendingMaterialRange.reset();
     return result;
 }
 

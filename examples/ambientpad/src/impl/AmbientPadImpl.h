@@ -103,6 +103,14 @@ class AmbientPadImpl final : public EffectBase
         }
     }
 
+    void setMaterialRange(const float value) noexcept
+    {
+        for (auto& voice : m_voices)
+        {
+            voice.setMaterialRange(value);
+        }
+    }
+
     void setLight(const float value) noexcept
     {
         for (auto& voice : m_voices)
@@ -717,6 +725,10 @@ class AmbientPadImpl final : public EffectBase
         if (const auto material = m_scriptEngine.drainMaterialCommand())
         {
             setMaterial(*material);
+        }
+        if (const auto materialRange = m_scriptEngine.drainMaterialRangeCommand())
+        {
+            setMaterialRange(*materialRange);
         }
         if (const auto light = m_scriptEngine.drainLightCommand())
         {

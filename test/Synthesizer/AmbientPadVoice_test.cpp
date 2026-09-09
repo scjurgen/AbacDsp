@@ -71,6 +71,24 @@ TEST_F(AmbientPadVoiceTest, sweepingMaterialAndLightStaysFiniteAndBounded)
     }
 }
 
+TEST_F(AmbientPadVoiceTest, materialRangeAtExtremesStaysFiniteAndBounded)
+{
+    voice->setMotion(1.f);
+    voice->setStability(0.f);
+    voice->setMaterialRange(1.f);
+    voice->triggerVoice(69, 100);
+    std::array<float, 512> mono{};
+    for (const auto center : {0.f, 0.5f, 1.f})
+    {
+        voice->setMaterial(center);
+        for (int block = 0; block < 20; ++block)
+        {
+            voice->processBlock(mono.data(), mono.size());
+            assertFiniteAndBounded(mono);
+        }
+    }
+}
+
 TEST_F(AmbientPadVoiceTest, holdFreezesModulationWithoutBreakingOutput)
 {
     voice->setMotion(1.f);

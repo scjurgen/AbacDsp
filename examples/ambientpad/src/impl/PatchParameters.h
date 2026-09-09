@@ -17,6 +17,7 @@ struct PatchParameters
         note            , // dial
         play            , // switch
         material        , // dial
+        materialRange   , // dial
         light           , // dial
         motion          , // dial
         breath          , // dial
@@ -41,6 +42,7 @@ float level{-30.0f};
 float note{69.0f};
 bool play{false};
 float material{0.5f};
+float materialRange{0.35f};
 float light{0.5f};
 float motion{0.3f};
 float breath{0.3f};
@@ -67,6 +69,7 @@ std::string script{};
 "note",
 "play",
 "material",
+"materialRange",
 "light",
 "motion",
 "breath",
@@ -107,6 +110,7 @@ std::string script{};
         else if constexpr (ParamId == Id::note) return note;
         else if constexpr (ParamId == Id::play) return play;
         else if constexpr (ParamId == Id::material) return material;
+        else if constexpr (ParamId == Id::materialRange) return materialRange;
         else if constexpr (ParamId == Id::light) return light;
         else if constexpr (ParamId == Id::motion) return motion;
         else if constexpr (ParamId == Id::breath) return breath;
@@ -145,6 +149,8 @@ break;
  case Id::play: if (!isEqual(get<Id::play>(), value)) {get<Id::play>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::material: if (!isEqual(get<Id::material>(), value)) {get<Id::material>() = value;m_modified = true;}
+break;
+ case Id::materialRange: if (!isEqual(get<Id::materialRange>(), value)) {get<Id::materialRange>() = value;m_modified = true;}
 break;
  case Id::light: if (!isEqual(get<Id::light>(), value)) {get<Id::light>() = value;m_modified = true;}
 break;
@@ -228,6 +234,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         note            , // dial
         play            , // switch
         material        , // dial
+        materialRange   , // dial
         light           , // dial
         motion          , // dial
         breath          , // dial

@@ -45,6 +45,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("note", this);
         m_parameters.addParameterListener("play", this);
         m_parameters.addParameterListener("material", this);
+        m_parameters.addParameterListener("materialRange", this);
         m_parameters.addParameterListener("light", this);
         m_parameters.addParameterListener("motion", this);
         m_parameters.addParameterListener("breath", this);
@@ -79,6 +80,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("note", this);
         m_parameters.removeParameterListener("play", this);
         m_parameters.removeParameterListener("material", this);
+        m_parameters.removeParameterListener("materialRange", this);
         m_parameters.removeParameterListener("light", this);
         m_parameters.removeParameterListener("motion", this);
         m_parameters.removeParameterListener("breath", this);
@@ -312,6 +314,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("materialRange", 1), juce::String::fromUTF8("Range"),
+            juce::NormalisableRange<float>(0, 1, 0.01, 1, false), 0.35,
+            juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 2) + " "; })));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("light", 1), juce::String::fromUTF8("Light"),
             juce::NormalisableRange<float>(0, 1, 0.01, 1, false), 0.5,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
@@ -435,6 +442,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setMaterial(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::material, v);
+             }},
+            {"materialRange",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setMaterialRange(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::materialRange, v);
              }},
             {"light",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -595,6 +608,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("material");
             float normalized = range.convertTo0to1(static_cast<float>(params.material));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("materialRange"))
+        {
+            const auto& range = m_parameters.getParameterRange("materialRange");
+            float normalized = range.convertTo0to1(static_cast<float>(params.materialRange));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("light"))

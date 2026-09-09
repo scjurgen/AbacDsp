@@ -33,6 +33,10 @@ class StubImpl final : public EffectBase
     {
         m_material = value;
     }
+    void setMaterialRange(const float value)
+    {
+        m_materialRange = value;
+    }
     void setLight(const float value)
     {
         m_light = value;
@@ -120,6 +124,7 @@ class StubImpl final : public EffectBase
     float m_note{};
     bool m_play{};
     float m_material{};
+    float m_materialRange{};
     float m_light{};
     float m_motion{};
     float m_breath{};
