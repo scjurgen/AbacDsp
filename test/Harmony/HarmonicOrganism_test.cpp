@@ -171,6 +171,105 @@ TEST_F(HarmonicOrganismTest, neverVowIsNeverViolatedAcrossManySimulatedCycles)
     }
 }
 
+TEST_F(HarmonicOrganismTest, setCustomPaletteReplacesCurrentState)
+{
+    const std::array<HarmonicState, 2> custom{
+        makeCustomHarmonicState(PaletteRegion::Home, std::to_array<int>({0, 3, 7})),
+        makeCustomHarmonicState(PaletteRegion::MajorLight, std::to_array<int>({0, 4, 7}))};
+    organism.setCustomPalette(custom);
+    EXPECT_EQ(organism.currentState().voicing.size(), 3u);
+    EXPECT_EQ(organism.currentState().region, PaletteRegion::Home);
+}
+
+TEST_F(HarmonicOrganismTest, setCustomPaletteWithEmptySpanRevertsToDefault)
+{
+    const std::array<HarmonicState, 1> custom{
+        makeCustomHarmonicState(PaletteRegion::Home, std::to_array<int>({0, 3, 7}))};
+    organism.setCustomPalette(custom);
+    organism.setCustomPalette(std::span<const HarmonicState>{});
+    EXPECT_EQ(organism.currentState().name, defaultPalette()[0].name);
+}
+
+TEST_F(HarmonicOrganismTest, setHomeAfterCustomPaletteStillTransposes)
+{
+    const std::array<HarmonicState, 1> custom{
+        makeCustomHarmonicState(PaletteRegion::Home, std::to_array<int>({0, 4, 7}))};
+    organism.setCustomPalette(custom);
+    organism.setHome(3);
+    const auto notes = organism.currentState().voicing.notes();
+    EXPECT_EQ(notes[0], 3);
+    EXPECT_EQ(notes[1], 7);
+    EXPECT_EQ(notes[2], 10);
+}
+
+TEST_F(HarmonicOrganismTest, considerTransitionWorksWithASmallCustomPalette)
+{
+    const std::array<HarmonicState, 3> custom{
+        makeCustomHarmonicState(PaletteRegion::Home, std::to_array<int>({0, 3, 7})),
+        makeCustomHarmonicState(PaletteRegion::MajorLight, std::to_array<int>({0, 4, 7})),
+        makeCustomHarmonicState(PaletteRegion::OpenSuspended, std::to_array<int>({0, 5, 7}))};
+    organism.setCustomPalette(custom);
+
+    const auto samplesPerDwell = static_cast<size_t>(HarmonicOrganism::kDwellSeconds * kSampleRate);
+    bool sawTransition = false;
+    for (int cycle = 0; cycle < 50 && !sawTransition; ++cycle)
+    {
+        organism.step(samplesPerDwell);
+        sawTransition = organism.takePendingTransition().has_value();
+    }
+    EXPECT_TRUE(sawTransition);
+}
+
+TEST_F(HarmonicOrganismTest, considerTransitionWorksWithALargerThanDefaultCustomPalette)
+{
+    constexpr size_t kCount{25};
+    std::array<HarmonicState, kCount> custom{};
+    for (size_t i = 0; i < kCount; ++i)
+    {
+        const auto region = static_cast<PaletteRegion>(i % 5);
+        const int third = (i % 2 == 0) ? 3 : 4;
+        custom[i] = makeCustomHarmonicState(region, std::to_array<int>({0, third, 7}));
+    }
+    organism.setCustomPalette(custom);
+
+    const auto samplesPerDwell = static_cast<size_t>(HarmonicOrganism::kDwellSeconds * kSampleRate);
+    bool sawTransition = false;
+    for (int cycle = 0; cycle < 50 && !sawTransition; ++cycle)
+    {
+        organism.step(samplesPerDwell);
+        sawTransition = organism.takePendingTransition().has_value();
+    }
+    EXPECT_TRUE(sawTransition);
+}
+
+TEST_F(HarmonicOrganismTest, setDwellSecondsSpeedsUpTransitions)
+{
+    organism.setDwellSeconds(1.f);
+    const auto samplesPerDwell = static_cast<size_t>(1.5f * kSampleRate);
+    bool sawTransition = false;
+    for (int cycle = 0; cycle < 20 && !sawTransition; ++cycle)
+    {
+        organism.step(samplesPerDwell);
+        sawTransition = organism.takePendingTransition().has_value();
+    }
+    // 20 cycles at 1.5s each is 30s at most - proves this isn't still running at the
+    // default 30s dwell, which would need at least one full cycle for even one decision.
+    EXPECT_TRUE(sawTransition);
+}
+
+TEST_F(HarmonicOrganismTest, setDwellSecondsClampsNegativeValuesToTheMinimum)
+{
+    organism.setDwellSeconds(-5.f);
+    const auto samplesPerClampedDwell = static_cast<size_t>((HarmonicOrganism::kMinDwellSeconds + 0.05f) * kSampleRate);
+    bool sawTransition = false;
+    for (int cycle = 0; cycle < 20 && !sawTransition; ++cycle)
+    {
+        organism.step(samplesPerClampedDwell);
+        sawTransition = organism.takePendingTransition().has_value();
+    }
+    EXPECT_TRUE(sawTransition);
+}
+
 TEST_F(HarmonicOrganismTest, arriveImpulseIncreasesClosenessAndReducesTensionAndMobilityWeights)
 {
     const auto attackSamples = static_cast<size_t>(ActiveImpulse::kAttackSeconds * kSampleRate);

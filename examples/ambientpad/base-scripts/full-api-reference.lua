@@ -51,6 +51,19 @@ function OnStart()
     SetHarmonyCharacter(3)     -- Modal Warmth
     SetPedalChannels({ 16 })
     SetPedalNote(28)
+
+    -- Optional: replace the 20 built-in states with a script-authored palette instead -
+    -- semitones are literal, home-relative, already spread as wanted. Only shown here for
+    -- syntax; see base-scripts/custom-harmony.lua for a patch actually built around this.
+    ClearHarmonicPalette()
+    AddHarmonicState({ semitones = { 0, 3, 7 } })
+    AddHarmonicState({ semitones = { 0, 4, 7 }, region = 2 })
+    AddHarmonicState({ semitones = { -12, 0, 5, 7 } })
+
+    -- Optional: override the organism's usual tens-of-seconds pace - see
+    -- base-scripts/custom-harmony.lua for why you'd actually want this
+    SetHarmonyTiming({ dwellSeconds = 30, cooldownSeconds = 20, glideSeconds = 10 }) -- today's defaults
+
     SetHarmony(true)
 
     -- Impulse gestures - performance nudges with their own life cycle, not instant switches.

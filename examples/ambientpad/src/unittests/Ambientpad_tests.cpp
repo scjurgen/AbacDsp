@@ -317,6 +317,73 @@ TEST_F(AmbientpadTest, harmonyLuaBindingsReachTheOrganism)
     EXPECT_GE(impl.harmonyTransitionCount(), 1u);
 }
 
+TEST_F(AmbientpadTest, harmonyTimingOverrideSpeedsUpTransitions)
+{
+    ASSERT_TRUE(impl.setScript("function OnStart()\n"
+                               "    SetHarmony(true)\n"
+                               "    SetHarmonyTiming({ dwellSeconds = 1, cooldownSeconds = 0.5, glideSeconds = 0.3 })\n"
+                               "end\n"));
+
+    // At the default 30s dwell, even one transition needs a full 30s cycle; a handful of
+    // 1.5s cycles seeing one proves the override actually reached the organism.
+    const auto samplesPerDwell = static_cast<size_t>(1.5f * kSampleRate);
+    const auto blocksPerDwell = static_cast<int>(samplesPerDwell / kBlockSize);
+    for (int cycle = 0; cycle < 15 && impl.harmonyTransitionCount() == 0; ++cycle)
+    {
+        for (int b = 0; b < blocksPerDwell; ++b)
+        {
+            const auto out = processOneBlock();
+            for (size_t i = 0; i < kBlockSize; ++i)
+            {
+                ASSERT_TRUE(std::isfinite(out(i, 0)));
+                ASSERT_LE(std::abs(out(i, 0)), 8.f);
+            }
+        }
+    }
+    EXPECT_GE(impl.harmonyTransitionCount(), 1u);
+}
+
+TEST_F(AmbientpadTest, customHarmonicPaletteReachesTheOrganism)
+{
+    ASSERT_TRUE(impl.setScript("function OnStart()\n"
+                               "    SetHarmony(true)\n"
+                               "    ClearHarmonicPalette()\n"
+                               "    AddHarmonicState({ semitones = {0, 3, 7} })\n"
+                               "    AddHarmonicState({ semitones = {0, 4, 7}, region = 2 })\n"
+                               "end\n"));
+
+    // Only 2 candidate states means each dwell period is close to a coin flip between
+    // staying and transitioning (unlike the 20-entry default palette) - give it several
+    // dwell periods, not just one, so the test isn't flaky on an unlucky "stay" decision.
+    const auto samplesPerDwell = static_cast<size_t>((AbacDsp::HarmonicOrganism::kDwellSeconds + 0.1f) * kSampleRate);
+    const auto blocksPerDwell = static_cast<int>(samplesPerDwell / kBlockSize);
+    for (int cycle = 0; cycle < 12 && impl.harmonyTransitionCount() == 0; ++cycle)
+    {
+        for (int b = 0; b < blocksPerDwell; ++b)
+        {
+            const auto out = processOneBlock();
+            for (size_t i = 0; i < kBlockSize; ++i)
+            {
+                ASSERT_TRUE(std::isfinite(out(i, 0)));
+                ASSERT_LE(std::abs(out(i, 0)), 8.f);
+            }
+        }
+    }
+    EXPECT_GE(impl.harmonyTransitionCount(), 1u);
+
+    // Only the two custom chords' absolute pitches (home note 60 plus {0,3,7} or {0,4,7})
+    // should ever sound - confirms the custom palette, not the 20 defaults, is what's live.
+    for (size_t channel = 1; channel <= Impl::kMaxVoices; ++channel)
+    {
+        if (!impl.voiceIsPlaying(channel))
+        {
+            continue;
+        }
+        const auto pitch = static_cast<int>(std::lround(impl.voicePitchSemitones(channel)));
+        EXPECT_THAT(pitch, ::testing::AnyOf(60, 63, 64, 67)) << "channel " << channel;
+    }
+}
+
 class BaseScriptTest : public ::testing::TestWithParam<std::string>
 {
 };
@@ -362,7 +429,7 @@ TEST(BaseScriptBassOverrideTest, minorHomeChannel16EndsUpAtTheOverrideNoteNotHom
 INSTANTIATE_TEST_SUITE_P(EveryBaseScript, BaseScriptTest,
                          ::testing::Values("breathing-drone", "harmonic-scene", "minor-home", "major-light",
                                            "modal-warmth", "open-suspended", "chromatic-weather", "pedal-modulation",
-                                           "full-api-reference"),
+                                           "full-api-reference", "custom-harmony"),
                          [](const ::testing::TestParamInfo<std::string>& info)
                          {
                              std::string name = info.param;

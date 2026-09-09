@@ -673,7 +673,7 @@ class AmbientPadImpl final : public EffectBase
             if (bestDistance <= kGlideRepitchMaxSemitones)
             {
                 targetMatched[bestTarget] = true;
-                m_voices[channelIndex].setPitch(absoluteTargets[bestTarget], 0.f, kTransitionGlideSeconds);
+                m_voices[channelIndex].setPitch(absoluteTargets[bestTarget], 0.f, m_transitionGlideSeconds);
             }
             else
             {
@@ -759,6 +759,17 @@ class AmbientPadImpl final : public EffectBase
         if (const auto pedal = m_scriptEngine.drainPedalChannelsCommand())
         {
             setPedalChannels(std::span<const int>(pedal->channels.data(), pedal->count));
+        }
+        if (const auto customPalette = m_scriptEngine.drainCustomPaletteCommand())
+        {
+            m_organism.setCustomPalette(
+                std::span<const AbacDsp::HarmonicState>(customPalette->entries.data(), customPalette->count));
+        }
+        if (const auto timing = m_scriptEngine.drainHarmonyTimingCommand())
+        {
+            m_organism.setDwellSeconds(timing->dwellSeconds);
+            m_organism.setCooldownSeconds(timing->cooldownSeconds);
+            m_transitionGlideSeconds = timing->glideSeconds;
         }
         const auto impulses = m_scriptEngine.drainImpulseEvents();
         for (size_t i = 0; i < impulses.count; ++i)
@@ -862,6 +873,7 @@ class AmbientPadImpl final : public EffectBase
     int m_harmonyHomeNote{kHarmonyHomeOctaveBase};
     std::array<bool, kMaxVoices> m_pedalChannels{};
     size_t m_harmonyTransitionCount{0};
+    float m_transitionGlideSeconds{kTransitionGlideSeconds};
 
     AmbientPadScriptEngine m_scriptEngine{};
     std::array<float, AmbientPadScriptEngine::kMaxLuaParams> m_luaParamValues{};

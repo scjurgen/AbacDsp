@@ -5,10 +5,12 @@
 #include <cmath>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
 #include "../inc/LuaScriptEngineBase.h"
+#include "Harmony/HarmonicPalette.h"
 #include "Harmony/HarmonicPreferences.h"
 
 /// @brief SetOscillator's payload: one of a channel's 2 oscillators' material path/tuning/level.
@@ -73,6 +75,25 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     {
         std::array<int, kMaxChannels> channels{};
         size_t count{0};
+    };
+
+    static constexpr size_t kMaxCustomPaletteEntries{AbacDsp::kMaxPaletteSize};
+
+    /// @brief AddHarmonicState/ClearHarmonicPalette's payload: the full script-authored
+    /// custom palette built so far - drained and applied as one atomic replace.
+    struct CustomPaletteCommand
+    {
+        std::array<AbacDsp::HarmonicState, kMaxCustomPaletteEntries> entries{};
+        size_t count{0};
+    };
+
+    /// @brief SetHarmonyTiming's payload: overrides for the organism's dwell/cooldown pace
+    /// and the realizer's per-transition glide time - each defaults to today's fixed value.
+    struct HarmonyTimingSettings
+    {
+        float dwellSeconds{30.f};
+        float cooldownSeconds{20.f};
+        float glideSeconds{10.f};
     };
 
     /// @brief SetPhaser's payload: the master-bus phaser (8 allpass poles total).
@@ -175,6 +196,16 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
 "-- SetPedalChannels({ channel, ... })  which channels (1..16) are pedal channels - any\n"
 "--   subset, including none or all; a newly added one is triggered at the home note\n"
 "\n"
+"-- ClearHarmonicPalette()  resets the script-authored custom palette built so far; alone\n"
+"--   (no AddHarmonicState calls after it) reverts to the 20 built-in states\n"
+"-- AddHarmonicState({ semitones = {...}, region })  appends one custom chord - semitones\n"
+"--   are literal, home-relative, already spread across registers exactly as wanted (e.g.\n"
+"--   { -24, 0, 4, 7, 10 } for a dominant 7th with a low bass added). region: 1..5 as\n"
+"--   SetHarmonyCharacter above, default 1. Every wish-axis tag is left neutral (0.5)\n"
+"-- SetHarmonyTiming({ dwellSeconds, cooldownSeconds, glideSeconds })  overrides how often\n"
+"--   the organism reconsiders, its post-transition pause, and the per-voice glide time -\n"
+"--   default 30/20/10 (today's fixed pace); each missing field resets to that default too\n"
+"\n"
 "-- Impulse gestures - performance nudges with a life cycle, not an instant hard switch:\n"
 "-- Stay()      delay harmonic departure, retain the current voicing relationship\n"
 "-- Lean()      move toward a nearby plausible colour\n"
@@ -209,6 +240,8 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     [[nodiscard]] std::optional<int> drainHarmonyCharacterCommand() noexcept;
     [[nodiscard]] std::optional<int> drainPedalNoteCommand() noexcept;
     [[nodiscard]] std::optional<PedalChannelsCommand> drainPedalChannelsCommand() noexcept;
+    [[nodiscard]] std::optional<CustomPaletteCommand> drainCustomPaletteCommand() noexcept;
+    [[nodiscard]] std::optional<HarmonyTimingSettings> drainHarmonyTimingCommand() noexcept;
 
     struct PendingImpulseEventsResult
     {
@@ -248,6 +281,9 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     void luaSetHarmonyCharacter(int region) noexcept;
     void luaSetPedalNote(int note) noexcept;
     void luaSetPedalChannels(const sol::table& channels) noexcept;
+    void luaClearHarmonicPalette() noexcept;
+    void luaAddHarmonicState(const sol::table& params) noexcept;
+    void luaSetHarmonyTiming(const sol::table& params) noexcept;
     void pushImpulse(AbacDsp::ImpulseKind kind) noexcept;
     void luaSetMaterial(float value) noexcept;
     void luaSetMaterialRange(float value) noexcept;
@@ -279,6 +315,10 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     std::optional<int> m_pendingHarmonyCharacter;
     std::optional<int> m_pendingPedalNote;
     std::optional<PedalChannelsCommand> m_pendingPedalChannels;
+    std::array<AbacDsp::HarmonicState, kMaxCustomPaletteEntries> m_customPaletteEntries{};
+    size_t m_customPaletteCount{0};
+    bool m_customPaletteDirty{false};
+    std::optional<HarmonyTimingSettings> m_pendingHarmonyTiming;
     std::array<AbacDsp::ImpulseKind, kMaxPendingImpulsesPerBlock> m_pendingImpulses{};
     size_t m_pendingImpulseCount{0};
     std::optional<float> m_pendingMaterial;
@@ -320,6 +360,9 @@ inline void AmbientPadScriptEngine::bindScriptFunctions()
     m_lua.set_function("SetHarmonyCharacter", &AmbientPadScriptEngine::luaSetHarmonyCharacter, this);
     m_lua.set_function("SetPedalNote", &AmbientPadScriptEngine::luaSetPedalNote, this);
     m_lua.set_function("SetPedalChannels", &AmbientPadScriptEngine::luaSetPedalChannels, this);
+    m_lua.set_function("ClearHarmonicPalette", &AmbientPadScriptEngine::luaClearHarmonicPalette, this);
+    m_lua.set_function("AddHarmonicState", &AmbientPadScriptEngine::luaAddHarmonicState, this);
+    m_lua.set_function("SetHarmonyTiming", &AmbientPadScriptEngine::luaSetHarmonyTiming, this);
     m_lua.set_function("Stay", [this]() { pushImpulse(AbacDsp::ImpulseKind::Stay); });
     m_lua.set_function("Lean", [this]() { pushImpulse(AbacDsp::ImpulseKind::Lean); });
     m_lua.set_function("Open", [this]() { pushImpulse(AbacDsp::ImpulseKind::Open); });
@@ -443,6 +486,65 @@ inline void AmbientPadScriptEngine::luaSetPedalChannels(const sol::table& channe
         command.channels[command.count++] = *channel;
     }
     m_pendingPedalChannels = command;
+}
+
+inline void AmbientPadScriptEngine::luaClearHarmonicPalette() noexcept
+{
+    m_customPaletteCount = 0;
+    m_customPaletteDirty = true;
+}
+
+inline void AmbientPadScriptEngine::luaAddHarmonicState(const sol::table& params) noexcept
+{
+    if (m_customPaletteCount >= kMaxCustomPaletteEntries)
+    {
+        return;
+    }
+    const sol::optional<sol::table> semitonesOpt = params["semitones"];
+    if (!semitonesOpt)
+    {
+        return;
+    }
+    const auto& semitonesTable = *semitonesOpt;
+    std::array<int, AbacDsp::Voicing::kMaxNotes> semitones{};
+    size_t semitoneCount = 0;
+    const size_t luaCount = semitonesTable.size();
+    for (size_t i = 1; i <= luaCount && semitoneCount < AbacDsp::Voicing::kMaxNotes; ++i)
+    {
+        const sol::optional<int> semitone = semitonesTable[i];
+        if (!semitone)
+        {
+            return;
+        }
+        semitones[semitoneCount++] = *semitone;
+    }
+    if (semitoneCount == 0)
+    {
+        return;
+    }
+    const int regionIndex = params.get_or("region", 1);
+    if (regionIndex < 1 || regionIndex > 5)
+    {
+        return;
+    }
+    const auto region = static_cast<AbacDsp::PaletteRegion>(regionIndex - 1);
+    m_customPaletteEntries[m_customPaletteCount++] =
+        AbacDsp::makeCustomHarmonicState(region, std::span<const int>(semitones.data(), semitoneCount));
+    m_customPaletteDirty = true;
+}
+
+inline void AmbientPadScriptEngine::luaSetHarmonyTiming(const sol::table& params) noexcept
+{
+    const float dwellSeconds = params.get_or("dwellSeconds", 30.f);
+    const float cooldownSeconds = params.get_or("cooldownSeconds", 20.f);
+    const float glideSeconds = params.get_or("glideSeconds", 10.f);
+    if (!std::isfinite(dwellSeconds) || !std::isfinite(cooldownSeconds) || !std::isfinite(glideSeconds))
+    {
+        return;
+    }
+    m_pendingHarmonyTiming =
+        HarmonyTimingSettings{std::clamp(dwellSeconds, 0.1f, 300.f), std::clamp(cooldownSeconds, 0.f, 300.f),
+                              std::clamp(glideSeconds, 0.f, 60.f)};
 }
 
 inline void AmbientPadScriptEngine::pushImpulse(const AbacDsp::ImpulseKind kind) noexcept
@@ -658,6 +760,28 @@ AmbientPadScriptEngine::drainPedalChannelsCommand() noexcept
 {
     const auto result = m_pendingPedalChannels;
     m_pendingPedalChannels.reset();
+    return result;
+}
+
+inline std::optional<AmbientPadScriptEngine::CustomPaletteCommand>
+AmbientPadScriptEngine::drainCustomPaletteCommand() noexcept
+{
+    if (!m_customPaletteDirty)
+    {
+        return std::nullopt;
+    }
+    m_customPaletteDirty = false;
+    CustomPaletteCommand command{};
+    command.entries = m_customPaletteEntries;
+    command.count = m_customPaletteCount;
+    return command;
+}
+
+inline std::optional<AmbientPadScriptEngine::HarmonyTimingSettings>
+AmbientPadScriptEngine::drainHarmonyTimingCommand() noexcept
+{
+    const auto result = m_pendingHarmonyTiming;
+    m_pendingHarmonyTiming.reset();
     return result;
 }
 

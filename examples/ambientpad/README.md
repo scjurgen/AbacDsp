@@ -119,6 +119,8 @@ flowchart TD
         CHAR["SetHarmonyCharacter"]
         PEDALCH["SetPedalChannels"]
         PEDAL["SetPedalNote"]
+        CUSTOM["ClearHarmonicPalette / AddHarmonicState"]
+        TIMING["SetHarmonyTiming"]
     end
 
     subgraph PREF["Vows and wishes"]
@@ -130,7 +132,8 @@ flowchart TD
     CLIMATE --> WEIGHTS["Wish weights"]
     IMPULSES -.->|temporary bias| WEIGHTS
 
-    HOME --> PALETTE["Curated palette, transposed to home"]
+    HOME --> PALETTE["Palette (curated or script-authored), transposed to home"]
+    CUSTOM -.->|replaces the 20 curated states| PALETTE
     PALETTE --> ORGANISM(("HarmonicOrganism"))
     VOWS --> ORGANISM
     WEIGHTS --> ORGANISM
@@ -139,6 +142,8 @@ flowchart TD
     ORGANISM -->|every dwell period| TRANSITION["Chosen next state"]
     TRANSITION --> REALIZER["Voice-leading realizer"]
     PEDALCH -.->|excluded from the realizer| REALIZER
+    TIMING -.->|dwell/cooldown pace| ORGANISM
+    TIMING -.->|glide time| REALIZER
 
     REALIZER -->|close pitch pair| GLIDE["setPitch, glide"]
     REALIZER -->|no close partner| FADE["triggerVoice / stopVoice"]
@@ -338,6 +343,40 @@ manual control); it replaces the whole pedal set each call, a channel newly adde
 triggered at the current home note, and a channel removed from it is left sounding rather than
 stopped - there is no dial for this, Lua-only.
 
+A script can also replace the palette itself, instead of only choosing among the 20 built-in
+states:
+
+```lua
+ClearHarmonicPalette()                          -- resets the custom palette built so far
+AddHarmonicState({ semitones = {...}, region })  -- appends one custom chord
+```
+
+`semitones` is a literal, home-relative list, already spread across registers exactly as
+wanted - the same convention the library's own 20 states are authored in (e.g.
+`{ -24, 0, 4, 7, 10 }` for a dominant 7th with a low bass added two octaves down). There is no
+voicing-generation step: what you write is what sounds. `region` is optional, 1..5 as
+`SetHarmonyCharacter` above, defaulting to 1 (Home). Every wish-axis tag (luminosity,
+minorColor, density, ambiguity, tension) is left at its neutral default (0.5) - a custom state
+is a plausible candidate on every axis, neither favoured nor disfavoured by the organism's
+climate or impulses.
+
+`AddHarmonicState` appends; a script builds its whole custom vocabulary by calling it several
+times, typically once in `OnStart`. `ClearHarmonicPalette()` alone, with no `AddHarmonicState`
+calls after it, reverts to the 20 built-in states - a well-defined way to go back to the
+defaults, not an empty/undefined palette. See `base-scripts/custom-harmony.lua`.
+
+The organism's own pace - how often it reconsiders, how long it pauses after a transition, how
+long each voice takes to glide into the new chord - is fixed by default (30s/20s/10s) but can
+be overridden:
+
+```lua
+SetHarmonyTiming({ dwellSeconds = 4, cooldownSeconds = 2, glideSeconds = 1.5 })
+```
+
+All three fields are optional and independently reset to their default if omitted (`{}` resets
+every one of them). Useful for a demo/preview patch, or any script that wants a livelier pace
+than the tens-of-seconds default - see `base-scripts/custom-harmony.lua`.
+
 A handful of impulse gestures nudge the organism's moving preferences temporarily - each rises,
 holds, then fades over roughly the same tens-of-seconds timescale as the organism's own
 decisions, a bias with a life cycle rather than an instant switch. There's no dial for these
@@ -380,3 +419,9 @@ naming a different home and firing its region's own signature gesture once after
 whole instrument to a new key: C major for a minute, then D minor (also centred on D) for a
 minute, then F major for a minute, then back to C, looping - a demonstration that the pedal and
 the organism's own harmony choices can be kept pointing at the same tonal centre as it moves.
+
+`base-scripts/custom-harmony.lua` replaces the 20 built-in states entirely with two
+script-authored regions - diatonic triads in region 1, whole-tone/diminished/chromatic shapes
+in region 5 - starts in the diatonic one, and uses `SetHarmonyTiming` to speed the organism up
+enough to actually hear several transitions before `SetHarmonyCharacter` switches it to the
+foreign region after 60 seconds.

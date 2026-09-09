@@ -115,6 +115,33 @@ TEST(HarmonicPaletteTest, coversEveryRegionAtLeastOnce)
     }
 }
 
+TEST(MakeCustomHarmonicStateTest, voicingMatchesTheGivenSemitonesExactly)
+{
+    const auto semitones = std::to_array<int>({-24, 0, 4, 7, 10});
+    const auto state = makeCustomHarmonicState(PaletteRegion::OpenSuspended, semitones);
+    ASSERT_EQ(state.voicing.size(), semitones.size());
+    for (size_t i = 0; i < semitones.size(); ++i)
+    {
+        EXPECT_EQ(state.voicing.notes()[i], semitones[i]);
+    }
+}
+
+TEST(MakeCustomHarmonicStateTest, setsTheGivenRegion)
+{
+    const auto state = makeCustomHarmonicState(PaletteRegion::ChromaticWeather, std::to_array<int>({0, 3, 7}));
+    EXPECT_EQ(state.region, PaletteRegion::ChromaticWeather);
+}
+
+TEST(MakeCustomHarmonicStateTest, everyTagDefaultsToNeutral)
+{
+    const auto state = makeCustomHarmonicState(PaletteRegion::Home, std::to_array<int>({0, 4, 7}));
+    EXPECT_FLOAT_EQ(state.luminosity, 0.5f);
+    EXPECT_FLOAT_EQ(state.minorColor, 0.5f);
+    EXPECT_FLOAT_EQ(state.density, 0.5f);
+    EXPECT_FLOAT_EQ(state.ambiguity, 0.5f);
+    EXPECT_FLOAT_EQ(state.tension, 0.5f);
+}
+
 TEST(TransposedPaletteTest, everyEntryMatchesTheDefaultShiftedByHome)
 {
     const auto plain = defaultPalette();

@@ -28,6 +28,19 @@ namespace AbacDsp
 
 inline constexpr size_t kDefaultPaletteSize{20};
 
+/// @brief Capacity for a script-authored custom palette (see makeCustomHarmonicState()) -
+/// comfortably more than kDefaultPaletteSize, still cheap, no allocation.
+inline constexpr size_t kMaxPaletteSize{32};
+
+/// @brief Builds one script-authored custom state: semitones taken literally (home-relative,
+/// already spread across registers exactly as given - no voicing generation), every tag left
+/// at its neutral default (0.5).
+[[nodiscard]] constexpr HarmonicState makeCustomHarmonicState(const PaletteRegion region,
+                                                              const std::span<const int> semitones) noexcept
+{
+    return HarmonicState{.name = "custom", .region = region, .voicing = Voicing::fromSemitones(semitones)};
+}
+
 /// @ingroup harmony
 /// @brief The hand-curated palette of harmonic states around an E-centred home, authored
 /// home-relative (home = 0); grouped as the spec groups them. See transposedPalette().

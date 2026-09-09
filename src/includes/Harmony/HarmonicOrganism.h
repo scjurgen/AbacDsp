@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <optional>
 #include <random>
+#include <span>
 
 #include "Generators/OrnsteinUhlenbeckProcess.h"
 #include "Harmony/HarmonicPalette.h"
@@ -130,15 +131,17 @@ class HarmonicOrganism
     static constexpr float kClimateSmoothingSeconds{40.f};
     static constexpr float kDwellSeconds{30.f};
     static constexpr float kCooldownSeconds{20.f};
+    static constexpr float kMinDwellSeconds{0.1f}; ///< floor for setDwellSeconds()
     static constexpr size_t kTopCandidateCount{3};
     static constexpr size_t kMaxActiveImpulses{4};
     static constexpr size_t kMaxClimateStepsPerCall{3600};
 
     explicit HarmonicOrganism(const float sampleRate, const unsigned seed = 1) noexcept
         : m_sampleRate(sampleRate)
-        , m_palette(defaultPalette())
         , m_rng(seed)
     {
+        const auto defaults = defaultPalette();
+        loadHomeRelativePalette(std::span<const HarmonicState>(defaults));
         for (size_t i = 0; i < kNumWishKinds; ++i)
         {
             m_climate[i].seed(seed + static_cast<unsigned>(i) + 1u);
@@ -154,7 +157,24 @@ class HarmonicOrganism
     void setHome(const int pitchClass) noexcept
     {
         m_homeOffsetSemitones = pitchClass;
-        m_palette = transposedPalette(pitchClass);
+        retunePalette();
+    }
+
+    /// @brief Replaces the palette with a script-authored set, home-relative, taken as given;
+    /// an empty span reverts to defaultPalette(). Always resets to index 0, unlike setHome().
+    void setCustomPalette(const std::span<const HarmonicState> entries) noexcept
+    {
+        if (entries.empty())
+        {
+            const auto defaults = defaultPalette();
+            loadHomeRelativePalette(std::span<const HarmonicState>(defaults));
+        }
+        else
+        {
+            loadHomeRelativePalette(entries);
+        }
+        m_currentIndex = 0;
+        m_pendingIndex.reset();
     }
 
     /// @brief Soft-biases future transitions toward one palette region (see regionBonus()) -
@@ -162,6 +182,21 @@ class HarmonicOrganism
     void setPreferredRegion(const std::optional<PaletteRegion> region) noexcept
     {
         m_preferredRegion = region;
+    }
+
+    /// @brief Overrides how often the organism reconsiders (default kDwellSeconds), clamped to
+    /// kMinDwellSeconds or more - lets a script trade the usual tens-of-seconds pace for one
+    /// fast enough to actually hear several transitions in a row.
+    void setDwellSeconds(const float seconds) noexcept
+    {
+        m_dwellSeconds = std::max(seconds, kMinDwellSeconds);
+    }
+
+    /// @brief Overrides the post-transition pause before the next decision (default
+    /// kCooldownSeconds), clamped to zero or more.
+    void setCooldownSeconds(const float seconds) noexcept
+    {
+        m_cooldownSeconds = std::max(seconds, 0.f);
     }
 
     /// @brief Starts (or refreshes) one impulse's life cycle; Release instead fast-decays
@@ -200,7 +235,7 @@ class HarmonicOrganism
 
         m_dwellAccumSeconds += dt;
         m_cooldownRemainingSeconds = std::max(0.f, m_cooldownRemainingSeconds - dt);
-        if (m_dwellAccumSeconds < kDwellSeconds || m_cooldownRemainingSeconds > 0.f)
+        if (m_dwellAccumSeconds < m_dwellSeconds || m_cooldownRemainingSeconds > 0.f)
         {
             return;
         }
@@ -309,15 +344,36 @@ class HarmonicOrganism
         return score;
     }
 
+    // Copies entries into m_paletteHomeRelative (clamped to kMaxPaletteSize) and rebuilds the
+    // working, currently-transposed m_palette from it - the shared tail of setCustomPalette()
+    // and the constructor's own initial load.
+    void loadHomeRelativePalette(const std::span<const HarmonicState> entries) noexcept
+    {
+        m_paletteSize = std::min(entries.size(), kMaxPaletteSize);
+        for (size_t i = 0; i < m_paletteSize; ++i)
+        {
+            m_paletteHomeRelative[i] = entries[i];
+        }
+        retunePalette();
+    }
+
+    void retunePalette() noexcept
+    {
+        for (size_t i = 0; i < m_paletteSize; ++i)
+        {
+            m_palette[i] = transposeState(m_paletteHomeRelative[i], m_homeOffsetSemitones);
+        }
+    }
+
     void considerTransition() noexcept
     {
         const auto weights = effectiveWishWeights();
         const auto current = m_palette[m_currentIndex];
 
-        std::array<size_t, kDefaultPaletteSize> survivors{};
-        std::array<float, kDefaultPaletteSize> survivorScores{};
+        std::array<size_t, kMaxPaletteSize> survivors{};
+        std::array<float, kMaxPaletteSize> survivorScores{};
         size_t survivorCount = 0;
-        for (size_t i = 0; i < kDefaultPaletteSize; ++i)
+        for (size_t i = 0; i < m_paletteSize; ++i)
         {
             bool rejected = false;
             const auto score = scoreCandidate(current, m_palette[i], weights, rejected);
@@ -355,16 +411,20 @@ class HarmonicOrganism
         {
             m_currentIndex = chosenIndex;
             m_pendingIndex = chosenIndex;
-            m_cooldownRemainingSeconds = kCooldownSeconds;
+            m_cooldownRemainingSeconds = m_cooldownSeconds;
         }
     }
 
     float m_sampleRate;
     int m_homeOffsetSemitones{0};
-    std::array<HarmonicState, kDefaultPaletteSize> m_palette;
+    std::array<HarmonicState, kMaxPaletteSize> m_paletteHomeRelative{};
+    size_t m_paletteSize{0};
+    std::array<HarmonicState, kMaxPaletteSize> m_palette{};
     size_t m_currentIndex{0};
     std::optional<size_t> m_pendingIndex;
     std::optional<PaletteRegion> m_preferredRegion;
+    float m_dwellSeconds{kDwellSeconds};
+    float m_cooldownSeconds{kCooldownSeconds};
 
     std::array<OrnsteinUhlenbeckProcess, kNumWishKinds> m_climate{
         OrnsteinUhlenbeckProcess(kClimateRateHz), OrnsteinUhlenbeckProcess(kClimateRateHz),
