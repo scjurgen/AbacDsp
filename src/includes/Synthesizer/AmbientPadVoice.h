@@ -45,8 +45,8 @@ enum class MaterialPath
  * @ingroup generators
  * @brief One sustained ambient-pad voice: two morphing wavetable layers through a pole-mixing
  * filter and a long attack/release VCA, kept alive by four correlated Ornstein-Uhlenbeck
- * modulators rather than a conventional LFO/ADSR-per-destination matrix. Volume, filter
- * cutoff, and Material can each also carry an independent, per-voice LFO layered on top.
+ * modulators rather than a conventional LFO/ADSR-per-destination matrix. Volume, Cutoff,
+ * Material, Resonance, and Pitch can each also carry an independent, per-voice LFO on top.
  *
  * The oscillator/filter/envelope chain runs mono; stereo depth is left to the caller's own
  * effects chain (chorus etc.), the same split MorphexsynthVoice uses. Control-rate work (the OU
@@ -70,6 +70,8 @@ class AmbientPadVoice
         , m_lfoVolume(sampleRate / static_cast<float>(kFGranularity))
         , m_lfoCutoff(sampleRate / static_cast<float>(kFGranularity))
         , m_lfoMaterial(sampleRate / static_cast<float>(kFGranularity))
+        , m_lfoResonance(sampleRate / static_cast<float>(kFGranularity))
+        , m_lfoPitch(sampleRate / static_cast<float>(kFGranularity))
         , m_filter(sampleRate)
         , m_waveShaperTables(waveShaperTables)
     {
@@ -184,6 +186,26 @@ class AmbientPadVoice
         m_lfoMaterial.setFrequency(std::clamp(rateCyclesPerMinute, 0.f, kMaxLfoCyclesPerMinute) / 60.f);
         m_lfoMaterial.setPhase(phaseDegrees);
         m_materialLfoDepth = std::clamp(depth, 0.f, 1.f);
+    }
+
+    /// @brief Adds a slow, always-upward pull on resonance on top of Lens's own setting -
+    /// unipolar, so it only ever adds, never subtracts. depth 0 (default) is off; phaseDegrees
+    /// (0..360, wrapped) sets where in the cycle it starts.
+    void setResonanceLfo(const float rateCyclesPerMinute, const float depth, const float phaseDegrees) noexcept
+    {
+        m_lfoResonance.setFrequency(std::clamp(rateCyclesPerMinute, 0.f, kMaxLfoCyclesPerMinute) / 60.f);
+        m_lfoResonance.setPhase(phaseDegrees);
+        m_resonanceLfoDepth = std::clamp(depth, 0.f, 1.f);
+    }
+
+    /// @brief Adds ordinary vibrato, identically to both oscillators (unlike Drift's opposite-
+    /// sign spread). depth 0 (default) is off; phaseDegrees (0..360, wrapped) sets where in the
+    /// cycle it starts.
+    void setPitchLfo(const float rateCyclesPerMinute, const float depthCents, const float phaseDegrees) noexcept
+    {
+        m_lfoPitch.setFrequency(std::clamp(rateCyclesPerMinute, 0.f, kMaxLfoCyclesPerMinute) / 60.f);
+        m_lfoPitch.setPhase(phaseDegrees);
+        m_pitchLfoDepthCents = std::clamp(depthCents, 0.f, 100.f);
     }
 
     void setMotion(const float value) noexcept
@@ -372,7 +394,8 @@ class AmbientPadVoice
     {
         auto& osc = m_oscillators[index];
         const auto baseFrequency = Convert::noteToFrequency<float>(pitchSemitones);
-        const auto totalInterval = osc.heightSemitones + (osc.cents + osc.driftCents + osc.instabilityCents) / 100.f;
+        const auto totalInterval =
+            osc.heightSemitones + (osc.cents + osc.driftCents + osc.instabilityCents + m_pitchLfoCents) / 100.f;
         osc.currentHz = baseFrequency * Convert::noteIntervalToRatio(totalInterval);
         osc.oscillator->setFrequency(osc.currentHz);
     }
@@ -432,9 +455,13 @@ class AmbientPadVoice
         const auto volumeLfoValue = m_hold ? m_lastVolumeLfo : m_lfoVolume.step();
         const auto cutoffLfoValue = m_hold ? m_lastCutoffLfo : m_lfoCutoff.step();
         const auto materialLfoValue = m_hold ? m_lastMaterialLfo : m_lfoMaterial.step();
+        const auto resonanceLfoValue = m_hold ? m_lastResonanceLfo : m_lfoResonance.step();
+        const auto pitchLfoValue = m_hold ? m_lastPitchLfo : m_lfoPitch.step();
         m_lastVolumeLfo = volumeLfoValue;
         m_lastCutoffLfo = cutoffLfoValue;
         m_lastMaterialLfo = materialLfoValue;
+        m_lastResonanceLfo = resonanceLfoValue;
+        m_lastPitchLfo = pitchLfoValue;
 
         // Stability=1 must mean stable: it scales down how much of every OU source
         // reaches its destination, not just pitch drift/detune.
@@ -456,7 +483,10 @@ class AmbientPadVoice
                                 cutoffLfoValue * m_cutoffLfoDepthSemitones;
         m_diagCutoffHz = Convert::noteToFrequency<float>(std::clamp(cutoffNote, 0.f, 127.f));
         m_filter.setCutoffFrequency(m_diagCutoffHz);
-        m_diagResonance = std::clamp(kBaseResonance + lensValue * m_resonanceRange * stabilityRestraint, 0.f, 1.f);
+        const auto resonanceLfoUnipolar = (resonanceLfoValue + 1.f) * 0.5f;
+        m_diagResonance = std::clamp(kBaseResonance + lensValue * m_resonanceRange * stabilityRestraint +
+                                         resonanceLfoUnipolar * m_resonanceLfoDepth,
+                                     0.f, 1.f);
         m_filter.setResonance(m_diagResonance);
 
         // Character tracks Light directly - a chosen filter character should hold still, not
@@ -469,6 +499,7 @@ class AmbientPadVoice
         const auto instability = kInterOscDetuneCents * stabilityRestraint;
         m_oscillators[0].instabilityCents = -0.5f * instability;
         m_oscillators[1].instabilityCents = 0.5f * instability;
+        m_pitchLfoCents = pitchLfoValue * m_pitchLfoDepthCents;
         (void) m_pitch.getValue(); // advances any pending pitch glide by one control-rate step
         updateAllOscillatorFrequencies();
 
@@ -541,9 +572,13 @@ class AmbientPadVoice
     LfoGenerators m_lfoVolume;
     LfoGenerators m_lfoCutoff;
     LfoGenerators m_lfoMaterial;
+    LfoGenerators m_lfoResonance;
+    LfoGenerators m_lfoPitch;
     float m_volumeLfoDepthDb{0.f};
     float m_cutoffLfoDepthSemitones{0.f};
     float m_materialLfoDepth{0.f};
+    float m_resonanceLfoDepth{0.f};
+    float m_pitchLfoDepthCents{0.f};
     float m_lastBreath{0.f};
     float m_lastMaterial{0.f};
     float m_lastLens{0.f};
@@ -551,7 +586,10 @@ class AmbientPadVoice
     float m_lastVolumeLfo{0.f};
     float m_lastCutoffLfo{0.f};
     float m_lastMaterialLfo{0.f};
+    float m_lastResonanceLfo{0.f};
+    float m_lastPitchLfo{0.f};
     float m_volumeLfoGain{1.f};
+    float m_pitchLfoCents{0.f};
 
     Filter1Pole4StageSmooth m_filter;
     LinearSmoothing m_filterCharacterPos{0.5f};

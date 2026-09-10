@@ -12,10 +12,12 @@ function OnStart()
 
     SetGain(1, -3)
 
-    -- Each channel can carry its own slow LFO on Volume, Cutoff, or Material - independent
-    -- rates/depths per channel (Lua-only, no dial)
-    SetVolumeLfo(1, 4, 3, 0)      -- 4 cycles/min, 3 dB tremolo dip, starts at phase 0
-    SetCutoffLfo(1, 6, 12, 180)   -- 6 cycles/min, 12-semitone filter sweep, starts opposite phase
+    -- Each channel can carry its own slow LFO on Volume, Cutoff, Material, Resonance, or Pitch -
+    -- independent rates/depths per channel (Lua-only, no dial)
+    SetVolumeLfo(1, 4, 3, 0)        -- 4 cycles/min, 3 dB tremolo dip, starts at phase 0
+    SetCutoffLfo(1, 6, 12, 180)     -- 6 cycles/min, 12-semitone filter sweep, starts opposite phase
+    SetResonanceLfo(1, 5, 0.3, 0)   -- 5 cycles/min, always pulls resonance up, never down
+    SetPitchLfo(1, 3, 8, 0)         -- 3 cycles/min, +/-8 cent vibrato
 
     -- The six musical-intent controls, plus Material's own Range dial and Hold
     SetMaterial(0.45)

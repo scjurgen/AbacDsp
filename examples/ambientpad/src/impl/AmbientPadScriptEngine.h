@@ -122,9 +122,9 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
         float mixDb{-100.f};
     };
 
-    /// @brief SetVolumeLfo/SetCutoffLfo/SetMaterialLfo's payload: one channel's per-voice LFO.
-    /// `depth`'s unit depends on the destination (dB for Volume, semitones for Cutoff, 0..1 for
-    /// Material) - see AmbientPadVoice's own setters.
+    /// @brief SetVolumeLfo/SetCutoffLfo/SetMaterialLfo/SetResonanceLfo/SetPitchLfo's payload.
+    /// `depth`'s unit depends on the destination (dB, semitones, 0..1, or cents) - see
+    /// AmbientPadVoice's own setters.
     struct LfoSettings
     {
         float rateCyclesPerMinute{4.f};
@@ -168,11 +168,13 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
 "--   glides smoothly to note+cents over that many seconds. cents: fine tune -100..100\n"
 "\n"
 "-- Each channel can carry its own slow LFO (rateCyclesPerMinute typically 1..10) on one of\n"
-"-- three destinations - depth 0 (default) leaves that channel exactly as before.\n"
+"-- five destinations - depth 0 (default) leaves that channel exactly as before.\n"
 "-- phaseDegrees (0..360) sets where in the cycle it starts; any other value wraps into range:\n"
 "-- SetVolumeLfo(channel, rateCyclesPerMinute, depthDb, phaseDegrees)        tremolo, 0..24 dB\n"
 "-- SetCutoffLfo(channel, rateCyclesPerMinute, depthSemitones, phaseDegrees) filter sweep, 0..48\n"
 "-- SetMaterialLfo(channel, rateCyclesPerMinute, depth, phaseDegrees)       morph sweep, 0..1\n"
+"-- SetResonanceLfo(channel, rateCyclesPerMinute, depth, phaseDegrees)      always-up, 0..1\n"
+"-- SetPitchLfo(channel, rateCyclesPerMinute, depthCents, phaseDegrees)     vibrato, 0..100c\n"
 "\n"
 "-- SetMaterial(value)  0..1, wavetable position along each oscillator's material path\n"
 "-- SetMaterialRange(value)  0..1, full width of the OU sweep around Material's center\n"
@@ -264,6 +266,8 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     [[nodiscard]] std::optional<LfoSettings> drainVolumeLfoCommand(size_t voiceIndex) noexcept;
     [[nodiscard]] std::optional<LfoSettings> drainCutoffLfoCommand(size_t voiceIndex) noexcept;
     [[nodiscard]] std::optional<LfoSettings> drainMaterialLfoCommand(size_t voiceIndex) noexcept;
+    [[nodiscard]] std::optional<LfoSettings> drainResonanceLfoCommand(size_t voiceIndex) noexcept;
+    [[nodiscard]] std::optional<LfoSettings> drainPitchLfoCommand(size_t voiceIndex) noexcept;
     [[nodiscard]] std::optional<bool> drainHarmonyEnabledCommand() noexcept;
     [[nodiscard]] std::optional<int> drainHarmonyHomeCommand() noexcept;
     [[nodiscard]] std::optional<int> drainHarmonyCharacterCommand() noexcept;
@@ -310,6 +314,8 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     void luaSetVolumeLfo(size_t channel, float rateCyclesPerMinute, float depthDb, float phaseDegrees) noexcept;
     void luaSetCutoffLfo(size_t channel, float rateCyclesPerMinute, float depthSemitones, float phaseDegrees) noexcept;
     void luaSetMaterialLfo(size_t channel, float rateCyclesPerMinute, float depth, float phaseDegrees) noexcept;
+    void luaSetResonanceLfo(size_t channel, float rateCyclesPerMinute, float depth, float phaseDegrees) noexcept;
+    void luaSetPitchLfo(size_t channel, float rateCyclesPerMinute, float depthCents, float phaseDegrees) noexcept;
     void luaSetHarmony(bool enabled) noexcept;
     void luaSetHarmonyHome(int note) noexcept;
     void luaSetHarmonyCharacter(int region) noexcept;
@@ -349,6 +355,8 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
     LfoCommands m_pendingVolumeLfo{};
     LfoCommands m_pendingCutoffLfo{};
     LfoCommands m_pendingMaterialLfo{};
+    LfoCommands m_pendingResonanceLfo{};
+    LfoCommands m_pendingPitchLfo{};
     std::optional<bool> m_pendingHarmonyEnabled;
     std::optional<int> m_pendingHarmonyHome;
     std::optional<int> m_pendingHarmonyCharacter;
@@ -430,6 +438,8 @@ inline void AmbientPadScriptEngine::bindScriptFunctions()
     m_lua.set_function("SetVolumeLfo", &AmbientPadScriptEngine::luaSetVolumeLfo, this);
     m_lua.set_function("SetCutoffLfo", &AmbientPadScriptEngine::luaSetCutoffLfo, this);
     m_lua.set_function("SetMaterialLfo", &AmbientPadScriptEngine::luaSetMaterialLfo, this);
+    m_lua.set_function("SetResonanceLfo", &AmbientPadScriptEngine::luaSetResonanceLfo, this);
+    m_lua.set_function("SetPitchLfo", &AmbientPadScriptEngine::luaSetPitchLfo, this);
     m_lua.set_function("SetDistortion", &AmbientPadScriptEngine::luaSetDistortion, this);
     m_lua.set_function("SetPhaser", &AmbientPadScriptEngine::luaSetPhaser, this);
     m_lua.set_function("SetChorus", &AmbientPadScriptEngine::luaSetChorus, this);
@@ -747,6 +757,30 @@ inline void AmbientPadScriptEngine::luaSetMaterialLfo(const size_t channel, cons
         LfoSettings{std::clamp(rateCyclesPerMinute, 0.f, 60.f), std::clamp(depth, 0.f, 1.f), phaseDegrees};
 }
 
+inline void AmbientPadScriptEngine::luaSetResonanceLfo(const size_t channel, const float rateCyclesPerMinute,
+                                                       const float depth, const float phaseDegrees) noexcept
+{
+    if (!isValidChannel(channel) || !std::isfinite(rateCyclesPerMinute) || !std::isfinite(depth) ||
+        !std::isfinite(phaseDegrees))
+    {
+        return;
+    }
+    m_pendingResonanceLfo[channel - 1] =
+        LfoSettings{std::clamp(rateCyclesPerMinute, 0.f, 60.f), std::clamp(depth, 0.f, 1.f), phaseDegrees};
+}
+
+inline void AmbientPadScriptEngine::luaSetPitchLfo(const size_t channel, const float rateCyclesPerMinute,
+                                                   const float depthCents, const float phaseDegrees) noexcept
+{
+    if (!isValidChannel(channel) || !std::isfinite(rateCyclesPerMinute) || !std::isfinite(depthCents) ||
+        !std::isfinite(phaseDegrees))
+    {
+        return;
+    }
+    m_pendingPitchLfo[channel - 1] =
+        LfoSettings{std::clamp(rateCyclesPerMinute, 0.f, 60.f), std::clamp(depthCents, 0.f, 100.f), phaseDegrees};
+}
+
 inline void AmbientPadScriptEngine::luaSetDistortion(const size_t presetIndex) noexcept
 {
     m_pendingDistortion = presetIndex;
@@ -1011,6 +1045,22 @@ inline std::optional<AmbientPadScriptEngine::LfoSettings> AmbientPadScriptEngine
 {
     const auto result = m_pendingMaterialLfo[voiceIndex];
     m_pendingMaterialLfo[voiceIndex].reset();
+    return result;
+}
+
+inline std::optional<AmbientPadScriptEngine::LfoSettings> AmbientPadScriptEngine::drainResonanceLfoCommand(
+    const size_t voiceIndex) noexcept
+{
+    const auto result = m_pendingResonanceLfo[voiceIndex];
+    m_pendingResonanceLfo[voiceIndex].reset();
+    return result;
+}
+
+inline std::optional<AmbientPadScriptEngine::LfoSettings> AmbientPadScriptEngine::drainPitchLfoCommand(
+    const size_t voiceIndex) noexcept
+{
+    const auto result = m_pendingPitchLfo[voiceIndex];
+    m_pendingPitchLfo[voiceIndex].reset();
     return result;
 }
 

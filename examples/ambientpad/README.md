@@ -17,9 +17,9 @@ all four processes at their current value.
 The voice keeps an array of 16 slots (channels) for polyphony: only channel 1 is driven by the
 standalone's own Note/Play controls, and the rest sit idle unless a script addresses them
 directly with `NoteOn`/`NoteOff` - or the harmonic organism is driving them itself. Each channel
-can also carry its own slow, Lua-only LFO on Volume, Cutoff, or Material - a genuine periodic
-sweep, independent of the OU weather system, with its own rate per channel (see Scripting
-below); Hold freezes these too.
+can also carry its own slow, Lua-only LFO on Volume, Cutoff, Material, Resonance, or Pitch - a
+genuine periodic sweep, independent of the OU weather system, with its own rate per channel
+(see Scripting below); Hold freezes these too.
 
 ## Modulation
 
@@ -49,6 +49,8 @@ flowchart TD
         LFOVOL["LFO Volume"]
         LFOCUT["LFO Cutoff"]
         LFOMAT["LFO Material"]
+        LFORES["LFO Resonance"]
+        LFOPITCH["LFO Pitch"]
     end
 
     MOTION -->|shared sigma| OUB
@@ -62,6 +64,8 @@ flowchart TD
     HOLD -.->|freezes step| LFOVOL
     HOLD -.->|freezes step| LFOCUT
     HOLD -.->|freezes step| LFOMAT
+    HOLD -.->|freezes step| LFORES
+    HOLD -.->|freezes step| LFOPITCH
 
     MATERIAL --> MORPH["Oscillator morph, both layers"]
     MRANGE -.->|OU depth| MORPH
@@ -73,11 +77,13 @@ flowchart TD
     LFOCUT -.->|SetCutoffLfo depth| CUTOFF
     LIGHT --> CHAR["Filter character: Velvet..Glass"]
     OUL --> RESO["Filter resonance"]
+    LFORES -.->|SetResonanceLfo depth, always up| RESO
 
     BREATH --> RIPPLE["VCA ripple gain"]
     OUB --> RIPPLE
 
     LFOVOL -.->|SetVolumeLfo depth| TREM["Tremolo gain"]
+    LFOPITCH -.->|SetPitchLfo depth| VIBRATO["Vibrato cents, both oscillators"]
 
     OUD --> DRIFT["Per-oscillator drift cents, opposite sign"]
     DETUNE["Fixed inter-oscillator detune"]
@@ -105,6 +111,7 @@ flowchart TD
     TREM --> VOICE
     DRIFT --> VOICE
     DETUNE --> VOICE
+    VIBRATO --> VOICE
     ENV --> VOICE
 ```
 
@@ -302,7 +309,7 @@ glides smoothly to `note + cents` over that many seconds. `cents` is `-100..100`
 
 ### Per-voice LFO (Lua only, no dial)
 
-Each of the 16 channels can carry its own slow LFO on one of three destinations, independent
+Each of the 16 channels can carry its own slow LFO on one of five destinations, independent
 of the OU weather system and of every other channel's own LFO - different channels can run at
 different speeds. `depth` defaults to 0, so a channel is untouched until a script opts in, and
 freezes right along with the OU processes while `Hold` is on.
@@ -311,12 +318,15 @@ freezes right along with the OU processes while `Hold` is on.
 SetVolumeLfo(channel, rateCyclesPerMinute, depthDb, phaseDegrees)        -- tremolo, 0..24 dB dip
 SetCutoffLfo(channel, rateCyclesPerMinute, depthSemitones, phaseDegrees) -- filter sweep, 0..48
 SetMaterialLfo(channel, rateCyclesPerMinute, depth, phaseDegrees)        -- morph sweep, 0..1
+SetResonanceLfo(channel, rateCyclesPerMinute, depth, phaseDegrees)       -- always pulls up, 0..1
+SetPitchLfo(channel, rateCyclesPerMinute, depthCents, phaseDegrees)      -- vibrato, 0..100 cents
 ```
 
 `rateCyclesPerMinute` is meant for slow use - typically `1..10` - and is clamped to `0..60`.
 `phaseDegrees` sets where in the cycle the LFO starts (`0..360`); any other value, negative or
 past 360, wraps into that range - useful for starting two channels' LFOs out of phase with
-each other.
+each other. `SetResonanceLfo`'s depth is unipolar: it only ever adds to Lens's own resonance,
+never subtracts, unlike the other four (which swing symmetrically around their destination).
 
 ### The four musical-intent controls
 
