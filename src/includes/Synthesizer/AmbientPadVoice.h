@@ -189,13 +189,13 @@ class AmbientPadVoice
     }
 
     /// @brief Adds a slow, always-upward pull on resonance on top of Lens's own setting -
-    /// unipolar, so it only ever adds, never subtracts. depth 0 (default) is off; phaseDegrees
-    /// (0..360, wrapped) sets where in the cycle it starts.
+    /// unipolar, so it only ever adds, never subtracts. depth 0 (default) is off; unbounded
+    /// above (a large depth deliberately pushes past self-oscillation).
     void setResonanceLfo(const float rateCyclesPerMinute, const float depth, const float phaseDegrees) noexcept
     {
         m_lfoResonance.setFrequency(std::clamp(rateCyclesPerMinute, 0.f, kMaxLfoCyclesPerMinute) / 60.f);
         m_lfoResonance.setPhase(phaseDegrees);
-        m_resonanceLfoDepth = std::clamp(depth, 0.f, 1.f);
+        m_resonanceLfoDepth = std::max(depth, 0.f);
     }
 
     /// @brief Adds ordinary vibrato, identically to both oscillators (unlike Drift's opposite-
@@ -484,9 +484,9 @@ class AmbientPadVoice
         m_diagCutoffHz = Convert::noteToFrequency<float>(std::clamp(cutoffNote, 0.f, 127.f));
         m_filter.setCutoffFrequency(m_diagCutoffHz);
         const auto resonanceLfoUnipolar = (resonanceLfoValue + 1.f) * 0.5f;
-        m_diagResonance = std::clamp(kBaseResonance + lensValue * m_resonanceRange * stabilityRestraint +
-                                         resonanceLfoUnipolar * m_resonanceLfoDepth,
-                                     0.f, 1.f);
+        m_diagResonance = std::max(kBaseResonance + lensValue * m_resonanceRange * stabilityRestraint +
+                                       resonanceLfoUnipolar * m_resonanceLfoDepth,
+                                   0.f);
         m_filter.setResonance(m_diagResonance);
 
         // Character tracks Light directly - a chosen filter character should hold still, not

@@ -318,7 +318,7 @@ freezes right along with the OU processes while `Hold` is on.
 SetVolumeLfo(channel, rateCyclesPerMinute, depthDb, phaseDegrees)        -- tremolo, 0..24 dB dip
 SetCutoffLfo(channel, rateCyclesPerMinute, depthSemitones, phaseDegrees) -- filter sweep, 0..48
 SetMaterialLfo(channel, rateCyclesPerMinute, depth, phaseDegrees)        -- morph sweep, 0..1
-SetResonanceLfo(channel, rateCyclesPerMinute, depth, phaseDegrees)       -- always pulls up, 0..1
+SetResonanceLfo(channel, rateCyclesPerMinute, depth, phaseDegrees)       -- always pulls up, 0+
 SetPitchLfo(channel, rateCyclesPerMinute, depthCents, phaseDegrees)      -- vibrato, 0..100 cents
 ```
 
@@ -327,6 +327,8 @@ SetPitchLfo(channel, rateCyclesPerMinute, depthCents, phaseDegrees)      -- vibr
 past 360, wraps into that range - useful for starting two channels' LFOs out of phase with
 each other. `SetResonanceLfo`'s depth is unipolar: it only ever adds to Lens's own resonance,
 never subtracts, unlike the other four (which swing symmetrically around their destination).
+Its depth has no upper limit either - resonance `1.0` is the filter's own self-oscillation
+threshold, so a depth large enough to cross it is a deliberate way to make a voice scream.
 
 ### The four musical-intent controls
 

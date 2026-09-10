@@ -173,7 +173,8 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
 "-- SetVolumeLfo(channel, rateCyclesPerMinute, depthDb, phaseDegrees)        tremolo, 0..24 dB\n"
 "-- SetCutoffLfo(channel, rateCyclesPerMinute, depthSemitones, phaseDegrees) filter sweep, 0..48\n"
 "-- SetMaterialLfo(channel, rateCyclesPerMinute, depth, phaseDegrees)       morph sweep, 0..1\n"
-"-- SetResonanceLfo(channel, rateCyclesPerMinute, depth, phaseDegrees)      always-up, 0..1\n"
+"-- SetResonanceLfo(channel, rateCyclesPerMinute, depth, phaseDegrees)      always-up, 0..(no\n"
+"--   upper limit - past 1 deliberately drives resonance past self-oscillation)\n"
 "-- SetPitchLfo(channel, rateCyclesPerMinute, depthCents, phaseDegrees)     vibrato, 0..100c\n"
 "\n"
 "-- SetMaterial(value)  0..1, wavetable position along each oscillator's material path\n"
@@ -766,7 +767,7 @@ inline void AmbientPadScriptEngine::luaSetResonanceLfo(const size_t channel, con
         return;
     }
     m_pendingResonanceLfo[channel - 1] =
-        LfoSettings{std::clamp(rateCyclesPerMinute, 0.f, 60.f), std::clamp(depth, 0.f, 1.f), phaseDegrees};
+        LfoSettings{std::clamp(rateCyclesPerMinute, 0.f, 60.f), std::max(depth, 0.f), phaseDegrees};
 }
 
 inline void AmbientPadScriptEngine::luaSetPitchLfo(const size_t channel, const float rateCyclesPerMinute,
