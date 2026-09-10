@@ -617,12 +617,66 @@ class AmbientPadImpl final : public EffectBase
         std::fprintf(stderr, "\n");
     }
 
+    static constexpr const char* paletteRegionName(const AbacDsp::PaletteRegion region) noexcept
+    {
+        switch (region)
+        {
+            case AbacDsp::PaletteRegion::Home:
+                return "Home";
+            case AbacDsp::PaletteRegion::MajorLight:
+                return "MajorLight";
+            case AbacDsp::PaletteRegion::ModalWarmth:
+                return "ModalWarmth";
+            case AbacDsp::PaletteRegion::OpenSuspended:
+                return "OpenSuspended";
+            case AbacDsp::PaletteRegion::ChromaticWeather:
+                return "ChromaticWeather";
+        }
+        return "?";
+    }
+
+    /// @brief Prints the wish weights and region preference the just-logged transition was
+    /// judged against, how many palette entries survived the vow filter, and the scored
+    /// shortlist the pick was drawn from (picked entry marked with '*').
+    void logHarmonicDecision(const AbacDsp::HarmonicOrganism::DecisionTrace& trace) const
+    {
+        static constexpr auto kWishAxisLabels =
+            std::to_array<const char*>({"lum", "close", "ambig", "minor", "dens", "mob", "tension"});
+
+        std::fprintf(stderr, "  wish:");
+        for (size_t i = 0; i < AbacDsp::kNumWishKinds; ++i)
+        {
+            std::fprintf(stderr, " %s=%.2f", kWishAxisLabels[i], static_cast<double>(trace.weights[i]));
+        }
+
+        std::fprintf(stderr, "\n  region: pref=");
+        if (trace.preferredRegion)
+        {
+            std::fprintf(stderr, "%s(+%.2f)", paletteRegionName(*trace.preferredRegion),
+                         static_cast<double>(trace.regionBonus));
+        }
+        else
+        {
+            std::fprintf(stderr, "none");
+        }
+        std::fprintf(stderr, " survivors=%zu/%zu\n  shortlist:", trace.survivorCount, trace.paletteSize);
+
+        for (size_t i = 0; i < trace.shortlistCount; ++i)
+        {
+            const auto& entry = trace.shortlist[i];
+            std::fprintf(stderr, " %s%.*s=%.2f", i == trace.pickedShortlistIndex ? "*" : "",
+                         static_cast<int>(entry.name.size()), entry.name.data(), static_cast<double>(entry.score));
+        }
+        std::fprintf(stderr, "\n");
+    }
+
     /// @brief Matches currently-playing non-pedal channels against target's voicing by pitch
     /// proximity: a close pair glides via setPitch(), a pitch with no close partner cross-fades
     /// (release the old channel, trigger a free one) - see the plan's design decision 3.
     void realizeHarmonicTransition(const AbacDsp::HarmonicState& target) noexcept
     {
         logHarmonicState(target);
+        logHarmonicDecision(m_organism.lastDecision());
 
         struct PlayingChannel
         {

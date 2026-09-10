@@ -6,6 +6,7 @@
 #include <optional>
 #include <random>
 #include <span>
+#include <string_view>
 
 #include "Generators/OrnsteinUhlenbeckProcess.h"
 #include "Harmony/HarmonicPalette.h"
@@ -137,6 +138,30 @@ class HarmonicOrganism
     static constexpr size_t kTopCandidateCount{3};
     static constexpr size_t kMaxActiveImpulses{4};
     static constexpr size_t kMaxClimateStepsPerCall{3600};
+
+    /// @brief One scored candidate from a decision's shortlist - name/region are copied out
+    /// of the palette entry for diagnostics, not looked up again from an index.
+    struct ShortlistEntry
+    {
+        std::string_view name;
+        PaletteRegion region{PaletteRegion::Home};
+        float score{0.f};
+    };
+
+    /// @brief A snapshot of the most recent considerTransition() decision: the effective
+    /// wish weights and region preference candidates were judged against, how many palette
+    /// entries survived the vow filter, and the scored shortlist the pick was drawn from.
+    struct DecisionTrace
+    {
+        WishWeights weights{neutralWishWeights()};
+        std::optional<PaletteRegion> preferredRegion;
+        float regionBonus{0.f};
+        size_t survivorCount{0};
+        size_t paletteSize{0};
+        std::array<ShortlistEntry, kTopCandidateCount> shortlist{};
+        size_t shortlistCount{0};
+        size_t pickedShortlistIndex{0};
+    };
 
     explicit HarmonicOrganism(const float sampleRate, const unsigned seed = 1) noexcept
         : m_sampleRate(sampleRate)
@@ -270,6 +295,13 @@ class HarmonicOrganism
     [[nodiscard]] WishWeights currentWishWeights() const noexcept
     {
         return effectiveWishWeights();
+    }
+
+    /// @brief The most recent considerTransition() decision - populated once per dwell
+    /// period regardless of whether it committed a transition or chose to stay.
+    [[nodiscard]] const DecisionTrace& lastDecision() const noexcept
+    {
+        return m_lastDecision;
     }
 
     /// @brief One-shot: nullopt unless step() just committed a transition, matching the
@@ -424,12 +456,37 @@ class HarmonicOrganism
         }
 
         std::uniform_int_distribution<size_t> pick(0, topCount - 1);
-        const auto chosenIndex = survivors[pick(m_rng)];
+        const auto pickedSlot = pick(m_rng);
+        const auto chosenIndex = survivors[pickedSlot];
+
+        recordDecisionTrace(weights, std::span<const size_t>(survivors.data(), topCount),
+                            std::span<const float>(survivorScores.data(), topCount), survivorCount, pickedSlot);
+
         if (chosenIndex != m_currentIndex)
         {
             m_currentIndex = chosenIndex;
             m_pendingIndex = chosenIndex;
             m_cooldownRemainingSeconds = m_cooldownSeconds;
+        }
+    }
+
+    // shortlistIndices/shortlistScores are already the sorted top-N survivors - see
+    // considerTransition()'s own selection sort just above the call site.
+    void recordDecisionTrace(const WishWeights& weights, const std::span<const size_t> shortlistIndices,
+                             const std::span<const float> shortlistScores, const size_t survivorCount,
+                             const size_t pickedShortlistIndex) noexcept
+    {
+        m_lastDecision.weights = weights;
+        m_lastDecision.preferredRegion = m_preferredRegion;
+        m_lastDecision.regionBonus = m_regionBonus;
+        m_lastDecision.survivorCount = survivorCount;
+        m_lastDecision.paletteSize = m_paletteSize;
+        m_lastDecision.shortlistCount = shortlistIndices.size();
+        m_lastDecision.pickedShortlistIndex = pickedShortlistIndex;
+        for (size_t i = 0; i < shortlistIndices.size(); ++i)
+        {
+            const auto& state = m_palette[shortlistIndices[i]];
+            m_lastDecision.shortlist[i] = {state.name, state.region, shortlistScores[i]};
         }
     }
 
@@ -463,6 +520,7 @@ class HarmonicOrganism
     float m_cooldownRemainingSeconds{0.f};
 
     std::mt19937 m_rng;
+    DecisionTrace m_lastDecision{};
 };
 
 }
