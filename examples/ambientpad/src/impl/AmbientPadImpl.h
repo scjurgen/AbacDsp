@@ -758,6 +758,19 @@ class AmbientPadImpl final : public EffectBase
             {
                 m_voices[v].setPitch(pitch->note, pitch->cents, pitch->glideTimeSeconds);
             }
+            if (const auto volumeLfo = m_scriptEngine.drainVolumeLfoCommand(v))
+            {
+                m_voices[v].setVolumeLfo(volumeLfo->rateCyclesPerMinute, volumeLfo->depth, volumeLfo->phaseDegrees);
+            }
+            if (const auto cutoffLfo = m_scriptEngine.drainCutoffLfoCommand(v))
+            {
+                m_voices[v].setCutoffLfo(cutoffLfo->rateCyclesPerMinute, cutoffLfo->depth, cutoffLfo->phaseDegrees);
+            }
+            if (const auto materialLfo = m_scriptEngine.drainMaterialLfoCommand(v))
+            {
+                m_voices[v].setMaterialLfo(materialLfo->rateCyclesPerMinute, materialLfo->depth,
+                                           materialLfo->phaseDegrees);
+            }
         }
 
         if (const auto enabled = m_scriptEngine.drainHarmonyEnabledCommand())

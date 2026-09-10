@@ -9,6 +9,7 @@
 #include "Filters/PoleMixingFilter.h"
 #include "Generators/AdsEnvelope.h"
 #include "Generators/OrnsteinUhlenbeckProcess.h"
+#include "Generators/SynthLfo.h"
 #include "NonLinear/WaveShaperTables.h"
 #include "Numbers/Convert.h"
 #include "Parameters/SmoothingParameter.h"
@@ -44,7 +45,8 @@ enum class MaterialPath
  * @ingroup generators
  * @brief One sustained ambient-pad voice: two morphing wavetable layers through a pole-mixing
  * filter and a long attack/release VCA, kept alive by four correlated Ornstein-Uhlenbeck
- * modulators rather than a conventional LFO/ADSR-per-destination matrix.
+ * modulators rather than a conventional LFO/ADSR-per-destination matrix. Volume, filter
+ * cutoff, and Material can each also carry an independent, per-voice LFO layered on top.
  *
  * The oscillator/filter/envelope chain runs mono; stereo depth is left to the caller's own
  * effects chain (chorus etc.), the same split MorphexsynthVoice uses. Control-rate work (the OU
@@ -65,6 +67,9 @@ class AmbientPadVoice
         , m_ouMaterial(sampleRate / static_cast<float>(kFGranularity))
         , m_ouLens(sampleRate / static_cast<float>(kFGranularity))
         , m_ouDrift(sampleRate / static_cast<float>(kFGranularity))
+        , m_lfoVolume(sampleRate / static_cast<float>(kFGranularity))
+        , m_lfoCutoff(sampleRate / static_cast<float>(kFGranularity))
+        , m_lfoMaterial(sampleRate / static_cast<float>(kFGranularity))
         , m_filter(sampleRate)
         , m_waveShaperTables(waveShaperTables)
     {
@@ -151,6 +156,34 @@ class AmbientPadVoice
     void setBreathVcaRange(const float amount) noexcept
     {
         m_breathVcaRange = std::clamp(amount, 0.f, 10.f);
+    }
+
+    /// @brief Adds a slow tremolo to the voice's output: unity gain at the sine's peak, dipping
+    /// to -depthDb at its trough. depth 0 (default) is off; phaseDegrees (0..360, wrapped)
+    /// sets where in the cycle it starts.
+    void setVolumeLfo(const float rateCyclesPerMinute, const float depthDb, const float phaseDegrees) noexcept
+    {
+        m_lfoVolume.setFrequency(std::clamp(rateCyclesPerMinute, 0.f, kMaxLfoCyclesPerMinute) / 60.f);
+        m_lfoVolume.setPhase(phaseDegrees);
+        m_volumeLfoDepthDb = std::clamp(depthDb, 0.f, kMaxVolumeLfoDepthDb);
+    }
+
+    /// @brief Adds a slow filter-cutoff sweep on top of Light's own setting. depth 0 (default)
+    /// is off; phaseDegrees (0..360, wrapped) sets where in the cycle it starts.
+    void setCutoffLfo(const float rateCyclesPerMinute, const float depthSemitones, const float phaseDegrees) noexcept
+    {
+        m_lfoCutoff.setFrequency(std::clamp(rateCyclesPerMinute, 0.f, kMaxLfoCyclesPerMinute) / 60.f);
+        m_lfoCutoff.setPhase(phaseDegrees);
+        m_cutoffLfoDepthSemitones = std::clamp(depthSemitones, 0.f, 48.f);
+    }
+
+    /// @brief Adds a slow wavetable-morph sweep on top of Material's own setting. depth 0
+    /// (default) is off; phaseDegrees (0..360, wrapped) sets where in the cycle it starts.
+    void setMaterialLfo(const float rateCyclesPerMinute, const float depth, const float phaseDegrees) noexcept
+    {
+        m_lfoMaterial.setFrequency(std::clamp(rateCyclesPerMinute, 0.f, kMaxLfoCyclesPerMinute) / 60.f);
+        m_lfoMaterial.setPhase(phaseDegrees);
+        m_materialLfoDepth = std::clamp(depth, 0.f, 1.f);
     }
 
     void setMotion(const float value) noexcept
@@ -396,12 +429,21 @@ class AmbientPadVoice
         m_lastLens = lensValue;
         m_lastDrift = driftValue;
 
+        const auto volumeLfoValue = m_hold ? m_lastVolumeLfo : m_lfoVolume.step();
+        const auto cutoffLfoValue = m_hold ? m_lastCutoffLfo : m_lfoCutoff.step();
+        const auto materialLfoValue = m_hold ? m_lastMaterialLfo : m_lfoMaterial.step();
+        m_lastVolumeLfo = volumeLfoValue;
+        m_lastCutoffLfo = cutoffLfoValue;
+        m_lastMaterialLfo = materialLfoValue;
+
         // Stability=1 must mean stable: it scales down how much of every OU source
         // reaches its destination, not just pitch drift/detune.
         const auto stabilityRestraint = 1.f - m_stability;
 
         const auto materialTarget =
-            std::clamp(m_material * 2.f - 1.f + materialValue * m_materialRange * stabilityRestraint, -1.f, 1.f);
+            std::clamp(m_material * 2.f - 1.f + materialValue * m_materialRange * stabilityRestraint +
+                           materialLfoValue * m_materialLfoDepth,
+                       -1.f, 1.f);
         m_materialSmoothed.newTransition(materialTarget, kControlSmoothingSeconds, controlRate());
         const auto material = m_materialSmoothed.getValue();
         for (auto& osc : m_oscillators)
@@ -410,7 +452,8 @@ class AmbientPadVoice
         }
 
         const auto cutoffNote = kMinCutoffNote + m_light * (kMaxCutoffNote - kMinCutoffNote) +
-                                lensValue * m_cutoffRange * stabilityRestraint;
+                                lensValue * m_cutoffRange * stabilityRestraint +
+                                cutoffLfoValue * m_cutoffLfoDepthSemitones;
         m_diagCutoffHz = Convert::noteToFrequency<float>(std::clamp(cutoffNote, 0.f, 127.f));
         m_filter.setCutoffFrequency(m_diagCutoffHz);
         m_diagResonance = std::clamp(kBaseResonance + lensValue * m_resonanceRange * stabilityRestraint, 0.f, 1.f);
@@ -430,6 +473,11 @@ class AmbientPadVoice
         updateAllOscillatorFrequencies();
 
         m_breathRippleGain = 1.f + breathValue * m_breath * m_breathVcaRange * stabilityRestraint;
+
+        // Unity gain at the LFO's peak, dipping to -depthDb at its trough - a real tremolo
+        // never boosts above the voice's own nominal level.
+        const auto volumeLfoUnipolar = (volumeLfoValue + 1.f) * 0.5f;
+        m_volumeLfoGain = Convert::dbToGain(-m_volumeLfoDepthDb * (1.f - volumeLfoUnipolar));
     }
 
     [[nodiscard]] float controlRate() const noexcept
@@ -455,7 +503,8 @@ class AmbientPadVoice
         const auto filtered = m_filter.step(sum);
 
         m_lastEnvelope = m_ampEnvelope.step();
-        const auto out = filtered * m_lastEnvelope * m_gain * m_breathRippleGain * m_gainSmoothed.getValue();
+        const auto out =
+            filtered * m_lastEnvelope * m_gain * m_breathRippleGain * m_volumeLfoGain * m_gainSmoothed.getValue();
         return std::clamp(out, -4.f, 4.f);
     }
 
@@ -473,6 +522,8 @@ class AmbientPadVoice
     static constexpr float kMinCutoffNote{48.f};
     static constexpr float kMaxCutoffNote{110.f};
     static constexpr float kMotionMaxSigma{0.4f};
+    static constexpr float kMaxLfoCyclesPerMinute{60.f};
+    static constexpr float kMaxVolumeLfoDepthDb{24.f};
     static constexpr float kInterOscDetuneCents{6.f};
     static constexpr float kGainSmoothingSeconds{0.05f};
     static constexpr float kControlSmoothingSeconds{0.05f};
@@ -487,10 +538,20 @@ class AmbientPadVoice
     OrnsteinUhlenbeckProcess m_ouMaterial;
     OrnsteinUhlenbeckProcess m_ouLens;
     OrnsteinUhlenbeckProcess m_ouDrift;
+    LfoGenerators m_lfoVolume;
+    LfoGenerators m_lfoCutoff;
+    LfoGenerators m_lfoMaterial;
+    float m_volumeLfoDepthDb{0.f};
+    float m_cutoffLfoDepthSemitones{0.f};
+    float m_materialLfoDepth{0.f};
     float m_lastBreath{0.f};
     float m_lastMaterial{0.f};
     float m_lastLens{0.f};
     float m_lastDrift{0.f};
+    float m_lastVolumeLfo{0.f};
+    float m_lastCutoffLfo{0.f};
+    float m_lastMaterialLfo{0.f};
+    float m_volumeLfoGain{1.f};
 
     Filter1Pole4StageSmooth m_filter;
     LinearSmoothing m_filterCharacterPos{0.5f};

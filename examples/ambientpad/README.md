@@ -16,7 +16,10 @@ all four processes at their current value.
 
 The voice keeps an array of 16 slots (channels) for polyphony: only channel 1 is driven by the
 standalone's own Note/Play controls, and the rest sit idle unless a script addresses them
-directly with `NoteOn`/`NoteOff` - or the harmonic organism is driving them itself.
+directly with `NoteOn`/`NoteOff` - or the harmonic organism is driving them itself. Each channel
+can also carry its own slow, Lua-only LFO on Volume, Cutoff, or Material - a genuine periodic
+sweep, independent of the OU weather system, with its own rate per channel (see Scripting
+below); Hold freezes these too.
 
 ## Modulation
 
@@ -42,6 +45,12 @@ flowchart TD
         OUD["OU Drift"]
     end
 
+    subgraph PERVOICE["Per-voice LFO (channel-indexed, off by default)"]
+        LFOVOL["LFO Volume"]
+        LFOCUT["LFO Cutoff"]
+        LFOMAT["LFO Material"]
+    end
+
     MOTION -->|shared sigma| OUB
     MOTION -->|shared sigma| OUM
     MOTION -->|shared sigma| OUL
@@ -50,18 +59,25 @@ flowchart TD
     HOLD -.->|freezes step| OUM
     HOLD -.->|freezes step| OUL
     HOLD -.->|freezes step| OUD
+    HOLD -.->|freezes step| LFOVOL
+    HOLD -.->|freezes step| LFOCUT
+    HOLD -.->|freezes step| LFOMAT
 
     MATERIAL --> MORPH["Oscillator morph, both layers"]
     MRANGE -.->|OU depth| MORPH
     OUM --> MORPH
+    LFOMAT -.->|SetMaterialLfo depth| MORPH
 
     LIGHT --> CUTOFF["Filter cutoff Hz"]
     OUL --> CUTOFF
+    LFOCUT -.->|SetCutoffLfo depth| CUTOFF
     LIGHT --> CHAR["Filter character: Velvet..Glass"]
     OUL --> RESO["Filter resonance"]
 
     BREATH --> RIPPLE["VCA ripple gain"]
     OUB --> RIPPLE
+
+    LFOVOL -.->|SetVolumeLfo depth| TREM["Tremolo gain"]
 
     OUD --> DRIFT["Per-oscillator drift cents, opposite sign"]
     DETUNE["Fixed inter-oscillator detune"]
@@ -86,6 +102,7 @@ flowchart TD
     CHAR --> VOICE
     RESO --> VOICE
     RIPPLE --> VOICE
+    TREM --> VOICE
     DRIFT --> VOICE
     DETUNE --> VOICE
     ENV --> VOICE
@@ -93,17 +110,20 @@ flowchart TD
 
 Motion sets one shared wander range/speed for all four processes; each still reaches a
 different destination at its own depth, so the voice reads as one weather system rather than
-four independent LFOs. Material's own depth is a dial (Range): it sets the full width, in
-Material's own 0..1 units, that OU Material can pull the morph position away from Material's
-center - center 0.5 (sine) with Range 0.5 wanders roughly between 0.25 and 0.75. Filter cutoff,
-resonance, per-oscillator drift, and the Breath VCA ripple each have their own depth too, but as
-Lua-only fine-tuning controls rather than dials (see Scripting below) - by default they're subtle
-enough to read as texture, not an obvious sweep. Filter character (Velvet..Glass) tracks Light
-directly and never wanders on its own, unlike the other destinations. Stability then scales how
-much of that wander actually reaches every destination, so Stability=1 is genuinely stable (no
-wander reaches the voice) regardless of Motion, not just firmer pitch. Hold pauses every
-process's own `step()` call, freezing
-modulation at whatever value it currently holds rather than resetting it to a center.
+four independent LFOs. Separately, each of the 16 channels can also carry its own slow LFO on
+Volume, Cutoff, or Material (see "Per-voice LFO" below) - a deliberately independent,
+per-channel modulation source, off by default. Material's own depth is a dial (Range): it sets
+the full width, in Material's own 0..1 units, that OU Material can pull the morph position
+away from Material's center - center 0.5 (sine) with Range 0.5 wanders roughly between 0.25 and
+0.75. Filter cutoff, resonance, per-oscillator drift, and the Breath VCA ripple each have their
+own depth too, but as Lua-only fine-tuning controls rather than dials (see Scripting below) -
+by default they're subtle enough to read as texture, not an obvious sweep. Filter character
+(Velvet..Glass) tracks Light directly and never wanders on its own, unlike the other
+destinations. Stability then scales how much of that wander actually reaches every destination,
+so Stability=1 is genuinely stable (no wander reaches the voice) regardless of Motion, not just
+firmer pitch. Hold pauses every process's own `step()` call - the four OU processes and each
+channel's own Volume/Cutoff/Material LFO alike - freezing modulation at whatever value it
+currently holds rather than resetting it to a center.
 
 ## Harmony
 
@@ -212,7 +232,7 @@ start once it reaches the end, rather than scrolling the whole history along eac
 | Breath | 0 - 1 | How much the Breath process moves level and cutoff |
 | Stability | 0 - 1 | Fragile (0: full drift/detune/wobble) to firm (1: none reaches the voice) |
 | Bloom | 0 - 1 | Amplitude attack/release time - short/direct to slow/lingering |
-| Hold | on/off | Freezes all four modulation processes at their current value |
+| Hold | on/off | Freezes all four OU processes and every channel's own LFO at their current value |
 | Harmony | on/off | Enables the harmonic organism (see Harmony above); off by default |
 | Home | C - B, default E | The harmonic organism's tonal home |
 | Character | Any/Minor Home/Major Light/Modal Warmth/Open-Suspended/Chromatic | Soft preference for one palette region |
@@ -279,6 +299,24 @@ SetPitch(channel, note, cents, glideTimeSeconds)
 Repitches a channel's held voice without retriggering its envelope or modulation state -
 `glideTimeSeconds = 0` is instant (equivalent to setting `NoteOn`'s own note), a positive value
 glides smoothly to `note + cents` over that many seconds. `cents` is `-100..100`.
+
+### Per-voice LFO (Lua only, no dial)
+
+Each of the 16 channels can carry its own slow LFO on one of three destinations, independent
+of the OU weather system and of every other channel's own LFO - different channels can run at
+different speeds. `depth` defaults to 0, so a channel is untouched until a script opts in, and
+freezes right along with the OU processes while `Hold` is on.
+
+```lua
+SetVolumeLfo(channel, rateCyclesPerMinute, depthDb, phaseDegrees)        -- tremolo, 0..24 dB dip
+SetCutoffLfo(channel, rateCyclesPerMinute, depthSemitones, phaseDegrees) -- filter sweep, 0..48
+SetMaterialLfo(channel, rateCyclesPerMinute, depth, phaseDegrees)        -- morph sweep, 0..1
+```
+
+`rateCyclesPerMinute` is meant for slow use - typically `1..10` - and is clamped to `0..60`.
+`phaseDegrees` sets where in the cycle the LFO starts (`0..360`); any other value, negative or
+past 360, wraps into that range - useful for starting two channels' LFOs out of phase with
+each other.
 
 ### The four musical-intent controls
 

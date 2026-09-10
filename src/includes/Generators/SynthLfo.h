@@ -59,6 +59,23 @@ class LfoGenerators
         }
     }
 
+    /// @brief Sets the current phase directly, in degrees - wrapped into 0..360 first, so a
+    /// negative value or one past 360 lands on the same phase as its in-range equivalent.
+    void setPhase(const float degrees) noexcept
+    {
+        if (!std::isfinite(degrees))
+        {
+            return;
+        }
+        constexpr auto kDegreesPerCycle = 360.0f;
+        auto wrapped = std::fmod(degrees, kDegreesPerCycle);
+        if (wrapped < 0.0f)
+        {
+            wrapped += kDegreesPerCycle;
+        }
+        m_phase = wrapped / kDegreesPerCycle;
+    }
+
     [[nodiscard]] float step() noexcept
     {
         if (!m_playing)

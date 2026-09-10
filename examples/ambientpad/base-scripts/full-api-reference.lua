@@ -12,6 +12,11 @@ function OnStart()
 
     SetGain(1, -3)
 
+    -- Each channel can carry its own slow LFO on Volume, Cutoff, or Material - independent
+    -- rates/depths per channel (Lua-only, no dial)
+    SetVolumeLfo(1, 4, 3, 0)      -- 4 cycles/min, 3 dB tremolo dip, starts at phase 0
+    SetCutoffLfo(1, 6, 12, 180)   -- 6 cycles/min, 12-semitone filter sweep, starts opposite phase
+
     -- The six musical-intent controls, plus Material's own Range dial and Hold
     SetMaterial(0.45)
     SetMaterialRange(0.4)
@@ -20,7 +25,7 @@ function OnStart()
     SetBreath(0.6)
     SetStability(0.3)
     SetBloom(0.6)
-    SetHold(true)  -- freeze the four OU processes at their current value...
+    SetHold(true)  -- freeze the four OU processes and every channel's own LFO...
     SetHold(false) -- ...and release them again - a real script would space these out in time
 
     -- Fine-tuning how far Lens/Drift/Breath can wander (all Lua-only, no dial)
@@ -42,6 +47,7 @@ function OnStart()
 
     -- A second, independently-configured channel, released again to show NoteOff
     SetOscillator(3, 0, { waveform = 2, level = 0.6, height = 0, cents = 0 }) -- Square-White-Saw
+    SetMaterialLfo(3, 1.5, 0.3, 450) -- 450 wraps to the same phase as 90 (a slower rate too)
     NoteOn(3, 64, 70)
     NoteOff(3, 64)
 
