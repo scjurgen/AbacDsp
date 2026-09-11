@@ -154,6 +154,17 @@ TEST(MakeCustomHarmonicStateTest, everyTagDefaultsToNeutral)
     EXPECT_FLOAT_EQ(state.tension, 0.5f);
 }
 
+TEST(MakeCustomHarmonicStateTest, explicitTagsOverrideTheNeutralDefault)
+{
+    const auto state = makeCustomHarmonicState(PaletteRegion::Home, std::to_array<float>({0.f, 0.01f, 7.1f}), 0.55f,
+                                               0.5f, 0.05f, 0.85f, 0.05f);
+    EXPECT_FLOAT_EQ(state.luminosity, 0.55f);
+    EXPECT_FLOAT_EQ(state.minorColor, 0.5f);
+    EXPECT_FLOAT_EQ(state.density, 0.05f);
+    EXPECT_FLOAT_EQ(state.ambiguity, 0.85f);
+    EXPECT_FLOAT_EQ(state.tension, 0.05f);
+}
+
 TEST(MakeCustomHarmonicStateTest, fractionalSemitonesKeepTheirRoundedIdentityAndCents)
 {
     const auto state = makeCustomHarmonicState(PaletteRegion::ChromaticWeather, std::to_array<float>({3.3f, 7.8f}));

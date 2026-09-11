@@ -219,12 +219,15 @@ class AmbientPadScriptEngine : public LuaScriptEngineBase<AmbientPadScriptEngine
 "\n"
 "-- ClearHarmonicPalette()  resets the script-authored custom palette built so far; alone\n"
 "--   (no AddHarmonicState calls after it) reverts to the 20 built-in states\n"
-"-- AddHarmonicState({ semitones = {...}, region })  appends one custom chord - semitones\n"
-"--   are literal, home-relative, already spread across registers exactly as wanted (e.g.\n"
-"--   { -24, 0, 4, 7, 10 } for a dominant 7th with a low bass added). A fractional value\n"
-"--   (e.g. 3.5) keeps its own rounded semitone for scoring/naming/voice-leading, plus a\n"
-"--   cents-level fine tune only on the actual sounding pitch. region: 1..5 as\n"
-"--   SetHarmonyCharacter above, default 1. Every wish-axis tag is left neutral (0.5)\n"
+"-- AddHarmonicState({ semitones = {...}, region, luminosity, minorColor, density,\n"
+"--   ambiguity, tension })  appends one custom chord - semitones are literal, home-relative,\n"
+"--   already spread across registers exactly as wanted (e.g. { -24, 0, 4, 7, 10 } for a\n"
+"--   dominant 7th with a low bass added). A fractional value (e.g. 3.5) keeps its own\n"
+"--   rounded semitone for scoring/naming/voice-leading, plus a cents-level fine tune only\n"
+"--   on the actual sounding pitch. region: 1..5 as SetHarmonyCharacter above, default 1.\n"
+"--   The five wish-axis tags are each 0..1, default 0.5 (neutral) when omitted - they let a\n"
+"--   custom state be favoured or disfavoured by the organism's climate/impulses, same as the\n"
+"--   20 built-ins\n"
 "-- SetHarmonyTiming({ dwellSeconds, cooldownSeconds, glideSeconds })  overrides how often\n"
 "--   the organism reconsiders, its post-transition pause, and the per-voice glide time -\n"
 "--   default 30/20/10 (today's fixed pace); each missing field resets to that default too\n"
@@ -585,8 +588,25 @@ inline void AmbientPadScriptEngine::luaAddHarmonicState(const sol::table& params
         return;
     }
     const auto region = static_cast<AbacDsp::PaletteRegion>(regionIndex - 1);
+
+    const auto readTag = [&params](const char* key) noexcept -> std::optional<float>
+    {
+        const float value = params.get_or(key, 0.5f);
+        return std::isfinite(value) ? std::optional<float>(std::clamp(value, 0.f, 1.f)) : std::nullopt;
+    };
+    const auto luminosity = readTag("luminosity");
+    const auto minorColor = readTag("minorColor");
+    const auto density = readTag("density");
+    const auto ambiguity = readTag("ambiguity");
+    const auto tension = readTag("tension");
+    if (!luminosity || !minorColor || !density || !ambiguity || !tension)
+    {
+        return;
+    }
+
     m_customPaletteEntries[m_customPaletteCount++] =
-        AbacDsp::makeCustomHarmonicState(region, std::span<const float>(semitones.data(), semitoneCount));
+        AbacDsp::makeCustomHarmonicState(region, std::span<const float>(semitones.data(), semitoneCount), *luminosity,
+                                         *minorColor, *density, *ambiguity, *tension);
     m_customPaletteDirty = true;
 }
 

@@ -409,8 +409,11 @@ A script can also replace the palette itself, instead of only choosing among the
 states:
 
 ```lua
-ClearHarmonicPalette()                          -- resets the custom palette built so far
-AddHarmonicState({ semitones = {...}, region })  -- appends one custom chord
+ClearHarmonicPalette()  -- resets the custom palette built so far
+AddHarmonicState({      -- appends one custom chord
+    semitones = {...}, region,
+    luminosity, minorColor, density, ambiguity, tension,
+})
 ```
 
 `semitones` is a literal, home-relative list, already spread across registers exactly as
@@ -421,10 +424,14 @@ voicing-generation step: what you write is what sounds. A value may be fractiona
 voice-leading (so it competes and glides exactly as that integer chord would), while the
 fractional remainder becomes a cents-level fine tune applied only to the actual sounding pitch
 - a chord voiced with a slightly sharp or flat tone, not a different chord shape. `region` is
-optional, 1..5 as `SetHarmonyCharacter` above, defaulting to 1 (Home). Every wish-axis tag
-(luminosity, minorColor, density, ambiguity, tension) is left at its neutral default (0.5) - a
-custom state is a plausible candidate on every axis, neither favoured nor disfavoured by the
-organism's climate or impulses.
+optional, 1..5 as `SetHarmonyCharacter` above, defaulting to 1 (Home).
+
+`luminosity`, `minorColor`, `density`, `ambiguity`, and `tension` are each optional, 0..1,
+defaulting to neutral (0.5) when omitted - the same five state-intrinsic axes every built-in
+state is authored with (see Character above). Left at the default, a custom state is a
+plausible candidate on every axis, neither favoured nor disfavoured by the organism's climate
+or impulses; setting them lets a custom state - a sparse drone, say - actually get preferred
+when the climate leans toward low density and low tension, not just when its region matches.
 
 `AddHarmonicState` appends; a script builds its whole custom vocabulary by calling it several
 times, typically once in `OnStart`. `ClearHarmonicPalette()` alone, with no `AddHarmonicState`
@@ -509,3 +516,9 @@ script-authored regions - diatonic triads in region 1, whole-tone/diminished/chr
 in region 5 - starts in the diatonic one, and uses `SetHarmonyTiming` to speed the organism up
 enough to actually hear several transitions before `SetHarmonyCharacter` switches it to the
 foreign region after 60 seconds.
+
+`base-scripts/drone-scene.lua` replaces the palette with three near-unison
+`AddHarmonicState` entries (plain drone, +5th, +4th) tagged low density/tension and high
+ambiguity via the optional wish-axis fields, so the organism lingers there under a slow,
+60-second dwell instead of just visiting; the same Impulse dropdown as
+`harmonic-scene.lua` lets a player nudge it live.
