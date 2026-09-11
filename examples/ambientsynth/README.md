@@ -353,3 +353,11 @@ the base musical-intent controls, chorus/reverb, home, a faster-than-default 2-s
 (`NoteOn`/`NoteOff` on channel 3, two back-to-back `PlayHarmony` calls) that only make musical
 sense spaced out over a real performance, not fired in one `OnStart()`. It's a syntax reference,
 not a patch to build on.
+
+`base-scripts/soundscape-journey.lua` is a self-playing patch, not a real-time performance one:
+one `OnNoteOn` takes that note as home/pedal and plays a fixed arc entirely on its own - calm,
+widely-spaced drones (5-7 voices, modulation building partway through), a Lydian-mode harmonic
+section cycling chords up to a 9th via `PlayHarmony`, a short chromatic-tension section, then
+quieter drones that fade out and stop. Voice choice, chord order, and every dwell time are
+randomized each run. Playing another note anywhere cancels the run in progress and restarts
+the arc from that note.
