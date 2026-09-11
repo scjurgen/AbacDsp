@@ -522,3 +522,10 @@ foreign region after 60 seconds.
 ambiguity via the optional wish-axis fields, so the organism lingers there under a slow,
 60-second dwell instead of just visiting; the same Impulse dropdown as
 `harmonic-scene.lua` lets a player nudge it live.
+
+`base-scripts/drone-chaos-cycle.lua` alternates that same drone palette with a short, dense
+chromatic-cluster palette (tagged low luminosity, high density/ambiguity/tension) on a timer:
+60 seconds calm at the drone's usual slow pace, 15 seconds of disturbance at a much faster
+5-second dwell and a near-instant 0.3-second glide, looping. Calm/Chaos knobs in Lua Controls
+retune each section's length live (taking effect next cycle, not the one already running),
+alongside the same Impulse dropdown.
