@@ -23,6 +23,6 @@ mark_as_advanced(
         gtest_disable_pthreads gtest_force_shared_crt gtest_hide_internal_symbols
 )
 
-package_add_test(PluginTests
+package_add_test(SampleplayerTests
         Sampleplayer_tests.cpp
 )

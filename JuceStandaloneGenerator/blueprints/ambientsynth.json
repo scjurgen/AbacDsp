@@ -1,0 +1,82 @@
+{
+  "name": "ambientsynth",
+  "plugintype": "InstrumentPlugin",
+  "lookAndFeel": "LookAndFeel.h",
+  "boxy": "boxy",
+  "plugintype-see-also": "http://lv2plug.in/ns/lv2core#InstrumentPlugin",
+  "description": [
+    "Ambient synth voice for real-time performance: two morphing wavetable layers through a discrete-type pole-mixing filter, each of Cutoff/Resonance/Material/Breath/Pitch carrying its own Ornstein-Uhlenbeck wander plus an independent LFO. Played from a MIDI keyboard - white keys C4..A4 pick a harmonic region, notes below C4 set the bass pedal - or scripted via Lua."
+  ],
+  "patches": true,
+  "use-lua": true,
+  "ports-control": [
+    {"short": "LEVEL", "type": "dial", "display": "Level", "symbol": "level", "default": -30, "range": [-60, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+
+    {"short": "MATRL", "type": "dial", "display": "Material", "symbol": "material", "default": 0.5, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
+    {"short": "MRANGE", "type": "dial", "display": "Range", "symbol": "materialRange", "default": 0.35, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
+    {"short": "CUTOFF", "type": "dial", "display": "Cutoff", "symbol": "cutoff", "default": 0.5, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
+    {"short": "RESON", "type": "dial", "display": "Resonance", "symbol": "resonance", "default": 0.1, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
+    {"short": "FTYPE", "type": "drop", "display": "Filter", "symbol": "filterType", "default": 0, "listitems": ["LP4", "LP2", "LP1Notch", "Notch", "BP2", "HP1LP3", "AP4"]},
+    {"short": "BLOOM", "type": "dial", "display": "Bloom", "symbol": "bloom", "default": 0.3, "range": [0, 1, 0.01, 1, false], "precision": 2, "unit": ""},
+
+    {"short": "PEDAL", "type": "dial", "display": "Pedal", "symbol": "pedalNote", "default": 0, "range": [0, 127, 1, 1, false], "precision": 0, "unit": ""},
+
+    {"short": "CPU", "type": "gauge", "gaugetype": "cpuload", "display": "CPU", "symbol": "cpu", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "LVL", "type": "gauge", "gaugetype": "levels", "display": "Level", "symbol": "levelMeter", "default": 0, "range": [0, 100, 0.1, 1, false], "precision": 1, "unit": "%"},
+    {"short": "FFT", "type": "gauge", "gaugetype": "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"},
+
+    {"short": "LUACTL", "type": "luacontrolarea", "display": "Lua Controls", "symbol": "luaControls"},
+
+    {"short": "VROWS", "type": "gauge", "gaugetype": "processingbins", "display": "Voices", "symbol": "voiceRows", "customtype": "ShowVoiceRows"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1100",
+    "WINDOW_HEIGHT": "1400",
+    "type": "|=3",
+    "composition": "C=(1:4) R=(1:1:8) A1=(CPU*200, LVL*300, FFT) A2=(LEVEL, MATRL, MRANGE, CUTOFF, RESON, FTYPE, BLOOM, PEDAL) A3=(LUACTL) A4=(VROWS)"
+  },
+  "performance-page": {
+    "type": "≡",
+    "composition": "R=(1:1:8) A1=(LEVEL, MATRL, MRANGE, CUTOFF, RESON, FTYPE, BLOOM, PEDAL) A2=(LUACTL) A3=(VROWS)"
+  },
+  "processor_forwards": [
+    {
+      "name": "hasScriptError",
+      "type": "bool"
+    },
+    {
+      "name": "scriptErrorMessage",
+      "call": "scriptError",
+      "type": "std::string"
+    },
+    {
+      "name": "getScriptSkeleton",
+      "call": "scriptSkeleton",
+      "type": "std::string"
+    },
+    {
+      "name": "getLuaUiParamSlots",
+      "call": "uiParamSlots",
+      "type": "AmbientSynthScriptEngine::UiParamSlots"
+    },
+    {
+      "name": "getVoiceSnapshots",
+      "type": "std::array<AbacDsp::AmbientSynthVoice::ModulationSnapshot, 16>",
+      "noexcept": true
+    }
+  ],
+  "extra_timer_callbacks": [
+    "pollScriptError();",
+    "if (processorRef.hasRunner()) { luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()), valueTreeState); }",
+    "voiceRowsGauge.update(processorRef.getVoiceSnapshots());"
+  ],
+  "extra_ui_includes": [
+    "impl/LuaControlBridge.h",
+    "impl/ShowVoiceRows.h"
+  ],
+  "CPP": {
+    "CLASS_NAME": "AmbientSynthImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/AmbientSynthImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

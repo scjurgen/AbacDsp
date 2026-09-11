@@ -30,7 +30,7 @@ mark_as_advanced(
     gtest_hide_internal_symbols
 )
 
-package_add_test(PluginTests
+package_add_test(MetronomeTests
         Metronome_tests.cpp
         BeatAnalysisReport_tests.cpp
 )

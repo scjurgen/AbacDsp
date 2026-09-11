@@ -6,6 +6,11 @@ include(GoogleTest)
 macro(package_add_test TESTNAME)
     add_executable(${TESTNAME} ${ARGN})
     target_link_libraries(${TESTNAME} gtest gmock gtest_main)
+    target_compile_definitions(
+        ${TESTNAME}
+        PRIVATE
+            AMBIENTSYNTH_BASE_SCRIPTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../base-scripts"
+    )
     gtest_discover_tests(
         ${TESTNAME}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -30,6 +35,10 @@ mark_as_advanced(
     gtest_hide_internal_symbols
 )
 
-package_add_test(DelayTests
-        Delay_tests.cpp
+package_add_test(AmbientsynthTests
+        Ambientsynth_tests.cpp
+        ../../../../src/includes/Wavetables/WaveTableStorage.cpp
 )
+target_link_libraries(AmbientsynthTests ambientsynth_lua)
+target_include_directories(AmbientsynthTests PRIVATE ${SOL2_DIR}/include)
+target_compile_definitions(AmbientsynthTests PRIVATE SOL_USING_CXX_LUA=1)
