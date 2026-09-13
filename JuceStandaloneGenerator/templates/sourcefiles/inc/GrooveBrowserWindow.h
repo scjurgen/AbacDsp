@@ -86,6 +86,7 @@ class GrooveBrowserWindow final : public juce::Component, public juce::TableList
         header.addColumn("BPM", kColumnBpm, 55);
         header.addColumn("Style", kColumnStyle, 120);
         header.addColumn("Bars", kColumnBars, 45);
+        header.addColumn("Var", kColumnVariations, 40);
         header.addColumn("Instruments", kColumnInstruments, 190);
         addAndMakeVisible(m_table);
 
@@ -98,7 +99,7 @@ class GrooveBrowserWindow final : public juce::Component, public juce::TableList
         m_cancelButton.onClick = [this] { closeParentDialog(); };
         addAndMakeVisible(m_cancelButton);
 
-        setSize(830, 520);
+        setSize(870, 520);
     }
 
     // Populates the folder combo and loads its first folder's grooves; call once
@@ -191,7 +192,8 @@ class GrooveBrowserWindow final : public juce::Component, public juce::TableList
     static constexpr int kColumnBpm = 3;
     static constexpr int kColumnStyle = 4;
     static constexpr int kColumnBars = 5;
-    static constexpr int kColumnInstruments = 6;
+    static constexpr int kColumnVariations = 6;
+    static constexpr int kColumnInstruments = 7;
     static constexpr float kSimilarBpmToleranceHz = 10.f;
 
     [[nodiscard]] static juce::String textForColumn(const GrooveBrowserRowInfo& row, const int columnId)
@@ -208,6 +210,8 @@ class GrooveBrowserWindow final : public juce::Component, public juce::TableList
                 return row.timeSignature.isEmpty() ? row.feel : row.feel + ", " + row.timeSignature;
             case kColumnBars:
                 return row.bars > 0 ? juce::String(row.bars) : juce::String();
+            case kColumnVariations:
+                return row.variationCount > 0 ? juce::String(row.variationCount) : juce::String();
             case kColumnInstruments:
                 return row.instruments;
             default:

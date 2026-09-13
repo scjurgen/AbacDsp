@@ -81,7 +81,7 @@ class AppSettings
         return juce::Rectangle<int>{
             props->getIntValue("grooveBrowserX", 100),
             props->getIntValue("grooveBrowserY", 100),
-            props->getIntValue("grooveBrowserWidth", 830),
+            props->getIntValue("grooveBrowserWidth", 870),
             props->getIntValue("grooveBrowserHeight", 520),
         };
     }
