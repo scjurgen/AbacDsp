@@ -70,16 +70,29 @@ class AppSettings
         props->saveIfNeeded();
     }
 
-    [[nodiscard]] static juce::String loadLlmAssistFolder()
+    // nullopt means "never saved" - see loadScriptEditorBounds()'s own comment.
+    [[nodiscard]] static std::optional<juce::Rectangle<int>> loadGrooveBrowserBounds()
     {
         const auto props = makePropsFile();
-        return props->getValue("llmAssistFolder");
+        if (!props->containsKey("grooveBrowserWidth"))
+        {
+            return std::nullopt;
+        }
+        return juce::Rectangle<int>{
+            props->getIntValue("grooveBrowserX", 100),
+            props->getIntValue("grooveBrowserY", 100),
+            props->getIntValue("grooveBrowserWidth", 870),
+            props->getIntValue("grooveBrowserHeight", 520),
+        };
     }
 
-    static void saveLlmAssistFolder(const juce::String& folder)
+    static void saveGrooveBrowserBounds(juce::Rectangle<int> bounds)
     {
         const auto props = makePropsFile();
-        props->setValue("llmAssistFolder", folder);
+        props->setValue("grooveBrowserX", bounds.getX());
+        props->setValue("grooveBrowserY", bounds.getY());
+        props->setValue("grooveBrowserWidth", bounds.getWidth());
+        props->setValue("grooveBrowserHeight", bounds.getHeight());
         props->saveIfNeeded();
     }
 

@@ -7,6 +7,7 @@
   ],
   "patches": true,
   "host_transport": true,
+  "groove_browser": true,
   "ports-control": [
     {"short": "PLAY", "type": "switch", "display": "Play", "symbol": "play", "default": 0, "momentary": true,
       "state_label": {"query": "isGroovePlaying", "on": "Stop", "off": "Play"}},
@@ -41,18 +42,10 @@
   ],
   "extra_processor_methods": [
     "[[nodiscard]] bool isHostPresent() const noexcept { return wrapperType != juce::AudioProcessor::wrapperType_Standalone; }",
-    "[[nodiscard]] std::vector<juce::String> listGrooveNames() const { std::vector<juce::String> result; if (pluginRunner) { for (const auto& n : pluginRunner->listGrooveNames()) { result.push_back(juce::String(n)); } } return result; }",
-    "[[nodiscard]] juce::String getCurrentGrooveName() const { return pluginRunner ? juce::String(pluginRunner->currentGrooveName()) : juce::String(); }",
     "void requestLoadGroove(const juce::String& styleName, const int variationIndex) { if (pluginRunner) { pluginRunner->requestLoadGroove(styleName.toStdString(), static_cast<unsigned>(variationIndex)); } }",
-    "[[nodiscard]] juce::String consumeGrooveInfoText() const { return pluginRunner ? juce::String(pluginRunner->consumeGrooveInfoText()) : juce::String(); }"
-  ],
-  "extra_menus": [
-    {
-      "name": "Groove",
-      "id_count": 4000,
-      "build_method": "juce::PopupMenu buildGrooveMenu()\n{\n    const auto names = processorRef.listGrooveNames();\n    juce::String currentStyle = processorRef.getCurrentGrooveName();\n    const int lastSlash = currentStyle.lastIndexOfChar('/');\n    const int vPos = currentStyle.lastIndexOf(\"_v\");\n    if (vPos > lastSlash) { currentStyle = currentStyle.substring(0, vPos); }\n    return buildGroupedMenu(names, {ID_BASE}, currentStyle);\n}",
-      "select_method": "void handleGrooveMenuSelection(int menuItemID)\n{\n    const auto names = processorRef.listGrooveNames();\n    if (menuItemID >= {ID_BASE} && menuItemID < {ID_BASE} + static_cast<int>(names.size()))\n    {\n        const auto& style = names[static_cast<size_t>(menuItemID - {ID_BASE})];\n        processorRef.requestLoadGroove(style, 0);\n        m_statusBar.showMessage(\"Loading groove '\" + style + \"'...\");\n    }\n}"
-    }
+    "[[nodiscard]] juce::String consumeGrooveInfoText() const { return pluginRunner ? juce::String(pluginRunner->consumeGrooveInfoText()) : juce::String(); }",
+    "[[nodiscard]] juce::StringArray listBaseFolders() const { juce::StringArray result; if (pluginRunner) { for (const auto& n : pluginRunner->listBaseFolders()) { result.add(juce::String(n)); } } return result; }",
+    "[[nodiscard]] juce::StringArray listGrooveInfoRows(const juce::String& baseFolder) const { juce::StringArray result; if (pluginRunner) { for (const auto& r : pluginRunner->listGrooveInfoRows(baseFolder.toStdString())) { result.add(juce::String(r)); } } return result; }"
   ],
   "protected_files": ["src/unittests/Groover_tests.cpp"],
   "CPP": {

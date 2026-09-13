@@ -536,22 +536,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return wrapperType != juce::AudioProcessor::wrapperType_Standalone;
     }
-    [[nodiscard]] std::vector<juce::String> listGrooveNames() const
-    {
-        std::vector<juce::String> result;
-        if (pluginRunner)
-        {
-            for (const auto& n : pluginRunner->listGrooveNames())
-            {
-                result.push_back(juce::String(n));
-            }
-        }
-        return result;
-    }
-    [[nodiscard]] juce::String getCurrentGrooveName() const
-    {
-        return pluginRunner ? juce::String(pluginRunner->currentGrooveName()) : juce::String();
-    }
     void requestLoadGroove(const juce::String& styleName, const int variationIndex)
     {
         if (pluginRunner)
@@ -562,6 +546,30 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     [[nodiscard]] juce::String consumeGrooveInfoText() const
     {
         return pluginRunner ? juce::String(pluginRunner->consumeGrooveInfoText()) : juce::String();
+    }
+    [[nodiscard]] juce::StringArray listBaseFolders() const
+    {
+        juce::StringArray result;
+        if (pluginRunner)
+        {
+            for (const auto& n : pluginRunner->listBaseFolders())
+            {
+                result.add(juce::String(n));
+            }
+        }
+        return result;
+    }
+    [[nodiscard]] juce::StringArray listGrooveInfoRows(const juce::String& baseFolder) const
+    {
+        juce::StringArray result;
+        if (pluginRunner)
+        {
+            for (const auto& r : pluginRunner->listGrooveInfoRows(baseFolder.toStdString()))
+            {
+                result.add(juce::String(r));
+            }
+        }
+        return result;
     }
 
 
