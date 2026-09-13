@@ -2,7 +2,7 @@
 
 A PatternSpec is authored with absolute-tick EventSpecs (never per-note deltas) so the
 generic scheduler in midi_writer.py is the only place that computes MIDI delta times. See
-PLAN.md for the musical vocabulary (Pulse/Accent/Subdivision/Cue/Silence/Groove guide) and
+README.md for the musical vocabulary (Pulse/Accent/Subdivision/Cue/Silence/Groove guide) and
 the note-number palette this project uses instead of General MIDI.
 """
 

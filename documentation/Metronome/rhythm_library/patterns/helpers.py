@@ -87,7 +87,7 @@ def bar_markers(bar_count: int, bar_ticks: int, *, start_index: int = 1) -> list
     return [SectionSpec(bar * bar_ticks, f"BAR {bar + start_index}") for bar in range(bar_count)]
 
 
-# --- Clave rhythms (see PLAN.md: son and rumba differ only in the 3-side's final note) ---
+# --- Clave rhythms (son and rumba differ only in the 3-side's final note) ---
 
 
 def clave_3_side_ticks(variant: str) -> list[int]:

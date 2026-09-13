@@ -26,9 +26,8 @@ def test_cultural_patterns_have_source_context(patterns):
 
 
 def test_pattern_count_is_substantial(patterns):
-    # PLAN.md's original "roughly 75-110" estimate was superseded by the explicit "generate at
-    # least these" catalog once every listed family/pattern was implemented in full (see
-    # PLAN.md, "Delivery"); this just guards against the catalog silently shrinking.
+    # The original "roughly 75-110" estimate was superseded once every planned family/pattern
+    # was implemented in full; this just guards against the catalog silently shrinking.
     assert len(patterns) >= 150
 
 

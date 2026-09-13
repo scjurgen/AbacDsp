@@ -1,7 +1,7 @@
 """Afro-Cuban, Afro-diasporic/Brazilian, and Middle Eastern rhythmic-guide patterns.
 
 These are introductory pulse/clave/dum-tak guides, not substitutes for learning the traditions
-and performance practice - see PLAN.md and every pattern's `source_context`/`simplification_note`.
+and performance practice - see every pattern's `source_context`/`simplification_note`.
 This project has no dedicated claves voice (see rhythm_library/instruments.py), so clave-family
 patterns use Woodblock/Rimshot/Sidestick as the closest available timbres.
 """

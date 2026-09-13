@@ -12,7 +12,7 @@ from rhythm_library.model import PatternSpec, bar_start_ticks
 
 CHANNEL = 9  # zero-based channel 9 (GM percussion)
 
-# Category rank breaks ties when several messages share a tick, matching PLAN.md's required
+# Category rank breaks ties when several messages share a tick, matching this project's required
 # tick-0 order (track_name, text, time_signature, set_tempo, markers) and putting a note-off
 # before any note-on sharing its tick, so a same-tick retrigger never gets swallowed.
 _RANK_TRACK_NAME = 0

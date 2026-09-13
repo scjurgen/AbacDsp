@@ -1,4 +1,4 @@
-"""Section A-H of PLAN.md: fundamentals through internal-time/challenge patterns."""
+"""Educational patterns: fundamentals through internal-time/challenge patterns."""
 
 from __future__ import annotations
 

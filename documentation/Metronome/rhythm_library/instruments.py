@@ -1,5 +1,5 @@
 """Note-number palette, drawn from this project's own GrooveNoteMap (see
-src/includes/Sampler/GrooveNoteMap.h and MidiDrums/README.md), not General MIDI. See PLAN.md,
+src/includes/Sampler/GrooveNoteMap.h and MidiDrums/README.md), not General MIDI. See README.md,
 "Instrument palette", for the rationale behind each substitution (in particular: no dedicated
 claves voice, so clave/cascara patterns use WOODBLOCK/RIMSHOT/SIDESTICK)."""
 

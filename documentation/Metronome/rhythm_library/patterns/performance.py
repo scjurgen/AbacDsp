@@ -1,5 +1,5 @@
 """Performance patterns: longer running guide tracks for rehearsal, live use, or accompaniment.
-Central design rule (PLAN.md): bar 1 carries a clear loop-start cue; the final bar carries a
+Central design rule: bar 1 carries a clear loop-start cue; the final bar carries a
 small, sparse turnaround (increased subdivision density or a compact pickup gesture, never a
 full drummer fill) that leads seamlessly back to bar 1.
 """

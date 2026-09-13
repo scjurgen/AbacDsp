@@ -1,7 +1,6 @@
 """Generates generated/README.md, generated/<area>/README.md, and
 generated/<area>/<family>/README.md from the same PatternSpec/manifest data used to write the
-MIDI files - never a second, hand-maintained documentation database. See PLAN.md's
-"Hierarchical README requirements" for the required structure.
+MIDI files - never a second, hand-maintained documentation database.
 """
 
 from __future__ import annotations

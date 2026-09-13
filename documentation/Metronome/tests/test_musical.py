@@ -1,4 +1,4 @@
-"""Pattern-specific musical correctness tests (PLAN.md, Testing and validation, section 3)."""
+"""Pattern-specific musical correctness tests."""
 
 from __future__ import annotations
 
@@ -100,8 +100,8 @@ def test_son_vs_rumba_clave_differ_at_3_side_final_note(pattern_by_id):
 
 
 def test_performance_four_bar_patterns_have_loop_start_and_turnaround(patterns):
-    # Mixed-meter files loop via their own bar-by-bar meter alternation (see PLAN.md, "Special
-    # documentation cases: mixed meters"), not the bar-4 subdivision-lift/turnaround convention.
+    # Mixed-meter files loop via their own bar-by-bar meter alternation, not the bar-4
+    # subdivision-lift/turnaround convention.
     four_bar_performance = [
         p
         for p in patterns

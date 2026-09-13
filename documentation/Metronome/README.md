@@ -44,8 +44,8 @@ swing/shuffle, odd and mixed meter, Afro-Cuban/Afro-diasporic and Middle Eastern
 count-ins, phrase cues, and turnaround-cued performance loops - using this project's real
 drum-kit note map (kick/snare/rimshot/hi-hat/woodblock/etc., see
 `src/includes/Sampler/GrooveNoteMap.h`), 480 ticks per quarter note, one file per pattern. This
-supersedes the project's earlier two-note-click-only generator. See `PLAN.md` for the full
-design and `generated/README.md` (after generating) for the catalog itself.
+supersedes the project's earlier two-note-click-only generator. See `generated/README.md`
+(after generating) for the full pattern catalog.
 
 ```
 python3 -m rhythm_library.generate [--output DIR] [--area AREA] [--family FAMILY] [--clean]
@@ -60,3 +60,74 @@ Output is staged in `generated/` for review; `rhythm_library.deploy` then copies
 `_v<digits>`, since it treats that suffix as a round-robin variation number. Each pattern here
 is a single deterministic take, so it becomes its own one-variation style, the same convention
 the retired `generate_metronome_midi.py` used.
+
+### Instrument palette
+
+Notes are drawn from this project's own note map (`src/includes/Sampler/GrooveNoteMap.h`,
+mirrored in `MidiDrums/README.md`), not General MIDI. There is no dedicated claves voice, so
+clave/cascara patterns use Woodblock/Rimshot/Sidestick as the closest existing timbres
+(`rhythm_library/instruments.py` is the source of truth):
+
+| Role | Note | GrooveTag |
+|---|---:|---|
+| Downbeat / grounded low pulse, Middle Eastern "dum" | 36 | Kick |
+| Pure click (click-only families) | 100 / 101 | ClickLow / ClickHigh |
+| Primary accent / backbeat | 38 | Snare |
+| Secondary accent | 40 | SnareAlt |
+| Rim/stick click, clave surrogate, Middle Eastern "tak" | 37 | Rimshot |
+| Side-stick texture, clave surrogate | 71 | Sidestick |
+| Light subdivision | 42 | HihatClosed |
+| Open/loose subdivision accent | 49 | HihatOpen |
+| Prominent count-in / section cue | 56 | Woodblock |
+| Ride-based jazz guide | 51 | Ride |
+| Crash cue (section/start) | 27 | Crash |
+| Distinguishable extra guide layer | 43 | Tom1 |
+
+Velocity tiers: section/start cue 118, primary downbeat accent 108, secondary accent 96, normal
+click 78, light subdivision 54, ghost/subtle guide 38. Default note duration: 30 ticks for click
+events, 45 ticks for cue events.
+
+### Catalog structure
+
+```
+generated/
+  educational/
+    afro-cuban/  afro-diasporic/  compound-meter/  four-four/  fundamentals/
+    internal-time/  middle-eastern/  mixed-meter/  odd-meter/  subdivisions/  three-four/
+  looper/
+    count-ins/  groove-guides/  phrase-cues/
+  performance/
+    afro-cuban/  afro-diasporic/  compound-meter/  middle-eastern/
+    mixed-meter/  odd-meter/  straight/  swing-shuffle/
+```
+
+Lowercase kebab-case `<area>/<family>/<pattern-file>.mid`, one file per pattern. Family folders
+grew to fit the actual pattern set rather than a fixed grid - e.g. swing/shuffle material lives
+inside educational's `subdivisions` family rather than its own folder, and count-ins only exist
+under `looper`, not `performance`.
+
+### Design vocabulary
+
+Pattern names and descriptions lean on an informal vocabulary rather than an enforced taxonomy:
+pulse (basic temporal reference), accent (beat grouping / bar stress), subdivision (internal
+rhythmic placement), cue (loop boundary / count-in / section marker), silence (intentional gap,
+for internal-time practice), groove guide (a sparse, non-full-kit musical feel). Two-bar phrases
+are used where a pattern's identity depends on clave direction (3-side vs 2-side); four-bar
+loops are the default for looper/performance patterns otherwise.
+
+### Cultural context
+
+The Afro-Cuban, Afro-diasporic/Brazilian, and Middle Eastern patterns are introductory rhythm
+guides, not authoritative substitutes for the traditions - names, phrasing, sound choice,
+tempo, swing, articulation, and regional variants are simplified here. See the cultural-context
+note and per-family caveats in `generated/README.md`.
+
+### Notes for anyone extending this
+
+- `GrooveMidiFile` (the C++ reader) only parses `set_tempo`, `time_signature`, and
+  `end_of_track` meta events; the `marker`/`text`/`track_name` events every generated file
+  carries are for a human opening the file in a DAW and currently have no runtime effect.
+- Each pattern's own `dominant_sounds` tag (in `manifest.json`) is free-form. The MidiDrums
+  sidecar written by `rhythm_library.deploy` recomputes `dominantSounds` independently, from
+  `instruments.NOTE_CATEGORY`, which does map onto MidiDrums' six-category vocabulary
+  (`rimshot, snare, tom, hihat, cymbal, percussion`).

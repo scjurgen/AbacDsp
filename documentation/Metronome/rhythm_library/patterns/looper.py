@@ -1,5 +1,5 @@
 """Looper patterns: count-ins, phrase cues, and sparse groove guides for a solo performer
-establishing a clean recording cycle. See PLAN.md - these markers currently have no runtime
+establishing a clean recording cycle. These markers currently have no runtime
 effect on tapelooper's own loop engine (which derives loop length purely from the last note's
 tick); generated anyway, they're correct, useful in a DAW, and cost nothing.
 """
