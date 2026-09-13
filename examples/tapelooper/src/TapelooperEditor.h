@@ -672,7 +672,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         }
         if (menuName == "Groove")
         {
-            return buildGrooveMenu();
+            return buildGrooveBrowserMenu();
         }
 
         if (menuName == "About")
@@ -767,7 +767,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         handlePatchMenuSelection(menuItemID);
         handleLoopMenuSelection(menuItemID);
         handleScriptMenuSelection(menuItemID);
-        handleGrooveMenuSelection(menuItemID);
+        handleGrooveBrowserMenuSelection(menuItemID);
     }
 
     void applyTheme(GuiConstants::Theme preset)
@@ -1542,28 +1542,68 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         }
     }
 
-    juce::PopupMenu buildGrooveMenu()
+    juce::PopupMenu buildGrooveBrowserMenu()
     {
-        const auto names = processorRef.listGrooveNames();
-        juce::String currentStyle = processorRef.getCurrentGrooveName();
-        const int lastSlash = currentStyle.lastIndexOfChar('/');
-        const int vPos = currentStyle.lastIndexOf("_v");
-        if (vPos > lastSlash)
-        {
-            currentStyle = currentStyle.substring(0, vPos);
-        }
-        return buildGroupedMenu(names, 20000, currentStyle);
+        juce::PopupMenu menu;
+        menu.addItem(kGrooveBrowserOpenId, "Browse...");
+        return menu;
     }
 
-    void handleGrooveMenuSelection(int menuItemID)
+    void handleGrooveBrowserMenuSelection(int menuItemID)
     {
-        const auto names = processorRef.listGrooveNames();
-        if (menuItemID >= 20000 && menuItemID < 20000 + static_cast<int>(names.size()))
+        if (menuItemID == kGrooveBrowserOpenId)
         {
-            const auto& style = names[static_cast<size_t>(menuItemID - 20000)];
-            processorRef.requestLoadGroove(style, 0);
-            m_statusBar.showMessage("Loading groove '" + style + "'...");
+            openGrooveBrowser();
         }
+    }
+
+    // Non-modal (see GrooveBrowserDialogWindow), so this can already be open -
+    // just bring it forward rather than spawning a second one.
+    void openGrooveBrowser()
+    {
+        if (m_grooveBrowserWindow != nullptr)
+        {
+            m_grooveBrowserWindow->toFront(true);
+            return;
+        }
+
+        auto* content = new GrooveBrowserWindow();
+        content->onListBaseFolders = [this] { return processorRef.listBaseFolders(); };
+        content->onListGrooveInfoRows = [this](const juce::String& folder)
+        { return processorRef.listGrooveInfoRows(folder); };
+        content->onGetCurrentBpm = [this]
+        {
+            const auto* param = valueTreeState.getRawParameterValue("bpm");
+            return param != nullptr ? param->load() : 0.f;
+        };
+        content->onLoadGroove = [this](const juce::String& styleName, int variationIndex)
+        {
+            processorRef.requestLoadGroove(styleName, variationIndex);
+            m_statusBar.showMessage("Loading groove '" + styleName + "'...");
+        };
+        content->refresh();
+
+        auto* dialogWindow =
+            new GrooveBrowserDialogWindow("Groove Browser", juce::Colour(GuiConstants::instance().colors.background));
+        dialogWindow->setContentOwned(content, true);
+        dialogWindow->setUsingNativeTitleBar(true);
+        dialogWindow->setResizable(true, false);
+        const auto savedBounds = AppSettings::loadGrooveBrowserBounds();
+        if (savedBounds)
+        {
+            dialogWindow->setBounds(*savedBounds);
+        }
+        else
+        {
+            dialogWindow->centreAroundComponent(nullptr, dialogWindow->getWidth(), dialogWindow->getHeight());
+        }
+        dialogWindow->setVisible(true);
+        if (savedBounds)
+        {
+            dialogWindow->setBounds(*savedBounds);
+        }
+        dialogWindow->armBoundsPersistence();
+        m_grooveBrowserWindow = dialogWindow;
     }
 
 
@@ -1618,6 +1658,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::Component::SafePointer<ScriptEditorWindow> m_scriptEditorContent;
     static constexpr int kAuthoringModeToggleId = 15000;
     static constexpr int kAuthoringModeOpenBrowserId = 15001;
+
+    static constexpr int kGrooveBrowserOpenId = 16000;
+    // Non-modal; deletes itself on close (see GrooveBrowserDialogWindow), hence
+    // SafePointer rather than an owning pointer here.
+    juce::Component::SafePointer<GrooveBrowserDialogWindow> m_grooveBrowserWindow;
 
     CustomRotaryDial tapeSpeedDial{this};
     CustomRotaryDial barsDial{this};

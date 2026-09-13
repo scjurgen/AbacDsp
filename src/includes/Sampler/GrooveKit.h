@@ -46,6 +46,23 @@ struct GrooveMetadata
 };
 
 /// @ingroup sampler
+/// @brief One style's browsable info for a groove-browser dialog - read from its
+/// first variation's sidecar only, no `.mid` file opened. See
+/// GrooveKit::listGrooveInfos().
+struct GrooveBrowserEntry
+{
+    std::string styleName;   ///< "<baseFolder>/<Genre>/<style>", ready for requestLoadGroove().
+    std::string folderName;  ///< The genre/family folder directly under baseFolder (e.g. "Action Drums").
+    std::string displayName; ///< Just the leaf style name, for a table's Name column.
+    float idealBpm{0.f};
+    std::string feel;
+    std::string timeSignature;
+    unsigned bars{0};
+    std::vector<std::string> dominantSounds;
+    unsigned variationCount{0};
+};
+
+/// @ingroup sampler
 /// @brief Opt-in request to also pre-render a short playback-ready burst
 /// (see GrooveKit::runLoad()). sampleRate == 0 (the default) means "no burst."
 struct BurstConfig
@@ -313,6 +330,23 @@ class GrooveKit
             names.push_back(style);
         }
         return names;
+    }
+
+    // One GrooveBrowserEntry per style under <midiDrumsRootDir>/<baseFolder>,
+    // sidecar-only. For a groove-browser dialog's bulk table.
+    [[nodiscard]] static std::vector<GrooveBrowserEntry> listGrooveInfos(const std::string& midiDrumsRootDir,
+                                                                         const std::string& baseFolder)
+    {
+        const auto folderRoot = (std::filesystem::path(midiDrumsRootDir) / baseFolder).string();
+        std::vector<GrooveBrowserEntry> entries;
+        for (const auto& [style, variations] : scanMidiDrums(folderRoot))
+        {
+            if (!variations.empty())
+            {
+                entries.push_back(browserEntryForStyle(folderRoot, baseFolder, style, variations));
+            }
+        }
+        return entries;
     }
 
     // Number of distinct variations available for styleName (0 if the style is
@@ -715,41 +749,44 @@ class GrooveKit
         return program;
     }
 
-    // Reads midiFile's sidecar "<stem>.json" (idealBpm/rhythm/dominantSounds,
-    // see MidiDrums's own file layout) and derives bars from the beat count.
-    // Missing/unparseable sidecar just leaves metadata default-empty.
+    // Reads and parses path's sidecar JSON; nullopt if missing or unparseable.
+    [[nodiscard]] static std::optional<GrooveSidecar> readSidecarFile(const std::string& path)
+    {
+        std::ifstream file(path);
+        if (!file.is_open())
+        {
+            return std::nullopt;
+        }
+        std::ostringstream text;
+        text << file.rdbuf();
+        try
+        {
+            return Json::parse(text.str()).template get<GrooveSidecar>();
+        }
+        catch (const std::exception&)
+        {
+            return std::nullopt;
+        }
+    }
+
+    // Reads midiFile's sidecar "<stem>.json" (idealBpm/rhythm/dominantSounds, see
+    // MidiDrums's own file layout); missing/unparseable just leaves metadata
+    // default-empty. bars is the sidecar's own when present, else beat-derived.
     [[nodiscard]] static GrooveMetadata readGrooveMetadata(const std::string& midiFile, const uint32_t loopLengthTicks,
                                                            const uint16_t ticksPerQuarterNote)
     {
         GrooveMetadata metadata;
-        std::ifstream file(std::filesystem::path(midiFile).replace_extension(".json"));
-        if (!file.is_open())
+        const auto sidecar = readSidecarFile(std::filesystem::path(midiFile).replace_extension(".json").string());
+        if (!sidecar)
         {
             return metadata;
         }
-        std::ostringstream text;
-        text << file.rdbuf();
-        GrooveSidecar sidecar;
-        try
-        {
-            sidecar = Json::parse(text.str()).template get<GrooveSidecar>();
-        }
-        catch (const std::exception&)
-        {
-            return metadata;
-        }
-        metadata.feel = sidecar.rhythm.feel;
-        metadata.timeSignature = sidecar.rhythm.timeSignature;
-        metadata.idealBpm = sidecar.idealBpm;
-        metadata.dominantSounds = sidecar.dominantSounds;
-        if (sidecar.bars > 0)
-        {
-            metadata.bars = sidecar.bars;
-        }
-        else
-        {
-            metadata.bars = deriveBars(loopLengthTicks, ticksPerQuarterNote, metadata.timeSignature);
-        }
+        metadata.feel = sidecar->rhythm.feel;
+        metadata.timeSignature = sidecar->rhythm.timeSignature;
+        metadata.idealBpm = sidecar->idealBpm;
+        metadata.dominantSounds = sidecar->dominantSounds;
+        metadata.bars = sidecar->bars > 0 ? sidecar->bars
+                                          : deriveBars(loopLengthTicks, ticksPerQuarterNote, metadata.timeSignature);
         return metadata;
     }
 
@@ -869,6 +906,33 @@ class GrooveKit
             std::ranges::sort(variations, {}, &std::pair<unsigned, std::string>::first);
         }
         return styles;
+    }
+
+    // Builds one GrooveBrowserEntry for style, reading its first variation's
+    // sidecar only (folderRoot-relative) - no `.mid` file opened.
+    [[nodiscard]] static GrooveBrowserEntry browserEntryForStyle(
+        const std::string& folderRoot, const std::string& baseFolder, const std::string& style,
+        const std::vector<std::pair<unsigned, std::string>>& variations)
+    {
+        GrooveBrowserEntry entry;
+        entry.styleName = (std::filesystem::path(baseFolder) / style).generic_string();
+        const auto firstSlash = style.find('/');
+        const auto lastSlash = style.rfind('/');
+        entry.folderName = firstSlash == std::string::npos ? style : style.substr(0, firstSlash);
+        entry.displayName = lastSlash == std::string::npos ? style : style.substr(lastSlash + 1);
+        entry.variationCount = static_cast<unsigned>(variations.size());
+
+        auto sidecarPath = std::filesystem::path(folderRoot) / variations.front().second;
+        sidecarPath.replace_extension(".json");
+        if (const auto sidecar = readSidecarFile(sidecarPath.string()))
+        {
+            entry.idealBpm = sidecar->idealBpm;
+            entry.feel = sidecar->rhythm.feel;
+            entry.timeSignature = sidecar->rhythm.timeSignature;
+            entry.bars = sidecar->bars;
+            entry.dominantSounds = sidecar->dominantSounds;
+        }
+        return entry;
     }
 
     std::mutex m_waitMutex;

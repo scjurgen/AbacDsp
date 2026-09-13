@@ -1,15 +1,19 @@
 Due to copyright reasons you need to add your own MIDI drum grooves here.
 There is a primitive example here (Linear Fusion), exchange it with your own collection.
 
-Organize grooves one folder per genre/style, each holding `.mid` files with an optional
-matching `.json` sidecar of the same base name:
+Genre packs sit one folder per genre/style under three difficulty buckets, each holding
+`.mid` files with an optional matching `.json` sidecar of the same base name:
 
 ```
 MidiDrums/
-  <Genre>/
-    <name>.mid
-    <name>.json   (optional)
+  Basic/<Genre>/<name>.mid + <name>.json     (straightforward genres/styles)
+  Advanced/<Genre>/<name>.mid + <name>.json  (more stylistically specific/syncopated)
+  Pro/<Genre>/<name>.mid + <name>.json       (complex fusion, odd meters, high tempo)
 ```
+
+`educational/`, `looper/`, and `performance/` stay outside the three buckets - they're
+generated rhythm-guide/click material (see "bars" below), not genre packs, and a groove
+browser offers them as separate top-level choices alongside Basic/Advanced/Pro.
 
 Sidecar JSON fields (all optional, as seen in the shipped example):
 

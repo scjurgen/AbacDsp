@@ -14,6 +14,7 @@
 #include "inc/CpuMeter.h"
 #include "inc/CustomRotaryDial.h"
 #include "inc/GenericMeter.h"
+#include "inc/GrooveBrowserWindow.h"
 #include "inc/GuiConstants.h"
 #include "inc/MomentaryToggleButton.h"
 #include "inc/SliceWaveDisplay.h"

@@ -9,6 +9,7 @@
   "loops": true,
   "host_transport": true,
   "use-lua": true,
+  "groove_browser": true,
   "extra_ui_includes": ["impl/LuaControlBridge.h", "inc/CircularTapeDisplay.h"],
   "ports-control":
   [
@@ -107,10 +108,10 @@
     "handleLoopLoadOutcome();"
   ],
   "extra_processor_methods": [
-    "[[nodiscard]] std::vector<juce::String> listGrooveNames() const { std::vector<juce::String> result; if (pluginRunner) { for (const auto& n : pluginRunner->listGrooveNames()) { result.push_back(juce::String(n)); } } return result; }",
-    "[[nodiscard]] juce::String getCurrentGrooveName() const { return pluginRunner ? juce::String(pluginRunner->currentGrooveName()) : juce::String(); }",
     "void requestLoadGroove(const juce::String& styleName, const int variationIndex) { if (pluginRunner) { pluginRunner->requestLoadGroove(styleName.toStdString(), static_cast<unsigned>(variationIndex)); } }",
     "[[nodiscard]] juce::String consumeGrooveInfoText() const { return pluginRunner ? juce::String(pluginRunner->consumeGrooveInfoText()) : juce::String(); }",
+    "[[nodiscard]] juce::StringArray listBaseFolders() const { juce::StringArray result; if (pluginRunner) { for (const auto& n : pluginRunner->listBaseFolders()) { result.add(juce::String(n)); } } return result; }",
+    "[[nodiscard]] juce::StringArray listGrooveInfoRows(const juce::String& baseFolder) const { juce::StringArray result; if (pluginRunner) { for (const auto& r : pluginRunner->listGrooveInfoRows(baseFolder.toStdString())) { result.add(juce::String(r)); } } return result; }",
     "static std::string getLoopsDirectory() {\n        auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);\n#if JUCE_MAC\n        base = base.getChildFile(\"Application Support\");\n#endif\n        const auto dir = base.getChildFile(\"AbacDsp\").getChildFile(\"Tapelooper\").getChildFile(\"loops\");\n        dir.createDirectory();\n        return dir.getFullPathName().toStdString();\n    }",
     "[[nodiscard]] std::vector<juce::String> listLoopNames() const { std::vector<juce::String> result; if (pluginRunner) { for (const auto& n : pluginRunner->listLoopNames()) { result.push_back(juce::String(n)); } } return result; }",
     "[[nodiscard]] juce::String getCurrentLoopName() const { return pluginRunner ? juce::String(pluginRunner->currentLoopName()) : juce::String(); }",
@@ -126,14 +127,6 @@
   ],
   "extra_prepare_calls": [
     "pluginRunner->setLoopsDirectory(getLoopsDirectory());"
-  ],
-  "extra_menus": [
-    {
-      "name": "Groove",
-      "id_count": 4000,
-      "build_method": "juce::PopupMenu buildGrooveMenu()\n{\n    const auto names = processorRef.listGrooveNames();\n    juce::String currentStyle = processorRef.getCurrentGrooveName();\n    const int lastSlash = currentStyle.lastIndexOfChar('/');\n    const int vPos = currentStyle.lastIndexOf(\"_v\");\n    if (vPos > lastSlash) { currentStyle = currentStyle.substring(0, vPos); }\n    return buildGroupedMenu(names, {ID_BASE}, currentStyle);\n}",
-      "select_method": "void handleGrooveMenuSelection(int menuItemID)\n{\n    const auto names = processorRef.listGrooveNames();\n    if (menuItemID >= {ID_BASE} && menuItemID < {ID_BASE} + static_cast<int>(names.size()))\n    {\n        const auto& style = names[static_cast<size_t>(menuItemID - {ID_BASE})];\n        processorRef.requestLoadGroove(style, 0);\n        m_statusBar.showMessage(\"Loading groove '\" + style + \"'...\");\n    }\n}"
-    }
   ],
   "protected_files": ["src/unittests/Tapelooper_tests.cpp"],
   "CPP": {

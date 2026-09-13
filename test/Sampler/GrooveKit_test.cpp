@@ -376,6 +376,49 @@ TEST(GrooveKitTest, ListAvailableGroovesGroupsByStyleAndSortsVariations)
     EXPECT_FALSE(GrooveKit::resolveGrooveName(dir.dir(), "Session Drums/str_4#4_1_c", 2).has_value());
 }
 
+TEST(GrooveKitTest, ListGrooveInfosReadsFirstVariationSidecarOnly)
+{
+    const TempGrooveKitDir dir;
+    const auto genreDir = dir.dir() + "/Basic/Session Drums";
+    std::filesystem::create_directories(genreDir);
+    std::ofstream(std::filesystem::path(genreDir) / "str_4#4_1_c_v1.mid").put('\0');
+    std::ofstream(std::filesystem::path(genreDir) / "str_4#4_1_c_v1.json") << "even|4/4|91|kick,hihat";
+    std::ofstream(std::filesystem::path(genreDir) / "str_4#4_1_c_v3.mid").put('\0');
+    // v3's own sidecar deliberately differs, to prove only v1's (the first variation) is read.
+    std::ofstream(std::filesystem::path(genreDir) / "str_4#4_1_c_v3.json") << "swing|3/4|140|tom";
+
+    const auto infos = GrooveKit::listGrooveInfos(dir.dir(), "Basic");
+    ASSERT_EQ(infos.size(), 1u);
+    const auto& entry = infos[0];
+    EXPECT_EQ(entry.styleName, "Basic/Session Drums/str_4#4_1_c");
+    EXPECT_EQ(entry.folderName, "Session Drums");
+    EXPECT_EQ(entry.displayName, "str_4#4_1_c");
+    EXPECT_EQ(entry.variationCount, 2u);
+    EXPECT_EQ(entry.feel, "even");
+    EXPECT_EQ(entry.timeSignature, "4/4");
+    EXPECT_FLOAT_EQ(entry.idealBpm, 91.f);
+    ASSERT_EQ(entry.dominantSounds.size(), 2u);
+    EXPECT_EQ(entry.dominantSounds[0], "kick");
+}
+
+TEST(GrooveKitTest, ListGrooveInfosScopesToBaseFolderAndPlugsIntoRequestLoadGroove)
+{
+    const TempGrooveKitDir dir;
+    const auto basicDir = dir.dir() + "/Basic/Funk";
+    const auto advancedDir = dir.dir() + "/Advanced/AOR Grooves";
+    std::filesystem::create_directories(basicDir);
+    std::filesystem::create_directories(advancedDir);
+    std::ofstream(std::filesystem::path(basicDir) / "str_4#4_1_v_v1.mid").put('\0');
+    std::ofstream(std::filesystem::path(advancedDir) / "str_4#4_1_v_v1.mid").put('\0');
+
+    const auto basicInfos = GrooveKit::listGrooveInfos(dir.dir(), "Basic");
+    ASSERT_EQ(basicInfos.size(), 1u);
+    EXPECT_EQ(basicInfos[0].styleName, "Basic/Funk/str_4#4_1_v");
+    EXPECT_EQ(basicInfos[0].folderName, "Funk");
+    // styleName plugs straight into the existing resolveGrooveName()/requestLoadGroove() contract.
+    EXPECT_EQ(GrooveKit::resolveGrooveName(dir.dir(), basicInfos[0].styleName, 0), "Basic/Funk/str_4#4_1_v_v1.mid");
+}
+
 TEST(GrooveKitTest, RequestLoadStyleResolvesFilenameOnBackgroundThread)
 {
     const TempGrooveKitDir dir;

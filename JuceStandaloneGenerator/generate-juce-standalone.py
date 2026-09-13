@@ -79,6 +79,7 @@ CPP_SOURCE_FILES_FIXED = [
     "inc/CpuMeter.h",
     "inc/CustomRotaryDial.h",
     "inc/GenericMeter.h",
+    "inc/GrooveBrowserWindow.h",
     "inc/GuiConstants.h",
     "inc/MomentaryToggleButton.h",
     "inc/SliceWaveDisplay.h",
@@ -369,6 +370,8 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
         blueprint["CPP"]["GAUGES"].append("LOOPBROWSER")
     if uses_lua(blueprint):
         blueprint["CPP"]["GAUGES"].append("SCRIPTBROWSER")
+    if blueprint.get("groove_browser", False):
+        blueprint["CPP"]["GAUGES"].append("GROOVEBROWSER")
     if blueprint.get("host_transport", False):
         blueprint["CPP"]["GAUGES"].append("HOSTTRANSPORT")
     if has_performance_page:

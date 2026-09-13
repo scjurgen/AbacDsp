@@ -70,6 +70,32 @@ class AppSettings
         props->saveIfNeeded();
     }
 
+    // nullopt means "never saved" - see loadScriptEditorBounds()'s own comment.
+    [[nodiscard]] static std::optional<juce::Rectangle<int>> loadGrooveBrowserBounds()
+    {
+        const auto props = makePropsFile();
+        if (!props->containsKey("grooveBrowserWidth"))
+        {
+            return std::nullopt;
+        }
+        return juce::Rectangle<int>{
+            props->getIntValue("grooveBrowserX", 100),
+            props->getIntValue("grooveBrowserY", 100),
+            props->getIntValue("grooveBrowserWidth", 830),
+            props->getIntValue("grooveBrowserHeight", 520),
+        };
+    }
+
+    static void saveGrooveBrowserBounds(juce::Rectangle<int> bounds)
+    {
+        const auto props = makePropsFile();
+        props->setValue("grooveBrowserX", bounds.getX());
+        props->setValue("grooveBrowserY", bounds.getY());
+        props->setValue("grooveBrowserWidth", bounds.getWidth());
+        props->setValue("grooveBrowserHeight", bounds.getHeight());
+        props->saveIfNeeded();
+    }
+
   private:
     [[nodiscard]] static std::unique_ptr<juce::PropertiesFile> makePropsFile()
     {

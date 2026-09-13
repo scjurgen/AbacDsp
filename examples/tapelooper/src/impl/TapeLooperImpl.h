@@ -97,9 +97,10 @@ constexpr float kDefaultReverbSend = 0.f; // inaudible until a track's send is t
 constexpr float kDefaultInstrumentGain = 1.f;
 constexpr float kDefaultInstrumentReverbSend = 0.f;
 
-// Click substitutes for the groove track by loading this style (see MidiDrums/Metronome/) -
-// the same requestLoadStyle() path any other groove-menu pick uses, not a separate mechanism.
-constexpr std::string_view kMetronomeGrooveStyle = "Metronome/straight_4#4";
+// Click substitutes for the groove track by loading this style (see
+// MidiDrums/Basic/Metronome/) - the same requestLoadStyle() path any other
+// groove pick uses, not a separate mechanism.
+constexpr std::string_view kMetronomeGrooveStyle = "Basic/Metronome/straight_4#4";
 constexpr unsigned kMetronomeGrooveVariation = 0;
 
 // Mirrors GrooveKit::splitStyleAndVariation()'s own "<style>_v<n>.mid" convention, so the
@@ -509,6 +510,37 @@ class TapeLooperImpl final : public EffectBase
     [[nodiscard]] std::vector<std::string> listGrooveNames() const
     {
         return GrooveKit::listAvailableGrooves(kAbacDspMidiDrumsDir);
+    }
+
+    // Fixed top-level browse folders (see MidiDrums/README.md): the three
+    // difficulty buckets plus the generated rhythm-guide trees.
+    [[nodiscard]] static std::vector<std::string> listBaseFolders()
+    {
+        return {"Basic", "Advanced", "Pro", "educational", "looper", "performance"};
+    }
+
+    [[nodiscard]] std::vector<AbacDsp::GrooveBrowserEntry> listGrooveInfos(const std::string& baseFolder) const
+    {
+        return GrooveKit::listGrooveInfos(kAbacDspMidiDrumsDir, baseFolder);
+    }
+
+    // One "|"-delimited row per groove, for the browser dialog - avoids a shared
+    // struct between Processor.h (juce::String-only) and GrooveBrowserWindow.
+    [[nodiscard]] std::vector<std::string> listGrooveInfoRows(const std::string& baseFolder) const
+    {
+        std::vector<std::string> rows;
+        for (const auto& entry : listGrooveInfos(baseFolder))
+        {
+            std::string sounds;
+            for (size_t i = 0; i < entry.dominantSounds.size(); ++i)
+            {
+                sounds += (i == 0 ? "" : ",") + entry.dominantSounds[i];
+            }
+            rows.push_back(entry.styleName + "|" + entry.folderName + "|" + entry.displayName + "|" +
+                           std::to_string(entry.idealBpm) + "|" + entry.feel + "|" + entry.timeSignature + "|" +
+                           std::to_string(entry.bars) + "|" + std::to_string(entry.variationCount) + "|" + sounds);
+        }
+        return rows;
     }
 
     [[nodiscard]] std::string currentGrooveName() const

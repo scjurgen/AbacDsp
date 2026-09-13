@@ -184,6 +184,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         /*START_SCRIPTBROWSER*/
         names.add("Scripts");
         /*END_SCRIPTBROWSER*/
+        /*START_GROOVEBROWSER*/
+        names.add("Groove");
+        /*END_GROOVEBROWSER*/
         /*EXTRA_MENU_NAMES*/
         names.add("About");
         return names;
@@ -213,6 +216,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             return buildScriptsMenu();
         }
         /*END_SCRIPTBROWSER*/
+        /*START_GROOVEBROWSER*/
+        if (menuName == "Groove")
+        {
+            return buildGrooveBrowserMenu();
+        }
+        /*END_GROOVEBROWSER*/
         /*EXTRA_MENU_DISPATCH*/
         if (menuName == "About")
         {
@@ -306,6 +315,9 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         /*START_SCRIPTBROWSER*/
         handleScriptMenuSelection(menuItemID);
         /*END_SCRIPTBROWSER*/
+        /*START_GROOVEBROWSER*/
+        handleGrooveBrowserMenuSelection(menuItemID);
+        /*END_GROOVEBROWSER*/
         /*EXTRA_MENU_SELECTION_DISPATCH*/
     }
 
@@ -1084,6 +1096,72 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     }
     /*END_SCRIPTBROWSER*/
 
+    /*START_GROOVEBROWSER*/
+    juce::PopupMenu buildGrooveBrowserMenu()
+    {
+        juce::PopupMenu menu;
+        menu.addItem(kGrooveBrowserOpenId, "Browse...");
+        return menu;
+    }
+
+    void handleGrooveBrowserMenuSelection(int menuItemID)
+    {
+        if (menuItemID == kGrooveBrowserOpenId)
+        {
+            openGrooveBrowser();
+        }
+    }
+
+    // Non-modal (see GrooveBrowserDialogWindow), so this can already be open -
+    // just bring it forward rather than spawning a second one.
+    void openGrooveBrowser()
+    {
+        if (m_grooveBrowserWindow != nullptr)
+        {
+            m_grooveBrowserWindow->toFront(true);
+            return;
+        }
+
+        auto* content = new GrooveBrowserWindow();
+        content->onListBaseFolders = [this] { return processorRef.listBaseFolders(); };
+        content->onListGrooveInfoRows = [this](const juce::String& folder)
+        { return processorRef.listGrooveInfoRows(folder); };
+        content->onGetCurrentBpm = [this]
+        {
+            const auto* param = valueTreeState.getRawParameterValue("bpm");
+            return param != nullptr ? param->load() : 0.f;
+        };
+        content->onLoadGroove = [this](const juce::String& styleName, int variationIndex)
+        {
+            processorRef.requestLoadGroove(styleName, variationIndex);
+            m_statusBar.showMessage("Loading groove '" + styleName + "'...");
+        };
+        content->refresh();
+
+        auto* dialogWindow =
+            new GrooveBrowserDialogWindow("Groove Browser", juce::Colour(GuiConstants::instance().colors.background));
+        dialogWindow->setContentOwned(content, true);
+        dialogWindow->setUsingNativeTitleBar(true);
+        dialogWindow->setResizable(true, false);
+        const auto savedBounds = AppSettings::loadGrooveBrowserBounds();
+        if (savedBounds)
+        {
+            dialogWindow->setBounds(*savedBounds);
+        }
+        else
+        {
+            dialogWindow->centreAroundComponent(nullptr, dialogWindow->getWidth(), dialogWindow->getHeight());
+        }
+        dialogWindow->setVisible(true);
+        if (savedBounds)
+        {
+            dialogWindow->setBounds(*savedBounds);
+        }
+        dialogWindow->armBoundsPersistence();
+        m_grooveBrowserWindow = dialogWindow;
+    }
+    /*END_GROOVEBROWSER*/
+
     /*EXTRA_MENU_METHODS*/
 
     /*EXTRA_PRIVATE_METHODS*/
@@ -1146,6 +1224,13 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     static constexpr int kAuthoringModeToggleId = 15000;
     static constexpr int kAuthoringModeOpenBrowserId = 15001;
     /*END_SCRIPTBROWSER*/
+
+    /*START_GROOVEBROWSER*/
+    static constexpr int kGrooveBrowserOpenId = 16000;
+    // Non-modal; deletes itself on close (see GrooveBrowserDialogWindow), hence
+    // SafePointer rather than an owning pointer here.
+    juce::Component::SafePointer<GrooveBrowserDialogWindow> m_grooveBrowserWindow;
+    /*END_GROOVEBROWSER*/
 
     /*WIDGETS_DECL*/
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
