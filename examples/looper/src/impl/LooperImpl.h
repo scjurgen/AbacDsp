@@ -317,6 +317,37 @@ class LooperImpl final : public EffectBase
         return GrooveKit::listAvailableGrooves(kAbacDspMidiDrumsDir);
     }
 
+    // Fixed top-level browse folders (see MidiDrums/README.md): the three
+    // difficulty buckets plus the generated rhythm-guide trees.
+    [[nodiscard]] static std::vector<std::string> listBaseFolders()
+    {
+        return {"Basic", "Advanced", "Pro", "educational", "looper", "performance"};
+    }
+
+    [[nodiscard]] std::vector<AbacDsp::GrooveBrowserEntry> listGrooveInfos(const std::string& baseFolder) const
+    {
+        return GrooveKit::listGrooveInfos(kAbacDspMidiDrumsDir, baseFolder);
+    }
+
+    // One "|"-delimited row per groove, for the browser dialog - avoids a shared
+    // struct between Processor.h (juce::String-only) and GrooveBrowserWindow.
+    [[nodiscard]] std::vector<std::string> listGrooveInfoRows(const std::string& baseFolder) const
+    {
+        std::vector<std::string> rows;
+        for (const auto& entry : listGrooveInfos(baseFolder))
+        {
+            std::string sounds;
+            for (size_t i = 0; i < entry.dominantSounds.size(); ++i)
+            {
+                sounds += (i == 0 ? "" : ",") + entry.dominantSounds[i];
+            }
+            rows.push_back(entry.styleName + "|" + entry.folderName + "|" + entry.displayName + "|" +
+                           std::to_string(entry.idealBpm) + "|" + entry.feel + "|" + entry.timeSignature + "|" +
+                           std::to_string(entry.bars) + "|" + std::to_string(entry.variationCount) + "|" + sounds);
+        }
+        return rows;
+    }
+
     // Relative-to-MidiDrums-root name of the groove currently installed and
     // playing (empty if none has finished loading yet). For menu ticking and
     // for LoopStorageService's save-request snapshot.
