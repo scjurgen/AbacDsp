@@ -794,6 +794,7 @@ class TapeLooperImpl final : public EffectBase
         installGrooveProgramIfChanged();
         syncLoopMeterFromGrooveIfChanged();
         notifyLoopBoundaryIfChanged();
+        updateRecordStateAndNotifyScript();
         m_scriptEngine.tickBlock(BlockSize);
         notifyUiParametersIfChanged();
         applyScriptCommands();
@@ -844,6 +845,22 @@ class TapeLooperImpl final : public EffectBase
     }
 
   private:
+    // Called before applyScriptCommands(), not from inside applyParameters() (which runs
+    // after it), so a script's OnRecordStateChanged reaction (e.g. SetGrooveSource) lands
+    // the same block instead of one block late.
+    void updateRecordStateAndNotifyScript() noexcept
+    {
+        for (size_t track = 0; track < m_tapeTrack.size(); ++track)
+        {
+            m_recording[track] = m_recordReq[track].load(std::memory_order_relaxed);
+            if (m_recording[track] != m_lastNotifiedRecording[track])
+            {
+                m_scriptEngine.notifyRecordStateChanged(track, m_recording[track]);
+                m_lastNotifiedRecording[track] = m_recording[track];
+            }
+        }
+    }
+
     void applyParameters() noexcept
     {
         m_tapeSpeed = std::clamp(m_tapeSpeedReq.load(std::memory_order_relaxed), 0.001f, 8.f);
@@ -857,12 +874,6 @@ class TapeLooperImpl final : public EffectBase
             if (m_clearReq[track].exchange(false, std::memory_order_relaxed))
             {
                 m_tapeTrack[track].reset();
-            }
-            m_recording[track] = m_recordReq[track].load(std::memory_order_relaxed);
-            if (m_recording[track] != m_lastNotifiedRecording[track])
-            {
-                m_scriptEngine.notifyRecordStateChanged(track, m_recording[track]);
-                m_lastNotifiedRecording[track] = m_recording[track];
             }
             m_playing[track] = m_playReq[track].load(std::memory_order_relaxed);
             m_wowDepth[track] = m_wowDepthReq[track].load(std::memory_order_relaxed);
