@@ -102,10 +102,14 @@ class GrooveBrowserWindow final : public juce::Component, public juce::TableList
         setSize(870, 520);
     }
 
-    // Populates the folder combo and loads its first folder's grooves; call once
+    // Populates the folder combo, restores the last-saved folder/filters/groove (see
+    // AppSettings::loadGrooveBrowserState()) and loads that folder's grooves; call once
     // after wiring the callbacks above.
     void refresh()
     {
+        const auto saved = AppSettings::loadGrooveBrowserState();
+        m_lastLoadedGrooveStyleName = saved.lastGrooveStyleName;
+
         m_folderCombo.clear(juce::dontSendNotification);
         if (onListBaseFolders)
         {
@@ -117,8 +121,15 @@ class GrooveBrowserWindow final : public juce::Component, public juce::TableList
         }
         if (m_folderCombo.getNumItems() > 0)
         {
-            m_folderCombo.setSelectedItemIndex(0, juce::dontSendNotification);
+            if (!selectComboItemByText(m_folderCombo, saved.folder))
+            {
+                m_folderCombo.setSelectedItemIndex(0, juce::dontSendNotification);
+            }
+            m_similarBpmToggle.setToggleState(saved.similarBpm, juce::dontSendNotification);
+            selectComboItemByText(m_feelCombo, saved.feel);
+            selectComboItemByText(m_timeSignatureCombo, saved.timeSignature);
             folderChanged();
+            selectLastLoadedGrooveRow();
         }
     }
 
@@ -337,6 +348,7 @@ class GrooveBrowserWindow final : public juce::Component, public juce::TableList
         m_table.updateContent();
         m_table.deselectAllRows();
         m_loadButton.setEnabled(false);
+        persistState();
     }
 
     // One alternating-band flag per filtered row, toggling at every substyle
@@ -367,11 +379,57 @@ class GrooveBrowserWindow final : public juce::Component, public juce::TableList
         {
             return;
         }
+        m_lastLoadedGrooveStyleName = m_filteredRows[static_cast<size_t>(row)].styleName;
+        persistState();
         if (onLoadGroove)
         {
-            onLoadGroove(m_filteredRows[static_cast<size_t>(row)].styleName, 0);
+            onLoadGroove(m_lastLoadedGrooveStyleName, 0);
         }
         closeParentDialog();
+    }
+
+    // Selects m_lastLoadedGrooveStyleName's row in the current m_filteredRows, if
+    // present, so refresh() shows the last-loaded groove highlighted, not just
+    // remembered internally. A no-op if it isn't in the current folder/filter view.
+    void selectLastLoadedGrooveRow()
+    {
+        if (m_lastLoadedGrooveStyleName.isEmpty())
+        {
+            return;
+        }
+        for (size_t i = 0; i < m_filteredRows.size(); ++i)
+        {
+            if (m_filteredRows[i].styleName == m_lastLoadedGrooveStyleName)
+            {
+                m_table.selectRow(static_cast<int>(i));
+                return;
+            }
+        }
+    }
+
+    // Snapshots the four live selection controls (plus the last-loaded groove) to
+    // AppSettings, so the browser reopens exactly as it was left.
+    void persistState()
+    {
+        AppSettings::saveGrooveBrowserState({m_folderCombo.getText(), m_similarBpmToggle.getToggleState(),
+                                             m_feelCombo.getText(), m_timeSignatureCombo.getText(),
+                                             m_lastLoadedGrooveStyleName});
+    }
+
+    // Selects combo's item matching text by index (ComboBox has no text lookup of its
+    // own); leaves the current selection untouched if nothing matches. Returns whether
+    // a match was found, so a caller can fall back to its own default.
+    static bool selectComboItemByText(juce::ComboBox& combo, const juce::String& text)
+    {
+        for (int i = 0; i < combo.getNumItems(); ++i)
+        {
+            if (combo.getItemText(i) == text)
+            {
+                combo.setSelectedItemIndex(i, juce::dontSendNotification);
+                return true;
+            }
+        }
+        return false;
     }
 
     void closeParentDialog()
@@ -393,6 +451,7 @@ class GrooveBrowserWindow final : public juce::Component, public juce::TableList
     std::vector<GrooveBrowserRowInfo> m_allRows;
     std::vector<GrooveBrowserRowInfo> m_filteredRows;
     std::vector<bool> m_rowBandOdd; // parallels m_filteredRows - see recomputeRowBands().
+    juce::String m_lastLoadedGrooveStyleName;
 };
 
 // Non-modal host window for GrooveBrowserWindow, mirroring

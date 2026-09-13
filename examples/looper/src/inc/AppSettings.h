@@ -5,6 +5,16 @@
 
 #include "GuiConstants.h"
 
+// The groove browser's own remembered selection - see AppSettings::loadGrooveBrowserState().
+struct GrooveBrowserState
+{
+    juce::String folder;
+    bool similarBpm{false};
+    juce::String feel{"All"};
+    juce::String timeSignature{"All"};
+    juce::String lastGrooveStyleName;
+};
+
 class AppSettings
 {
   public:
@@ -93,6 +103,31 @@ class AppSettings
         props->setValue("grooveBrowserY", bounds.getY());
         props->setValue("grooveBrowserWidth", bounds.getWidth());
         props->setValue("grooveBrowserHeight", bounds.getHeight());
+        props->saveIfNeeded();
+    }
+
+    // Folder/filter/last-loaded-groove selection, restored the next time the
+    // browser opens (including after an app restart) - see GrooveBrowserState.
+    [[nodiscard]] static GrooveBrowserState loadGrooveBrowserState()
+    {
+        const auto props = makePropsFile();
+        GrooveBrowserState state;
+        state.folder = props->getValue("grooveBrowserFolder");
+        state.similarBpm = props->getBoolValue("grooveBrowserSimilarBpm", false);
+        state.feel = props->getValue("grooveBrowserFeel", "All");
+        state.timeSignature = props->getValue("grooveBrowserTimeSignature", "All");
+        state.lastGrooveStyleName = props->getValue("grooveBrowserLastGroove");
+        return state;
+    }
+
+    static void saveGrooveBrowserState(const GrooveBrowserState& state)
+    {
+        const auto props = makePropsFile();
+        props->setValue("grooveBrowserFolder", state.folder);
+        props->setValue("grooveBrowserSimilarBpm", state.similarBpm);
+        props->setValue("grooveBrowserFeel", state.feel);
+        props->setValue("grooveBrowserTimeSignature", state.timeSignature);
+        props->setValue("grooveBrowserLastGroove", state.lastGrooveStyleName);
         props->saveIfNeeded();
     }
 
