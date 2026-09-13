@@ -34,9 +34,8 @@ namespace AbacDsp
 {
 
 /// @ingroup sampler
-/// @brief Groove info derived from a groove's sidecar `.json` (bar count computed
-/// from its beat count + time signature; the rest is read as-is). Default-empty
-/// when the sidecar is missing or unparseable.
+/// @brief Groove info derived from a groove's sidecar `.json` - bars is its own
+/// `bars` field when present, else derived from beat count + time signature.
 struct GrooveMetadata
 {
     unsigned bars{0};
@@ -70,6 +69,7 @@ struct GrooveSidecar
 {
     float idealBpm{0.f};
     GrooveSidecarRhythm rhythm;
+    unsigned bars{0}; // 0 means "not present in the sidecar" - see readGrooveMetadata()
     std::vector<std::string> dominantSounds;
 };
 
@@ -742,28 +742,63 @@ class GrooveKit
         metadata.timeSignature = sidecar.rhythm.timeSignature;
         metadata.idealBpm = sidecar.idealBpm;
         metadata.dominantSounds = sidecar.dominantSounds;
-        const uint32_t totalBeats = ticksPerQuarterNote > 0 ? loopLengthTicks / ticksPerQuarterNote : 0;
-        metadata.bars = totalBeats / parseBeatsPerBar(metadata.timeSignature);
+        if (sidecar.bars > 0)
+        {
+            metadata.bars = sidecar.bars;
+        }
+        else
+        {
+            metadata.bars = deriveBars(loopLengthTicks, ticksPerQuarterNote, metadata.timeSignature);
+        }
         return metadata;
     }
 
-    // "N/M" -> N; 4 if timeSignature doesn't parse (most groove time signatures
-    // in practice, and a safe divisor default either way).
-    [[nodiscard]] static unsigned parseBeatsPerBar(const std::string& timeSignature)
+    /// @brief A parsed "N/M" time signature; {4, 4} when unparseable.
+    struct TimeSignature
+    {
+        unsigned numerator{4};
+        unsigned denominator{4};
+    };
+
+    // "N/M" -> {N, M}; {4, 4} if timeSignature doesn't parse.
+    [[nodiscard]] static TimeSignature parseTimeSignature(const std::string& timeSignature)
     {
         const auto slash = timeSignature.find('/');
         if (slash == std::string::npos)
         {
-            return 4;
+            return {};
         }
         try
         {
-            return static_cast<unsigned>(std::stoul(timeSignature.substr(0, slash)));
+            const auto numerator = static_cast<unsigned>(std::stoul(timeSignature.substr(0, slash)));
+            const auto denominator = static_cast<unsigned>(std::stoul(timeSignature.substr(slash + 1)));
+            return denominator > 0 ? TimeSignature{numerator, denominator} : TimeSignature{};
         }
         catch (const std::exception&)
         {
-            return 4;
+            return {};
         }
+    }
+
+    // Bar length honours the denominator (a 6/8 bar is half as many ticks as 6/4).
+    // Only corrects the known "one tick short of a clean bar" export quirk;
+    // anything else off a bar boundary is floored, not guessed at.
+    [[nodiscard]] static uint32_t deriveBars(const uint32_t loopLengthTicks, const uint16_t ticksPerQuarterNote,
+                                             const std::string& timeSignature) noexcept
+    {
+        if (ticksPerQuarterNote == 0)
+        {
+            return 0;
+        }
+        const auto [numerator, denominator] = parseTimeSignature(timeSignature);
+        const uint32_t ticksPerBar = ticksPerQuarterNote * 4 * numerator / denominator;
+        if (ticksPerBar == 0)
+        {
+            return 0;
+        }
+        const uint32_t remainder = loopLengthTicks % ticksPerBar;
+        const uint32_t corrected = remainder == ticksPerBar - 1 ? loopLengthTicks + 1 : loopLengthTicks;
+        return corrected / ticksPerBar;
     }
 
     // Walks the note's tags most-specific-first, returning the first one some

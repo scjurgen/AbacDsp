@@ -560,6 +560,7 @@ for _id, _name, _variant, _direction in (
             [M44],
             2,
             clave_events(_variant, _direction),
+            bpm=96.0 if _variant == "son" else 90.0,
             tags=["intermediate", "afro-cuban", f"clave-{_direction}"],
             grouping=[3, 2] if _direction == "3-2" else [2, 3],
             source_context=AFRO_CUBAN_CONTEXT,
@@ -580,6 +581,7 @@ PATTERNS.append(
         clave_events("son", "3-2", note=instr.SIDESTICK) + [
             EventSpec(M44.bar_ticks * 2 + e.tick, e.note, e.velocity, e.duration) for e in clave_events("son", "3-2", note=instr.SIDESTICK)
         ],
+        bpm=126.0,
         tags=["intermediate", "afro-cuban"],
         source_context=AFRO_CUBAN_CONTEXT,
         simplification_note="A pulse guide, not a transcription of a specific bossa nova arrangement.",
@@ -599,6 +601,7 @@ PATTERNS.append(
         [M44],
         4,
         _loop(M44, 4, lambda bar: _samba_pulse_bar),
+        bpm=100.0,
         tags=["intermediate", "afro-diasporic"],
         source_context=AFRO_DIASPORIC_CONTEXT,
         simplification_note="A single-voice surdo guide; a real bateria layers multiple surdo pitches plus caixa, tamborim and agogo.",
@@ -615,6 +618,7 @@ PATTERNS.append(
         [M128],
         4,
         _loop(M128, 4, lambda bar: _bell_12_8),
+        bpm=80.0,
         tags=["intermediate", "afro-diasporic"],
         source_context=AFRO_DIASPORIC_CONTEXT,
     )
@@ -630,6 +634,7 @@ PATTERNS.append(
         [M68],
         4,
         _loop(M68, 4, lambda bar: _bell_6_8),
+        bpm=80.0,
         tags=["intermediate", "afro-diasporic"],
         source_context=AFRO_DIASPORIC_CONTEXT,
     )
@@ -645,6 +650,7 @@ PATTERNS.append(
         [M44],
         4,
         _loop(M44, 4, lambda bar: _tresillo_bar),
+        bpm=90.0,
         tags=["easy", "afro-diasporic"],
         grouping=[3, 3, 2],
         source_context=AFRO_DIASPORIC_CONTEXT,
@@ -661,6 +667,7 @@ PATTERNS.append(
         [M44],
         4,
         _loop(M44, 4, lambda bar: _habanera_bar),
+        bpm=90.0,
         tags=["intermediate", "afro-diasporic"],
         source_context=AFRO_DIASPORIC_CONTEXT,
     )
@@ -687,6 +694,7 @@ PATTERNS.append(
         [M44],
         4,
         _loop(M44, 4, lambda bar: _maqsum_bar),
+        bpm=90.0,
         tags=["intermediate", "middle-eastern"],
         source_context=DUM_TAK_DISCLAIMER,
     )
@@ -709,6 +717,7 @@ PATTERNS.append(
         [M44],
         4,
         _loop(M44, 4, lambda bar: _baladi_bar),
+        bpm=85.0,
         tags=["intermediate", "middle-eastern"],
         source_context=DUM_TAK_DISCLAIMER,
     )
@@ -731,6 +740,7 @@ PATTERNS.append(
         [M44],
         4,
         _loop(M44, 4, lambda bar: _saidi_bar),
+        bpm=100.0,
         tags=["intermediate", "middle-eastern"],
         source_context=DUM_TAK_DISCLAIMER,
     )
@@ -779,6 +789,7 @@ PATTERNS.append(
         [M98],
         4,
         _loop(M98, 4, lambda bar: grouped_pulse_events(M98, [2, 2, 2, 3], accent_note=instr.DUM, normal_note=instr.TAK)),
+        bpm=130.0,
         tags=["advanced", "middle-eastern", "odd-meter"],
         grouping=[2, 2, 2, 3],
         source_context=DUM_TAK_DISCLAIMER,

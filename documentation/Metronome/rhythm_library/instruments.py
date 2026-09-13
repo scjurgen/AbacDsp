@@ -48,3 +48,21 @@ NOTE_NAMES = {
     CRASH: "crash",
     TOM1: "tom1",
 }
+
+# Maps this palette onto MidiDrums's own six-category sidecar vocabulary (see
+# MidiDrums/analyze_variations.py and MidiDrums/README.md's "dominantSounds"/
+# "variesBy" fields). KICK and the CLICK_LOW/CLICK_HIGH pseudo-notes are
+# intentionally absent - excluded from "dominant sounds" the same way kick is
+# excluded everywhere else in this project.
+NOTE_CATEGORY = {
+    SNARE: "snare",
+    SNARE_ALT: "snare",
+    RIMSHOT: "rimshot",
+    SIDESTICK: "rimshot",
+    HIHAT_CLOSED: "hihat",
+    HIHAT_OPEN: "hihat",
+    RIDE: "cymbal",
+    CRASH: "cymbal",
+    TOM1: "tom",
+    WOODBLOCK: "percussion",
+}

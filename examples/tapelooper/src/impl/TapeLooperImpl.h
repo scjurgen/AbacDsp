@@ -44,7 +44,7 @@
 namespace AbacDsp
 {
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(GrooveSidecarRhythm, feel, timeSignature)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(GrooveSidecar, idealBpm, rhythm, dominantSounds)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(GrooveSidecar, idealBpm, rhythm, bars, dominantSounds)
 }
 
 using GrooveKit = AbacDsp::GrooveKit<nlohmann::json>;

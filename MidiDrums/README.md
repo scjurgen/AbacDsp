@@ -19,6 +19,7 @@ Sidecar JSON fields (all optional, as seen in the shipped example):
   "rhythm": { "feel": "even", "timeSignature": "6/8" },
   "variation": 1,
   "section": "verse",
+  "bars": 2,
   "dominantSounds": ["hihat", "snare"],
   "variesBy": "cymbal"
 }
@@ -29,6 +30,17 @@ are not free-form: their values are always drawn from the fixed category list `r
 `snare`, `tom`, `hihat`, `cymbal`, `percussion`. A consumer (the looper, or any other
 tool searching this library) should match against these category names directly rather
 than re-deriving them from raw MIDI note numbers.
+
+`bars` is the groove's loop length, read straight from the sidecar so a bulk listing
+(e.g. a groove browser) never has to reopen the `.mid` file. `analyze_variations.py
+--apply` computes and writes it for genre-pack grooves (from the file's own declared
+End_track tick, or its last note rounded up to the next beat). Grooves under
+`educational/`, `looper/`, and `performance/` get it (plus every other sidecar field)
+written directly by their own generator instead -
+`documentation/Metronome/rhythm_library/deploy.py`, from the same `PatternSpec` the
+`.mid` file itself was built from. One `rhythm.timeSignature` value used only by that
+generator, `"mixed"`, is not a real `"N/M"` signature - it marks a pattern whose meter
+changes bar to bar (e.g. alternating 3/4 and 4/4).
 
 ## Filename convention
 

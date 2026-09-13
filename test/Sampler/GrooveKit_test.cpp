@@ -23,10 +23,11 @@ namespace
 {
 // Minimal JsonLike stand-in (see Sampler/LoopFile_test.cpp's own FakeJson): exercises
 // the concept/template contract without pulling a real JSON library into the core
-// test build. Its own text format is "<feel>|<timeSignature>|<sound1,sound2,...>",
+// test build. Its own text format is "<feel>|<timeSignature>|<idealBpm>|<sound1,sound2,...>",
 // not real JSON - GrooveKit.h never inspects the text itself, only what Json::parse()
 // and .get<GrooveSidecar>() hand back, so any format both sides agree on is valid.
-// Own text format: "<feel>|<timeSignature>|<idealBpm>|<sound1,sound2,...>".
+// Own text format: "<feel>|<timeSignature>|<idealBpm>|<sound1,sound2,...>[|<bars>]" -
+// the trailing "|<bars>" is optional, matching a real sidecar where "bars" may be absent.
 class FakeJson
 {
   public:
@@ -52,7 +53,9 @@ class FakeJson
         sidecar.rhythm.timeSignature = m_text.substr(firstBar + 1, secondBar - firstBar - 1);
         const auto idealBpmText = m_text.substr(secondBar + 1, thirdBar - secondBar - 1);
         sidecar.idealBpm = idealBpmText.empty() ? 0.f : std::stof(idealBpmText);
-        const auto sounds = m_text.substr(thirdBar + 1);
+        const auto tail = m_text.substr(thirdBar + 1);
+        const auto fourthBar = tail.find('|');
+        const auto sounds = fourthBar == std::string::npos ? tail : tail.substr(0, fourthBar);
         size_t start = 0;
         while (!sounds.empty() && start <= sounds.size())
         {
@@ -67,6 +70,11 @@ class FakeJson
                 break;
             }
             start = comma + 1;
+        }
+        if (fourthBar != std::string::npos)
+        {
+            const auto barsText = tail.substr(fourthBar + 1);
+            sidecar.bars = barsText.empty() ? 0u : static_cast<unsigned>(std::stoul(barsText));
         }
         return sidecar;
     }
@@ -406,6 +414,39 @@ TEST(GrooveKitTest, MetadataParsesSidecarAndComputesBarsFromBeatCount)
     EXPECT_EQ(metadata.dominantSounds[1], "hihat");
 }
 
+TEST(GrooveKitTest, BarCountRoundsUpWhenEndOfTrackIsOneTickShortOfABarBoundary)
+{
+    const TempGrooveKitDir dir;
+    writeGrooveTake(dir, "bd", 1);
+    // EOT at tick 3839, one tick short of a clean 8 beats (3840) - some exporters
+    // declare loops this way; flooring would undercount this as 7/4 = 1 bar.
+    writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 36}, {3360, 36}}, 480, 3839);
+    std::ofstream(dir.filePath("groove.json")) << "even|4/4|91|kick,hihat";
+
+    GrooveKit kit;
+    kit.requestLoad(dir.dir(), dir.dir(), "groove.mid");
+    ASSERT_TRUE(waitUntilGrooveKitReady(kit));
+
+    EXPECT_EQ(kit.installedMetadata().bars, 2u); // rounds up to 8 beats / 4 per bar
+}
+
+TEST(GrooveKitTest, BarCountAccountsForTimeSignatureDenominator)
+{
+    const TempGrooveKitDir dir;
+    writeGrooveTake(dir, "bd", 1);
+    // 6/8 at 480 tpqn: one bar is 1440 ticks (half of a 6/4 bar at the same tpqn) -
+    // EOT one tick short of 2 clean bars (2880). A numerator-only divisor (ignoring
+    // the /8 denominator) would wrongly read this as 1 bar, not 2.
+    writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 36}, {2400, 36}}, 480, 2879);
+    std::ofstream(dir.filePath("groove.json")) << "even|6/8|100|kick";
+
+    GrooveKit kit;
+    kit.requestLoad(dir.dir(), dir.dir(), "groove.mid");
+    ASSERT_TRUE(waitUntilGrooveKitReady(kit));
+
+    EXPECT_EQ(kit.installedMetadata().bars, 2u);
+}
+
 TEST(GrooveKitTest, BarCountUsesTimeSignatureNumeratorAsDivisor)
 {
     const TempGrooveKitDir dir;
@@ -419,6 +460,22 @@ TEST(GrooveKitTest, BarCountUsesTimeSignatureNumeratorAsDivisor)
     ASSERT_TRUE(waitUntilGrooveKitReady(kit));
 
     EXPECT_EQ(kit.installedMetadata().bars, 2u); // 6 beats / 3 per bar
+}
+
+TEST(GrooveKitTest, MetadataUsesSidecarBarsDirectlyWhenPresent)
+{
+    const TempGrooveKitDir dir;
+    writeGrooveTake(dir, "bd", 1);
+    // EOT at tick 3840 (8 beats -> 2 bars at 4/4) - the sidecar's own "bars" below
+    // deliberately disagrees, to prove it wins over the tick-based computation.
+    writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 36}, {3360, 36}}, 480, 3840);
+    std::ofstream(dir.filePath("groove.json")) << "even|4/4|91|kick,hihat|5";
+
+    GrooveKit kit;
+    kit.requestLoad(dir.dir(), dir.dir(), "groove.mid");
+    ASSERT_TRUE(waitUntilGrooveKitReady(kit));
+
+    EXPECT_EQ(kit.installedMetadata().bars, 5u);
 }
 
 TEST(GrooveKitTest, MetadataDefaultsWhenSidecarMissing)
