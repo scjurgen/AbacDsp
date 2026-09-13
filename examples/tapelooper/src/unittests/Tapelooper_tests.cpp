@@ -667,6 +667,63 @@ TEST(TapeLooperTest, TapeSpeedScalesTheGrooveClickBeatClock)
     EXPECT_NEAR(static_cast<double>(doubledSpeedSpb), static_cast<double>(baseSpb) / 2.0, 1.0);
 }
 
+TEST(TapeLooperTest, BeatsInBarFromTimelineDefaultsToFourForAnEmptyTimeline)
+{
+    EXPECT_EQ(TapeLooperDetail::beatsInBarFromTimeline({}, 1), 4);
+    EXPECT_EQ(TapeLooperDetail::beatsInBarFromTimeline({}, 7), 4);
+}
+
+TEST(TapeLooperTest, BeatsInBarFromTimelineUsesTheSingleEntryForAnyBar)
+{
+    const std::vector<AbacDsp::GrooveTimeSignatureChange> timeline{{1u, 7u, 8u}};
+    EXPECT_EQ(TapeLooperDetail::beatsInBarFromTimeline(timeline, 1), 7);
+    EXPECT_EQ(TapeLooperDetail::beatsInBarFromTimeline(timeline, 50), 7);
+}
+
+TEST(TapeLooperTest, BeatsInBarFromTimelinePicksTheEntryActiveAtEachBar)
+{
+    const std::vector<AbacDsp::GrooveTimeSignatureChange> timeline{{1u, 4u, 4u}, {3u, 7u, 8u}, {5u, 3u, 4u}};
+    EXPECT_EQ(TapeLooperDetail::beatsInBarFromTimeline(timeline, 1), 4);
+    EXPECT_EQ(TapeLooperDetail::beatsInBarFromTimeline(timeline, 2), 4);
+    EXPECT_EQ(TapeLooperDetail::beatsInBarFromTimeline(timeline, 3), 7);
+    EXPECT_EQ(TapeLooperDetail::beatsInBarFromTimeline(timeline, 4), 7);
+    EXPECT_EQ(TapeLooperDetail::beatsInBarFromTimeline(timeline, 5), 3);
+    EXPECT_EQ(TapeLooperDetail::beatsInBarFromTimeline(timeline, 100), 3); // past the last entry
+}
+
+TEST(TapeLooperTest, BeatsInBarFromTimelineFallsBackToTheFirstEntryBeforeItsStartBar)
+{
+    const std::vector<AbacDsp::GrooveTimeSignatureChange> timeline{{3u, 7u, 8u}};
+    EXPECT_EQ(TapeLooperDetail::beatsInBarFromTimeline(timeline, 1), 7);
+    EXPECT_EQ(TapeLooperDetail::beatsInBarFromTimeline(timeline, 2), 7);
+}
+
+TEST(TapeLooperTest, ClampedNumeratorForLoopSizingPassesRealMeterThrough)
+{
+    // 7/4 (7 quarter notes/bar) is the widest single meter currently in MidiDrums,
+    // still under kMaxBeatsPerBarForLoopSizing (8).
+    EXPECT_EQ(TapeLooperDetail::clampedNumeratorForLoopSizing(7u, 4u), 7u);
+    EXPECT_EQ(TapeLooperDetail::clampedNumeratorForLoopSizing(6u, 8u), 6u);
+}
+
+TEST(TapeLooperTest, ClampedNumeratorForLoopSizingScalesDownAnExtremeMeter)
+{
+    // 20/4 = 20 quarter notes/bar, far past the cap - denominator stays 4.
+    const auto clamped = TapeLooperDetail::clampedNumeratorForLoopSizing(20u, 4u);
+    EXPECT_LT(static_cast<float>(clamped) * 4.f / 4.f, 20.f);
+    EXPECT_LE(static_cast<float>(clamped) * 4.f / 4.f, TapeLooperDetail::kMaxBeatsPerBarForLoopSizing);
+    EXPECT_GE(clamped, 1u);
+}
+
+TEST(TapeLooperTest, FramesForLoopBeatsMatchesFramesForLoopGivenTheSameTotalBeats)
+{
+    constexpr float kBars = 5.f;
+    constexpr float kBpm = 90.f;
+    const auto viaBars = TapeLooperDetail::framesForLoop(kBars, kBpm);
+    const auto viaBeats = TapeLooperDetail::framesForLoopBeats(kBars * TapeLooperDetail::kBeatsPerBar, kBpm);
+    EXPECT_EQ(viaBeats, viaBars);
+}
+
 // No real kit ever loads in this test file (see the top-of-file note), so every instrument
 // name here is necessarily untagged - this proves that stays a silent no-op, per the plan's
 // own risk callout, rather than a crash, while the groove track is actively playing.

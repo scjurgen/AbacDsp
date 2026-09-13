@@ -52,13 +52,49 @@ using GrooveKit = AbacDsp::GrooveKit<nlohmann::json>;
 namespace TapeLooperDetail
 {
 constexpr float kBeatsPerBar = 4.f;
+// Bound on a bar's quarter-notes-per-bar for the tape's physical loop sizing only
+// (never display) - see clampedNumeratorForLoopSizing(); MidiDrums' widest meter is 7/4.
+constexpr float kMaxBeatsPerBarForLoopSizing = 8.f;
+
+// Last timeline entry with startBar <= bar, else the first entry - mirrors
+// LoopTimeKeeper::activeSignature(). Returns kBeatsPerBar for an empty timeline
+// (no groove loaded, or a groove with no declared meter).
+[[nodiscard]] inline int beatsInBarFromTimeline(const std::vector<AbacDsp::GrooveTimeSignatureChange>& timeline,
+                                                const size_t bar) noexcept
+{
+    if (timeline.empty())
+    {
+        return static_cast<int>(kBeatsPerBar);
+    }
+    size_t active = 0;
+    for (size_t i = 0; i < timeline.size() && timeline[i].startBar <= bar; ++i)
+    {
+        active = i;
+    }
+    return static_cast<int>(timeline[active].numerator);
+}
+
+// Scales numerator down (denominator unchanged) so numerator*4/denominator stays within
+// kMaxBeatsPerBarForLoopSizing - a no-op for every real MidiDrums meter. Makes
+// kMaxLoopFrames a provable bound (bars is already clamped to kMaxBars), not a runtime clamp.
+[[nodiscard]] constexpr unsigned clampedNumeratorForLoopSizing(const unsigned numerator,
+                                                               const unsigned denominator) noexcept
+{
+    const auto quarterNotesPerBar = static_cast<float>(numerator) * 4.f / static_cast<float>(denominator);
+    if (quarterNotesPerBar <= kMaxBeatsPerBarForLoopSizing)
+    {
+        return numerator;
+    }
+    return std::max(1u, static_cast<unsigned>(kMaxBeatsPerBarForLoopSizing * static_cast<float>(denominator) / 4.f));
+}
+
 constexpr float kAssumedSampleRate = 48000.f;
 constexpr float kMinBars = 1.f;
 constexpr float kMaxBars = 32.f;
 constexpr float kMinBpm = 50.f;
 constexpr size_t kFreeTracks{3};
-// Headroom for a future per-bar time-signature timeline; unused while the loop
-// clock stays at the default 4/4 (see LoopTimeKeeper::setTimeSignature()).
+// Sized for a groove's own per-bar meter timeline (see GrooveMetadata::timeSignatureTimeline,
+// LoopTimeKeeper::setTimeSignature()), synced in on every groove swap.
 constexpr size_t kMaxTimeSignatureChanges = 8;
 
 // Match VariSpeedTapeDelay's own constructor defaults, so wiring these in
@@ -178,16 +214,24 @@ constexpr TrackEffectChain kDefaultTrackEffectChain{
      EffectNodeType::Compressor, EffectNodeType::RingMod, EffectNodeType::Tremolo},
     kMaxChainNodes};
 
-constexpr size_t framesForLoop(const float bars, const float bpm) noexcept
+constexpr size_t framesForLoop(const float bars, const float bpm, const float beatsPerBar = kBeatsPerBar) noexcept
 {
-    return static_cast<size_t>(bars * kBeatsPerBar / bpm * 60.f * kAssumedSampleRate);
+    return static_cast<size_t>(bars * beatsPerBar / bpm * 60.f * kAssumedSampleRate);
 }
 
-// Sized for the longest possible loop (32 bars @ 50 BPM); the margin keeps
-// that loop's read distance clear of setReadHead()'s own safety clamp.
-constexpr size_t kMaxLoopFrames = framesForLoop(kMaxBars, kMinBpm);
+// Sized for the longest possible loop (32 bars @ 50 BPM, kMaxBeatsPerBarForLoopSizing
+// quarter notes/bar) - keeps read distance clear of setReadHead()'s own safety clamp.
+constexpr size_t kMaxLoopFrames = framesForLoop(kMaxBars, kMinBpm, kMaxBeatsPerBarForLoopSizing);
 constexpr size_t kModulationMargin = 4800;
 constexpr size_t kBufferSize = kMaxLoopFrames + kModulationMargin;
+
+// Actual current loop length in frames, from LoopTimeKeeper's meter-aware loopBeats() -
+// correct for any per-bar meter, not just 4/4. Same units as framesForLoop() (fixed
+// kAssumedSampleRate); always <= kMaxLoopFrames by construction (see the clamp above).
+[[nodiscard]] inline size_t framesForLoopBeats(const double loopBeats, const float bpm) noexcept
+{
+    return static_cast<size_t>(loopBeats * 60.0 / static_cast<double>(bpm) * static_cast<double>(kAssumedSampleRate));
+}
 
 // Loop save/load (9c): a full loop can be ~7M frames (32 bars @ 50 BPM), far too large to
 // copy in one block - extraction/installation are spread across blocks in chunks this size.
@@ -581,7 +625,13 @@ class TapeLooperImpl final : public EffectBase
 
     [[nodiscard]] int getBarBeats() const noexcept
     {
-        return static_cast<int>(TapeLooperDetail::kBeatsPerBar);
+        const auto clock = computeLoopClock();
+        if (clock.samplesPerBar == 0)
+        {
+            return static_cast<int>(TapeLooperDetail::kBeatsPerBar);
+        }
+        const auto bar = 1 + clock.loopPositionFrames / clock.samplesPerBar;
+        return TapeLooperDetail::beatsInBarFromTimeline(m_grooveKit.installedMetadata().timeSignatureTimeline, bar);
     }
 
     [[nodiscard]] int getOuterRingBars() const noexcept
@@ -597,8 +647,9 @@ class TapeLooperImpl final : public EffectBase
             return {};
         }
         const auto bar = 1 + clock.loopPositionFrames / clock.samplesPerBar;
-        const auto beatLen =
-            std::max<size_t>(1, clock.samplesPerBar / static_cast<size_t>(TapeLooperDetail::kBeatsPerBar));
+        const auto beatsInBar =
+            TapeLooperDetail::beatsInBarFromTimeline(m_grooveKit.installedMetadata().timeSignatureTimeline, bar);
+        const auto beatLen = std::max<size_t>(1, clock.samplesPerBar / static_cast<size_t>(beatsInBar));
         const auto beat = 1 + clock.barPositionFrames / beatLen;
         return std::to_string(bar) + "." + std::to_string(beat);
     }
@@ -705,7 +756,8 @@ class TapeLooperImpl final : public EffectBase
         const auto bars = std::clamp(m_barsReq.load(std::memory_order_relaxed), TapeLooperDetail::kMinBars,
                                      TapeLooperDetail::kMaxBars);
         const auto bpm = std::max(m_bpmReq.load(std::memory_order_relaxed), TapeLooperDetail::kMinBpm);
-        const auto loopFrames = TapeLooperDetail::framesForLoop(bars, bpm);
+        const auto loopFrames =
+            TapeLooperDetail::framesForLoopBeats(m_loopTimeKeeper.loopBeatsForBars(static_cast<unsigned>(bars)), bpm);
         m_loopStorage.beginSave(name, patchParamsJson, loopFrames, bars, bpm, sampleRate());
         m_extractionTotalFramesReq.store(loopFrames, std::memory_order_relaxed);
         m_extractionStartRequested.store(true, std::memory_order_release);
@@ -740,6 +792,7 @@ class TapeLooperImpl final : public EffectBase
         m_grooveKit.pollAndInstall();
         checkGrooveInfoTextChanged();
         installGrooveProgramIfChanged();
+        syncLoopMeterFromGrooveIfChanged();
         notifyLoopBoundaryIfChanged();
         m_scriptEngine.tickBlock(BlockSize);
         notifyUiParametersIfChanged();
@@ -1106,9 +1159,9 @@ class TapeLooperImpl final : public EffectBase
         }
     }
 
-    // Loop length is bars * beats/bar / BPM, the same BPM the groove plays at.
-    // Float equality mirrors GrooverImpl's applyHumanizeIfChanged(): a stored
-    // value either stays bit-identical or is a genuinely new one.
+    // Loop length is bars * beats/bar / BPM (beats/bar from the loaded groove's meter -
+    // see syncLoopMeterFromGrooveIfChanged()). Float equality mirrors GrooverImpl's
+    // applyHumanizeIfChanged(): a stored value either stays bit-identical or is new.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wfloat-equal"
     void applyLoopLengthIfChanged() noexcept
@@ -1116,13 +1169,14 @@ class TapeLooperImpl final : public EffectBase
         const float bars = std::clamp(m_barsReq.load(std::memory_order_relaxed), TapeLooperDetail::kMinBars,
                                       TapeLooperDetail::kMaxBars);
         const float bpm = std::max(m_bpm, TapeLooperDetail::kMinBpm);
-        if (bars == static_cast<float>(m_loopTimeKeeper.bars()) && bpm == m_loopTimeKeeper.bpm())
+        if (bars == static_cast<float>(m_loopTimeKeeper.bars()) && bpm == m_loopTimeKeeper.bpm() && !m_loopMeterDirty)
         {
             return;
         }
+        m_loopMeterDirty = false;
         m_loopTimeKeeper.setBars(static_cast<unsigned>(bars));
         m_loopTimeKeeper.setBpm(bpm);
-        const auto loopFrames = TapeLooperDetail::framesForLoop(bars, bpm);
+        const auto loopFrames = TapeLooperDetail::framesForLoopBeats(m_loopTimeKeeper.loopBeats(), bpm);
         for (auto& tape : m_tapeTrack)
         {
             tape.setReadHead(0, static_cast<float>(loopFrames), true);
@@ -1158,7 +1212,7 @@ class TapeLooperImpl final : public EffectBase
     [[nodiscard]] LoopClock computeLoopClock() const noexcept
     {
         const auto loopFrames =
-            TapeLooperDetail::framesForLoop(static_cast<float>(m_loopTimeKeeper.bars()), m_loopTimeKeeper.bpm());
+            TapeLooperDetail::framesForLoopBeats(m_loopTimeKeeper.loopBeats(), m_loopTimeKeeper.bpm());
         if (loopFrames == 0)
         {
             return {};
@@ -1402,6 +1456,31 @@ class TapeLooperImpl final : public EffectBase
         const std::string text = GrooveKit::formatGrooveInfoText(grooveName, m_grooveKit.installedMetadata());
         std::lock_guard lock(m_infoTextMutex);
         m_pendingInfoText = text;
+    }
+
+    // Gated on the groove's name, not GrooveKit::program()'s pointer, since a
+    // humanize-only reload gets a fresh program for the same file/meter and must
+    // not force a loop-length recompute (and position reset) on every push/life tweak.
+    void syncLoopMeterFromGrooveIfChanged() noexcept
+    {
+        const std::string& grooveName = m_grooveKit.installedGrooveName();
+        if (grooveName.empty() || grooveName == m_lastLoopMeterGrooveName)
+        {
+            return;
+        }
+        m_lastLoopMeterGrooveName = grooveName;
+        m_loopTimeKeeper.resetTimeSignatures();
+        for (const auto& change : m_grooveKit.installedMetadata().timeSignatureTimeline)
+        {
+            const auto numerator =
+                TapeLooperDetail::clampedNumeratorForLoopSizing(change.numerator, change.denominator);
+            if (!m_loopTimeKeeper.setTimeSignature(change.startBar, static_cast<uint16_t>(numerator),
+                                                   static_cast<uint16_t>(change.denominator)))
+            {
+                break; // more meter changes than the table holds; rest keep the last applied meter
+            }
+        }
+        m_loopMeterDirty = true;
     }
 
     // One function per node type, all sharing the (track, inL, inR) -> (outL, outR) shape so
@@ -1871,6 +1950,9 @@ class TapeLooperImpl final : public EffectBase
     std::string m_lastGrooveName; // audio thread only
     mutable std::mutex m_infoTextMutex;
     mutable std::string m_pendingInfoText;
+
+    std::string m_lastLoopMeterGrooveName; // audio thread only, see syncLoopMeterFromGrooveIfChanged()
+    bool m_loopMeterDirty{false};
 
     TapeLooperLoopStorageService<TapeLooperDetail::kFreeTracks> m_loopStorage;
     std::atomic<bool> m_extractionStartRequested{false};

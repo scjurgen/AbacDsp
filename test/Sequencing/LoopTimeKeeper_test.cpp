@@ -268,4 +268,40 @@ TEST(LoopTimeKeeperTest, timeSignatureChangeNeverResetsPosition)
     EXPECT_NEAR(keeper.positionBeats(), 1.0, 1e-9);
 }
 
+TEST(LoopTimeKeeperTest, resetTimeSignaturesRestoresDefaultFourFour)
+{
+    Keeper keeper(48000.f);
+    ASSERT_TRUE(keeper.setTimeSignature(1u, 7, 8));
+    ASSERT_TRUE(keeper.setTimeSignature(3u, 3, 4));
+    keeper.setBars(4u);
+    ASSERT_NE(keeper.loopBeats(), 16.0); // sanity: the non-default timeline is in effect
+
+    keeper.resetTimeSignatures();
+    EXPECT_NEAR(keeper.loopBeats(), 16.0, 1e-9); // 4 bars * 4/4, same as no setTimeSignature() at all
+}
+
+TEST(LoopTimeKeeperTest, loopBeatsForBarsMatchesDefaultFourFourWithoutMutatingState)
+{
+    Keeper keeper(48000.f);
+    keeper.setBars(3u);
+    ASSERT_NEAR(keeper.loopBeats(), 12.0, 1e-9);
+
+    EXPECT_NEAR(keeper.loopBeatsForBars(5u), 20.0, 1e-9);
+    EXPECT_EQ(keeper.bars(), 3u);                // unchanged by the query
+    EXPECT_NEAR(keeper.loopBeats(), 12.0, 1e-9); // unchanged by the query
+}
+
+TEST(LoopTimeKeeperTest, loopBeatsForBarsHonoursTheLiveTimelineAtAHypotheticalBarCount)
+{
+    Keeper keeper(48000.f);
+    ASSERT_TRUE(keeper.setTimeSignature(5u, 7, 8));
+    keeper.setBars(6u);
+
+    // Matches loopBeats() when queried at the currently-applied bar count.
+    EXPECT_NEAR(keeper.loopBeatsForBars(6u), keeper.loopBeats(), 1e-9);
+    // Bars 1-4 at 4/4 (16 beats) + bar 5 at 7/8 (3.5 beats), for a hypothetical
+    // 5-bar loop that was never actually applied via setBars().
+    EXPECT_NEAR(keeper.loopBeatsForBars(5u), 16.0 + 3.5, 1e-9);
+}
+
 }

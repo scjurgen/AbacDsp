@@ -96,6 +96,16 @@ class LoopTimeKeeper
         return true;
     }
 
+    // Clears the timeline back to the default 4/4-from-bar-1 entry. Unlike
+    // setTimeSignature() (insert-or-overwrite only), this can shrink the table -
+    // the right primitive before installing a completely different timeline.
+    void resetTimeSignatures() noexcept
+    {
+        m_timeSignatures[0] = {1u, 4, 4};
+        m_timeSignatureCount = 1;
+        recomputeLoopBeats();
+    }
+
     void advance(const size_t numFrames, const float speedRatio) noexcept
     {
         const auto elapsedBeats = static_cast<double>(numFrames) * static_cast<double>(speedRatio) *
@@ -140,6 +150,19 @@ class LoopTimeKeeper
     [[nodiscard]] double loopBeats() const noexcept
     {
         return m_cachedLoopBeats;
+    }
+
+    // Same per-bar summation as the cached loopBeats(), but for a caller-chosen bar
+    // count rather than the currently-applied one - lets a caller preview a pending
+    // bars change against the live timeline without mutating state.
+    [[nodiscard]] double loopBeatsForBars(const unsigned bars) const noexcept
+    {
+        double total = 0.0;
+        for (unsigned bar = 1; bar <= bars; ++bar)
+        {
+            total += barLengthQuarterNotes(bar);
+        }
+        return total;
     }
 
     // Snapshot only: converts the wrapped beat position to frames at the *current*
@@ -213,12 +236,7 @@ class LoopTimeKeeper
 
     void recomputeLoopBeats() noexcept
     {
-        double total = 0.0;
-        for (unsigned bar = 1; bar <= m_bars; ++bar)
-        {
-            total += barLengthQuarterNotes(bar);
-        }
-        m_cachedLoopBeats = total;
+        m_cachedLoopBeats = loopBeatsForBars(m_bars);
     }
 
     static constexpr float kMinBpm = 1.f;

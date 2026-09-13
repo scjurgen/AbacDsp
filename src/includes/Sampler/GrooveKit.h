@@ -28,10 +28,21 @@
 #include "Sampler/GrooveHumanize.h"
 #include "Sampler/GrooveMidiFile.h"
 #include "Sampler/GrooveNoteMap.h"
+#include "Sampler/GrooveTiming.h"
 #include "Sampler/SliceLibrary.h"
 
 namespace AbacDsp
 {
+
+/// @ingroup sampler
+/// @brief One meter active from startBar (1-based) onward - see
+/// GrooveMetadata::timeSignatureTimeline.
+struct GrooveTimeSignatureChange
+{
+    unsigned startBar{1};
+    unsigned numerator{4};
+    unsigned denominator{4};
+};
 
 /// @ingroup sampler
 /// @brief Groove info derived from a groove's sidecar `.json` - bars is its own
@@ -43,6 +54,9 @@ struct GrooveMetadata
     std::string timeSignature;
     float idealBpm{0.f};
     std::vector<std::string> dominantSounds;
+    // The groove's own bar-by-bar meter, from its MIDI time-signature meta events
+    // (see analyzeGrooveFile()); never empty for a successfully-loaded groove.
+    std::vector<GrooveTimeSignatureChange> timeSignatureTimeline;
 };
 
 /// @ingroup sampler
@@ -721,7 +735,29 @@ class GrooveKit
         }
         analyzed.notes = analyzeNotes(midi.noteEvents(), ticksPerQuarterNote, midi.timeSignatures(), kGridResolution);
         analyzed.metadata = readGrooveMetadata(midiFile, analyzed.loopLengthTicks, ticksPerQuarterNote);
+        analyzed.metadata.timeSignatureTimeline =
+            buildTimeSignatureTimeline(midi.timeSignatures(), ticksPerQuarterNote);
         return analyzed;
+    }
+
+    // One timeline entry per declared time-signature meta event, startBar
+    // derived via barIndexForTick(); a single default {1, 4, 4} if the file
+    // declares none, so the result is never empty for a loaded groove.
+    [[nodiscard]] static std::vector<GrooveTimeSignatureChange> buildTimeSignatureTimeline(
+        const std::vector<MidiTimeSignatureEvent>& timeSignatures, const uint16_t ticksPerQuarterNote)
+    {
+        if (timeSignatures.empty())
+        {
+            return {{1u, 4u, 4u}};
+        }
+        std::vector<GrooveTimeSignatureChange> timeline;
+        timeline.reserve(timeSignatures.size());
+        for (const auto& ts : timeSignatures)
+        {
+            const auto startBar = 1u + barIndexForTick(timeSignatures, ticksPerQuarterNote, ts.tick);
+            timeline.push_back({startBar, ts.numerator, 1u << ts.denominatorPower});
+        }
+        return timeline;
     }
 
     // Triggers land at each humanized note's output tick; kept sorted since

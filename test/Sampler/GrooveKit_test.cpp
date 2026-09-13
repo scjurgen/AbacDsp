@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -147,22 +148,54 @@ void appendGrooveU32BE(std::vector<uint8_t>& buf, const uint32_t value)
     buf.push_back(static_cast<uint8_t>(value & 0xFF));
 }
 
-// One-track, format-0 SMF with a note-on (velocity 100) for every {tick, note}
-// pair given, in ascending tick order. EOT sits at endOfTrackTick if given
-// (must be >= the last note's tick), else immediately after the last note.
-[[nodiscard]] std::vector<uint8_t> buildGrooveMidiBytes(const std::vector<std::pair<uint32_t, uint8_t>>& notes,
-                                                        const uint16_t division = 480,
-                                                        const uint32_t endOfTrackTick = 0)
+// One-track, format-0 SMF: a note-on (velocity 100) per {tick, note}, plus an
+// optional FF 58 04 time-signature meta event per timeSignatures entry, merged
+// into one ascending-tick stream. EOT at endOfTrackTick, else after the last event.
+[[nodiscard]] std::vector<uint8_t> buildGrooveMidiBytes(
+    const std::vector<std::pair<uint32_t, uint8_t>>& notes, const uint16_t division = 480,
+    const uint32_t endOfTrackTick = 0, const std::vector<AbacDsp::MidiTimeSignatureEvent>& timeSignatures = {})
 {
+    struct MergedEvent
+    {
+        uint32_t tick;
+        bool isTimeSignature;
+        size_t index;
+    };
+    std::vector<MergedEvent> events;
+    events.reserve(notes.size() + timeSignatures.size());
+    for (size_t i = 0; i < notes.size(); ++i)
+    {
+        events.push_back({notes[i].first, false, i});
+    }
+    for (size_t i = 0; i < timeSignatures.size(); ++i)
+    {
+        events.push_back({timeSignatures[i].tick, true, i});
+    }
+    std::ranges::stable_sort(events, {}, &MergedEvent::tick);
+
     std::vector<uint8_t> body;
     uint32_t lastTick = 0;
-    for (const auto& [tick, note] : notes)
+    for (const auto& event : events)
     {
-        appendGrooveVlq(body, tick - lastTick);
-        body.push_back(0x90);
-        body.push_back(note);
-        body.push_back(100);
-        lastTick = tick;
+        appendGrooveVlq(body, event.tick - lastTick);
+        if (event.isTimeSignature)
+        {
+            const auto& ts = timeSignatures[event.index];
+            body.push_back(0xFF);
+            body.push_back(0x58);
+            body.push_back(0x04);
+            body.push_back(ts.numerator);
+            body.push_back(ts.denominatorPower);
+            body.push_back(24); // clocks per metronome click, unused by the parser
+            body.push_back(8);  // notated 32nd notes per beat, unused by the parser
+        }
+        else
+        {
+            body.push_back(0x90);
+            body.push_back(notes[event.index].second);
+            body.push_back(100);
+        }
+        lastTick = event.tick;
     }
     appendGrooveVlq(body, endOfTrackTick > lastTick ? endOfTrackTick - lastTick : 0);
     body.push_back(0xFF);
@@ -184,9 +217,10 @@ void appendGrooveU32BE(std::vector<uint8_t>& buf, const uint32_t value)
 }
 
 void writeGrooveMidiFile(const std::string& path, const std::vector<std::pair<uint32_t, uint8_t>>& notes,
-                         const uint16_t division = 480, const uint32_t endOfTrackTick = 0)
+                         const uint16_t division = 480, const uint32_t endOfTrackTick = 0,
+                         const std::vector<AbacDsp::MidiTimeSignatureEvent>& timeSignatures = {})
 {
-    const auto bytes = buildGrooveMidiBytes(notes, division, endOfTrackTick);
+    const auto bytes = buildGrooveMidiBytes(notes, division, endOfTrackTick, timeSignatures);
     std::ofstream out(path, std::ios::binary);
     out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
 }
@@ -550,6 +584,65 @@ TEST(GrooveKitTest, MetadataDefaultsWhenSidecarIsMalformed)
     ASSERT_TRUE(waitUntilGrooveKitReady(kit));
 
     EXPECT_EQ(kit.installedMetadata().bars, 0u);
+}
+
+TEST(GrooveKitTest, TimeSignatureTimelineDefaultsToFourFourWhenFileDeclaresNone)
+{
+    const TempGrooveKitDir dir;
+    writeGrooveTake(dir, "bd", 1);
+    writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 36}});
+
+    GrooveKit kit;
+    kit.requestLoad(dir.dir(), dir.dir(), "groove.mid");
+    ASSERT_TRUE(waitUntilGrooveKitReady(kit));
+
+    const auto& timeline = kit.installedMetadata().timeSignatureTimeline;
+    ASSERT_EQ(timeline.size(), 1u);
+    EXPECT_EQ(timeline[0].startBar, 1u);
+    EXPECT_EQ(timeline[0].numerator, 4u);
+    EXPECT_EQ(timeline[0].denominator, 4u);
+}
+
+TEST(GrooveKitTest, TimeSignatureTimelineReadsASingleDeclaredMeter)
+{
+    const TempGrooveKitDir dir;
+    writeGrooveTake(dir, "bd", 1);
+    // 7/8: denominatorPower 3 -> denominator 8.
+    writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 36}}, 480, 0, {{0, 7, 3}});
+
+    GrooveKit kit;
+    kit.requestLoad(dir.dir(), dir.dir(), "groove.mid");
+    ASSERT_TRUE(waitUntilGrooveKitReady(kit));
+
+    const auto& timeline = kit.installedMetadata().timeSignatureTimeline;
+    ASSERT_EQ(timeline.size(), 1u);
+    EXPECT_EQ(timeline[0].startBar, 1u);
+    EXPECT_EQ(timeline[0].numerator, 7u);
+    EXPECT_EQ(timeline[0].denominator, 8u);
+}
+
+TEST(GrooveKitTest, TimeSignatureTimelineTracksAMeterChangeAtABarBoundary)
+{
+    const TempGrooveKitDir dir;
+    writeGrooveTake(dir, "bd", 1);
+    // 4/4 (1920 ticks/bar at 480 tpqn) for bars 1-2, then 3/4 from bar 3
+    // (tick 3840) - a synthetic mixed-meter groove (see plan's "Risks" section
+    // for the real mixed-meter library grooves this generalizes to).
+    writeGrooveMidiFile(dir.filePath("groove.mid"), {{0, 36}, {3360, 36}, {5280, 36}}, 480, 6720,
+                        {{0, 4, 2}, {3840, 3, 2}});
+
+    GrooveKit kit;
+    kit.requestLoad(dir.dir(), dir.dir(), "groove.mid");
+    ASSERT_TRUE(waitUntilGrooveKitReady(kit));
+
+    const auto& timeline = kit.installedMetadata().timeSignatureTimeline;
+    ASSERT_EQ(timeline.size(), 2u);
+    EXPECT_EQ(timeline[0].startBar, 1u);
+    EXPECT_EQ(timeline[0].numerator, 4u);
+    EXPECT_EQ(timeline[0].denominator, 4u);
+    EXPECT_EQ(timeline[1].startBar, 3u);
+    EXPECT_EQ(timeline[1].numerator, 3u);
+    EXPECT_EQ(timeline[1].denominator, 4u);
 }
 
 TEST(GrooveKitTest, FormatGrooveInfoTextBuildsExpectedShape)
