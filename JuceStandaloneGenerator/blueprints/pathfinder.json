@@ -1,0 +1,34 @@
+{
+  "name": "pathfinder",
+  "plugintype": "Chorus",
+  "description": ["Shared-stereo tape vibrato: one moving delay read head, modulated by tape-like wow and flutter, 100% wet. The seed graph of a planned tape-modulation toolbox."],
+  "patches": true,
+  "ports-control":
+  [
+    {"short": "DPTH", "type": "dial", "display": "Depth", "symbol": "depth", "default": 35, "range": [0, 100, 0.1, 1, false], "precision": 0, "unit": "%"},
+    {"short": "SPD", "type": "dial", "display": "Speed", "symbol": "speed", "default": 0.8, "range": [0.05, 6.0, 0.01, 0.35, false], "precision": 2, "unit": "Hz"},
+    {"short": "AGGR", "type": "dial", "display": "OU Aggressivity", "symbol": "aggressivity", "default": 15, "range": [0, 100, 0.1, 1, false], "precision": 0, "unit": "%"},
+    {"short": "CHAR", "type": "dial", "display": "Character", "symbol": "character", "default": 50, "range": [0, 100, 0.1, 1, false], "precision": 0, "unit": "%"},
+
+    {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu"},
+    {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"},
+    {"short": "SIG", "type":"gauge", "gaugetype" : "signal", "display": "Signal", "symbol": "signal"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "800",
+    "WINDOW_HEIGHT": "600",
+    "type": "|||",
+    "composition": "C=(1:1:5) A1=(CPU*200, LVL*400) A2=(DPTH, SPD, AGGR, CHAR) A3=(FFT%1, SIG%1))"
+  },
+  "performance-page": {
+    "type": "-",
+    "composition": "A1=(LVL) A2=(DPTH, SPD, AGGR, CHAR)"
+  },
+  "CPP":
+  {
+    "CLASS_NAME": "PathfinderImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/PathfinderImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}
