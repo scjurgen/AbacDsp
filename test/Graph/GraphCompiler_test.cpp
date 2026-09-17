@@ -1,0 +1,111 @@
+#include <algorithm>
+#include <string>
+
+#include "gtest/gtest.h"
+
+#include "Graph/GraphCompiler.h"
+#include "Graph/GraphDescription.h"
+#include "Graph/NodeRegistry.h"
+#include "GraphTestNodes.h"
+
+namespace AbacDsp::Graph::Test
+{
+namespace
+{
+
+[[nodiscard]] NodeRegistry makeRegistry()
+{
+    NodeRegistry registry;
+    registerTestNodes(registry);
+    return registry;
+}
+
+[[nodiscard]] NodeInstance makeNode(std::string id, std::string type)
+{
+    return NodeInstance{.id = std::move(id), .type = std::move(type)};
+}
+
+[[nodiscard]] Edge makeEdge(std::string fromNode, std::string fromPort, std::string toNode, std::string toPort)
+{
+    return Edge{.fromNode = std::move(fromNode),
+                .fromPort = std::move(fromPort),
+                .toNode = std::move(toNode),
+                .toPort = std::move(toPort)};
+}
+
+[[nodiscard]] GraphDescription makeChainDescription(const int length)
+{
+    GraphDescription description;
+    description.io = {{"in"}, {"out"}};
+
+    for (int i = 0; i < length; ++i)
+    {
+        description.nodes.push_back(makeNode("n" + std::to_string(i), "PassThroughStub"));
+    }
+
+    description.edges.push_back(makeEdge("", "in", "n0", "in"));
+    for (int i = 0; i + 1 < length; ++i)
+    {
+        description.edges.push_back(makeEdge("n" + std::to_string(i), "out", "n" + std::to_string(i + 1), "in"));
+    }
+    description.edges.push_back(makeEdge("n" + std::to_string(length - 1), "out", "", "out"));
+    return description;
+}
+
+} // namespace
+
+TEST(GraphCompilerTest, ValidChainCompiles)
+{
+    const auto description = makeChainDescription(1);
+    const auto result = GraphCompiler::compile(description, makeRegistry(), 64);
+
+    ASSERT_TRUE(result.graph.has_value());
+    EXPECT_EQ(result.graph->nodeCount(), 1u);
+}
+
+TEST(GraphCompilerTest, ErrorDiagnosticsPreventCompilation)
+{
+    GraphDescription description;
+    description.nodes = {makeNode("p1", "PassThroughStub"), makeNode("p1", "PassThroughStub")};
+
+    const auto result = GraphCompiler::compile(description, makeRegistry(), 64);
+
+    EXPECT_FALSE(result.graph.has_value());
+    const bool hasDuplicateError = std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
+                                               [](const Diagnostic& d)
+                                               {
+                                                   return d.severity == DiagnosticSeverity::Error &&
+                                                          d.message.find("duplicate node id") != std::string::npos;
+                                               });
+    EXPECT_TRUE(hasDuplicateError);
+}
+
+TEST(GraphCompilerTest, BufferSlotCountDoesNotGrowWithChainLength)
+{
+    const auto shortChain = GraphCompiler::compile(makeChainDescription(3), makeRegistry(), 64);
+    const auto longChain = GraphCompiler::compile(makeChainDescription(6), makeRegistry(), 64);
+
+    ASSERT_TRUE(shortChain.graph.has_value());
+    ASSERT_TRUE(longChain.graph.has_value());
+    EXPECT_EQ(shortChain.graph->bufferSlotCount(), longChain.graph->bufferSlotCount());
+}
+
+TEST(GraphCompilerTest, CycleWithBreakerCompiles)
+{
+    GraphDescription description;
+    description.io = {{"in"}, {"out"}};
+    description.nodes = {makeNode("sum", "SumStub"), makeNode("breaker", "CycleBreakerStub")};
+    description.edges = {
+        makeEdge("", "in", "sum", "in1"),
+        makeEdge("breaker", "out", "sum", "in2"),
+        makeEdge("sum", "out", "breaker", "in"),
+        makeEdge("breaker", "out", "", "out"),
+    };
+
+    const auto result = GraphCompiler::compile(description, makeRegistry(), 64);
+
+    ASSERT_TRUE(result.graph.has_value());
+    EXPECT_EQ(result.graph->nodeCount(), 2u);
+}
+
+}

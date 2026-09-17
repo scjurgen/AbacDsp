@@ -120,6 +120,23 @@
  */
 
 /**
+ * @defgroup graph Graph
+ * @brief Node/port schema and DAG compiler for Lua-declarative audio graphs.
+ *
+ * A GraphDescription is plain data; GraphValidator is the single source of
+ * truth for whether it is well-formed, and GraphCompiler turns a valid one
+ * into a CompiledGraph that allocates nothing on the audio thread. Node
+ * dispatch is virtual, once per block, the same tradeoff BlockProcessorBase
+ * makes (@ref blockprocessors) - the node-type set is open-ended here, which
+ * is what rules out a closed std::variant.
+ *
+ * A feedback cycle is only valid if some node in it is marked breaksCycle;
+ * that node's own incoming edge from within the cycle is excluded from the
+ * schedule's ordering, so it reads the previous block's value from its
+ * still-live input buffer rather than needing this block's value already.
+ */
+
+/**
  * @defgroup helpers Helpers
  * @brief Small utilities: array construction, SIMD selection, test formatting.
  */

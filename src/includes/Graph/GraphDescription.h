@@ -1,0 +1,116 @@
+#pragma once
+
+#include <map>
+#include <string>
+#include <vector>
+
+namespace AbacDsp::Graph
+{
+
+enum class PortDirection
+{
+    Input,
+    Output
+};
+
+enum class PortCategory
+{
+    AudioMono,
+    AudioStereo,
+    AudioN,
+    ControlScalar,
+    ControlAudioRate,
+    Event,
+    Meter
+};
+
+struct PortDescriptor
+{
+    std::string name;
+    PortDirection direction{PortDirection::Input};
+    PortCategory category{PortCategory::AudioMono};
+    bool multiConnectable{false};
+};
+
+struct NodeInstance
+{
+    std::string id;
+    std::string type;
+    std::map<std::string, float> params;
+    std::map<std::string, std::string> config;
+};
+
+/**
+ * @ingroup graph
+ * @brief One audio-graph connection, source output port to destination input port.
+ *
+ * An empty fromNode/toNode means the other side of that pair is a graph
+ * boundary port name (GraphDescription::Io), not a node.port pair - a graph
+ * input behaves as an edge source, a graph output as an edge sink.
+ */
+struct Edge
+{
+    std::string fromNode;
+    std::string fromPort;
+    std::string toNode;
+    std::string toPort;
+    float gain{1.0f};
+    int polarity{1};
+    std::string label;
+};
+
+struct ControlEdge
+{
+    std::string fromNode;
+    std::string fromPort;
+    std::string toNode;
+    std::string toParam;
+    std::string mapName;
+    float smoothingMs{0.0f};
+};
+
+struct MacroTarget
+{
+    std::string toNode;
+    std::string toParam;
+    std::string mapName;
+};
+
+struct Macro
+{
+    std::string id;
+    std::string label;
+    float defaultValue{0.0f};
+    std::vector<MacroTarget> targets;
+};
+
+/**
+ * @ingroup graph
+ * @brief Named external audio ports. Every entry is an audio.mono port.
+ */
+struct Io
+{
+    std::vector<std::string> inputs;
+    std::vector<std::string> outputs;
+};
+
+/**
+ * @ingroup graph
+ * @brief Plain data model for one graph: I/O, node instances, and their wiring.
+ *
+ * Carries no behaviour and knows nothing about Lua - GraphValidator and
+ * GraphCompiler are what give it meaning. controls/macros are populated and
+ * consumed starting with later phases; this phase only moves the data.
+ */
+struct GraphDescription
+{
+    int version{1};
+    std::string name;
+    Io io;
+    std::vector<NodeInstance> nodes;
+    std::vector<Edge> edges;
+    std::vector<ControlEdge> controls;
+    std::vector<Macro> macros;
+};
+
+}
