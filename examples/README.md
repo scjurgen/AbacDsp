@@ -18,6 +18,7 @@ generates or overwrites it.
 | Maxdiffuser               | Effect     |     |         | processing-size displays   | series allpass diffuser chain, FDN reverb, pitch shifting, biquad, waveshaping distortion                                       |
 | Metronome                 | Effect     |     |         | beat/spectrogram displays  | beat sequencer, click generator, onset/timing analysis against the beat grid                                                    |
 | Minireverb                | Effect     |     |         |                             | order-32 FDN reverb (Walsh-Hadamard mix), two in-tank pitch shifters, per-line hi/lo-pass filtering, vibrato                     |
+| Organicchorus             | Effect     | x   |         |                             | multi-voice BBD-style chorus/flanger (variable-write-clock tape delay per voice), Ornstein-Uhlenbeck/Wow/Flutter modulation, one-pole tone filtering, saturation                |
 | Pingsynth                 | Instrument | x   |         |                             | modal resonator (ringing bandpass) bank, FDN reverb, pitch detection for Lua-side tuning                                        |
 | Plaingain                 | Effect     |     |         |                             | gain staging, biquad shelving filters, latency-compensation delay                                                               |
 | Resonik                   | Effect     | x   |         |                             | resonator bank (biquad + SVF bandpass), multi-tap delay, pitch detection                                                        |
@@ -66,6 +67,14 @@ grid, and exports an HTML report (histograms per beat/subdivision, a hit timelin
 Order-32 FDN reverb (`FdnTankBlockDelayWalshSIMD`/`FdnTankSpiced`) with
 Walsh-Hadamard mixing, two in-tank pitch shifters, and low/high-pass shaping
 per delay line.
+
+## Organicchorus
+Multi-voice BBD-style chorus/flanger: each voice is a genuine variable-speed tape
+delay (not a read-position fake) whose write clock stays clean (baseline speed plus
+an independent Ornstein-Uhlenbeck drift) while Wow and Flutter modulate the read
+head instead, wrapped in per-voice feedback and tone shaping. Four configurations
+(Classic, Wide, Tri Ensemble, Flanger) share six macros (Configuration, Tone, Speed,
+Depth, Feedback, Mix); two extra live-tweak knobs (Drift, Spread) are Lua-scripted.
 
 ## Pingsynth
 A Lua-scripted modal resonator synth: each voice is a bank of ringing bandpass resonators,

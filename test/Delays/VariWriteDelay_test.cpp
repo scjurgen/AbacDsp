@@ -270,4 +270,38 @@ TEST(VariSpeedTapeDelayLoopIoTest, ChunkedInstallLoopChunkMatchesSingleShotLoadL
     EXPECT_EQ(expected, actual);
 }
 
+// setReadHead(..., true) resolves to m_idealWritePosition - clampedDistance, wrapped into
+// [0, BufferSize) - so on a freshly constructed instance (write position still 0) the
+// resulting read position directly reveals what the clamp margin actually did.
+TEST(VariSpeedTapeDelaySafetyMarginTest, DefaultMarginMatchesLegacyFixedConstant)
+{
+    constexpr size_t kBufferSize = 20000;
+    VariSpeedTapeDelay<kBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
+    sut.setReadHead(0, 500.f, true);
+    EXPECT_NEAR(sut.readHead(0), kBufferSize - 1000.0, 1E-9);
+}
+
+TEST(VariSpeedTapeDelaySafetyMarginTest, SmallerMarginPermitsShortDelay)
+{
+    constexpr size_t kBufferSize = 20000;
+    VariSpeedTapeDelay<kBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
+    sut.setReadHeadSafetyMargin(50.f);
+    sut.setReadHead(0, 500.f, true);
+    EXPECT_NEAR(sut.readHead(0), kBufferSize - 500.0, 1E-9);
+}
+
+TEST(VariSpeedTapeDelaySafetyMarginTest, MarginIsClampedToInterpolatorFloorAndBufferCeiling)
+{
+    constexpr size_t kBufferSize = 20000;
+    VariSpeedTapeDelay<kBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
+
+    sut.setReadHeadSafetyMargin(2.f);
+    sut.setReadHead(0, 3.f, true);
+    EXPECT_NEAR(sut.readHead(0), kBufferSize - 8.0, 1E-9);
+
+    sut.setReadHeadSafetyMargin(999999.f);
+    sut.setReadHead(0, 9000.f, true);
+    EXPECT_NEAR(sut.readHead(0), kBufferSize - kBufferSize / 2.0, 1E-9);
+}
+
 }

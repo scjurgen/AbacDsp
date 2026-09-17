@@ -1,0 +1,18 @@
+{
+  "configuration": 2,
+  "tone": 70.0,
+  "speed": 0.6,
+  "tapeSpeed": 0.0,
+  "depth": 60.0,
+  "feedback": 20.0,
+  "mix": 55.0,
+  "luaParam1": 0.6,
+  "luaParam2": 0.7,
+  "luaParam3": 0.0,
+  "luaParam4": 0.0,
+  "luaParam5": 0.0,
+  "luaParam6": 0.0,
+  "luaParam7": 0.0,
+  "luaParam8": 0.0,
+  "script": ""
+}

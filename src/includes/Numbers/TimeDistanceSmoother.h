@@ -96,14 +96,17 @@ class TimeDistanceSmoother
         return m_readPosition;
     }
 
-    void advancePosition() noexcept
+    // rateMultiplier scales only the base advance, not a transition/correction
+    // glide already in progress - a caller perturbing read rate (e.g. Wow/Flutter)
+    // rides on top of those without fighting them.
+    void advancePosition(const FloatType rateMultiplier = FloatType(1)) noexcept
     {
         if (m_correctionCooldown > 0)
         {
             m_correctionCooldown--;
         }
 
-        FloatType readAdvance = m_writeAdvance;
+        FloatType readAdvance = m_writeAdvance * rateMultiplier;
 
         if (m_isTransitioning)
         {

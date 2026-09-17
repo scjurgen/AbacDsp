@@ -1,0 +1,52 @@
+{
+  "name": "organicchorus",
+  "plugintype": "Chorus",
+  "description": ["Organic, multi-voice BBD-style chorus/flanger built on a genuine variable-write-clock delay transport per voice, driven by mean-reverting drift and flutter so the ensemble never quite repeats."],
+  "patches": true,
+  "use-lua": true,
+  "ports-control":
+  [
+    {"short": "CFG", "type": "drop", "display": "Configuration", "symbol": "configuration", "default": 0, "listitems": ["Classic", "Wide", "Tri Ensemble", "Flanger"]},
+    {"short": "TONE", "type": "dial", "display": "Tone", "symbol": "tone", "default": 50, "range": [0, 100, 0.1, 1, false], "precision": 0, "unit": ""},
+    {"short": "SPD", "type": "dial", "display": "Speed", "symbol": "speed", "default": 0.8, "range": [0.05, 6.0, 0.01, 0.35, false], "precision": 2, "unit": "Hz"},
+    {"short": "TSPD", "type": "dial", "display": "Tape Speed", "symbol": "tapeSpeed", "default": 0, "range": [-24, 24, 0.1, 1, true], "precision": 1, "unit": "st"},
+    {"short": "DPTH", "type": "dial", "display": "Depth", "symbol": "depth", "default": 50, "range": [0, 100, 0.1, 1, false], "precision": 0, "unit": "%"},
+    {"short": "FDBK", "type": "dial", "display": "Feedback", "symbol": "feedback", "default": 0, "range": [-100, 100, 0.1, 1, true], "precision": 0, "unit": "%"},
+    {"short": "MIX", "type": "dial", "display": "Mix", "symbol": "mix", "default": 50, "range": [0, 100, 0.1, 1, false], "precision": 0, "unit": "%"},
+
+    {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu"},
+    {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
+    {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"},
+    {"short": "SIG", "type":"gauge", "gaugetype" : "signal", "display": "Signal", "symbol": "signal"},
+    {"short": "LUACTL", "type": "luacontrolarea", "display": "Lua Controls", "symbol": "luaControls"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1200",
+    "WINDOW_HEIGHT": "800",
+    "type": "|=",
+    "composition": "C=(1:12) R=(1:1) A1=(CPU*200, LVL*500, CFG*300) A2=(TONE, SPD, TSPD, DPTH, FDBK, MIX, FFT*400) A3=(LUACTL)"
+  },
+  "performance-page": {
+    "type": "-",
+    "composition": "A1=(LVL) A2=(CFG, TONE, SPD, TSPD, DPTH, FDBK, MIX)"
+  },
+  "processor_forwards": [
+    {"name": "hasScriptError", "type": "bool"},
+    {"name": "scriptErrorMessage", "call": "scriptError", "type": "std::string"},
+    {"name": "getScriptSkeleton", "call": "scriptSkeleton", "type": "std::string"},
+    {"name": "getLuaUiParamSlots", "call": "uiParamSlots", "type": "OrganicChorusScriptEngine::UiParamSlots"}
+  ],
+  "extra_timer_callbacks": [
+    "pollScriptError();",
+    "if (processorRef.hasRunner()) { luaControlsLuaControlArea.refresh(toLuaControlDescriptors(processorRef.getLuaUiParamSlots()), valueTreeState); }"
+  ],
+  "extra_ui_includes": [
+    "impl/LuaControlBridge.h"
+  ],
+  "CPP":
+  {
+    "CLASS_NAME": "OrganicChorusImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/OrganicChorusImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

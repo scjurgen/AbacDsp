@@ -205,7 +205,7 @@ class OnePoleFilter : public OnePoleBase<OnePoleFilter<FilterCharacteristic, Cla
 
     void processBlock(const float* in, float* out, const size_t numSamples) noexcept
     {
-        if (this->m_fdbk == 0)
+        if (std::abs(this->m_fdbk) <= 1E-8f)
         {
             std::copy_n(in, numSamples, out);
             return;
@@ -408,7 +408,7 @@ class MultiChannelOnePoleFilter
 
     void processBlock(const float* in, float* out, const size_t numSamples) noexcept
     {
-        if (this->m_fdbk == 0)
+        if (std::abs(this->m_fdbk) <= 1E-8f)
         {
             std::copy_n(in, numSamples * NumChannels, out);
             return;

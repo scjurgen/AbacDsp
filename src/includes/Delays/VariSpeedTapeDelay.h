@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <random>
 #include <span>
 #include <vector>
 
@@ -101,7 +102,7 @@ class VariSpeedTapeDelay
     {
         const auto w = m_wow.step();
         const auto f = m_flutter.step();
-        const auto ratio = m_ratio.getValue(TileSize) * (1.0f + w) * f;
+        const auto ratio = m_ratio.getValue(TileSize) * (1.0f + w) * f * (1.0f + m_externalRatioPerturbation);
 
         m_input = in.data();
         m_inputSize = TileSize;
@@ -114,12 +115,12 @@ class VariSpeedTapeDelay
     }
 
     /// @brief Moves one head to delta frames behind the write head, gliding unless forced.
-    /// Kept 1000 frames clear of both ends so wow and flutter cannot push it past the write head.
+    /// Kept m_readHeadSafetyMargin frames clear of both ends so wow and flutter cannot push
+    /// it past the write head; see setReadHeadSafetyMargin() for sizing that margin.
     void setReadHead(const size_t hdIdx, const float delta, const bool force = false) noexcept
     {
-        constexpr float MaxModulationSafety{1000.f};
         const auto clampedDelta =
-            std::clamp(delta, MaxModulationSafety, static_cast<float>(BufferSize) - 1 - MaxModulationSafety);
+            std::clamp(delta, m_readHeadSafetyMargin, static_cast<float>(BufferSize) - 1 - m_readHeadSafetyMargin);
         if (force)
         {
             m_rdhd[hdIdx].forceReadPositionDistance(clampedDelta);
@@ -246,6 +247,43 @@ class VariSpeedTapeDelay
         m_wow.setDrift(value);
     }
 
+    // Reseeds Wow's own random components, so multiple instances sharing the same rate
+    // settings still drift independently rather than in lockstep.
+    void seed(const std::mt19937::result_type value) noexcept
+    {
+        m_wow.seed(value);
+    }
+
+    // Raises the read-head drift-correction threshold past a modulation's own excursion,
+    // so slow (sub-6Hz) Wow motion isn't corrected away as if it were drift.
+    void setReadHeadCorrectionThreshold(const size_t hdIdx, const float samples) noexcept
+    {
+        m_rdhd[hdIdx].setDistanceCorrectionThreshold(samples);
+    }
+
+    // A caller-driven multiplicative ratio perturbation, combined the same way Wow and
+    // Flutter are - unlike setRatio(), this bypasses the accel/brake glide entirely, so
+    // it actually reaches feed() instead of being damped out by continuous retargeting.
+    void setExternalRatioPerturbation(const float value) noexcept
+    {
+        m_externalRatioPerturbation = value;
+    }
+
+    // How long a triggered correction takes to complete (default 5ms, tuned for
+    // tapelooper's snappy resync). A slower value spreads the same correction over a
+    // longer, gentler read-rate deviation instead of a brief, sharper one.
+    void setReadHeadCorrectionTime(const size_t hdIdx, const float seconds) noexcept
+    {
+        m_rdhd[hdIdx].setCorrectionTime(seconds);
+    }
+
+    // Overrides the default 1000-frame read-head clamp margin (see setReadHead()) with one
+    // sized to this caller's own, measured worst-case modulation excursion instead.
+    void setReadHeadSafetyMargin(const float samples) noexcept
+    {
+        m_readHeadSafetyMargin = std::clamp(samples, 8.f, static_cast<float>(BufferSize) / 2.f);
+    }
+
   private:
     /// @brief Appends frames at the write head, taking a bulk copy when the run does not wrap.
     /// The first six frames are duplicated past the end so the interpolator can read across the seam.
@@ -312,6 +350,8 @@ class VariSpeedTapeDelay
     float m_ratioTarget{1.f};
     float m_flutterRate{1.f};
     float m_wowRate{1.f};
+    float m_readHeadSafetyMargin{1000.f};
+    float m_externalRatioPerturbation{0.f};
 };
 
 }

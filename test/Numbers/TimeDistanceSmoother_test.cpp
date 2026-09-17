@@ -1,6 +1,6 @@
-#include "Numbers/TimeDistanceSmoother.h"
-
 #include <gtest/gtest.h>
+
+#include "Numbers/TimeDistanceSmoother.h"
 
 namespace AbacDsp::Test
 {
@@ -50,16 +50,22 @@ TEST(TimeDistanceSmootherTest, writeHeadVariableRatio)
             writeHead = (writeHead + produced) % BufferSize;
             smoother.setCurrentWritePosition(static_cast<float>(writeHead), ratio);
             for (size_t i = 0; i < InternalBlockSize; ++i)
+            {
                 smoother.advancePosition();
+            }
         }
 
         const float delta = smoother.getCurrentDelta();
         auto wrappedDelta = [](float d, float wrap) -> float
         {
             if (d > wrap * 0.5f)
+            {
                 d -= wrap;
+            }
             if (d < -wrap * 0.5f)
+            {
                 d += wrap;
+            }
             return d;
         };
         const float wd = wrappedDelta(delta, static_cast<float>(BufferSize));
@@ -96,13 +102,17 @@ TEST(TimeDistanceSmootherTest, delayWrapBoundary)
         writeHead = (writeHead + InternalBlockSize) % BufferSize;
         smoother.setCurrentWritePosition(static_cast<float>(writeHead), 1.f);
         for (size_t i = 0; i < InternalBlockSize; ++i)
+        {
             smoother.advancePosition();
+        }
 
         if (block > 200)
         {
             float d = smoother.getCurrentDelta();
             if (d > static_cast<float>(BufferSize) * 0.5f)
+            {
                 d -= static_cast<float>(BufferSize);
+            }
             const float dev = std::abs(d - TargetDistance);
             if (dev > maxDeltaDeviation)
             {
@@ -185,6 +195,37 @@ TEST(TimeDistanceSmootherTest, driftDoubleVsFloat)
         EXPECT_GT(deltaError1, 0.01);
         EXPECT_LT(deltaError1, 1.0);
         EXPECT_LT(deltaError2, 1E-7);
+    }
+}
+
+TEST(TimeDistanceSmootherTest, rateMultiplierScalesAdvance)
+{
+    TimeDistanceSmoother<double> smoother(48000.0);
+    smoother.setWrapPosition(100000);
+    smoother.setCurrentWritePosition(0.0, 2.0);
+    smoother.forceReadPositionDistance(500.0);
+
+    const auto before = smoother.getPosition();
+    smoother.advancePosition(0.5);
+    EXPECT_NEAR(smoother.getPosition() - before, 1.0, 1e-9);
+}
+
+TEST(TimeDistanceSmootherTest, defaultRateMultiplierMatchesExplicitUnity)
+{
+    TimeDistanceSmoother<double> a(48000.0);
+    TimeDistanceSmoother<double> b(48000.0);
+    a.setWrapPosition(100000);
+    b.setWrapPosition(100000);
+    a.setCurrentWritePosition(0.0, 1.3);
+    b.setCurrentWritePosition(0.0, 1.3);
+    a.forceReadPositionDistance(200.0);
+    b.forceReadPositionDistance(200.0);
+
+    for (int i = 0; i < 50; ++i)
+    {
+        a.advancePosition();
+        b.advancePosition(1.0);
+        EXPECT_DOUBLE_EQ(a.getPosition(), b.getPosition());
     }
 }
 
