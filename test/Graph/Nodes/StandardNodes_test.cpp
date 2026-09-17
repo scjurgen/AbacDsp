@@ -45,7 +45,7 @@ TEST(StandardNodesIntegrationTest, StereoToMonoGainMonoToStereoChainCompilesAndR
         makeEdge("m2s", "outR", "", "outR"),
     };
 
-    auto result = GraphCompiler::compile(description, registry, 1);
+    auto result = GraphCompiler::compile(description, registry, 1, 48000.f);
     ASSERT_TRUE(result.graph.has_value());
 
     const float inL = 3.f;
@@ -78,7 +78,7 @@ TEST(StandardNodesIntegrationTest, MsEncodeThenMsDecodeReconstructsInput)
         makeEdge("dec", "outL", "", "outL"),   makeEdge("dec", "outR", "", "outR"),
     };
 
-    auto result = GraphCompiler::compile(description, registry, 1);
+    auto result = GraphCompiler::compile(description, registry, 1, 48000.f);
     ASSERT_TRUE(result.graph.has_value());
 
     const float inL = 1.f;

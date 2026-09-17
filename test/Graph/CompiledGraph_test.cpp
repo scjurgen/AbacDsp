@@ -46,7 +46,7 @@ TEST(CompiledGraphTest, PassThroughChainReproducesInput)
         makeEdge("b", "out", "", "out"),
     };
 
-    auto result = GraphCompiler::compile(description, makeRegistry(), 64);
+    auto result = GraphCompiler::compile(description, makeRegistry(), 64, 48000.f);
     ASSERT_TRUE(result.graph.has_value());
 
     const std::vector<float> input{1.f, 2.f, 3.f, 4.f, 5.f};
@@ -70,7 +70,7 @@ TEST(CompiledGraphTest, GainStubSetParameterScalesOutput)
         makeEdge("g", "out", "", "out"),
     };
 
-    auto result = GraphCompiler::compile(description, makeRegistry(), 64);
+    auto result = GraphCompiler::compile(description, makeRegistry(), 64, 48000.f);
     ASSERT_TRUE(result.graph.has_value());
 
     const std::vector<float> input{1.f, 2.f, 3.f};
@@ -96,7 +96,7 @@ TEST(CompiledGraphTest, SumStubAddsBothInputs)
         makeEdge("sum", "out", "", "out"),
     };
 
-    auto result = GraphCompiler::compile(description, makeRegistry(), 64);
+    auto result = GraphCompiler::compile(description, makeRegistry(), 64, 48000.f);
     ASSERT_TRUE(result.graph.has_value());
 
     const std::vector<float> inputA{3.f, 3.f};
@@ -125,7 +125,7 @@ TEST(CompiledGraphTest, CycleBreakerDelaysFeedbackByOneBlock)
         makeEdge("breaker", "out", "", "out"),
     };
 
-    auto result = GraphCompiler::compile(description, makeRegistry(), 1);
+    auto result = GraphCompiler::compile(description, makeRegistry(), 1, 48000.f);
     ASSERT_TRUE(result.graph.has_value());
 
     float output = 0.f;
@@ -154,7 +154,7 @@ TEST(CompiledGraphTest, RepeatedProcessingIsStable)
         makeEdge("a", "out", "", "out"),
     };
 
-    auto result = GraphCompiler::compile(description, makeRegistry(), 64);
+    auto result = GraphCompiler::compile(description, makeRegistry(), 64, 48000.f);
     ASSERT_TRUE(result.graph.has_value());
 
     const std::vector<float> input(64, 0.5f);

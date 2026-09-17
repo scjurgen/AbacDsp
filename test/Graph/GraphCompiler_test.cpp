@@ -57,7 +57,7 @@ namespace
 TEST(GraphCompilerTest, ValidChainCompiles)
 {
     const auto description = makeChainDescription(1);
-    const auto result = GraphCompiler::compile(description, makeRegistry(), 64);
+    const auto result = GraphCompiler::compile(description, makeRegistry(), 64, 48000.f);
 
     ASSERT_TRUE(result.graph.has_value());
     EXPECT_EQ(result.graph->nodeCount(), 1u);
@@ -68,7 +68,7 @@ TEST(GraphCompilerTest, ErrorDiagnosticsPreventCompilation)
     GraphDescription description;
     description.nodes = {makeNode("p1", "PassThroughStub"), makeNode("p1", "PassThroughStub")};
 
-    const auto result = GraphCompiler::compile(description, makeRegistry(), 64);
+    const auto result = GraphCompiler::compile(description, makeRegistry(), 64, 48000.f);
 
     EXPECT_FALSE(result.graph.has_value());
     const bool hasDuplicateError = std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
@@ -82,8 +82,8 @@ TEST(GraphCompilerTest, ErrorDiagnosticsPreventCompilation)
 
 TEST(GraphCompilerTest, BufferSlotCountDoesNotGrowWithChainLength)
 {
-    const auto shortChain = GraphCompiler::compile(makeChainDescription(3), makeRegistry(), 64);
-    const auto longChain = GraphCompiler::compile(makeChainDescription(6), makeRegistry(), 64);
+    const auto shortChain = GraphCompiler::compile(makeChainDescription(3), makeRegistry(), 64, 48000.f);
+    const auto longChain = GraphCompiler::compile(makeChainDescription(6), makeRegistry(), 64, 48000.f);
 
     ASSERT_TRUE(shortChain.graph.has_value());
     ASSERT_TRUE(longChain.graph.has_value());
@@ -102,7 +102,7 @@ TEST(GraphCompilerTest, CycleWithBreakerCompiles)
         makeEdge("breaker", "out", "", "out"),
     };
 
-    const auto result = GraphCompiler::compile(description, makeRegistry(), 64);
+    const auto result = GraphCompiler::compile(description, makeRegistry(), 64, 48000.f);
 
     ASSERT_TRUE(result.graph.has_value());
     EXPECT_EQ(result.graph->nodeCount(), 2u);

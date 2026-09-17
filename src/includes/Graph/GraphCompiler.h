@@ -41,7 +41,7 @@ class GraphCompiler
 {
   public:
     [[nodiscard]] static CompileResult compile(const GraphDescription& description, const NodeRegistry& registry,
-                                               const size_t maxBlockSize)
+                                               const size_t maxBlockSize, const float sampleRate)
     {
         std::vector<Diagnostic> diagnostics = GraphValidator::validate(description, registry);
         const bool hasError = std::any_of(diagnostics.begin(), diagnostics.end(),
@@ -51,7 +51,7 @@ class GraphCompiler
             return {std::nullopt, std::move(diagnostics)};
         }
 
-        BuildState state = buildNodes(description, registry);
+        BuildState state = buildNodes(description, registry, sampleRate);
         const std::vector<std::string> order = computeSchedule(description, state);
         if (order.size() != state.nodesById.size())
         {
@@ -107,7 +107,8 @@ class GraphCompiler
         std::vector<CompiledGraph::ScheduledNode> schedule;
     };
 
-    [[nodiscard]] static BuildState buildNodes(const GraphDescription& description, const NodeRegistry& registry)
+    [[nodiscard]] static BuildState buildNodes(const GraphDescription& description, const NodeRegistry& registry,
+                                               const float sampleRate)
     {
         BuildState state;
         for (const auto& instance : description.nodes)
@@ -117,7 +118,7 @@ class GraphCompiler
             {
                 continue;
             }
-            std::unique_ptr<Node> node = registry.create(instance.type, instance);
+            std::unique_ptr<Node> node = registry.create(instance.type, instance, sampleRate);
             for (const auto& [paramId, value] : instance.params)
             {
                 const int index = schema->findParameterIndex(paramId);

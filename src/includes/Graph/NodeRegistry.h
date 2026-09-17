@@ -13,7 +13,7 @@
 namespace AbacDsp::Graph
 {
 
-using NodeFactory = std::function<std::unique_ptr<Node>(const NodeInstance&)>;
+using NodeFactory = std::function<std::unique_ptr<Node>(const NodeInstance&, float sampleRate)>;
 
 /**
  * @ingroup graph
@@ -37,10 +37,11 @@ class NodeRegistry
         return it == m_entries.end() ? nullptr : &it->second.schema;
     }
 
-    [[nodiscard]] std::unique_ptr<Node> create(const std::string& typeName, const NodeInstance& instance) const
+    [[nodiscard]] std::unique_ptr<Node> create(const std::string& typeName, const NodeInstance& instance,
+                                               const float sampleRate) const
     {
         const auto it = m_entries.find(typeName);
-        return it == m_entries.end() ? nullptr : it->second.factory(instance);
+        return it == m_entries.end() ? nullptr : it->second.factory(instance, sampleRate);
     }
 
   private:

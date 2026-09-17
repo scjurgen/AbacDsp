@@ -94,21 +94,21 @@ class SumStubNode final : public Node
 inline void registerTestNodes(NodeRegistry& registry)
 {
     registry.registerType("PassThroughStub", NodeSchema{{audioInPort("in"), audioOutPort("out")}, {}, false},
-                          [](const NodeInstance&) { return std::make_unique<PassThroughStubNode>(); });
+                          [](const NodeInstance&, float) { return std::make_unique<PassThroughStubNode>(); });
 
     registry.registerType("CycleBreakerStub", NodeSchema{{audioInPort("in"), audioOutPort("out")}, {}, true},
-                          [](const NodeInstance&) { return std::make_unique<CycleBreakerStubNode>(); });
+                          [](const NodeInstance&, float) { return std::make_unique<CycleBreakerStubNode>(); });
 
     registry.registerType(
         "GainStub",
         NodeSchema{{audioInPort("in"), audioOutPort("out")},
                    {ParameterDescriptor{"gain", "linear", 0.0f, 4.0f, 1.0f, ParameterMapping::Linear, 0.0f, true}},
                    false},
-        [](const NodeInstance&) { return std::make_unique<GainStubNode>(); });
+        [](const NodeInstance&, float) { return std::make_unique<GainStubNode>(); });
 
     registry.registerType("SumStub",
                           NodeSchema{{audioInPort("in1"), audioInPort("in2"), audioOutPort("out")}, {}, false},
-                          [](const NodeInstance&) { return std::make_unique<SumStubNode>(); });
+                          [](const NodeInstance&, float) { return std::make_unique<SumStubNode>(); });
 }
 
 }

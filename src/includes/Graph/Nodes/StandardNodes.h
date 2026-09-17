@@ -54,7 +54,7 @@ inline void registerStandardNodes(NodeRegistry& registry)
                     audioPort("outL", PortDirection::Output), audioPort("outR", PortDirection::Output)},
                    {param("gainDb", "dB", -60.0f, 24.0f, 0.0f)},
                    false},
-        [](const NodeInstance&) { return std::make_unique<Gain>(); });
+        [](const NodeInstance&, float) { return std::make_unique<Gain>(); });
 
     registry.registerType(
         "Mixer",
@@ -63,7 +63,7 @@ inline void registerStandardNodes(NodeRegistry& registry)
                     audioPort("outL", PortDirection::Output), audioPort("outR", PortDirection::Output)},
                    {},
                    false},
-        [](const NodeInstance&) { return std::make_unique<Mixer>(); });
+        [](const NodeInstance&, float) { return std::make_unique<Mixer>(); });
 
     registry.registerType(
         "Matrix",
@@ -72,7 +72,7 @@ inline void registerStandardNodes(NodeRegistry& registry)
                    {param("gainLL", "linear", -2.0f, 2.0f, 1.0f), param("gainLR", "linear", -2.0f, 2.0f, 0.0f),
                     param("gainRL", "linear", -2.0f, 2.0f, 0.0f), param("gainRR", "linear", -2.0f, 2.0f, 1.0f)},
                    false},
-        [](const NodeInstance&) { return std::make_unique<Matrix>(); });
+        [](const NodeInstance&, float) { return std::make_unique<Matrix>(); });
 
     registry.registerType(
         "Split",
@@ -81,7 +81,7 @@ inline void registerStandardNodes(NodeRegistry& registry)
                     audioPort("out2L", PortDirection::Output), audioPort("out2R", PortDirection::Output)},
                    {},
                    false},
-        [](const NodeInstance&) { return std::make_unique<Split>(); });
+        [](const NodeInstance&, float) { return std::make_unique<Split>(); });
 
     registry.registerType(
         "StereoToMono",
@@ -89,14 +89,14 @@ inline void registerStandardNodes(NodeRegistry& registry)
                     audioPort("out", PortDirection::Output)},
                    {param("gainL", "linear", 0.0f, 1.0f, 0.5f), param("gainR", "linear", 0.0f, 1.0f, 0.5f)},
                    false},
-        [](const NodeInstance&) { return std::make_unique<StereoToMono>(); });
+        [](const NodeInstance&, float) { return std::make_unique<StereoToMono>(); });
 
     registry.registerType("MonoToStereo",
                           NodeSchema{{audioPort("in", PortDirection::Input), audioPort("outL", PortDirection::Output),
                                       audioPort("outR", PortDirection::Output)},
                                      {},
                                      false},
-                          [](const NodeInstance&) { return std::make_unique<MonoToStereo>(); });
+                          [](const NodeInstance&, float) { return std::make_unique<MonoToStereo>(); });
 
     registry.registerType(
         "MS_Encode",
@@ -104,7 +104,7 @@ inline void registerStandardNodes(NodeRegistry& registry)
                     audioPort("outM", PortDirection::Output), audioPort("outS", PortDirection::Output)},
                    {},
                    false},
-        [](const NodeInstance&) { return std::make_unique<MsEncode>(); });
+        [](const NodeInstance&, float) { return std::make_unique<MsEncode>(); });
 
     registry.registerType(
         "MS_Decode",
@@ -112,7 +112,7 @@ inline void registerStandardNodes(NodeRegistry& registry)
                     audioPort("outL", PortDirection::Output), audioPort("outR", PortDirection::Output)},
                    {},
                    false},
-        [](const NodeInstance&) { return std::make_unique<MsDecode>(); });
+        [](const NodeInstance&, float) { return std::make_unique<MsDecode>(); });
 
     registry.registerType(
         "Width",
@@ -120,7 +120,7 @@ inline void registerStandardNodes(NodeRegistry& registry)
                     audioPort("outL", PortDirection::Output), audioPort("outR", PortDirection::Output)},
                    {param("width", "linear", 0.0f, 2.0f, 1.0f)},
                    false},
-        [](const NodeInstance&) { return std::make_unique<Width>(); });
+        [](const NodeInstance&, float) { return std::make_unique<Width>(); });
 }
 
 }
