@@ -7,12 +7,12 @@
 #include <vector>
 
 #include "Audio/AudioBuffer.h"
-#include "Delays/OrganicChorusTransport.h"
+#include "Delays/WobbleDelay.h"
 #include "EffectBase.h"
 #include "Filters/Sinc/sinc_4.h"
 
 /**
- * @brief Minimal "Tape Vibrato" graph: a shared stereo OrganicChorusTransport read head,
+ * @brief Minimal "Tape Vibrato" graph: a shared stereo WobbleDelay read head,
  * modulated by tape-like wow and flutter, 100% wet.
  *
  * The seed of a planned Lua tape-modulation toolbox (chorus.md); base delay, buffer size
@@ -29,7 +29,7 @@ class PathfinderImpl final : public EffectBase
     static constexpr float kSafetyMarginSamples{250.f};
     static constexpr float kCorrectionThresholdSamples{190.f};
     static constexpr float kFlutterRateFloorHz{0.6f};
-    using Transport = AbacDsp::OrganicChorusTransport<kBufferSize, 2, 1, BlockSize>;
+    using Transport = AbacDsp::WobbleDelay<kBufferSize, 2, 1, BlockSize>;
 
     explicit PathfinderImpl(const float sampleRate)
         : EffectBase(sampleRate)

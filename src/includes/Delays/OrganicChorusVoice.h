@@ -6,7 +6,7 @@
 #include <memory>
 #include <random>
 
-#include "Delays/OrganicChorusTransport.h"
+#include "Delays/WobbleDelay.h"
 #include "Filters/Distortion.h"
 #include "Filters/OnePoleFilter.h"
 #include "Filters/Sinc/SincFilter.h"
@@ -17,7 +17,7 @@ namespace AbacDsp
 
 /**
  * @ingroup delays
- * @brief One BBD-style chorus/flanger voice built on `OrganicChorusTransport`, wrapped in a
+ * @brief One BBD-style chorus/flanger voice built on `WobbleDelay`, wrapped in a
  * feedback loop and pre/post tone shaping.
  *
  * The transport writes tape at its base ratio plus a separate, zero-mean
@@ -61,7 +61,7 @@ class OrganicChorusVoice
         m_transport.setReadHeadSafetyMargin(samples);
     }
 
-    // See OrganicChorusTransport::setReadHeadCorrectionThreshold(): must exceed this voice's
+    // See WobbleDelay::setReadHeadCorrectionThreshold(): must exceed this voice's
     // own Wow/Flutter excursion, or drift correction cancels the modulation itself.
     void setReadHeadCorrectionThreshold(const float samples) noexcept
     {
@@ -177,7 +177,7 @@ class OrganicChorusVoice
     }
 
   private:
-    OrganicChorusTransport<BufferSize, 1, 1, TileSize> m_transport;
+    WobbleDelay<BufferSize, 1, 1, TileSize> m_transport;
     OrnsteinUhlenbeckProcess m_speedDrift;
     float m_speedDriftMean{0.f};
     OnePoleFilter<OnePoleFilterCharacteristic::HighPass> m_preHighPass;

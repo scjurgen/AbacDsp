@@ -2,7 +2,7 @@
 
 Visualizes and verifies classes in `src/includes/Delays/` directly, with no
 JUCE involved: `VariSpeedTapeDelay`'s wow/flutter-shaped recorded pitch and
-its exponential/octave-based transport-speed glide; `OrganicChorusTransport`
+its exponential/octave-based transport-speed glide; `WobbleDelay`
 (organicchorus's own fork, where wow/flutter modulate the read head instead
 of the write clock - see its own class doc comment), including a check that
 its drift-tracking fix holds under stress; an aliasing comparison
@@ -54,12 +54,12 @@ cmake --build . --target DelaysExplore
   frames by the current ratio each call, so `writeHead()`'s advance per
   tile is directly proportional to it.
 - `td_readheadwobble.txt`: the same measurement as `td_pitchwobble.txt`, but
-  driving `OrganicChorusTransport` instead - wow/flutter modulate the read
+  driving `WobbleDelay` instead - wow/flutter modulate the read
   head here, and the write clock stays clean throughout.
-- `td_driftstability.txt`: `OrganicChorusTransport`'s write/read distance
+- `td_driftstability.txt`: `WobbleDelay`'s write/read distance
   error (`writeHead() - readHead()`, minus the target distance) over a 30s
   run under a sustained Drift-sized external ratio perturbation - the same
-  scenario as `test/Delays/OrganicChorusTransport_test.cpp`'s
+  scenario as `test/Delays/WobbleDelay_test.cpp`'s
   `ReadHeadVelocityStaysBoundedUnderSustainedDrift` regression test, verifying
   the drift-tracking fix (`m_lastFeedRatio`) holds over a longer run.
 - `td_aliasing_<side>_<ratio>_<filter>.txt` / `.wav` (16 files: writeside/
@@ -72,7 +72,7 @@ cmake --build . --target DelaysExplore
   Nyquist 2400Hz - the sweep's top end crosses it); `1to2` forces ratio 0.5
   (24000 samples/sec, Nyquist 12000Hz - the same sweep stays well under it,
   a control). `writeside` drives `VariSpeedTapeDelay` (tapelooper's actual
-  filter choice); `readside` drives `OrganicChorusTransport`.
+  filter choice); `readside` drives `WobbleDelay`.
 - `td_aliasing_ratioglide_<filter>.txt` / `.wav`: a constant 1000Hz probe
   fed into `VariSpeedTapeDelay` while its ratio steps from 1.0 down to 0.1
   in 10 stages, each held for 1s via the transport's own `setRatio(...,
@@ -110,10 +110,10 @@ trace (`2.0->1.0`) takes almost exactly twice as long, approximately
 0.333s, matching `brakePerSec=3` - braking really is slower than
 accelerating, not just documented as such.
 
-![Tracked playback pitch, OrganicChorusTransport, wow+flutter on vs. off](td_readheadwobble.png)
+![Tracked playback pitch, WobbleDelay, wow+flutter on vs. off](td_readheadwobble.png)
 
 **Pitch wobble (read head)**: same 220 Hz probe and wow/flutter settings as
-the write-clock plot above, but driving `OrganicChorusTransport`. The
+the write-clock plot above, but driving `WobbleDelay`. The
 wobble is visually similar in shape and depth - the wow/flutter *character*
 carries over faithfully from write-side to read-side modulation - but here
 it is a live playback effect: the recording underneath stays clean (see
@@ -121,7 +121,7 @@ it is a live playback effect: the recording underneath stays clean (see
 recording directly), and the wobble would apply fresh on every playback
 pass rather than being fixed once recorded.
 
-![OrganicChorusTransport write/read distance error under sustained Drift](td_driftstability.png)
+![WobbleDelay write/read distance error under sustained Drift](td_driftstability.png)
 
 **Drift-tracking stability**: the distance error wanders smoothly within
 roughly -23 to -3 samples over the full 30s run, tracking the Drift
@@ -131,7 +131,7 @@ Drift perturbation entirely, so this same error grew unchecked until it
 crossed the configured correction threshold and triggered a hard, audible
 50ms catch-up glide (read velocity dropping to roughly 8% of nominal); see
 [[project_organicchorus_transport_fork]] and
-`test/Delays/OrganicChorusTransport_test.cpp` for the regression test that
+`test/Delays/WobbleDelay_test.cpp` for the regression test that
 pins this.
 
 ![Aliasing, write-side transport, 1:10 ratio, sinc4 vs. sinc_69_768](td_aliasing_writeside_1to10.png)
@@ -152,9 +152,9 @@ comfortably below the 12000Hz Nyquist of a 1:2 (24000 samples/sec) write
 rate - a single clean ridge, no mirror, in both filters. Aliasing here is
 specific to how extreme the ratio is, not an inherent flaw at any ratio.
 
-![Aliasing, OrganicChorusTransport, 1:10 and 1:2](td_aliasing_readside_1to10.png)
+![Aliasing, WobbleDelay, 1:10 and 1:2](td_aliasing_readside_1to10.png)
 
-**Aliasing, read-side transport**: `OrganicChorusTransport` reproduces both
+**Aliasing, read-side transport**: `WobbleDelay` reproduces both
 results (extreme: aliased identically in both filters; mild: clean in both
 - see `td_aliasing_readside_1to2.png`) exactly, since this test exercises
 only the base-ratio resampler the two classes share - Wow/Flutter, the one

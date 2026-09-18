@@ -6,7 +6,7 @@
 #include "gtest/gtest.h"
 
 #include "Audio/AudioBuffer.h"
-#include "Delays/OrganicChorusTransport.h"
+#include "Delays/WobbleDelay.h"
 #include "Filters/Sinc/sinc_4.h"
 #include "impl/PathfinderImpl.h"
 

@@ -28,7 +28,7 @@ using Voice = OrganicChorusVoice<BufferSize, TileSize>;
                                             const float wowVariance, const float wowDrift, const float flutterRate,
                                             const float flutterDepth, const size_t numBlocks)
 {
-    OrganicChorusTransport<BufferSize, 1, 1, TileSize> sut{SampleRate, makeSincFilter()};
+    WobbleDelay<BufferSize, 1, 1, TileSize> sut{SampleRate, makeSincFilter()};
     constexpr float kTargetDistance{BufferSize / 2.f};
     sut.setReadHeadSafetyMargin(8.f);
     sut.setReadHead(0, kTargetDistance, true);
@@ -85,7 +85,7 @@ TEST(OrganicChorusVoiceSafetyMarginMeasurement, DeeperSettingsStayBounded)
 // it were drift - this is the regression that motivated exposing the threshold at all.
 TEST(OrganicChorusVoiceSafetyMarginMeasurement, DefaultCorrectionThresholdWouldMaskTheModulation)
 {
-    OrganicChorusTransport<BufferSize, 1, 1, TileSize> sut{SampleRate, makeSincFilter()};
+    WobbleDelay<BufferSize, 1, 1, TileSize> sut{SampleRate, makeSincFilter()};
     constexpr float kTargetDistance{BufferSize / 2.f};
     sut.setReadHeadSafetyMargin(8.f);
     sut.setReadHead(0, kTargetDistance, true);
@@ -115,7 +115,7 @@ TEST(OrganicChorusVoiceSafetyMarginMeasurement, DefaultCorrectionThresholdWouldM
         peak = std::max(peak, static_cast<float>(std::abs(delta - kTargetDistance)));
     }
     // Chunked read reconstruction (kLowRateChunkFrames) leaves a ~67-69 sample baseline
-    // residual even fully masked now - matches OrganicChorusTransportWriteTest's "quiet" case.
+    // residual even fully masked now - matches WobbleDelayWriteTest's "quiet" case.
     EXPECT_LT(peak, 100.f);
 }
 

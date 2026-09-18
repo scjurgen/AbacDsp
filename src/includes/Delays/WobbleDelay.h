@@ -19,18 +19,19 @@ namespace AbacDsp
 {
 /**
  * @ingroup delays
- * @brief organicchorus's own tape transport - a deliberate fork of VariSpeedTapeDelay, not a
- * shared class.
+ * @brief Varispeed delay line, modulated on playback rather than on record - a deliberate
+ * fork of VariSpeedTapeDelay, not a shared class. Medium-agnostic: equally usable for a tape,
+ * a BBD, or anything else with a moving read head.
  *
  * The write clock only carries the base ratio plus an external (e.g. Ornstein-Uhlenbeck)
- * perturbation, so tape stays clean; Wow and Flutter modulate each read head's own advance
- * rate instead. `tapelooper` still uses VariSpeedTapeDelay, where Wow/Flutter modulate the
- * write clock and get printed into what's recorded - a fix to one class does not reach the
- * other.
+ * perturbation, so what's recorded stays clean; Wow and Flutter modulate each read head's own
+ * advance rate instead, so the wobble is a live effect, not baked into the recording (compare
+ * VariSpeedTapeDelay, where Wow/Flutter modulate the write clock instead - a fix to one class
+ * does not reach the other).
  * @see https://en.wikipedia.org/wiki/Wow_and_flutter
  */
 template <size_t BufferSize, size_t NumChannels, size_t NumReadHeads, size_t TileSize>
-class OrganicChorusTransport
+class WobbleDelay
 {
   public:
     /// Octaves per second when speeding up.
@@ -49,7 +50,7 @@ class OrganicChorusTransport
     static constexpr size_t kLowRateChunkFrames = 16;
     static constexpr size_t kLowRateRingFrames = TileSize * static_cast<size_t>(kMaxRatio) * 2;
 
-    OrganicChorusTransport(const float sampleRate, const std::shared_ptr<SincFilter>& filterSet)
+    WobbleDelay(const float sampleRate, const std::shared_ptr<SincFilter>& filterSet)
         : m_sampleRate(sampleRate)
         , m_buffer((BufferSize + 6) * NumChannels, 0)
         , m_rdhd{constructArray<TimeDistanceSmoother<double>, NumReadHeads>(static_cast<double>(sampleRate))}

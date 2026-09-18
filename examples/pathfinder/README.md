@@ -1,7 +1,7 @@
 # Pathfinder
 
 The first graph of a planned Lua tape-modulation toolbox (see `chorus.md`): a single
-shared-stereo tape transport (`OrganicChorusTransport`, organicchorus's own fork of
+shared-stereo tape transport (`WobbleDelay`, organicchorus's own fork of
 `VariSpeedTapeDelay`), one read head, driven purely by its internal wow and flutter,
 100% wet. Left and right share one transport, so the wobble stays coherent across the
 stereo image rather than drifting independently per channel.
@@ -15,7 +15,7 @@ built as an ordinary fixed-topology example like every other one in `examples/`.
 
 ```mermaid
 flowchart LR
-    IN["Stereo input"] --> T["OrganicChorusTransport\n(shared wow + flutter, 1 read head)"]
+    IN["Stereo input"] --> T["WobbleDelay\n(shared wow + flutter, 1 read head)"]
     T --> OUT["Stereo output (100% wet)"]
 ```
 

@@ -6,7 +6,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-#include "Delays/OrganicChorusTransport.h"
+#include "Delays/WobbleDelay.h"
 #include "Filters/Sinc/sinc_4.h"
 #include "Generators/OrnsteinUhlenbeckProcess.h"
 
@@ -23,7 +23,7 @@ struct DelayTestParams
     std::vector<size_t> expectedDominantIndices;
 };
 
-class OrganicChorusTransportTestFixture : public ::testing::TestWithParam<DelayTestParams>
+class WobbleDelayTestFixture : public ::testing::TestWithParam<DelayTestParams>
 {
   protected:
     struct PeakAnalysis
@@ -38,7 +38,7 @@ class OrganicChorusTransportTestFixture : public ::testing::TestWithParam<DelayT
         float energy{};
     };
 
-    OrganicChorusTransport<10000, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
+    WobbleDelay<10000, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
 
     void SetUp() override
     {
@@ -145,7 +145,7 @@ class OrganicChorusTransportTestFixture : public ::testing::TestWithParam<DelayT
 };
 
 
-TEST_P(OrganicChorusTransportTestFixture, DelayedAround1000Samples)
+TEST_P(WobbleDelayTestFixture, DelayedAround1000Samples)
 {
     const auto& p = GetParam();
 
@@ -180,7 +180,7 @@ TEST_P(OrganicChorusTransportTestFixture, DelayedAround1000Samples)
 // Re-measured for the SrPullConverter-based read reconstruction: peak positions land close
 // to their old (Catmull-Rom-era) values given compensation headroom; support width is
 // genuinely wider now - the sinc kernel's own footprint, not a bug.
-INSTANTIATE_TEST_SUITE_P(OrganicChorusTransportSpeedVariants, OrganicChorusTransportTestFixture,
+INSTANTIATE_TEST_SUITE_P(WobbleDelaySpeedVariants, WobbleDelayTestFixture,
                          ::testing::Values(
                              //             ratio   peakIdx   suppW  dominantIndices
                              DelayTestParams{0.25f, 4023.71f, 120, {4020, 4021, 4022, 4023, 4024, 4025, 4026, 4027}},
@@ -199,10 +199,10 @@ INSTANTIATE_TEST_SUITE_P(OrganicChorusTransportSpeedVariants, OrganicChorusTrans
 
 // The resampler has its own startup transient (see the fixture's settle() above), so
 // writeHead() isn't exactly TileSize per feed() from a cold start - only once settled.
-TEST(OrganicChorusTransportWriteTest, WriteHeadAdvancesByTileSizePerFeedOnceSettled)
+TEST(WobbleDelayWriteTest, WriteHeadAdvancesByTileSizePerFeedOnceSettled)
 {
     constexpr size_t kSmallBufferSize = 500;
-    OrganicChorusTransport<kSmallBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
+    WobbleDelay<kSmallBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
     sut.setRatio(1.f, true);
 
     std::array<float, TileSize> block{};
@@ -217,11 +217,11 @@ TEST(OrganicChorusTransportWriteTest, WriteHeadAdvancesByTileSizePerFeedOnceSett
 
 // The whole point of this fork: Wow/Flutter must never reach feed(), so the write head's
 // per-tile advance is identical whether they are silent or driven hard.
-TEST(OrganicChorusTransportWriteTest, WowFlutterNeverAffectsWriteHeadAdvance)
+TEST(WobbleDelayWriteTest, WowFlutterNeverAffectsWriteHeadAdvance)
 {
     constexpr size_t kSmallBufferSize = 500;
-    OrganicChorusTransport<kSmallBufferSize, 1, 1, TileSize> quiet{48000.f, std::make_shared<SincFilter>(sinc4)};
-    OrganicChorusTransport<kSmallBufferSize, 1, 1, TileSize> driven{48000.f, std::make_shared<SincFilter>(sinc4)};
+    WobbleDelay<kSmallBufferSize, 1, 1, TileSize> quiet{48000.f, std::make_shared<SincFilter>(sinc4)};
+    WobbleDelay<kSmallBufferSize, 1, 1, TileSize> driven{48000.f, std::make_shared<SincFilter>(sinc4)};
     quiet.setRatio(1.f, true);
     driven.setRatio(1.f, true);
     driven.setWowRate(0.5f);
@@ -245,12 +245,12 @@ TEST(OrganicChorusTransportWriteTest, WowFlutterNeverAffectsWriteHeadAdvance)
 // Mirrors OrganicChorusVoiceSafetyMarginMeasurement in OrganicChorusVoice_test.cpp: the
 // write/read distance should sit on target with Wow/Flutter off, and wander once they're
 // driven - proving the read head, not the write clock, now carries the modulation.
-TEST(OrganicChorusTransportWriteTest, ReadHeadWobblesWithWowFlutterWhileWriteStaysClean)
+TEST(WobbleDelayWriteTest, ReadHeadWobblesWithWowFlutterWhileWriteStaysClean)
 {
     constexpr size_t kBufferSize = 20000;
     constexpr float kTargetDistance{kBufferSize / 2.f};
 
-    const auto measurePeakDrift = [](OrganicChorusTransport<kBufferSize, 1, 1, TileSize>& sut)
+    const auto measurePeakDrift = [](WobbleDelay<kBufferSize, 1, 1, TileSize>& sut)
     {
         sut.setReadHeadSafetyMargin(8.f);
         sut.setReadHead(0, kTargetDistance, true);
@@ -281,12 +281,12 @@ TEST(OrganicChorusTransportWriteTest, ReadHeadWobblesWithWowFlutterWhileWriteSta
     // Even at ratio 1 with Wow/Flutter off, a small bounded residual remains - empirically ~69
     // samples here (the read reconstruction's own chunked generation is coarser-grained than
     // the old per-sample Catmull-Rom was); the bound below has headroom either way.
-    OrganicChorusTransport<kBufferSize, 1, 1, TileSize> quiet{48000.f, std::make_shared<SincFilter>(sinc4)};
+    WobbleDelay<kBufferSize, 1, 1, TileSize> quiet{48000.f, std::make_shared<SincFilter>(sinc4)};
     quiet.setWowDepth(0.f);
     quiet.setFlutterDepth(0.f);
     EXPECT_LT(measurePeakDrift(quiet), 100.f);
 
-    OrganicChorusTransport<kBufferSize, 1, 1, TileSize> driven{48000.f, std::make_shared<SincFilter>(sinc4)};
+    WobbleDelay<kBufferSize, 1, 1, TileSize> driven{48000.f, std::make_shared<SincFilter>(sinc4)};
     driven.setWowRate(0.4f);
     driven.setWowDepth(0.7f);
     driven.setWowVariance(0.3f);
@@ -299,10 +299,10 @@ TEST(OrganicChorusTransportWriteTest, ReadHeadWobblesWithWowFlutterWhileWriteSta
 // setReadHead(..., true) resolves to m_idealWritePosition - clampedDistance, wrapped into
 // [0, BufferSize) - so on a freshly constructed instance (write position still 0) the
 // resulting read position directly reveals what the clamp margin actually did.
-TEST(OrganicChorusTransportSafetyMarginTest, DefaultMarginMatchesLegacyFixedConstant)
+TEST(WobbleDelaySafetyMarginTest, DefaultMarginMatchesLegacyFixedConstant)
 {
     constexpr size_t kBufferSize = 20000;
-    OrganicChorusTransport<kBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
+    WobbleDelay<kBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
     sut.setReadHead(0, 500.f, true);
     EXPECT_NEAR(sut.readHead(0), kBufferSize - 1000.0, 1E-9);
 }
@@ -313,19 +313,19 @@ TEST(OrganicChorusTransportSafetyMarginTest, DefaultMarginMatchesLegacyFixedCons
 // where the read head literally sits, so the two now differ by that constant.
 constexpr double kReadReconstructionDelay = 25.765625;
 
-TEST(OrganicChorusTransportSafetyMarginTest, SmallerMarginPermitsShortDelay)
+TEST(WobbleDelaySafetyMarginTest, SmallerMarginPermitsShortDelay)
 {
     constexpr size_t kBufferSize = 20000;
-    OrganicChorusTransport<kBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
+    WobbleDelay<kBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
     sut.setReadHeadSafetyMargin(50.f);
     sut.setReadHead(0, 500.f, true);
     EXPECT_NEAR(sut.readHead(0), kBufferSize - 500.0 + kReadReconstructionDelay, 1E-9);
 }
 
-TEST(OrganicChorusTransportSafetyMarginTest, MarginIsClampedToInterpolatorFloorAndBufferCeiling)
+TEST(WobbleDelaySafetyMarginTest, MarginIsClampedToInterpolatorFloorAndBufferCeiling)
 {
     constexpr size_t kBufferSize = 20000;
-    OrganicChorusTransport<kBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
+    WobbleDelay<kBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
 
     // Floor is now max(2, kReadReconstructionDelay) - the kernel's own structural minimum,
     // not the old fixed 8 (sized for Catmull-Rom's much narrower footprint).
@@ -341,12 +341,12 @@ TEST(OrganicChorusTransportSafetyMarginTest, MarginIsClampedToInterpolatorFloorA
 // readBlock() used to track m_ratio.getLastValue(), which omits setExternalRatioPerturbation()
 // - under sustained drift that caused a hard catch-up glide once the real write rate diverged
 // far enough. Fixed by tracking the exact feed() ratio; this pins the regression.
-TEST(OrganicChorusTransportDriftTrackingTest, ReadHeadVelocityStaysBoundedUnderSustainedDrift)
+TEST(WobbleDelayDriftTrackingTest, ReadHeadVelocityStaysBoundedUnderSustainedDrift)
 {
     constexpr size_t kBufferSize = 8192;
     constexpr float sigma = 0.2f * 0.06f; // Drift=0.2 on Tri Ensemble's speedDriftMaxSigma
 
-    OrganicChorusTransport<kBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
+    WobbleDelay<kBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
     sut.setRatio(1.f, true);
     sut.setReadHeadSafetyMargin(280.f);
     sut.setReadHeadCorrectionThreshold(0, 220.f);

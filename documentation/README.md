@@ -22,7 +22,7 @@ all. See `TODO.md` for folders and algorithms still missing plots.
 
 | Folder | Kind | Covers |
 |---|---|---|
-| `Delays/` | documentation | `VariSpeedTapeDelay`: wow/flutter baked into recorded pitch, octave-based transport-speed glide; `OrganicChorusTransport`: the same but wow/flutter on the read head, drift-tracking fix check, sinc4-vs-sinc_69_768 aliasing sweep; `MultiTapDelay`: whole-sample-only tap spacing |
+| `Delays/` | documentation | `VariSpeedTapeDelay`: wow/flutter baked into recorded pitch, octave-based transport-speed glide; `WobbleDelay`: the same but wow/flutter on the read head, drift-tracking fix check, sinc4-vs-sinc_69_768 aliasing sweep; `MultiTapDelay`: whole-sample-only tap spacing |
 | `ClassicBeats/` | generation | Original, copyright-free full-drumset MIDI grooves (Rock, Blues, Jazz Swing, Latin, Funk, Fusion, Hip-Hop, Progressive, Reggae, Pop, Soul) informed by aggregate statistics over reference packs, staged locally for later review before joining `MidiDrums/` |
 | `Diffuser/` | documentation | `DiffuserDelayChain`: Schroeder vs. Direct allpass magnitude flatness, echo-density growth vs. element count |
 | `DrumKit808/` | generation | Synthesizes a full TR-808-style drum kit into `samples/drums/808/` - a copyright-free alternative to a real recorded pack, see `samples/README.md` |

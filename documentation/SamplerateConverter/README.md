@@ -56,7 +56,7 @@ cmake --build . --target SamplerateConverterExplore
 ## Does it matter which class drives it?
 
 `documentation/Delays/`'s own aliasing check answers this question for
-`VariSpeedTapeDelay` vs. `OrganicChorusTransport` (its write-clock vs. read-head fork);
+`VariSpeedTapeDelay` vs. `WobbleDelay` (its write-clock vs. read-head fork);
 here the equivalent question is `SrPushConverter` vs. `SrPullConverter` over the exact
 same `SincFilter`. Every spectrogram pair below (`_push_*.png` vs. `_pull_*.png`,
 generated separately, both checked in) is visually identical, and the SNR measurement

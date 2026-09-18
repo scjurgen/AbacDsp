@@ -1,7 +1,7 @@
 # Organic Chorus
 
 A multi-voice BBD-style chorus/flanger built on a genuine variable-speed tape transport
-per voice (`OrganicChorusTransport`, a fork of tapelooper's `VariSpeedTapeDelay` tuned
+per voice (`WobbleDelay`, a fork of tapelooper's `VariSpeedTapeDelay` tuned
 for this instrument's own artistic use of the tape concept), rather than a read-position
 fake: the write clock stays clean, carrying only the transport's own baseline speed plus
 an independent, mean-reverting (Ornstein-Uhlenbeck) drift process (Drift) wandering it on
@@ -26,7 +26,7 @@ flowchart TD
         SUMIN["input + dampedFeedback * Feedback"] --> HP["High-pass (Tone)"]
         HP --> LP1["Pre low-pass (Tone)"]
         LP1 --> FEED["feed()"]
-        subgraph TRANSPORT["OrganicChorusTransport"]
+        subgraph TRANSPORT["WobbleDelay"]
             direction TD
             RATIO["write ratio = baseRatio * (1+SpeedDrift)"]
             RATIO --> RESAMP["Sinc-interpolated write"] --> RING["Ring buffer (tape)"]
@@ -96,7 +96,7 @@ a new `ChorusConfigurationSpec` entry in `src/impl/ChorusConfigurations.h`, not 
 ### A path to tape defects
 
 Because this engine's transport is a genuine variable-speed tape model
-(`OrganicChorusTransport`, not a read-position approximation), it also opens the door to
+(`WobbleDelay`, not a read-position approximation), it also opens the door to
 simulating period tape defects - dropout, hiss, print-through - later, the same way
 tapelooper's own transport does. Nothing here builds that yet; it is recorded as a
 natural next step this architecture enables, not a promise.
