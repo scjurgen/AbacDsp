@@ -43,6 +43,7 @@ struct NodeSchema
     std::vector<PortDescriptor> ports;
     std::vector<ParameterDescriptor> parameters;
     bool breaksCycle{false};
+    bool providesDamping{false};
 
     [[nodiscard]] const PortDescriptor* findPort(const std::string_view name) const noexcept
     {

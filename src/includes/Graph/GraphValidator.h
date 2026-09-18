@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <set>
 #include <string>
@@ -328,6 +329,51 @@ class GraphValidator
         return std::find(it->second.begin(), it->second.end(), id) != it->second.end();
     }
 
+    [[nodiscard]] static float resolveParamValue(const ResolvedNode& node, const std::string& paramId,
+                                                 const float fallback)
+    {
+        const auto it = node.instance->params.find(paramId);
+        if (it != node.instance->params.end())
+        {
+            return it->second;
+        }
+        const int index = node.schema->findParameterIndex(paramId);
+        return index >= 0 ? node.schema->parameters[static_cast<size_t>(index)].defaultValue : fallback;
+    }
+
+    // Not an exhaustive resonance taxonomy - Biquad in "peak" mode and BandPass
+    // are the two node types this phase actually ships with resonance.
+    [[nodiscard]] static bool isResonantFilterNode(const ResolvedNode& node)
+    {
+        constexpr float kResonantQThreshold = 2.0f;
+        const bool isPeakBiquad = node.instance->type == "Biquad" && node.instance->config.contains("mode") &&
+                                  node.instance->config.at("mode") == "peak";
+        const bool isBandPass = node.instance->type == "BandPass";
+        if (!isPeakBiquad && !isBandPass)
+        {
+            return false;
+        }
+        return resolveParamValue(node, "Q", 0.0f) > kResonantQThreshold;
+    }
+
+    static void validateFeedbackGainLimits(const GraphDescription& description,
+                                           const std::vector<std::string>& component,
+                                           std::vector<Diagnostic>& diagnostics)
+    {
+        constexpr float kMaxFeedbackGain = 1.0f;
+        for (const auto& edge : description.edges)
+        {
+            const bool bothInComponent =
+                std::find(component.begin(), component.end(), edge.fromNode) != component.end() &&
+                std::find(component.begin(), component.end(), edge.toNode) != component.end();
+            if (bothInComponent && std::abs(edge.gain) > kMaxFeedbackGain)
+            {
+                diagnostics.push_back({DiagnosticSeverity::Error, "feedback edge gain exceeds the safe limit of 1.0",
+                                       edge.toNode, edge.toPort});
+            }
+        }
+    }
+
     static void validateCycles(const GraphDescription& description, const NodeMap& nodes,
                                std::vector<Diagnostic>& diagnostics)
     {
@@ -367,6 +413,28 @@ class GraphValidator
                     message += " " + id;
                 }
                 diagnostics.push_back({DiagnosticSeverity::Error, message, component.front(), ""});
+            }
+
+            validateFeedbackGainLimits(description, component, diagnostics);
+
+            const bool hasDamping = std::any_of(component.begin(), component.end(), [&nodes](const std::string& id)
+                                                { return nodes.at(id).schema->providesDamping; });
+            if (!hasDamping)
+            {
+                std::string message = "feedback cycle has no damping filter:";
+                for (const auto& id : component)
+                {
+                    message += " " + id;
+                }
+                diagnostics.push_back({DiagnosticSeverity::Warning, message, component.front(), ""});
+
+                const bool hasResonant = std::any_of(component.begin(), component.end(), [&nodes](const std::string& id)
+                                                     { return isResonantFilterNode(nodes.at(id)); });
+                if (hasResonant)
+                {
+                    diagnostics.push_back({DiagnosticSeverity::Warning,
+                                           "resonant filter inside an undamped feedback cycle", component.front(), ""});
+                }
             }
         }
     }

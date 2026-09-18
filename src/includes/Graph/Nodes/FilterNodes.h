@@ -11,6 +11,7 @@
 #include "Graph/Nodes/Compander.h"
 #include "Graph/Nodes/CrossoverLR4.h"
 #include "Graph/Nodes/DcBlocker.h"
+#include "Graph/Nodes/FeedbackDelay.h"
 #include "Graph/Nodes/OnePoleHp.h"
 #include "Graph/Nodes/OnePoleLp.h"
 #include "Graph/Nodes/Saturator.h"
@@ -46,8 +47,8 @@ namespace Detail
 /**
  * @ingroup graph
  * @brief Registers OnePoleLP, OnePoleHP, Biquad, BandPass, ShelfEQ, TiltEQ,
- * CrossoverLR4, Saturator, Compander, and DCBlocker under chorus.md's exact
- * type-name spelling.
+ * CrossoverLR4, Saturator, Compander, DCBlocker, and FeedbackDelay under
+ * chorus.md's exact type-name spelling.
  */
 inline void registerFilterNodes(NodeRegistry& registry)
 {
@@ -57,14 +58,16 @@ inline void registerFilterNodes(NodeRegistry& registry)
     registry.registerType("OnePoleLP",
                           NodeSchema{{filterPort("in", PortDirection::Input), filterPort("out", PortDirection::Output)},
                                      {filterParam("cutoffHz", 20.0f, 20000.0f, 1000.0f)},
-                                     false},
+                                     false,
+                                     true},
                           [](const NodeInstance&, const float sampleRate)
                           { return std::make_unique<OnePoleLp>(sampleRate); });
 
     registry.registerType("OnePoleHP",
                           NodeSchema{{filterPort("in", PortDirection::Input), filterPort("out", PortDirection::Output)},
                                      {filterParam("cutoffHz", 20.0f, 20000.0f, 1000.0f)},
-                                     false},
+                                     false,
+                                     true},
                           [](const NodeInstance&, const float sampleRate)
                           { return std::make_unique<OnePoleHp>(sampleRate); });
 
@@ -73,7 +76,8 @@ inline void registerFilterNodes(NodeRegistry& registry)
         NodeSchema{{filterPort("in", PortDirection::Input), filterPort("out", PortDirection::Output)},
                    {filterParam("frequencyHz", 20.0f, 20000.0f, 1000.0f), filterParam("Q", 0.1f, 20.0f, 0.70710678f),
                     filterParam("peakGainDb", -24.0f, 24.0f, 0.0f)},
-                   false},
+                   false,
+                   true},
         [](const NodeInstance& instance, const float sampleRate)
         {
             const auto it = instance.config.find("mode");
@@ -93,14 +97,16 @@ inline void registerFilterNodes(NodeRegistry& registry)
         NodeSchema{{filterPort("in", PortDirection::Input), filterPort("out", PortDirection::Output)},
                    {filterParam("frequencyHz", 20.0f, 20000.0f, 4000.0f), filterParam("gainDb", -24.0f, 24.0f, 0.0f),
                     filterParam("Q", 0.1f, 20.0f, 0.70710678f)},
-                   false},
+                   false,
+                   true},
         [](const NodeInstance&, const float sampleRate) { return std::make_unique<ShelfEQ>(sampleRate); });
 
     registry.registerType(
         "TiltEQ",
         NodeSchema{{filterPort("in", PortDirection::Input), filterPort("out", PortDirection::Output)},
                    {filterParam("tiltDb", -24.0f, 24.0f, 0.0f), filterParam("pivotHz", 20.0f, 20000.0f, 1000.0f)},
-                   false},
+                   false,
+                   true},
         [](const NodeInstance&, const float sampleRate) { return std::make_unique<TiltEQ>(sampleRate); });
 
     registry.registerType(
@@ -129,6 +135,11 @@ inline void registerFilterNodes(NodeRegistry& registry)
         "DCBlocker",
         NodeSchema{{filterPort("in", PortDirection::Input), filterPort("out", PortDirection::Output)}, {}, false},
         [](const NodeInstance&, const float sampleRate) { return std::make_unique<DcBlocker>(sampleRate); });
+
+    registry.registerType(
+        "FeedbackDelay",
+        NodeSchema{{filterPort("in", PortDirection::Input), filterPort("out", PortDirection::Output)}, {}, true},
+        [](const NodeInstance&, float) { return std::make_unique<FeedbackDelay>(); });
 }
 
 }

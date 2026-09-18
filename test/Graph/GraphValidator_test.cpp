@@ -6,6 +6,7 @@
 #include "Graph/GraphDescription.h"
 #include "Graph/GraphValidator.h"
 #include "Graph/NodeRegistry.h"
+#include "Graph/Nodes/FilterNodes.h"
 #include "GraphTestNodes.h"
 
 namespace AbacDsp::Graph::Test
@@ -47,6 +48,13 @@ namespace
     return std::any_of(
         diagnostics.begin(), diagnostics.end(), [needle](const Diagnostic& d)
         { return d.severity == DiagnosticSeverity::Error && d.message.find(needle) != std::string::npos; });
+}
+
+[[nodiscard]] bool hasWarningContaining(const std::vector<Diagnostic>& diagnostics, const std::string_view needle)
+{
+    return std::any_of(
+        diagnostics.begin(), diagnostics.end(), [needle](const Diagnostic& d)
+        { return d.severity == DiagnosticSeverity::Warning && d.message.find(needle) != std::string::npos; });
 }
 
 [[nodiscard]] int countSeverity(const std::vector<Diagnostic>& diagnostics, const DiagnosticSeverity severity)
@@ -234,6 +242,69 @@ TEST(GraphValidatorTest, ValidControlEdgePassesAndSourceIsNotFlaggedAsUnused)
     const auto diagnostics = GraphValidator::validate(description, makeRegistry());
     EXPECT_EQ(countSeverity(diagnostics, DiagnosticSeverity::Error), 0);
     EXPECT_EQ(countSeverity(diagnostics, DiagnosticSeverity::Warning), 0);
+}
+
+TEST(GraphValidatorTest, FeedbackEdgeGainAboveLimitFails)
+{
+    GraphDescription description;
+    description.nodes = {makeNode("p1", "PassThroughStub"), makeNode("breaker", "CycleBreakerStub")};
+    description.edges = {
+        makeEdge("p1", "out", "breaker", "in"),
+        Edge{.fromNode = "breaker", .fromPort = "out", .toNode = "p1", .toPort = "in", .gain = 1.5f},
+    };
+
+    const auto diagnostics = GraphValidator::validate(description, makeRegistry());
+    EXPECT_TRUE(hasErrorContaining(diagnostics, "feedback edge gain exceeds"));
+}
+
+TEST(GraphValidatorTest, CyclicSccWithoutDampingNodeWarns)
+{
+    GraphDescription description;
+    description.nodes = {makeNode("p1", "PassThroughStub"), makeNode("breaker", "CycleBreakerStub")};
+    description.edges = {
+        makeEdge("p1", "out", "breaker", "in"),
+        makeEdge("breaker", "out", "p1", "in"),
+    };
+
+    const auto diagnostics = GraphValidator::validate(description, makeRegistry());
+    EXPECT_TRUE(hasWarningContaining(diagnostics, "no damping filter"));
+}
+
+TEST(GraphValidatorTest, CyclicSccWithDampingNodeDoesNotWarnAboutDamping)
+{
+    NodeRegistry registry;
+    registerTestNodes(registry);
+    Nodes::registerFilterNodes(registry);
+
+    GraphDescription description;
+    description.nodes = {makeNode("p1", "PassThroughStub"), makeNode("breaker", "CycleBreakerStub"),
+                         makeNode("lp", "OnePoleLP")};
+    description.edges = {
+        makeEdge("p1", "out", "breaker", "in"),
+        makeEdge("breaker", "out", "lp", "in"),
+        makeEdge("lp", "out", "p1", "in"),
+    };
+
+    const auto diagnostics = GraphValidator::validate(description, registry);
+    EXPECT_FALSE(hasWarningContaining(diagnostics, "no damping filter"));
+}
+
+TEST(GraphValidatorTest, ResonantFilterInUndampedFeedbackCycleWarns)
+{
+    NodeRegistry registry;
+    registerTestNodes(registry);
+    Nodes::registerFilterNodes(registry);
+
+    GraphDescription description;
+    description.nodes = {makeNode("breaker", "CycleBreakerStub"), makeNode("bp", "BandPass")};
+    description.nodes[1].params["Q"] = 5.0f;
+    description.edges = {
+        makeEdge("breaker", "out", "bp", "in"),
+        makeEdge("bp", "out", "breaker", "in"),
+    };
+
+    const auto diagnostics = GraphValidator::validate(description, registry);
+    EXPECT_TRUE(hasWarningContaining(diagnostics, "resonant filter"));
 }
 
 TEST(GraphValidatorTest, UnconnectedInputAndUnusedNodeAreWarningsNotErrors)

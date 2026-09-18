@@ -1,4 +1,5 @@
 #include <array>
+#include <span>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -142,6 +143,32 @@ TEST(CompiledGraphTest, CycleBreakerDelaysFeedbackByOneBlock)
 
     result.graph->process(ins, outs, 1);
     EXPECT_FLOAT_EQ(output, 10.f);
+}
+
+TEST(CompiledGraphTest, FeedbackSlotExposesTheFeedbackSourcesLiveContent)
+{
+    GraphDescription description;
+    description.io = {{"in"}, {"out"}};
+    description.nodes = {makeNode("sum", "SumStub"), makeNode("breaker", "CycleBreakerStub")};
+    description.edges = {
+        makeEdge("", "in", "sum", "in1"),
+        makeEdge("breaker", "out", "sum", "in2"),
+        makeEdge("sum", "out", "breaker", "in"),
+        makeEdge("breaker", "out", "", "out"),
+    };
+
+    auto result = GraphCompiler::compile(description, makeRegistry(), 4, 48000.f);
+    ASSERT_TRUE(result.graph.has_value());
+    ASSERT_EQ(result.graph->feedbackSlotCount(), 1u);
+
+    const std::vector<float> input(4, 10.f);
+    std::vector<float> output(4, 0.f);
+    std::array<const float*, 1> ins{input.data()};
+    std::array<float*, 1> outs{output.data()};
+    result.graph->process(ins, outs, 4);
+
+    const std::span<const float> feedback = result.graph->feedbackSlotBuffer(0);
+    EXPECT_FLOAT_EQ(feedback[0], 10.f);
 }
 
 TEST(CompiledGraphTest, FindNodeReturnsMatchingNodeOrNullptr)

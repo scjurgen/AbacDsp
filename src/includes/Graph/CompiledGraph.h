@@ -121,18 +121,32 @@ class CompiledGraph
         return nullptr;
     }
 
+    [[nodiscard]] size_t feedbackSlotCount() const noexcept
+    {
+        return m_feedbackSlots.size();
+    }
+
+    // The slot's full maxBlockSize-capacity buffer - may hold samples past
+    // whatever numSamples the last process() call actually used.
+    [[nodiscard]] std::span<const float> feedbackSlotBuffer(const size_t feedbackIndex) const noexcept
+    {
+        return m_buffers[m_feedbackSlots[feedbackIndex]];
+    }
+
   private:
     friend class GraphCompiler;
 
     CompiledGraph(std::vector<std::unique_ptr<Node>> nodes, std::vector<std::string> nodeIds,
                   std::vector<ScheduleStep> schedule, std::vector<std::vector<float>> buffers,
-                  std::vector<size_t> graphInputSlots, std::vector<OutputBinding> graphOutputBindings)
+                  std::vector<size_t> graphInputSlots, std::vector<OutputBinding> graphOutputBindings,
+                  std::vector<size_t> feedbackSlots)
         : m_nodes(std::move(nodes))
         , m_nodeIds(std::move(nodeIds))
         , m_schedule(std::move(schedule))
         , m_buffers(std::move(buffers))
         , m_graphInputSlots(std::move(graphInputSlots))
         , m_graphOutputBindings(std::move(graphOutputBindings))
+        , m_feedbackSlots(std::move(feedbackSlots))
     {
     }
 
@@ -142,6 +156,7 @@ class CompiledGraph
     std::vector<std::vector<float>> m_buffers;
     std::vector<size_t> m_graphInputSlots;
     std::vector<OutputBinding> m_graphOutputBindings;
+    std::vector<size_t> m_feedbackSlots;
 };
 
 }

@@ -76,7 +76,8 @@ class GraphCompiler
                             std::move(state.schedule),
                             std::move(state.buffers),
                             std::move(state.graphInputSlots),
-                            std::move(graphOutputBindings)};
+                            std::move(graphOutputBindings),
+                            std::move(state.feedbackSlots)};
         return {std::move(graph), std::move(diagnostics)};
     }
 
@@ -108,6 +109,7 @@ class GraphCompiler
         std::vector<std::vector<float>> buffers;
         std::map<PortKey, size_t> outputSlot;
         std::vector<size_t> graphInputSlots;
+        std::vector<size_t> feedbackSlots;
         std::vector<CompiledGraph::ScheduleStep> schedule;
     };
 
@@ -341,6 +343,7 @@ class GraphCompiler
             if (info.isFeedbackSource)
             {
                 state.outputSlot[key] = state.buffers.size();
+                state.feedbackSlots.push_back(state.buffers.size());
                 state.buffers.push_back(std::vector<float>(maxBlockSize, 0.0f));
             }
         }
