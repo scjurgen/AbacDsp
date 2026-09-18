@@ -144,6 +144,34 @@ TEST(CompiledGraphTest, CycleBreakerDelaysFeedbackByOneBlock)
     EXPECT_FLOAT_EQ(output, 10.f);
 }
 
+TEST(CompiledGraphTest, FindNodeReturnsMatchingNodeOrNullptr)
+{
+    GraphDescription description;
+    description.io = {{"in"}, {"out"}};
+    description.nodes = {makeNode("g", "GainStub")};
+    description.edges = {
+        makeEdge("", "in", "g", "in"),
+        makeEdge("g", "out", "", "out"),
+    };
+
+    auto result = GraphCompiler::compile(description, makeRegistry(), 64, 48000.f);
+    ASSERT_TRUE(result.graph.has_value());
+
+    Node* gainNode = result.graph->findNode("g");
+    ASSERT_NE(gainNode, nullptr);
+    gainNode->setParameter(0, 3.0f);
+
+    const std::vector<float> input{1.f, 2.f};
+    std::vector<float> output(input.size(), 0.f);
+    std::array<const float*, 1> ins{input.data()};
+    std::array<float*, 1> outs{output.data()};
+    result.graph->process(ins, outs, input.size());
+
+    EXPECT_FLOAT_EQ(output[0], 3.f);
+    EXPECT_FLOAT_EQ(output[1], 6.f);
+    EXPECT_EQ(result.graph->findNode("nosuchnode"), nullptr);
+}
+
 TEST(CompiledGraphTest, RepeatedProcessingIsStable)
 {
     GraphDescription description;

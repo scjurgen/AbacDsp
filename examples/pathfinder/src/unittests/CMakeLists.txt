@@ -5,7 +5,9 @@ set(CMAKE_CXX_STANDARD 20)
 include(GoogleTest)
 macro(package_add_test TESTNAME)
     add_executable(${TESTNAME} ${ARGN})
-    target_link_libraries(${TESTNAME} gtest gmock gtest_main)
+    target_link_libraries(${TESTNAME} gtest gmock gtest_main pathfinder_lua)
+    target_include_directories(${TESTNAME} PRIVATE ${SOL2_DIR}/include)
+    target_compile_definitions(${TESTNAME} PRIVATE SOL_USING_CXX_LUA=1)
     gtest_discover_tests(
         ${TESTNAME}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -32,4 +34,5 @@ mark_as_advanced(
 
 package_add_test(PathfinderTests
         Pathfinder_tests.cpp
+        PathfinderV1Comparison_test.cpp
 )

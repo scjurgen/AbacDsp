@@ -93,20 +93,22 @@ class LuaGraphLoader
                                                                         const std::string& nodeId,
                                                                         const std::string& key)
     {
-        switch (value.get_type())
+        const sol::type type = value.get_type();
+        if (type == sol::type::number)
         {
-            case sol::type::number:
-                return std::to_string(value.as<double>());
-            case sol::type::string:
-                return value.as<std::string>();
-            case sol::type::boolean:
-                return value.as<bool>() ? "true" : "false";
-            default:
-                diagnostics.push_back({DiagnosticSeverity::Error,
-                                       "node config value must be a number, string or boolean, not a table", nodeId,
-                                       key});
-                return std::nullopt;
+            return std::to_string(value.as<double>());
         }
+        if (type == sol::type::string)
+        {
+            return value.as<std::string>();
+        }
+        if (type == sol::type::boolean)
+        {
+            return value.as<bool>() ? "true" : "false";
+        }
+        diagnostics.push_back({DiagnosticSeverity::Error,
+                               "node config value must be a number, string or boolean, not a table", nodeId, key});
+        return std::nullopt;
     }
 
     [[nodiscard]] static bool parseNodes(const sol::table& root, std::vector<NodeInstance>& nodes,

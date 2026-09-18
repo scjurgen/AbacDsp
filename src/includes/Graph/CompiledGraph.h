@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <memory>
 #include <span>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -79,13 +81,28 @@ class CompiledGraph
         return m_nodes.size();
     }
 
+    // Linear scan over m_nodeIds - intended for one-time setup (e.g. caching a raw
+    // Node* right after compile()), never the per-block audio-thread path.
+    [[nodiscard]] Node* findNode(const std::string_view id) noexcept
+    {
+        for (size_t i = 0; i < m_nodeIds.size(); ++i)
+        {
+            if (m_nodeIds[i] == id)
+            {
+                return m_nodes[i].get();
+            }
+        }
+        return nullptr;
+    }
+
   private:
     friend class GraphCompiler;
 
-    CompiledGraph(std::vector<std::unique_ptr<Node>> nodes, std::vector<ScheduledNode> schedule,
-                  std::vector<std::vector<float>> buffers, std::vector<size_t> graphInputSlots,
-                  std::vector<OutputBinding> graphOutputBindings)
+    CompiledGraph(std::vector<std::unique_ptr<Node>> nodes, std::vector<std::string> nodeIds,
+                  std::vector<ScheduledNode> schedule, std::vector<std::vector<float>> buffers,
+                  std::vector<size_t> graphInputSlots, std::vector<OutputBinding> graphOutputBindings)
         : m_nodes(std::move(nodes))
+        , m_nodeIds(std::move(nodeIds))
         , m_schedule(std::move(schedule))
         , m_buffers(std::move(buffers))
         , m_graphInputSlots(std::move(graphInputSlots))
@@ -94,6 +111,7 @@ class CompiledGraph
     }
 
     std::vector<std::unique_ptr<Node>> m_nodes;
+    std::vector<std::string> m_nodeIds;
     std::vector<ScheduledNode> m_schedule;
     std::vector<std::vector<float>> m_buffers;
     std::vector<size_t> m_graphInputSlots;

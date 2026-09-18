@@ -4,11 +4,11 @@ set(PROJECT_NAME "Pathfinder")
 set(FORMATS AU VST3 AUv3 Standalone)
 
 # Check if we're building as part of main project or standalone
-if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../VERSION")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../VERSION")
     file(STRINGS ../../VERSION CURRENT_VERSION)
-else ()
+else()
     set(CURRENT_VERSION "0.1.0")
-endif ()
+endif()
 
 project(${PROJECT_NAME} VERSION ${CURRENT_VERSION})
 
@@ -16,32 +16,40 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_XCODE_GENERATE_SCHEME OFF)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Support macOS down to High Sierra")
+set(CMAKE_OSX_DEPLOYMENT_TARGET
+    "10.13"
+    CACHE STRING
+    "Support macOS down to High Sierra"
+)
 set_property(GLOBAL PROPERTY USE_FOLDERS YES)
 
 set(CMAKE_FOLDER "Dependencies")
 
-option(JUCE_ENABLE_MODULE_SOURCE_GROUPS "Show all module sources in IDE projects" ON)
+option(
+    JUCE_ENABLE_MODULE_SOURCE_GROUPS
+    "Show all module sources in IDE projects"
+    ON
+)
 
 include(FetchContent)
 FetchContent_Declare(
-        nlohmann_json
-        GIT_REPOSITORY https://github.com/nlohmann/json.git
-        GIT_TAG v3.11.3
-        GIT_SHALLOW TRUE
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+    GIT_SHALLOW TRUE
 )
 
 # Only add JUCE if not already available (standalone build)
-if (NOT TARGET juce::juce_core)
+if(NOT TARGET juce::juce_core)
     add_subdirectory(../../3rdparty/JUCE ${CMAKE_CURRENT_BINARY_DIR}/JUCE)
-endif ()
+endif()
 
 include(FetchContent)
 FetchContent_Declare(
-        nlohmann_json
-        GIT_REPOSITORY https://github.com/nlohmann/json.git
-        GIT_TAG v3.11.3
-        GIT_SHALLOW TRUE
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+    GIT_SHALLOW TRUE
 )
 
 # Authoring Mode's embedded HTTP server (see AuthoringHttpServer.h, pulled in
@@ -54,14 +62,41 @@ set(HTTPLIB_USE_BROTLI_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
 set(HTTPLIB_USE_ZSTD_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
 set(HTTPLIB_INSTALL OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
-        httplib
-        GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-        GIT_TAG v0.54.1
-        GIT_SHALLOW TRUE
+    httplib
+    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+    GIT_TAG v0.54.1
+    GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(httplib)
 
-set(PLIST_EXTRAS_CONTENT [=[
+# Lua, compiled as C++ (not C): lua_error then propagates as a real C++ exception
+# instead of a longjmp that would skip destructors, which matters once Lua state
+# lives next to RAII C++ objects on the audio thread. SOL_USING_CXX_LUA=1 below keeps
+# sol2's declarations on the matching (non "extern C") linkage.
+set(LUA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../3rdparty/lua)
+set(SOL2_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../3rdparty/sol2)
+
+file(GLOB LUA_IMPL_SRCS ${LUA_DIR}/*.c)
+list(FILTER LUA_IMPL_SRCS EXCLUDE REGEX ".*/(lua|luac|onelua|ltests)\\.c$")
+set_source_files_properties(${LUA_IMPL_SRCS} PROPERTIES LANGUAGE CXX)
+
+add_library(pathfinder_lua STATIC ${LUA_IMPL_SRCS})
+target_include_directories(pathfinder_lua PUBLIC ${LUA_DIR})
+set_target_properties(
+    pathfinder_lua
+    PROPERTIES FOLDER "Examples/${PROJECT_NAME}"
+)
+
+if(APPLE)
+    target_compile_definitions(pathfinder_lua PUBLIC LUA_USE_MACOSX)
+elseif(UNIX)
+    target_compile_definitions(pathfinder_lua PUBLIC LUA_USE_LINUX)
+elseif(WIN32)
+    target_compile_definitions(pathfinder_lua PUBLIC LUA_USE_WINDOWS)
+endif()
+
+set(PLIST_EXTRAS_CONTENT
+    [=[
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -71,7 +106,8 @@ set(PLIST_EXTRAS_CONTENT [=[
     <string>This app requires microphone access for audio input.</string>
 </dict>
 </plist>
-]=])
+]=]
+)
 
 set(CMAKE_FOLDER "Examples/${PROJECT_NAME}")
 
@@ -93,7 +129,8 @@ juce_add_plugin("${PROJECT_NAME}"
         PLUGIN_MANUFACTURER_CODE KrPd
         PLUGIN_CODE CE43
         FORMATS "${FORMATS}"
-        PRODUCT_NAME "${PROJECT_NAME}")
+        PRODUCT_NAME "${PROJECT_NAME}"
+)
 
 target_compile_features("${PROJECT_NAME}" PRIVATE cxx_std_20)
 
@@ -108,58 +145,72 @@ list(FILTER SourceFiles EXCLUDE REGEX ".*StubImpl\\.h$")
 
 # Include directories for AbacDsp library (from main project)
 target_include_directories("${PROJECT_NAME}" PUBLIC ../../src/includes)
+target_include_directories("${PROJECT_NAME}" SYSTEM PRIVATE ${SOL2_DIR}/include)
+target_compile_definitions("${PROJECT_NAME}" PRIVATE SOL_USING_CXX_LUA=1)
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
 
 # Fix source_group to use correct root path for this project
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src PREFIX "" FILES ${SourceFiles})
+source_group(
+    TREE ${CMAKE_CURRENT_SOURCE_DIR}/src
+    PREFIX ""
+    FILES ${SourceFiles}
+)
 
 # Use unique binary data target name to avoid conflicts
 juce_add_binary_data(PathfinderAssets SOURCES logo.png)
-set_target_properties(PathfinderAssets PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
-
-foreach (target ${FORMATS} "All")
-    if (TARGET ${PROJECT_NAME}_${target})
-        set_target_properties(${PROJECT_NAME}_${target} PROPERTIES
-                XCODE_SCHEME_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/../../3rdparty/JUCE/extras/AudioPluginHost/Builds/MacOSX/build/Debug/AudioPluginHost.app"
-                XCODE_GENERATE_SCHEME ON)
-    endif ()
-endforeach ()
-
-set(JUCE_DEPENDENCIES
-        juce::juce_audio_utils
+set_target_properties(
+    PathfinderAssets
+    PROPERTIES POSITION_INDEPENDENT_CODE TRUE
 )
 
-target_compile_definitions("${PROJECT_NAME}"
-        PUBLIC
+foreach(target ${FORMATS} "All")
+    if(TARGET ${PROJECT_NAME}_${target})
+        set_target_properties(
+            ${PROJECT_NAME}_${target}
+            PROPERTIES
+                XCODE_SCHEME_EXECUTABLE
+                    "${CMAKE_CURRENT_SOURCE_DIR}/../../3rdparty/JUCE/extras/AudioPluginHost/Builds/MacOSX/build/Debug/AudioPluginHost.app"
+                XCODE_GENERATE_SCHEME ON
+        )
+    endif()
+endforeach()
+
+set(JUCE_DEPENDENCIES juce::juce_audio_utils)
+
+target_compile_definitions(
+    "${PROJECT_NAME}"
+    PUBLIC
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
         JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=0
 )
 
-target_link_libraries("${PROJECT_NAME}"
-        PRIVATE
+target_link_libraries(
+    "${PROJECT_NAME}"
+    PRIVATE
         PathfinderAssets
+        pathfinder_lua
         ${JUCE_DEPENDENCIES}
         nlohmann_json::nlohmann_json
         httplib::httplib
-        PUBLIC
+    PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
 )
 
 # Color warnings and errors
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     add_compile_options(-fdiagnostics-color=always)
-elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     add_compile_options(-fcolor-diagnostics)
-endif ()
+endif()
 
 option(PACKAGE_TESTS "Build the tests" ON)
-if (PACKAGE_TESTS)
+if(PACKAGE_TESTS)
     enable_testing()
     include(GoogleTest)
     add_subdirectory(src/unittests)
-endif ()
+endif()

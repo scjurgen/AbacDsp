@@ -71,8 +71,12 @@ class GraphCompiler
             ownedNodes.push_back(std::move(state.nodesById.at(id).node));
         }
 
-        CompiledGraph graph{std::move(ownedNodes), std::move(state.schedule), std::move(state.buffers),
-                            std::move(state.graphInputSlots), std::move(graphOutputBindings)};
+        CompiledGraph graph{std::move(ownedNodes),
+                            order,
+                            std::move(state.schedule),
+                            std::move(state.buffers),
+                            std::move(state.graphInputSlots),
+                            std::move(graphOutputBindings)};
         return {std::move(graph), std::move(diagnostics)};
     }
 

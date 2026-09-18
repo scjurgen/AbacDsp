@@ -5,12 +5,12 @@
 
 #include "gtest/gtest.h"
 
-#include "../../examples/pathfinder/src/impl/PathfinderImpl.h"
 #include "Audio/AudioBuffer.h"
 #include "Graph/GraphCompiler.h"
 #include "Graph/GraphDescription.h"
 #include "Graph/NodeRegistry.h"
 #include "Graph/Nodes/TapeDelayNode.h"
+#include "impl/PathfinderImpl.h"
 
 namespace AbacDsp::Graph::Test
 {
