@@ -143,6 +143,11 @@ set(ALL_TEST_TARGETS "")
 
 subdirlist(TEST_SUBDIRS ${CMAKE_CURRENT_SOURCE_DIR})
 foreach(subdir ${TEST_SUBDIRS})
+    # Graph is built explicitly below: GraphTests must not pull in Graph/Lua's
+    # *_test.cpp, which only compiles under WITH_LUA_GRAPH.
+    if(subdir STREQUAL "Graph")
+        continue()
+    endif()
     file(
         GLOB_RECURSE test_files
         "${CMAKE_CURRENT_SOURCE_DIR}/${subdir}/*_test.cpp"
@@ -157,6 +162,55 @@ foreach(subdir ${TEST_SUBDIRS})
         list(APPEND ALL_TEST_TARGETS ${subdir}Tests)
     endif()
 endforeach()
+
+file(
+    GLOB_RECURSE GRAPH_TEST_SOURCES
+    CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/Graph/*_test.cpp"
+)
+list(FILTER GRAPH_TEST_SOURCES EXCLUDE REGEX ".*/Graph/Lua/.*")
+if(GRAPH_TEST_SOURCES)
+    package_add_test(GraphTests ${GRAPH_TEST_SOURCES})
+    list(APPEND ALL_TEST_TARGETS GraphTests)
+endif()
+
+if(WITH_LUA_GRAPH)
+    set(LUA_DIR ${PROJECT_SOURCE_DIR}/3rdparty/lua)
+    set(SOL2_DIR ${PROJECT_SOURCE_DIR}/3rdparty/sol2)
+
+    file(GLOB LUA_IMPL_SRCS ${LUA_DIR}/*.c)
+    list(FILTER LUA_IMPL_SRCS EXCLUDE REGEX ".*/(lua|luac|onelua|ltests)\\.c$")
+    set_source_files_properties(${LUA_IMPL_SRCS} PROPERTIES LANGUAGE CXX)
+
+    add_library(abacdsp_lua STATIC ${LUA_IMPL_SRCS})
+    target_include_directories(abacdsp_lua PUBLIC ${LUA_DIR})
+    set_target_properties(abacdsp_lua PROPERTIES FOLDER "Dependencies")
+
+    if(APPLE)
+        target_compile_definitions(abacdsp_lua PUBLIC LUA_USE_MACOSX)
+    elseif(UNIX)
+        target_compile_definitions(abacdsp_lua PUBLIC LUA_USE_LINUX)
+    elseif(WIN32)
+        target_compile_definitions(abacdsp_lua PUBLIC LUA_USE_WINDOWS)
+    endif()
+
+    file(
+        GLOB_RECURSE GRAPH_LUA_TEST_SOURCES
+        CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/Graph/Lua/*_test.cpp"
+    )
+    if(GRAPH_LUA_TEST_SOURCES)
+        package_add_test(GraphLuaTests ${GRAPH_LUA_TEST_SOURCES})
+        target_link_libraries(GraphLuaTests abacdsp_lua)
+        target_include_directories(
+            GraphLuaTests
+            SYSTEM
+            PRIVATE ${SOL2_DIR}/include
+        )
+        target_compile_definitions(GraphLuaTests PRIVATE SOL_USING_CXX_LUA=1)
+        list(APPEND ALL_TEST_TARGETS GraphLuaTests)
+    endif()
+endif()
 
 set(CMAKE_FOLDER "tests")
 

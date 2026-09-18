@@ -71,6 +71,11 @@ option(
     "Instrument tests with --coverage and add a 'coverage' target (gcovr)"
     OFF
 )
+option(
+    WITH_LUA_GRAPH
+    "Build the optional sol2/Lua-driven graph loader and its tests"
+    OFF
+)
 
 if(PACKAGE_TESTS)
     # Prevent CTest from creating dashboard targets but keep DartConfiguration.tcl
