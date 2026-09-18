@@ -108,7 +108,7 @@ class GraphCompiler
         std::vector<std::vector<float>> buffers;
         std::map<PortKey, size_t> outputSlot;
         std::vector<size_t> graphInputSlots;
-        std::vector<CompiledGraph::ScheduledNode> schedule;
+        std::vector<CompiledGraph::ScheduleStep> schedule;
     };
 
     [[nodiscard]] static BuildState buildNodes(const GraphDescription& description, const NodeRegistry& registry,
@@ -220,6 +220,17 @@ class GraphCompiler
             forwardAdjacency[edge.fromNode].push_back(edge.toNode);
             inDegree[edge.toNode] += 1;
         }
+        // Control edges never break a cycle (no breaksCycle exemption here) - a
+        // control-edge-closed cycle surfaces as the residual-cycle check below.
+        for (const auto& control : description.controls)
+        {
+            if (!state.nodesById.contains(control.fromNode) || !state.nodesById.contains(control.toNode))
+            {
+                continue;
+            }
+            forwardAdjacency[control.fromNode].push_back(control.toNode);
+            inDegree[control.toNode] += 1;
+        }
 
         std::set<std::string> ready;
         for (const auto& [id, degree] : inDegree)
@@ -275,6 +286,16 @@ class GraphCompiler
             const int consumerPosition =
                 edge.toNode.empty() ? static_cast<int>(scheduleLength) : state.positionById.at(edge.toNode);
             info.lastUsePosition = std::max(info.lastUsePosition, consumerPosition);
+        }
+        for (const auto& control : description.controls)
+        {
+            if (control.fromNode.empty() || !state.positionById.contains(control.toNode))
+            {
+                continue;
+            }
+            PortUsage& info = usage[{control.fromNode, control.fromPort}];
+            info.used = true;
+            info.lastUsePosition = std::max(info.lastUsePosition, state.positionById.at(control.toNode));
         }
         return usage;
     }
@@ -385,12 +406,50 @@ class GraphCompiler
         return state.buffers[kSilenceSlot].data();
     }
 
+    [[nodiscard]] static std::map<std::string, std::vector<CompiledGraph::ParameterApplication>>
+    resolveControlApplications(const GraphDescription& description, const BuildState& state)
+    {
+        std::map<std::string, std::vector<CompiledGraph::ParameterApplication>> applicationsByTarget;
+        for (const auto& control : description.controls)
+        {
+            if (!state.nodesById.contains(control.fromNode) || !state.nodesById.contains(control.toNode))
+            {
+                continue;
+            }
+            const auto sourceIt = state.outputSlot.find({control.fromNode, control.fromPort});
+            if (sourceIt == state.outputSlot.end())
+            {
+                continue;
+            }
+            const auto& target = state.nodesById.at(control.toNode);
+            const int paramIndex = target.schema->findParameterIndex(control.toParam);
+            if (paramIndex < 0)
+            {
+                continue;
+            }
+            applicationsByTarget[control.toNode].push_back(
+                {sourceIt->second, target.node.get(), static_cast<size_t>(paramIndex)});
+        }
+        return applicationsByTarget;
+    }
+
     static void buildScheduleEntries(const GraphDescription& description, BuildState& state,
                                      const std::vector<std::string>& order)
     {
+        const auto applicationsByTarget = resolveControlApplications(description, state);
+
         state.schedule.reserve(order.size());
         for (const auto& id : order)
         {
+            const auto appIt = applicationsByTarget.find(id);
+            if (appIt != applicationsByTarget.end())
+            {
+                for (const auto& application : appIt->second)
+                {
+                    state.schedule.push_back(application);
+                }
+            }
+
             const auto& build = state.nodesById.at(id);
             CompiledGraph::ScheduledNode scheduled;
             scheduled.node = build.node.get();

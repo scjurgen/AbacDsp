@@ -33,6 +33,15 @@ namespace
                 .toPort = std::move(toPort)};
 }
 
+[[nodiscard]] ControlEdge makeControlEdge(std::string fromNode, std::string fromPort, std::string toNode,
+                                          std::string toParam)
+{
+    return ControlEdge{.fromNode = std::move(fromNode),
+                       .fromPort = std::move(fromPort),
+                       .toNode = std::move(toNode),
+                       .toParam = std::move(toParam)};
+}
+
 [[nodiscard]] bool hasErrorContaining(const std::vector<Diagnostic>& diagnostics, const std::string_view needle)
 {
     return std::any_of(
@@ -151,6 +160,80 @@ TEST(GraphValidatorTest, CycleWithBreakerPasses)
 
     const auto diagnostics = GraphValidator::validate(description, makeRegistry());
     EXPECT_EQ(countSeverity(diagnostics, DiagnosticSeverity::Error), 0);
+}
+
+TEST(GraphValidatorTest, ControlEdgeFromGraphBoundaryFails)
+{
+    GraphDescription description;
+    description.io = {{"in"}, {}};
+    description.nodes = {makeNode("g", "GainStub")};
+    description.controls = {makeControlEdge("", "in", "g", "gain")};
+
+    const auto diagnostics = GraphValidator::validate(description, makeRegistry());
+    EXPECT_TRUE(hasErrorContaining(diagnostics, "control edge source must be a node"));
+}
+
+TEST(GraphValidatorTest, ControlEdgeFromUnknownNodeFails)
+{
+    GraphDescription description;
+    description.nodes = {makeNode("g", "GainStub")};
+    description.controls = {makeControlEdge("nosuch", "out", "g", "gain")};
+
+    const auto diagnostics = GraphValidator::validate(description, makeRegistry());
+    EXPECT_TRUE(hasErrorContaining(diagnostics, "unknown control source node"));
+}
+
+TEST(GraphValidatorTest, ControlEdgeFromInputPortFails)
+{
+    GraphDescription description;
+    description.nodes = {makeNode("src", "PassThroughStub"), makeNode("g", "GainStub")};
+    description.controls = {makeControlEdge("src", "in", "g", "gain")};
+
+    const auto diagnostics = GraphValidator::validate(description, makeRegistry());
+    EXPECT_TRUE(hasErrorContaining(diagnostics, "control edge source must be an output port"));
+}
+
+TEST(GraphValidatorTest, ControlEdgeToUnknownNodeFails)
+{
+    GraphDescription description;
+    description.nodes = {makeNode("src", "ConstantStub")};
+    description.controls = {makeControlEdge("src", "out", "nosuch", "gain")};
+
+    const auto diagnostics = GraphValidator::validate(description, makeRegistry());
+    EXPECT_TRUE(hasErrorContaining(diagnostics, "unknown control target node"));
+}
+
+TEST(GraphValidatorTest, ControlEdgeToUnknownParameterFails)
+{
+    GraphDescription description;
+    description.nodes = {makeNode("src", "ConstantStub"), makeNode("g", "GainStub")};
+    description.controls = {makeControlEdge("src", "out", "g", "noSuchParam")};
+
+    const auto diagnostics = GraphValidator::validate(description, makeRegistry());
+    EXPECT_TRUE(hasErrorContaining(diagnostics, "unknown control target parameter"));
+}
+
+TEST(GraphValidatorTest, ControlEdgeToNonAutomatableParameterFails)
+{
+    GraphDescription description;
+    description.nodes = {makeNode("src", "ConstantStub"), makeNode("g", "NonAutomatableGainStub")};
+    description.controls = {makeControlEdge("src", "out", "g", "gain")};
+
+    const auto diagnostics = GraphValidator::validate(description, makeRegistry());
+    EXPECT_TRUE(hasErrorContaining(diagnostics, "not automatable"));
+}
+
+TEST(GraphValidatorTest, ValidControlEdgePassesAndSourceIsNotFlaggedAsUnused)
+{
+    GraphDescription description;
+    description.io = {{"in"}, {"out"}};
+    description.nodes = {makeNode("src", "ConstantStub"), makeNode("g", "GainStub")};
+    description.edges = {makeEdge("", "in", "g", "in"), makeEdge("g", "out", "", "out")};
+    description.controls = {makeControlEdge("src", "out", "g", "gain")};
+
+    const auto diagnostics = GraphValidator::validate(description, makeRegistry());
+    EXPECT_EQ(countSeverity(diagnostics, DiagnosticSeverity::Error), 0);
+    EXPECT_EQ(countSeverity(diagnostics, DiagnosticSeverity::Warning), 0);
 }
 
 TEST(GraphValidatorTest, UnconnectedInputAndUnusedNodeAreWarningsNotErrors)

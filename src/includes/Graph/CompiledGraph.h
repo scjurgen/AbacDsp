@@ -6,7 +6,9 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "Node.h"
@@ -41,6 +43,17 @@ class CompiledGraph
         float gain{1.0f};
     };
 
+    // A ControlEdge's runtime effect: read the source slot's last sample of the
+    // block (its most up-to-date value) and push it into the target's parameter.
+    struct ParameterApplication
+    {
+        size_t sourceSlot{0};
+        Node* targetNode{nullptr};
+        size_t paramIndex{0};
+    };
+
+    using ScheduleStep = std::variant<ScheduledNode, ParameterApplication>;
+
     CompiledGraph(const CompiledGraph&) = delete;
     CompiledGraph& operator=(const CompiledGraph&) = delete;
     CompiledGraph(CompiledGraph&&) noexcept = default;
@@ -53,10 +66,23 @@ class CompiledGraph
             std::copy_n(graphInputs[i], numSamples, m_buffers[m_graphInputSlots[i]].data());
         }
 
-        for (auto& scheduled : m_schedule)
+        for (auto& step : m_schedule)
         {
-            scheduled.node->process(std::span<const float*>(scheduled.inputPointers),
-                                    std::span<float*>(scheduled.outputPointers), numSamples);
+            std::visit(
+                [this, numSamples](auto& entry) noexcept
+                {
+                    using T = std::decay_t<decltype(entry)>;
+                    if constexpr (std::is_same_v<T, ScheduledNode>)
+                    {
+                        entry.node->process(std::span<const float*>(entry.inputPointers),
+                                            std::span<float*>(entry.outputPointers), numSamples);
+                    }
+                    else
+                    {
+                        entry.targetNode->setParameter(entry.paramIndex, m_buffers[entry.sourceSlot][numSamples - 1]);
+                    }
+                },
+                step);
         }
 
         for (size_t i = 0; i < m_graphOutputBindings.size(); ++i)
@@ -99,7 +125,7 @@ class CompiledGraph
     friend class GraphCompiler;
 
     CompiledGraph(std::vector<std::unique_ptr<Node>> nodes, std::vector<std::string> nodeIds,
-                  std::vector<ScheduledNode> schedule, std::vector<std::vector<float>> buffers,
+                  std::vector<ScheduleStep> schedule, std::vector<std::vector<float>> buffers,
                   std::vector<size_t> graphInputSlots, std::vector<OutputBinding> graphOutputBindings)
         : m_nodes(std::move(nodes))
         , m_nodeIds(std::move(nodeIds))
@@ -112,7 +138,7 @@ class CompiledGraph
 
     std::vector<std::unique_ptr<Node>> m_nodes;
     std::vector<std::string> m_nodeIds;
-    std::vector<ScheduledNode> m_schedule;
+    std::vector<ScheduleStep> m_schedule;
     std::vector<std::vector<float>> m_buffers;
     std::vector<size_t> m_graphInputSlots;
     std::vector<OutputBinding> m_graphOutputBindings;

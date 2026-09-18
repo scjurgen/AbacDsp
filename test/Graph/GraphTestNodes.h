@@ -81,6 +81,31 @@ class SumStubNode final : public Node
     }
 };
 
+/**
+ * @brief 0 in -> 1 out, fills every sample with an automatable "value" parameter
+ * (index 0). Stands in for a control source (Macro/Constant) in control-edge tests.
+ */
+class ConstantStubNode final : public Node
+{
+  public:
+    void process(const std::span<const float*>, const std::span<float*> outputs,
+                 const size_t numSamples) noexcept override
+    {
+        std::fill_n(outputs[0], numSamples, m_value);
+    }
+
+    void setParameter(const size_t paramIndex, const float value) noexcept override
+    {
+        if (paramIndex == 0)
+        {
+            m_value = value;
+        }
+    }
+
+  private:
+    float m_value{0.0f};
+};
+
 [[nodiscard]] inline PortDescriptor audioInPort(std::string name)
 {
     return PortDescriptor{std::move(name), PortDirection::Input, PortCategory::AudioMono, false};
@@ -109,6 +134,22 @@ inline void registerTestNodes(NodeRegistry& registry)
     registry.registerType("SumStub",
                           NodeSchema{{audioInPort("in1"), audioInPort("in2"), audioOutPort("out")}, {}, false},
                           [](const NodeInstance&, float) { return std::make_unique<SumStubNode>(); });
+
+    registry.registerType(
+        "ConstantStub",
+        NodeSchema{{audioOutPort("out")},
+                   {ParameterDescriptor{"value", "linear", -10.0f, 10.0f, 0.0f, ParameterMapping::Linear, 0.0f, true}},
+                   false},
+        [](const NodeInstance&, float) { return std::make_unique<ConstantStubNode>(); });
+
+    // Same behaviour as GainStub, but "gain" is not automatable - exists only to
+    // exercise GraphValidator's "control target parameter is not automatable" check.
+    registry.registerType(
+        "NonAutomatableGainStub",
+        NodeSchema{{audioInPort("in"), audioOutPort("out")},
+                   {ParameterDescriptor{"gain", "linear", 0.0f, 4.0f, 1.0f, ParameterMapping::Linear, 0.0f, false}},
+                   false},
+        [](const NodeInstance&, float) { return std::make_unique<GainStubNode>(); });
 }
 
 }

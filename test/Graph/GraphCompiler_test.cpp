@@ -1,10 +1,13 @@
 #include <algorithm>
+#include <array>
 #include <string>
+#include <vector>
 
 #include "gtest/gtest.h"
 
 #include "Graph/GraphCompiler.h"
 #include "Graph/GraphDescription.h"
+#include "Graph/Node.h"
 #include "Graph/NodeRegistry.h"
 #include "GraphTestNodes.h"
 
@@ -31,6 +34,15 @@ namespace
                 .fromPort = std::move(fromPort),
                 .toNode = std::move(toNode),
                 .toPort = std::move(toPort)};
+}
+
+[[nodiscard]] ControlEdge makeControlEdge(std::string fromNode, std::string fromPort, std::string toNode,
+                                          std::string toParam)
+{
+    return ControlEdge{.fromNode = std::move(fromNode),
+                       .fromPort = std::move(fromPort),
+                       .toNode = std::move(toNode),
+                       .toParam = std::move(toParam)};
 }
 
 [[nodiscard]] GraphDescription makeChainDescription(const int length)
@@ -106,6 +118,42 @@ TEST(GraphCompilerTest, CycleWithBreakerCompiles)
 
     ASSERT_TRUE(result.graph.has_value());
     EXPECT_EQ(result.graph->nodeCount(), 2u);
+}
+
+TEST(GraphCompilerTest, ControlEdgeAppliesSourceValueToTargetParameterSameBlock)
+{
+    GraphDescription description;
+    description.io = {{"in"}, {"out"}};
+    description.nodes = {makeNode("src", "ConstantStub"), makeNode("g", "GainStub")};
+    description.nodes[0].params["value"] = 2.0f;
+    description.edges = {
+        makeEdge("", "in", "g", "in"),
+        makeEdge("g", "out", "", "out"),
+    };
+    description.controls = {makeControlEdge("src", "out", "g", "gain")};
+
+    auto result = GraphCompiler::compile(description, makeRegistry(), 64, 48000.f);
+    ASSERT_TRUE(result.graph.has_value());
+
+    const std::vector<float> input{1.f, 2.f, 3.f};
+    std::vector<float> output(input.size(), 0.f);
+    std::array<const float*, 1> ins{input.data()};
+    std::array<float*, 1> outs{output.data()};
+
+    result.graph->process(ins, outs, input.size());
+    EXPECT_FLOAT_EQ(output[0], 2.f);
+    EXPECT_FLOAT_EQ(output[1], 4.f);
+    EXPECT_FLOAT_EQ(output[2], 6.f);
+
+    // Live change, exactly how an external macro/UI value reaches a control source.
+    Node* src = result.graph->findNode("src");
+    ASSERT_NE(src, nullptr);
+    src->setParameter(0, 3.0f);
+
+    result.graph->process(ins, outs, input.size());
+    EXPECT_FLOAT_EQ(output[0], 3.f);
+    EXPECT_FLOAT_EQ(output[1], 6.f);
+    EXPECT_FLOAT_EQ(output[2], 9.f);
 }
 
 }

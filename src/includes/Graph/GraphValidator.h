@@ -47,6 +47,7 @@ class GraphValidator
         std::vector<Diagnostic> diagnostics;
         const NodeMap nodes = resolveNodes(description, registry, diagnostics);
         validateEdges(description, nodes, diagnostics);
+        validateControls(description, nodes, diagnostics);
         validateConnectivity(description, nodes, diagnostics);
         validateCycles(description, nodes, diagnostics);
         return diagnostics;
@@ -168,6 +169,58 @@ class GraphValidator
         }
     }
 
+    // Source category is not enforced here - every control node's ports use
+    // ControlAudioRate uniformly for now (see Phase 6 plan), so nothing yet
+    // distinguishes a scalar from an audio-rate control source.
+    static void validateControls(const GraphDescription& description, const NodeMap& nodes,
+                                 std::vector<Diagnostic>& diagnostics)
+    {
+        for (const auto& control : description.controls)
+        {
+            if (control.fromNode.empty())
+            {
+                diagnostics.push_back({DiagnosticSeverity::Error,
+                                       "control edge source must be a node, not a graph boundary port", control.toNode,
+                                       control.toParam});
+                continue;
+            }
+            const auto sourceIt = nodes.find(control.fromNode);
+            if (sourceIt == nodes.end())
+            {
+                diagnostics.push_back(
+                    {DiagnosticSeverity::Error, "unknown control source node", control.fromNode, control.fromPort});
+                continue;
+            }
+            const PortDescriptor* sourcePort = sourceIt->second.schema->findPort(control.fromPort);
+            if (sourcePort == nullptr || sourcePort->direction != PortDirection::Output)
+            {
+                diagnostics.push_back({DiagnosticSeverity::Error, "control edge source must be an output port",
+                                       control.fromNode, control.fromPort});
+                continue;
+            }
+
+            const auto targetIt = nodes.find(control.toNode);
+            if (targetIt == nodes.end())
+            {
+                diagnostics.push_back(
+                    {DiagnosticSeverity::Error, "unknown control target node", control.toNode, control.toParam});
+                continue;
+            }
+            const int paramIndex = targetIt->second.schema->findParameterIndex(control.toParam);
+            if (paramIndex < 0)
+            {
+                diagnostics.push_back(
+                    {DiagnosticSeverity::Error, "unknown control target parameter", control.toNode, control.toParam});
+                continue;
+            }
+            if (!targetIt->second.schema->parameters[static_cast<size_t>(paramIndex)].automatable)
+            {
+                diagnostics.push_back({DiagnosticSeverity::Error, "control target parameter is not automatable",
+                                       control.toNode, control.toParam});
+            }
+        }
+    }
+
     static void validateConnectivity(const GraphDescription& description, const NodeMap& nodes,
                                      std::vector<Diagnostic>& diagnostics)
     {
@@ -186,6 +239,11 @@ class GraphValidator
             {
                 nodesWithOutgoingEdge.insert(edge.fromNode);
             }
+        }
+        for (const auto& control : description.controls)
+        {
+            nodesWithOutgoingEdge.insert(control.fromNode);
+            nodesWithIncomingEdge.insert(control.toNode);
         }
 
         for (const auto& [id, resolved] : nodes)
