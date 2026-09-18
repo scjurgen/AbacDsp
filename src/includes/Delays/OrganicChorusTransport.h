@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <functional>
 #include <random>
 #include <vector>
 
@@ -11,6 +12,7 @@
 #include "Numbers/MultichannelInterpolation.h"
 #include "Numbers/TimeDistanceSmoother.h"
 #include "Parameters/SmoothingParameter.h"
+#include "SamplerateConverter/SrPullConverter.h"
 #include "SamplerateConverter/SrPushConverter.h"
 
 namespace AbacDsp
@@ -37,12 +39,26 @@ class OrganicChorusTransport
     static constexpr auto brakePerSec = 3.f;
     using TapeInterpolation = MultichannelInterpolation<NumChannels>;
 
+    /// Ratio range matches SrPullConverter's own supported range exactly (see setRatio()).
+    static constexpr float kMinRatio = 1.f / 16.f;
+    static constexpr float kMaxRatio = 16.f;
+
+    // Sizes readBlock()'s low-rate reconstruction ring (see lowRateCallback()): one chunk per
+    // SrPullConverter callback, ring large enough that a chunk from several tiles back can
+    // never still be the most recent one SrPullConverter has a saved pointer into.
+    static constexpr size_t kLowRateChunkFrames = 16;
+    static constexpr size_t kLowRateRingFrames = TileSize * static_cast<size_t>(kMaxRatio) * 2;
+
     OrganicChorusTransport(const float sampleRate, const std::shared_ptr<SincFilter>& filterSet)
         : m_sampleRate(sampleRate)
         , m_buffer((BufferSize + 6) * NumChannels, 0)
         , m_rdhd{constructArray<TimeDistanceSmoother<double>, NumReadHeads>(static_cast<double>(sampleRate))}
         , m_tmpOutput(static_cast<size_t>(sampleRate), 0)
         , m_srConverter(filterSet)
+        , m_readConverters{constructArray<SrPullConverter, NumReadHeads>(filterSet)}
+        , m_readReconstructionDelay(static_cast<float>(filterSet->halfCoeffWidth()) /
+                                        static_cast<float>(filterSet->increment()) +
+                                    static_cast<float>(kLowRateChunkFrames))
         , m_flutter(sampleRate / TileSize)
         , m_wow(sampleRate / TileSize)
     {
@@ -51,6 +67,7 @@ class OrganicChorusTransport
             m_rdhd[i].setWrapPosition(BufferSize);
             m_rdhd[i].setCorrectionTime(.005f);
             setReadHead(i, static_cast<float>((i + 1) * 4800), true);
+            m_lowRateRing[i].resize(kLowRateRingFrames * NumChannels, 0.f);
         }
         m_flutter.setRate(.4f);
         m_flutter.setDepth(0.1f);
@@ -60,30 +77,21 @@ class OrganicChorusTransport
         m_wow.setDrift(0.05f);
     }
 
-    // Wow/Flutter are stepped once per call, at tile rate (they are constructed at
-    // sampleRate/TileSize) - correct only when each tile calls readBlock() exactly once per
-    // head, true for every current caller (one head per voice).
+    // Catmull-Rom reconstructs the modulated read position only up to the tape's own native
+    // rate; a per-tile SrPullConverter call resamples that up to TileSize's output rate, the
+    // same split feed() already uses the other way. Wow/Flutter step once per call, at tile rate.
     void readBlock(const size_t hdIdx, std::array<float, NumChannels * TileSize>& out) noexcept
     {
-        m_rdhd[hdIdx].setCurrentWritePosition(static_cast<double>(m_writeHead), m_lastFeedRatio);
+        // 1.0, not m_lastFeedRatio: this now walks the tape at its own native pace, one buffer
+        // sample per step (Wow/Flutter aside) - the transport ratio is applied below instead.
+        m_rdhd[hdIdx].setCurrentWritePosition(static_cast<double>(m_writeHead), 1.0);
         const auto w = m_wow.step();
         const auto f = m_flutter.step();
         const auto rateMultiplier = static_cast<double>((1.0f + w) * f);
-        for (size_t i = 0; i < TileSize; ++i)
-        {
-            m_rdhd[hdIdx].advancePosition(rateMultiplier);
 
-            const auto indexBuffer = static_cast<size_t>(std::floor(m_rdhd[hdIdx].getPosition()));
-            // Subtract in double first, or a large tape position would already
-            // have lost the sub-sample fraction before narrowing to float.
-            const float fraction = static_cast<float>(m_rdhd[hdIdx].getPosition() - static_cast<double>(indexBuffer));
-            std::array<float, NumChannels> tmp{};
-            TapeInterpolation::catmullRom(&m_buffer[indexBuffer * NumChannels], tmp.data(), fraction);
-            for (size_t c = 0; c < NumChannels; ++c)
-            {
-                out[i * NumChannels + c] = tmp[c];
-            }
-        }
+        auto cb = lowRateCallback(hdIdx, rateMultiplier);
+        const auto pullRatio = std::clamp(static_cast<float>(1.0 / m_lastFeedRatio), kMinRatio, kMaxRatio);
+        m_readConverters[hdIdx].fetchBlock(pullRatio, out.data(), TileSize, NumChannels, cb);
     }
 
     /// @brief Resamples one tile by the transport's own ratio and lays it onto the tape.
@@ -105,12 +113,13 @@ class OrganicChorusTransport
     }
 
     /// @brief Moves one head to delta frames behind the write head, gliding unless forced.
-    /// Kept m_readHeadSafetyMargin frames clear of both ends so Wow/Flutter cannot push
-    /// it past the write head; see setReadHeadSafetyMargin() for sizing that margin.
+    /// Compensates for the read reconstruction's own group delay (see m_readReconstructionDelay)
+    /// so a caller's requested distance is what the reconstructed signal actually arrives at.
     void setReadHead(const size_t hdIdx, const float delta, const bool force = false) noexcept
     {
-        const auto clampedDelta =
-            std::clamp(delta, m_readHeadSafetyMargin, static_cast<float>(BufferSize) - 1 - m_readHeadSafetyMargin);
+        const auto compensated = delta - m_readReconstructionDelay;
+        const auto clampedDelta = std::clamp(compensated, m_readHeadSafetyMargin,
+                                             static_cast<float>(BufferSize) - 1 - m_readHeadSafetyMargin);
         if (force)
         {
             m_rdhd[hdIdx].forceReadPositionDistance(clampedDelta);
@@ -125,8 +134,8 @@ class OrganicChorusTransport
     /// Transition time is octaves-to-travel over accelPerSec or brakePerSec, so it is speed-independent.
     void setRatio(const float targetRatio, const bool force = false) noexcept
     {
-        const auto ctRatio = std::clamp(targetRatio, 0.001f, 8.f);
-        const auto last = std::clamp(m_ratio.getLastValue(), 0.001f, 8.f);
+        const auto ctRatio = std::clamp(targetRatio, kMinRatio, kMaxRatio);
+        const auto last = std::clamp(m_ratio.getLastValue(), kMinRatio, kMaxRatio);
         const auto delta = std::abs(std::log2(ctRatio / last));
         const auto rate = ctRatio > last ? accelPerSec : brakePerSec;
         const auto transitionTime = delta / rate;
@@ -216,13 +225,48 @@ class OrganicChorusTransport
     }
 
     // Overrides the default 1000-frame read-head clamp margin (see setReadHead()) with one
-    // sized to this caller's own, measured worst-case modulation excursion instead.
+    // sized to this caller's own, measured worst-case modulation excursion; floor is never
+    // below m_readReconstructionDelay, the kernel's own structural minimum.
     void setReadHeadSafetyMargin(const float samples) noexcept
     {
-        m_readHeadSafetyMargin = std::clamp(samples, 8.f, static_cast<float>(BufferSize) / 2.f);
+        m_readHeadSafetyMargin = std::clamp(samples, m_readReconstructionDelay, static_cast<float>(BufferSize) / 2.f);
     }
 
   private:
+    // Generates the next chunk of the modulated, tape-native-rate reconstruction (Catmull-Rom
+    // over the raw ring buffer) into m_lowRateRing, and returns a callback handing that chunk
+    // to SrPullConverter - see readBlock() and the class comment on kLowRateRingFrames.
+    [[nodiscard]] std::function<long(float**, size_t)> lowRateCallback(const size_t hdIdx,
+                                                                       const double rateMultiplier) noexcept
+    {
+        return [this, hdIdx, rateMultiplier](float** ptr, size_t) -> long
+        {
+            auto& ring = m_lowRateRing[hdIdx];
+            auto& writePos = m_lowRateWritePos[hdIdx];
+            const auto chunk = std::min(kLowRateChunkFrames, kLowRateRingFrames - writePos);
+            for (size_t i = 0; i < chunk; ++i)
+            {
+                m_rdhd[hdIdx].advancePosition(rateMultiplier);
+                // Hard runtime floor, re-checked every step: no static margin alone can prove
+                // safety against an indefinitely-sustained Wow excursion (see Wow.h).
+                if (m_rdhd[hdIdx].getCurrentDelta() < m_readReconstructionDelay)
+                {
+                    m_rdhd[hdIdx].forceReadPositionDistance(m_readReconstructionDelay);
+                }
+                const auto indexBuffer = static_cast<size_t>(std::floor(m_rdhd[hdIdx].getPosition()));
+                // Subtract in double first, or a large tape position would already have lost
+                // the sub-sample fraction before narrowing to float.
+                const float fraction =
+                    static_cast<float>(m_rdhd[hdIdx].getPosition() - static_cast<double>(indexBuffer));
+                TapeInterpolation::catmullRom(&m_buffer[indexBuffer * NumChannels], &ring[(writePos + i) * NumChannels],
+                                              fraction);
+            }
+            *ptr = &ring[writePos * NumChannels];
+            writePos = (writePos + chunk) % kLowRateRingFrames;
+            return static_cast<long>(chunk);
+        };
+    }
+
     void writeToRingBuffer(const float* data, const size_t frames) noexcept
     {
         if (m_writeHead >= 6)
@@ -268,6 +312,12 @@ class OrganicChorusTransport
     size_t m_inputSize{0};
     std::vector<float> m_tmpOutput;
     SrPushConverter<NumChannels> m_srConverter;
+    std::array<SrPullConverter, NumReadHeads> m_readConverters;
+    // Read reconstruction's total added delay in tape-domain samples (kernel group delay plus
+    // kLowRateChunkFrames, which adds 1:1); subtracted in setReadHead() to compensate for it.
+    const float m_readReconstructionDelay;
+    std::array<std::vector<float>, NumReadHeads> m_lowRateRing;
+    std::array<size_t, NumReadHeads> m_lowRateWritePos{};
     Flutter m_flutter;
     Wow m_wow;
     float m_ratioTarget{1.f};

@@ -42,6 +42,9 @@ class OrganicChorusTransportTestFixture : public ::testing::TestWithParam<DelayT
 
     void SetUp() override
     {
+        // Below the default (1000) so setReadHead()'s read-reconstruction-delay compensation
+        // isn't clamped away - the test's own target distances land exactly as requested.
+        sut.setReadHeadSafetyMargin(50.f);
         sut.setFlutterDepth(0.f);
         sut.setFlutterRate(1.f);
         sut.setRatio(1.f);
@@ -153,7 +156,9 @@ TEST_P(OrganicChorusTransportTestFixture, DelayedAround1000Samples)
     const auto out = feedAndCollect(4096);
     const auto peak = analysePeak(out);
 
-    for (size_t i = 0; i < peak.peakIndex - peak.supportWidth; ++i)
+    // Saturating: peakIndex < supportWidth would otherwise underflow this size_t subtraction.
+    const auto preSupportEnd = peak.peakIndex > peak.supportWidth ? peak.peakIndex - peak.supportWidth : 0;
+    for (size_t i = 0; i < preSupportEnd; ++i)
     {
         EXPECT_EQ(out[i], 0.f) << "failed at " << i;
     }
@@ -172,16 +177,19 @@ TEST_P(OrganicChorusTransportTestFixture, DelayedAround1000Samples)
     }
 }
 
+// Re-measured for the SrPullConverter-based read reconstruction: peak positions land close
+// to their old (Catmull-Rom-era) values given compensation headroom; support width is
+// genuinely wider now - the sinc kernel's own footprint, not a bug.
 INSTANTIATE_TEST_SUITE_P(OrganicChorusTransportSpeedVariants, OrganicChorusTransportTestFixture,
                          ::testing::Values(
-                             //             ratio   peakIdx   energy  suppW  dominantIndices
-                             DelayTestParams{0.25f, 4026.0f, 91, {4023, 4024, 4025, 4026, 4027, 4028, 4029, 4030}},
-                             DelayTestParams{0.5f, 2010.35f, 45, {2009, 2010, 2011, 2012}},
-                             DelayTestParams{0.9438743127f, 1060.4f, 24, {1060, 1061}},
-                             DelayTestParams{1.f, 1001.5f, 22, {1001, 1002}},
-                             DelayTestParams{1.05946309436f, 944.7f, 23, {944, 945}},
-                             DelayTestParams{2.f, 506.7f, 21, {506, 507}},
-                             DelayTestParams{4.f, 258.45f, 21, {258, 259}}),
+                             //             ratio   peakIdx   suppW  dominantIndices
+                             DelayTestParams{0.25f, 4023.71f, 120, {4020, 4021, 4022, 4023, 4024, 4025, 4026, 4027}},
+                             DelayTestParams{0.5f, 2005.63f, 56, {2004, 2005, 2006, 2007}},
+                             DelayTestParams{0.9438743127f, 1059.16f, 31, {1058, 1059, 1060}},
+                             DelayTestParams{1.f, 999.63f, 36, {999, 1000}},
+                             DelayTestParams{1.05946309436f, 937.4f, 35, {937, 938}},
+                             DelayTestParams{2.f, 505.52f, 35, {505, 506}},
+                             DelayTestParams{4.f, 258.45f, 34, {258, 259}}),
                          [](const ::testing::TestParamInfo<DelayTestParams>& info) -> std::string
                          {
                              auto s = std::to_string(info.param.ratio);
@@ -270,12 +278,13 @@ TEST(OrganicChorusTransportWriteTest, ReadHeadWobblesWithWowFlutterWhileWriteSta
         return peak;
     };
 
-    // Even at ratio 1 with Wow/Flutter off, the resampler's own quantization leaves a small,
-    // bounded residual - empirically ~11 samples here; the bound below has headroom either way.
+    // Even at ratio 1 with Wow/Flutter off, a small bounded residual remains - empirically ~69
+    // samples here (the read reconstruction's own chunked generation is coarser-grained than
+    // the old per-sample Catmull-Rom was); the bound below has headroom either way.
     OrganicChorusTransport<kBufferSize, 1, 1, TileSize> quiet{48000.f, std::make_shared<SincFilter>(sinc4)};
     quiet.setWowDepth(0.f);
     quiet.setFlutterDepth(0.f);
-    EXPECT_LT(measurePeakDrift(quiet), 20.f);
+    EXPECT_LT(measurePeakDrift(quiet), 100.f);
 
     OrganicChorusTransport<kBufferSize, 1, 1, TileSize> driven{48000.f, std::make_shared<SincFilter>(sinc4)};
     driven.setWowRate(0.4f);
@@ -284,7 +293,7 @@ TEST(OrganicChorusTransportWriteTest, ReadHeadWobblesWithWowFlutterWhileWriteSta
     driven.setWowDrift(0.3f);
     driven.setFlutterRate(0.4f);
     driven.setFlutterDepth(0.3f);
-    EXPECT_GT(measurePeakDrift(driven), 40.f);
+    EXPECT_GT(measurePeakDrift(driven), 100.f);
 }
 
 // setReadHead(..., true) resolves to m_idealWritePosition - clampedDistance, wrapped into
@@ -298,13 +307,19 @@ TEST(OrganicChorusTransportSafetyMarginTest, DefaultMarginMatchesLegacyFixedCons
     EXPECT_NEAR(sut.readHead(0), kBufferSize - 1000.0, 1E-9);
 }
 
+// setReadHead() now compensates for the read reconstruction's own added delay (see
+// m_readReconstructionDelay: kernel half-width/increment + kLowRateChunkFrames, 25.765625 for
+// sinc4/chunk16) - a caller's requested distance is where the signal actually arrives, not
+// where the read head literally sits, so the two now differ by that constant.
+constexpr double kReadReconstructionDelay = 25.765625;
+
 TEST(OrganicChorusTransportSafetyMarginTest, SmallerMarginPermitsShortDelay)
 {
     constexpr size_t kBufferSize = 20000;
     OrganicChorusTransport<kBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
     sut.setReadHeadSafetyMargin(50.f);
     sut.setReadHead(0, 500.f, true);
-    EXPECT_NEAR(sut.readHead(0), kBufferSize - 500.0, 1E-9);
+    EXPECT_NEAR(sut.readHead(0), kBufferSize - 500.0 + kReadReconstructionDelay, 1E-9);
 }
 
 TEST(OrganicChorusTransportSafetyMarginTest, MarginIsClampedToInterpolatorFloorAndBufferCeiling)
@@ -312,9 +327,11 @@ TEST(OrganicChorusTransportSafetyMarginTest, MarginIsClampedToInterpolatorFloorA
     constexpr size_t kBufferSize = 20000;
     OrganicChorusTransport<kBufferSize, 1, 1, TileSize> sut{48000.f, std::make_shared<SincFilter>(sinc4)};
 
+    // Floor is now max(2, kReadReconstructionDelay) - the kernel's own structural minimum,
+    // not the old fixed 8 (sized for Catmull-Rom's much narrower footprint).
     sut.setReadHeadSafetyMargin(2.f);
     sut.setReadHead(0, 3.f, true);
-    EXPECT_NEAR(sut.readHead(0), kBufferSize - 8.0, 1E-9);
+    EXPECT_NEAR(sut.readHead(0), kBufferSize - kReadReconstructionDelay, 1E-9);
 
     sut.setReadHeadSafetyMargin(999999.f);
     sut.setReadHead(0, 9000.f, true);
@@ -342,7 +359,12 @@ TEST(OrganicChorusTransportDriftTrackingTest, ReadHeadVelocityStaysBoundedUnderS
     OrnsteinUhlenbeckProcess speedDrift(48000.f / static_cast<float>(TileSize));
     speedDrift.setSigma(sigma);
 
-    double lastReadHead = sut.readHead(0);
+    // Per-tile velocity is no longer a meaningful signal: readHead() now advances in bursts (a
+    // whole low-rate chunk generated every few tiles, see kLowRateChunkFrames), not smoothly
+    // every tile. Averaging over a window spanning several chunks smooths that by-design
+    // burstiness out while staying sensitive to a genuine sustained lurch.
+    constexpr int kVelocityWindowTiles = 50;
+    double windowStartReadHead = sut.readHead(0);
     float worstDeviation = 0.f;
     constexpr int numBlocks = static_cast<int>(60.0 * 48000.0) / static_cast<int>(TileSize);
     for (int b = 0; b < numBlocks; ++b)
@@ -353,8 +375,12 @@ TEST(OrganicChorusTransportDriftTrackingTest, ReadHeadVelocityStaysBoundedUnderS
         std::array<float, TileSize> discard{};
         sut.readBlock(0, discard);
 
+        if ((b + 1) % kVelocityWindowTiles != 0)
+        {
+            continue;
+        }
         const double readHead = sut.readHead(0);
-        auto delta = readHead - lastReadHead;
+        auto delta = readHead - windowStartReadHead;
         if (delta < -static_cast<double>(kBufferSize) / 2.0)
         {
             delta += static_cast<double>(kBufferSize);
@@ -363,9 +389,9 @@ TEST(OrganicChorusTransportDriftTrackingTest, ReadHeadVelocityStaysBoundedUnderS
         {
             delta -= static_cast<double>(kBufferSize);
         }
-        lastReadHead = readHead;
+        windowStartReadHead = readHead;
 
-        const auto velocity = static_cast<float>(delta) / static_cast<float>(TileSize);
+        const auto velocity = static_cast<float>(delta) / static_cast<float>(kVelocityWindowTiles * TileSize);
         worstDeviation = std::max(worstDeviation, std::abs(velocity - 1.f));
     }
 
