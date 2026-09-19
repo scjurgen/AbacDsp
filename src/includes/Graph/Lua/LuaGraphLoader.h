@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <optional>
 #include <sol/sol.hpp>
@@ -40,10 +41,18 @@ struct LoadResult
 class LuaGraphLoader
 {
   public:
+    // A script is one short table; these only stop a runaway loop or a memory bomb.
+    static constexpr long kInstructionBudget{20'000'000};
+    static constexpr int kHookInterval{1000};
+    static constexpr size_t kMemoryLimitBytes{64u * 1024u * 1024u};
+
     [[nodiscard]] static LoadResult loadFromString(const std::string_view source)
     {
-        sol::state lua;
+        MemoryLimit memory{0, kMemoryLimitBytes};
+        sol::state lua(sol::default_at_panic, &limitedAllocator, &memory);
         lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table);
+        tInstructionsLeft = kInstructionBudget;
+        lua_sethook(lua.lua_state(), &instructionHook, LUA_MASKCOUNT, kHookInterval);
 
         const sol::protected_function_result result = lua.safe_script(source, sol::script_pass_on_error);
         if (!result.valid())
@@ -89,6 +98,43 @@ class LuaGraphLoader
     }
 
   private:
+    struct MemoryLimit
+    {
+        size_t used;
+        size_t limit;
+    };
+
+    // Lua's allocator contract (realloc and free in one function), with a ceiling.
+    static void* limitedAllocator(void* userData, void* pointer, const size_t oldSize, const size_t newSize)
+    {
+        auto* memory = static_cast<MemoryLimit*>(userData);
+        const size_t previous = pointer != nullptr ? oldSize : 0;
+        if (newSize == 0)
+        {
+            memory->used -= previous;
+            std::free(pointer);
+            return nullptr;
+        }
+        if (memory->used - previous + newSize > memory->limit)
+        {
+            return nullptr;
+        }
+        void* grown = std::realloc(pointer, newSize);
+        memory->used = grown != nullptr ? memory->used - previous + newSize : memory->used;
+        return grown;
+    }
+
+    static inline thread_local long tInstructionsLeft{0};
+
+    static void instructionHook(lua_State* state, lua_Debug*)
+    {
+        tInstructionsLeft -= kHookInterval;
+        if (tInstructionsLeft <= 0)
+        {
+            luaL_error(state, "script exceeded its instruction budget");
+        }
+    }
+
     [[nodiscard]] static LoadResult error(std::string message)
     {
         return LoadResult{std::nullopt, {Diagnostic{DiagnosticSeverity::Error, std::move(message), "", ""}}};
@@ -455,6 +501,37 @@ class LuaGraphLoader
         return ok;
     }
 
+    // min and max come as a pair; curve is "linear" or "exp".
+    [[nodiscard]] static bool parseTargetRange(const sol::table& entry, const std::string& macroId,
+                                               const std::string& to, MacroTarget& target,
+                                               std::vector<Diagnostic>& diagnostics)
+    {
+        const std::string where = "macro \"" + macroId + "\" target \"" + to + "\"";
+        const sol::optional<float> minValue = entry["min"];
+        const sol::optional<float> maxValue = entry["max"];
+        if (minValue.has_value() != maxValue.has_value())
+        {
+            diagnostics.push_back({DiagnosticSeverity::Error, where + " needs both min and max, or neither",
+                                   target.toNode, target.toParam, "macros." + macroId + ".targets"});
+            return false;
+        }
+        if (minValue)
+        {
+            target.minValue = *minValue;
+            target.maxValue = *maxValue;
+        }
+
+        const sol::optional<std::string> curve = entry["curve"];
+        if (curve && *curve != "linear" && *curve != "exp")
+        {
+            diagnostics.push_back({DiagnosticSeverity::Error, where + " curve must be \"linear\" or \"exp\"",
+                                   target.toNode, target.toParam, "macros." + macroId + ".targets"});
+            return false;
+        }
+        target.curve = curve.value_or(std::string{});
+        return true;
+    }
+
     [[nodiscard]] static bool parseMacros(const sol::table& root, std::vector<Macro>& macros,
                                           std::vector<Diagnostic>& diagnostics)
     {
@@ -523,6 +600,11 @@ class LuaGraphLoader
                             continue;
                         }
                         target.mapName = mapObj.as<std::string>();
+                    }
+                    if (!parseTargetRange(*targetEntry, macro.id, *to, target, diagnostics))
+                    {
+                        ok = false;
+                        continue;
                     }
                     macro.targets.push_back(std::move(target));
                 }

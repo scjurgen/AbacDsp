@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -74,6 +75,11 @@ struct MacroTarget
     std::string toNode;
     std::string toParam;
     std::string mapName;
+    // Both or neither: the parameter value at macro 0 and at macro 1; empty means the schema range.
+    std::optional<float> minValue{};
+    std::optional<float> maxValue{};
+    // "linear" (or empty) or "exp": how the macro travels between minValue and maxValue.
+    std::string curve{};
 };
 
 struct Macro

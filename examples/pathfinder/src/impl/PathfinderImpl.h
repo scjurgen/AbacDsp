@@ -1,80 +1,167 @@
 #pragma once
 
-#include <algorithm>
 #include <array>
 #include <cassert>
-#include <cmath>
 #include <cstddef>
+#include <string>
 #include <string_view>
 #include <vector>
 
 #include "Audio/AudioBuffer.h"
 #include "EffectBase.h"
-#include "Graph/CompiledGraph.h"
-#include "Graph/GraphCompiler.h"
-#include "Graph/Lua/LuaGraphLoader.h"
-#include "Graph/Node.h"
-#include "Graph/NodeRegistry.h"
-#include "Graph/Nodes/TapeDelayNode.h"
+#include "Graph/GraphSwapper.h"
+#include "Graph/MacroBank.h"
+#include "PathfinderScriptEngine.h"
 
 /**
- * @brief Minimal "Tape Vibrato" graph: one WobbleDelay per channel inside an UpDownSampler,
- * both identically seeded so they share the same tape-like wow and flutter, 100% wet.
+ * @brief A tape-modulation effect whose signal chain is a user-editable graph script.
  *
- * The audio chain is built by loading chorus.md's own "First graph: tape vibrato" Lua
- * text through the graph toolbox (LuaGraphLoader -> GraphValidator -> GraphCompiler),
- * not by driving the delays directly - the seed cutover of the planned
- * Lua tape-modulation toolbox.
+ * The graph starts as the tape vibrato preset. setScript() compiles a new script on the caller's
+ * thread and swaps it in with a short crossfade; a script that fails leaves the running graph
+ * alone and reports its error. The four dials and the script's own knobs write macro values that
+ * the graph reads itself, so a control callback may run on any thread. collectRetired() frees
+ * graphs the audio thread has finished with and belongs on a non-audio thread.
  */
 template <size_t BlockSize>
 class PathfinderImpl final : public EffectBase
 {
   public:
-    static constexpr size_t kBufferSize{8192};
-    static constexpr float kBaseDelayMs{8.f};
-    // Mirror TapeDelayNode.h's own config defaults - kGraphScript below doesn't
-    // override them, so these stay accurate documentation of the fixed config.
-    static constexpr float kSafetyMarginSamples{250.f};
-    static constexpr float kFlutterRateFloorHz{0.6f};
-    using TapeNode = AbacDsp::Graph::Nodes::TapeDelayNode<BlockSize>;
-    using Delay = typename TapeNode::Delay;
-    static constexpr auto kSharedSeed{TapeNode::kSharedSeed};
+    using Engine = PathfinderScriptEngine<BlockSize>;
+    using UiParamSlots = typename Engine::KnobSlots;
+
+    static constexpr float kFadeSeconds{0.03f};
+    static constexpr size_t kDepthSlot{0};
+    static constexpr size_t kSpeedSlot{1};
+    static constexpr size_t kAggressivitySlot{2};
+    static constexpr size_t kCharacterSlot{3};
 
     explicit PathfinderImpl(const float sampleRate)
         : EffectBase(sampleRate)
-        , m_graph(buildGraph(sampleRate))
+        , m_engine(m_bank, sampleRate)
+        , m_swapper(makeDefaultGraph(), BlockSize, static_cast<size_t>(kFadeSeconds * sampleRate))
     {
-        m_tapeNode = m_graph.findNode(kTapeNodeId);
-        assert(m_tapeNode != nullptr);
         m_visualWavedata.resize(6000);
-        applyMacros();
+        applyDialDefaults();
+        m_macros = m_defaultMacros;
     }
 
+    // The dials are the macros depth, speed, aggressivity and character, in percent.
     void setDepth(const float percent)
     {
-        m_depth = percent * 0.01f;
-        applyMacros();
+        m_bank.set(kDepthSlot, percent * 0.01f);
     }
 
-    void setSpeed(const float hz)
+    void setSpeed(const float percent)
     {
-        m_speedHz = hz;
-        applyMacros();
+        m_bank.set(kSpeedSlot, percent * 0.01f);
     }
 
     void setAggressivity(const float percent)
     {
-        m_aggressivity = percent * 0.01f;
-        applyMacros();
+        m_bank.set(kAggressivitySlot, percent * 0.01f);
     }
 
-    // 0% is tape-oriented (below nominal transport speed), 50% is nominal, 100% is a
-    // clean, host-rate-equivalent transport - see chorus.md's Character mapping.
     void setCharacter(const float percent)
     {
-        const auto fraction = percent * 0.01f;
-        const auto ratio = std::exp2((fraction - 0.5f) * 2.f * kCharacterOctaves);
-        m_tapeNode->setParameter(kParamTransportRatio, ratio);
+        m_bank.set(kCharacterSlot, percent * 0.01f);
+    }
+
+    // The script's own macros, shown as knobs one to eight, each a raw 0 to 1 value.
+    void setLuaParam1(const float value)
+    {
+        setKnob(0, value);
+    }
+
+    void setLuaParam2(const float value)
+    {
+        setKnob(1, value);
+    }
+
+    void setLuaParam3(const float value)
+    {
+        setKnob(2, value);
+    }
+
+    void setLuaParam4(const float value)
+    {
+        setKnob(3, value);
+    }
+
+    void setLuaParam5(const float value)
+    {
+        setKnob(4, value);
+    }
+
+    void setLuaParam6(const float value)
+    {
+        setKnob(5, value);
+    }
+
+    void setLuaParam7(const float value)
+    {
+        setKnob(6, value);
+    }
+
+    void setLuaParam8(const float value)
+    {
+        setKnob(7, value);
+    }
+
+    // Graph scripts have no imports; the resolver the processor offers is not used.
+    template <typename Resolver>
+    void setImportResolver(Resolver&&)
+    {
+    }
+
+    bool setScript(const std::string_view text)
+    {
+        auto result = m_engine.compile(text);
+        if (!result.graph)
+        {
+            m_scriptError = std::move(result.error);
+            return false;
+        }
+        if (!m_swapper.submit(std::move(*result.graph)))
+        {
+            m_scriptError = "the graph could not replace the running one";
+            return false;
+        }
+        m_scriptError.clear();
+        m_scriptWarnings = std::move(result.warnings);
+        m_macros = std::move(result.macros);
+        static_cast<void>(m_swapper.collectRetired());
+        return true;
+    }
+
+    [[nodiscard]] bool hasScriptError() const noexcept
+    {
+        return !m_scriptError.empty();
+    }
+
+    [[nodiscard]] const std::string& scriptError() const noexcept
+    {
+        return m_scriptError;
+    }
+
+    [[nodiscard]] const std::string& scriptWarnings() const noexcept
+    {
+        return m_scriptWarnings;
+    }
+
+    [[nodiscard]] static std::string scriptSkeleton()
+    {
+        return Engine::skeleton();
+    }
+
+    [[nodiscard]] UiParamSlots uiParamSlots() const
+    {
+        return Engine::knobSlots(m_macros);
+    }
+
+    // Message thread: frees graphs a finished swap has left behind; true if one was freed.
+    bool collectRetired() noexcept
+    {
+        return m_swapper.collectRetired();
     }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
@@ -91,7 +178,7 @@ class PathfinderImpl final : public EffectBase
         std::array<float, BlockSize> outR{};
         std::array<const float*, 2> graphInputs{inL.data(), inR.data()};
         std::array<float*, 2> graphOutputs{outL.data(), outR.data()};
-        m_graph.process(graphInputs, graphOutputs, BlockSize);
+        m_swapper.process(graphInputs, graphOutputs, BlockSize);
 
         for (size_t i = 0; i < BlockSize; ++i)
         {
@@ -109,147 +196,38 @@ class PathfinderImpl final : public EffectBase
     }
 
   private:
-    static constexpr float kCharacterOctaves{1.f};
-    // Wow/flutter depth ranges reused from organicchorus's Classic config; flutter's is
-    // the gentler one, per chorus.md's "wow depth primarily, flutter depth more gently".
-    static constexpr float kWowDepthAtZero{0.15f};
-    static constexpr float kWowDepthAtOne{0.45f};
-    static constexpr float kFlutterDepthAtZero{0.1f};
-    static constexpr float kFlutterDepthAtOne{0.5f};
-    // OU Aggressivity's wow-variance/wow-drift scale, validated up to this value against
-    // kSafetyMarginSamples via explore/pathfinder_vibrato.cpp.
-    static constexpr float kMaxWowVariance{0.6f};
-    static constexpr float kMaxWowDrift{0.6f};
+    // Depth 65, speed 47, aggressivity 10 and character 50 percent: the values the tape vibrato
+    // preset's static parameters correspond to.
+    static constexpr std::array<float, Engine::kDialMacroCount> kDialDefaults{0.65f, 0.47f, 0.10f, 0.50f};
 
-    // Mirror TapeDelayNode.h's registerTapeDelayNode() parameter order.
-    static constexpr size_t kParamTransportRatio{0};
-    static constexpr size_t kParamWowDepth{1};
-    static constexpr size_t kParamWowRate{2};
-    static constexpr size_t kParamWowVariance{3};
-    static constexpr size_t kParamWowDrift{4};
-    static constexpr size_t kParamFlutterDepth{5};
-    static constexpr size_t kParamFlutterRate{6};
-
-    static constexpr std::string_view kTapeNodeId{"tape"};
-
-    // chorus.md's own "First graph: tape vibrato" example, embedded verbatim.
-    // clang-format off
-    static constexpr std::string_view kGraphScript = R"lua(
-return {
-  version = 1,
-  name = "Tape Vibrato",
-
-  io = {
-    inputs  = { "inL", "inR" },
-    outputs = { "outL", "outR" },
-  },
-
-  nodes = {
+    void applyDialDefaults()
     {
-      id = "tape",
-      type = "TapeDelay",
-      config = {
-        channels = 2,
-        writeRateHz = 4800,
-        maxDelayMs = 30,
-        interpolation = "cubic",
-        modulationMode = "sharedStereo",
-      },
-      params = {
-        baseDelayMs = 8.0,
-        transportRatio = 1.0,
-
-        wowDepth = 0.25,
-        wowRate = 0.30,
-        wowVariance = 0.10,
-        wowDrift = 0.00,
-
-        flutterDepth = 0.02,
-        flutterRate = 4.0,
-      },
-    },
-  },
-
-  edges = {
-    { from = "inL", to = "tape.inL" },
-    { from = "inR", to = "tape.inR" },
-    { from = "tape.outL", to = "outL" },
-    { from = "tape.outR", to = "outR" },
-  },
-
-  macros = {
-    {
-      id = "depth",
-      label = "Depth",
-      default = 0.35,
-      targets = {
-        { to = "tape.wowDepth", map = "vibratoWowDepth" },
-        { to = "tape.flutterDepth", map = "vibratoFlutterDepth" },
-      },
-    },
-    {
-      id = "speed",
-      label = "Speed",
-      default = 0.35,
-      targets = {
-        { to = "tape.wowRate", map = "vibratoWowRate" },
-        { to = "tape.flutterRate", map = "vibratoFlutterRate" },
-      },
-    },
-    {
-      id = "aggressivity",
-      label = "OU Aggressivity",
-      default = 0.15,
-      targets = {
-        { to = "tape.wowVariance", map = "vibratoWowVariance" },
-        { to = "tape.wowDrift", map = "vibratoWowDrift" },
-      },
-    },
-    {
-      id = "character",
-      label = "Character",
-      default = 0.50,
-      targets = {
-        { to = "tape.transportRatio", map = "tapeToCleanTransportRatio" },
-      },
-    },
-  },
-}
-)lua";
-    // clang-format on
-
-    // A load/validate/compile failure here means kGraphScript itself is broken - a
-    // build integration bug, not a runtime condition to recover from.
-    [[nodiscard]] static AbacDsp::Graph::CompiledGraph buildGraph(const float sampleRate)
-    {
-        const AbacDsp::Graph::Lua::LoadResult loaded =
-            AbacDsp::Graph::Lua::LuaGraphLoader::loadFromString(kGraphScript);
-        assert(loaded.description.has_value());
-
-        AbacDsp::Graph::NodeRegistry registry;
-        AbacDsp::Graph::Nodes::registerTapeDelayNode<BlockSize>(registry);
-
-        auto compiled = AbacDsp::Graph::GraphCompiler::compile(*loaded.description, registry, BlockSize, sampleRate);
-        assert(compiled.graph.has_value());
-        return std::move(*compiled.graph);
+        for (size_t slot = 0; slot < kDialDefaults.size(); ++slot)
+        {
+            m_bank.set(slot, kDialDefaults[slot]);
+        }
     }
 
-    void applyMacros()
+    void setKnob(const size_t knob, const float value)
     {
-        m_tapeNode->setParameter(kParamWowRate, m_speedHz);
-        m_tapeNode->setParameter(kParamFlutterRate, std::max(m_speedHz, kFlutterRateFloorHz));
-        m_tapeNode->setParameter(kParamWowDepth, kWowDepthAtZero + (kWowDepthAtOne - kWowDepthAtZero) * m_depth);
-        m_tapeNode->setParameter(kParamFlutterDepth,
-                                 kFlutterDepthAtZero + (kFlutterDepthAtOne - kFlutterDepthAtZero) * m_depth);
-        m_tapeNode->setParameter(kParamWowVariance, m_aggressivity * kMaxWowVariance);
-        m_tapeNode->setParameter(kParamWowDrift, m_aggressivity * kMaxWowDrift);
+        m_bank.set(Engine::kDialMacroCount + knob, value);
     }
 
-    AbacDsp::Graph::CompiledGraph m_graph;
-    AbacDsp::Graph::Node* m_tapeNode{nullptr};
-    float m_depth{0.35f};
-    float m_speedHz{0.8f};
-    float m_aggressivity{0.15f};
+    [[nodiscard]] AbacDsp::Graph::CompiledGraph makeDefaultGraph()
+    {
+        auto result = m_engine.compile(Engine::skeleton());
+        assert(result.graph.has_value());
+        m_defaultMacros = std::move(result.macros);
+        return std::move(*result.graph);
+    }
+
+    AbacDsp::Graph::MacroBank m_bank;
+    Engine m_engine;
+    std::vector<AbacDsp::Graph::LoweredMacro> m_defaultMacros;
+    AbacDsp::Graph::GraphSwapper m_swapper;
+    std::vector<AbacDsp::Graph::LoweredMacro> m_macros;
+    std::string m_scriptError;
+    std::string m_scriptWarnings;
 
     std::vector<float> m_visualWavedata;
     std::vector<float> m_preparedWavedata;

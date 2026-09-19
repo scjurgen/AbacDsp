@@ -366,4 +366,69 @@ TEST(LuaGraphLoaderTest, IdLookupIgnoresAnotherKeyThatMerelyEndsInId)
     EXPECT_EQ(diagnostics[0].line, 3);
 }
 
+TEST(LuaGraphLoaderTest, MacroTargetReadsMinMaxAndCurve)
+{
+    const LoadResult result = LuaGraphLoader::loadFromString(R"lua(
+        return {
+          macros = {
+            { id = "m1", targets = {
+                { to = "n1.gain", min = 0.1, max = 2.0, curve = "exp" },
+                { to = "n1.pan" },
+            } },
+          },
+        }
+    )lua");
+    ASSERT_TRUE(result.description.has_value());
+    const auto& targets = result.description->macros.at(0).targets;
+    ASSERT_EQ(targets.size(), 2u);
+    ASSERT_TRUE(targets[0].minValue.has_value());
+    EXPECT_FLOAT_EQ(*targets[0].minValue, 0.1f);
+    EXPECT_FLOAT_EQ(*targets[0].maxValue, 2.0f);
+    EXPECT_EQ(targets[0].curve, "exp");
+    EXPECT_FALSE(targets[1].minValue.has_value());
+    EXPECT_TRUE(targets[1].curve.empty());
+}
+
+TEST(LuaGraphLoaderTest, MacroTargetWithOnlyOneOfMinAndMaxIsAnError)
+{
+    const LoadResult result = LuaGraphLoader::loadFromString(R"lua(
+        return { macros = { { id = "m1", targets = { { to = "n1.gain", min = 0.1 } } } } }
+    )lua");
+    ASSERT_TRUE(hasSingleError(result));
+    EXPECT_EQ(result.diagnostics.front().nodeId, "n1");
+    EXPECT_NE(result.diagnostics.front().message.find("both min and max"), std::string::npos);
+}
+
+TEST(LuaGraphLoaderTest, MacroTargetWithAnUnknownCurveIsAnError)
+{
+    const LoadResult result = LuaGraphLoader::loadFromString(R"lua(
+        return { macros = { { id = "m1", targets = { { to = "n1.gain", curve = "wobbly" } } } } }
+    )lua");
+    ASSERT_TRUE(hasSingleError(result));
+    EXPECT_NE(result.diagnostics.front().message.find("curve"), std::string::npos);
+}
+
+TEST(LuaGraphLoaderTest, ARunawayLoopIsStoppedByTheInstructionBudget)
+{
+    const LoadResult result = LuaGraphLoader::loadFromString("while true do end");
+    ASSERT_TRUE(hasSingleError(result));
+    EXPECT_NE(result.diagnostics.front().message.find("instruction budget"), std::string::npos);
+}
+
+TEST(LuaGraphLoaderTest, AMemoryBombIsStoppedByTheAllocationLimit)
+{
+    const LoadResult result = LuaGraphLoader::loadFromString("local big = string.rep('x', 2 ^ 27)\nreturn {}");
+    ASSERT_TRUE(hasSingleError(result));
+    EXPECT_NE(result.diagnostics.front().message.find("memory"), std::string::npos);
+}
+
+TEST(LuaGraphLoaderTest, TheBudgetResetsForEveryLoad)
+{
+    for (int i = 0; i < 3; ++i)
+    {
+        EXPECT_TRUE(LuaGraphLoader::loadFromString("local n = 0 for i = 1, 100000 do n = n + i end return {}")
+                        .description.has_value());
+    }
+}
+
 }

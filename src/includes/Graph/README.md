@@ -18,7 +18,27 @@ Lua text -> LuaGraphLoader -> GraphDescription -> GraphValidator -> GraphCompile
 - `Presets/`: the chorus families below.
 
 `TapeDelay` is compiled for one fixed block size and must be called with exactly that many samples.
-Macros in a graph are declarative: the compiler ignores them, a host applies them by hand.
+The compiler ignores `macros`; `MacroLowering` rewrites them into nodes that read a `MacroBank`, so a
+host only writes an atomic per macro (see Macros below).
+
+## Macros
+
+A macro is a normalized 0 to 1 control declared in the script. Each target names `node.param` and
+sweeps it from `min` to `max` (the parameter's own range when both are left out); `curve = "exp"`
+makes the sweep geometric and needs a positive `min` and `max`.
+
+```lua
+macros = {
+  { id = "depth", label = "Depth", default = 0.65,
+    targets = { { to = "tape.flutterDepth", min = 0, max = 1 },
+                { to = "tape.transportRatio", min = 0.5, max = 2, curve = "exp" } } },
+}
+```
+
+`MacroLowering::lower` turns each usable macro into a `MacroInput` node reading one `MacroBank` slot,
+plus a `ScaleOffset` or `ExpMap` per target feeding a control edge. The graph then applies the values
+itself on the audio thread; the host writes `MacroBank::set(slot, value)` from any thread and never
+touches a node. A macro or target that cannot be lowered is skipped with a warning.
 
 ## Presets
 
@@ -32,7 +52,7 @@ does the same comparison without writing.
 
 | Preset | Family | Measured effect |
 |---|---|---|
-| `tape_vibrato` | tape vibrato, one shared stereo tape | 21 cents peak at about 5 Hz, 42 samples of delay swing |
+| `tape_vibrato` | tape vibrato, one shared stereo tape | 21 cents peak at about 5 Hz, 47 samples of delay swing |
 | `classic_stereo_chorus` | dual mono, independent seeds and rates | 104 samples (2.2 ms) swing |
 | `shared_transport_heads` | two heads, same modulation | 117 samples (2.4 ms) swing per head |
 | `ensemble_tri_chorus` | three independent voices, 1/sqrt(3) each | 114 to 130 samples per voice |

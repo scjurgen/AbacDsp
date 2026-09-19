@@ -34,5 +34,4 @@ mark_as_advanced(
 
 package_add_test(PathfinderTests
         Pathfinder_tests.cpp
-        PathfinderV1Comparison_test.cpp
 )

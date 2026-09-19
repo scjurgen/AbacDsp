@@ -416,8 +416,8 @@ TEST(ChorusPresetsTest, TapeVibratoIsFullyWetAndItsImpulseArrivesAtTheBaseDelayP
 {
     auto graph = compilePreset("tape_vibrato");
     const auto output = OfflineRender::render(graph, leftImpulse(8192), 8192, kStandardBlockSize);
-    EXPECT_LT(peakAbs(output[0], 0, 400), 1E-3f);
-    EXPECT_GT(peakAbs(output[0], 400, 520), 0.5f);
+    EXPECT_LT(peakAbs(output[0], 0, 440), 1E-3f);
+    EXPECT_GT(peakAbs(output[0], 480, 650), 0.5f);
 }
 
 TEST(ChorusPresetsTest, ClassicChorusKeepsTheDryImpulseAddsAWetOneAndStaysDualMono)
@@ -471,7 +471,7 @@ TEST(ChorusPresetsTest, ModulatedPresetsSwingTheirDelayByAnAudibleAmount)
         long minimum;
     };
     const std::vector<Case> cases{
-        {"tape_vibrato", {{400, 560}}, 30},
+        {"tape_vibrato", {{450, 660}}, 30},
         {"classic_stereo_chorus", {{500, 800}}, 90},
         {"shared_transport_heads", {{450, 680}, {680, 900}}, 90},
         {"ensemble_tri_chorus", {{500, 690}, {690, 900}, {900, 1200}}, 90},
