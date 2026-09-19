@@ -231,6 +231,21 @@ TEST(WobbleDelayTest, FlutterMovesTheDelayAroundTheBase)
     EXPECT_GT(range.max, 1000.f);
 }
 
+TEST(WobbleDelayTest, FlutterExcursionFollowsItsOwnRate)
+{
+    const auto peakExcursion = [](const float rateHz)
+    {
+        Sut sut(kRate);
+        sut.setDelay(3000.f, true);
+        sut.setFlutterDepth(1.f);
+        sut.setFlutterRate(rateHz);
+        const auto range = observeDelay(sut, 20 * static_cast<size_t>(kRate));
+        return range.max - range.min;
+    };
+    // The same speed error gives a delay excursion inversely proportional to its rate.
+    EXPECT_NEAR(peakExcursion(0.5f) / peakExcursion(8.f), 16.f, 3.f);
+}
+
 TEST(WobbleDelayTest, ReadHeadNeverCrossesSafetyMargin)
 {
     Sut sut(kRate);

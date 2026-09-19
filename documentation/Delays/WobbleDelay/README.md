@@ -19,15 +19,16 @@ renders for listening) goes into the gitignored `../generated/`.
 Pitch wobble. A 220 Hz tone passes through a 2000 sample delay, with wow (1.5 Hz, depth 0.8)
 and flutter (8 Hz, depth 0.8) either engaged or off. The pitch is tracked with
 `periodLengthByZeroCrossingAverage()` over a 42 ms window. With modulation off it sits flat at
-220 Hz (the small ripple is the tracker's own noise). With both on it wanders across roughly 217.5
-to 222.5 Hz, a slow wow cycle with the 8 Hz flutter riding on it. The pitch deviation is the
-derivative of the delay modulation, which is why the same depth values give a larger swing at the
-faster flutter rate.
+220 Hz (the small ripple is the tracker's own noise). With both on it wanders across roughly 217
+to 223 Hz, a slow wow cycle with the 8 Hz flutter riding on it. Flutter is a speed error, so its
+delay offset is scaled by its own rate (sample rate over 2 pi times the flutter rate, floored at
+0.1 Hz): the pitch swing then equals the configured depth at any flutter rate, while the delay
+excursion grows as the rate falls.
 
 ![Read/write distance under deep modulation, safety margin 30](wd_delaystability.png)
 
 Distance stability. A base delay of 60 samples with deep wow (depth 1.0) and flutter (3 %), and a
-safety margin of 30 samples, over 20 s. The distance swings between the margin and about 150
+safety margin of 30 samples, over 20 s. The distance swings between the margin and about 155
 samples and never goes below the margin line, which shows as flat stretches where the clamp
 engages. The clamp acts on the modulated target, and the delay is then interpolated between two
 clamped targets, so it holds between them as well. The unit test `ReadHeadNeverCrossesSafetyMargin`

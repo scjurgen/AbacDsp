@@ -22,14 +22,11 @@ namespace AbacDsp
  *
  * The read position is the write head minus a delay, so it can never drift from it. That
  * delay is an eased base distance plus a Wow delay and a Flutter offset, updated every
- * TileSize samples and interpolated linearly in between. The result is clamped to the safety
- * margin, so the read head can not reach the write head however deep the modulation is.
- * setDelay() glides along a smoothstep curve, so the read speed is zero at both ends of a retune
- * and its peak is bounded. The read is Catmull-Rom.
- *
- * There is no resampling here: run it at another rate by wrapping it in UpDownSampler.
- * Flutter is a speed error, used here directly as a position offset scaled to the physical
- * excursion at kFlutterReferenceHz.
+ * TileSize samples and interpolated linearly in between, then clamped to the safety margin
+ * so the read head can not reach the write head. setDelay() glides along a smoothstep curve
+ * with zero read speed at both ends and a bounded peak. The read is Catmull-Rom.
+ * Flutter is a speed error, used as a position offset scaled to its physical excursion at its
+ * own rate. There is no resampling: wrap it in UpDownSampler for other rates.
  * @see https://en.wikipedia.org/wiki/Wow_and_flutter
  */
 template <size_t BufferSize, size_t TileSize>
@@ -43,22 +40,25 @@ class WobbleDelay
     static constexpr float kRetuneSlope{0.5f};
     /// Peak slope of the smoothstep curve, which a retune's duration is stretched by.
     static constexpr float kSmoothstepPeakSlope{1.5f};
-    /// Flutter frequency at which its position offset equals the physical delay excursion.
-    static constexpr float kFlutterReferenceHz{10.f};
+    /// Lowest flutter rate its offset is scaled for; below it the excursion stops growing.
+    static constexpr float kMinFlutterRateHz{0.1f};
+    /// Matches the rate `Flutter` starts with.
+    static constexpr float kDefaultFlutterRateHz{0.3f};
     /// Fewest samples between write and read that the four-point read can support.
     static constexpr float kStructuralMinDelay{3.f};
     static constexpr float kMaxDelay{static_cast<float>(BufferSize) - 4.f};
     static constexpr float kDefaultDelay{static_cast<float>(BufferSize) / 8.f};
 
     explicit WobbleDelay(const float sampleRate)
-        : m_controlRate(sampleRate / static_cast<float>(TileSize))
+        : m_sampleRate(sampleRate)
+        , m_controlRate(sampleRate / static_cast<float>(TileSize))
         , m_msToSamples(sampleRate / 1000.f)
-        , m_flutterScale(sampleRate / (2.f * std::numbers::pi_v<float> * kFlutterReferenceHz))
         , m_buffer(BufferSize, 0.f)
         , m_flutter(m_controlRate)
         , m_wow(m_controlRate)
     {
         m_wow.setDepth(0.f);
+        setFlutterRate(kDefaultFlutterRateHz);
     }
 
     /// @brief Moves the base delay to the given number of samples, gliding unless forced.
@@ -97,6 +97,7 @@ class WobbleDelay
     void setFlutterRate(const float value) noexcept
     {
         m_flutter.setRate(value);
+        m_flutterScale = m_sampleRate / (2.f * std::numbers::pi_v<float> * std::max(value, kMinFlutterRateHz));
     }
 
     void setWowDepth(const float value) noexcept
@@ -201,9 +202,10 @@ class WobbleDelay
         return Interpolation::hermite43x(taps.data(), 1.f - fraction);
     }
 
+    const float m_sampleRate;
     const float m_controlRate;
     const float m_msToSamples;
-    const float m_flutterScale;
+    float m_flutterScale{0.f};
 
     std::vector<float> m_buffer;
     size_t m_head{0};
