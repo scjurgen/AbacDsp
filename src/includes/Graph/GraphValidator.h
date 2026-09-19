@@ -27,6 +27,14 @@ struct Diagnostic
     std::string message;
     std::string nodeId;
     std::string portName;
+    std::string field;
+    int line{0};
+};
+
+struct FeedbackComponent
+{
+    std::vector<std::string> nodeIds;
+    std::vector<std::string> breakerIds;
 };
 
 /**
@@ -52,6 +60,30 @@ class GraphValidator
         validateConnectivity(description, nodes, diagnostics);
         validateCycles(description, nodes, diagnostics);
         return diagnostics;
+    }
+
+    /// Every feedback cycle (a strongly connected component with an edge inside it), sorted by node id.
+    [[nodiscard]] static std::vector<FeedbackComponent> findFeedbackComponents(const GraphDescription& description,
+                                                                               const NodeRegistry& registry)
+    {
+        std::vector<Diagnostic> ignored;
+        const NodeMap nodes = resolveNodes(description, registry, ignored);
+        std::vector<FeedbackComponent> result;
+        for (auto& component : cycleComponents(description, nodes))
+        {
+            std::ranges::sort(component);
+            FeedbackComponent entry;
+            for (const auto& id : component)
+            {
+                if (nodes.at(id).schema->breaksCycle)
+                {
+                    entry.breakerIds.push_back(id);
+                }
+            }
+            entry.nodeIds = std::move(component);
+            result.push_back(std::move(entry));
+        }
+        return result;
     }
 
   private:
@@ -374,8 +406,8 @@ class GraphValidator
         }
     }
 
-    static void validateCycles(const GraphDescription& description, const NodeMap& nodes,
-                               std::vector<Diagnostic>& diagnostics)
+    [[nodiscard]] static std::vector<std::vector<std::string>> cycleComponents(const GraphDescription& description,
+                                                                               const NodeMap& nodes)
     {
         std::map<std::string, std::vector<std::string>> adjacency;
         for (const auto& edge : description.edges)
@@ -396,13 +428,22 @@ class GraphValidator
             }
         }
 
-        for (const auto& component : state.components)
+        std::vector<std::vector<std::string>> cycles;
+        for (auto& component : state.components)
         {
-            const bool isCycle = component.size() > 1 || hasSelfLoop(component.front(), adjacency);
-            if (!isCycle)
+            if (component.size() > 1 || hasSelfLoop(component.front(), adjacency))
             {
-                continue;
+                cycles.push_back(std::move(component));
             }
+        }
+        return cycles;
+    }
+
+    static void validateCycles(const GraphDescription& description, const NodeMap& nodes,
+                               std::vector<Diagnostic>& diagnostics)
+    {
+        for (const auto& component : cycleComponents(description, nodes))
+        {
             const bool hasBreaker = std::any_of(component.begin(), component.end(), [&nodes](const std::string& id)
                                                 { return nodes.at(id).schema->breaksCycle; });
             if (!hasBreaker)

@@ -61,6 +61,7 @@ class GraphCompiler
         }
 
         assignBufferSlots(description, state, order, maxBlockSize);
+        CompiledGraph::Layout layout = buildLayout(state);
         buildScheduleEntries(description, state, order);
         std::vector<CompiledGraph::OutputBinding> graphOutputBindings = bindGraphOutputs(description, state);
 
@@ -77,7 +78,8 @@ class GraphCompiler
                             std::move(state.buffers),
                             std::move(state.graphInputSlots),
                             std::move(graphOutputBindings),
-                            std::move(state.feedbackSlots)};
+                            std::move(state.feedbackSlots),
+                            std::move(layout)};
         return {std::move(graph), std::move(diagnostics)};
     }
 
@@ -110,6 +112,7 @@ class GraphCompiler
         std::map<PortKey, size_t> outputSlot;
         std::vector<size_t> graphInputSlots;
         std::vector<size_t> feedbackSlots;
+        std::map<PortKey, PortUsage> usage;
         std::vector<CompiledGraph::ScheduleStep> schedule;
     };
 
@@ -337,7 +340,8 @@ class GraphCompiler
     {
         reserveFixedSlots(description, state, maxBlockSize);
 
-        const auto usage = analyzeOutputPorts(description, state, order.size());
+        state.usage = analyzeOutputPorts(description, state, order.size());
+        const auto& usage = state.usage;
         for (const auto& [key, info] : usage)
         {
             if (info.isFeedbackSource)
@@ -382,6 +386,21 @@ class GraphCompiler
                 slotLastUse[slot] = usageIt->second.lastUsePosition;
             }
         }
+    }
+
+    [[nodiscard]] static CompiledGraph::Layout buildLayout(const BuildState& state)
+    {
+        CompiledGraph::Layout layout;
+        layout.slotCount = state.buffers.size();
+        layout.reservedSlotCount = 2 + state.graphInputSlots.size();
+        for (const auto& [key, slot] : state.outputSlot)
+        {
+            const PortUsage& info = state.usage.at(key);
+            layout.ports.push_back(CompiledGraph::PortSlot{key.first, key.second, slot,
+                                                           state.positionById.at(key.first), info.lastUsePosition,
+                                                           info.isFeedbackSource});
+        }
+        return layout;
     }
 
     [[nodiscard]] static const float* resolveInputSlotPointer(const GraphDescription& description,

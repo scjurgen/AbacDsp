@@ -3,6 +3,7 @@
 #define SOL_USING_CXX_LUA 1
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <optional>
 #include <sol/sol.hpp>
@@ -48,14 +49,31 @@ class LuaGraphLoader
         if (!result.valid())
         {
             const sol::error err = result;
-            return error(err.what());
+            return scriptError(err.what());
         }
         const sol::object returned = result;
         if (returned.get_type() != sol::type::table)
         {
             return error("script did not return a table");
         }
-        return parseGraph(returned.as<sol::table>());
+        LoadResult loaded = parseGraph(returned.as<sol::table>());
+        annotateSourceLines(loaded.diagnostics, source);
+        return loaded;
+    }
+
+    /// Sets Diagnostic::line for entries naming a node, by finding that node's id, and the
+    /// param or config key or "node.port" reference, in the script text. Best effort: Lua keeps no
+    /// source positions for table fields, so a repeated id string can point at the wrong line.
+    static void annotateSourceLines(std::vector<Diagnostic>& diagnostics, const std::string_view source)
+    {
+        const std::vector<std::string_view> lines = splitLines(source);
+        for (auto& diagnostic : diagnostics)
+        {
+            if (diagnostic.line == 0 && !diagnostic.nodeId.empty())
+            {
+                diagnostic.line = lookupLine(lines, diagnostic);
+            }
+        }
     }
 
     [[nodiscard]] static LoadResult loadFromFile(const std::string& path)
@@ -74,6 +92,168 @@ class LuaGraphLoader
     [[nodiscard]] static LoadResult error(std::string message)
     {
         return LoadResult{std::nullopt, {Diagnostic{DiagnosticSeverity::Error, std::move(message), "", ""}}};
+    }
+
+    // sol2 prefixes a script error with `[string "..."]:LINE:`.
+    [[nodiscard]] static LoadResult scriptError(std::string message)
+    {
+        const int line = scriptErrorLine(message);
+        LoadResult result = error(std::move(message));
+        result.diagnostics.front().line = line;
+        return result;
+    }
+
+    [[nodiscard]] static int scriptErrorLine(const std::string& message)
+    {
+        const size_t marker = message.find("]:");
+        if (marker == std::string::npos)
+        {
+            return 0;
+        }
+        size_t end = marker + 2;
+        while (end < message.size() && std::isdigit(static_cast<unsigned char>(message[end])))
+        {
+            ++end;
+        }
+        if (end == marker + 2 || end >= message.size() || message[end] != ':')
+        {
+            return 0;
+        }
+        return std::stoi(message.substr(marker + 2, end - marker - 2));
+    }
+
+    [[nodiscard]] static std::vector<std::string_view> splitLines(const std::string_view source)
+    {
+        std::vector<std::string_view> lines;
+        size_t start = 0;
+        while (start <= source.size())
+        {
+            const size_t end = std::min(source.find('\n', start), source.size());
+            lines.push_back(source.substr(start, end - start));
+            start = end + 1;
+        }
+        return lines;
+    }
+
+    [[nodiscard]] static bool isWordChar(const char c)
+    {
+        return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_';
+    }
+
+    [[nodiscard]] static std::string_view trimRight(std::string_view text)
+    {
+        while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back())) != 0)
+        {
+            text.remove_suffix(1);
+        }
+        return text;
+    }
+
+    // True when the text before a quoted id reads `id =`, with `id` a whole word.
+    [[nodiscard]] static bool endsWithIdAssignment(std::string_view prefix)
+    {
+        prefix = trimRight(prefix);
+        if (prefix.empty() || prefix.back() != '=')
+        {
+            return false;
+        }
+        prefix = trimRight(prefix.substr(0, prefix.size() - 1));
+        return prefix.ends_with("id") && (prefix.size() == 2 || !isWordChar(prefix[prefix.size() - 3]));
+    }
+
+    [[nodiscard]] static bool declaresAnyId(const std::string_view line)
+    {
+        const size_t quote = line.find('"');
+        return quote != std::string_view::npos && endsWithIdAssignment(line.substr(0, quote));
+    }
+
+    [[nodiscard]] static bool declaresId(const std::string_view line, const std::string& id)
+    {
+        const size_t position = line.find('"' + id + '"');
+        return position != std::string_view::npos && endsWithIdAssignment(line.substr(0, position));
+    }
+
+    [[nodiscard]] static bool assignsKey(const std::string_view line, const std::string& key)
+    {
+        for (size_t position = line.find(key); position != std::string_view::npos;
+             position = line.find(key, position + 1))
+        {
+            const size_t after = position + key.size();
+            const bool wholeWord = (position == 0 || !isWordChar(line[position - 1])) &&
+                                   (after >= line.size() || !isWordChar(line[after]));
+            const size_t next = line.find_first_not_of(" \t", after);
+            if (wholeWord && next != std::string_view::npos && line[next] == '=')
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    [[nodiscard]] static int findLine(const std::vector<std::string_view>& lines, const size_t from,
+                                      const std::string& needle)
+    {
+        for (size_t i = from; i < lines.size(); ++i)
+        {
+            if (lines[i].find(needle) != std::string_view::npos)
+            {
+                return static_cast<int>(i) + 1;
+            }
+        }
+        return 0;
+    }
+
+    [[nodiscard]] static int findIdLine(const std::vector<std::string_view>& lines, const std::string& id)
+    {
+        for (size_t i = 0; i < lines.size(); ++i)
+        {
+            if (declaresId(lines[i], id))
+            {
+                return static_cast<int>(i) + 1;
+            }
+        }
+        return 0;
+    }
+
+    // Scans the node's own table: from its id line until the next id declaration.
+    [[nodiscard]] static int findKeyLine(const std::vector<std::string_view>& lines, const int idLine,
+                                         const std::string& key)
+    {
+        for (size_t i = static_cast<size_t>(idLine) - 1; i < lines.size(); ++i)
+        {
+            if (i + 1 != static_cast<size_t>(idLine) && declaresAnyId(lines[i]))
+            {
+                return 0;
+            }
+            if (assignsKey(lines[i], key))
+            {
+                return static_cast<int>(i) + 1;
+            }
+        }
+        return 0;
+    }
+
+    [[nodiscard]] static int lookupLine(const std::vector<std::string_view>& lines, const Diagnostic& diagnostic)
+    {
+        const int idLine = findIdLine(lines, diagnostic.nodeId);
+        const size_t dot = diagnostic.field.find('.');
+        if (idLine != 0 && dot != std::string::npos)
+        {
+            const int keyLine = findKeyLine(lines, idLine, diagnostic.field.substr(dot + 1));
+            if (keyLine != 0)
+            {
+                return keyLine;
+            }
+        }
+        if (!diagnostic.portName.empty())
+        {
+            const int portLine = findLine(lines, 0, '"' + diagnostic.nodeId + '.' + diagnostic.portName + '"');
+            if (portLine != 0)
+            {
+                return portLine;
+            }
+        }
+        return idLine;
     }
 
     // Splits "node.port" on the first '.'; no dot means the whole string names
@@ -107,7 +287,8 @@ class LuaGraphLoader
             return value.as<bool>() ? "true" : "false";
         }
         diagnostics.push_back({DiagnosticSeverity::Error,
-                               "node config value must be a number, string or boolean, not a table", nodeId, key});
+                               "node config value must be a number, string or boolean, not a table", nodeId, key,
+                               "config." + key});
         return std::nullopt;
     }
 
@@ -125,8 +306,8 @@ class LuaGraphLoader
             const sol::optional<sol::table> entry = (*nodesTable)[i];
             if (!entry)
             {
-                diagnostics.push_back(
-                    {DiagnosticSeverity::Error, "nodes[" + std::to_string(i) + "] is not a table", "", ""});
+                diagnostics.push_back({DiagnosticSeverity::Error, "nodes[" + std::to_string(i) + "] is not a table", "",
+                                       "", "nodes[" + std::to_string(i) + "]"});
                 ok = false;
                 continue;
             }
@@ -134,8 +315,9 @@ class LuaGraphLoader
             const sol::optional<std::string> type = (*entry)["type"];
             if (!id || !type)
             {
-                diagnostics.push_back(
-                    {DiagnosticSeverity::Error, "nodes[" + std::to_string(i) + "] missing \"id\" or \"type\"", "", ""});
+                diagnostics.push_back({DiagnosticSeverity::Error,
+                                       "nodes[" + std::to_string(i) + "] missing \"id\" or \"type\"", "", "",
+                                       "nodes[" + std::to_string(i) + "]"});
                 ok = false;
                 continue;
             }
@@ -154,7 +336,7 @@ class LuaGraphLoader
                     if (value.get_type() != sol::type::number)
                     {
                         diagnostics.push_back({DiagnosticSeverity::Error, "node param must be a number", instance.id,
-                                               key.as<std::string>()});
+                                               key.as<std::string>(), "params." + key.as<std::string>()});
                         ok = false;
                         continue;
                     }
@@ -204,8 +386,9 @@ class LuaGraphLoader
             const sol::optional<std::string> to = entry ? sol::optional<std::string>((*entry)["to"]) : std::nullopt;
             if (!from || !to)
             {
-                diagnostics.push_back(
-                    {DiagnosticSeverity::Error, "edges[" + std::to_string(i) + "] missing \"from\" or \"to\"", "", ""});
+                diagnostics.push_back({DiagnosticSeverity::Error,
+                                       "edges[" + std::to_string(i) + "] missing \"from\" or \"to\"", "", "",
+                                       "edges[" + std::to_string(i) + "]"});
                 ok = false;
                 continue;
             }
@@ -236,7 +419,8 @@ class LuaGraphLoader
             if (!from || !to)
             {
                 diagnostics.push_back({DiagnosticSeverity::Error,
-                                       "controls[" + std::to_string(i) + "] missing \"from\" or \"to\"", "", ""});
+                                       "controls[" + std::to_string(i) + "] missing \"from\" or \"to\"", "", "",
+                                       "controls[" + std::to_string(i) + "]"});
                 ok = false;
                 continue;
             }
@@ -244,7 +428,8 @@ class LuaGraphLoader
             if (toNode.empty())
             {
                 diagnostics.push_back({DiagnosticSeverity::Error,
-                                       "controls[" + std::to_string(i) + "] \"to\" must be \"node.param\"", "", ""});
+                                       "controls[" + std::to_string(i) + "] \"to\" must be \"node.param\"", "", "",
+                                       "controls[" + std::to_string(i) + "].to"});
                 ok = false;
                 continue;
             }
@@ -258,7 +443,7 @@ class LuaGraphLoader
                 {
                     diagnostics.push_back({DiagnosticSeverity::Error,
                                            "controls[" + std::to_string(i) + "].map must be a string map name", toNode,
-                                           toParam});
+                                           toParam, "controls[" + std::to_string(i) + "].map"});
                     ok = false;
                     continue;
                 }
@@ -285,8 +470,8 @@ class LuaGraphLoader
             const sol::optional<std::string> id = entry ? sol::optional<std::string>((*entry)["id"]) : std::nullopt;
             if (!id)
             {
-                diagnostics.push_back(
-                    {DiagnosticSeverity::Error, "macros[" + std::to_string(i) + "] missing \"id\"", "", ""});
+                diagnostics.push_back({DiagnosticSeverity::Error, "macros[" + std::to_string(i) + "] missing \"id\"",
+                                       "", "", "macros[" + std::to_string(i) + "].id"});
                 ok = false;
                 continue;
             }
@@ -307,7 +492,8 @@ class LuaGraphLoader
                     {
                         diagnostics.push_back(
                             {DiagnosticSeverity::Error,
-                             "macro \"" + macro.id + "\" target " + std::to_string(t) + " missing \"to\"", "", ""});
+                             "macro \"" + macro.id + "\" target " + std::to_string(t) + " missing \"to\"", "", "",
+                             "macros." + macro.id + ".targets[" + std::to_string(t) + "].to"});
                         ok = false;
                         continue;
                     }
@@ -316,7 +502,8 @@ class LuaGraphLoader
                     {
                         diagnostics.push_back(
                             {DiagnosticSeverity::Error,
-                             "macro \"" + macro.id + "\" target \"" + *to + "\" must be \"node.param\"", "", ""});
+                             "macro \"" + macro.id + "\" target \"" + *to + "\" must be \"node.param\"", "", "",
+                             "macros." + macro.id + ".targets[" + std::to_string(t) + "].to"});
                         ok = false;
                         continue;
                     }
@@ -330,7 +517,8 @@ class LuaGraphLoader
                             diagnostics.push_back({DiagnosticSeverity::Error,
                                                    "macro \"" + macro.id + "\" target \"" + *to +
                                                        "\".map must be a string map name, not an inline table",
-                                                   toNode, toParam});
+                                                   toNode, toParam,
+                                                   "macros." + macro.id + ".targets[" + std::to_string(t) + "].map"});
                             ok = false;
                             continue;
                         }
@@ -351,8 +539,8 @@ class LuaGraphLoader
         const sol::optional<int> version = root["version"];
         if (version && *version != 1)
         {
-            diagnostics.push_back(
-                {DiagnosticSeverity::Error, "unsupported graph version: " + std::to_string(*version), "", ""});
+            diagnostics.push_back({DiagnosticSeverity::Error, "unsupported graph version: " + std::to_string(*version),
+                                   "", "", "version"});
         }
 
         GraphDescription description;

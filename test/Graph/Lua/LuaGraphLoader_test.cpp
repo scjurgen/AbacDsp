@@ -254,4 +254,116 @@ TEST(LuaGraphLoaderTest, NodeConfigRoundTripsNumberStringAndBoolean)
     EXPECT_EQ(instance.config.at("enabled"), "true");
 }
 
+TEST(LuaGraphLoaderTest, ScriptRuntimeErrorReportsItsLine)
+{
+    const LoadResult result = LuaGraphLoader::loadFromString("local a = 1\nlocal b = 2\nerror(\"boom\")\n");
+    ASSERT_TRUE(hasSingleError(result));
+    EXPECT_EQ(result.diagnostics.front().line, 3);
+}
+
+TEST(LuaGraphLoaderTest, ScriptSyntaxErrorReportsItsLine)
+{
+    const LoadResult result = LuaGraphLoader::loadFromString("local a = 1\nlocal b = = 2\n");
+    ASSERT_TRUE(hasSingleError(result));
+    EXPECT_EQ(result.diagnostics.front().line, 2);
+}
+
+TEST(LuaGraphLoaderTest, NonNumericParamNamesTheNodeFieldAndLine)
+{
+    const LoadResult result = LuaGraphLoader::loadFromString(R"lua(
+return {
+  nodes = {
+    { id = "tape", type = "TapeDelay",
+      params = {
+        wowRate = 0.3,
+        wowDepth = "loud",
+      },
+    },
+  },
+}
+)lua");
+    ASSERT_TRUE(hasSingleError(result));
+    const Diagnostic& diagnostic = result.diagnostics.front();
+    EXPECT_EQ(diagnostic.nodeId, "tape");
+    EXPECT_EQ(diagnostic.field, "params.wowDepth");
+    EXPECT_EQ(diagnostic.line, 7);
+}
+
+TEST(LuaGraphLoaderTest, NonScalarConfigValueNamesTheNodeFieldAndLine)
+{
+    const LoadResult result = LuaGraphLoader::loadFromString(R"lua(
+return {
+  nodes = {
+    { id = "first", type = "TapeDelay" },
+    { id = "tape", type = "TapeDelay",
+      config = {
+        interpolation = { "cubic" },
+      },
+    },
+  },
+}
+)lua");
+    ASSERT_TRUE(hasSingleError(result));
+    const Diagnostic& diagnostic = result.diagnostics.front();
+    EXPECT_EQ(diagnostic.nodeId, "tape");
+    EXPECT_EQ(diagnostic.field, "config.interpolation");
+    EXPECT_EQ(diagnostic.line, 7);
+}
+
+TEST(LuaGraphLoaderTest, StructuralErrorNamesItsTableIndexAsTheField)
+{
+    const LoadResult result = LuaGraphLoader::loadFromString(R"lua(
+        return { nodes = { { id = "n1" } } }
+    )lua");
+    ASSERT_TRUE(hasSingleError(result));
+    EXPECT_EQ(result.diagnostics.front().field, "nodes[1]");
+}
+
+TEST(LuaGraphLoaderTest, ValidatorDiagnosticGetsTheLineOfItsNodePortReference)
+{
+    constexpr std::string_view script = R"lua(
+return {
+  io = { inputs = { "inL" }, outputs = { "outL" } },
+  nodes = {
+    { id = "tape", type = "TapeDelay" },
+  },
+  edges = {
+    { from = "inL", to = "tape.inL" },
+    { from = "tape.bogus", to = "outL" },
+  },
+}
+)lua";
+    const LoadResult result = LuaGraphLoader::loadFromString(script);
+    ASSERT_TRUE(result.description.has_value());
+
+    NodeRegistry registry;
+    Nodes::registerTapeDelayNode<64>(registry);
+    auto diagnostics = GraphValidator::validate(*result.description, registry);
+    LuaGraphLoader::annotateSourceLines(diagnostics, script);
+
+    const auto unknownPort = std::find_if(diagnostics.begin(), diagnostics.end(),
+                                          [](const Diagnostic& d) { return d.message == "unknown port"; });
+    ASSERT_NE(unknownPort, diagnostics.end());
+    EXPECT_EQ(unknownPort->line, 9);
+}
+
+TEST(LuaGraphLoaderTest, DiagnosticWithoutAKnownNodeStaysAtLineZero)
+{
+    std::vector<Diagnostic> diagnostics{
+        Diagnostic{DiagnosticSeverity::Error, "unknown graph source port", "", "x", "", 0},
+        Diagnostic{DiagnosticSeverity::Error, "unknown node type", "ghost", "", "", 0}};
+    LuaGraphLoader::annotateSourceLines(diagnostics, "return { nodes = { { id = \"real\", type = \"T\" } } }");
+    EXPECT_EQ(diagnostics[0].line, 0);
+    EXPECT_EQ(diagnostics[1].line, 0);
+}
+
+TEST(LuaGraphLoaderTest, IdLookupIgnoresAnotherKeyThatMerelyEndsInId)
+{
+    std::vector<Diagnostic> diagnostics{Diagnostic{DiagnosticSeverity::Error, "x", "tape", "", "", 0}};
+    constexpr std::string_view script =
+        "local grid = \"tape\"\nreturn { nodes = {\n{ id = \"tape\", type = \"T\" } } }";
+    LuaGraphLoader::annotateSourceLines(diagnostics, script);
+    EXPECT_EQ(diagnostics[0].line, 3);
+}
+
 }

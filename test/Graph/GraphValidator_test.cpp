@@ -325,4 +325,43 @@ TEST(GraphValidatorTest, UnconnectedInputAndUnusedNodeAreWarningsNotErrors)
     EXPECT_GT(countSeverity(diagnostics, DiagnosticSeverity::Warning), 0);
 }
 
+TEST(GraphValidatorTest, FindFeedbackComponentsReturnsNothingForAnAcyclicGraph)
+{
+    GraphDescription description;
+    description.nodes = {makeNode("p1", "PassThroughStub"), makeNode("p2", "PassThroughStub")};
+    description.edges = {makeEdge("p1", "out", "p2", "in")};
+    EXPECT_TRUE(GraphValidator::findFeedbackComponents(description, makeRegistry()).empty());
+}
+
+TEST(GraphValidatorTest, FindFeedbackComponentsReportsTheCycleAndItsBreaker)
+{
+    GraphDescription description;
+    description.nodes = {makeNode("p1", "PassThroughStub"), makeNode("breaker", "CycleBreakerStub")};
+    description.edges = {makeEdge("p1", "out", "breaker", "in"), makeEdge("breaker", "out", "p1", "in")};
+
+    const auto components = GraphValidator::findFeedbackComponents(description, makeRegistry());
+    ASSERT_EQ(components.size(), 1u);
+    EXPECT_EQ(components[0].nodeIds, (std::vector<std::string>{"breaker", "p1"}));
+    EXPECT_EQ(components[0].breakerIds, (std::vector<std::string>{"breaker"}));
+}
+
+TEST(GraphValidatorTest, FindFeedbackComponentsReportsAnUnbrokenCycleWithoutBreakers)
+{
+    GraphDescription description;
+    description.nodes = {makeNode("p1", "PassThroughStub"), makeNode("p2", "PassThroughStub")};
+    description.edges = {makeEdge("p1", "out", "p2", "in"), makeEdge("p2", "out", "p1", "in")};
+
+    const auto components = GraphValidator::findFeedbackComponents(description, makeRegistry());
+    ASSERT_EQ(components.size(), 1u);
+    EXPECT_TRUE(components[0].breakerIds.empty());
+}
+
+TEST(GraphValidatorTest, FindFeedbackComponentsCountsASelfLoop)
+{
+    GraphDescription description;
+    description.nodes = {makeNode("breaker", "CycleBreakerStub")};
+    description.edges = {makeEdge("breaker", "out", "breaker", "in")};
+    EXPECT_EQ(GraphValidator::findFeedbackComponents(description, makeRegistry()).size(), 1u);
+}
+
 }

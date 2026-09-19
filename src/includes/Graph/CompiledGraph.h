@@ -54,6 +54,25 @@ class CompiledGraph
 
     using ScheduleStep = std::variant<ScheduledNode, ParameterApplication>;
 
+    // Where one node output port lives, for tooling only: process() never reads it.
+    // Positions are indices in schedule order; a graph output is used until the end.
+    struct PortSlot
+    {
+        std::string nodeId;
+        std::string port;
+        size_t slot{0};
+        int firstPosition{0};
+        int lastPosition{0};
+        bool isFeedback{false};
+    };
+
+    struct Layout
+    {
+        size_t slotCount{0};
+        size_t reservedSlotCount{0};
+        std::vector<PortSlot> ports;
+    };
+
     CompiledGraph(const CompiledGraph&) = delete;
     CompiledGraph& operator=(const CompiledGraph&) = delete;
     CompiledGraph(CompiledGraph&&) noexcept = default;
@@ -131,6 +150,17 @@ class CompiledGraph
         return nullptr;
     }
 
+    [[nodiscard]] const Layout& layout() const noexcept
+    {
+        return m_layout;
+    }
+
+    // Node ids in schedule order.
+    [[nodiscard]] const std::vector<std::string>& nodeIds() const noexcept
+    {
+        return m_nodeIds;
+    }
+
     [[nodiscard]] size_t feedbackSlotCount() const noexcept
     {
         return m_feedbackSlots.size();
@@ -149,7 +179,7 @@ class CompiledGraph
     CompiledGraph(std::vector<std::unique_ptr<Node>> nodes, std::vector<std::string> nodeIds,
                   std::vector<ScheduleStep> schedule, std::vector<std::vector<float>> buffers,
                   std::vector<size_t> graphInputSlots, std::vector<OutputBinding> graphOutputBindings,
-                  std::vector<size_t> feedbackSlots)
+                  std::vector<size_t> feedbackSlots, Layout layout)
         : m_nodes(std::move(nodes))
         , m_nodeIds(std::move(nodeIds))
         , m_schedule(std::move(schedule))
@@ -157,6 +187,7 @@ class CompiledGraph
         , m_graphInputSlots(std::move(graphInputSlots))
         , m_graphOutputBindings(std::move(graphOutputBindings))
         , m_feedbackSlots(std::move(feedbackSlots))
+        , m_layout(std::move(layout))
     {
     }
 
@@ -167,6 +198,7 @@ class CompiledGraph
     std::vector<size_t> m_graphInputSlots;
     std::vector<OutputBinding> m_graphOutputBindings;
     std::vector<size_t> m_feedbackSlots;
+    Layout m_layout;
 };
 
 }
