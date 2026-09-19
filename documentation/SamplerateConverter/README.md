@@ -55,10 +55,9 @@ cmake --build . --target SamplerateConverterExplore
 
 ## Does it matter which class drives it?
 
-`documentation/Delays/`'s own aliasing check answers this question for
-`VariSpeedTapeDelay` vs. `WobbleDelay` (its write-clock vs. read-head fork);
-here the equivalent question is `SrPushConverter` vs. `SrPullConverter` over the exact
-same `SincFilter`. Every spectrogram pair below (`_push_*.png` vs. `_pull_*.png`,
+`documentation/Delays/VariSpeedTapeDelay/`'s own aliasing check drives the shared resampler
+through one caller, `VariSpeedTapeDelay`'s write side; here the question is
+`SrPushConverter` vs. `SrPullConverter` over the exact same `SincFilter`. Every spectrogram pair below (`_push_*.png` vs. `_pull_*.png`,
 generated separately, both checked in) is visually identical, and the SNR measurement
 confirms it numerically: at ratio 0.1, `sinc4` push and pull both measure 87.7955dB; at
 ratio 2.0, both measure 44.1347dB - not "close," but bit-for-bit identical given the
@@ -125,8 +124,8 @@ many overlapping windows) rather than one FFT snapshot - a single window lands a
 arbitrary phase of the beating between the probe and any nearby spurious component,
 which was making one-shot readings swing by tens of dB between otherwise-identical
 runs. Fundamental is the strongest bin of that averaged spectrum; alias is the
-strongest bin at least 50Hz away from it (Delays/README.md's own ratioglide SNR
-measurement uses the same "strongest peak outside a guard band" definition).
+strongest bin at least 50Hz away from it (Delays/VariSpeedTapeDelay/README.md's own
+ratioglide SNR measurement uses the same "strongest peak outside a guard band" definition).
 
 | ratio | sinc4 | init_7_128 | init_11_128 | init_21_512 | init_33_512 | init_69_768 |
 |---:|---:|---:|---:|---:|---:|---:|
@@ -147,8 +146,8 @@ measurement uses the same "strongest peak outside a guard band" definition).
 | 3.5 | 23.3 | 23.3 | 23.3 | 23.3 | 23.3 | 23.3 |
 | 4.0 | 29.8 | 29.8 | 29.8 | 29.8 | 29.8 | 29.8 |
 
-Two findings, neither the smooth single-cliff story `Delays/README.md`'s own
-sinc4-vs-sinc_69_768 table tells, and both worth taking at face value rather than
+Two findings, neither the smooth single-cliff story `Delays/VariSpeedTapeDelay/README.md`'s
+own sinc4-vs-sinc_69_768 table tells, and both worth taking at face value rather than
 forcing into that shape:
 
 **All six filters move together at every ratio.** Across the entire table the spread

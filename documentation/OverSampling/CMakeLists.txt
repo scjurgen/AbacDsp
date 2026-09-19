@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(DelaysExplore)
+project(OverSamplingExplore)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,14 +11,8 @@ endif()
 
 include_directories(../../src/includes)
 include_directories(../../3rdparty/AudioFile)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(
-    VariSpeedTapeDelayExplore
-    VariSpeedTapeDelay/VariSpeedTapeDelayExplore.cpp
-)
-add_executable(WobbleDelayExplore WobbleDelay/WobbleDelayExplore.cpp)
-add_executable(MultiTapDelayExplore MultiTapDelay/MultiTapDelayExplore.cpp)
+add_executable(OverSamplingExplore OverSamplingExplore.cpp)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)

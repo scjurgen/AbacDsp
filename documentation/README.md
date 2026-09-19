@@ -22,7 +22,7 @@ all. See `TODO.md` for folders and algorithms still missing plots.
 
 | Folder | Kind | Covers |
 |---|---|---|
-| `Delays/` | documentation | `VariSpeedTapeDelay`: wow/flutter baked into recorded pitch, octave-based transport-speed glide; `WobbleDelay`: the same but wow/flutter on the read head, drift-tracking fix check, sinc4-vs-sinc_69_768 aliasing sweep; `MultiTapDelay`: whole-sample-only tap spacing |
+| `Delays/` | documentation | One subfolder per class. `VariSpeedTapeDelay/`: wow/flutter baked into recorded pitch, octave-based transport-speed glide, write-side aliasing vs. ratio; `WobbleDelay/`: single-rate delay with Wow and Flutter on the read head, crossing clamp, retune glide, swept-tone spectrograms; `MultiTapDelay/`: whole-sample-only tap spacing |
 | `ClassicBeats/` | generation | Original, copyright-free full-drumset MIDI grooves (Rock, Blues, Jazz Swing, Latin, Funk, Fusion, Hip-Hop, Progressive, Reggae, Pop, Soul) informed by aggregate statistics over reference packs, staged locally for later review before joining `MidiDrums/` |
 | `Diffuser/` | documentation | `DiffuserDelayChain`: Schroeder vs. Direct allpass magnitude flatness, echo-density growth vs. element count |
 | `DrumKit808/` | generation | Synthesizes a full TR-808-style drum kit into `samples/drums/808/` - a copyright-free alternative to a real recorded pack, see `samples/README.md` |
@@ -37,6 +37,7 @@ all. See `TODO.md` for folders and algorithms still missing plots.
 | `Modulation/` | documentation | `Wow`/`Flutter` LFO character (timeline, spectrum, Poincare orbit plot), `Tremolo` drive morph, `RingModulator` sidebands |
 | `Numbers/` | generation | Sollya setup for the minimax sin/cos polynomials in `src/includes/Numbers/Approximation.h` |
 | `OrnsteinUhlenbeck/` | documentation | `OrnsteinUhlenbeckProcess`: mean-reverting noise timelines across `sigma` speeds |
+| `OverSampling/` | documentation | `UpDownSampler` wrapping `WobbleDelay`: swept-tone spectrograms at oversampling and undersampling ratios, delay time and latency vs. ratio, abrupt vs. slow ratio changes |
 | `Plot/` | shared tooling | `PyConPlot.py` - the matplotlib wrapper most other folders' plots are rendered with |
 | `Reverbs/FDN/` | generation | Hadamard-matrix coefficients via SageMath, used to regenerate `src/includes/Reverbs/HadamardWalsh{4,8,16,32}.h` |
 | `Reverbs/Tanks/` | documentation | `FdnTankGlide`/`FdnTankSpicedBase`/`FdnTankBlockDelayWalshSIMD`: late-tail spectral flatness, RT60 vs. frequency band, Schroeder energy decay curves |
