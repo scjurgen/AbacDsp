@@ -16,19 +16,45 @@ struct PatchParameters
         depth       , // dial
         speed       , // dial
         aggressivity, // dial
-        character    // dial
+        character   , // dial
+        luaParam1   , // dial
+        luaParam2   , // dial
+        luaParam3   , // dial
+        luaParam4   , // dial
+        luaParam5   , // dial
+        luaParam6   , // dial
+        luaParam7   , // dial
+        luaParam8   , // dial
+        script       // script
     };
-float depth{35.0f};
-float speed{0.8f};
-float aggressivity{15.0f};
+float depth{65.0f};
+float speed{47.0f};
+float aggressivity{10.0f};
 float character{50.0f};
+float luaParam1{0.0f};
+float luaParam2{0.0f};
+float luaParam3{0.0f};
+float luaParam4{0.0f};
+float luaParam5{0.0f};
+float luaParam6{0.0f};
+float luaParam7{0.0f};
+float luaParam8{0.0f};
+std::string script{};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
         "depth",
 "speed",
 "aggressivity",
-"character"
+"character",
+"luaParam1",
+"luaParam2",
+"luaParam3",
+"luaParam4",
+"luaParam5",
+"luaParam6",
+"luaParam7",
+"luaParam8"
     });
 //        "onOff", "patch", "input", "modulationDepth", "mix", "density", "threshold", "knee"});
 
@@ -51,6 +77,15 @@ float character{50.0f};
         else if constexpr (ParamId == Id::speed) return speed;
         else if constexpr (ParamId == Id::aggressivity) return aggressivity;
         else if constexpr (ParamId == Id::character) return character;
+        else if constexpr (ParamId == Id::luaParam1) return luaParam1;
+        else if constexpr (ParamId == Id::luaParam2) return luaParam2;
+        else if constexpr (ParamId == Id::luaParam3) return luaParam3;
+        else if constexpr (ParamId == Id::luaParam4) return luaParam4;
+        else if constexpr (ParamId == Id::luaParam5) return luaParam5;
+        else if constexpr (ParamId == Id::luaParam6) return luaParam6;
+        else if constexpr (ParamId == Id::luaParam7) return luaParam7;
+        else if constexpr (ParamId == Id::luaParam8) return luaParam8;
+        else if constexpr (ParamId == Id::script) return script;
 
     }
 
@@ -71,12 +106,30 @@ break;
 break;
  case Id::character: if (!isEqual(get<Id::character>(), value)) {get<Id::character>() = value;m_modified = true;}
 break;
+ case Id::luaParam1: if (!isEqual(get<Id::luaParam1>(), value)) {get<Id::luaParam1>() = value;m_modified = true;}
+break;
+ case Id::luaParam2: if (!isEqual(get<Id::luaParam2>(), value)) {get<Id::luaParam2>() = value;m_modified = true;}
+break;
+ case Id::luaParam3: if (!isEqual(get<Id::luaParam3>(), value)) {get<Id::luaParam3>() = value;m_modified = true;}
+break;
+ case Id::luaParam4: if (!isEqual(get<Id::luaParam4>(), value)) {get<Id::luaParam4>() = value;m_modified = true;}
+break;
+ case Id::luaParam5: if (!isEqual(get<Id::luaParam5>(), value)) {get<Id::luaParam5>() = value;m_modified = true;}
+break;
+ case Id::luaParam6: if (!isEqual(get<Id::luaParam6>(), value)) {get<Id::luaParam6>() = value;m_modified = true;}
+break;
+ case Id::luaParam7: if (!isEqual(get<Id::luaParam7>(), value)) {get<Id::luaParam7>() = value;m_modified = true;}
+break;
+ case Id::luaParam8: if (!isEqual(get<Id::luaParam8>(), value)) {get<Id::luaParam8>() = value;m_modified = true;}
+break;
+ case Id::script: break;
 
             default:
                 break;
         }
     }
 
+void updateScript(const std::string& value) { if (script != value) { script = value; m_modified = true; } }
 
 
     [[nodiscard]] bool isModified() const
@@ -114,5 +167,14 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         depth       , // dial
         speed       , // dial
         aggressivity, // dial
-        character    // dial
+        character   , // dial
+        luaParam1   , // dial
+        luaParam2   , // dial
+        luaParam3   , // dial
+        luaParam4   , // dial
+        luaParam5   , // dial
+        luaParam6   , // dial
+        luaParam7   , // dial
+        luaParam8   , // dial
+        script       // script
 )

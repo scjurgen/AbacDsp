@@ -8,6 +8,7 @@
 #include <string_view>
 #include <vector>
 
+#include "../inc/LuaScriptEngineBase.h"
 #include "Graph/CompiledGraph.h"
 #include "Graph/GraphCompiler.h"
 #include "Graph/GraphInspector.h"
@@ -22,20 +23,13 @@
 #include "Graph/Nodes/TapeDelayNode.h"
 #include "Graph/Presets/ChorusPresets.h"
 
-// One script-claimed knob, in the shape LuaControlBridge turns into a LuaControlDescriptor.
-struct PathfinderKnobSlot
-{
-    bool claimed{false};
-    std::string id;
-    std::string name;
-    float rangeMin{0.f};
-    float rangeMax{1.f};
-    float rangeStep{0.f};
-    float rangeSkew{1.f};
-    float defaultValue{0.f};
-    std::string description;
-    std::string unit;
-};
+// One script-claimed knob is the shared LuaUiParamSlot, so the generated processor and its
+// authoring server can pass it on unchanged.
+using PathfinderKnobSlot = LuaUiParamSlot;
+
+inline constexpr size_t kPathfinderDialMacroCount{4};
+inline constexpr size_t kPathfinderKnobCount{AbacDsp::Graph::MacroBank::kSlotCount - kPathfinderDialMacroCount};
+using PathfinderKnobSlots = std::array<PathfinderKnobSlot, kPathfinderKnobCount>;
 
 struct PathfinderScriptResult
 {
@@ -59,9 +53,9 @@ class PathfinderScriptEngine
   public:
     static constexpr size_t kMaxScriptBytes{64 * 1024};
     static constexpr size_t kMaxNodes{128};
-    static constexpr size_t kDialMacroCount{4};
-    static constexpr size_t kKnobCount{AbacDsp::Graph::MacroBank::kSlotCount - kDialMacroCount};
-    using KnobSlots = std::array<PathfinderKnobSlot, kKnobCount>;
+    static constexpr size_t kDialMacroCount{kPathfinderDialMacroCount};
+    static constexpr size_t kKnobCount{kPathfinderKnobCount};
+    using KnobSlots = PathfinderKnobSlots;
 
     PathfinderScriptEngine(const AbacDsp::Graph::MacroBank& bank, const float sampleRate)
         : m_sampleRate(sampleRate)

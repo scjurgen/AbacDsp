@@ -150,6 +150,13 @@ target_compile_definitions("${PROJECT_NAME}" PRIVATE SOL_USING_CXX_LUA=1)
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
 
+# The graph presets double as the read-only template scripts in the script editor's library list.
+target_compile_definitions(
+    "${PROJECT_NAME}"
+    PRIVATE
+        PATHFINDER_BASE_SCRIPTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../src/includes/Graph/Presets/lua"
+)
+
 # Fix source_group to use correct root path for this project
 source_group(
     TREE ${CMAKE_CURRENT_SOURCE_DIR}/src
