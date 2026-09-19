@@ -81,6 +81,23 @@ class WowTest : public ::testing::Test
     }
 };
 
+TEST_F(WowTest, LastDelayIsTheIntegralOfStepDerivative)
+{
+    m_wow->setRate(0.5f);
+    m_wow->setDepth(0.5f);
+    m_wow->setVariance(0.1f);
+    m_wow->setDrift(0.05f);
+    EXPECT_FLOAT_EQ(m_wow->lastDelay(), 0.f);
+
+    double integrated{0.0};
+    for (size_t i = 0; i < 20000; ++i)
+    {
+        integrated += static_cast<double>(m_wow->step()) * 1000.0 / static_cast<double>(m_sampleRate);
+        ASSERT_NEAR(m_wow->lastDelay(), integrated, 1e-2) << "at step " << i;
+    }
+    EXPECT_GT(std::abs(m_wow->lastDelay()), 0.f);
+}
+
 TEST_F(WowTest, DepthAffectsModulation)
 {
     m_wow->setRate(0.5f);

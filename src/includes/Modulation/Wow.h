@@ -85,6 +85,12 @@ class Wow
         m_driftRate = std::clamp(rateHz, 0.01f, 0.5f);
     }
 
+    /// @brief Delay value in milliseconds as of the last step(), which itself returns its derivative.
+    [[nodiscard]] float lastDelay() const noexcept
+    {
+        return m_previousDelay;
+    }
+
     // use sparingly, this stuff is CPU heavy
     [[nodiscard]] float step() noexcept
     {
