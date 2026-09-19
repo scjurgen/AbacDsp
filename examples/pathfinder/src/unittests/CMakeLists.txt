@@ -34,4 +34,11 @@ mark_as_advanced(
 
 package_add_test(PathfinderTests
         Pathfinder_tests.cpp
+        PathfinderReadme_tests.cpp
+)
+
+# The README's node reference and its example scripts are checked against the code.
+target_compile_definitions(
+    PathfinderTests
+    PRIVATE PATHFINDER_README_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../README.md"
 )

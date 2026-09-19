@@ -208,4 +208,43 @@ TEST(TapeDelayNodeTest, RegisteredNodeReadsTheSeedFromItsConfig)
     EXPECT_NE(renderRandomWow(defaulted, kBlocks), expected);
 }
 
+TEST(TapeDelayNodeTest, SchemaDefaultsDescribeAnUnmodulatedNode)
+{
+    NodeRegistry registry;
+    registerTapeDelayNode<kBlockSize>(registry);
+    const auto* schema = registry.findSchema("TapeDelay");
+    ASSERT_NE(schema, nullptr);
+    for (const std::string id : {"wowDepth", "wowVariance", "wowDrift", "flutterDepth"})
+    {
+        const int index = schema->findParameterIndex(id);
+        ASSERT_GE(index, 0) << id;
+        EXPECT_EQ(schema->parameters[static_cast<size_t>(index)].defaultValue, 0.f) << id;
+    }
+}
+
+TEST(TapeDelayNodeTest, WithNoParametersSetTheSeedHasNothingToChange)
+{
+    constexpr size_t kBlocks = 200;
+    Node first(kSampleRate, 8.0f, 250.0f, 3);
+    Node second(kSampleRate, 8.0f, 250.0f, 4);
+    std::vector<float> a;
+    std::vector<float> b;
+    for (size_t block = 0; block < kBlocks; ++block)
+    {
+        Block one;
+        Block two;
+        for (size_t i = 0; i < kBlockSize; ++i)
+        {
+            const float phase = static_cast<float>(block * kBlockSize + i) * 440.f / kSampleRate;
+            one.inL[i] = one.inR[i] = two.inL[i] = two.inR[i] =
+                0.5f * std::sin(2.0f * std::numbers::pi_v<float> * phase);
+        }
+        processOneBlock(first, one);
+        processOneBlock(second, two);
+        a.insert(a.end(), one.outL.begin(), one.outL.end());
+        b.insert(b.end(), two.outL.begin(), two.outL.end());
+    }
+    EXPECT_EQ(a, b);
+}
+
 }

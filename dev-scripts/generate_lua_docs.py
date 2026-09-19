@@ -65,13 +65,10 @@ th, td {{ border: 1px solid #ccc; padding: 4px 10px; text-align: left; }}
 </style>
 </head>
 <body>
-<div class="doc-nav"><a href="#example-section">{title} scripting</a> | <a href="#manual-section">Lua manual</a></div>
-<div id="example-section" class="doc-section"></div>
-<hr>
-<div id="manual-section" class="doc-section"></div>
+<div class="doc-nav"><a href="#example-section">{title} scripting</a>{manual_nav}</div>
+<div id="example-section" class="doc-section"></div>{manual_block}
 
-<script type="text/plain" id="example-md-b64">{example_b64}</script>
-<script type="text/plain" id="manual-md-b64">{manual_b64}</script>
+<script type="text/plain" id="example-md-b64">{example_b64}</script>{manual_data}
 <script>
 {marked_js}
 </script>
@@ -81,23 +78,29 @@ function b64ToUtf8(b64) {{
     const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
     return new TextDecoder("utf-8").decode(bytes);
 }}
-const exampleMd = b64ToUtf8(document.getElementById("example-md-b64").textContent);
-const manualMd = b64ToUtf8(document.getElementById("manual-md-b64").textContent);
-document.getElementById("example-section").innerHTML = marked.parse(exampleMd);
-document.getElementById("manual-section").innerHTML = marked.parse(manualMd);
+const exampleMd = b64ToUtf8(document.getElementById("example-md-b64").textContent);{manual_decode}
+document.getElementById("example-section").innerHTML = marked.parse(exampleMd);{manual_render}
 </script>
 </body>
 </html>
 """
 
 
-def lua_scripted_example_names() -> list[str]:
-    names = []
+def lua_scripted_examples() -> dict[str, bool]:
+    """Lua-scripted example name -> whether its page includes LUA-MANUAL.md.
+
+    A blueprint sets "lua_manual": false when its scripts are not the control scripts that manual
+    describes (pathfinder's are graph scripts), so the page is its README section alone."""
+    examples = {}
     for blueprint_path in sorted(BLUEPRINTS_DIR.glob("*.json")):
         blueprint = json.loads(blueprint_path.read_text(encoding="utf-8"))
         if blueprint.get("use-lua"):
-            names.append(blueprint["name"])
-    return names
+            examples[blueprint["name"]] = bool(blueprint.get("lua_manual", True))
+    return examples
+
+
+def lua_scripted_example_names() -> list[str]:
+    return list(lua_scripted_examples())
 
 
 def extract_scripting_section(readme_text: str) -> str:
@@ -121,7 +124,20 @@ def to_b64(text: str) -> str:
     return base64.b64encode(text.encode("utf-8")).decode("ascii")
 
 
-def generate_one(name: str, manual_md: str, marked_js: str) -> Path:
+def manual_parts(manual_md: str | None) -> dict[str, str]:
+    """The page fragments that exist only when the Lua manual is part of it."""
+    if manual_md is None:
+        return {"manual_nav": "", "manual_block": "", "manual_data": "", "manual_decode": "", "manual_render": ""}
+    return {
+        "manual_nav": ' | <a href="#manual-section">Lua manual</a>',
+        "manual_block": '\n<hr>\n<div id="manual-section" class="doc-section"></div>',
+        "manual_data": f'\n<script type="text/plain" id="manual-md-b64">{to_b64(manual_md)}</script>',
+        "manual_decode": '\nconst manualMd = b64ToUtf8(document.getElementById("manual-md-b64").textContent);',
+        "manual_render": '\ndocument.getElementById("manual-section").innerHTML = marked.parse(manualMd);',
+    }
+
+
+def generate_one(name: str, manual_md: str | None, marked_js: str) -> Path:
     readme_path = ROOT / "examples" / name / "README.md"
     readme_text = readme_path.read_text(encoding="utf-8")
     section = extract_scripting_section(readme_text)
@@ -130,8 +146,8 @@ def generate_one(name: str, manual_md: str, marked_js: str) -> Path:
     page = PAGE_TEMPLATE.format(
         title=title,
         example_b64=to_b64(section),
-        manual_b64=to_b64(manual_md),
         marked_js=marked_js,
+        **manual_parts(manual_md),
     )
     out_path = ROOT / "examples" / name / "scripting.html"
     out_path.write_text(page, encoding="utf-8")
@@ -144,7 +160,8 @@ def main() -> int:
     parser.add_argument("--open", action="store_true", help="open the (first) generated file in the browser")
     args = parser.parse_args()
 
-    all_names = lua_scripted_example_names()
+    examples = lua_scripted_examples()
+    all_names = list(examples)
     if args.example:
         if args.example not in all_names:
             print(f"error: {args.example!r} is not a Lua-scripted example ({', '.join(all_names)})", file=sys.stderr)
@@ -159,7 +176,7 @@ def main() -> int:
     written = []
     for name in names:
         try:
-            written.append(generate_one(name, manual_md, marked_js))
+            written.append(generate_one(name, manual_md if examples[name] else None, marked_js))
         except ValueError as exc:
             print(f"error: {name}: {exc}", file=sys.stderr)
             return 1

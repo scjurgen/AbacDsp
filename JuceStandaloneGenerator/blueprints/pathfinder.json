@@ -5,6 +5,7 @@
   "patches": true,
   "use-lua": true,
   "lua_apply_slot_defaults": true,
+  "lua_manual": false,
   "ports-control":
   [
     {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu"},

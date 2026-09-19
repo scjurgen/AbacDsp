@@ -26,7 +26,8 @@ namespace AbacDsp::Graph::Nodes
  * and run at the same ratio, so their wow and flutter stay coherent. Ports: inL, inR,
  * feedbackL, feedbackR -> outL, outR. Parameters 0-6: transportRatio, wowDepth, wowRate,
  * wowVariance, wowDrift, flutterDepth, flutterRate. numSamples must equal BlockSize.
- * The seed only matters while wowVariance or wowDrift is above zero.
+ * The seed only matters while wowVariance or wowDrift is above zero. The schema defaults are the
+ * node's own starting values: an unset parameter means no wobble at all, not a gentle one.
  */
 template <size_t BlockSize>
 class TapeDelayNode final : public Node
@@ -160,17 +161,17 @@ void registerTapeDelayNode(NodeRegistry& registry)
                                  .maxValue = 8.0f,
                                  .defaultValue = 1.0f},
              ParameterDescriptor{
-                 .id = "wowDepth", .unit = "linear", .minValue = 0.0f, .maxValue = 1.0f, .defaultValue = 0.1f},
+                 .id = "wowDepth", .unit = "linear", .minValue = 0.0f, .maxValue = 1.0f, .defaultValue = 0.0f},
              ParameterDescriptor{
-                 .id = "wowRate", .unit = "Hz", .minValue = 0.0f, .maxValue = 10.0f, .defaultValue = 0.4f},
+                 .id = "wowRate", .unit = "Hz", .minValue = 0.0f, .maxValue = 10.0f, .defaultValue = 1.0f},
              ParameterDescriptor{
-                 .id = "wowVariance", .unit = "linear", .minValue = 0.0f, .maxValue = 1.0f, .defaultValue = 0.1f},
+                 .id = "wowVariance", .unit = "linear", .minValue = 0.0f, .maxValue = 1.0f, .defaultValue = 0.0f},
              ParameterDescriptor{
-                 .id = "wowDrift", .unit = "linear", .minValue = 0.0f, .maxValue = 1.0f, .defaultValue = 0.05f},
+                 .id = "wowDrift", .unit = "linear", .minValue = 0.0f, .maxValue = 1.0f, .defaultValue = 0.0f},
              ParameterDescriptor{
-                 .id = "flutterDepth", .unit = "linear", .minValue = 0.0f, .maxValue = 1.0f, .defaultValue = 0.1f},
+                 .id = "flutterDepth", .unit = "linear", .minValue = 0.0f, .maxValue = 1.0f, .defaultValue = 0.0f},
              ParameterDescriptor{
-                 .id = "flutterRate", .unit = "Hz", .minValue = 0.0f, .maxValue = 20.0f, .defaultValue = 0.4f}},
+                 .id = "flutterRate", .unit = "Hz", .minValue = 0.0f, .maxValue = 20.0f, .defaultValue = 0.3f}},
             false},
         [](const NodeInstance& instance, const float sampleRate)
         {

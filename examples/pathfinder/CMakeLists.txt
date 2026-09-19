@@ -155,6 +155,7 @@ target_compile_definitions(
     "${PROJECT_NAME}"
     PRIVATE
         PATHFINDER_BASE_SCRIPTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../src/includes/Graph/Presets/lua"
+        PATHFINDER_SCRIPTING_DOCS_FILE="${CMAKE_CURRENT_SOURCE_DIR}/scripting.html"
 )
 
 # Fix source_group to use correct root path for this project

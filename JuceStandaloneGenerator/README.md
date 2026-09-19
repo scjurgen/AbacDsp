@@ -38,6 +38,19 @@ second, curated page:
   (bespoke visualisations like maxdiffuser's size display or the looper's
   CircularBarDisplays) - see the existing blueprints for examples.
 
+## Lua blueprint options
+
+For a blueprint with `"use-lua": true` (all optional, off or empty by default, so a blueprint that
+does not set them generates the same output as before):
+
+- `"defaults": [0.65, 0.5]` on the `luacontrolarea` port gives the first pool parameters
+  (`luaParam1`, `luaParam2`, ...) a starting value between 0 and 1 instead of 0, for a fresh instance.
+- `"lua_apply_slot_defaults": true` makes the generated `applyScriptText` (Apply, Reset, the script
+  pool) move every knob the script claims to the default it declares. Loading a patch does not: it
+  keeps the saved knob positions. Needs an impl whose `uiParamSlots()` fills `LuaUiParamSlot` defaults.
+- `"lua_manual": false` leaves `LUA-MANUAL.md` out of the generated `scripting.html`, for examples
+  whose scripts are not the control scripts that manual describes (pathfinder's are graph scripts).
+
 ## Unit tests
 
 Generator-side logic that doesn't depend on JUCE (currently: `ThemeOrbit.h`) has its own

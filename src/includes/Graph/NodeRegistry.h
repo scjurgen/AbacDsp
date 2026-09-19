@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "GraphDescription.h"
 #include "Node.h"
@@ -35,6 +36,18 @@ class NodeRegistry
     {
         const auto it = m_entries.find(typeName);
         return it == m_entries.end() ? nullptr : &it->second.schema;
+    }
+
+    /// Every registered type name, in alphabetical order.
+    [[nodiscard]] std::vector<std::string> typeNames() const
+    {
+        std::vector<std::string> names;
+        names.reserve(m_entries.size());
+        for (const auto& [name, entry] : m_entries)
+        {
+            names.push_back(name);
+        }
+        return names;
     }
 
     [[nodiscard]] std::unique_ptr<Node> create(const std::string& typeName, const NodeInstance& instance,

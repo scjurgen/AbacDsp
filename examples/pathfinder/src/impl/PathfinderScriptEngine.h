@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <format>
 #include <optional>
 #include <span>
 #include <string>
@@ -124,12 +125,89 @@ class PathfinderScriptEngine
         return slots;
     }
 
+    // The node types a script can use, as a markdown table for the README: ports, parameters, config.
+    [[nodiscard]] std::string nodeReferenceMarkdown() const
+    {
+        std::string text = "| Type | Ports | Parameters | Config |\n|---|---|---|---|\n";
+        for (const auto& name : m_registry.typeNames())
+        {
+            if (name == "MacroInput")
+            {
+                continue;
+            }
+            const auto* schema = m_registry.findSchema(name);
+            text += "| `" + name + "` | " + portsCell(*schema) + " | " + parametersCell(*schema) + " | " +
+                    configCell(name) + " |\n";
+        }
+        return text;
+    }
+
     [[nodiscard]] static std::string skeleton()
     {
         return std::string{AbacDsp::Graph::Presets::kTapeVibrato};
     }
 
   private:
+    [[nodiscard]] static std::string portList(const AbacDsp::Graph::NodeSchema& schema,
+                                              const AbacDsp::Graph::PortDirection direction)
+    {
+        std::string list;
+        for (const auto& port : schema.ports)
+        {
+            if (port.direction != direction)
+            {
+                continue;
+            }
+            const bool control = port.category == AbacDsp::Graph::PortCategory::ControlAudioRate ||
+                                 port.category == AbacDsp::Graph::PortCategory::ControlScalar;
+            list += (list.empty() ? "" : ", ") + port.name + (control ? " (ctl)" : "");
+        }
+        return list;
+    }
+
+    [[nodiscard]] static std::string portsCell(const AbacDsp::Graph::NodeSchema& schema)
+    {
+        const std::string inputs = portList(schema, AbacDsp::Graph::PortDirection::Input);
+        const std::string outputs = portList(schema, AbacDsp::Graph::PortDirection::Output);
+        return (inputs.empty() ? "" : "in: " + inputs) + (inputs.empty() || outputs.empty() ? "" : "; ") +
+               (outputs.empty() ? "" : "out: " + outputs);
+    }
+
+    [[nodiscard]] static std::string parametersCell(const AbacDsp::Graph::NodeSchema& schema)
+    {
+        std::string cell;
+        for (const auto& parameter : schema.parameters)
+        {
+            const std::string unit = parameter.unit == "linear" || parameter.unit.empty() ? "" : " " + parameter.unit;
+            cell += (cell.empty() ? "" : "; ") + std::format("`{}` ({:g} to {:g}, default {:g}{})", parameter.id,
+                                                             parameter.minValue, parameter.maxValue,
+                                                             parameter.defaultValue, unit);
+        }
+        return cell;
+    }
+
+    // Config keys are read by the node factories and are not part of a schema, so they are listed here.
+    [[nodiscard]] static std::string configCell(const std::string& typeName)
+    {
+        if (typeName == "TapeDelay")
+        {
+            return "`baseDelayMs` (8), `safetyMarginSamples` (250), `seed` (1)";
+        }
+        if (typeName == "Biquad")
+        {
+            return "`mode`: lowpass (default), highpass, notch, peak";
+        }
+        if (typeName == "LFO")
+        {
+            return "`waveform`: sine (default), triangle, saw, square, noise";
+        }
+        if (typeName == "Constant")
+        {
+            return "`value` (0)";
+        }
+        return {};
+    }
+
     [[nodiscard]] static std::optional<std::string> shapeProblem(const AbacDsp::Graph::GraphDescription& description)
     {
         if (description.io.inputs.size() != 2 || description.io.outputs.size() != 2)
