@@ -8,6 +8,7 @@
 #include <span>
 #include <vector>
 
+#include "Parameters/OctaveGlide.h"
 #include "SamplerateConverter/UpDownSampler.h"
 
 namespace AbacDsp::Test
@@ -92,7 +93,7 @@ template <typename Sut>
     for (size_t pos = 0; pos < input.size(); pos += blockSize)
     {
         const auto count = std::min(blockSize, input.size() - pos);
-        sut.setRatio(ratioAtSample(pos));
+        sut.setRatio(ratioAtSample(pos), true);
         sut.processBlock(std::span<const float>{input}.subspan(pos, count),
                          std::span<float>{output}.subspan(pos, count));
     }
@@ -152,6 +153,69 @@ struct Alignment
         step = std::max(step, std::abs(signal[i] - signal[i - 1]));
     }
     return step;
+}
+
+// Worst 256-sample window of the second difference of the test tone from `from` on, against the
+// steady tone: 1.0 is clean. Repeated samples raise it without a large sample-to-sample step.
+[[nodiscard]] float broadbandRatio(const std::vector<float>& signal, const size_t from)
+{
+    constexpr size_t kWindow{256};
+    const auto omega = 2.f * std::numbers::pi_v<float> * kToneCyclesPerSample;
+    const auto steady = kToneAmplitude * omega * omega / std::numbers::sqrt2_v<float>;
+    float worst{0.f};
+    for (auto start = from; start + kWindow < signal.size(); start += kWindow / 2)
+    {
+        double sum{0.0};
+        for (size_t i = start; i < start + kWindow; ++i)
+        {
+            const auto d2 = static_cast<double>(signal[i]) - 2.0 * signal[i - 1] + signal[i - 2];
+            sum += d2 * d2;
+        }
+        worst = std::max(worst, static_cast<float>(std::sqrt(sum / static_cast<double>(kWindow))) / steady);
+    }
+    return worst;
+}
+
+// Renders the test tone at 16-sample blocks with the ratio going from `from` to `to` at
+// `octavesPerSecond` (0 is a jump) once the first 1.5 s have passed.
+[[nodiscard]] std::vector<float> renderRatioChange(Identity& sut, const float from, const float to,
+                                                   const float octavesPerSecond)
+{
+    constexpr size_t kBlock{16};
+    constexpr size_t kChangeAt{72000};
+    const bool jump = octavesPerSecond <= 0.f;
+    OctaveGlide glide(48000.f, from, jump ? 1.f : octavesPerSecond, jump ? 1.f : octavesPerSecond);
+    bool changed{false};
+    return runThrough(sut, makeSine(192000), kBlock,
+                      [&](const size_t pos)
+                      {
+                          if (!changed && pos >= kChangeAt)
+                          {
+                              glide.setTarget(to, jump);
+                              changed = true;
+                          }
+                          return glide.getValue(kBlock);
+                      });
+}
+
+// Same as renderRatioChange(), but the sampler's own glide does the change (or a forced jump).
+[[nodiscard]] std::vector<float> renderOwnGlide(Identity& sut, const float from, const float to, const bool force)
+{
+    constexpr size_t kBlock{16};
+    constexpr size_t kChangeAt{72000};
+    const auto input = makeSine(192000);
+    std::vector<float> output(input.size());
+    sut.setRatio(from, true);
+    for (size_t pos = 0; pos < input.size(); pos += kBlock)
+    {
+        if (pos == kChangeAt)
+        {
+            sut.setRatio(to, force);
+        }
+        sut.processBlock(std::span<const float>{input}.subspan(pos, kBlock),
+                         std::span<float>{output}.subspan(pos, kBlock));
+    }
+    return output;
 }
 
 [[nodiscard]] bool allFinite(const std::vector<float>& signal)
@@ -231,7 +295,7 @@ TEST(UpDownSamplerTest, SourceMayAliasTarget)
     const auto expected = runThrough(separate, input, 100, 2.f);
 
     auto buffer = input;
-    inPlace.setRatio(2.f);
+    inPlace.setRatio(2.f, true);
     for (size_t pos = 0; pos < buffer.size(); pos += 100)
     {
         const auto count = std::min<size_t>(100, buffer.size() - pos);
@@ -320,6 +384,90 @@ TEST(UpDownSamplerTest, AbruptRatioJumpsStayBounded)
     {
         EXPECT_NEAR(rmsOf(output, (segment + 1) * kSegment - 4000, 4000), kToneRms, kToneRms * 0.03f)
             << "segment " << segment;
+    }
+}
+
+TEST(UpDownSamplerTest, DownwardGlidesDoNotUnderrunAtSixteenSampleBlocks)
+{
+    for (const float octavesPerSecond : {1.5f, 6.f, 24.f})
+    {
+        Identity sut(kMaxBlock);
+        const auto output = renderRatioChange(sut, 1.f, 0.25f, octavesPerSecond);
+
+        EXPECT_EQ(sut.underruns(), 0u) << "octaves per second " << octavesPerSecond;
+        EXPECT_LT(broadbandRatio(output, 68000), 1.05f) << "octaves per second " << octavesPerSecond;
+    }
+}
+
+TEST(UpDownSamplerTest, SetRatioGlidesUnlessForced)
+{
+    Identity sut(kMaxBlock);
+    const std::vector<float> silence(16, 0.f);
+    std::vector<float> discard(16);
+    const auto advance = [&](const size_t numSamples)
+    {
+        for (size_t done = 0; done < numSamples; done += silence.size())
+        {
+            sut.processBlock(silence, discard);
+        }
+    };
+
+    sut.setRatio(0.5f);
+    EXPECT_FLOAT_EQ(sut.ratio(), 0.5f);
+    advance(8000);
+    // Linear in the ratio over the time the octave distance takes: halfway is the midpoint.
+    EXPECT_NEAR(sut.currentRatio(), 0.75f, 0.01f);
+    advance(8000);
+    EXPECT_NEAR(sut.currentRatio(), 0.5f, 1e-3f);
+
+    sut.setRatio(1.f);
+    advance(4000);
+    EXPECT_NEAR(sut.currentRatio(), 0.75f, 0.01f);
+
+    sut.setRatio(4.f, true);
+    EXPECT_FLOAT_EQ(sut.currentRatio(), 4.f);
+}
+
+TEST(UpDownSamplerTest, OwnDownwardGlideDoesNotUnderrun)
+{
+    Identity sut(kMaxBlock);
+    const auto output = renderOwnGlide(sut, 1.f, 0.25f, false);
+
+    EXPECT_EQ(sut.underruns(), 0u);
+    EXPECT_LT(broadbandRatio(output, 68000), 1.05f);
+}
+
+TEST(UpDownSamplerTest, OwnUpwardGlideStaysClean)
+{
+    Identity sut(kMaxBlock);
+    const auto output = renderOwnGlide(sut, 0.25f, 1.f, false);
+
+    EXPECT_EQ(sut.underruns(), 0u);
+    EXPECT_LT(broadbandRatio(output, 68000), 1.3f);
+}
+
+TEST(UpDownSamplerTest, UpwardGlidesStayClean)
+{
+    for (const float octavesPerSecond : {1.5f, 6.f})
+    {
+        Identity sut(kMaxBlock);
+        const auto output = renderRatioChange(sut, 0.25f, 1.f, octavesPerSecond);
+
+        EXPECT_EQ(sut.underruns(), 0u) << "octaves per second " << octavesPerSecond;
+        EXPECT_LT(broadbandRatio(output, 68000), 1.3f) << "octaves per second " << octavesPerSecond;
+    }
+}
+
+// The up stage reading the previous chunk's ratio removes the burst a jump used to cause
+// through the converters alone (about 6 for 0.25 -> 1 before it).
+TEST(UpDownSamplerTest, UpwardJumpThroughTheConvertersAloneIsFarCleanerThanBefore)
+{
+    for (const auto& [from, to] : {std::pair{0.25f, 1.f}, std::pair{0.5f, 2.f}})
+    {
+        Identity sut(kMaxBlock);
+        const auto output = renderRatioChange(sut, from, to, 0.f);
+
+        EXPECT_LT(broadbandRatio(output, 68000), 1.5f) << from << " -> " << to;
     }
 }
 

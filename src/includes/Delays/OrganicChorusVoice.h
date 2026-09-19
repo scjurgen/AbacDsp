@@ -141,7 +141,8 @@ class OrganicChorusVoice
         // wobble, not a pitch bend.
         const auto drift = m_speedDrift.step() - m_speedDriftMean;
         const auto ratio = m_baseRatio.getValue(TileSize) * (1.f + drift);
-        m_transport.setRatio(std::clamp(ratio, Transport::kMinRatio, Transport::kMaxRatio));
+        // Forced: the base glide and the drift are applied here, the sampler must not smooth them.
+        m_transport.setRatio(std::clamp(ratio, Transport::kMinRatio, Transport::kMaxRatio), true);
 
         std::array<float, TileSize> driven{};
         for (size_t i = 0; i < TileSize; ++i)

@@ -11,11 +11,8 @@
 #include "Audio/AudioBuffer.h"
 #include "Audio/FixedSizeProcessor.h"
 #include "Filters/Sinc/sinc_7_128.h"
+#include "Parameters/OctaveGlide.h"
 #include "SamplerateConverter/SrPushConverter.h"
-
-// TODO(JS): smooth ratio changes (abrupt jumps cause a short burst); a bool force flag
-// would keep the current immediate change:
-// void setRatio(const float ratio, const bool force=true)
 
 // TODO(JS): check if we need a Stereo or multitrack version (maybe with a template channelsize)
 
@@ -35,11 +32,12 @@ concept SpanBlockProcessor = requires(T& processor, std::span<const float> sourc
  * Audio is down-converted by the ratio, re-blocked into FixedFrameSize chunks for the
  * wrapped Processor, and converted back. ratio > 1 oversamples, ratio < 1 undersamples.
  * The ratio is clamped to [1/16, 16] and it always converts, also at exactly 1.0.
+ * setRatio() glides at 1/8000 octave per sample up and 1/16000 down unless forced.
  *
- * Latency is ratio dependent (re-blocker and sinc delay are counted in internal-rate
- * samples) but continuous, and does not depend on the host block size. A small cushion
- * stays in the output FIFO to absorb per-block count jitter; a large abrupt ratio change
- * can still underrun, which repeats the last sample and is counted by underruns().
+ * Latency is ratio dependent but continuous, and does not depend on the host block size.
+ * The up stage uses the previous chunk's ratio, matching the data still in flight, and a
+ * proportional correction keeps the output FIFO at its cushion while the ratio moves, so a
+ * glide does not run it dry. A remaining dropout repeats the last sample, see underruns().
  * processBlock() never allocates, and source and target may alias.
  */
 template <SpanBlockProcessor Processor, size_t FixedFrameSize>
@@ -70,14 +68,27 @@ class UpDownSampler
     UpDownSampler& operator=(UpDownSampler&&) = delete;
 
 
-    void setRatio(const float ratio) noexcept
+    /// Sets the target ratio; the ratio glides to it unless force is set.
+    void setRatio(const float ratio, const bool force = false) noexcept
     {
         assert(ratio >= kMinRatio);
         assert(ratio <= kMaxRatio);
-        m_ratio = std::clamp(ratio, kMinRatio, kMaxRatio);
+        m_targetRatio = std::clamp(ratio, kMinRatio, kMaxRatio);
+        m_glide.setTarget(m_targetRatio, force);
+        if (force)
+        {
+            m_ratio = m_targetRatio;
+        }
     }
 
+    /// The target ratio last set.
     [[nodiscard]] float ratio() const noexcept
+    {
+        return m_targetRatio;
+    }
+
+    /// The ratio used for the most recent chunk, which trails the target during a glide.
+    [[nodiscard]] float currentRatio() const noexcept
     {
         return m_ratio;
     }
@@ -107,6 +118,7 @@ class UpDownSampler
         m_fifoWrite = 0;
         m_fifoSize = 0;
         m_started = false;
+        m_hasPreviousRatio = false;
         m_lastOut = 0.f;
     }
 
@@ -160,6 +172,15 @@ class UpDownSampler
 
     static constexpr size_t kHeadroom{4096};
     static constexpr size_t kFifoCushion{16};
+    /// Glide speed in octaves per host sample: 6 and 3 octaves per second at 48 kHz.
+    static constexpr float kGlideUpOctavesPerSample{1.f / 8000.f};
+    static constexpr float kGlideDownOctavesPerSample{1.f / 16000.f};
+    /// Level correction: the error beyond the dead-band over kControlSettle, capped. A surplus
+    /// only adds latency, so its dead-band is wider than that of a deficit.
+    static constexpr float kControlDeficitDeadband{8.f};
+    static constexpr float kControlSurplusDeadband{16.f};
+    static constexpr float kControlSettle{128.f};
+    static constexpr float kControlMaxCorrection{0.05f};
 
     void runProcessor(const InternalBuffer& in, InternalBuffer& out)
     {
@@ -167,16 +188,36 @@ class UpDownSampler
                                  std::span<float>{&out(0, 0), FixedFrameSize});
     }
 
+    /// Proportional correction of the up-stage ratio that holds the FIFO at its cushion.
+    /// Zero inside the dead-band and before the first output, so a constant ratio is untouched.
+    [[nodiscard]] float levelCorrection() const noexcept
+    {
+        if (!m_started)
+        {
+            return 0.f;
+        }
+        const auto error = static_cast<float>(kFifoCushion) - static_cast<float>(m_fifoSize);
+        const auto deadband = error > 0.f ? kControlDeficitDeadband : kControlSurplusDeadband;
+        const auto beyond = std::max(std::abs(error) - deadband, 0.f);
+        return std::clamp(std::copysign(beyond, error) / kControlSettle, -kControlMaxCorrection, kControlMaxCorrection);
+    }
+
     void processChunk(const std::span<const float> source, const std::span<float> target) noexcept
     {
+        m_ratio = m_glide.getValue(source.size());
+        // The up stage lags by one chunk: the data still in flight was made at the previous ratio.
+        const auto upRatio = m_hasPreviousRatio ? m_previousRatio : m_ratio;
+        m_previousRatio = m_ratio;
+        m_hasPreviousRatio = true;
+
         const auto internalCount =
             m_toInternal.fetchBlock(m_ratio, source.data(), source.size(), m_internal.data(), m_internal.size());
 
         SpanView view{m_internal.data(), internalCount};
         m_reblocker.processBlock(view);
 
-        const auto hostCount = m_toHost.fetchBlock(1.f / m_ratio, m_internal.data(), internalCount, m_hostChunk.data(),
-                                                   m_hostChunk.size());
+        const auto hostCount = m_toHost.fetchBlock((1.f / upRatio) * (1.f + levelCorrection()), m_internal.data(),
+                                                   internalCount, m_hostChunk.data(), m_hostChunk.size());
         pushFifo(std::span<const float>{m_hostChunk.data(), hostCount});
         popFifo(target);
     }
@@ -244,6 +285,10 @@ class UpDownSampler
     bool m_started{false};
     float m_lastOut{0.f};
     float m_ratio{1.f};
+    float m_targetRatio{1.f};
+    OctaveGlide m_glide{1.f, 1.f, kGlideUpOctavesPerSample, kGlideDownOctavesPerSample};
+    float m_previousRatio{1.f};
+    bool m_hasPreviousRatio{false};
     size_t m_underruns{0};
 };
 

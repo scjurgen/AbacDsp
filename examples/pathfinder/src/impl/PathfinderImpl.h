@@ -11,7 +11,6 @@
 #include "Delays/WobbleDelay.h"
 #include "EffectBase.h"
 #include "Helpers/ConstructArray.h"
-#include "Parameters/OctaveGlide.h"
 #include "SamplerateConverter/UpDownSampler.h"
 
 /**
@@ -38,7 +37,6 @@ class PathfinderImpl final : public EffectBase
     explicit PathfinderImpl(const float sampleRate)
         : EffectBase(sampleRate)
         , m_transports(AbacDsp::constructArray<Transport, 2>(BlockSize, sampleRate))
-        , m_ratio(sampleRate)
     {
         m_visualWavedata.resize(6000);
         for (auto& transport : m_transports)
@@ -75,12 +73,14 @@ class PathfinderImpl final : public EffectBase
     {
         const auto fraction = percent * 0.01f;
         const auto ratio = std::exp2((fraction - 0.5f) * 2.f * kCharacterOctaves);
-        m_ratio.setTarget(std::clamp(ratio, Transport::kMinRatio, Transport::kMaxRatio));
+        for (auto& transport : m_transports)
+        {
+            transport.setRatio(std::clamp(ratio, Transport::kMinRatio, Transport::kMaxRatio));
+        }
     }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
-        const auto ratio = m_ratio.getValue(BlockSize);
         for (size_t channel = 0; channel < 2; ++channel)
         {
             std::array<float, BlockSize> channelIn{};
@@ -89,7 +89,6 @@ class PathfinderImpl final : public EffectBase
             {
                 channelIn[i] = in(i, channel);
             }
-            m_transports[channel].setRatio(ratio);
             m_transports[channel].processBlock(channelIn, channelOut);
             for (size_t i = 0; i < BlockSize; ++i)
             {
@@ -137,7 +136,6 @@ class PathfinderImpl final : public EffectBase
     }
 
     std::array<Transport, 2> m_transports;
-    AbacDsp::OctaveGlide m_ratio;
     float m_depth{0.35f};
     float m_speedHz{0.8f};
     float m_aggressivity{0.15f};
