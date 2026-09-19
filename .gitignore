@@ -79,3 +79,6 @@ docs/doxygen/html
 
 # debug information files
 *.dwo
+
+# local staging folder for older code
+incoming/
