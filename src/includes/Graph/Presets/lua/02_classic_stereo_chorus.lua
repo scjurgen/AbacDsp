@@ -9,9 +9,9 @@ return {
 
   nodes = {
     { id = "tapeL", type = "TapeDelay", config = { baseDelayMs = 12, seed = 11 },
-      params = { wowDepth = 0.30, wowRate = 0.80, wowVariance = 0.05, flutterDepth = 0.05, flutterRate = 3.0 } },
+      params = { wowDepth = 0.50, wowRate = 0.40, wowVariance = 0.10, flutterDepth = 0.42, flutterRate = 0.80 } },
     { id = "tapeR", type = "TapeDelay", config = { baseDelayMs = 12, seed = 23 },
-      params = { wowDepth = 0.30, wowRate = 0.80, wowVariance = 0.05, flutterDepth = 0.05, flutterRate = 3.0 } },
+      params = { wowDepth = 0.50, wowRate = 0.47, wowVariance = 0.10, flutterDepth = 0.50, flutterRate = 0.95 } },
 
     { id = "toneL", type = "TiltEQ", params = { tiltDb = -2.0, pivotHz = 1000 } },
     { id = "toneR", type = "TiltEQ", params = { tiltDb = -2.0, pivotHz = 1000 } },

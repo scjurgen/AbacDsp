@@ -11,8 +11,8 @@ return {
       config = { baseDelayMs = 8 },
       params = {
         transportRatio = 1.0,
-        wowDepth = 0.25, wowRate = 0.30, wowVariance = 0.10, wowDrift = 0.00,
-        flutterDepth = 0.02, flutterRate = 4.0,
+        wowDepth = 0.60, wowRate = 0.50, wowVariance = 0.10, wowDrift = 0.00,
+        flutterDepth = 0.65, flutterRate = 5.0,
       },
     },
   },

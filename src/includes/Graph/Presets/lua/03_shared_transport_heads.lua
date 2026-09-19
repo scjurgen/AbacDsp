@@ -10,9 +10,9 @@ return {
 
   nodes = {
     { id = "headA", type = "TapeDelay", config = { baseDelayMs = 10, seed = 5 },
-      params = { wowDepth = 0.25, wowRate = 0.50, wowVariance = 0.10, flutterDepth = 0.05, flutterRate = 4.0 } },
+      params = { wowDepth = 0.50, wowRate = 0.35, wowVariance = 0.10, flutterDepth = 0.42, flutterRate = 0.70 } },
     { id = "headB", type = "TapeDelay", config = { baseDelayMs = 15, seed = 5 },
-      params = { wowDepth = 0.25, wowRate = 0.50, wowVariance = 0.10, flutterDepth = 0.05, flutterRate = 4.0 } },
+      params = { wowDepth = 0.50, wowRate = 0.35, wowVariance = 0.10, flutterDepth = 0.42, flutterRate = 0.70 } },
 
     { id = "gainA", type = "Gain", params = { gainDb = -6.0 } },
     { id = "gainB", type = "Gain", params = { gainDb = -7.5 } },

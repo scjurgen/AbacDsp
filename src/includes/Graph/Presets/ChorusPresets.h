@@ -28,8 +28,8 @@ return {
       config = { baseDelayMs = 8 },
       params = {
         transportRatio = 1.0,
-        wowDepth = 0.25, wowRate = 0.30, wowVariance = 0.10, wowDrift = 0.00,
-        flutterDepth = 0.02, flutterRate = 4.0,
+        wowDepth = 0.60, wowRate = 0.50, wowVariance = 0.10, wowDrift = 0.00,
+        flutterDepth = 0.65, flutterRate = 5.0,
       },
     },
   },
@@ -68,9 +68,9 @@ return {
 
   nodes = {
     { id = "tapeL", type = "TapeDelay", config = { baseDelayMs = 12, seed = 11 },
-      params = { wowDepth = 0.30, wowRate = 0.80, wowVariance = 0.05, flutterDepth = 0.05, flutterRate = 3.0 } },
+      params = { wowDepth = 0.50, wowRate = 0.40, wowVariance = 0.10, flutterDepth = 0.42, flutterRate = 0.80 } },
     { id = "tapeR", type = "TapeDelay", config = { baseDelayMs = 12, seed = 23 },
-      params = { wowDepth = 0.30, wowRate = 0.80, wowVariance = 0.05, flutterDepth = 0.05, flutterRate = 3.0 } },
+      params = { wowDepth = 0.50, wowRate = 0.47, wowVariance = 0.10, flutterDepth = 0.50, flutterRate = 0.95 } },
 
     { id = "toneL", type = "TiltEQ", params = { tiltDb = -2.0, pivotHz = 1000 } },
     { id = "toneR", type = "TiltEQ", params = { tiltDb = -2.0, pivotHz = 1000 } },
@@ -110,9 +110,9 @@ return {
 
   nodes = {
     { id = "headA", type = "TapeDelay", config = { baseDelayMs = 10, seed = 5 },
-      params = { wowDepth = 0.25, wowRate = 0.50, wowVariance = 0.10, flutterDepth = 0.05, flutterRate = 4.0 } },
+      params = { wowDepth = 0.50, wowRate = 0.35, wowVariance = 0.10, flutterDepth = 0.42, flutterRate = 0.70 } },
     { id = "headB", type = "TapeDelay", config = { baseDelayMs = 15, seed = 5 },
-      params = { wowDepth = 0.25, wowRate = 0.50, wowVariance = 0.10, flutterDepth = 0.05, flutterRate = 4.0 } },
+      params = { wowDepth = 0.50, wowRate = 0.35, wowVariance = 0.10, flutterDepth = 0.42, flutterRate = 0.70 } },
 
     { id = "gainA", type = "Gain", params = { gainDb = -6.0 } },
     { id = "gainB", type = "Gain", params = { gainDb = -7.5 } },
@@ -172,11 +172,11 @@ return {
 
   nodes = {
     { id = "voice1", type = "TapeDelay", config = { baseDelayMs = 11, seed = 101 },
-      params = { wowDepth = 0.30, wowRate = 0.50, wowVariance = 0.20, wowDrift = 0.20, flutterDepth = 0.05, flutterRate = 3.0 } },
+      params = { wowDepth = 0.50, wowRate = 0.30, wowVariance = 0.20, wowDrift = 0.20, flutterDepth = 0.40, flutterRate = 0.60 } },
     { id = "voice2", type = "TapeDelay", config = { baseDelayMs = 15, seed = 202 },
-      params = { wowDepth = 0.30, wowRate = 0.70, wowVariance = 0.20, wowDrift = 0.20, flutterDepth = 0.05, flutterRate = 3.5 } },
+      params = { wowDepth = 0.50, wowRate = 0.40, wowVariance = 0.20, wowDrift = 0.20, flutterDepth = 0.48, flutterRate = 0.80 } },
     { id = "voice3", type = "TapeDelay", config = { baseDelayMs = 20, seed = 303 },
-      params = { wowDepth = 0.30, wowRate = 0.90, wowVariance = 0.20, wowDrift = 0.20, flutterDepth = 0.05, flutterRate = 4.0 } },
+      params = { wowDepth = 0.50, wowRate = 0.50, wowVariance = 0.20, wowDrift = 0.20, flutterDepth = 0.58, flutterRate = 1.05 } },
 
     { id = "gain1", type = "Gain", params = { gainDb = -4.77 } },
     { id = "gain2", type = "Gain", params = { gainDb = -4.77 } },
