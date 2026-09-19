@@ -43,4 +43,11 @@ python3 "$SPEC" \
     --panel "$DATA_DIR/os_jump_slow.txt" "ratio 0.75 to 1.25, sine at 0.5 Hz" \
     -o "$SCRIPT_DIR/os_ratiochange.png" --maxfreq 24000 --height 2.0
 
+python3 "$SPEC" \
+    --panel "$DATA_DIR/os_glide_down_immediate.txt" "ratio 1.0 -> 0.25, immediate, 16-sample blocks" \
+    --panel "$DATA_DIR/os_glide_down_glide.txt" "ratio 1.0 -> 0.25, sampler glide, 16-sample blocks" \
+    --panel "$DATA_DIR/os_glide_up_immediate.txt" "ratio 0.25 -> 1.0, immediate, 16-sample blocks" \
+    --panel "$DATA_DIR/os_glide_up_glide.txt" "ratio 0.25 -> 1.0, sampler glide, 16-sample blocks" \
+    -o "$SCRIPT_DIR/os_glide.png" --maxfreq 24000 --height 2.0
+
 echo "Done: PNGs in $SCRIPT_DIR, WAVs (for listening) and .txt data in $DATA_DIR"

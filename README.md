@@ -79,6 +79,13 @@ deviation, a histogram, a hit timeline) as a standalone HTML report:
 
 See `examples/metronome/README.md`.
 
+## Block size
+
+Processing is block based, and 16 samples is the standard block size. The JUCE example
+plugins run their DSP in fixed 16-sample blocks (`NumSamplesPerBlock`), block-based classes take
+their block size as a template parameter, and behaviour that depends on the block size is
+verified at 16. Large host blocks are not a design target.
+
 ## Building and testing
 
 ```bash

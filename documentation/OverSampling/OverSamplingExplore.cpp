@@ -19,6 +19,7 @@
 
 #include "Analysis/Spectrogram.h"
 #include "Delays/WobbleDelay.h"
+#include "Parameters/OctaveGlide.h"
 #include "SamplerateConverter/UpDownSampler.h"
 
 namespace
@@ -35,7 +36,7 @@ using Composed = AbacDsp::UpDownSampler<Delay, kFrame>;
 // The delay is given in host samples, so the wrapped delay line gets it in internal samples.
 void configure(Composed& composed, const float ratio, const bool modulated)
 {
-    composed.setRatio(ratio);
+    composed.setRatio(ratio, true);
     auto& delay = composed.processor();
     delay.setDelay(kHostDelay * ratio, true);
     if (modulated)
@@ -74,13 +75,14 @@ void configure(Composed& composed, const float ratio, const bool modulated)
 
 // Runs the input in host blocks, asking ratioAt(position) for the ratio before each block.
 template <typename RatioAt>
-[[nodiscard]] std::vector<float> render(Composed& composed, const std::vector<float>& input, RatioAt ratioAt)
+[[nodiscard]] std::vector<float> render(Composed& composed, const std::vector<float>& input, RatioAt ratioAt,
+                                        const size_t blockSize = kMaxBlock)
 {
     std::vector<float> output(input.size());
-    for (size_t pos = 0; pos < input.size(); pos += kMaxBlock)
+    for (size_t pos = 0; pos < input.size(); pos += blockSize)
     {
-        const auto count = std::min(kMaxBlock, input.size() - pos);
-        composed.setRatio(ratioAt(pos));
+        const auto count = std::min(blockSize, input.size() - pos);
+        composed.setRatio(ratioAt(pos), true);
         composed.processBlock(std::span<const float>{input}.subspan(pos, count),
                               std::span<float>{output}.subspan(pos, count));
     }
@@ -171,7 +173,7 @@ void writeDelayTime(std::ofstream& out)
     for (const float ratio : ratios)
     {
         Composed composed(kMaxBlock, kHostRate * ratio);
-        composed.setRatio(ratio);
+        composed.setRatio(ratio, true);
         composed.processor().setDelay(kInternalDelay, true);
         std::vector<float> input(60000, 0.f);
         input[kImpulseAt] = 1.f;
@@ -206,6 +208,108 @@ void writeRatioChanges(const std::string& outDir)
     configure(slowComposed, 1.f, false);
     writeGridAndWav(outDir + "/os_jump_slow", render(slowComposed, input, slow));
 }
+
+constexpr float kToneHz = 1000.f;
+constexpr float kChangeAtSeconds = 1.5f;
+
+// Glide rates in octaves per second for the study below; 0 is an immediate jump.
+constexpr std::array<float, 4> kGlideRates{0.f, 24.f, 6.f, 1.5f};
+
+// Renders the probe while the ratio goes from `from` to `to` after kChangeAtSeconds, either
+// at once or glided by OctaveGlide the way OrganicChorusVoice and PathfinderImpl do it.
+[[nodiscard]] std::vector<float> renderRatioChange(const float from, const float to, const float octavesPerSecond,
+                                                   const size_t blockSize, size_t& underruns)
+{
+    Composed composed(kMaxBlock, kHostRate);
+    configure(composed, from, false);
+    const bool immediate = octavesPerSecond <= 0.f;
+    AbacDsp::OctaveGlide glide(kHostRate, from, immediate ? 1.f : octavesPerSecond, immediate ? 1.f : octavesPerSecond);
+    const auto changeAt = static_cast<size_t>(kChangeAtSeconds * kHostRate);
+    bool changed = false;
+    const auto ratioAt = [&](const size_t pos)
+    {
+        if (!changed && pos >= changeAt)
+        {
+            glide.setTarget(to, immediate);
+            changed = true;
+        }
+        return glide.getValue(blockSize);
+    };
+    const auto audio = render(composed, makeTone(kToneHz, static_cast<size_t>(4.f * kHostRate)), ratioAt, blockSize);
+    underruns = composed.underruns();
+    return audio;
+}
+
+// Same change, done by the sampler's own glide (or a forced jump) instead of a driven ratio.
+[[nodiscard]] std::vector<float> renderClassGlide(const float from, const float to, const size_t blockSize,
+                                                  size_t& underruns)
+{
+    Composed composed(kMaxBlock, kHostRate);
+    configure(composed, from, false);
+    const auto input = makeTone(kToneHz, static_cast<size_t>(4.f * kHostRate));
+    const auto changeAt = static_cast<size_t>(kChangeAtSeconds * kHostRate);
+    std::vector<float> output(input.size());
+    for (size_t pos = 0; pos < input.size(); pos += blockSize)
+    {
+        if (pos == changeAt)
+        {
+            composed.setRatio(to);
+        }
+        const auto count = std::min(blockSize, input.size() - pos);
+        composed.processBlock(std::span<const float>{input}.subspan(pos, count),
+                              std::span<float>{output}.subspan(pos, count));
+    }
+    underruns = composed.underruns();
+    return output;
+}
+
+// Worst 256-sample window of the second difference, against the steady tone: 1.0 is clean.
+// Repeated samples add broadband energy without any large sample-to-sample step.
+[[nodiscard]] float broadbandRatio(const std::vector<float>& audio)
+{
+    constexpr size_t kWindow = 256;
+    const auto omega = 2.f * std::numbers::pi_v<float> * kToneHz / kHostRate;
+    const auto steady = 0.5f * omega * omega / std::numbers::sqrt2_v<float>;
+    float worst = 0.f;
+    for (auto start = static_cast<size_t>(kChangeAtSeconds * kHostRate) - 4000; start + kWindow < audio.size();
+         start += kWindow / 2)
+    {
+        double sum = 0.0;
+        for (size_t i = start; i < start + kWindow; ++i)
+        {
+            const auto d2 = static_cast<double>(audio[i]) - 2.0 * audio[i - 1] + audio[i - 2];
+            sum += d2 * d2;
+        }
+        worst = std::max(worst, static_cast<float>(std::sqrt(sum / kWindow)) / steady);
+    }
+    return worst;
+}
+
+void writeGlideStudy(const std::string& outDir)
+{
+    std::ofstream metrics(outDir + "/os_glide_metrics.txt");
+    metrics << "from to octaves_per_second(-1=sampler glide) broadband_ratio underruns\n";
+    const std::array<std::pair<float, float>, 5> changes{
+        {{0.25f, 1.f}, {0.5f, 2.f}, {1.f, 0.5f}, {1.f, 0.25f}, {1.f, 0.0625f}}};
+    for (const auto& [from, to] : changes)
+    {
+        for (const float rate : kGlideRates)
+        {
+            size_t underruns = 0;
+            const auto audio = renderRatioChange(from, to, rate, kFrame, underruns);
+            metrics << from << " " << to << " " << rate << " " << broadbandRatio(audio) << " " << underruns << "\n";
+        }
+        size_t underruns = 0;
+        const auto audio = renderClassGlide(from, to, kFrame, underruns);
+        metrics << from << " " << to << " -1 " << broadbandRatio(audio) << " " << underruns << "\n";
+    }
+
+    size_t unused = 0;
+    writeGridAndWav(outDir + "/os_glide_down_immediate", renderRatioChange(1.f, 0.25f, 0.f, kFrame, unused));
+    writeGridAndWav(outDir + "/os_glide_down_glide", renderClassGlide(1.f, 0.25f, kFrame, unused));
+    writeGridAndWav(outDir + "/os_glide_up_immediate", renderRatioChange(0.25f, 1.f, 0.f, kFrame, unused));
+    writeGridAndWav(outDir + "/os_glide_up_glide", renderClassGlide(0.25f, 1.f, kFrame, unused));
+}
 }
 
 int main(int argc, char* argv[])
@@ -221,6 +325,7 @@ int main(int argc, char* argv[])
     writeSweeps(outDir);
     writeDelayTime(delayTimeOut);
     writeRatioChanges(outDir);
+    writeGlideStudy(outDir);
 
     std::cout << "OverSamplingExplore: wrote plot data, spectrogram grids and WAVs into " << outDir << std::endl;
 }
