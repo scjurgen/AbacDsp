@@ -1,9 +1,8 @@
 
 #include <gtest/gtest.h>
+#include <vector>
 
 #include "Audio/FixedSizeProcessor.h"
-
-#include <vector>
 namespace AbacDsp::Test
 {
 template <typename T>
@@ -124,6 +123,35 @@ TEST(FixedSizeProcessorTest, HandlesPartialBigBlock)
         {
             EXPECT_FLOAT_EQ(channelData[sample], expectedData[sample]);
         }
+    }
+}
+
+TEST(FixedSizeProcessorTest, ResetDropsBufferedInputAndPendingOutput)
+{
+    constexpr size_t NumFixFrames{4};
+    size_t processCalls = 0;
+    auto counting = [&processCalls](const AudioBuffer<1, NumFixFrames>& input, AudioBuffer<1, NumFixFrames>& output)
+    {
+        ++processCalls;
+        for (size_t frame = 0; frame < input.numFrames(); ++frame)
+        {
+            output(frame, 0) = input(frame, 0);
+        }
+    };
+    FixedSizeProcessor<1, NumFixFrames, MockAudioBuffer<float>> sut(counting);
+
+    MockAudioBuffer<float> buffer(1, 6);
+    std::fill_n(buffer.getWritePointer(0), 6, 1.f);
+    sut.processBlock(buffer);
+    EXPECT_EQ(processCalls, 1u);
+
+    sut.reset();
+    std::fill_n(buffer.getWritePointer(0), 6, 2.f);
+    sut.processBlock(buffer);
+    EXPECT_EQ(processCalls, 2u);
+    for (size_t i = 0; i < NumFixFrames; ++i)
+    {
+        EXPECT_FLOAT_EQ(buffer.getReadPointer(0)[i], 0.f) << "pending output survived the reset at " << i;
     }
 }
 

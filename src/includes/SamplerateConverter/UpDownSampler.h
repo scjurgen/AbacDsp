@@ -97,6 +97,19 @@ class UpDownSampler
         return m_underruns;
     }
 
+    /// Clears the converters, re-blocker and FIFO, but not the wrapped processor.
+    void reset()
+    {
+        m_toInternal.reset();
+        m_toHost.reset();
+        m_reblocker.reset();
+        m_fifoRead = 0;
+        m_fifoWrite = 0;
+        m_fifoSize = 0;
+        m_started = false;
+        m_lastOut = 0.f;
+    }
+
     void processBlock(std::span<const float> source, std::span<float> target) noexcept
     {
         assert(source.size() == target.size());

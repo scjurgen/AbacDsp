@@ -211,6 +211,18 @@ TEST(UpDownSamplerTest, LatencyDoesNotDependOnBlockSize)
     }
 }
 
+TEST(UpDownSamplerTest, ResetRestoresTheFreshBehaviour)
+{
+    const auto input = makeSine(6000);
+    Identity fresh(kMaxBlock);
+    const auto expected = runThrough(fresh, input, 64, 2.f);
+
+    Identity sut(kMaxBlock);
+    static_cast<void>(runThrough(sut, makeSine(3000, 0.05f), 100, 0.5f));
+    sut.reset();
+    EXPECT_EQ(runThrough(sut, input, 64, 2.f), expected);
+}
+
 TEST(UpDownSamplerTest, SourceMayAliasTarget)
 {
     Identity separate(kMaxBlock);
