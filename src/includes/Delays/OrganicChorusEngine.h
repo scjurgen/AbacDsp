@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <memory>
 
 #include "Delays/OrganicChorusVoice.h"
 #include "Helpers/ConstructArray.h"
@@ -26,8 +25,8 @@ template <size_t BufferSize, size_t TileSize, size_t MaxVoices = 4>
 class OrganicChorusEngine
 {
   public:
-    OrganicChorusEngine(const float sampleRate, const std::shared_ptr<SincFilter>& sincFilter)
-        : m_voices(constructArray<OrganicChorusVoice<BufferSize, TileSize>, MaxVoices>(sampleRate, sincFilter))
+    explicit OrganicChorusEngine(const float sampleRate)
+        : m_voices(constructArray<OrganicChorusVoice<BufferSize, TileSize>, MaxVoices>(sampleRate))
     {
         m_gain.fill(1.f);
         for (size_t v = 0; v < MaxVoices; ++v)
@@ -75,11 +74,6 @@ class OrganicChorusEngine
     void setVoiceReadHeadSafetyMargin(const size_t voice, const float samples) noexcept
     {
         m_voices[voice].setReadHeadSafetyMargin(samples);
-    }
-
-    void setVoiceReadHeadCorrectionThreshold(const size_t voice, const float samples) noexcept
-    {
-        m_voices[voice].setReadHeadCorrectionThreshold(samples);
     }
 
     void setVoiceWow(const size_t voice, const float rateHz, const float depth, const float variance,

@@ -4,16 +4,19 @@
 #include <array>
 #include <cmath>
 #include <memory>
+#include <random>
 #include <vector>
 
 #include "Audio/AudioBuffer.h"
 #include "Delays/WobbleDelay.h"
 #include "EffectBase.h"
-#include "Filters/Sinc/sinc_4.h"
+#include "Helpers/ConstructArray.h"
+#include "Parameters/OctaveGlide.h"
+#include "SamplerateConverter/UpDownSampler.h"
 
 /**
- * @brief Minimal "Tape Vibrato" graph: a shared stereo WobbleDelay read head,
- * modulated by tape-like wow and flutter, 100% wet.
+ * @brief Minimal "Tape Vibrato" graph: one WobbleDelay per channel inside an UpDownSampler,
+ * both identically seeded so they share the same tape-like wow and flutter, 100% wet.
  *
  * The seed of a planned Lua tape-modulation toolbox (chorus.md); base delay, buffer size
  * and safety margin are fixed static config here rather than exposed controls.
@@ -27,19 +30,24 @@ class PathfinderImpl final : public EffectBase
     // Reused from organicchorus's Classic config; re-confirmed for this stereo/single-head
     // use via explore/pathfinder_vibrato.cpp before wiring into the blueprint.
     static constexpr float kSafetyMarginSamples{250.f};
-    static constexpr float kCorrectionThresholdSamples{190.f};
     static constexpr float kFlutterRateFloorHz{0.6f};
-    using Transport = AbacDsp::WobbleDelay<kBufferSize, 2, 1, BlockSize>;
+    static constexpr std::mt19937::result_type kSharedSeed{1};
+    using Delay = AbacDsp::WobbleDelay<kBufferSize, BlockSize>;
+    using Transport = AbacDsp::UpDownSampler<Delay, BlockSize>;
 
     explicit PathfinderImpl(const float sampleRate)
         : EffectBase(sampleRate)
-        , m_transport(sampleRate, std::make_shared<AbacDsp::SincFilter>(sinc4))
+        , m_transports(AbacDsp::constructArray<Transport, 2>(BlockSize, sampleRate))
+        , m_ratio(sampleRate)
     {
         m_visualWavedata.resize(6000);
-        m_transport.setReadHeadSafetyMargin(kSafetyMarginSamples);
-        m_transport.setReadHeadCorrectionThreshold(0, kCorrectionThresholdSamples);
-        m_transport.setReadHead(0, kBaseDelayMs * 0.001f * sampleRate, true);
-        m_transport.setRatio(1.f, true);
+        for (auto& transport : m_transports)
+        {
+            auto& delay = transport.processor();
+            delay.seed(kSharedSeed);
+            delay.setSafetyMargin(kSafetyMarginSamples);
+            delay.setDelay(kBaseDelayMs * 0.001f * sampleRate, true);
+        }
         applyMacros();
     }
 
@@ -67,25 +75,29 @@ class PathfinderImpl final : public EffectBase
     {
         const auto fraction = percent * 0.01f;
         const auto ratio = std::exp2((fraction - 0.5f) * 2.f * kCharacterOctaves);
-        m_transport.setRatio(ratio, false);
+        m_ratio.setTarget(std::clamp(ratio, Transport::kMinRatio, Transport::kMaxRatio));
     }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
     {
-        std::array<float, 2 * BlockSize> interleavedIn{};
-        for (size_t i = 0; i < BlockSize; ++i)
+        const auto ratio = m_ratio.getValue(BlockSize);
+        for (size_t channel = 0; channel < 2; ++channel)
         {
-            interleavedIn[2 * i] = in(i, 0);
-            interleavedIn[2 * i + 1] = in(i, 1);
+            std::array<float, BlockSize> channelIn{};
+            std::array<float, BlockSize> channelOut{};
+            for (size_t i = 0; i < BlockSize; ++i)
+            {
+                channelIn[i] = in(i, channel);
+            }
+            m_transports[channel].setRatio(ratio);
+            m_transports[channel].processBlock(channelIn, channelOut);
+            for (size_t i = 0; i < BlockSize; ++i)
+            {
+                out(i, channel) = channelOut[i];
+            }
         }
-        m_transport.feed(interleavedIn);
-
-        std::array<float, 2 * BlockSize> interleavedOut{};
-        m_transport.readBlock(0, interleavedOut);
         for (size_t i = 0; i < BlockSize; ++i)
         {
-            out(i, 0) = interleavedOut[2 * i];
-            out(i, 1) = interleavedOut[2 * i + 1];
             m_visualWavedata[m_currentSample] = out(i, 0) + out(i, 1);
             m_currentSample = (m_currentSample + 1) % m_visualWavedata.size();
         }
@@ -112,15 +124,20 @@ class PathfinderImpl final : public EffectBase
 
     void applyMacros()
     {
-        m_transport.setWowRate(m_speedHz);
-        m_transport.setFlutterRate(std::max(m_speedHz, kFlutterRateFloorHz));
-        m_transport.setWowDepth(kWowDepthAtZero + (kWowDepthAtOne - kWowDepthAtZero) * m_depth);
-        m_transport.setFlutterDepth(kFlutterDepthAtZero + (kFlutterDepthAtOne - kFlutterDepthAtZero) * m_depth);
-        m_transport.setWowVariance(m_aggressivity * kMaxWowVariance);
-        m_transport.setWowDrift(m_aggressivity * kMaxWowDrift);
+        for (auto& transport : m_transports)
+        {
+            auto& delay = transport.processor();
+            delay.setWowRate(m_speedHz);
+            delay.setFlutterRate(std::max(m_speedHz, kFlutterRateFloorHz));
+            delay.setWowDepth(kWowDepthAtZero + (kWowDepthAtOne - kWowDepthAtZero) * m_depth);
+            delay.setFlutterDepth(kFlutterDepthAtZero + (kFlutterDepthAtOne - kFlutterDepthAtZero) * m_depth);
+            delay.setWowVariance(m_aggressivity * kMaxWowVariance);
+            delay.setWowDrift(m_aggressivity * kMaxWowDrift);
+        }
     }
 
-    Transport m_transport;
+    std::array<Transport, 2> m_transports;
+    AbacDsp::OctaveGlide m_ratio;
     float m_depth{0.35f};
     float m_speedHz{0.8f};
     float m_aggressivity{0.15f};

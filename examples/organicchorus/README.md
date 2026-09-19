@@ -1,13 +1,13 @@
 # Organic Chorus
 
-A multi-voice BBD-style chorus/flanger built on a genuine variable-speed tape transport
-per voice (`WobbleDelay`, a fork of tapelooper's `VariSpeedTapeDelay` tuned
-for this instrument's own artistic use of the tape concept), rather than a read-position
-fake: the write clock stays clean, carrying only the transport's own baseline speed plus
-an independent, mean-reverting (Ornstein-Uhlenbeck) drift process (Drift) wandering it on
-top, while a slow sine LFO (Depth) and a fast flutter component (Speed) instead modulate
-each voice's read head - so the ensemble drifts and breathes without ever repeating on an
-obvious cycle. Seven macros (Configuration, Tone, Speed, Tape Speed, Depth, Feedback, Mix)
+A multi-voice BBD-style chorus/flanger built on a variable-speed tape transport per
+voice: a `WobbleDelay` running inside an `UpDownSampler`, whose ratio is the tape speed.
+The ratio carries the transport's own baseline speed plus an independent, mean-reverting
+(Ornstein-Uhlenbeck) drift process (Drift) wandering it on top, while wow (Depth) and flutter
+(Speed) instead modulate each voice's read head - so the ensemble drifts and breathes
+without ever repeating on an obvious cycle. The sampler adds a ratio-dependent latency,
+about 1.4 ms at nominal speed, which is part of every voice's delay (see
+`documentation/OverSampling/`). Seven macros (Configuration, Tone, Speed, Tape Speed, Depth, Feedback, Mix)
 drive per-configuration curves onto that engine; the underlying voice count, delay ranges,
 tone endpoints and feedback policy stay internal to each configuration.
 
@@ -25,24 +25,25 @@ flowchart TD
         direction TD
         SUMIN["input + dampedFeedback * Feedback"] --> HP["High-pass (Tone)"]
         HP --> LP1["Pre low-pass (Tone)"]
-        LP1 --> FEED["feed()"]
-        subgraph TRANSPORT["WobbleDelay"]
+        LP1 --> DOWN["Down-convert to the tape rate\n(UpDownSampler)"]
+        RATIO["ratio = baseRatio * (1+SpeedDrift)"] -.-> DOWN
+        subgraph TRANSPORT["WobbleDelay, at the tape rate"]
             direction TD
-            RATIO["write ratio = baseRatio * (1+SpeedDrift)"]
-            RATIO --> RESAMP["Sinc-interpolated write"] --> RING["Ring buffer (tape)"]
-            RING --> READ["Read head\n(centre delay, corrected against drift)"]
-            READADV["read advance = nominal * (1+Wow)*Flutter"] -.-> READ
+            RING["Delay line (tape)"] --> READ["Read head\n(centre delay + wow + flutter offset)"]
+            WOWFLUT["Wow + Flutter offset"] -.-> READ
         end
-        FEED --> RATIO
-        READ --> LP2["Post low-pass (Tone)"] --> SAT["Saturation"] --> WETV["voice wet (mono)"]
+        DOWN --> RING
+        READ --> UP["Up-convert to the host rate"]
+        RATIO -.-> UP
+        UP --> LP2["Post low-pass (Tone)"] --> SAT["Saturation"] --> WETV["voice wet (mono)"]
         WETV -. "one tile later" .-> SUMIN
     end
 
     MONO --> SUMIN
     DEPTH["Depth"] -.-> VOICECOUNT
     DEPTH -. "centre delay" .-> READ
-    DEPTH -. "Wow/Flutter excursion" .-> READADV
-    SPEED["Speed"] -. "Wow + Flutter rate\n(Flutter never below its own floor)" .-> READADV
+    DEPTH -. "Wow/Flutter excursion" .-> WOWFLUT
+    SPEED["Speed"] -. "Wow + Flutter rate\n(Flutter never below its own floor)" .-> WOWFLUT
     TAPESPEED["Tape Speed"] -. "baseRatio, glides" .-> RATIO
     DRIFT["Drift (Lua)"] -. "independent OU sigma" .-> RATIO
 
@@ -96,7 +97,7 @@ a new `ChorusConfigurationSpec` entry in `src/impl/ChorusConfigurations.h`, not 
 ### A path to tape defects
 
 Because this engine's transport is a genuine variable-speed tape model
-(`WobbleDelay`, not a read-position approximation), it also opens the door to
+(`WobbleDelay` inside an `UpDownSampler`, not a read-position approximation), it also opens the door to
 simulating period tape defects - dropout, hiss, print-through - later, the same way
 tapelooper's own transport does. Nothing here builds that yet; it is recorded as a
 natural next step this architecture enables, not a promise.

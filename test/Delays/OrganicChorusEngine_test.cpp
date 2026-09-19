@@ -1,12 +1,10 @@
 #include <array>
 #include <cmath>
-#include <memory>
 #include <random>
 
 #include "gtest/gtest.h"
 
 #include "Delays/OrganicChorusEngine.h"
-#include "Filters/Sinc/sinc_4.h"
 
 namespace AbacDsp::Test
 {
@@ -17,15 +15,9 @@ constexpr float SampleRate{48000.f};
 
 using Engine = OrganicChorusEngine<BufferSize, TileSize, 4>;
 
-[[nodiscard]] static std::shared_ptr<SincFilter> makeSincFilter()
-{
-    return std::make_shared<SincFilter>(sinc4);
-}
-
 void configureVoice(Engine& engine, const size_t voice, const float delaySamples)
 {
     engine.setVoiceReadHeadSafetyMargin(voice, 64.f);
-    engine.setVoiceReadHeadCorrectionThreshold(voice, delaySamples * 0.2f);
     engine.setVoiceCentreDelay(voice, delaySamples, true);
     engine.setVoiceWow(voice, 0.4f + 0.05f * static_cast<float>(voice), 0.5f, 0.2f, 0.2f);
     engine.setVoiceFlutter(voice, 0.5f, 0.2f);
@@ -39,7 +31,7 @@ TEST(OrganicChorusEngineTest, OutputStaysFiniteAcrossEveryVoiceCountAndFeedback)
 {
     for (size_t voiceCount = 1; voiceCount <= 4; ++voiceCount)
     {
-        Engine engine{SampleRate, makeSincFilter()};
+        Engine engine{SampleRate};
         engine.setActiveVoiceCount(voiceCount);
         engine.setMix(0.6f);
         for (size_t v = 0; v < voiceCount; ++v)
@@ -68,7 +60,7 @@ TEST(OrganicChorusEngineTest, OutputStaysFiniteAcrossEveryVoiceCountAndFeedback)
 
 TEST(OrganicChorusEngineTest, MonoSummedInputStaysStableUnderFeedback)
 {
-    Engine engine{SampleRate, makeSincFilter()};
+    Engine engine{SampleRate};
     engine.setActiveVoiceCount(2);
     engine.setMix(1.f);
     configureVoice(engine, 0, 400.f);
@@ -93,7 +85,7 @@ TEST(OrganicChorusEngineTest, MonoSummedInputStaysStableUnderFeedback)
 
 TEST(OrganicChorusEngineTest, ZeroMixIsBitIdenticalToDryInput)
 {
-    Engine engine{SampleRate, makeSincFilter()};
+    Engine engine{SampleRate};
     engine.setActiveVoiceCount(4);
     engine.setMix(0.f);
     for (size_t v = 0; v < 4; ++v)

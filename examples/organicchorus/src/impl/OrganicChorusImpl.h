@@ -12,7 +12,6 @@
 #include "ChorusConfigurations.h"
 #include "Delays/OrganicChorusEngine.h"
 #include "EffectBase.h"
-#include "Filters/Sinc/sinc_4.h"
 #include "OrganicChorusScriptEngine.h"
 
 template <size_t BlockSize>
@@ -25,7 +24,7 @@ class OrganicChorusImpl final : public EffectBase
 
     explicit OrganicChorusImpl(const float sampleRate)
         : EffectBase(sampleRate)
-        , m_engine(sampleRate, std::make_shared<AbacDsp::SincFilter>(sinc4))
+        , m_engine(sampleRate)
         , m_sampleRate(sampleRate)
     {
         m_visualWavedata.resize(6000);
@@ -180,7 +179,6 @@ class OrganicChorusImpl final : public EffectBase
             const auto delayMs = spec.baseDelayMs.at(m_depth) + voice.delayOffsetMs;
             const auto delaySamples = delayMs * 0.001f * m_sampleRate;
             m_engine.setVoiceReadHeadSafetyMargin(v, spec.readHeadSafetyMarginSamples);
-            m_engine.setVoiceReadHeadCorrectionThreshold(v, spec.readHeadCorrectionThresholdSamples);
             m_engine.setVoiceCentreDelay(v, delaySamples);
             m_engine.setVoiceSpeedDriftAmplitude(v, speedDriftSigma);
 
