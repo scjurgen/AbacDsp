@@ -35,9 +35,12 @@ pins this.
 
 ![Retune glide, 200 -> 6000 -> 1000 samples](wd_retune.png)
 
-Retune glide. `setDelay()` moves the base delay at up to 0.5 samples per sample, meaning the read
-head runs at 0.5 or 1.5 times speed during a retune, never faster. 200 to 6000 samples takes 0.24 s
-and 6000 to 1000 takes 0.21 s. The ramp is linear, so its speed changes abruptly at both ends.
+Retune glide. `setDelay()` moves the base delay along a smoothstep curve. Its steepest point is
+0.5 samples per sample, meaning the read head runs at 0.5 or 1.5 times speed there and never
+faster, and it runs at exactly 1.0 at both ends of the glide. Because the peak is bounded, the
+glide takes 1.5 times as long as a linear ramp at that speed: 200 to 6000 samples takes 0.36 s and
+6000 to 1000 takes 0.31 s. A retune started during a glide continues from where the delay is, at
+zero speed.
 
 ![Swept tone, no modulation, flutter, wow, both](wd_sweep.png)
 
@@ -49,8 +52,9 @@ around the ridge, with a slightly lifted floor at the top of the sweep.
 
 ![Swept tone during a retune from 200 to 6000 samples](wd_sweep_retune.png)
 
-Swept tone during a retune. While the delay grows the tone is read at half speed, which lowers
-the ridge for the length of the glide. At the end of the glide, at about 0.24 s, there is a
-short broadband burst: the read speed jumps from 0.5 to 1.0 in one step, and a step in
-instantaneous frequency splatters across the spectrum. An eased glide with zero speed at both ends
-removes it.
+Swept tone during a retune. While the delay grows the tone is read slower than normal, which
+lowers the ridge for the length of the glide, and it recovers smoothly as the glide ends. An
+earlier version of the glide used a linear ramp, whose read speed jumped from 0.5 to 1.0 at its
+end. A step in instantaneous frequency splatters across the whole spectrum, and it showed here as
+a full-height burst at the end of the glide. With the eased curve, whose delay speed is zero at
+both ends, only a faint smear about 100 dB down remains near 0.3 s.

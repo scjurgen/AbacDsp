@@ -121,28 +121,66 @@ TEST(WobbleDelayTest, ForcedDelayJumpsAtOnce)
     EXPECT_FLOAT_EQ(sut.currentDelay(), 700.f);
 }
 
-TEST(WobbleDelayTest, RetuneGlidesAtBoundedSpeed)
+TEST(WobbleDelayTest, RetuneGlidesSmoothlyAtBoundedSpeed)
 {
     Sut sut(kRate);
     sut.setDelay(200.f, true);
     sut.setDelay(1000.f);
 
     float previous = sut.currentDelay();
+    float previousSpeed{0.f};
+    float peakSpeed{0.f};
+    float maxSpeedChange{0.f};
     size_t arrivedAt{0};
     for (size_t i = 1; i <= 4000; ++i)
     {
         static_cast<void>(sut.step(0.f));
         const auto now = sut.currentDelay();
-        ASSERT_LE(std::abs(now - previous), Sut::kRetuneSlope + 1e-3f) << "at " << i;
+        const auto speed = now - previous;
+        ASSERT_GE(speed, 0.f) << "at " << i;
+        ASSERT_LE(speed, Sut::kRetuneSlope + 1e-3f) << "at " << i;
+        if (i == 1)
+        {
+            EXPECT_LT(speed, 0.01f) << "starts at zero speed";
+        }
+        peakSpeed = std::max(peakSpeed, speed);
+        maxSpeedChange = std::max(maxSpeedChange, std::abs(speed - previousSpeed));
         previous = now;
+        previousSpeed = speed;
         if (arrivedAt == 0 && std::abs(now - 1000.f) < 1e-3f)
         {
             arrivedAt = i;
         }
     }
     EXPECT_FLOAT_EQ(sut.currentDelay(), 1000.f);
-    EXPECT_GE(arrivedAt, 1500u);
-    EXPECT_LE(arrivedAt, 1700u);
+    EXPECT_LT(previousSpeed, 0.01f) << "ends at zero speed";
+    EXPECT_GT(peakSpeed, Sut::kRetuneSlope * 0.9f);
+    EXPECT_LT(maxSpeedChange, 0.02f);
+    EXPECT_GE(arrivedAt, 2300u);
+    EXPECT_LE(arrivedAt, 2500u);
+}
+
+TEST(WobbleDelayTest, RetuneDuringAGlideStartsFromWhereItIs)
+{
+    Sut sut(kRate);
+    sut.setDelay(200.f, true);
+    sut.setDelay(1000.f);
+    for (size_t i = 0; i < 800; ++i)
+    {
+        static_cast<void>(sut.step(0.f));
+    }
+    const auto midway = sut.currentDelay();
+    EXPECT_GT(midway, 300.f);
+    EXPECT_LT(midway, 900.f);
+
+    sut.setDelay(300.f);
+    static_cast<void>(sut.step(0.f));
+    EXPECT_NEAR(sut.currentDelay(), midway, 1.f);
+    for (size_t i = 0; i < 4000; ++i)
+    {
+        static_cast<void>(sut.step(0.f));
+    }
+    EXPECT_FLOAT_EQ(sut.currentDelay(), 300.f);
 }
 
 TEST(WobbleDelayTest, RetuneOutputStaysBounded)

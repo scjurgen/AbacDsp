@@ -12,7 +12,6 @@
 #include "Modulation/Flutter.h"
 #include "Modulation/Wow.h"
 #include "Numbers/Interpolation.h"
-#include "Parameters/SmoothingParameter.h"
 
 namespace AbacDsp
 {
@@ -22,10 +21,11 @@ namespace AbacDsp
  * @brief Mono single-rate delay whose read head wobbles like a tape transport.
  *
  * The read position is the write head minus a delay, so it can never drift from it. That
- * delay is a smoothed base distance plus a Wow delay and a Flutter offset, updated every
+ * delay is an eased base distance plus a Wow delay and a Flutter offset, updated every
  * TileSize samples and interpolated linearly in between. The result is clamped to the safety
  * margin, so the read head can not reach the write head however deep the modulation is.
- * setDelay() glides at a bounded read speed instead of jumping. The read is Catmull-Rom.
+ * setDelay() glides along a smoothstep curve, so the read speed is zero at both ends of a retune
+ * and its peak is bounded. The read is Catmull-Rom.
  *
  * There is no resampling here: run it at another rate by wrapping it in UpDownSampler.
  * Flutter is a speed error, used here directly as a position offset scaled to the physical
@@ -39,8 +39,10 @@ class WobbleDelay
     static_assert(TileSize > 0);
 
   public:
-    /// Fastest retune in samples of delay change per sample, i.e. reads at 0.5x or 1.5x speed.
+    /// Peak retune speed in samples of delay change per sample, i.e. reads at 0.5x or 1.5x speed.
     static constexpr float kRetuneSlope{0.5f};
+    /// Peak slope of the smoothstep curve, which a retune's duration is stretched by.
+    static constexpr float kSmoothstepPeakSlope{1.5f};
     /// Flutter frequency at which its position offset equals the physical delay excursion.
     static constexpr float kFlutterReferenceHz{10.f};
     /// Fewest samples between write and read that the four-point read can support.
@@ -49,8 +51,7 @@ class WobbleDelay
     static constexpr float kDefaultDelay{static_cast<float>(BufferSize) / 8.f};
 
     explicit WobbleDelay(const float sampleRate)
-        : m_sampleRate(sampleRate)
-        , m_controlRate(sampleRate / static_cast<float>(TileSize))
+        : m_controlRate(sampleRate / static_cast<float>(TileSize))
         , m_msToSamples(sampleRate / 1000.f)
         , m_flutterScale(sampleRate / (2.f * std::numbers::pi_v<float> * kFlutterReferenceHz))
         , m_buffer(BufferSize, 0.f)
@@ -61,11 +62,20 @@ class WobbleDelay
     }
 
     /// @brief Moves the base delay to the given number of samples, gliding unless forced.
+    /// A retune started during a glide continues from the current position at zero speed.
     void setDelay(const float samples, const bool force = false) noexcept
     {
         const auto target = std::clamp(samples, m_safetyMargin, kMaxDelay);
-        const auto seconds = std::abs(target - m_distance.getLastValue()) / (kRetuneSlope * m_sampleRate);
-        m_distance.newTransition(target, seconds, m_controlRate, force);
+        m_glideStart = m_baseDelay;
+        m_glideTarget = target;
+        m_glideTick = 0;
+        const auto peakTicks =
+            kSmoothstepPeakSlope * std::abs(target - m_baseDelay) / (kRetuneSlope * static_cast<float>(TileSize));
+        m_glideTicks = force ? 0 : static_cast<size_t>(std::ceil(peakTicks));
+        if (m_glideTicks == 0)
+        {
+            m_baseDelay = target;
+        }
         if (force)
         {
             m_delay = target;
@@ -149,12 +159,31 @@ class WobbleDelay
   private:
     void updateControl() noexcept
     {
-        const auto base = m_distance.getValue();
+        const auto base = advanceGlide();
         static_cast<void>(m_wow.step());
         const auto wow = m_wow.lastDelay() * m_msToSamples;
         const auto flutter = (m_flutter.step() - 1.f) * m_flutterScale;
         const auto target = std::clamp(base + wow + flutter, m_safetyMargin, kMaxDelay);
         m_delaySlope = (target - m_delay) / static_cast<float>(TileSize);
+    }
+
+    [[nodiscard]] float advanceGlide() noexcept
+    {
+        if (m_glideTicks == 0)
+        {
+            return m_baseDelay;
+        }
+        ++m_glideTick;
+        if (m_glideTick >= m_glideTicks)
+        {
+            m_glideTicks = 0;
+            m_baseDelay = m_glideTarget;
+            return m_baseDelay;
+        }
+        const auto progress = static_cast<float>(m_glideTick) / static_cast<float>(m_glideTicks);
+        const auto eased = progress * progress * (3.f - 2.f * progress);
+        m_baseDelay = m_glideStart + (m_glideTarget - m_glideStart) * eased;
+        return m_baseDelay;
     }
 
     [[nodiscard]] static size_t wrap(const size_t index) noexcept
@@ -172,7 +201,6 @@ class WobbleDelay
         return Interpolation::hermite43x(taps.data(), 1.f - fraction);
     }
 
-    const float m_sampleRate;
     const float m_controlRate;
     const float m_msToSamples;
     const float m_flutterScale;
@@ -180,7 +208,11 @@ class WobbleDelay
     std::vector<float> m_buffer;
     size_t m_head{0};
 
-    LinearSmoothing m_distance{kDefaultDelay};
+    float m_baseDelay{kDefaultDelay};
+    float m_glideStart{kDefaultDelay};
+    float m_glideTarget{kDefaultDelay};
+    size_t m_glideTick{0};
+    size_t m_glideTicks{0};
     Flutter m_flutter;
     Wow m_wow;
     float m_safetyMargin{kStructuralMinDelay};
