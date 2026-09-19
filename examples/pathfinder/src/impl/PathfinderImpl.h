@@ -18,8 +18,8 @@
  *
  * The graph starts as the tape vibrato preset. setScript() compiles a new script on the caller's
  * thread and swaps it in with a short crossfade; a script that fails leaves the running graph
- * alone and reports its error. The four dials and the script's own knobs write macro values that
- * the graph reads itself, so a control callback may run on any thread. collectRetired() frees
+ * alone and reports its error. The script's macros are its only controls: each is a knob whose
+ * value the graph reads itself, so a control callback may run on any thread. collectRetired() frees
  * graphs the audio thread has finished with and belongs on a non-audio thread.
  */
 template <size_t BlockSize>
@@ -30,10 +30,6 @@ class PathfinderImpl final : public EffectBase
     using UiParamSlots = typename Engine::KnobSlots;
 
     static constexpr float kFadeSeconds{0.03f};
-    static constexpr size_t kDepthSlot{0};
-    static constexpr size_t kSpeedSlot{1};
-    static constexpr size_t kAggressivitySlot{2};
-    static constexpr size_t kCharacterSlot{3};
 
     explicit PathfinderImpl(const float sampleRate)
         : EffectBase(sampleRate)
@@ -41,32 +37,11 @@ class PathfinderImpl final : public EffectBase
         , m_swapper(makeDefaultGraph(), BlockSize, static_cast<size_t>(kFadeSeconds * sampleRate))
     {
         m_visualWavedata.resize(6000);
-        applyDialDefaults();
+        applyMacroDefaults(m_defaultMacros);
         m_macros = m_defaultMacros;
     }
 
-    // The dials are the macros depth, speed, aggressivity and character, in percent.
-    void setDepth(const float percent)
-    {
-        m_bank.set(kDepthSlot, percent * 0.01f);
-    }
-
-    void setSpeed(const float percent)
-    {
-        m_bank.set(kSpeedSlot, percent * 0.01f);
-    }
-
-    void setAggressivity(const float percent)
-    {
-        m_bank.set(kAggressivitySlot, percent * 0.01f);
-    }
-
-    void setCharacter(const float percent)
-    {
-        m_bank.set(kCharacterSlot, percent * 0.01f);
-    }
-
-    // The script's own macros, shown as knobs one to eight, each a raw 0 to 1 value.
+    // The script's macros, in declaration order, shown as knobs one to eight; each takes a raw 0 to 1.
     void setLuaParam1(const float value)
     {
         setKnob(0, value);
@@ -196,21 +171,19 @@ class PathfinderImpl final : public EffectBase
     }
 
   private:
-    // Depth 65, speed 47, aggressivity 10 and character 50 percent: the values the tape vibrato
-    // preset's static parameters correspond to.
-    static constexpr std::array<float, Engine::kDialMacroCount> kDialDefaults{0.65f, 0.47f, 0.10f, 0.50f};
-
-    void applyDialDefaults()
+    // A new instance starts on the default script's declared defaults; the host's parameter values
+    // then replace them as they arrive.
+    void applyMacroDefaults(const std::vector<AbacDsp::Graph::LoweredMacro>& macros)
     {
-        for (size_t slot = 0; slot < kDialDefaults.size(); ++slot)
+        for (const auto& macro : macros)
         {
-            m_bank.set(slot, kDialDefaults[slot]);
+            m_bank.set(macro.slot, macro.defaultNormalized);
         }
     }
 
     void setKnob(const size_t knob, const float value)
     {
-        m_bank.set(Engine::kDialMacroCount + knob, value);
+        m_bank.set(knob, value);
     }
 
     [[nodiscard]] AbacDsp::Graph::CompiledGraph makeDefaultGraph()

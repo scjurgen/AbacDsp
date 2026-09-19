@@ -3,7 +3,9 @@
 -- delay. A band-pass does not count as damping, so the validator warns that the cycle is
 -- undamped and resonant. The saturators clamp the loop and the final stage to +-1 and stand in
 -- for a safety limiter; there is no feedback meter node. A quiet input decays; a loud burst
--- drives the loop into the saturators and it rings for seconds before it dies away.
+-- drives the loop into the saturators and it rings for seconds before it dies away. Each macro is
+-- one knob; its default is in the knob's own units and reproduces the parameter values below.
+-- The Feedback knob reaches +3 dB: the saturators still keep the loop and the output within +-1.
 return {
   version = 1,
   name = "Experimental Resonant Feedback",
@@ -58,5 +60,26 @@ return {
     { from = "mix.outR", to = "limitR.in" },
     { from = "limitL.out", to = "outL" },
     { from = "limitR.out", to = "outR" },
+  },
+
+  macros = {
+    { id = "resonance", label = "Resonance", unit = "Hz", min = 200, max = 4000, default = 880,
+      targets = { { to = "resonatorL.frequencyHz", min = 200, max = 4000 },
+                  { to = "resonatorR.frequencyHz", min = 250, max = 5000 } } },
+    { id = "q", label = "Q", min = 0.5, max = 20, default = 8,
+      targets = { { to = "resonatorL.Q", min = 0.5, max = 20 },
+                  { to = "resonatorR.Q", min = 0.5, max = 20 } } },
+    { id = "feedback", label = "Feedback", unit = "dB", min = -12, max = 3, default = -3,
+      targets = { { to = "loopGain.gainDb", min = -12, max = 3 } } },
+    { id = "drive", label = "Drive", min = 0, max = 5, default = 1.5,
+      targets = { { to = "driveL.drive", min = 0, max = 5 },
+                  { to = "driveR.drive", min = 0, max = 5 } } },
+    { id = "cross", label = "Cross", unit = "%", min = 0, max = 100, default = 40,
+      targets = { { to = "coupling.gainLR", min = 0.0, max = 1.0 },
+                  { to = "coupling.gainRL", min = 0.0, max = 1.0 },
+                  { to = "coupling.gainLL", min = 1.0, max = 0.0 },
+                  { to = "coupling.gainRR", min = 1.0, max = 0.0 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = -6,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
   },
 }

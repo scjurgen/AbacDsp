@@ -1,31 +1,27 @@
 {
   "name": "pathfinder",
   "plugintype": "Chorus",
-  "description": ["Tape-modulation effect whose signal chain is a graph script you edit in the app. It starts as a shared-stereo tape vibrato: a moving delay read head modulated by tape-like wow and flutter, 100% wet."],
+  "description": ["Tape-modulation effect whose signal chain and controls are a graph script you edit in the app. It starts as a shared-stereo tape vibrato: a moving delay read head modulated by tape-like wow and flutter, 100% wet."],
   "patches": true,
   "use-lua": true,
+  "lua_apply_slot_defaults": true,
   "ports-control":
   [
-    {"short": "DPTH", "type": "dial", "display": "Depth", "symbol": "depth", "default": 65, "range": [0, 100, 0.1, 1, false], "precision": 0, "unit": "%"},
-    {"short": "SPD", "type": "dial", "display": "Speed", "symbol": "speed", "default": 47, "range": [0, 100, 0.1, 1, false], "precision": 0, "unit": "%"},
-    {"short": "AGGR", "type": "dial", "display": "OU Aggressivity", "symbol": "aggressivity", "default": 10, "range": [0, 100, 0.1, 1, false], "precision": 0, "unit": "%"},
-    {"short": "CHAR", "type": "dial", "display": "Character", "symbol": "character", "default": 50, "range": [0, 100, 0.1, 1, false], "precision": 0, "unit": "%"},
-
     {"short": "CPU", "type":"gauge", "gaugetype" : "cpuload", "display": "CPU", "symbol": "cpu"},
     {"short": "LVL", "type":"gauge", "gaugetype" : "levels", "display": "Level", "symbol": "level", "default": 0, "range": [0, 100, 0.1, 1, false], "precision":1, "unit": "%" },
     {"short": "FFT", "type":"gauge", "gaugetype" : "spectrogram", "display": "Spectrogram", "symbol": "spectrogram"},
     {"short": "SIG", "type":"gauge", "gaugetype" : "signal", "display": "Signal", "symbol": "signal"},
-    {"short": "LUACTL", "type": "luacontrolarea", "display": "Lua Controls", "symbol": "luaControls"}
+    {"short": "LUACTL", "type": "luacontrolarea", "display": "Lua Controls", "symbol": "luaControls", "defaults": [0.65, 0.44444, 0.1, 0.5]}
   ],
   "layout": {
     "WINDOW_WIDTH": "1000",
-    "WINDOW_HEIGHT": "800",
-    "type": "|=3",
-    "composition": "C=(1:4) R=(1:1:2) A1=(CPU*200, LVL*400) A2=(DPTH, SPD, AGGR, CHAR) A3=(LUACTL) A4=(FFT%1, SIG%1)"
+    "WINDOW_HEIGHT": "700",
+    "type": "|=",
+    "composition": "C=(1:4) R=(1:1) A1=(CPU*200, LVL*400) A2=(LUACTL) A3=(FFT%1, SIG%1)"
   },
   "performance-page": {
-    "type": "=3",
-    "composition": "R=(1:1:1) A1=(LVL) A2=(DPTH, SPD, AGGR, CHAR) A3=(LUACTL)"
+    "type": "=",
+    "composition": "A1=(LVL) A2=(LUACTL)"
   },
   "processor_forwards": [
     {"name": "hasScriptError", "type": "bool"},

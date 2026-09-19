@@ -27,8 +27,8 @@
 // authoring server can pass it on unchanged.
 using PathfinderKnobSlot = LuaUiParamSlot;
 
-inline constexpr size_t kPathfinderDialMacroCount{4};
-inline constexpr size_t kPathfinderKnobCount{AbacDsp::Graph::MacroBank::kSlotCount - kPathfinderDialMacroCount};
+// One macro per generated Lua control knob (luaParam1 to luaParam8).
+inline constexpr size_t kPathfinderKnobCount{8};
 using PathfinderKnobSlots = std::array<PathfinderKnobSlot, kPathfinderKnobCount>;
 
 struct PathfinderScriptResult
@@ -44,8 +44,8 @@ struct PathfinderScriptResult
  *
  * The script is the Lua graph DSL: load, check the shape (2 inputs, 2 outputs, size and node
  * limits), lower the macros onto the shared MacroBank, then validate and compile at BlockSize.
- * The macros depth, speed, aggressivity and character take the four dial slots, any others take
- * one of the knob slots in order. An error names the node, field and line where they are known.
+ * The macros take the eight knob slots in the order the script declares them; any beyond that are
+ * ignored with a warning. An error names the node, field and line where they are known.
  */
 template <size_t BlockSize>
 class PathfinderScriptEngine
@@ -53,7 +53,6 @@ class PathfinderScriptEngine
   public:
     static constexpr size_t kMaxScriptBytes{64 * 1024};
     static constexpr size_t kMaxNodes{128};
-    static constexpr size_t kDialMacroCount{kPathfinderDialMacroCount};
     static constexpr size_t kKnobCount{kPathfinderKnobCount};
     using KnobSlots = PathfinderKnobSlots;
 
@@ -87,8 +86,8 @@ class PathfinderScriptEngine
             return result;
         }
 
-        const std::array<std::string, kDialMacroCount> dialIds{"depth", "speed", "aggressivity", "character"};
-        auto lowered = AbacDsp::Graph::MacroLowering::lower(*loaded.description, m_registry, dialIds, kDialMacroCount);
+        auto lowered = AbacDsp::Graph::MacroLowering::lower(*loaded.description, m_registry,
+                                                            std::span<const std::string>{}, 0, kKnobCount);
         auto compiled =
             AbacDsp::Graph::GraphCompiler::compile(lowered.description, m_registry, BlockSize, m_sampleRate);
 
@@ -112,14 +111,13 @@ class PathfinderScriptEngine
         KnobSlots slots{};
         for (const auto& macro : macros)
         {
-            if (macro.slot < kDialMacroCount)
-            {
-                continue;
-            }
-            auto& slot = slots[macro.slot - kDialMacroCount];
+            auto& slot = slots[macro.slot];
             slot.claimed = true;
             slot.id = macro.id;
             slot.name = macro.label;
+            slot.unit = macro.unit;
+            slot.rangeMin = macro.displayMin;
+            slot.rangeMax = macro.displayMax;
             slot.defaultValue = macro.defaultValue;
             slot.description = "Script macro \"" + macro.id + "\"";
         }

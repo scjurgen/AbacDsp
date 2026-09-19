@@ -18,22 +18,6 @@ class StubImpl final : public EffectBase
     {
         m_visualWavedata.resize(6000);
     }
-    void setDepth(const float value)
-    {
-        m_depth = value;
-    }
-    void setSpeed(const float value)
-    {
-        m_speed = value;
-    }
-    void setAggressivity(const float value)
-    {
-        m_aggressivity = value;
-    }
-    void setCharacter(const float value)
-    {
-        m_character = value;
-    }
     void setLuaParam1(const float value)
     {
         m_luaParam1 = value;
@@ -93,10 +77,6 @@ class StubImpl final : public EffectBase
     }
 
   private:
-    float m_depth{};
-    float m_speed{};
-    float m_aggressivity{};
-    float m_character{};
     float m_luaParam1{};
     float m_luaParam2{};
     float m_luaParam3{};

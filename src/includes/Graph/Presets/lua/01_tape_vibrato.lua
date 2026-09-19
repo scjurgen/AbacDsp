@@ -1,6 +1,7 @@
 -- Family 1: tape vibrato. One stereo TapeDelay, 100% wet, shared wow and flutter.
--- Each macro is 0 to 1; a target sweeps min to max, with curve = "exp" for a geometric sweep.
--- The values below are the macros at their defaults.
+-- A macro shows as one knob: unit, min and max are what the knob displays, default is in those
+-- units. Its targets sweep their own min to max as the knob travels; curve = "exp" sweeps
+-- geometrically. The parameter values below are the macros at their defaults.
 return {
   version = 1,
   name = "Tape Vibrato",
@@ -12,7 +13,7 @@ return {
       config = { baseDelayMs = 10 },
       params = {
         transportRatio = 1.0,
-        wowDepth = 0.65, wowRate = 0.52, wowVariance = 0.10, wowDrift = 0.05,
+        wowDepth = 0.65, wowRate = 0.50, wowVariance = 0.10, wowDrift = 0.05,
         flutterDepth = 0.65, flutterRate = 5.0,
       },
     },
@@ -26,16 +27,16 @@ return {
   },
 
   macros = {
-    { id = "depth", label = "Depth", default = 0.65,
+    { id = "depth", label = "Depth", unit = "%", min = 0, max = 100, default = 65,
       targets = { { to = "tape.wowDepth", min = 0.0, max = 1.0 },
                   { to = "tape.flutterDepth", min = 0.0, max = 1.0 } } },
-    { id = "speed", label = "Speed", default = 0.47,
+    { id = "speed", label = "Speed", unit = "Hz", min = 1, max = 10, default = 5,
       targets = { { to = "tape.wowRate", min = 0.1, max = 1.0 },
                   { to = "tape.flutterRate", min = 1.0, max = 10.0 } } },
-    { id = "aggressivity", label = "OU Aggressivity", default = 0.10,
+    { id = "aggressivity", label = "OU Aggressivity", unit = "%", min = 0, max = 100, default = 10,
       targets = { { to = "tape.wowVariance", min = 0.0, max = 1.0 },
                   { to = "tape.wowDrift", min = 0.0, max = 0.5 } } },
-    { id = "character", label = "Character", default = 0.50,
+    { id = "character", label = "Character", unit = "%", min = 0, max = 100, default = 50,
       targets = { { to = "tape.transportRatio", min = 0.5, max = 2.0, curve = "exp" } } },
   },
 }

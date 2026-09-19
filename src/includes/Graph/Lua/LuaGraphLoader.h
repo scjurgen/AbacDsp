@@ -501,6 +501,28 @@ class LuaGraphLoader
         return ok;
     }
 
+    // unit is a label; min and max are the display range and come as a pair.
+    [[nodiscard]] static bool parseMacroDisplay(const sol::table& entry, Macro& macro,
+                                                std::vector<Diagnostic>& diagnostics)
+    {
+        macro.unit = entry.get_or("unit", std::string{});
+        const sol::optional<float> minValue = entry["min"];
+        const sol::optional<float> maxValue = entry["max"];
+        if (minValue.has_value() != maxValue.has_value())
+        {
+            diagnostics.push_back({DiagnosticSeverity::Error,
+                                   "macro \"" + macro.id + "\" needs both min and max, or neither", "", "",
+                                   "macros." + macro.id});
+            return false;
+        }
+        if (minValue)
+        {
+            macro.displayMin = *minValue;
+            macro.displayMax = *maxValue;
+        }
+        return true;
+    }
+
     // min and max come as a pair; curve is "linear" or "exp".
     [[nodiscard]] static bool parseTargetRange(const sol::table& entry, const std::string& macroId,
                                                const std::string& to, MacroTarget& target,
@@ -556,6 +578,11 @@ class LuaGraphLoader
             Macro macro{.id = *id,
                         .label = entry->get_or("label", std::string{}),
                         .defaultValue = entry->get_or("default", 0.0f)};
+            if (!parseMacroDisplay(*entry, macro, diagnostics))
+            {
+                ok = false;
+                continue;
+            }
 
             const sol::optional<sol::table> targets = (*entry)["targets"];
             if (targets)

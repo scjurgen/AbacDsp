@@ -13,28 +13,20 @@ struct PatchParameters
 {
     enum class Id : int
     {
-        depth       , // dial
-        speed       , // dial
-        aggressivity, // dial
-        character   , // dial
-        luaParam1   , // dial
-        luaParam2   , // dial
-        luaParam3   , // dial
-        luaParam4   , // dial
-        luaParam5   , // dial
-        luaParam6   , // dial
-        luaParam7   , // dial
-        luaParam8   , // dial
-        script       // script
+        luaParam1, // dial
+        luaParam2, // dial
+        luaParam3, // dial
+        luaParam4, // dial
+        luaParam5, // dial
+        luaParam6, // dial
+        luaParam7, // dial
+        luaParam8, // dial
+        script    // script
     };
-float depth{65.0f};
-float speed{47.0f};
-float aggressivity{10.0f};
-float character{50.0f};
-float luaParam1{0.0f};
-float luaParam2{0.0f};
-float luaParam3{0.0f};
-float luaParam4{0.0f};
+float luaParam1{0.65f};
+float luaParam2{0.44444f};
+float luaParam3{0.1f};
+float luaParam4{0.5f};
 float luaParam5{0.0f};
 float luaParam6{0.0f};
 float luaParam7{0.0f};
@@ -43,11 +35,7 @@ std::string script{};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
-        "depth",
-"speed",
-"aggressivity",
-"character",
-"luaParam1",
+        "luaParam1",
 "luaParam2",
 "luaParam3",
 "luaParam4",
@@ -73,11 +61,7 @@ std::string script{};
     template<Id ParamId>
     auto& get()
     {
-        if constexpr (ParamId == Id::depth) return depth;
-        else if constexpr (ParamId == Id::speed) return speed;
-        else if constexpr (ParamId == Id::aggressivity) return aggressivity;
-        else if constexpr (ParamId == Id::character) return character;
-        else if constexpr (ParamId == Id::luaParam1) return luaParam1;
+        if constexpr (ParamId == Id::luaParam1) return luaParam1;
         else if constexpr (ParamId == Id::luaParam2) return luaParam2;
         else if constexpr (ParamId == Id::luaParam3) return luaParam3;
         else if constexpr (ParamId == Id::luaParam4) return luaParam4;
@@ -98,14 +82,6 @@ std::string script{};
     {
         switch (id)
         {
- case Id::depth: if (!isEqual(get<Id::depth>(), value)) {get<Id::depth>() = value;m_modified = true;}
-break;
- case Id::speed: if (!isEqual(get<Id::speed>(), value)) {get<Id::speed>() = value;m_modified = true;}
-break;
- case Id::aggressivity: if (!isEqual(get<Id::aggressivity>(), value)) {get<Id::aggressivity>() = value;m_modified = true;}
-break;
- case Id::character: if (!isEqual(get<Id::character>(), value)) {get<Id::character>() = value;m_modified = true;}
-break;
  case Id::luaParam1: if (!isEqual(get<Id::luaParam1>(), value)) {get<Id::luaParam1>() = value;m_modified = true;}
 break;
  case Id::luaParam2: if (!isEqual(get<Id::luaParam2>(), value)) {get<Id::luaParam2>() = value;m_modified = true;}
@@ -164,17 +140,13 @@ private:
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     PatchParameters,
-        depth       , // dial
-        speed       , // dial
-        aggressivity, // dial
-        character   , // dial
-        luaParam1   , // dial
-        luaParam2   , // dial
-        luaParam3   , // dial
-        luaParam4   , // dial
-        luaParam5   , // dial
-        luaParam6   , // dial
-        luaParam7   , // dial
-        luaParam8   , // dial
-        script       // script
+        luaParam1, // dial
+        luaParam2, // dial
+        luaParam3, // dial
+        luaParam4, // dial
+        luaParam5, // dial
+        luaParam6, // dial
+        luaParam7, // dial
+        luaParam8, // dial
+        script    // script
 )

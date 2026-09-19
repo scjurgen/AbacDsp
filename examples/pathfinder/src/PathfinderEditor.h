@@ -83,11 +83,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // auto generated
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-            std::vector<juce::Rectangle<int>> areas(3);
-            const auto rowHeight = area.getHeight() / 3;
+            std::vector<juce::Rectangle<int>> areas(2);
+            const auto rowHeight = area.getHeight() / 1;
             areas[0] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-            areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-            areas[2] = area.reduced(Constants::Margins::small);
+            areas[1] = area.reduced(Constants::Margins::small);
 
             {
                 juce::FlexBox box;
@@ -102,19 +101,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
                 box.flexDirection = juce::FlexBox::Direction::row;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(depthDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(speedDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(aggressivityDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(characterDial).withFlex(1).withMargin(knobMarginSmall));
-                box.performLayout(areas[1].toFloat());
-            }
-            {
-                juce::FlexBox box;
-                box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::row;
-                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
                 box.items.add(juce::FlexItem(luaControlsLuaControlArea).withFlex(1).withMargin(knobMarginSmall));
-                box.performLayout(areas[2].toFloat());
+                box.performLayout(areas[1].toFloat());
             }
         }
         else
@@ -123,13 +111,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
 
-            std::vector<juce::Rectangle<int>> areas(4);
+            std::vector<juce::Rectangle<int>> areas(3);
             const auto colWidth = area.getWidth() / 5;
-            const auto rowHeight = area.getHeight() / 4;
+            const auto rowHeight = area.getHeight() / 2;
             areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
             areas[1] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-            areas[2] = area.removeFromTop(rowHeight * 1).reduced(Constants::Margins::small);
-            areas[3] = area.reduced(Constants::Margins::small);
+            areas[2] = area.reduced(Constants::Margins::small);
 
             {
                 juce::FlexBox box;
@@ -145,19 +132,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
                 box.flexDirection = juce::FlexBox::Direction::row;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
-                box.items.add(juce::FlexItem(depthDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(speedDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(aggressivityDial).withFlex(1).withMargin(knobMarginSmall));
-                box.items.add(juce::FlexItem(characterDial).withFlex(1).withMargin(knobMarginSmall));
-                box.performLayout(areas[1].toFloat());
-            }
-            {
-                juce::FlexBox box;
-                box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::row;
-                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
                 box.items.add(juce::FlexItem(luaControlsLuaControlArea).withFlex(1).withMargin(knobMarginSmall));
-                box.performLayout(areas[2].toFloat());
+                box.performLayout(areas[1].toFloat());
             }
             {
                 juce::FlexBox box;
@@ -166,7 +142,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
                 box.items.add(juce::FlexItem(spectrogramGauge).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(signalGauge).withFlex(1).withMargin(knobMarginSmall));
-                box.performLayout(areas[3].toFloat());
+                box.performLayout(areas[2].toFloat());
             }
         }
     }
@@ -194,22 +170,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
 
     void initWidgets()
     {
-        addAndMakeVisible(depthDial);
-        depthDial.reset(valueTreeState, "depth");
-        depthDial.setLabelText(juce::String::fromUTF8("Depth"));
-        depthDial.setTooltip(juce::String::fromUTF8("Depth (0 to 100 %)"));
-        addAndMakeVisible(speedDial);
-        speedDial.reset(valueTreeState, "speed");
-        speedDial.setLabelText(juce::String::fromUTF8("Speed"));
-        speedDial.setTooltip(juce::String::fromUTF8("Speed (0 to 100 %)"));
-        addAndMakeVisible(aggressivityDial);
-        aggressivityDial.reset(valueTreeState, "aggressivity");
-        aggressivityDial.setLabelText(juce::String::fromUTF8("OU Aggressivity"));
-        aggressivityDial.setTooltip(juce::String::fromUTF8("OU Aggressivity (0 to 100 %)"));
-        addAndMakeVisible(characterDial);
-        characterDial.reset(valueTreeState, "character");
-        characterDial.setLabelText(juce::String::fromUTF8("Character"));
-        characterDial.setTooltip(juce::String::fromUTF8("Character (0 to 100 %)"));
         addAndMakeVisible(cpuGauge);
         cpuGauge.setLabelText(juce::String::fromUTF8("CPU"));
         cpuGauge.setTooltip(juce::String::fromUTF8("CPU"));
@@ -324,10 +284,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         m_pageSettingsButton.setToggleState(page == Page::Settings, juce::dontSendNotification);
         if (page == Page::Performance)
         {
-            depthDial.setVisible(true);
-            speedDial.setVisible(true);
-            aggressivityDial.setVisible(true);
-            characterDial.setVisible(true);
             cpuGauge.setVisible(false);
             levelGauge.setVisible(true);
             spectrogramGauge.setVisible(false);
@@ -344,10 +300,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         }
         else
         {
-            depthDial.setVisible(true);
-            speedDial.setVisible(true);
-            aggressivityDial.setVisible(true);
-            characterDial.setVisible(true);
             cpuGauge.setVisible(true);
             levelGauge.setVisible(true);
             spectrogramGauge.setVisible(true);
@@ -471,8 +423,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         const juce::String body =
             juce::String(JucePlugin_Manufacturer) +
             "\n\n"
-            "Tape-modulation effect whose signal chain is a graph script you edit in the app. It starts as a "
-            "shared-stereo tape vibrato: a moving delay read head modulated by tape-like wow and flutter, 100% "
+            "Tape-modulation effect whose signal chain and controls are a graph script you edit in the app. It starts "
+            "as a shared-stereo tape vibrato: a moving delay read head modulated by tape-like wow and flutter, 100% "
             "wet.\n\nPart of the AbacDsp project - core DSP library is MIT licensed.\n\nBuilt with JUCE, licensed "
             "under AGPLv3 (or a commercial JUCE licence).\n\nScripting powered by Lua and sol2 (both MIT "
             "licensed).\n\nFull third-party license details: THIRD-PARTY-LICENSES.md in the AbacDsp repository.";
@@ -1148,10 +1100,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     static constexpr int kAuthoringModeOpenBrowserId = 15001;
 
 
-    CustomRotaryDial depthDial{this};
-    CustomRotaryDial speedDial{this};
-    CustomRotaryDial aggressivityDial{this};
-    CustomRotaryDial characterDial{this};
     CpuGauge cpuGauge{};
     Gauge levelGauge{};
     SpectrogramDisplay spectrogramGauge{AppSettings::loadTheme()};

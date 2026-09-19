@@ -86,8 +86,14 @@ struct Macro
 {
     std::string id;
     std::string label;
+    // In display units: between displayMin and displayMax when given, else in 0 to 1.
     float defaultValue{0.0f};
     std::vector<MacroTarget> targets;
+    // What a control shows for this macro: a unit label and the range its 0 to 1 travel spans.
+    // The macro value itself stays 0 to 1. displayMin and displayMax come as a pair.
+    std::string unit{};
+    std::optional<float> displayMin{};
+    std::optional<float> displayMax{};
 };
 
 /**

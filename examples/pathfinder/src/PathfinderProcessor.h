@@ -41,10 +41,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         , m_spectrogram{}
         , m_patchIndex(0, 0)
     {
-        m_parameters.addParameterListener("depth", this);
-        m_parameters.addParameterListener("speed", this);
-        m_parameters.addParameterListener("aggressivity", this);
-        m_parameters.addParameterListener("character", this);
         m_parameters.addParameterListener("luaParam1", this);
         m_parameters.addParameterListener("luaParam2", this);
         m_parameters.addParameterListener("luaParam3", this);
@@ -65,10 +61,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     }
     ~AudioPluginAudioProcessor() override
     {
-        m_parameters.removeParameterListener("depth", this);
-        m_parameters.removeParameterListener("speed", this);
-        m_parameters.removeParameterListener("aggressivity", this);
-        m_parameters.removeParameterListener("character", this);
         m_parameters.removeParameterListener("luaParam1", this);
         m_parameters.removeParameterListener("luaParam2", this);
         m_parameters.removeParameterListener("luaParam3", this);
@@ -279,43 +271,23 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("depth", 1), juce::String::fromUTF8("Depth"),
-            juce::NormalisableRange<float>(0, 100, 0.1, 1, false), 65,
-            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " %"; })));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("speed", 1), juce::String::fromUTF8("Speed"),
-            juce::NormalisableRange<float>(0, 100, 0.1, 1, false), 47,
-            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " %"; })));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("aggressivity", 1), juce::String::fromUTF8("OU Aggressivity"),
-            juce::NormalisableRange<float>(0, 100, 0.1, 1, false), 10,
-            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " %"; })));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID("character", 1), juce::String::fromUTF8("Character"),
-            juce::NormalisableRange<float>(0, 100, 0.1, 1, false), 50,
-            juce::AudioParameterFloatAttributes{}.withLabel("%").withStringFromValueFunction(
-                [](float value, int) { return juce::String(value, 0) + " %"; })));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("luaParam1", 1), juce::String::fromUTF8("Lua Param 1"),
-            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
+            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0.65,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("luaParam2", 1), juce::String::fromUTF8("Lua Param 2"),
-            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
+            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0.44444,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("luaParam3", 1), juce::String::fromUTF8("Lua Param 3"),
-            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
+            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0.1,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("luaParam4", 1), juce::String::fromUTF8("Lua Param 4"),
-            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0,
+            juce::NormalisableRange<float>(0, 1, 0, 1, false), 0.5,
             juce::AudioParameterFloatAttributes{}.withLabel("").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 2) + " "; })));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -352,30 +324,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 
 
         static const std::map<juce::String, std::function<void(AudioPluginAudioProcessor&, float)>> parameterMap{
-            {"depth",
-             [](AudioPluginAudioProcessor& p, const float v)
-             {
-                 p.pluginRunner->setDepth(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::depth, v);
-             }},
-            {"speed",
-             [](AudioPluginAudioProcessor& p, const float v)
-             {
-                 p.pluginRunner->setSpeed(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::speed, v);
-             }},
-            {"aggressivity",
-             [](AudioPluginAudioProcessor& p, const float v)
-             {
-                 p.pluginRunner->setAggressivity(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::aggressivity, v);
-             }},
-            {"character",
-             [](AudioPluginAudioProcessor& p, const float v)
-             {
-                 p.pluginRunner->setCharacter(v);
-                 p.m_fileIo.updateParameter(PatchParameters::Id::character, v);
-             }},
             {"luaParam1",
              [](AudioPluginAudioProcessor& p, const float v)
              {
@@ -453,30 +401,6 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     void applyLoadedParametersToHost()
     {
         const auto& params = m_fileIo.getCurrentParameters();
-        if (auto* p = m_parameters.getParameter("depth"))
-        {
-            const auto& range = m_parameters.getParameterRange("depth");
-            float normalized = range.convertTo0to1(static_cast<float>(params.depth));
-            p->setValueNotifyingHost(normalized);
-        }
-        if (auto* p = m_parameters.getParameter("speed"))
-        {
-            const auto& range = m_parameters.getParameterRange("speed");
-            float normalized = range.convertTo0to1(static_cast<float>(params.speed));
-            p->setValueNotifyingHost(normalized);
-        }
-        if (auto* p = m_parameters.getParameter("aggressivity"))
-        {
-            const auto& range = m_parameters.getParameterRange("aggressivity");
-            float normalized = range.convertTo0to1(static_cast<float>(params.aggressivity));
-            p->setValueNotifyingHost(normalized);
-        }
-        if (auto* p = m_parameters.getParameter("character"))
-        {
-            const auto& range = m_parameters.getParameterRange("character");
-            float normalized = range.convertTo0to1(static_cast<float>(params.character));
-            p->setValueNotifyingHost(normalized);
-        }
         if (auto* p = m_parameters.getParameter("luaParam1"))
         {
             const auto& range = m_parameters.getParameterRange("luaParam1");
@@ -609,8 +533,28 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         if (ok)
         {
             m_fileIo.updateScript(text.toStdString());
+            applyUiSlotDefaults();
         }
         return ok;
+    }
+
+    // Moves every knob the script claims to the default it declares. Only the paths that apply
+    // a script on the user's request call this; loading a patch keeps the saved knob positions.
+    void applyUiSlotDefaults()
+    {
+        const auto slots = pluginRunner->uiParamSlots();
+        for (size_t i = 0; i < slots.size(); ++i)
+        {
+            if (!slots[i].claimed)
+            {
+                continue;
+            }
+            if (auto* parameter = m_parameters.getParameter("luaParam" + juce::String(i + 1)))
+            {
+                parameter->setValueNotifyingHost(luaParamDisplayToNormalized(
+                    slots[i].rangeMin, slots[i].rangeMax, slots[i].rangeSkew, slots[i].defaultValue));
+            }
+        }
     }
 
     [[nodiscard]] std::vector<juce::String> listScriptNames() const

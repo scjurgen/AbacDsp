@@ -2,6 +2,7 @@
 -- Two TapeDelay with the same seed and wow/flutter move in lockstep, like two heads on one
 -- transport, at different base delays. A Matrix per head leans it left or right.
 -- Approximation: no per-head drift; a real multi-head delay would be a new node.
+-- Each macro is one knob; its default is in the knob's own units and reproduces the values below.
 return {
   version = 1,
   name = "Shared Transport Heads",
@@ -56,5 +57,29 @@ return {
     { from = "dry.outR", to = "mix.in2R" },
     { from = "mix.outL", to = "outL" },
     { from = "mix.outR", to = "outR" },
+  },
+
+  macros = {
+    { id = "depth", label = "Depth", unit = "%", min = 0, max = 100, default = 60,
+      targets = { { to = "headA.flutterDepth", min = 0.0, max = 0.7 },
+                  { to = "headB.flutterDepth", min = 0.0, max = 0.7 } } },
+    { id = "rate", label = "Rate", unit = "Hz", min = 0.2, max = 2.0, default = 0.7,
+      targets = { { to = "headA.flutterRate", min = 0.2, max = 2.0 },
+                  { to = "headB.flutterRate", min = 0.2, max = 2.0 } } },
+    { id = "wander", label = "Wander", unit = "%", min = 0, max = 100, default = 50,
+      targets = { { to = "headA.wowDepth", min = 0.0, max = 1.0 },
+                  { to = "headB.wowDepth", min = 0.0, max = 1.0 },
+                  { to = "headA.wowVariance", min = 0.0, max = 0.2 },
+                  { to = "headB.wowVariance", min = 0.0, max = 0.2 } } },
+    { id = "spread", label = "Spread", unit = "%", min = 0, max = 100, default = 100,
+      targets = { { to = "leanA.gainLR", min = 0.0, max = 0.35 },
+                  { to = "leanA.gainRR", min = 1.0, max = 0.65 },
+                  { to = "leanB.gainRL", min = 0.0, max = 0.35 },
+                  { to = "leanB.gainLL", min = 1.0, max = 0.65 } } },
+    { id = "tone", label = "Tone", unit = "dB", min = -6, max = 6, default = -2.5,
+      targets = { { to = "toneL.tiltDb", min = -6, max = 6 },
+                  { to = "toneR.tiltDb", min = -6, max = 6 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = -2,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
   },
 }

@@ -1,7 +1,8 @@
 -- Family 4: multi-voice ensemble (tri-chorus).
 -- Three TapeDelay voices with their own seed, rate, base delay and drift, so their
 -- modulation is independent. Each voice runs at 1/sqrt(3), -4.77 dB, so three voices sum to
--- the level of one. Matrices lean the voices left, centre and right.
+-- the level of one. Matrices lean the voices left, centre and right. Each macro is one knob; its
+-- default is in the knob's own units and reproduces the parameter values below.
 return {
   version = 1,
   name = "Ensemble Tri-Chorus",
@@ -75,5 +76,37 @@ return {
     { from = "dry.outR", to = "mix.in2R" },
     { from = "mix.outL", to = "outL" },
     { from = "mix.outR", to = "outR" },
+  },
+
+  macros = {
+    { id = "depth", label = "Depth", unit = "%", min = 0, max = 100, default = 60,
+      targets = { { to = "voice1.flutterDepth", min = 0.0, max = 0.6667 },
+                  { to = "voice2.flutterDepth", min = 0.0, max = 0.8 },
+                  { to = "voice3.flutterDepth", min = 0.0, max = 0.9667 } } },
+    { id = "rate", label = "Rate", unit = "Hz", min = 0.2, max = 2.0, default = 0.8,
+      targets = { { to = "voice1.flutterRate", min = 0.15, max = 1.5 },
+                  { to = "voice2.flutterRate", min = 0.2, max = 2.0 },
+                  { to = "voice3.flutterRate", min = 0.2625, max = 2.625 } } },
+    { id = "wander", label = "Wander", unit = "%", min = 0, max = 100, default = 40,
+      targets = { { to = "voice1.wowVariance", min = 0.0, max = 0.5 },
+                  { to = "voice2.wowVariance", min = 0.0, max = 0.5 },
+                  { to = "voice3.wowVariance", min = 0.0, max = 0.5 },
+                  { to = "voice1.wowDrift", min = 0.0, max = 0.5 },
+                  { to = "voice2.wowDrift", min = 0.0, max = 0.5 },
+                  { to = "voice3.wowDrift", min = 0.0, max = 0.5 } } },
+    { id = "spread", label = "Spread", unit = "%", min = 0, max = 100, default = 100,
+      targets = { { to = "lean1.gainLR", min = 0.0, max = 0.4 },
+                  { to = "lean1.gainRR", min = 1.0, max = 0.6 },
+                  { to = "lean2.gainLL", min = 1.0, max = 0.8 },
+                  { to = "lean2.gainLR", min = 0.0, max = 0.2 },
+                  { to = "lean2.gainRL", min = 0.0, max = 0.2 },
+                  { to = "lean2.gainRR", min = 1.0, max = 0.8 },
+                  { to = "lean3.gainLL", min = 1.0, max = 0.6 },
+                  { to = "lean3.gainRL", min = 0.0, max = 0.4 } } },
+    { id = "tone", label = "Tone", unit = "dB", min = -6, max = 6, default = -2,
+      targets = { { to = "toneL.tiltDb", min = -6, max = 6 },
+                  { to = "toneR.tiltDb", min = -6, max = 6 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = -2,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
   },
 }

@@ -16,8 +16,9 @@ struct Preset
 
 // clang-format off
 inline constexpr std::string_view kTapeVibrato = R"lua(-- Family 1: tape vibrato. One stereo TapeDelay, 100% wet, shared wow and flutter.
--- Each macro is 0 to 1; a target sweeps min to max, with curve = "exp" for a geometric sweep.
--- The values below are the macros at their defaults.
+-- A macro shows as one knob: unit, min and max are what the knob displays, default is in those
+-- units. Its targets sweep their own min to max as the knob travels; curve = "exp" sweeps
+-- geometrically. The parameter values below are the macros at their defaults.
 return {
   version = 1,
   name = "Tape Vibrato",
@@ -29,7 +30,7 @@ return {
       config = { baseDelayMs = 10 },
       params = {
         transportRatio = 1.0,
-        wowDepth = 0.65, wowRate = 0.52, wowVariance = 0.10, wowDrift = 0.05,
+        wowDepth = 0.65, wowRate = 0.50, wowVariance = 0.10, wowDrift = 0.05,
         flutterDepth = 0.65, flutterRate = 5.0,
       },
     },
@@ -43,16 +44,16 @@ return {
   },
 
   macros = {
-    { id = "depth", label = "Depth", default = 0.65,
+    { id = "depth", label = "Depth", unit = "%", min = 0, max = 100, default = 65,
       targets = { { to = "tape.wowDepth", min = 0.0, max = 1.0 },
                   { to = "tape.flutterDepth", min = 0.0, max = 1.0 } } },
-    { id = "speed", label = "Speed", default = 0.47,
+    { id = "speed", label = "Speed", unit = "Hz", min = 1, max = 10, default = 5,
       targets = { { to = "tape.wowRate", min = 0.1, max = 1.0 },
                   { to = "tape.flutterRate", min = 1.0, max = 10.0 } } },
-    { id = "aggressivity", label = "OU Aggressivity", default = 0.10,
+    { id = "aggressivity", label = "OU Aggressivity", unit = "%", min = 0, max = 100, default = 10,
       targets = { { to = "tape.wowVariance", min = 0.0, max = 1.0 },
                   { to = "tape.wowDrift", min = 0.0, max = 0.5 } } },
-    { id = "character", label = "Character", default = 0.50,
+    { id = "character", label = "Character", unit = "%", min = 0, max = 100, default = 50,
       targets = { { to = "tape.transportRatio", min = 0.5, max = 2.0, curve = "exp" } } },
   },
 }
@@ -60,7 +61,8 @@ return {
 
 inline constexpr std::string_view kClassicStereoChorus = R"lua(-- Family 2: classic stereo chorus, dual mono.
 -- One TapeDelay per channel with its own seed, so left and right wobble independently.
--- Each TapeDelay is stereo: only its own channel is fed and read.
+-- Each TapeDelay is stereo: only its own channel is fed and read. Each macro is one knob; its
+-- default is in the knob's own units and reproduces the parameter values below.
 return {
   version = 1,
   name = "Classic Stereo Chorus",
@@ -96,6 +98,20 @@ return {
     { from = "mix.outL", to = "outL" },
     { from = "mix.outR", to = "outR" },
   },
+
+  macros = {
+    { id = "depth", label = "Depth", unit = "%", min = 0, max = 100, default = 60,
+      targets = { { to = "tapeL.flutterDepth", min = 0.0, max = 0.7 },
+                  { to = "tapeR.flutterDepth", min = 0.0, max = 0.8333 } } },
+    { id = "rate", label = "Rate", unit = "Hz", min = 0.2, max = 2.0, default = 0.8,
+      targets = { { to = "tapeL.flutterRate", min = 0.2, max = 2.0 },
+                  { to = "tapeR.flutterRate", min = 0.2375, max = 2.375 } } },
+    { id = "tone", label = "Tone", unit = "dB", min = -6, max = 6, default = -2,
+      targets = { { to = "toneL.tiltDb", min = -6, max = 6 },
+                  { to = "toneR.tiltDb", min = -6, max = 6 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = -3,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
+  },
 }
 )lua";
 
@@ -103,6 +119,7 @@ inline constexpr std::string_view kSharedTransportHeads = R"lua(-- Family 3: sha
 -- Two TapeDelay with the same seed and wow/flutter move in lockstep, like two heads on one
 -- transport, at different base delays. A Matrix per head leans it left or right.
 -- Approximation: no per-head drift; a real multi-head delay would be a new node.
+-- Each macro is one knob; its default is in the knob's own units and reproduces the values below.
 return {
   version = 1,
   name = "Shared Transport Heads",
@@ -158,13 +175,38 @@ return {
     { from = "mix.outL", to = "outL" },
     { from = "mix.outR", to = "outR" },
   },
+
+  macros = {
+    { id = "depth", label = "Depth", unit = "%", min = 0, max = 100, default = 60,
+      targets = { { to = "headA.flutterDepth", min = 0.0, max = 0.7 },
+                  { to = "headB.flutterDepth", min = 0.0, max = 0.7 } } },
+    { id = "rate", label = "Rate", unit = "Hz", min = 0.2, max = 2.0, default = 0.7,
+      targets = { { to = "headA.flutterRate", min = 0.2, max = 2.0 },
+                  { to = "headB.flutterRate", min = 0.2, max = 2.0 } } },
+    { id = "wander", label = "Wander", unit = "%", min = 0, max = 100, default = 50,
+      targets = { { to = "headA.wowDepth", min = 0.0, max = 1.0 },
+                  { to = "headB.wowDepth", min = 0.0, max = 1.0 },
+                  { to = "headA.wowVariance", min = 0.0, max = 0.2 },
+                  { to = "headB.wowVariance", min = 0.0, max = 0.2 } } },
+    { id = "spread", label = "Spread", unit = "%", min = 0, max = 100, default = 100,
+      targets = { { to = "leanA.gainLR", min = 0.0, max = 0.35 },
+                  { to = "leanA.gainRR", min = 1.0, max = 0.65 },
+                  { to = "leanB.gainRL", min = 0.0, max = 0.35 },
+                  { to = "leanB.gainLL", min = 1.0, max = 0.65 } } },
+    { id = "tone", label = "Tone", unit = "dB", min = -6, max = 6, default = -2.5,
+      targets = { { to = "toneL.tiltDb", min = -6, max = 6 },
+                  { to = "toneR.tiltDb", min = -6, max = 6 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = -2,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
+  },
 }
 )lua";
 
 inline constexpr std::string_view kEnsembleTriChorus = R"lua(-- Family 4: multi-voice ensemble (tri-chorus).
 -- Three TapeDelay voices with their own seed, rate, base delay and drift, so their
 -- modulation is independent. Each voice runs at 1/sqrt(3), -4.77 dB, so three voices sum to
--- the level of one. Matrices lean the voices left, centre and right.
+-- the level of one. Matrices lean the voices left, centre and right. Each macro is one knob; its
+-- default is in the knob's own units and reproduces the parameter values below.
 return {
   version = 1,
   name = "Ensemble Tri-Chorus",
@@ -239,11 +281,44 @@ return {
     { from = "mix.outL", to = "outL" },
     { from = "mix.outR", to = "outR" },
   },
+
+  macros = {
+    { id = "depth", label = "Depth", unit = "%", min = 0, max = 100, default = 60,
+      targets = { { to = "voice1.flutterDepth", min = 0.0, max = 0.6667 },
+                  { to = "voice2.flutterDepth", min = 0.0, max = 0.8 },
+                  { to = "voice3.flutterDepth", min = 0.0, max = 0.9667 } } },
+    { id = "rate", label = "Rate", unit = "Hz", min = 0.2, max = 2.0, default = 0.8,
+      targets = { { to = "voice1.flutterRate", min = 0.15, max = 1.5 },
+                  { to = "voice2.flutterRate", min = 0.2, max = 2.0 },
+                  { to = "voice3.flutterRate", min = 0.2625, max = 2.625 } } },
+    { id = "wander", label = "Wander", unit = "%", min = 0, max = 100, default = 40,
+      targets = { { to = "voice1.wowVariance", min = 0.0, max = 0.5 },
+                  { to = "voice2.wowVariance", min = 0.0, max = 0.5 },
+                  { to = "voice3.wowVariance", min = 0.0, max = 0.5 },
+                  { to = "voice1.wowDrift", min = 0.0, max = 0.5 },
+                  { to = "voice2.wowDrift", min = 0.0, max = 0.5 },
+                  { to = "voice3.wowDrift", min = 0.0, max = 0.5 } } },
+    { id = "spread", label = "Spread", unit = "%", min = 0, max = 100, default = 100,
+      targets = { { to = "lean1.gainLR", min = 0.0, max = 0.4 },
+                  { to = "lean1.gainRR", min = 1.0, max = 0.6 },
+                  { to = "lean2.gainLL", min = 1.0, max = 0.8 },
+                  { to = "lean2.gainLR", min = 0.0, max = 0.2 },
+                  { to = "lean2.gainRL", min = 0.0, max = 0.2 },
+                  { to = "lean2.gainRR", min = 1.0, max = 0.8 },
+                  { to = "lean3.gainLL", min = 1.0, max = 0.6 },
+                  { to = "lean3.gainRL", min = 0.0, max = 0.4 } } },
+    { id = "tone", label = "Tone", unit = "dB", min = -6, max = 6, default = -2,
+      targets = { { to = "toneL.tiltDb", min = -6, max = 6 },
+                  { to = "toneR.tiltDb", min = -6, max = 6 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = -2,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
+  },
 }
 )lua";
 
 inline constexpr std::string_view kCrossoverPreserveStereo = R"lua(-- Crossover-safe chorus, policy 1: preserve the stereo low band.
--- The low band bypasses the delay and stays dry; the high band is processed.
+-- The low band bypasses the delay and stays dry; the high band is processed. Each macro is one
+-- knob; its default is in the knob's own units and reproduces the parameter values below.
 return {
   version = 1,
   name = "Preserve Stereo Low Band",
@@ -251,7 +326,9 @@ return {
   nodes = {
     { id = "xoL", type = "CrossoverLR4", params = { frequencyHz = 200 } },
     { id = "xoR", type = "CrossoverLR4", params = { frequencyHz = 200 } },
-    { id = "tape", type = "TapeDelay" },
+    { id = "tape", type = "TapeDelay", config = { baseDelayMs = 12, seed = 61 },
+      params = { wowDepth = 0.50, wowRate = 0.40, wowVariance = 0.10, flutterDepth = 0.42, flutterRate = 0.80 } },
+    { id = "wet", type = "Gain", params = { gainDb = 0.0 } },
     { id = "mix", type = "Mixer" },
   },
   edges = {
@@ -259,18 +336,32 @@ return {
     { from = "inR", to = "xoR.in" },
     { from = "xoL.highOut", to = "tape.inL" },
     { from = "xoR.highOut", to = "tape.inR" },
-    { from = "tape.outL", to = "mix.in1L" },
-    { from = "tape.outR", to = "mix.in1R" },
+    { from = "tape.outL", to = "wet.inL" },
+    { from = "tape.outR", to = "wet.inR" },
+    { from = "wet.outL", to = "mix.in1L" },
+    { from = "wet.outR", to = "mix.in1R" },
     { from = "xoL.lowOut", to = "mix.in2L" },
     { from = "xoR.lowOut", to = "mix.in2R" },
     { from = "mix.outL", to = "outL" },
     { from = "mix.outR", to = "outR" },
   },
+  macros = {
+    { id = "crossover", label = "Crossover", unit = "Hz", min = 60, max = 800, default = 200,
+      targets = { { to = "xoL.frequencyHz", min = 60, max = 800 },
+                  { to = "xoR.frequencyHz", min = 60, max = 800 } } },
+    { id = "depth", label = "Depth", unit = "%", min = 0, max = 100, default = 60,
+      targets = { { to = "tape.flutterDepth", min = 0.0, max = 0.7 } } },
+    { id = "rate", label = "Rate", unit = "Hz", min = 0.2, max = 2.0, default = 0.8,
+      targets = { { to = "tape.flutterRate", min = 0.2, max = 2.0 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = 0,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
+  },
 }
 )lua";
 
 inline constexpr std::string_view kCrossoverMonoLow = R"lua(-- Crossover-safe chorus, policy 2: mono low band.
--- Same split; the low band is folded to mono before it is recombined.
+-- Same split; the low band is folded to mono before it is recombined. Each macro is one knob; its
+-- default is in the knob's own units and reproduces the parameter values below.
 return {
   version = 1,
   name = "Mono Low Band",
@@ -280,7 +371,9 @@ return {
     { id = "xoR", type = "CrossoverLR4", params = { frequencyHz = 200 } },
     { id = "lowMono", type = "StereoToMono" },
     { id = "lowDup", type = "MonoToStereo" },
-    { id = "tape", type = "TapeDelay" },
+    { id = "tape", type = "TapeDelay", config = { baseDelayMs = 12, seed = 61 },
+      params = { wowDepth = 0.50, wowRate = 0.40, wowVariance = 0.10, flutterDepth = 0.42, flutterRate = 0.80 } },
+    { id = "wet", type = "Gain", params = { gainDb = 0.0 } },
     { id = "mix", type = "Mixer" },
   },
   edges = {
@@ -291,26 +384,42 @@ return {
     { from = "lowMono.out", to = "lowDup.in" },
     { from = "xoL.highOut", to = "tape.inL" },
     { from = "xoR.highOut", to = "tape.inR" },
-    { from = "tape.outL", to = "mix.in1L" },
-    { from = "tape.outR", to = "mix.in1R" },
+    { from = "tape.outL", to = "wet.inL" },
+    { from = "tape.outR", to = "wet.inR" },
+    { from = "wet.outL", to = "mix.in1L" },
+    { from = "wet.outR", to = "mix.in1R" },
     { from = "lowDup.outL", to = "mix.in2L" },
     { from = "lowDup.outR", to = "mix.in2R" },
     { from = "mix.outL", to = "outL" },
     { from = "mix.outR", to = "outR" },
   },
+  macros = {
+    { id = "crossover", label = "Crossover", unit = "Hz", min = 60, max = 800, default = 200,
+      targets = { { to = "xoL.frequencyHz", min = 60, max = 800 },
+                  { to = "xoR.frequencyHz", min = 60, max = 800 } } },
+    { id = "depth", label = "Depth", unit = "%", min = 0, max = 100, default = 60,
+      targets = { { to = "tape.flutterDepth", min = 0.0, max = 0.7 } } },
+    { id = "rate", label = "Rate", unit = "Hz", min = 0.2, max = 2.0, default = 0.8,
+      targets = { { to = "tape.flutterRate", min = 0.2, max = 2.0 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = 0,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
+  },
 }
 )lua";
 
 inline constexpr std::string_view kCrossoverWetOnlyLowCut = R"lua(-- Crossover-safe chorus, policy 3: wet-only low cut.
--- No split; the full dry signal stays and only the wet bus is high-passed.
+-- No split; the full dry signal stays and only the wet bus is high-passed. Each macro is one
+-- knob; its default is in the knob's own units and reproduces the parameter values below.
 return {
   version = 1,
   name = "Wet Only Low Cut",
   io = { inputs = { "inL", "inR" }, outputs = { "outL", "outR" } },
   nodes = {
-    { id = "tape", type = "TapeDelay" },
+    { id = "tape", type = "TapeDelay", config = { baseDelayMs = 12, seed = 61 },
+      params = { wowDepth = 0.50, wowRate = 0.40, wowVariance = 0.10, flutterDepth = 0.42, flutterRate = 0.80 } },
     { id = "wetHpL", type = "OnePoleHP", params = { cutoffHz = 200 } },
     { id = "wetHpR", type = "OnePoleHP", params = { cutoffHz = 200 } },
+    { id = "wet", type = "Gain", params = { gainDb = 0.0 } },
     { id = "mix", type = "Mixer" },
   },
   edges = {
@@ -318,12 +427,25 @@ return {
     { from = "inR", to = "tape.inR" },
     { from = "tape.outL", to = "wetHpL.in" },
     { from = "tape.outR", to = "wetHpR.in" },
-    { from = "wetHpL.out", to = "mix.in1L" },
-    { from = "wetHpR.out", to = "mix.in1R" },
+    { from = "wetHpL.out", to = "wet.inL" },
+    { from = "wetHpR.out", to = "wet.inR" },
+    { from = "wet.outL", to = "mix.in1L" },
+    { from = "wet.outR", to = "mix.in1R" },
     { from = "inL", to = "mix.in2L" },
     { from = "inR", to = "mix.in2R" },
     { from = "mix.outL", to = "outL" },
     { from = "mix.outR", to = "outR" },
+  },
+  macros = {
+    { id = "lowcut", label = "Low cut", unit = "Hz", min = 20, max = 800, default = 200,
+      targets = { { to = "wetHpL.cutoffHz", min = 20, max = 800 },
+                  { to = "wetHpR.cutoffHz", min = 20, max = 800 } } },
+    { id = "depth", label = "Depth", unit = "%", min = 0, max = 100, default = 60,
+      targets = { { to = "tape.flutterDepth", min = 0.0, max = 0.7 } } },
+    { id = "rate", label = "Rate", unit = "Hz", min = 0.2, max = 2.0, default = 0.8,
+      targets = { { to = "tape.flutterRate", min = 0.2, max = 2.0 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = 0,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
   },
 }
 )lua";
@@ -331,7 +453,8 @@ return {
 inline constexpr std::string_view kBbdInspired = R"lua(-- Family 6: BBD-inspired chorus.
 -- A short modulated delay, a two-pole bandwidth limit on the wet path, and a feedback path
 -- through a damping filter and a saturator. No companding or clock noise: the node set has
--- no expander to pair with Compander and no noise source.
+-- no expander to pair with Compander and no noise source. Each macro is one knob; its default is
+-- in the knob's own units and reproduces the parameter values below.
 return {
   version = 1,
   name = "BBD Inspired Chorus",
@@ -390,13 +513,36 @@ return {
     { from = "returnL.out", to = "bbd.feedbackL" },
     { from = "returnR.out", to = "bbd.feedbackR" },
   },
+
+  macros = {
+    { id = "depth", label = "Depth", unit = "%", min = 0, max = 100, default = 60,
+      targets = { { to = "bbd.flutterDepth", min = 0.0, max = 0.7 } } },
+    { id = "rate", label = "Rate", unit = "Hz", min = 0.2, max = 2.0, default = 0.7,
+      targets = { { to = "bbd.flutterRate", min = 0.2, max = 2.0 } } },
+    { id = "bandwidth", label = "Bandwidth", unit = "Hz", min = 1000, max = 12000, default = 6000,
+      targets = { { to = "bw1L.cutoffHz", min = 1000, max = 12000 },
+                  { to = "bw2L.cutoffHz", min = 1000, max = 12000 },
+                  { to = "bw1R.cutoffHz", min = 1000, max = 12000 },
+                  { to = "bw2R.cutoffHz", min = 1000, max = 12000 } } },
+    { id = "feedback", label = "Feedback", unit = "dB", min = -60, max = -6, default = -13,
+      targets = { { to = "feedback.gainDb", min = -60, max = -6 } } },
+    { id = "damping", label = "Damping", unit = "Hz", min = 500, max = 8000, default = 3500,
+      targets = { { to = "dampL.cutoffHz", min = 500, max = 8000 },
+                  { to = "dampR.cutoffHz", min = 500, max = 8000 } } },
+    { id = "drive", label = "Drive", min = 0, max = 6, default = 1,
+      targets = { { to = "satL.drive", min = 0, max = 6 },
+                  { to = "satR.drive", min = 0, max = 6 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = -3,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
+  },
 }
 )lua";
 
 inline constexpr std::string_view kDimension = R"lua(-- Family 7: dimension-style widening.
 -- Two nearly static delays. Tap A is folded to mono into the left channel, tap B is folded
 -- to mono and inverted into the right, so a mono input comes out decorrelated. Movement is a
--- slow wander with no periodic component, so there is no audible wobble.
+-- slow wander with no periodic component, so there is no audible wobble. Each macro is one knob;
+-- its default is in the knob's own units and reproduces the parameter values below.
 return {
   version = 1,
   name = "Dimension Widening",
@@ -450,6 +596,25 @@ return {
     { from = "mix.outL", to = "outL" },
     { from = "mix.outR", to = "outR" },
   },
+
+  macros = {
+    { id = "wander", label = "Wander", unit = "%", min = 0, max = 100, default = 60,
+      targets = { { to = "tapA.wowDepth", min = 0.0, max = 1.0 },
+                  { to = "tapB.wowDepth", min = 0.0, max = 1.0 },
+                  { to = "tapA.wowVariance", min = 0.0, max = 0.3333 },
+                  { to = "tapB.wowVariance", min = 0.0, max = 0.3333 } } },
+    { id = "width", label = "Width", unit = "%", min = 0, max = 100, default = 100,
+      targets = { { to = "toRight.gainRL", min = 0.0, max = -0.5 },
+                  { to = "toRight.gainRR", min = 0.0, max = -0.5 } } },
+    { id = "lowcut", label = "Low cut", unit = "Hz", min = 20, max = 800, default = 200,
+      targets = { { to = "highpassL.cutoffHz", min = 20, max = 800 },
+                  { to = "highpassR.cutoffHz", min = 20, max = 800 } } },
+    { id = "tone", label = "Tone", unit = "dB", min = -6, max = 6, default = -1.5,
+      targets = { { to = "toneL.tiltDb", min = -6, max = 6 },
+                  { to = "toneR.tiltDb", min = -6, max = 6 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = -1,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
+  },
 }
 )lua";
 
@@ -458,7 +623,9 @@ inline constexpr std::string_view kExperimentalResonantFeedback = R"lua(-- Famil
 -- delay. A band-pass does not count as damping, so the validator warns that the cycle is
 -- undamped and resonant. The saturators clamp the loop and the final stage to +-1 and stand in
 -- for a safety limiter; there is no feedback meter node. A quiet input decays; a loud burst
--- drives the loop into the saturators and it rings for seconds before it dies away.
+-- drives the loop into the saturators and it rings for seconds before it dies away. Each macro is
+-- one knob; its default is in the knob's own units and reproduces the parameter values below.
+-- The Feedback knob reaches +3 dB: the saturators still keep the loop and the output within +-1.
 return {
   version = 1,
   name = "Experimental Resonant Feedback",
@@ -513,6 +680,27 @@ return {
     { from = "mix.outR", to = "limitR.in" },
     { from = "limitL.out", to = "outL" },
     { from = "limitR.out", to = "outR" },
+  },
+
+  macros = {
+    { id = "resonance", label = "Resonance", unit = "Hz", min = 200, max = 4000, default = 880,
+      targets = { { to = "resonatorL.frequencyHz", min = 200, max = 4000 },
+                  { to = "resonatorR.frequencyHz", min = 250, max = 5000 } } },
+    { id = "q", label = "Q", min = 0.5, max = 20, default = 8,
+      targets = { { to = "resonatorL.Q", min = 0.5, max = 20 },
+                  { to = "resonatorR.Q", min = 0.5, max = 20 } } },
+    { id = "feedback", label = "Feedback", unit = "dB", min = -12, max = 3, default = -3,
+      targets = { { to = "loopGain.gainDb", min = -12, max = 3 } } },
+    { id = "drive", label = "Drive", min = 0, max = 5, default = 1.5,
+      targets = { { to = "driveL.drive", min = 0, max = 5 },
+                  { to = "driveR.drive", min = 0, max = 5 } } },
+    { id = "cross", label = "Cross", unit = "%", min = 0, max = 100, default = 40,
+      targets = { { to = "coupling.gainLR", min = 0.0, max = 1.0 },
+                  { to = "coupling.gainRL", min = 0.0, max = 1.0 },
+                  { to = "coupling.gainLL", min = 1.0, max = 0.0 },
+                  { to = "coupling.gainRR", min = 1.0, max = 0.0 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = -6,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
   },
 }
 )lua";

@@ -1,6 +1,7 @@
 -- Family 2: classic stereo chorus, dual mono.
 -- One TapeDelay per channel with its own seed, so left and right wobble independently.
--- Each TapeDelay is stereo: only its own channel is fed and read.
+-- Each TapeDelay is stereo: only its own channel is fed and read. Each macro is one knob; its
+-- default is in the knob's own units and reproduces the parameter values below.
 return {
   version = 1,
   name = "Classic Stereo Chorus",
@@ -35,5 +36,19 @@ return {
     { from = "dry.outR", to = "mix.in2R" },
     { from = "mix.outL", to = "outL" },
     { from = "mix.outR", to = "outR" },
+  },
+
+  macros = {
+    { id = "depth", label = "Depth", unit = "%", min = 0, max = 100, default = 60,
+      targets = { { to = "tapeL.flutterDepth", min = 0.0, max = 0.7 },
+                  { to = "tapeR.flutterDepth", min = 0.0, max = 0.8333 } } },
+    { id = "rate", label = "Rate", unit = "Hz", min = 0.2, max = 2.0, default = 0.8,
+      targets = { { to = "tapeL.flutterRate", min = 0.2, max = 2.0 },
+                  { to = "tapeR.flutterRate", min = 0.2375, max = 2.375 } } },
+    { id = "tone", label = "Tone", unit = "dB", min = -6, max = 6, default = -2,
+      targets = { { to = "toneL.tiltDb", min = -6, max = 6 },
+                  { to = "toneR.tiltDb", min = -6, max = 6 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = -3,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
   },
 }

@@ -16,8 +16,12 @@
 
 #include "Graph/GraphCompiler.h"
 #include "Graph/Lua/LuaGraphLoader.h"
+#include "Graph/MacroBank.h"
+#include "Graph/MacroLowering.h"
 #include "Graph/NodeRegistry.h"
+#include "Graph/Nodes/ControlNodes.h"
 #include "Graph/Nodes/FilterNodes.h"
+#include "Graph/Nodes/MacroInput.h"
 #include "Graph/Nodes/StandardNodes.h"
 #include "Graph/Nodes/TapeDelayNode.h"
 #include "Graph/OfflineRender.h"
@@ -292,6 +296,39 @@ struct LagWindow
     const auto noise =
         OfflineRender::stimulus({.kind = Stimulus::WhiteNoise, .amplitude = 0.5f, .seed = 3}, numSamples, kSampleRate);
     return {noise, noise};
+}
+
+constexpr size_t kKnobSlots = 8;
+
+[[nodiscard]] NodeRegistry makeMacroRegistry(const MacroBank& bank)
+{
+    auto registry = makeRegistry<kStandardBlockSize>();
+    Nodes::registerControlNodes(registry);
+    Nodes::registerMacroInputNode(registry, bank);
+    return registry;
+}
+
+[[nodiscard]] CompiledGraph compileWith(const GraphDescription& description, const NodeRegistry& registry)
+{
+    auto result = GraphCompiler::compile(description, registry, kStandardBlockSize, kSampleRate);
+    EXPECT_TRUE(result.graph.has_value()) << description.name;
+    return std::move(*result.graph);
+}
+
+[[nodiscard]] double rmsDifference(const std::vector<std::vector<float>>& a, const std::vector<std::vector<float>>& b)
+{
+    double sum = 0.0;
+    size_t count = 0;
+    for (size_t channel = 0; channel < a.size(); ++channel)
+    {
+        for (size_t i = 0; i < a[channel].size(); ++i)
+        {
+            const double difference = static_cast<double>(a[channel][i]) - b[channel][i];
+            sum += difference * difference;
+            ++count;
+        }
+    }
+    return std::sqrt(sum / static_cast<double>(count));
 }
 
 } // namespace
@@ -598,6 +635,88 @@ TEST(ChorusPresetsTest, ExperimentalFeedbackWarnsBloomsOnALoudBurstAndStaysBound
     for (const auto& channel : output)
     {
         EXPECT_LE(peakAbs(channel, 0, channel.size()), 1.0f + 1E-6f);
+    }
+}
+
+TEST(ChorusPresetsTest, EveryPresetOffersMacrosThatLowerCleanlyAndFitTheKnobPool)
+{
+    for (const auto& preset : Presets::kChorusPresets)
+    {
+        SCOPED_TRACE(std::string{preset.name});
+        MacroBank bank;
+        const auto registry = makeMacroRegistry(bank);
+        const auto description = loadPreset(preset.name);
+        ASSERT_FALSE(description.macros.empty());
+        ASSERT_LE(description.macros.size(), kKnobSlots);
+
+        const auto lowered = MacroLowering::lower(description, registry, {}, 0, kKnobSlots);
+        EXPECT_TRUE(lowered.diagnostics.empty()) << lowered.diagnostics.front().message;
+        EXPECT_EQ(lowered.macros.size(), description.macros.size());
+        std::set<std::string> ids;
+        for (const auto& macro : lowered.macros)
+        {
+            EXPECT_TRUE(ids.insert(macro.id).second) << "duplicate " << macro.id;
+            EXPECT_FALSE(macro.label.empty());
+            EXPECT_LT(macro.displayMin, macro.displayMax) << macro.id;
+            EXPECT_GE(macro.defaultValue, macro.displayMin) << macro.id;
+            EXPECT_LE(macro.defaultValue, macro.displayMax) << macro.id;
+        }
+    }
+}
+
+// The macros are the only controls the app offers, so at their defaults they must give exactly the
+// sound the script's own parameters describe.
+TEST(ChorusPresetsTest, MacrosAtTheirDefaultsReproduceTheScriptsOwnParameters)
+{
+    const auto input = stereoNoise(48000);
+    for (const auto& preset : Presets::kChorusPresets)
+    {
+        SCOPED_TRACE(std::string{preset.name});
+        MacroBank bank;
+        const auto registry = makeMacroRegistry(bank);
+        const auto description = loadPreset(preset.name);
+        const auto lowered = MacroLowering::lower(description, registry, {}, 0, kKnobSlots);
+        for (const auto& macro : lowered.macros)
+        {
+            bank.set(macro.slot, macro.defaultNormalized);
+        }
+        auto withMacros = compileWith(lowered.description, registry);
+        auto plain = compileWith(description, registry);
+        const auto a = OfflineRender::render(withMacros, input, 48000, kStandardBlockSize);
+        const auto b = OfflineRender::render(plain, input, 48000, kStandardBlockSize);
+        EXPECT_LT(rmsDifference(a, b), 1E-3);
+    }
+}
+
+// A knob that changes nothing is a defect, so every macro is moved from 0 to 1 on its own.
+TEST(ChorusPresetsTest, EveryMacroChangesTheOutputWhenItIsMoved)
+{
+    const auto input = stereoNoise(24000);
+    for (const auto& preset : Presets::kChorusPresets)
+    {
+        MacroBank probe;
+        const auto probeRegistry = makeMacroRegistry(probe);
+        const auto description = loadPreset(preset.name);
+        const auto lowered = MacroLowering::lower(description, probeRegistry, {}, 0, kKnobSlots);
+        for (const auto& macro : lowered.macros)
+        {
+            SCOPED_TRACE(std::string{preset.name} + " / " + macro.id);
+            std::array<std::vector<std::vector<float>>, 2> rendered;
+            for (size_t end = 0; end < 2; ++end)
+            {
+                MacroBank bank;
+                const auto registry = makeMacroRegistry(bank);
+                const auto again = MacroLowering::lower(description, registry, {}, 0, kKnobSlots);
+                for (const auto& other : again.macros)
+                {
+                    bank.set(other.slot, other.defaultNormalized);
+                }
+                bank.set(macro.slot, static_cast<float>(end));
+                auto graph = compileWith(again.description, registry);
+                rendered[end] = OfflineRender::render(graph, input, 24000, kStandardBlockSize);
+            }
+            EXPECT_GT(rmsDifference(rendered[0], rendered[1]), 1E-4);
+        }
     }
 }
 

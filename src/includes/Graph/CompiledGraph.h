@@ -1,7 +1,10 @@
 #pragma once
 
 #include <algorithm>
+#include <bit>
 #include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <memory>
 #include <span>
 #include <string>
@@ -50,6 +53,9 @@ class CompiledGraph
         size_t sourceSlot{0};
         Node* targetNode{nullptr};
         size_t paramIndex{0};
+        // The value last pushed. A parameter is set only when it changes, since a node may restart
+        // a smoothing ramp on every setParameter() call and never settle on a steady value.
+        float lastValue{std::numeric_limits<float>::quiet_NaN()};
     };
 
     using ScheduleStep = std::variant<ScheduledNode, ParameterApplication>;
@@ -98,7 +104,12 @@ class CompiledGraph
                     }
                     else
                     {
-                        entry.targetNode->setParameter(entry.paramIndex, m_buffers[entry.sourceSlot][numSamples - 1]);
+                        const float value = m_buffers[entry.sourceSlot][numSamples - 1];
+                        if (std::bit_cast<std::uint32_t>(value) != std::bit_cast<std::uint32_t>(entry.lastValue))
+                        {
+                            entry.targetNode->setParameter(entry.paramIndex, value);
+                            entry.lastValue = value;
+                        }
                     }
                 },
                 step);

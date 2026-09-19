@@ -21,7 +21,12 @@ struct LoweredMacro
 {
     std::string id;
     std::string label;
+    std::string unit;
+    float displayMin{0.f};
+    float displayMax{1.f};
+    // In display units, and as the 0 to 1 position a control holds.
     float defaultValue{0.f};
+    float defaultNormalized{0.f};
     size_t slot{0};
 };
 
@@ -46,7 +51,8 @@ class MacroLowering
 {
   public:
     [[nodiscard]] static LoweredGraph lower(const GraphDescription& description, const NodeRegistry& registry,
-                                            const std::span<const std::string> reservedIds, const size_t firstFreeSlot)
+                                            const std::span<const std::string> reservedIds, const size_t firstFreeSlot,
+                                            const size_t slotLimit = MacroBank::kSlotCount)
     {
         LoweredGraph result{description, {}, {}};
         if (description.macros.empty())
@@ -63,7 +69,7 @@ class MacroLowering
         size_t nextFree = firstFreeSlot;
         for (const auto& macro : description.macros)
         {
-            const auto slot = assignSlot(macro.id, reservedIds, nextFree);
+            const auto slot = assignSlot(macro.id, reservedIds, nextFree, slotLimit);
             if (!slot)
             {
                 result.diagnostics.push_back(Diagnostic{
@@ -98,7 +104,7 @@ class MacroLowering
 
     [[nodiscard]] static std::optional<size_t> assignSlot(const std::string& id,
                                                           const std::span<const std::string> reservedIds,
-                                                          size_t& nextFree)
+                                                          size_t& nextFree, const size_t slotLimit)
     {
         for (size_t i = 0; i < reservedIds.size(); ++i)
         {
@@ -107,7 +113,7 @@ class MacroLowering
                 return i;
             }
         }
-        if (nextFree < MacroBank::kSlotCount)
+        if (nextFree < slotLimit)
         {
             return nextFree++;
         }
@@ -178,10 +184,32 @@ class MacroLowering
                                                           .toParam = resolved.target->toParam});
     }
 
+    [[nodiscard]] static LoweredMacro describe(const Macro& macro, const size_t slot, LoweredGraph& result)
+    {
+        LoweredMacro lowered{macro.id, macro.label.empty() ? macro.id : macro.label, macro.unit};
+        lowered.slot = slot;
+        const bool rangeUsable = macro.displayMin && macro.displayMax && *macro.displayMax > *macro.displayMin;
+        if (macro.displayMin && !rangeUsable)
+        {
+            result.diagnostics.push_back(Diagnostic{DiagnosticSeverity::Warning,
+                                                    "macro \"" + macro.id + "\" needs max above min, using 0 to 1", "",
+                                                    "", "macros." + macro.id});
+        }
+        if (rangeUsable)
+        {
+            lowered.displayMin = *macro.displayMin;
+            lowered.displayMax = *macro.displayMax;
+        }
+        lowered.defaultValue = macro.defaultValue;
+        const float span = lowered.displayMax - lowered.displayMin;
+        lowered.defaultNormalized = std::clamp((macro.defaultValue - lowered.displayMin) / span, 0.f, 1.f);
+        return lowered;
+    }
+
     static void lowerMacro(const Macro& macro, const size_t slot, const GraphDescription& description,
                            const NodeRegistry& registry, LoweredGraph& result)
     {
-        const LoweredMacro lowered{macro.id, macro.label.empty() ? macro.id : macro.label, macro.defaultValue, slot};
+        const LoweredMacro lowered = describe(macro, slot, result);
         std::vector<ResolvedTarget> targets;
         for (const auto& target : macro.targets)
         {

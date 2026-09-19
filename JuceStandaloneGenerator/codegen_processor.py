@@ -553,6 +553,30 @@ def create_processor_script_methods(blueprint: Blueprint) -> str:
     if not uses_lua(blueprint):
         return ""
     upper = "Script"
+    apply_defaults = bool(blueprint.get("lua_apply_slot_defaults", False))
+    apply_call = "\n            applyUiSlotDefaults();" if apply_defaults else ""
+    apply_method = ""
+    if apply_defaults:
+        apply_method = """
+    // Moves every knob the script claims to the default it declares. Only the paths that apply
+    // a script on the user's request call this; loading a patch keeps the saved knob positions.
+    void applyUiSlotDefaults()
+    {
+        const auto slots = pluginRunner->uiParamSlots();
+        for (size_t i = 0; i < slots.size(); ++i)
+        {
+            if (!slots[i].claimed)
+            {
+                continue;
+            }
+            if (auto* parameter = m_parameters.getParameter("luaParam" + juce::String(i + 1)))
+            {
+                parameter->setValueNotifyingHost(luaParamDisplayToNormalized(
+                    slots[i].rangeMin, slots[i].rangeMax, slots[i].rangeSkew, slots[i].defaultValue));
+            }
+        }
+    }
+"""
     return f"""
     [[nodiscard]] juce::String getScriptText() const
     {{
@@ -568,11 +592,11 @@ def create_processor_script_methods(blueprint: Blueprint) -> str:
         const bool ok = pluginRunner->set{upper}(text.toStdString());
         if (ok)
         {{
-            m_fileIo.update{upper}(text.toStdString());
+            m_fileIo.update{upper}(text.toStdString());{apply_call}
         }}
         return ok;
     }}
-
+{apply_method}
     [[nodiscard]] std::vector<juce::String> listScriptNames() const
     {{
         std::vector<juce::String> result;

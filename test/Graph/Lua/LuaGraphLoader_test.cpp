@@ -431,4 +431,40 @@ TEST(LuaGraphLoaderTest, TheBudgetResetsForEveryLoad)
     }
 }
 
+TEST(LuaGraphLoaderTest, MacroReadsUnitDisplayRangeAndDefault)
+{
+    const LoadResult result = LuaGraphLoader::loadFromString(R"lua(
+        return { macros = { { id = "m", label = "Depth", unit = "%", min = 0, max = 100, default = 65,
+                              targets = { { to = "n.gain" } } } } }
+    )lua");
+    ASSERT_TRUE(result.description.has_value());
+    const Macro& macro = result.description->macros.at(0);
+    EXPECT_EQ(macro.unit, "%");
+    ASSERT_TRUE(macro.displayMin.has_value());
+    EXPECT_FLOAT_EQ(*macro.displayMin, 0.f);
+    EXPECT_FLOAT_EQ(*macro.displayMax, 100.f);
+    EXPECT_FLOAT_EQ(macro.defaultValue, 65.f);
+}
+
+TEST(LuaGraphLoaderTest, MacroWithoutDisplayFieldsKeepsThemEmpty)
+{
+    const LoadResult result = LuaGraphLoader::loadFromString(R"lua(
+        return { macros = { { id = "m", targets = { { to = "n.gain" } } } } }
+    )lua");
+    ASSERT_TRUE(result.description.has_value());
+    const Macro& macro = result.description->macros.at(0);
+    EXPECT_TRUE(macro.unit.empty());
+    EXPECT_FALSE(macro.displayMin.has_value());
+    EXPECT_FALSE(macro.displayMax.has_value());
+}
+
+TEST(LuaGraphLoaderTest, MacroWithOnlyOneOfMinAndMaxIsAnError)
+{
+    const LoadResult result = LuaGraphLoader::loadFromString(R"lua(
+        return { macros = { { id = "m", max = 100, targets = { { to = "n.gain" } } } } }
+    )lua");
+    ASSERT_TRUE(hasSingleError(result));
+    EXPECT_EQ(result.diagnostics.front().field, "macros.m");
+}
+
 }

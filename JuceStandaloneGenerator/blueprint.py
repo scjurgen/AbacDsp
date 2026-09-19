@@ -67,16 +67,18 @@ def luacontrolarea_pool_ports(item: dict[str, Any]) -> list[dict[str, Any]]:
     knobs/dropdowns/switches from - not shown in any composition, so it never gets a
     generator-owned widget of its own. count/ccbase default to 8 pool slots starting
     at CC16, matching DroneScriptEngine::kMaxLuaParams; keep both in sync by hand if
-    either changes."""
+    either changes. An optional "defaults" list gives the first pool parameters a starting value
+    (raw 0 to 1) other than 0, so a fresh instance starts on what the default script expects."""
     count = item.get('count', 8)
     cc_base = item.get('ccbase', 16)
+    defaults = item.get('defaults', [])
     return [
         {
             'short': f'LP{idx + 1}',
             'type': 'dial',
             'display': f'Lua Param {idx + 1}',
             'symbol': f'luaParam{idx + 1}',
-            'default': 0,
+            'default': defaults[idx] if idx < len(defaults) else 0,
             'range': [0, 1, 0, 1, False],
             'precision': 2,
             'unit': '',

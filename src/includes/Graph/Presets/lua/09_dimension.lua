@@ -1,7 +1,8 @@
 -- Family 7: dimension-style widening.
 -- Two nearly static delays. Tap A is folded to mono into the left channel, tap B is folded
 -- to mono and inverted into the right, so a mono input comes out decorrelated. Movement is a
--- slow wander with no periodic component, so there is no audible wobble.
+-- slow wander with no periodic component, so there is no audible wobble. Each macro is one knob;
+-- its default is in the knob's own units and reproduces the parameter values below.
 return {
   version = 1,
   name = "Dimension Widening",
@@ -54,5 +55,24 @@ return {
     { from = "dry.outR", to = "mix.in2R" },
     { from = "mix.outL", to = "outL" },
     { from = "mix.outR", to = "outR" },
+  },
+
+  macros = {
+    { id = "wander", label = "Wander", unit = "%", min = 0, max = 100, default = 60,
+      targets = { { to = "tapA.wowDepth", min = 0.0, max = 1.0 },
+                  { to = "tapB.wowDepth", min = 0.0, max = 1.0 },
+                  { to = "tapA.wowVariance", min = 0.0, max = 0.3333 },
+                  { to = "tapB.wowVariance", min = 0.0, max = 0.3333 } } },
+    { id = "width", label = "Width", unit = "%", min = 0, max = 100, default = 100,
+      targets = { { to = "toRight.gainRL", min = 0.0, max = -0.5 },
+                  { to = "toRight.gainRR", min = 0.0, max = -0.5 } } },
+    { id = "lowcut", label = "Low cut", unit = "Hz", min = 20, max = 800, default = 200,
+      targets = { { to = "highpassL.cutoffHz", min = 20, max = 800 },
+                  { to = "highpassR.cutoffHz", min = 20, max = 800 } } },
+    { id = "tone", label = "Tone", unit = "dB", min = -6, max = 6, default = -1.5,
+      targets = { { to = "toneL.tiltDb", min = -6, max = 6 },
+                  { to = "toneR.tiltDb", min = -6, max = 6 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = -1,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
   },
 }

@@ -200,4 +200,56 @@ TEST_F(LoweringFixture, TwoTargetsOfOneMacroMoveTogether)
     EXPECT_FLOAT_EQ(gainOf(graph), 4.f);
 }
 
+TEST_F(LoweringFixture, DisplayRangeUnitAndDefaultAreCarriedAndTheDefaultIsNormalized)
+{
+    auto description = makeGraph(MacroTarget{.toNode = "g", .toParam = "gain"});
+    description.macros[0].unit = "Hz";
+    description.macros[0].displayMin = 100.f;
+    description.macros[0].displayMax = 500.f;
+    description.macros[0].defaultValue = 200.f;
+    const auto lowered = lower(description);
+    ASSERT_EQ(lowered.macros.size(), 1u);
+    EXPECT_EQ(lowered.macros[0].unit, "Hz");
+    EXPECT_FLOAT_EQ(lowered.macros[0].displayMin, 100.f);
+    EXPECT_FLOAT_EQ(lowered.macros[0].displayMax, 500.f);
+    EXPECT_FLOAT_EQ(lowered.macros[0].defaultValue, 200.f);
+    EXPECT_FLOAT_EQ(lowered.macros[0].defaultNormalized, 0.25f);
+}
+
+TEST_F(LoweringFixture, WithoutADisplayRangeTheDefaultIsAlreadyNormalizedAndClamped)
+{
+    auto description = makeGraph(MacroTarget{.toNode = "g", .toParam = "gain"});
+    description.macros[0].defaultValue = 0.25f;
+    EXPECT_FLOAT_EQ(lower(description).macros[0].defaultNormalized, 0.25f);
+    description.macros[0].defaultValue = 7.f;
+    EXPECT_FLOAT_EQ(lower(description).macros[0].defaultNormalized, 1.f);
+}
+
+TEST_F(LoweringFixture, ADisplayRangeWithMaxNotAboveMinFallsBackToZeroToOneWithAWarning)
+{
+    auto description = makeGraph(MacroTarget{.toNode = "g", .toParam = "gain"});
+    description.macros[0].displayMin = 5.f;
+    description.macros[0].displayMax = 5.f;
+    const auto lowered = lower(description);
+    ASSERT_EQ(lowered.macros.size(), 1u);
+    EXPECT_FLOAT_EQ(lowered.macros[0].displayMin, 0.f);
+    EXPECT_FLOAT_EQ(lowered.macros[0].displayMax, 1.f);
+    ASSERT_EQ(lowered.diagnostics.size(), 1u);
+    EXPECT_EQ(lowered.diagnostics[0].severity, DiagnosticSeverity::Warning);
+}
+
+TEST_F(LoweringFixture, TheSlotLimitCapsHowManyMacrosGetASlot)
+{
+    GraphDescription description = makeGraph(MacroTarget{.toNode = "g", .toParam = "gain"});
+    description.macros.clear();
+    for (size_t i = 0; i < 5; ++i)
+    {
+        description.macros.push_back(
+            Macro{.id = "k" + std::to_string(i), .targets = {MacroTarget{.toNode = "g", .toParam = "gain"}}});
+    }
+    const auto lowered = MacroLowering::lower(description, m_registry, {}, 0, 3);
+    EXPECT_EQ(lowered.macros.size(), 3u);
+    EXPECT_EQ(lowered.diagnostics.size(), 2u);
+}
+
 }

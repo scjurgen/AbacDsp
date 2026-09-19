@@ -1,7 +1,8 @@
 -- Family 6: BBD-inspired chorus.
 -- A short modulated delay, a two-pole bandwidth limit on the wet path, and a feedback path
 -- through a damping filter and a saturator. No companding or clock noise: the node set has
--- no expander to pair with Compander and no noise source.
+-- no expander to pair with Compander and no noise source. Each macro is one knob; its default is
+-- in the knob's own units and reproduces the parameter values below.
 return {
   version = 1,
   name = "BBD Inspired Chorus",
@@ -59,5 +60,27 @@ return {
     { from = "feedback.outR", to = "returnR.in" },
     { from = "returnL.out", to = "bbd.feedbackL" },
     { from = "returnR.out", to = "bbd.feedbackR" },
+  },
+
+  macros = {
+    { id = "depth", label = "Depth", unit = "%", min = 0, max = 100, default = 60,
+      targets = { { to = "bbd.flutterDepth", min = 0.0, max = 0.7 } } },
+    { id = "rate", label = "Rate", unit = "Hz", min = 0.2, max = 2.0, default = 0.7,
+      targets = { { to = "bbd.flutterRate", min = 0.2, max = 2.0 } } },
+    { id = "bandwidth", label = "Bandwidth", unit = "Hz", min = 1000, max = 12000, default = 6000,
+      targets = { { to = "bw1L.cutoffHz", min = 1000, max = 12000 },
+                  { to = "bw2L.cutoffHz", min = 1000, max = 12000 },
+                  { to = "bw1R.cutoffHz", min = 1000, max = 12000 },
+                  { to = "bw2R.cutoffHz", min = 1000, max = 12000 } } },
+    { id = "feedback", label = "Feedback", unit = "dB", min = -60, max = -6, default = -13,
+      targets = { { to = "feedback.gainDb", min = -60, max = -6 } } },
+    { id = "damping", label = "Damping", unit = "Hz", min = 500, max = 8000, default = 3500,
+      targets = { { to = "dampL.cutoffHz", min = 500, max = 8000 },
+                  { to = "dampR.cutoffHz", min = 500, max = 8000 } } },
+    { id = "drive", label = "Drive", min = 0, max = 6, default = 1,
+      targets = { { to = "satL.drive", min = 0, max = 6 },
+                  { to = "satR.drive", min = 0, max = 6 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = -3,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
   },
 }

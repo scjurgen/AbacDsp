@@ -225,4 +225,72 @@ TEST(CompiledGraphTest, RepeatedProcessingIsStable)
     EXPECT_EQ(output, input);
 }
 
+namespace
+{
+
+// Counts how often its parameter is set: a node that restarts a smoothing ramp on every set would
+// never settle if a steady control value were pushed each block.
+class CountingGainNode final : public Node
+{
+  public:
+    explicit CountingGainNode(int& setCount) noexcept
+        : m_setCount(setCount)
+    {
+    }
+
+    void process(const std::span<const float*> inputs, const std::span<float*> outputs,
+                 const size_t numSamples) noexcept override
+    {
+        std::copy_n(inputs[0], numSamples, outputs[0]);
+    }
+
+    void setParameter(const size_t paramIndex, const float) noexcept override
+    {
+        m_setCount += paramIndex == 0 ? 1 : 0;
+    }
+
+  private:
+    int& m_setCount;
+};
+
+} // namespace
+
+TEST(CompiledGraphTest, AControlEdgeSetsItsParameterOnlyWhenTheValueChanges)
+{
+    int setCount = 0;
+    NodeRegistry registry = makeRegistry();
+    registry.registerType(
+        "CountingGain",
+        NodeSchema{{audioInPort("in"), audioOutPort("out")},
+                   {ParameterDescriptor{"gain", "linear", 0.0f, 4.0f, 1.0f, ParameterMapping::Linear, 0.0f, true}},
+                   false},
+        [&setCount](const NodeInstance&, float) { return std::make_unique<CountingGainNode>(setCount); });
+
+    GraphDescription description;
+    description.io = {{"in"}, {"out"}};
+    description.nodes = {makeNode("c", "ConstantStub"), makeNode("g", "CountingGain")};
+    description.nodes[0].params["value"] = 0.5f;
+    description.edges = {makeEdge("", "in", "g", "in"), makeEdge("g", "out", "", "out")};
+    description.controls = {ControlEdge{.fromNode = "c", .fromPort = "out", .toNode = "g", .toParam = "gain"}};
+
+    auto result = GraphCompiler::compile(description, registry, 64, 48000.f);
+    ASSERT_TRUE(result.graph.has_value());
+    CompiledGraph& graph = *result.graph;
+
+    const std::vector<float> input(64, 1.f);
+    std::vector<float> output(64, 0.f);
+    std::array<const float*, 1> ins{input.data()};
+    std::array<float*, 1> outs{output.data()};
+    for (int block = 0; block < 10; ++block)
+    {
+        graph.process(ins, outs, 64);
+    }
+    EXPECT_EQ(setCount, 1);
+
+    graph.findNode("c")->setParameter(0, 0.75f);
+    graph.process(ins, outs, 64);
+    graph.process(ins, outs, 64);
+    EXPECT_EQ(setCount, 2);
+}
+
 }

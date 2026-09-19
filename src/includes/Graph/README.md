@@ -23,13 +23,15 @@ host only writes an atomic per macro (see Macros below).
 
 ## Macros
 
-A macro is a normalized 0 to 1 control declared in the script. Each target names `node.param` and
-sweeps it from `min` to `max` (the parameter's own range when both are left out); `curve = "exp"`
-makes the sweep geometric and needs a positive `min` and `max`.
+A macro is one control, declared in the script. Its value travels 0 to 1; `unit`, `min` and `max` are
+what a control shows for that travel and `default` is in those units (all optional, 0 to 1 by default).
+Each target names `node.param` and sweeps it from its own `min` to `max` as the control travels (the
+parameter's range when both are left out); `curve = "exp"` makes the sweep geometric and needs a
+positive `min` and `max`.
 
 ```lua
 macros = {
-  { id = "depth", label = "Depth", default = 0.65,
+  { id = "depth", label = "Depth", unit = "%", min = 0, max = 100, default = 65,
     targets = { { to = "tape.flutterDepth", min = 0, max = 1 },
                 { to = "tape.transportRatio", min = 0.5, max = 2, curve = "exp" } } },
 }
@@ -38,7 +40,12 @@ macros = {
 `MacroLowering::lower` turns each usable macro into a `MacroInput` node reading one `MacroBank` slot,
 plus a `ScaleOffset` or `ExpMap` per target feeding a control edge. The graph then applies the values
 itself on the audio thread; the host writes `MacroBank::set(slot, value)` from any thread and never
-touches a node. A macro or target that cannot be lowered is skipped with a warning.
+touches a node. A macro or target that cannot be lowered is skipped with a warning. A control edge
+sets its parameter only when the value changes, because several nodes restart a smoothing ramp on
+every set and would never settle on a steady value.
+
+Every preset declares its macros, and a test checks that at their defaults they reproduce the
+script's own parameters and that moving each one changes the output.
 
 ## Presets
 

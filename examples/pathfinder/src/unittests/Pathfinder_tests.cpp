@@ -72,7 +72,7 @@ std::string gainScript(const std::string& gainDb, const std::string& extra = "")
            extra + "}\n";
 }
 
-// Two Gain stages in series: "depth" (a dial) drives the first, "level" (knob 1) the second.
+// Two Gain stages in series: knob 1 ("coarse", -60 to 0 dB) drives the first, knob 2 ("fine") the second.
 const std::string kMacroScript = R"lua(
 return {
   io = { inputs = { "inL", "inR" }, outputs = { "outL", "outR" } },
@@ -86,24 +86,25 @@ return {
     { from = "b.outL", to = "outL" }, { from = "b.outR", to = "outR" },
   },
   macros = {
-    { id = "depth", label = "Depth", targets = { { to = "a.gainDb", min = -60, max = 0 } } },
-    { id = "level", label = "Level", default = 0.5, targets = { { to = "b.gainDb", min = -60, max = 0 } } },
+    { id = "coarse", label = "Coarse", unit = "dB", min = -60, max = 0, default = -6,
+      targets = { { to = "a.gainDb", min = -60, max = 0 } } },
+    { id = "fine", label = "Fine", default = 0.5, targets = { { to = "b.gainDb", min = -60, max = 0 } } },
   },
 }
 )lua";
 
 } // namespace
 
-TEST(PathfinderImplTest, StaysFiniteAcrossFullDialSweep)
+TEST(PathfinderImplTest, StaysFiniteAcrossFullKnobSweep)
 {
     std::mt19937 rng{1};
     Impl impl{SampleRate};
-    for (const float dial : {0.f, 25.f, 50.f, 75.f, 100.f})
+    for (const float knob : {0.f, 0.25f, 0.5f, 0.75f, 1.f})
     {
-        impl.setDepth(dial);
-        impl.setSpeed(dial);
-        impl.setAggressivity(dial);
-        impl.setCharacter(dial);
+        impl.setLuaParam1(knob);
+        impl.setLuaParam2(knob);
+        impl.setLuaParam3(knob);
+        impl.setLuaParam4(knob);
         feedNoiseBlocks(impl, 50, rng);
     }
 }
@@ -111,25 +112,25 @@ TEST(PathfinderImplTest, StaysFiniteAcrossFullDialSweep)
 TEST(PathfinderImplTest, CharacterExtremesStayFiniteWithActiveModulation)
 {
     std::mt19937 rng{2};
-    for (const float character : {0.f, 25.f, 50.f, 75.f, 100.f})
+    for (const float character : {0.f, 0.25f, 0.5f, 0.75f, 1.f})
     {
         Impl impl{SampleRate};
-        impl.setDepth(100.f);
-        impl.setSpeed(50.f);
-        impl.setAggressivity(100.f);
-        impl.setCharacter(character);
+        impl.setLuaParam1(1.f);
+        impl.setLuaParam2(0.5f);
+        impl.setLuaParam3(1.f);
+        impl.setLuaParam4(character);
         feedNoiseBlocks(impl, 100, rng);
     }
 }
 
-// With the modulation dials at zero the default graph is a plain 10 ms delay plus about 68
+// With the modulation knobs at zero the default graph is a plain 10 ms delay plus about 68
 // samples of sampler latency, so an impulse must surface there and not at zero.
 TEST(PathfinderImplTest, ImpulseEnergySurfacesNearTheBaseDelayWithModulationOff)
 {
     Impl impl{SampleRate};
-    impl.setDepth(0.f);
-    impl.setAggressivity(0.f);
-    impl.setCharacter(50.f);
+    impl.setLuaParam1(0.f);
+    impl.setLuaParam3(0.f);
+    impl.setLuaParam4(0.5f);
 
     AbacDsp::AudioBuffer<2, BlockSize> in{};
     AbacDsp::AudioBuffer<2, BlockSize> out{};
@@ -254,44 +255,102 @@ TEST(PathfinderScriptTest, SizeAndNodeLimitsAreEnforced)
     EXPECT_NE(impl.scriptError().find("nodes"), std::string::npos) << impl.scriptError();
 }
 
-TEST(PathfinderScriptTest, DialsDriveMacrosByIdAndKnobsDriveTheOthers)
+TEST(PathfinderScriptTest, KnobsDriveTheScriptsMacrosInDeclarationOrder)
 {
     Impl impl{SampleRate};
     ASSERT_TRUE(impl.setScript(kMacroScript));
 
-    impl.setDepth(100.f);
     impl.setLuaParam1(1.f);
+    impl.setLuaParam2(1.f);
     EXPECT_NEAR(settledLevel(impl, 0.5f), 0.5f, 1E-4f);
 
-    impl.setDepth(50.f); // -30 dB
+    impl.setLuaParam1(0.5f); // -30 dB
     EXPECT_NEAR(settledLevel(impl, 0.5f), 0.5f * std::pow(10.f, -30.f / 20.f), 1E-4f);
 
-    impl.setLuaParam1(0.5f); // a further -30 dB
+    impl.setLuaParam2(0.5f); // a further -30 dB
     EXPECT_NEAR(settledLevel(impl, 0.5f), 0.5f * std::pow(10.f, -60.f / 20.f), 1E-5f);
 }
 
-TEST(PathfinderScriptTest, OnlyMacrosWithoutADialAreOfferedAsKnobs)
+TEST(PathfinderScriptTest, KnobSlotsCarryTheMacrosLabelUnitRangeAndDefault)
 {
     Impl impl{SampleRate};
     ASSERT_TRUE(impl.setScript(kMacroScript));
     const auto slots = impl.uiParamSlots();
     ASSERT_TRUE(slots[0].claimed);
-    EXPECT_EQ(slots[0].id, "level");
-    EXPECT_EQ(slots[0].name, "Level");
-    EXPECT_FLOAT_EQ(slots[0].rangeMin, 0.f);
-    EXPECT_FLOAT_EQ(slots[0].rangeMax, 1.f);
-    for (size_t i = 1; i < slots.size(); ++i)
+    EXPECT_EQ(slots[0].id, "coarse");
+    EXPECT_EQ(slots[0].name, "Coarse");
+    EXPECT_EQ(slots[0].unit, "dB");
+    EXPECT_FLOAT_EQ(slots[0].rangeMin, -60.f);
+    EXPECT_FLOAT_EQ(slots[0].rangeMax, 0.f);
+    EXPECT_FLOAT_EQ(slots[0].defaultValue, -6.f);
+
+    ASSERT_TRUE(slots[1].claimed);
+    EXPECT_EQ(slots[1].name, "Fine");
+    EXPECT_TRUE(slots[1].unit.empty());
+    EXPECT_FLOAT_EQ(slots[1].rangeMin, 0.f);
+    EXPECT_FLOAT_EQ(slots[1].rangeMax, 1.f);
+    for (size_t i = 2; i < slots.size(); ++i)
     {
         EXPECT_FALSE(slots[i].claimed) << i;
     }
 }
 
-TEST(PathfinderScriptTest, TheDefaultGraphOffersNoKnobsBecauseItsMacrosAreTheDials)
+TEST(PathfinderScriptTest, ASecondScriptReplacesTheKnobsTheFirstOffered)
 {
     Impl impl{SampleRate};
+    ASSERT_TRUE(impl.setScript(kMacroScript));
+    ASSERT_TRUE(impl.uiParamSlots()[1].claimed);
+
+    ASSERT_TRUE(impl.setScript(gainScript("0.0")));
     for (const auto& slot : impl.uiParamSlots())
     {
         EXPECT_FALSE(slot.claimed);
+    }
+}
+
+TEST(PathfinderScriptTest, MoreMacrosThanKnobsLeavesTheExtrasOutWithAWarning)
+{
+    Impl impl{SampleRate};
+    std::string macros;
+    for (size_t i = 0; i < Impl::Engine::kKnobCount + 2; ++i)
+    {
+        macros += "{ id = \"m" + std::to_string(i) + "\", targets = { { to = \"g.gainDb\" } } },";
+    }
+    ASSERT_TRUE(impl.setScript(gainScript("0.0", "macros = {" + macros + "},\n")));
+    size_t claimed = 0;
+    for (const auto& slot : impl.uiParamSlots())
+    {
+        claimed += slot.claimed ? 1 : 0;
+    }
+    EXPECT_EQ(claimed, Impl::Engine::kKnobCount);
+    EXPECT_NE(impl.scriptWarnings().find("no free knob slot"), std::string::npos) << impl.scriptWarnings();
+}
+
+TEST(PathfinderScriptTest, TheDefaultScriptOffersDepthSpeedAggressivityAndCharacterAsKnobs)
+{
+    Impl impl{SampleRate};
+    const auto slots = impl.uiParamSlots();
+    const std::array<std::string, 4> expectedIds{"depth", "speed", "aggressivity", "character"};
+    for (size_t i = 0; i < expectedIds.size(); ++i)
+    {
+        ASSERT_TRUE(slots[i].claimed) << i;
+        EXPECT_EQ(slots[i].id, expectedIds[i]);
+        EXPECT_FALSE(slots[i].unit.empty()) << expectedIds[i];
+    }
+    EXPECT_FALSE(slots[4].claimed);
+}
+
+// The blueprint gives the first knob parameters their starting raw value (its "defaults" list for
+// luaControls), so a new instance starts on the default script's declared defaults. Keep both in step.
+TEST(PathfinderScriptTest, TheBlueprintsKnobDefaultsMatchTheDefaultScriptsMacroDefaults)
+{
+    Impl impl{SampleRate};
+    const std::array<float, 4> blueprintDefaults{0.65f, 0.44444f, 0.1f, 0.5f};
+    const auto slots = impl.uiParamSlots();
+    for (size_t i = 0; i < blueprintDefaults.size(); ++i)
+    {
+        const float normalized = (slots[i].defaultValue - slots[i].rangeMin) / (slots[i].rangeMax - slots[i].rangeMin);
+        EXPECT_NEAR(normalized, blueprintDefaults[i], 1E-4f) << slots[i].id;
     }
 }
 

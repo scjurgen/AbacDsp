@@ -1,5 +1,6 @@
 -- Crossover-safe chorus, policy 2: mono low band.
--- Same split; the low band is folded to mono before it is recombined.
+-- Same split; the low band is folded to mono before it is recombined. Each macro is one knob; its
+-- default is in the knob's own units and reproduces the parameter values below.
 return {
   version = 1,
   name = "Mono Low Band",
@@ -9,7 +10,9 @@ return {
     { id = "xoR", type = "CrossoverLR4", params = { frequencyHz = 200 } },
     { id = "lowMono", type = "StereoToMono" },
     { id = "lowDup", type = "MonoToStereo" },
-    { id = "tape", type = "TapeDelay" },
+    { id = "tape", type = "TapeDelay", config = { baseDelayMs = 12, seed = 61 },
+      params = { wowDepth = 0.50, wowRate = 0.40, wowVariance = 0.10, flutterDepth = 0.42, flutterRate = 0.80 } },
+    { id = "wet", type = "Gain", params = { gainDb = 0.0 } },
     { id = "mix", type = "Mixer" },
   },
   edges = {
@@ -20,11 +23,24 @@ return {
     { from = "lowMono.out", to = "lowDup.in" },
     { from = "xoL.highOut", to = "tape.inL" },
     { from = "xoR.highOut", to = "tape.inR" },
-    { from = "tape.outL", to = "mix.in1L" },
-    { from = "tape.outR", to = "mix.in1R" },
+    { from = "tape.outL", to = "wet.inL" },
+    { from = "tape.outR", to = "wet.inR" },
+    { from = "wet.outL", to = "mix.in1L" },
+    { from = "wet.outR", to = "mix.in1R" },
     { from = "lowDup.outL", to = "mix.in2L" },
     { from = "lowDup.outR", to = "mix.in2R" },
     { from = "mix.outL", to = "outL" },
     { from = "mix.outR", to = "outR" },
+  },
+  macros = {
+    { id = "crossover", label = "Crossover", unit = "Hz", min = 60, max = 800, default = 200,
+      targets = { { to = "xoL.frequencyHz", min = 60, max = 800 },
+                  { to = "xoR.frequencyHz", min = 60, max = 800 } } },
+    { id = "depth", label = "Depth", unit = "%", min = 0, max = 100, default = 60,
+      targets = { { to = "tape.flutterDepth", min = 0.0, max = 0.7 } } },
+    { id = "rate", label = "Rate", unit = "Hz", min = 0.2, max = 2.0, default = 0.8,
+      targets = { { to = "tape.flutterRate", min = 0.2, max = 2.0 } } },
+    { id = "wet", label = "Wet", unit = "dB", min = -60, max = 0, default = 0,
+      targets = { { to = "wet.gainDb", min = -60, max = 0 } } },
   },
 }
