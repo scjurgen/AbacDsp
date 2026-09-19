@@ -327,7 +327,196 @@ return {
 }
 )lua";
 
-inline constexpr std::array<Preset, 7> kChorusPresets{{
+inline constexpr std::string_view kBbdInspired = R"lua(-- Family 6: BBD-inspired chorus.
+-- A short modulated delay, a two-pole bandwidth limit on the wet path, and a feedback path
+-- through a damping filter and a saturator. No companding or clock noise: the node set has
+-- no expander to pair with Compander and no noise source.
+return {
+  version = 1,
+  name = "BBD Inspired Chorus",
+
+  io = { inputs = { "inL", "inR" }, outputs = { "outL", "outR" } },
+
+  nodes = {
+    { id = "bbd", type = "TapeDelay", config = { baseDelayMs = 8, seed = 31 },
+      params = { wowDepth = 0.50, wowRate = 0.40, wowVariance = 0.05, flutterDepth = 0.42, flutterRate = 0.70 } },
+
+    { id = "bw1L", type = "OnePoleLP", params = { cutoffHz = 6000 } },
+    { id = "bw2L", type = "OnePoleLP", params = { cutoffHz = 6000 } },
+    { id = "bw1R", type = "OnePoleLP", params = { cutoffHz = 6000 } },
+    { id = "bw2R", type = "OnePoleLP", params = { cutoffHz = 6000 } },
+
+    { id = "dampL", type = "OnePoleLP", params = { cutoffHz = 3500 } },
+    { id = "dampR", type = "OnePoleLP", params = { cutoffHz = 3500 } },
+    { id = "satL", type = "Saturator", params = { drive = 1.0 } },
+    { id = "satR", type = "Saturator", params = { drive = 1.0 } },
+    { id = "feedback", type = "Gain", params = { gainDb = -13.0 } },
+    { id = "returnL", type = "FeedbackDelay" },
+    { id = "returnR", type = "FeedbackDelay" },
+
+    { id = "wet", type = "Gain", params = { gainDb = -3.0 } },
+    { id = "dry", type = "Gain", params = { gainDb = 0.0 } },
+    { id = "mix", type = "Mixer" },
+  },
+
+  edges = {
+    { from = "inL", to = "bbd.inL" },
+    { from = "inR", to = "bbd.inR" },
+    { from = "bbd.outL", to = "bw1L.in" },
+    { from = "bbd.outR", to = "bw1R.in" },
+    { from = "bw1L.out", to = "bw2L.in" },
+    { from = "bw1R.out", to = "bw2R.in" },
+
+    { from = "bw2L.out", to = "wet.inL" },
+    { from = "bw2R.out", to = "wet.inR" },
+    { from = "wet.outL", to = "mix.in1L" },
+    { from = "wet.outR", to = "mix.in1R" },
+    { from = "inL", to = "dry.inL" },
+    { from = "inR", to = "dry.inR" },
+    { from = "dry.outL", to = "mix.in2L" },
+    { from = "dry.outR", to = "mix.in2R" },
+    { from = "mix.outL", to = "outL" },
+    { from = "mix.outR", to = "outR" },
+
+    { from = "bw2L.out", to = "dampL.in" },
+    { from = "bw2R.out", to = "dampR.in" },
+    { from = "dampL.out", to = "satL.in" },
+    { from = "dampR.out", to = "satR.in" },
+    { from = "satL.out", to = "feedback.inL" },
+    { from = "satR.out", to = "feedback.inR" },
+    { from = "feedback.outL", to = "returnL.in" },
+    { from = "feedback.outR", to = "returnR.in" },
+    { from = "returnL.out", to = "bbd.feedbackL" },
+    { from = "returnR.out", to = "bbd.feedbackR" },
+  },
+}
+)lua";
+
+inline constexpr std::string_view kDimension = R"lua(-- Family 7: dimension-style widening.
+-- Two nearly static delays. Tap A is folded to mono into the left channel, tap B is folded
+-- to mono and inverted into the right, so a mono input comes out decorrelated. Movement is a
+-- slow wander with no periodic component, so there is no audible wobble.
+return {
+  version = 1,
+  name = "Dimension Widening",
+
+  io = { inputs = { "inL", "inR" }, outputs = { "outL", "outR" } },
+
+  nodes = {
+    { id = "tapA", type = "TapeDelay", config = { baseDelayMs = 9, seed = 41 },
+      params = { wowDepth = 0.60, wowRate = 0.10, wowVariance = 0.20, flutterDepth = 0.0 } },
+    { id = "tapB", type = "TapeDelay", config = { baseDelayMs = 14, seed = 42 },
+      params = { wowDepth = 0.60, wowRate = 0.13, wowVariance = 0.20, flutterDepth = 0.0 } },
+
+    { id = "toLeft", type = "Matrix", params = { gainLL = 0.5, gainLR = 0.5, gainRL = 0.0, gainRR = 0.0 } },
+    { id = "toRight", type = "Matrix", params = { gainLL = 0.0, gainLR = 0.0, gainRL = -0.5, gainRR = -0.5 } },
+    { id = "taps", type = "Mixer" },
+
+    { id = "highpassL", type = "OnePoleHP", params = { cutoffHz = 200 } },
+    { id = "highpassR", type = "OnePoleHP", params = { cutoffHz = 200 } },
+    { id = "toneL", type = "TiltEQ", params = { tiltDb = -1.5, pivotHz = 1000 } },
+    { id = "toneR", type = "TiltEQ", params = { tiltDb = -1.5, pivotHz = 1000 } },
+    { id = "wet", type = "Gain", params = { gainDb = -1.0 } },
+    { id = "dry", type = "Gain", params = { gainDb = 0.0 } },
+    { id = "mix", type = "Mixer" },
+  },
+
+  edges = {
+    { from = "inL", to = "tapA.inL" },
+    { from = "inR", to = "tapA.inR" },
+    { from = "inL", to = "tapB.inL" },
+    { from = "inR", to = "tapB.inR" },
+    { from = "tapA.outL", to = "toLeft.inL" },
+    { from = "tapA.outR", to = "toLeft.inR" },
+    { from = "tapB.outL", to = "toRight.inL" },
+    { from = "tapB.outR", to = "toRight.inR" },
+    { from = "toLeft.outL", to = "taps.in1L" },
+    { from = "toLeft.outR", to = "taps.in1R" },
+    { from = "toRight.outL", to = "taps.in2L" },
+    { from = "toRight.outR", to = "taps.in2R" },
+    { from = "taps.outL", to = "highpassL.in" },
+    { from = "taps.outR", to = "highpassR.in" },
+    { from = "highpassL.out", to = "toneL.in" },
+    { from = "highpassR.out", to = "toneR.in" },
+    { from = "toneL.out", to = "wet.inL" },
+    { from = "toneR.out", to = "wet.inR" },
+    { from = "wet.outL", to = "mix.in1L" },
+    { from = "wet.outR", to = "mix.in1R" },
+    { from = "inL", to = "dry.inL" },
+    { from = "inR", to = "dry.inR" },
+    { from = "dry.outL", to = "mix.in2L" },
+    { from = "dry.outR", to = "mix.in2R" },
+    { from = "mix.outL", to = "outL" },
+    { from = "mix.outR", to = "outR" },
+  },
+}
+)lua";
+
+inline constexpr std::string_view kExperimentalResonantFeedback = R"lua(-- Family 8: experimental resonant feedback chorus. A DANGEROUS configuration on purpose.
+-- The loop is TapeDelay, resonant band-pass, saturator, gain, cross-coupling, then back into the
+-- delay. A band-pass does not count as damping, so the validator warns that the cycle is
+-- undamped and resonant. The saturators clamp the loop and the final stage to +-1 and stand in
+-- for a safety limiter; there is no feedback meter node. A quiet input decays; a loud burst
+-- drives the loop into the saturators and it rings for seconds before it dies away.
+return {
+  version = 1,
+  name = "Experimental Resonant Feedback",
+
+  io = { inputs = { "inL", "inR" }, outputs = { "outL", "outR" } },
+
+  nodes = {
+    { id = "tape", type = "TapeDelay", config = { baseDelayMs = 12, seed = 51 },
+      params = { wowDepth = 0.50, wowRate = 0.30, wowVariance = 0.10, flutterDepth = 0.20, flutterRate = 0.50 } },
+
+    { id = "resonatorL", type = "BandPass", params = { frequencyHz = 880, Q = 8.0 } },
+    { id = "resonatorR", type = "BandPass", params = { frequencyHz = 1100, Q = 8.0 } },
+    { id = "driveL", type = "Saturator", params = { drive = 1.5 } },
+    { id = "driveR", type = "Saturator", params = { drive = 1.5 } },
+    { id = "loopGain", type = "Gain", params = { gainDb = -3.0 } },
+    { id = "coupling", type = "Matrix", params = { gainLL = 0.6, gainLR = 0.4, gainRL = 0.4, gainRR = 0.6 } },
+    { id = "returnL", type = "FeedbackDelay" },
+    { id = "returnR", type = "FeedbackDelay" },
+
+    { id = "wet", type = "Gain", params = { gainDb = -6.0 } },
+    { id = "dry", type = "Gain", params = { gainDb = 0.0 } },
+    { id = "mix", type = "Mixer" },
+    { id = "limitL", type = "Saturator", params = { drive = 0.0 } },
+    { id = "limitR", type = "Saturator", params = { drive = 0.0 } },
+  },
+
+  edges = {
+    { from = "inL", to = "tape.inL" },
+    { from = "inR", to = "tape.inR" },
+    { from = "tape.outL", to = "resonatorL.in" },
+    { from = "tape.outR", to = "resonatorR.in" },
+    { from = "resonatorL.out", to = "driveL.in" },
+    { from = "resonatorR.out", to = "driveR.in" },
+    { from = "driveL.out", to = "loopGain.inL" },
+    { from = "driveR.out", to = "loopGain.inR" },
+    { from = "loopGain.outL", to = "coupling.inL" },
+    { from = "loopGain.outR", to = "coupling.inR" },
+    { from = "coupling.outL", to = "returnL.in" },
+    { from = "coupling.outR", to = "returnR.in" },
+    { from = "returnL.out", to = "tape.feedbackL" },
+    { from = "returnR.out", to = "tape.feedbackR" },
+
+    { from = "driveL.out", to = "wet.inL" },
+    { from = "driveR.out", to = "wet.inR" },
+    { from = "wet.outL", to = "mix.in1L" },
+    { from = "wet.outR", to = "mix.in1R" },
+    { from = "inL", to = "dry.inL" },
+    { from = "inR", to = "dry.inR" },
+    { from = "dry.outL", to = "mix.in2L" },
+    { from = "dry.outR", to = "mix.in2R" },
+    { from = "mix.outL", to = "limitL.in" },
+    { from = "mix.outR", to = "limitR.in" },
+    { from = "limitL.out", to = "outL" },
+    { from = "limitR.out", to = "outR" },
+  },
+}
+)lua";
+
+inline constexpr std::array<Preset, 10> kChorusPresets{{
     {"tape_vibrato", kTapeVibrato},
     {"classic_stereo_chorus", kClassicStereoChorus},
     {"shared_transport_heads", kSharedTransportHeads},
@@ -335,6 +524,9 @@ inline constexpr std::array<Preset, 7> kChorusPresets{{
     {"crossover_preserve_stereo", kCrossoverPreserveStereo},
     {"crossover_mono_low", kCrossoverMonoLow},
     {"crossover_wet_only_low_cut", kCrossoverWetOnlyLowCut},
+    {"bbd_inspired", kBbdInspired},
+    {"dimension", kDimension},
+    {"experimental_resonant_feedback", kExperimentalResonantFeedback},
 }};
 // clang-format on
 

@@ -252,6 +252,48 @@ struct LagWindow
     return carrier / total;
 }
 
+[[nodiscard]] double rmsOf(const std::vector<float>& signal, const size_t from, const size_t to)
+{
+    double sum = 0.0;
+    for (size_t i = from; i < to; ++i)
+    {
+        sum += static_cast<double>(signal[i]) * signal[i];
+    }
+    return std::sqrt(sum / static_cast<double>(to - from));
+}
+
+[[nodiscard]] double correlationOf(const std::vector<float>& a, const std::vector<float>& b, const size_t from)
+{
+    double cross = 0.0;
+    double powerA = 0.0;
+    double powerB = 0.0;
+    for (size_t i = from; i < a.size(); ++i)
+    {
+        cross += static_cast<double>(a[i]) * b[i];
+        powerA += static_cast<double>(a[i]) * a[i];
+        powerB += static_cast<double>(b[i]) * b[i];
+    }
+    return cross / std::sqrt(powerA * powerB);
+}
+
+// Level of a sine through the wet path of a preset (dry muted), measured over the last half.
+[[nodiscard]] double wetToneGainDb(const std::string_view preset, const float frequencyHz)
+{
+    constexpr size_t kSamples = static_cast<size_t>(3 * kSampleRate);
+    const auto tone = OfflineRender::stimulus({.kind = Stimulus::Sine, .amplitude = 0.3f, .frequencyHz = frequencyHz},
+                                              kSamples, kSampleRate);
+    auto graph = compileDescription(withDryMuted(loadPreset(preset)));
+    const auto output = OfflineRender::render(graph, {tone, tone}, kSamples, kStandardBlockSize);
+    return 20.0 * std::log10(rmsOf(output[0], kSamples / 2, kSamples) / rmsOf(tone, kSamples / 2, kSamples));
+}
+
+[[nodiscard]] std::vector<std::vector<float>> monoNoise(const size_t numSamples)
+{
+    const auto noise =
+        OfflineRender::stimulus({.kind = Stimulus::WhiteNoise, .amplitude = 0.5f, .seed = 3}, numSamples, kSampleRate);
+    return {noise, noise};
+}
+
 } // namespace
 
 TEST(ChorusPresetsTest, EveryPresetLoadsValidatesAndCompilesAtBothBlockSizes)
@@ -433,6 +475,7 @@ TEST(ChorusPresetsTest, ModulatedPresetsSwingTheirDelayByAnAudibleAmount)
         {"classic_stereo_chorus", {{500, 800}}, 90},
         {"shared_transport_heads", {{450, 680}, {680, 900}}, 90},
         {"ensemble_tri_chorus", {{500, 690}, {690, 900}, {900, 1200}}, 90},
+        {"bbd_inspired", {{380, 650}}, 90},
     };
     constexpr long kMaximumSwing = 250;
     for (const auto& testCase : cases)
@@ -478,6 +521,84 @@ TEST(ChorusPresetsTest, CarrierAndPitchChecksSeeNothingInAnUnmodulatedTone)
     EXPECT_GT(carrierPowerFraction(tone, static_cast<size_t>(2 * kSampleRate), static_cast<size_t>(10 * kSampleRate),
                                    1000.0, 1.0, 60.0, 0.5),
               0.95);
+}
+
+// Targets, measured on the first version: 15 kHz sits 15.9 dB below 1 kHz, the first echo is 20 percent
+// of the direct arrival and each further echo is smaller.
+TEST(ChorusPresetsTest, BbdPresetLimitsItsBandwidthAndEchoesWithDecay)
+{
+    EXPECT_LE(wetToneGainDb("bbd_inspired", 15000.f), wetToneGainDb("bbd_inspired", 1000.f) - 12.0);
+
+    auto graph = compileDescription(withDryMuted(loadPreset("bbd_inspired")));
+    const auto impulse = OfflineRender::render(graph, leftImpulse(4096), 4096, kStandardBlockSize);
+    const float direct = peakAbs(impulse[0], 380, 650);
+    const float first = peakAbs(impulse[0], 800, 1300);
+    const float second = peakAbs(impulse[0], 1300, 1900);
+    EXPECT_GE(first, 0.05f * direct);
+    EXPECT_LE(first, 0.6f * direct);
+    EXPECT_LT(second, first);
+}
+
+// Targets, measured on the first version: 0.8 cents of pitch movement (the vibrato has 21), a mono
+// input decorrelated to 0.68 with the dry signal in and to 0.00 in the wet path alone, and a
+// left-only input reaching the right output at 0.27.
+TEST(ChorusPresetsTest, DimensionKeepsItsPitchSteadyAndDecorrelatesAMonoInput)
+{
+    constexpr size_t kToneSamples = static_cast<size_t>(12 * kSampleRate);
+    const auto tone = OfflineRender::stimulus({.kind = Stimulus::Sine, .amplitude = 0.5f, .frequencyHz = 1000.f},
+                                              kToneSamples, kSampleRate);
+    auto toneGraph = compileDescription(withDryMuted(loadPreset("dimension")));
+    const auto toneOut = OfflineRender::render(toneGraph, {tone, tone}, kToneSamples, kStandardBlockSize);
+    EXPECT_LE(peakPitchDeviationCents(toneOut[0], static_cast<size_t>(2 * kSampleRate)), 3.0);
+
+    constexpr size_t kNoiseSamples = static_cast<size_t>(6 * kSampleRate);
+    auto full = compilePreset("dimension");
+    const auto withDry = OfflineRender::render(full, monoNoise(kNoiseSamples), kNoiseSamples, kStandardBlockSize);
+    EXPECT_LE(correlationOf(withDry[0], withDry[1], 48000), 0.8);
+
+    auto wetGraph = compileDescription(withDryMuted(loadPreset("dimension")));
+    const auto wetOnly = OfflineRender::render(wetGraph, monoNoise(kNoiseSamples), kNoiseSamples, kStandardBlockSize);
+    EXPECT_LE(std::abs(correlationOf(wetOnly[0], wetOnly[1], 48000)), 0.1);
+
+    auto impulseGraph = compileDescription(withDryMuted(loadPreset("dimension")));
+    const auto impulse = OfflineRender::render(impulseGraph, leftImpulse(4096), 4096, kStandardBlockSize);
+    EXPECT_GE(peakAbs(impulse[1], 400, 800), 0.1f);
+}
+
+// A dangerous configuration on purpose: the validator must say so, a loud burst must bloom into a
+// ring that lasts seconds (measured: 0.33 rms at 1 s, 0.001 at 5 s), and nothing may leave +-1.
+TEST(ChorusPresetsTest, ExperimentalFeedbackWarnsBloomsOnALoudBurstAndStaysBounded)
+{
+    const auto description = loadPreset("experimental_resonant_feedback");
+    const auto diagnostics = GraphValidator::validate(description, makeRegistry<kStandardBlockSize>());
+    const auto hasWarning = [&diagnostics](const std::string_view prefix)
+    {
+        return std::ranges::any_of(
+            diagnostics, [prefix](const Diagnostic& d)
+            { return d.severity == DiagnosticSeverity::Warning && std::string_view{d.message}.starts_with(prefix); });
+    };
+    EXPECT_TRUE(hasWarning("feedback cycle has no damping filter"));
+    EXPECT_TRUE(hasWarning("resonant filter inside an undamped feedback cycle"));
+
+    constexpr size_t kSamples = static_cast<size_t>(6 * kSampleRate);
+    const auto noise =
+        OfflineRender::stimulus({.kind = Stimulus::WhiteNoise, .amplitude = 0.7f, .seed = 5}, kSamples, kSampleRate);
+    std::vector<float> burst(kSamples, 0.f);
+    std::copy_n(noise.begin(), 24000, burst.begin());
+    auto burstGraph = compileDescription(withDryMuted(description));
+    const auto rung = OfflineRender::render(burstGraph, {burst, burst}, kSamples, kStandardBlockSize);
+    EXPECT_GE(rmsOf(rung[0], 48000, 50400), 0.1);
+    EXPECT_LE(rmsOf(rung[0], 5 * 48000, 5 * 48000 + 2400), 0.05);
+
+    constexpr size_t kLoudSamples = static_cast<size_t>(10 * kSampleRate);
+    const auto loud = OfflineRender::stimulus({.kind = Stimulus::WhiteNoise, .amplitude = 1.0f, .seed = 4},
+                                              kLoudSamples, kSampleRate);
+    auto loudGraph = compileDescription(description);
+    const auto output = OfflineRender::render(loudGraph, {loud, loud}, kLoudSamples, kStandardBlockSize);
+    for (const auto& channel : output)
+    {
+        EXPECT_LE(peakAbs(channel, 0, channel.size()), 1.0f + 1E-6f);
+    }
 }
 
 }
