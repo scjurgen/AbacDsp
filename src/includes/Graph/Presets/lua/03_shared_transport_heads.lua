@@ -1,0 +1,60 @@
+-- Family 3: shared-transport tape-head chorus.
+-- Two TapeDelay with the same seed and wow/flutter move in lockstep, like two heads on one
+-- transport, at different base delays. A Matrix per head leans it left or right.
+-- Approximation: no per-head drift; a real multi-head delay would be a new node.
+return {
+  version = 1,
+  name = "Shared Transport Heads",
+
+  io = { inputs = { "inL", "inR" }, outputs = { "outL", "outR" } },
+
+  nodes = {
+    { id = "headA", type = "TapeDelay", config = { baseDelayMs = 10, seed = 5 },
+      params = { wowDepth = 0.25, wowRate = 0.50, wowVariance = 0.10, flutterDepth = 0.05, flutterRate = 4.0 } },
+    { id = "headB", type = "TapeDelay", config = { baseDelayMs = 15, seed = 5 },
+      params = { wowDepth = 0.25, wowRate = 0.50, wowVariance = 0.10, flutterDepth = 0.05, flutterRate = 4.0 } },
+
+    { id = "gainA", type = "Gain", params = { gainDb = -6.0 } },
+    { id = "gainB", type = "Gain", params = { gainDb = -7.5 } },
+    { id = "leanA", type = "Matrix", params = { gainLL = 1.0, gainLR = 0.35, gainRL = 0.0, gainRR = 0.65 } },
+    { id = "leanB", type = "Matrix", params = { gainLL = 0.65, gainLR = 0.0, gainRL = 0.35, gainRR = 1.0 } },
+    { id = "heads", type = "Mixer" },
+
+    { id = "toneL", type = "TiltEQ", params = { tiltDb = -2.5, pivotHz = 1000 } },
+    { id = "toneR", type = "TiltEQ", params = { tiltDb = -2.5, pivotHz = 1000 } },
+    { id = "wet", type = "Gain", params = { gainDb = -2.0 } },
+    { id = "dry", type = "Gain", params = { gainDb = 0.0 } },
+    { id = "mix", type = "Mixer" },
+  },
+
+  edges = {
+    { from = "inL", to = "headA.inL" },
+    { from = "inR", to = "headA.inR" },
+    { from = "inL", to = "headB.inL" },
+    { from = "inR", to = "headB.inR" },
+    { from = "headA.outL", to = "gainA.inL" },
+    { from = "headA.outR", to = "gainA.inR" },
+    { from = "headB.outL", to = "gainB.inL" },
+    { from = "headB.outR", to = "gainB.inR" },
+    { from = "gainA.outL", to = "leanA.inL" },
+    { from = "gainA.outR", to = "leanA.inR" },
+    { from = "gainB.outL", to = "leanB.inL" },
+    { from = "gainB.outR", to = "leanB.inR" },
+    { from = "leanA.outL", to = "heads.in1L" },
+    { from = "leanA.outR", to = "heads.in1R" },
+    { from = "leanB.outL", to = "heads.in2L" },
+    { from = "leanB.outR", to = "heads.in2R" },
+    { from = "heads.outL", to = "toneL.in" },
+    { from = "heads.outR", to = "toneR.in" },
+    { from = "toneL.out", to = "wet.inL" },
+    { from = "toneR.out", to = "wet.inR" },
+    { from = "wet.outL", to = "mix.in1L" },
+    { from = "wet.outR", to = "mix.in1R" },
+    { from = "inL", to = "dry.inL" },
+    { from = "inR", to = "dry.inR" },
+    { from = "dry.outL", to = "mix.in2L" },
+    { from = "dry.outR", to = "mix.in2R" },
+    { from = "mix.outL", to = "outL" },
+    { from = "mix.outR", to = "outR" },
+  },
+}

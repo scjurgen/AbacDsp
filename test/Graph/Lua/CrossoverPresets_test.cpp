@@ -11,6 +11,7 @@
 #include "Graph/Nodes/StandardNodes.h"
 #include "Graph/Nodes/TapeDelayNode.h"
 #include "Graph/OfflineRender.h"
+#include "Graph/Presets/ChorusPresets.h"
 
 namespace AbacDsp::Graph::Test
 {
@@ -32,92 +33,15 @@ constexpr float kSampleRate = 48000.f;
 // Preserve stereo low band: low band bypasses TapeDelay entirely (dry), high
 // band goes through it, Mixer recombines - the untouched low path is what
 // makes this policy distinct from "mono low band" below.
-constexpr std::string_view kPreserveStereoLowBand = R"lua(
-return {
-  version = 1,
-  name = "Preserve Stereo Low Band",
-  io = { inputs = { "inL", "inR" }, outputs = { "outL", "outR" } },
-  nodes = {
-    { id = "xoL", type = "CrossoverLR4", params = { frequencyHz = 200 } },
-    { id = "xoR", type = "CrossoverLR4", params = { frequencyHz = 200 } },
-    { id = "tape", type = "TapeDelay" },
-    { id = "mix", type = "Mixer" },
-  },
-  edges = {
-    { from = "inL", to = "xoL.in" },
-    { from = "inR", to = "xoR.in" },
-    { from = "xoL.highOut", to = "tape.inL" },
-    { from = "xoR.highOut", to = "tape.inR" },
-    { from = "tape.outL", to = "mix.in1L" },
-    { from = "tape.outR", to = "mix.in1R" },
-    { from = "xoL.lowOut", to = "mix.in2L" },
-    { from = "xoR.lowOut", to = "mix.in2R" },
-    { from = "mix.outL", to = "outL" },
-    { from = "mix.outR", to = "outR" },
-  },
-}
-)lua";
+constexpr std::string_view kPreserveStereoLowBand = Presets::kCrossoverPreserveStereo;
 
 // Mono low band: same split, but the low band is folded to mono and
 // duplicated back to both channels before recombining.
-constexpr std::string_view kMonoLowBand = R"lua(
-return {
-  version = 1,
-  name = "Mono Low Band",
-  io = { inputs = { "inL", "inR" }, outputs = { "outL", "outR" } },
-  nodes = {
-    { id = "xoL", type = "CrossoverLR4", params = { frequencyHz = 200 } },
-    { id = "xoR", type = "CrossoverLR4", params = { frequencyHz = 200 } },
-    { id = "lowMono", type = "StereoToMono" },
-    { id = "lowDup", type = "MonoToStereo" },
-    { id = "tape", type = "TapeDelay" },
-    { id = "mix", type = "Mixer" },
-  },
-  edges = {
-    { from = "inL", to = "xoL.in" },
-    { from = "inR", to = "xoR.in" },
-    { from = "xoL.lowOut", to = "lowMono.inL" },
-    { from = "xoR.lowOut", to = "lowMono.inR" },
-    { from = "lowMono.out", to = "lowDup.in" },
-    { from = "xoL.highOut", to = "tape.inL" },
-    { from = "xoR.highOut", to = "tape.inR" },
-    { from = "tape.outL", to = "mix.in1L" },
-    { from = "tape.outR", to = "mix.in1R" },
-    { from = "lowDup.outL", to = "mix.in2L" },
-    { from = "lowDup.outR", to = "mix.in2R" },
-    { from = "mix.outL", to = "outL" },
-    { from = "mix.outR", to = "outR" },
-  },
-}
-)lua";
+constexpr std::string_view kMonoLowBand = Presets::kCrossoverMonoLow;
 
 // Wet-only low cut: no crossover node at all - full dry stays untouched, only
 // the wet (post-TapeDelay) bus is high-passed before mixing back with dry.
-constexpr std::string_view kWetOnlyLowCut = R"lua(
-return {
-  version = 1,
-  name = "Wet Only Low Cut",
-  io = { inputs = { "inL", "inR" }, outputs = { "outL", "outR" } },
-  nodes = {
-    { id = "tape", type = "TapeDelay" },
-    { id = "wetHpL", type = "OnePoleHP", params = { cutoffHz = 200 } },
-    { id = "wetHpR", type = "OnePoleHP", params = { cutoffHz = 200 } },
-    { id = "mix", type = "Mixer" },
-  },
-  edges = {
-    { from = "inL", to = "tape.inL" },
-    { from = "inR", to = "tape.inR" },
-    { from = "tape.outL", to = "wetHpL.in" },
-    { from = "tape.outR", to = "wetHpR.in" },
-    { from = "wetHpL.out", to = "mix.in1L" },
-    { from = "wetHpR.out", to = "mix.in1R" },
-    { from = "inL", to = "mix.in2L" },
-    { from = "inR", to = "mix.in2R" },
-    { from = "mix.outL", to = "outL" },
-    { from = "mix.outR", to = "outR" },
-  },
-}
-)lua";
+constexpr std::string_view kWetOnlyLowCut = Presets::kCrossoverWetOnlyLowCut;
 
 struct StereoRun
 {

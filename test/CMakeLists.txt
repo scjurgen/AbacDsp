@@ -207,7 +207,12 @@ if(WITH_LUA_GRAPH)
             SYSTEM
             PRIVATE ${SOL2_DIR}/include
         )
-        target_compile_definitions(GraphLuaTests PRIVATE SOL_USING_CXX_LUA=1)
+        target_compile_definitions(
+            GraphLuaTests
+            PRIVATE
+                SOL_USING_CXX_LUA=1
+                GRAPH_PRESET_LUA_DIR="${PROJECT_SOURCE_DIR}/src/includes/Graph/Presets/lua"
+        )
         list(APPEND ALL_TEST_TARGETS GraphLuaTests)
     endif()
 endif()

@@ -26,6 +26,7 @@ namespace AbacDsp::Graph::Nodes
  * and run at the same ratio, so their wow and flutter stay coherent. Ports: inL, inR,
  * feedbackL, feedbackR -> outL, outR. Parameters 0-6: transportRatio, wowDepth, wowRate,
  * wowVariance, wowDrift, flutterDepth, flutterRate. numSamples must equal BlockSize.
+ * The seed only matters while wowVariance or wowDrift is above zero.
  */
 template <size_t BlockSize>
 class TapeDelayNode final : public Node
@@ -37,13 +38,14 @@ class TapeDelayNode final : public Node
     using Delay = AbacDsp::WobbleDelay<kBufferSize, BlockSize>;
     using Transport = AbacDsp::UpDownSampler<Delay, BlockSize>;
 
-    TapeDelayNode(const float sampleRate, const float baseDelayMs, const float safetyMarginSamples)
+    TapeDelayNode(const float sampleRate, const float baseDelayMs, const float safetyMarginSamples,
+                  const std::mt19937::result_type seed = kSharedSeed)
         : m_transports(AbacDsp::constructArray<Transport, kNumChannels>(BlockSize, sampleRate))
     {
         forEachDelay(
             [&](Delay& delay)
             {
-                delay.seed(kSharedSeed);
+                delay.seed(seed);
                 delay.setSafetyMargin(safetyMarginSamples);
                 delay.setDelay(baseDelayMs * 0.001f * sampleRate, true);
             });
@@ -136,7 +138,7 @@ namespace Detail
  * @brief Registers "TapeDelay" for one fixed BlockSize.
  *
  * Static config (NodeInstance::config, pathfinder v1's own defaults when
- * absent): baseDelayMs (8.0), safetyMarginSamples (250.0).
+ * absent): baseDelayMs (8.0), safetyMarginSamples (250.0), seed (1, exact up to 2^24).
  */
 template <size_t BlockSize>
 void registerTapeDelayNode(NodeRegistry& registry)
@@ -152,12 +154,11 @@ void registerTapeDelayNode(NodeRegistry& registry)
                  .name = "feedbackR", .direction = PortDirection::Input, .category = PortCategory::AudioMono},
              PortDescriptor{.name = "outL", .direction = PortDirection::Output, .category = PortCategory::AudioMono},
              PortDescriptor{.name = "outR", .direction = PortDirection::Output, .category = PortCategory::AudioMono}},
-            {ParameterDescriptor{
-                 .id = "transportRatio",
-                 .unit = "ratio",
-                 .minValue = TapeDelayNode<BlockSize>::Transport::kMinRatio,
-                 .maxValue = 8.0f,
-                 .defaultValue = 1.0f},
+            {ParameterDescriptor{.id = "transportRatio",
+                                 .unit = "ratio",
+                                 .minValue = TapeDelayNode<BlockSize>::Transport::kMinRatio,
+                                 .maxValue = 8.0f,
+                                 .defaultValue = 1.0f},
              ParameterDescriptor{
                  .id = "wowDepth", .unit = "linear", .minValue = 0.0f, .maxValue = 1.0f, .defaultValue = 0.1f},
              ParameterDescriptor{
@@ -175,7 +176,10 @@ void registerTapeDelayNode(NodeRegistry& registry)
         {
             const float baseDelayMs = Detail::configOrDefault(instance, "baseDelayMs", 8.0f);
             const float safetyMarginSamples = Detail::configOrDefault(instance, "safetyMarginSamples", 250.0f);
-            return std::make_unique<TapeDelayNode<BlockSize>>(sampleRate, baseDelayMs, safetyMarginSamples);
+            const auto seed = static_cast<std::mt19937::result_type>(std::max(
+                Detail::configOrDefault(instance, "seed", static_cast<float>(TapeDelayNode<BlockSize>::kSharedSeed)),
+                0.0f));
+            return std::make_unique<TapeDelayNode<BlockSize>>(sampleRate, baseDelayMs, safetyMarginSamples, seed);
         });
 }
 

@@ -1,6 +1,7 @@
 #include <array>
 #include <cmath>
 #include <numbers>
+#include <vector>
 
 #include "gtest/gtest.h"
 
@@ -35,6 +36,26 @@ void processOneBlock(Node& node, Block& block)
     std::array<const float*, 4> ins{block.inL.data(), block.inR.data(), block.feedbackL.data(), block.feedbackR.data()};
     std::array<float*, 2> outs{block.outL.data(), block.outR.data()};
     node.process(ins, outs, kBlockSize);
+}
+
+// Random wow only: OU variance is what a seed changes.
+[[nodiscard]] std::vector<float> renderRandomWow(Node& node, const size_t numBlocks)
+{
+    node.setParameter(1, 1.0f); // wowDepth
+    node.setParameter(3, 1.0f); // wowVariance
+    std::vector<float> left;
+    for (size_t b = 0; b < numBlocks; ++b)
+    {
+        Block block;
+        for (size_t i = 0; i < kBlockSize; ++i)
+        {
+            const float phase = static_cast<float>(b * kBlockSize + i) * 440.f / kSampleRate;
+            block.inL[i] = block.inR[i] = 0.5f * std::sin(2.0f * std::numbers::pi_v<float> * phase);
+        }
+        processOneBlock(node, block);
+        left.insert(left.end(), block.outL.begin(), block.outL.end());
+    }
+    return left;
 }
 
 } // namespace
@@ -147,6 +168,44 @@ TEST(TapeDelayNodeTest, SilentInputAndFeedbackStaySilent)
             EXPECT_FLOAT_EQ(block.outR[i], 0.0f);
         }
     }
+}
+
+TEST(TapeDelayNodeTest, SameSeedGivesIdenticalRandomWowAndDifferentSeedsDiverge)
+{
+    constexpr size_t kBlocks = 400;
+    Node first(kSampleRate, 8.0f, 250.0f, 7);
+    Node second(kSampleRate, 8.0f, 250.0f, 7);
+    Node other(kSampleRate, 8.0f, 250.0f, 8);
+    const auto renderedFirst = renderRandomWow(first, kBlocks);
+    EXPECT_EQ(renderedFirst, renderRandomWow(second, kBlocks));
+    EXPECT_NE(renderedFirst, renderRandomWow(other, kBlocks));
+}
+
+TEST(TapeDelayNodeTest, DefaultSeedIsOne)
+{
+    constexpr size_t kBlocks = 400;
+    Node implicitSeed = makeNode();
+    Node explicitSeed(kSampleRate, 8.0f, 250.0f, 1);
+    EXPECT_EQ(renderRandomWow(implicitSeed, kBlocks), renderRandomWow(explicitSeed, kBlocks));
+}
+
+TEST(TapeDelayNodeTest, RegisteredNodeReadsTheSeedFromItsConfig)
+{
+    constexpr size_t kBlocks = 400;
+    NodeRegistry registry;
+    registerTapeDelayNode<kBlockSize>(registry);
+
+    NodeInstance seeded{.id = "t", .type = "TapeDelay", .config = {{"seed", "7"}}};
+    NodeInstance plain{.id = "t", .type = "TapeDelay"};
+    auto fromConfig = registry.create("TapeDelay", seeded, kSampleRate);
+    auto fromDefault = registry.create("TapeDelay", plain, kSampleRate);
+    Node direct(kSampleRate, 8.0f, 250.0f, 7);
+
+    auto& configured = static_cast<Node&>(*fromConfig);
+    auto& defaulted = static_cast<Node&>(*fromDefault);
+    const auto expected = renderRandomWow(direct, kBlocks);
+    EXPECT_EQ(renderRandomWow(configured, kBlocks), expected);
+    EXPECT_NE(renderRandomWow(defaulted, kBlocks), expected);
 }
 
 }
