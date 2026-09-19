@@ -23,6 +23,20 @@ enum class DiagnosticSeverity
 
 struct Diagnostic
 {
+    Diagnostic() = default;
+
+    // A constructor rather than an aggregate, so {severity, message, node, port} stays warning-free.
+    Diagnostic(const DiagnosticSeverity newSeverity, std::string newMessage, std::string newNodeId = {},
+               std::string newPortName = {}, std::string newField = {}, const int newLine = 0)
+        : severity(newSeverity)
+        , message(std::move(newMessage))
+        , nodeId(std::move(newNodeId))
+        , portName(std::move(newPortName))
+        , field(std::move(newField))
+        , line(newLine)
+    {
+    }
+
     DiagnosticSeverity severity{DiagnosticSeverity::Error};
     std::string message;
     std::string nodeId;
