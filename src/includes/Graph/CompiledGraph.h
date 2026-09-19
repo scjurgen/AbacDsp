@@ -102,6 +102,16 @@ class CompiledGraph
         return m_buffers.size();
     }
 
+    [[nodiscard]] size_t graphInputCount() const noexcept
+    {
+        return m_graphInputSlots.size();
+    }
+
+    [[nodiscard]] size_t graphOutputCount() const noexcept
+    {
+        return m_graphOutputBindings.size();
+    }
+
     [[nodiscard]] size_t nodeCount() const noexcept
     {
         return m_nodes.size();
