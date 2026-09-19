@@ -43,7 +43,7 @@
 
 /**
  * @defgroup delays Delays
- * @brief Delay lines, and four different answers to changing their length.
+ * @brief Delay lines, and five different answers to changing their length.
  *
  * Every delay line faces the same problem: moving a read head discontinuously
  * clicks. The classes here differ mainly in which artifact they accept instead.
@@ -54,6 +54,7 @@
  * | Crossfade two heads | Brief comb filtering | DispersionDelay |
  * | Ease the read rate | Transient pitch bend | FracReadHead |
  * | Glide at 0.5x or 2x | Audible octave sweep | ModulatingDelayPitchedAdjust |
+ * | Ease the delay along a smoothstep | Bounded read speed, no speed step | WobbleDelay |
  *
  * VariSpeedTapeDelay sidesteps the question by varying the rate at which
  * material is recorded, so its buffer holds tape rather than samples.
@@ -190,7 +191,8 @@
  *
  * Applying a control change at once puts a step into the signal: a click on a
  * gain, a zipper on anything swept. Everything here exists to spread that step
- * over a few milliseconds.
+ * over a few milliseconds. OctaveGlide does the same for a speed ratio, at a rate
+ * given in octaves per second.
  */
 
 /**
@@ -242,7 +244,8 @@
  * Push and pull differ in who drives. The push converter takes input when the
  * caller has it and returns whatever comes out, which suits a live audio path;
  * the pull converter asks a callback for input as it needs it, which suits a
- * file or generator.
+ * file or generator. UpDownSampler wraps any processor between a down and an
+ * up conversion at a settable ratio, for oversampling or undersampling.
  */
 
 /**

@@ -10,8 +10,15 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 endif()
 
 include_directories(../../src/includes)
+include_directories(../../3rdparty/AudioFile)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(DelaysExplore DelaysExplore.cpp)
+add_executable(
+    VariSpeedTapeDelayExplore
+    VariSpeedTapeDelay/VariSpeedTapeDelayExplore.cpp
+)
+add_executable(WobbleDelayExplore WobbleDelay/WobbleDelayExplore.cpp)
+add_executable(MultiTapDelayExplore MultiTapDelay/MultiTapDelayExplore.cpp)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)

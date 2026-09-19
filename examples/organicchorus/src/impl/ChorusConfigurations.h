@@ -60,7 +60,6 @@ struct ChorusConfigurationSpec
     MacroRange feedback;
     float feedbackDampHz;
     float readHeadSafetyMarginSamples;
-    float readHeadCorrectionThresholdSamples;
     // Ornstein-Uhlenbeck sigma at Drift=1: real mechanical speed wander on the tape
     // transport's own clock, independent of Depth - see Organicchorus_tests.cpp.
     float speedDriftMaxSigma;
@@ -75,7 +74,7 @@ inline constexpr std::array<ChorusConfigurationSpec, kConfigurationCount> kConfi
         0.6f, {0.1f, 0.5f},
         {400.f, 60.f}, {1200.f, 10000.f}, {1200.f, 10000.f},
         0.15f, {-0.80f, 0.80f}, 3500.f,
-        250.f, 190.f, 0.05f
+        250.f, 0.05f
     },
     // Wide: two voices, panned hard, slightly detuned rate/offset for stereo spread.
     ChorusConfigurationSpec{
@@ -84,7 +83,7 @@ inline constexpr std::array<ChorusConfigurationSpec, kConfigurationCount> kConfi
         0.6f, {0.15f, 0.55f},
         {350.f, 50.f}, {1500.f, 12000.f}, {1500.f, 12000.f},
         0.15f, {-0.80f, 0.80f}, 4000.f,
-        250.f, 190.f, 0.05f
+        250.f, 0.05f
     },
     // Tri Ensemble: three voices spread wider/slower, cleaner (less BBD colour).
     ChorusConfigurationSpec{
@@ -94,7 +93,7 @@ inline constexpr std::array<ChorusConfigurationSpec, kConfigurationCount> kConfi
         0.5f, {0.1f, 0.35f},
         {300.f, 40.f}, {2000.f, 16000.f}, {2000.f, 16000.f},
         0.05f, {-0.75f, 0.75f}, 6000.f,
-        280.f, 220.f, 0.06f
+        280.f, 0.06f
     },
     // Flanger: very short delay, bipolar feedback, wide/fast sweep, brighter tone.
     ChorusConfigurationSpec{
@@ -103,7 +102,7 @@ inline constexpr std::array<ChorusConfigurationSpec, kConfigurationCount> kConfi
         0.8f, {0.2f, 0.6f},
         {200.f, 20.f}, {1000.f, 14000.f}, {1000.f, 14000.f},
         0.1f, {-0.95f, 0.95f}, 9000.f,
-        270.f, 210.f, 0.05f
+        270.f, 0.05f
     },
 }};
 // clang-format on

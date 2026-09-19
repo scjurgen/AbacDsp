@@ -1,13 +1,11 @@
 #include <array>
 #include <cmath>
-#include <memory>
 #include <random>
 
 #include "gtest/gtest.h"
 
 #include "Audio/AudioBuffer.h"
-#include "Delays/OrganicChorusTransport.h"
-#include "Filters/Sinc/sinc_4.h"
+#include "Delays/WobbleDelay.h"
 #include "impl/PathfinderImpl.h"
 
 namespace
@@ -20,39 +18,25 @@ using Impl = PathfinderImpl<BlockSize>;
 
 // Mirrors organicchorus's own safety-margin test: reports the peak read/write distance
 // deviation from the target delay over a multi-minute session at full Depth/Aggressivity.
-float measurePeakDriftSamples(const float speedHz, const size_t numBlocks)
+float measurePeakDriftSamples(const float speedHz, const size_t numSamples)
 {
-    Impl::Transport transport{SampleRate, std::make_shared<AbacDsp::SincFilter>(sinc4)};
+    Impl::Delay delay{SampleRate};
     const float targetDistance = Impl::kBaseDelayMs * 0.001f * SampleRate;
-    transport.setReadHeadSafetyMargin(Impl::kSafetyMarginSamples);
-    transport.setReadHead(0, targetDistance, true);
-    transport.setReadHeadCorrectionThreshold(0, Impl::kCorrectionThresholdSamples);
-    transport.setWowRate(speedHz);
-    transport.setWowDepth(0.45f);
-    transport.setWowVariance(0.6f);
-    transport.setWowDrift(0.6f);
-    transport.setFlutterRate(std::max(speedHz, Impl::kFlutterRateFloorHz));
-    transport.setFlutterDepth(0.5f);
-    transport.setRatio(1.f, true);
+    delay.setSafetyMargin(Impl::kSafetyMarginSamples);
+    delay.setDelay(targetDistance, true);
+    delay.seed(Impl::kSharedSeed);
+    delay.setWowRate(speedHz);
+    delay.setWowDepth(0.45f);
+    delay.setWowVariance(0.6f);
+    delay.setWowDrift(0.6f);
+    delay.setFlutterRate(std::max(speedHz, Impl::kFlutterRateFloorHz));
+    delay.setFlutterDepth(0.5f);
 
     float peak = 0.f;
-    const std::array<float, 2 * BlockSize> silence{};
-    for (size_t b = 0; b < numBlocks; ++b)
+    for (size_t i = 0; i < numSamples; ++i)
     {
-        transport.feed(silence);
-        std::array<float, 2 * BlockSize> discard{};
-        transport.readBlock(0, discard);
-
-        auto delta = static_cast<double>(transport.writeHead()) - transport.readHead(0);
-        while (delta < 0.0)
-        {
-            delta += Impl::kBufferSize;
-        }
-        while (delta >= Impl::kBufferSize)
-        {
-            delta -= Impl::kBufferSize;
-        }
-        peak = std::max(peak, static_cast<float>(std::abs(delta - static_cast<double>(targetDistance))));
+        static_cast<void>(delay.step(0.f));
+        peak = std::max(peak, std::abs(delay.currentDelay() - targetDistance));
     }
     return peak;
 }
@@ -62,12 +46,12 @@ float measurePeakDriftSamples(const float speedHz, const size_t numBlocks)
 // to actually find the worst case rather than assuming it is monotonic.
 TEST(PathfinderSafetyTest, EveryReachableSpeedStaysWithinConfiguredSafetyMargin)
 {
-    constexpr size_t numBlocks = static_cast<size_t>(60 * SampleRate / BlockSize);
+    constexpr size_t numSamples = static_cast<size_t>(60 * SampleRate);
     constexpr int kSteps = 15;
     for (int i = 0; i <= kSteps; ++i)
     {
         const float speedHz = 0.05f + static_cast<float>(i) / kSteps * (6.0f - 0.05f);
-        const auto peak = measurePeakDriftSamples(speedHz, numBlocks);
+        const auto peak = measurePeakDriftSamples(speedHz, numSamples);
         EXPECT_LT(peak, Impl::kSafetyMarginSamples) << "speedHz=" << speedHz << " peak=" << peak;
     }
 }

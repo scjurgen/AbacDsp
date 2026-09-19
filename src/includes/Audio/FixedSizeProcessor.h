@@ -74,6 +74,14 @@ class FixedSizeProcessor
             }
         }
     }
+    /// Drops any partially collected block and the pending output.
+    void reset() noexcept
+    {
+        m_inputBuffer = InternalBuffer{};
+        m_outputBuffer = InternalBuffer{};
+        m_feedAndEat = 0;
+    }
+
     void processBlockOutputOnly(ExternalBufferType& buffer)
     {
         const auto totalNumChannels = static_cast<unsigned>(buffer.getNumChannels());

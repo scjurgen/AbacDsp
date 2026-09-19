@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "Audio/AudioBuffer.h"
-#include "Delays/OrganicChorusTransport.h"
 #include "EffectBase.h"
 #include "Graph/CompiledGraph.h"
 #include "Graph/GraphCompiler.h"
@@ -19,12 +18,12 @@
 #include "Graph/Nodes/TapeDelayNode.h"
 
 /**
- * @brief Minimal "Tape Vibrato" graph: a shared stereo OrganicChorusTransport read head,
- * modulated by tape-like wow and flutter, 100% wet.
+ * @brief Minimal "Tape Vibrato" graph: one WobbleDelay per channel inside an UpDownSampler,
+ * both identically seeded so they share the same tape-like wow and flutter, 100% wet.
  *
  * The audio chain is built by loading chorus.md's own "First graph: tape vibrato" Lua
  * text through the graph toolbox (LuaGraphLoader -> GraphValidator -> GraphCompiler),
- * not by driving OrganicChorusTransport directly - the seed cutover of the planned
+ * not by driving the delays directly - the seed cutover of the planned
  * Lua tape-modulation toolbox.
  */
 template <size_t BlockSize>
@@ -36,9 +35,10 @@ class PathfinderImpl final : public EffectBase
     // Mirror TapeDelayNode.h's own config defaults - kGraphScript below doesn't
     // override them, so these stay accurate documentation of the fixed config.
     static constexpr float kSafetyMarginSamples{250.f};
-    static constexpr float kCorrectionThresholdSamples{190.f};
     static constexpr float kFlutterRateFloorHz{0.6f};
-    using Transport = AbacDsp::OrganicChorusTransport<kBufferSize, 2, 1, BlockSize>;
+    using TapeNode = AbacDsp::Graph::Nodes::TapeDelayNode<BlockSize>;
+    using Delay = typename TapeNode::Delay;
+    static constexpr auto kSharedSeed{TapeNode::kSharedSeed};
 
     explicit PathfinderImpl(const float sampleRate)
         : EffectBase(sampleRate)

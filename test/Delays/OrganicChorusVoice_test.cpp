@@ -1,12 +1,10 @@
 #include <array>
 #include <cmath>
-#include <memory>
 #include <random>
 
 #include "gtest/gtest.h"
 
 #include "Delays/OrganicChorusVoice.h"
-#include "Filters/Sinc/sinc_4.h"
 
 namespace AbacDsp::Test
 {
@@ -17,24 +15,16 @@ constexpr float SampleRate{48000.f};
 
 using Voice = OrganicChorusVoice<BufferSize, TileSize>;
 
-[[nodiscard]] static std::shared_ptr<SincFilter> makeSincFilter()
+// Empirical basis for a configuration's safety margin: the largest observed deviation, in
+// samples, of the read/write distance from its nominal target.
+[[nodiscard]] float measurePeakExcursionSamples(const float wowRate, const float wowPerceptualDepth,
+                                                const float wowVariance, const float wowDrift, const float flutterRate,
+                                                const float flutterDepth, const size_t numSamples)
 {
-    return std::make_shared<SincFilter>(sinc4);
-}
-
-// Empirical basis for a configuration's read-head safety margin: the largest observed
-// deviation, in samples, of the actual read/write distance from its nominal target.
-[[nodiscard]] float measurePeakDriftSamples(const float wowRate, const float wowPerceptualDepth,
-                                            const float wowVariance, const float wowDrift, const float flutterRate,
-                                            const float flutterDepth, const size_t numBlocks)
-{
-    OrganicChorusTransport<BufferSize, 1, 1, TileSize> sut{SampleRate, makeSincFilter()};
+    WobbleDelay<BufferSize, TileSize> sut{SampleRate};
     constexpr float kTargetDistance{BufferSize / 2.f};
-    sut.setReadHeadSafetyMargin(8.f);
-    sut.setReadHead(0, kTargetDistance, true);
-    // Correction defaults to a 1-sample threshold (see VariSpeedTapeDelay's own comment),
-    // which would mask Wow/Flutter's own excursion rather than let it be measured.
-    sut.setReadHeadCorrectionThreshold(0, kTargetDistance);
+    sut.setSafetyMargin(8.f);
+    sut.setDelay(kTargetDistance, true);
     sut.setWowRate(wowRate);
     sut.setWowDepth(wowPerceptualDepth);
     sut.setWowVariance(wowVariance);
@@ -43,23 +33,10 @@ using Voice = OrganicChorusVoice<BufferSize, TileSize>;
     sut.setFlutterDepth(flutterDepth);
 
     float peak = 0.f;
-    const std::array<float, TileSize> silence{};
-    for (size_t b = 0; b < numBlocks; ++b)
+    for (size_t i = 0; i < numSamples; ++i)
     {
-        sut.feed(silence);
-        std::array<float, TileSize> discard{};
-        sut.readBlock(0, discard);
-
-        auto delta = static_cast<double>(sut.writeHead()) - sut.readHead(0);
-        while (delta < 0.0)
-        {
-            delta += BufferSize;
-        }
-        while (delta >= BufferSize)
-        {
-            delta -= BufferSize;
-        }
-        peak = std::max(peak, static_cast<float>(std::abs(delta - kTargetDistance)));
+        static_cast<void>(sut.step(0.f));
+        peak = std::max(peak, std::abs(sut.currentDelay() - kTargetDistance));
     }
     return peak;
 }
@@ -68,7 +45,7 @@ using Voice = OrganicChorusVoice<BufferSize, TileSize>;
 // in sync by hand with examples/organicchorus/src/impl/ChorusConfigurations.h.
 TEST(OrganicChorusVoiceSafetyMarginMeasurement, TameSettingsStayWellUnderTwoMilliseconds)
 {
-    const auto peak = measurePeakDriftSamples(0.6f, 0.35f, 0.1f, 0.2f, 0.5f, 0.15f, 20 * SampleRate / TileSize);
+    const auto peak = measurePeakExcursionSamples(0.6f, 0.35f, 0.1f, 0.2f, 0.5f, 0.15f, 20 * SampleRate);
     EXPECT_LT(peak, SampleRate * 0.002f);
 }
 
@@ -76,50 +53,22 @@ TEST(OrganicChorusVoiceSafetyMarginMeasurement, TameSettingsStayWellUnderTwoMill
 // but a noticeably larger excursion than the tame case above.
 TEST(OrganicChorusVoiceSafetyMarginMeasurement, DeeperSettingsStayBounded)
 {
-    const auto peak = measurePeakDriftSamples(0.3f, 0.7f, 0.3f, 0.4f, 0.4f, 0.3f, 20 * SampleRate / TileSize);
+    const auto peak = measurePeakExcursionSamples(0.3f, 0.7f, 0.3f, 0.4f, 0.4f, 0.3f, 20 * SampleRate);
     EXPECT_LT(peak, SampleRate * 0.004f);
 }
 
-// The correction mechanism itself (not just Wow/Flutter depth) must actually be raised
-// past a modulation's own excursion, or the intended modulation is corrected away as if
-// it were drift - this is the regression that motivated exposing the threshold at all.
-TEST(OrganicChorusVoiceSafetyMarginMeasurement, DefaultCorrectionThresholdWouldMaskTheModulation)
+// The modulation must actually move the read head, not just stay inside the bound.
+TEST(OrganicChorusVoiceSafetyMarginMeasurement, DeeperSettingsActuallyModulateTheDelay)
 {
-    OrganicChorusTransport<BufferSize, 1, 1, TileSize> sut{SampleRate, makeSincFilter()};
-    constexpr float kTargetDistance{BufferSize / 2.f};
-    sut.setReadHeadSafetyMargin(8.f);
-    sut.setReadHead(0, kTargetDistance, true);
-    sut.setWowRate(0.3f);
-    sut.setWowDepth(0.7f);
-    sut.setWowVariance(0.3f);
-    sut.setWowDrift(0.4f);
-    sut.setFlutterRate(0.4f);
-    sut.setFlutterDepth(0.3f);
-
-    float peak = 0.f;
-    const std::array<float, TileSize> silence{};
-    for (size_t b = 0; b < 20 * SampleRate / TileSize; ++b)
-    {
-        sut.feed(silence);
-        std::array<float, TileSize> discard{};
-        sut.readBlock(0, discard);
-        auto delta = static_cast<double>(sut.writeHead()) - sut.readHead(0);
-        while (delta < 0.0)
-        {
-            delta += BufferSize;
-        }
-        while (delta >= BufferSize)
-        {
-            delta -= BufferSize;
-        }
-        peak = std::max(peak, static_cast<float>(std::abs(delta - kTargetDistance)));
-    }
-    EXPECT_LT(peak, 20.f);
+    const auto tame = measurePeakExcursionSamples(0.6f, 0.35f, 0.1f, 0.2f, 0.5f, 0.15f, 20 * SampleRate);
+    const auto deeper = measurePeakExcursionSamples(0.3f, 0.7f, 0.3f, 0.4f, 0.4f, 0.3f, 20 * SampleRate);
+    EXPECT_GT(tame, 1.f);
+    EXPECT_GT(deeper, tame);
 }
 
 TEST(OrganicChorusVoiceTest, OutputStaysFiniteAndBoundedUnderFullModulationAndFeedback)
 {
-    Voice voice{SampleRate, makeSincFilter()};
+    Voice voice{SampleRate};
     voice.setReadHeadSafetyMargin(64.f);
     voice.setCentreDelay(500.f, true);
     voice.setWowRate(0.4f);
@@ -164,8 +113,8 @@ TEST(OrganicChorusVoiceTest, SameSeedProducesIdenticalOutput)
         voice.seed(42);
     };
 
-    Voice a{SampleRate, makeSincFilter()};
-    Voice b{SampleRate, makeSincFilter()};
+    Voice a{SampleRate};
+    Voice b{SampleRate};
     configure(a);
     configure(b);
 
@@ -192,8 +141,8 @@ TEST(OrganicChorusVoiceTest, DifferentSeedsEventuallyDiverge)
         voice.seed(seed);
     };
 
-    Voice a{SampleRate, makeSincFilter()};
-    Voice b{SampleRate, makeSincFilter()};
+    Voice a{SampleRate};
+    Voice b{SampleRate};
     configure(a, 1);
     configure(b, 2);
 

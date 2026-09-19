@@ -6,9 +6,7 @@
 #include "gtest/gtest.h"
 
 #include "Audio/AudioBuffer.h"
-#include "Delays/VariSpeedTapeDelay.h"
-#include "Filters/Sinc/sinc_4.h"
-#include "Generators/OrnsteinUhlenbeckProcess.h"
+#include "Delays/WobbleDelay.h"
 #include "impl/ChorusConfigurations.h"
 #include "impl/OrganicChorusImpl.h"
 
@@ -20,50 +18,28 @@ constexpr float SampleRate{48000.f};
 
 using Impl = OrganicChorusImpl<BlockSize>;
 
-// Mirrors OrganicChorusVoice::processBlock(): Wow's bounded sine, Flutter floored, and a
-// separate zero-mean OU process perturbing the ratio directly - reports the peak
-// read/write distance deviation over a multi-minute session.
+// Mirrors OrganicChorusVoice's use of WobbleDelay at one Speed setting: reports the peak
+// deviation of the read/write distance from its centre over a multi-minute session.
 float measurePeakDriftSamples(const OrganicChorus::ChorusConfigurationSpec& spec, const float wowRateHz,
-                              const size_t numBlocks)
+                              const size_t numSamples)
 {
-    constexpr size_t kBufferSize = Impl::kBufferSize;
-    AbacDsp::VariSpeedTapeDelay<kBufferSize, 1, 1, BlockSize> transport{SampleRate,
-                                                                        std::make_shared<AbacDsp::SincFilter>(sinc4)};
+    AbacDsp::WobbleDelay<Impl::kBufferSize, BlockSize> delay{SampleRate};
     const float targetDistance = spec.baseDelayMs.at(1.f) * 0.001f * SampleRate;
-    transport.setReadHeadSafetyMargin(spec.readHeadSafetyMarginSamples);
-    transport.setReadHead(0, targetDistance, true);
-    transport.setReadHeadCorrectionThreshold(0, spec.readHeadCorrectionThresholdSamples);
-    transport.setWowRate(wowRateHz);
-    transport.setWowDepth(spec.wowDepth.at(1.f));
-    transport.setWowVariance(0.f);
-    transport.setWowDrift(0.f);
-    transport.setFlutterRate(std::max(wowRateHz, spec.flutterRateFloorHz));
-    transport.setFlutterDepth(spec.flutterDepth.at(1.f));
-    transport.setRatio(1.f, true);
-
-    AbacDsp::OrnsteinUhlenbeckProcess speedDrift{SampleRate / static_cast<float>(BlockSize)};
-    speedDrift.seed(2024);
-    speedDrift.setSigma(spec.speedDriftMaxSigma);
+    delay.setSafetyMargin(spec.readHeadSafetyMarginSamples);
+    delay.setDelay(targetDistance, true);
+    delay.seed(2024);
+    delay.setWowRate(wowRateHz);
+    delay.setWowDepth(spec.wowDepth.at(1.f));
+    delay.setWowVariance(0.f);
+    delay.setWowDrift(0.f);
+    delay.setFlutterRate(std::max(wowRateHz, spec.flutterRateFloorHz));
+    delay.setFlutterDepth(spec.flutterDepth.at(1.f));
 
     float peak = 0.f;
-    const std::array<float, BlockSize> silence{};
-    for (size_t b = 0; b < numBlocks; ++b)
+    for (size_t i = 0; i < numSamples; ++i)
     {
-        transport.setExternalRatioPerturbation(speedDrift.step() - spec.speedDriftMaxSigma);
-        transport.feed(silence);
-        std::array<float, BlockSize> discard{};
-        transport.readBlock(0, discard);
-
-        auto delta = static_cast<double>(transport.writeHead()) - transport.readHead(0);
-        while (delta < 0.0)
-        {
-            delta += kBufferSize;
-        }
-        while (delta >= kBufferSize)
-        {
-            delta -= kBufferSize;
-        }
-        peak = std::max(peak, static_cast<float>(std::abs(delta - static_cast<double>(targetDistance))));
+        static_cast<void>(delay.step(0.f));
+        peak = std::max(peak, std::abs(delay.currentDelay() - targetDistance));
     }
     return peak;
 }
@@ -73,14 +49,14 @@ float measurePeakDriftSamples(const OrganicChorus::ChorusConfigurationSpec& spec
 // monotonic, so this sweeps finely enough to actually find it.
 TEST(OrganicChorusConfigurationSafetyTest, EveryReachableSpeedStaysWithinConfiguredSafetyMargin)
 {
-    constexpr size_t numBlocks = static_cast<size_t>(60 * SampleRate / BlockSize);
+    constexpr size_t numSamples = static_cast<size_t>(60 * SampleRate);
     constexpr int kSteps = 15;
     for (const auto& spec : OrganicChorus::kConfigurations)
     {
         for (int i = 0; i <= kSteps; ++i)
         {
             const float rateFraction = static_cast<float>(i) / static_cast<float>(kSteps);
-            const auto peak = measurePeakDriftSamples(spec, spec.wowRateHz.at(rateFraction), numBlocks);
+            const auto peak = measurePeakDriftSamples(spec, spec.wowRateHz.at(rateFraction), numSamples);
             EXPECT_LT(peak, spec.readHeadSafetyMarginSamples) << "rateFraction=" << rateFraction << " peak=" << peak;
         }
     }

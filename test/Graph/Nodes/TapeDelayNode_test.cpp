@@ -17,7 +17,7 @@ using Node = TapeDelayNode<kBlockSize>;
 
 [[nodiscard]] Node makeNode()
 {
-    return Node(kSampleRate, 8.0f, 250.0f, 190.0f);
+    return Node(kSampleRate, 8.0f, 250.0f);
 }
 
 struct Block

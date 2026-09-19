@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <numbers>
 #include <random>
@@ -28,6 +29,8 @@ class Wow
   public:
     /// Exponent for the perceptual depth taper; tuned by ear against alternatives such as 2.5.
     static constexpr float perceptualDepthExponent{3.0f};
+    /// Hard bound on the OU component, in standard deviations - astronomically rare to engage.
+    static constexpr float kOuClampSigmas{5.0f};
 
     explicit Wow(const float sampleRate)
         : m_sampleRate(sampleRate)
@@ -82,6 +85,12 @@ class Wow
         m_driftRate = std::clamp(rateHz, 0.01f, 0.5f);
     }
 
+    /// @brief Delay value in milliseconds as of the last step(), which itself returns its derivative.
+    [[nodiscard]] float lastDelay() const noexcept
+    {
+        return m_previousDelay;
+    }
+
     // use sparingly, this stuff is CPU heavy
     [[nodiscard]] float step() noexcept
     {
@@ -114,7 +123,12 @@ class Wow
         }
 
         const auto ouValue = m_ouProcess.step();
-        const auto filteredOU = m_lowpass.step(ouValue);
+        // OrnsteinUhlenbeckProcess itself is unclamped by design (shared with other voices);
+        // bound only here, at kOuClampSigmas standard deviations of its own stationary variance.
+        const auto sigma = m_varianceSmoothed.getValue();
+        const auto theta = sigma * 20.f + 1.f; // mirrors OrnsteinUhlenbeckProcess::setSigma()
+        const auto ouBound = kOuClampSigmas * std::sqrt(sigma * sigma / (2.f * theta));
+        const auto filteredOU = m_lowpass.step(std::clamp(ouValue, -ouBound, ouBound));
 
         const auto currentDelay = depth * (std::sin(m_phase) + filteredOU);
 
