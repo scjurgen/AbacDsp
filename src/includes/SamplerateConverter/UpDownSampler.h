@@ -37,9 +37,9 @@ concept SpanBlockProcessor = requires(T& processor, std::span<const float> sourc
  * The ratio is clamped to [1/16, 16] and it always converts, also at exactly 1.0.
  *
  * Latency is ratio dependent (re-blocker and sinc delay are counted in internal-rate
- * samples) but continuous. The output is silent until the output FIFO holds a small
- * cushion, which absorbs per-block count jitter; a large abrupt ratio change can still
- * underrun, which repeats the last sample and is counted by underruns().
+ * samples) but continuous, and does not depend on the host block size. A small cushion
+ * stays in the output FIFO to absorb per-block count jitter; a large abrupt ratio change
+ * can still underrun, which repeats the last sample and is counted by underruns().
  * processBlock() never allocates, and source and target may alias.
  */
 template <SpanBlockProcessor Processor, size_t FixedFrameSize>
@@ -183,25 +183,31 @@ class UpDownSampler
         }
     }
 
+    void readFifo(const std::span<float> out) noexcept
+    {
+        for (float& sample : out)
+        {
+            m_lastOut = m_fifo[m_fifoRead];
+            sample = m_lastOut;
+            m_fifoRead = m_fifoRead + 1 == m_fifo.size() ? 0 : m_fifoRead + 1;
+        }
+        m_fifoSize -= out.size();
+    }
+
     void popFifo(const std::span<float> target) noexcept
     {
         if (!m_started)
         {
-            if (m_fifoSize < kFifoCushion + target.size())
-            {
-                std::ranges::fill(target, 0.f);
-                return;
-            }
-            m_started = true;
+            const auto real =
+                m_fifoSize > kFifoCushion ? std::min(m_fifoSize - kFifoCushion, target.size()) : size_t{0};
+            const auto padding = target.size() - real;
+            std::fill_n(target.begin(), padding, 0.f);
+            readFifo(target.subspan(padding));
+            m_started = real > 0;
+            return;
         }
         const auto available = std::min(m_fifoSize, target.size());
-        for (size_t i = 0; i < available; ++i)
-        {
-            m_lastOut = m_fifo[m_fifoRead];
-            target[i] = m_lastOut;
-            m_fifoRead = m_fifoRead + 1 == m_fifo.size() ? 0 : m_fifoRead + 1;
-        }
-        m_fifoSize -= available;
+        readFifo(target.first(available));
         if (available < target.size())
         {
             ++m_underruns;

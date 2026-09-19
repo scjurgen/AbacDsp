@@ -189,6 +189,28 @@ TEST(UpDownSamplerTest, RatioOneReproducesInputDelayed)
     EXPECT_LT(alignment.rms, 0.002f) << "lag " << alignment.lag;
 }
 
+TEST(UpDownSamplerTest, LatencyDoesNotDependOnBlockSize)
+{
+    constexpr size_t kImpulseAt{3000};
+    for (const float ratio : {0.5f, 1.f, 2.f})
+    {
+        std::vector<int> latencies;
+        for (const size_t blockSize : {size_t{1}, size_t{16}, size_t{64}, size_t{256}, size_t{512}})
+        {
+            Identity sut(kMaxBlock);
+            std::vector<float> input(12000, 0.f);
+            input[kImpulseAt] = 1.f;
+            const auto output = runThrough(sut, input, blockSize, ratio);
+            const auto peak = std::ranges::max_element(output, [](const float a, const float b)
+                                                       { return std::abs(a) < std::abs(b); });
+            latencies.push_back(static_cast<int>(peak - output.begin()) - static_cast<int>(kImpulseAt));
+        }
+        const auto [lowest, highest] = std::ranges::minmax(latencies);
+        EXPECT_LE(highest - lowest, 1) << "ratio " << ratio;
+        EXPECT_LT(highest, 200) << "ratio " << ratio;
+    }
+}
+
 TEST(UpDownSamplerTest, SourceMayAliasTarget)
 {
     Identity separate(kMaxBlock);
