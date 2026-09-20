@@ -8,14 +8,13 @@ namespace AbacDsp::Graph::Nodes
 
 /**
  * @ingroup graph
- * @brief 4th-order Linkwitz-Riley crossover: lowOut is two cascaded
- * Biquad<LowPass> (Butterworth Q), highOut is the exact complement
- * (in - lowOut). An independently-designed cascaded Biquad<HighPass> for
- * highOut does not reconstruct flat (verified empirically via explore/,
- * error peaking near the crossover frequency); deriving it as the direct
- * complement instead guarantees lowOut + highOut == in to float precision at
- * every frequency, by construction. Ports: in -> lowOut, highOut.
- * Parameter 0: frequencyHz (default 1000).
+ * @brief 4th-order Linkwitz-Riley crossover: each band is two cascaded
+ * Butterworth (Q = 1/sqrt(2)) biquads at the same frequency.
+ *
+ * Both bands are -6 dB at the crossover and in phase there, so lowOut + highOut
+ * has flat magnitude but is an allpass of the input (Butterworth 2nd-order
+ * allpass, same frequency), not the input itself.
+ * Ports: in -> lowOut, highOut. Parameter 0: frequencyHz (default 1000).
  */
 class CrossoverLR4 final : public Node
 {
@@ -31,10 +30,8 @@ class CrossoverLR4 final : public Node
     {
         m_lowStage1.processBlock(inputs[0], outputs[0], numSamples);
         m_lowStage2.processBlock(outputs[0], outputs[0], numSamples);
-        for (size_t i = 0; i < numSamples; ++i)
-        {
-            outputs[1][i] = inputs[0][i] - outputs[0][i];
-        }
+        m_highStage1.processBlock(inputs[0], outputs[1], numSamples);
+        m_highStage2.processBlock(outputs[1], outputs[1], numSamples);
     }
 
     void setParameter(const size_t paramIndex, const float value) noexcept override
@@ -53,12 +50,16 @@ class CrossoverLR4 final : public Node
     {
         m_lowStage1.computeCoefficients(m_sampleRate, m_frequencyHz, kQ, 0.0f);
         m_lowStage2.computeCoefficients(m_sampleRate, m_frequencyHz, kQ, 0.0f);
+        m_highStage1.computeCoefficients(m_sampleRate, m_frequencyHz, kQ, 0.0f);
+        m_highStage2.computeCoefficients(m_sampleRate, m_frequencyHz, kQ, 0.0f);
     }
 
     float m_sampleRate;
     float m_frequencyHz{1000.0f};
     AbacDsp::Biquad<AbacDsp::BiquadFilterType::LowPass> m_lowStage1;
     AbacDsp::Biquad<AbacDsp::BiquadFilterType::LowPass> m_lowStage2;
+    AbacDsp::Biquad<AbacDsp::BiquadFilterType::HighPass> m_highStage1;
+    AbacDsp::Biquad<AbacDsp::BiquadFilterType::HighPass> m_highStage2;
 };
 
 }

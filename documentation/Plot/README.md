@@ -96,6 +96,8 @@ titles or axis limits from otherwise-shared CLI defaults:
 | `title` | string | Subplot title |
 | `labelx`, `labely` | string | Axis labels |
 | `logx`, `logy` | bool | Logarithmic axis scale |
+| `hzticks` | bool | With `logx`: label the x-axis at octave-spaced ISO centres (63, 125, ... 1k, 2k, ...) as plain Hz, one grid cell per octave |
+| `ystep` | number | Y-axis major tick spacing, e.g. `24` so dB/octave slopes line up with the grid |
 | `normalize` | bool | Rescale this subplot's data into `[0, 1]` |
 | `miny`, `maxy` | number | Y-axis limits |
 | `linewidth` | number | Line width |

@@ -13,6 +13,7 @@ from collections import defaultdict
 from typing import Dict, List, Tuple, Any, Optional, Union
 import numpy as np
 import shlex
+from matplotlib.ticker import FixedLocator, FuncFormatter, MultipleLocator, NullLocator
 
 def get_available_palettes() -> List[str]:
     """Get list of available matplotlib color palettes/colormaps"""
@@ -52,12 +53,12 @@ def parse_plot_options(option_string: str) -> Dict[str, Any]:
             key, value = token.split('=', 1)
             key = key.strip()
             value = value.strip()
-            if key in ['logx', 'logy', 'symlogy', 'normalize', 'grid', 'grid_major', 'grid_minor']:
+            if key in ['logx', 'logy', 'symlogy', 'normalize', 'grid', 'grid_major', 'grid_minor', 'hzticks']:
                 try:
                     options[key] = str2bool(value)
                 except:
                     options[key] = value.lower() in ('true', '1', 'yes')
-            elif key in ['miny', 'maxy', 'linewidth', 'linthreshy']:
+            elif key in ['miny', 'maxy', 'linewidth', 'linthreshy', 'ystep']:
                 try:
                     options[key] = float(value)
                 except:
@@ -150,6 +151,22 @@ def parse_data_file(filename: str) -> List[Tuple[Dict[str, List[Dict[str, List[f
         plots.append((current_plot_data, current_plot_options))
     return plots if plots else [({}, {})]
 
+OCTAVE_CENTERS_HZ = [16.0, 31.5, 63.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0]
+
+
+def format_hz(value: float, _pos: Optional[int] = None) -> str:
+    """Plain frequency label: 250, 1k, 16k"""
+    return f"{value / 1000:g}k" if value >= 1000 else f"{value:g}"
+
+
+def apply_octave_hz_ticks(ax: plt.Axes) -> None:
+    """Label a log x-axis at octave-spaced ISO centres, so one grid cell is one octave"""
+    low, high = ax.get_xlim()
+    ax.xaxis.set_major_locator(FixedLocator([f for f in OCTAVE_CENTERS_HZ if low <= f <= high]))
+    ax.xaxis.set_major_formatter(FuncFormatter(format_hz))
+    ax.xaxis.set_minor_locator(NullLocator())
+
+
 def create_plots(data_plots: List[Tuple[Dict[str, Dict[str, List[float]]], Dict[str, Any]]], args: argparse.Namespace) -> None:
     """Create and save the plots"""
     n_plots = len(data_plots)
@@ -201,6 +218,8 @@ def create_plots(data_plots: List[Tuple[Dict[str, Dict[str, List[float]]], Dict[
             color_idx += 1
         if effective_options.get('logx', False):
             ax.set_xscale('log')
+            if effective_options.get('hzticks', False):
+                apply_octave_hz_ticks(ax)
         if effective_options.get('logy', False):
             ax.set_yscale('log')
         elif effective_options.get('symlogy', False):
@@ -219,6 +238,9 @@ def create_plots(data_plots: List[Tuple[Dict[str, Dict[str, List[float]]], Dict[
             ymin = miny if miny is not None else current_ylim[0]
             ymax = maxy if maxy is not None else current_ylim[1]
             ax.set_ylim(ymin, ymax)
+        ystep = effective_options.get('ystep', None)
+        if ystep:
+            ax.yaxis.set_major_locator(MultipleLocator(ystep))
         # Add legend if there are multiple series
         if len(data) > 1:
             legendpos = effective_options.get('legendpos', args.legendpos)
@@ -279,7 +301,10 @@ Plot-specific options (use in @New plot lines):
 - symlogy, linthreshy: symmetric-log y-axis (true/false) and its linear half-width around zero,
   for data that crosses zero but spans orders of magnitude (ignored if logy is also set)
 - normalize: normalize data (true/false)
+- hzticks: with logx, label the x-axis at octave-spaced ISO centres (63, 125, ... 1k, 2k, ...)
+  as plain Hz, one grid cell per octave (true/false)
 - miny, maxy: y-axis limits (numbers)
+- ystep: y-axis major tick spacing (number), e.g. 24 to line dB/octave slopes up with the grid
 - linewidth: line width (number)
 - palette: color palette name
 - legendpos: legend position
