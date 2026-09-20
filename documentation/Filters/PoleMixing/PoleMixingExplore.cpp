@@ -189,7 +189,7 @@ constexpr float kResponseFreqHi = 12000.f;
 
 void writeResponse(std::ofstream& out)
 {
-    out << "@New plot: title=\"magnitude (cutoff=1kHz, resonance=0)\" logx=true\n";
+    out << "@New plot: title=\"magnitude (cutoff=1kHz, resonance=0)\" logx=true hzticks=true\n";
     for (const auto presetName : kRepresentativePresets)
     {
         const auto& cf = AbacDsp::poleMixingList[AbacDsp::findFilterIndex(presetName)].cf;
@@ -202,7 +202,7 @@ void writeResponse(std::ofstream& out)
         }
     }
 
-    out << "@New plot: title=\"phase (cutoff=1kHz, resonance=0)\" logx=true\n";
+    out << "@New plot: title=\"phase (cutoff=1kHz, resonance=0)\" logx=true hzticks=true\n";
     for (const auto presetName : kRepresentativePresets)
     {
         const auto& cf = AbacDsp::poleMixingList[AbacDsp::findFilterIndex(presetName)].cf;
@@ -247,9 +247,9 @@ void writeResonanceSweep(std::ofstream& out, const std::string_view presetName)
 
 void writeResonance(std::ofstream& out)
 {
-    out << "@New plot: title=\"LP4 approaching self-oscillation\" logx=true\n";
+    out << "@New plot: title=\"LP4 approaching self-oscillation\" logx=true hzticks=true\n";
     writeResonanceSweep(out, "LP4");
-    out << "@New plot: title=\"BP4 approaching self-oscillation\" logx=true\n";
+    out << "@New plot: title=\"BP4 approaching self-oscillation\" logx=true hzticks=true\n";
     writeResonanceSweep(out, "BP4");
 
     out << "@New plot: title=\"LP4 self-oscillation (single impulse, zero input after)\"\n#envelope\n";
@@ -267,7 +267,7 @@ void writeResonance(std::ofstream& out)
 
 void writeOverdriveSpectra(std::ofstream& out, const std::string_view title)
 {
-    out << "@New plot: title=\"" << title << " spectrum vs. input level\" logx=true\n";
+    out << "@New plot: title=\"" << title << " spectrum vs. input level\" logx=true hzticks=true\n";
     for (const float amplitude : {0.05f, 0.5f, 2.f})
     {
         AbacDsp::Lp24Smooth filter(kSampleRate);
@@ -289,7 +289,7 @@ void writeOverdriveSpectra(std::ofstream& out, const std::string_view title)
 void writeOverdriveSpectraBandpass(std::ofstream& out, const std::string_view title)
 {
     const auto& cf = AbacDsp::poleMixingList[AbacDsp::findFilterIndex("LP4")].cf;
-    out << "@New plot: title=\"" << title << " spectrum vs. input level\" logx=true\n";
+    out << "@New plot: title=\"" << title << " spectrum vs. input level\" logx=true hzticks=true\n";
     for (const float amplitude : {0.05f, 0.5f, 2.f})
     {
         AbacDsp::Filter1Pole4StageSmooth filter(kSampleRate);
@@ -389,7 +389,7 @@ void writeCutoffAccuracy(std::ofstream& out)
 {
     const float thirdSemitone = std::pow(2.f, 1.f / 36.f); // 36 steps/octave: a musical, not arbitrary, grid
 
-    out << "@New plot: title=\"resonant-peak frequency vs. requested cutoff\" logx=true logy=true\n";
+    out << "@New plot: title=\"resonant-peak frequency vs. requested cutoff\" logx=true hzticks=true logy=true\n";
     writeCutoffAccuracySweep(out, geometricSweep(100.f, 12000.f, thirdSemitone));
 
     out << "@New plot: title=\"resonant-peak frequency vs. requested cutoff (zoom: 1000-12000 Hz)\"\n";
@@ -576,13 +576,13 @@ void writeTopologySelfOscillation(std::ofstream& out)
 
 void writeTopology(std::ofstream& out)
 {
-    out << "@New plot: title=\"LP4 resonance peak: classic vs bandpass-tap feedback\" logx=true\n";
+    out << "@New plot: title=\"LP4 resonance peak: classic vs bandpass-tap feedback\" logx=true hzticks=true\n";
     writeTopologyPairForPreset<AbacDsp::Lp24Smooth>(out, "LP4");
 
     out << "@New plot: title=\"self-oscillation: classic vs bandpass-tap feedback (LP4)\"\n";
     writeTopologySelfOscillation(out);
 
-    out << "@New plot: title=\"LP4/HP4/BP4, classic vs bandpass-tap, near self-oscillation\" logx=true\n";
+    out << "@New plot: title=\"LP4/HP4/BP4, classic vs bandpass-tap, near self-oscillation\" logx=true hzticks=true\n";
     writeTopologyPairForPreset<AbacDsp::Lp24Smooth>(out, "LP4");
     writeTopologyPairForPreset<AbacDsp::Hp24Smooth>(out, "HP4");
     writeTopologyPairForPreset<AbacDsp::Bp24Smooth>(out, "BP4");

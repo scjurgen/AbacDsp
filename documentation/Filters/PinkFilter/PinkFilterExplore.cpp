@@ -75,7 +75,7 @@ template <bool FastPink>
 void writeSpectrum(std::ofstream& out)
 {
     out << "@New plot: title=\"PinkFilter measured PSD vs. ideal -3dB/octave (fitted at 1kHz)\" "
-           "logx=true\n";
+           "logx=true hzticks=true\n";
     const auto fastDb = measurePinkPsdDb<true>();
     const auto accurateDb = measurePinkPsdDb<false>();
     constexpr float f0 = 1000.f;
@@ -109,7 +109,7 @@ void writeAccuracy(std::ofstream& out)
 
     const auto writeError = [&](const std::vector<float>& db, const char* title, const char* name)
     {
-        out << "@New plot: title=\"" << title << "\" logx=true\n#" << name << "\n";
+        out << "@New plot: title=\"" << title << "\" logx=true hzticks=true\n#" << name << "\n";
         const float anchorDb = dbAtHz(db, f0);
         for (size_t bin = 1; bin < db.size(); ++bin)
         {

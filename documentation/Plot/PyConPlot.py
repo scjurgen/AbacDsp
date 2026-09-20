@@ -151,7 +151,7 @@ def parse_data_file(filename: str) -> List[Tuple[Dict[str, List[Dict[str, List[f
         plots.append((current_plot_data, current_plot_options))
     return plots if plots else [({}, {})]
 
-OCTAVE_CENTERS_HZ = [16.0, 31.5, 63.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0]
+OCTAVE_CENTERS_HZ = [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 31.5, 63.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0]
 
 
 def format_hz(value: float, _pos: Optional[int] = None) -> str:
@@ -329,6 +329,7 @@ Plot-specific options (use in @New plot lines):
     parser.add_argument('--maxy', type=float, help='Maximum y-axis value (default: auto)')
     parser.add_argument('--logx', action='store_true', help='Use logarithmic scale for x-axis')
     parser.add_argument('--logy', action='store_true', help='Use logarithmic scale for y-axis')
+    parser.add_argument('--hzticks', action='store_true', help='With --logx: label the x-axis at octave-spaced ISO centres as plain Hz')
     parser.add_argument('--symlogy', action='store_true', help='Use symmetric-log scale for y-axis: linear near zero, logarithmic beyond --linthreshy. For data that crosses zero but spans orders of magnitude (ignored if --logy is also set)')
     parser.add_argument('--linthreshy', type=float, default=1.0, help='Linear region half-width around zero for --symlogy (default: 1.0)')
     parser.add_argument('--aspect', default='auto', choices=['auto', 'equal'], help="Axes aspect ratio: 'equal' keeps x/y units the same size, e.g. for orbit/phase-plane plots (default: 'auto')")

@@ -112,10 +112,10 @@ void writeSpectra(std::ofstream& out)
 {
     constexpr auto numSamples = static_cast<size_t>(10.f * kSampleRate);
 
-    out << "@New plot: title=\"Wow spectrum (rate=2Hz, depth=1, drift=0)\" logx=true\n#Wow\n";
+    out << "@New plot: title=\"Wow spectrum (rate=2Hz, depth=1, drift=0)\" logx=true hzticks=true\n#Wow\n";
     writeDecimatedSpectrum(out, renderWow(2.f, 1.f, 0.f, numSamples));
 
-    out << "@New plot: title=\"Flutter spectrum (rate=8Hz, depth=50)\" logx=true\n#Flutter\n";
+    out << "@New plot: title=\"Flutter spectrum (rate=8Hz, depth=50)\" logx=true hzticks=true\n#Flutter\n";
     writeDecimatedSpectrum(out, renderFlutter(8.f, 50.f, numSamples));
 }
 
@@ -180,7 +180,7 @@ void writeTremoloRingMod(std::ofstream& out)
         }
     }
 
-    out << "@New plot: title=\"RingModulator sidebands (1000Hz probe tone)\" logx=true\n";
+    out << "@New plot: title=\"RingModulator sidebands (1000Hz probe tone)\" logx=true hzticks=true\n";
     constexpr size_t kRingFftSize = 16384;
     constexpr float kProbeHz = 1000.f;
     for (const float carrierHz : {300.f, 1500.f})

@@ -244,14 +244,14 @@ void writeResponse(std::ofstream& out)
 
     AbacDsp::SvfResoBP svf{sampleRate};
     svf.setByDecay(0, f0, decay);
-    out << "@New plot: title=\"SvfResoBP magnitude (f0=1kHz, decay=100ms)\" logx=true\n";
+    out << "@New plot: title=\"SvfResoBP magnitude (f0=1kHz, decay=100ms)\" logx=true hzticks=true\n";
     writeNormalizedSweep(
         out, "SvfResoBP", kSamples, loHz, hiHz, [&svf] { svf.reset(); },
         [&svf](const float in) { return svf.step(in); });
 
     AbacDsp::BiquadResoBP biquad{sampleRate};
     biquad.setByDecay(0, f0, decay);
-    out << "@New plot: title=\"BiquadResoBP magnitude (f0=1kHz, decay=100ms)\" logx=true\n";
+    out << "@New plot: title=\"BiquadResoBP magnitude (f0=1kHz, decay=100ms)\" logx=true hzticks=true\n";
     writeNormalizedSweep(
         out, "BiquadResoBP", kSamples, loHz, hiHz, [&biquad] { biquad.reset(); },
         [&biquad](const float in) { return biquad.step(in); });
@@ -387,14 +387,14 @@ void writeTopology(std::ofstream& out)
 
     AbacDsp::SvfResoBP svf{sampleRate};
     svf.setByDecay(0, f0, decay);
-    out << "@New plot: title=\"SvfResoBP (f0=800 Hz, decay=150 ms)\" logx=true\n";
+    out << "@New plot: title=\"SvfResoBP (f0=800 Hz, decay=150 ms)\" logx=true hzticks=true\n";
     writeNormalizedSweep(
         out, "SvfResoBP", kSamples, loHz, hiHz, [&svf] { svf.reset(); },
         [&svf](const float in) { return svf.step(in); });
 
     AbacDsp::BiquadResoBP biquad{sampleRate};
     biquad.setByDecay(0, f0, decay);
-    out << "@New plot: title=\"BiquadResoBP (f0=800 Hz, decay=150 ms)\" logx=true\n";
+    out << "@New plot: title=\"BiquadResoBP (f0=800 Hz, decay=150 ms)\" logx=true hzticks=true\n";
     writeNormalizedSweep(
         out, "BiquadResoBP", kSamples, loHz, hiHz, [&biquad] { biquad.reset(); },
         [&biquad](const float in) { return biquad.step(in); });
@@ -402,7 +402,7 @@ void writeTopology(std::ofstream& out)
     AbacDsp::BiquadResoBandPassParallel<1, 1> scalarBank{sampleRate};
     scalarBank.setByDecay(0, 0, f0, decay);
     out << "@New plot: title=\"BiquadResoBandPassParallel, element 0 of a 1-element bank "
-           "(f0=800 Hz, decay=150 ms)\" logx=true\n";
+           "(f0=800 Hz, decay=150 ms)\" logx=true hzticks=true\n";
     writeNormalizedSweep(
         out, "BiquadResoBandPassParallel", kSamples, loHz, hiHz, [&scalarBank] { scalarBank.reset(0); },
         [&scalarBank](const float in) { return scalarBank.step(0, in); });
@@ -412,7 +412,7 @@ void writeTopology(std::ofstream& out)
     std::array<float, 1> simdIn{};
     std::array<float, 1> simdOut{};
     out << "@New plot: title=\"BiquadResoBPParallelSIMD, element 0 of a 4-element bank "
-           "(f0=800 Hz, decay=150 ms)\" logx=true\n";
+           "(f0=800 Hz, decay=150 ms)\" logx=true hzticks=true\n";
     writeNormalizedSweep(
         out, "BiquadResoBPParallelSIMD", kSamples, loHz, hiHz, [&simdBank] { simdBank.reset(0); },
         [&simdBank, &simdIn, &simdOut](const float in)

@@ -28,7 +28,7 @@ python3 "$ROOT_DIR/documentation/Plot/PyConPlot.py" -f "$DATA_DIR/rv_spectral.tx
     --labelx "frequency (Hz)" --labely "magnitude (dB)" --width 1200 --height 350 --cols 1
 
 python3 "$ROOT_DIR/documentation/Plot/PyConPlot.py" -f "$DATA_DIR/rv_rt60.txt" -o "$SCRIPT_DIR/rv_rt60.png" \
-    --labelx "frequency (Hz)" --labely "RT60 (s)" --width 1200 --height 500 --cols 1 --logx
+    --labelx "frequency (Hz)" --labely "RT60 (s)" --width 1200 --height 500 --cols 1 --logx --hzticks
 
 python3 "$ROOT_DIR/documentation/Plot/PyConPlot.py" -f "$DATA_DIR/rv_decay.txt" -o "$SCRIPT_DIR/rv_decay.png" \
     --labelx "time (s)" --labely "level (dB)" --width 1200 --height 500 --cols 1

@@ -96,7 +96,7 @@ titles or axis limits from otherwise-shared CLI defaults:
 | `title` | string | Subplot title |
 | `labelx`, `labely` | string | Axis labels |
 | `logx`, `logy` | bool | Logarithmic axis scale |
-| `hzticks` | bool | With `logx`: label the x-axis at octave-spaced ISO centres (63, 125, ... 1k, 2k, ...) as plain Hz, one grid cell per octave |
+| `hzticks` | bool | With `logx`: label the x-axis at octave-spaced ISO centres (0.125 Hz up to 16k) as plain Hz, one grid cell per octave |
 | `ystep` | number | Y-axis major tick spacing, e.g. `24` so dB/octave slopes line up with the grid |
 | `normalize` | bool | Rescale this subplot's data into `[0, 1]` |
 | `miny`, `maxy` | number | Y-axis limits |
@@ -124,6 +124,7 @@ Booleans accept `true`/`false`/`1`/`0`/`yes`/`no` (case-insensitive).
 | `--linewidth` | `1.0` | Line width |
 | `--miny`, `--maxy` | auto | Shared y-axis limits, applied to every subplot unless overridden per-plot |
 | `--logx`, `--logy` | off | Logarithmic axis scale |
+| `--hzticks` | off | With `--logx`: octave-spaced Hz labels, same as the per-plot `hzticks` key |
 | `--aspect` | `auto` | `equal` keeps x/y units the same size on screen - use for orbit/phase-plane style plots where a circle should look circular, not stretched |
 | `--grid` | off | Enable grid (same as `--grid-major`) |
 | `--grid-major` | on | Major grid lines |

@@ -46,7 +46,7 @@ void writeFamilyResponse(std::ofstream& out, const char* name, const float freqH
 void writeFamilyResponses(std::ofstream& out)
 {
     out << "@New plot: title=\"Biquad<type> family: magnitude response (freq=1kHz, Q=0.7071, "
-           "gain=+12dB where used)\" logx=true\n";
+           "gain=+12dB where used)\" logx=true hzticks=true\n";
     const auto sweep = logSweepHz(20.f, 20000.f, 500);
     constexpr float freqHz = 1000.f;
     constexpr float gainDb = 12.f;
@@ -144,7 +144,7 @@ void writePhaseResponse(std::ofstream& out, const char* name, const float design
 void writePhaseResponses(std::ofstream& out)
 {
     out << "@New plot: title=\"Biquad<type> family: phase response (freq=1kHz, Q=0.7071, "
-           "gain=+12dB where used)\" logx=true\n";
+           "gain=+12dB where used)\" logx=true hzticks=true\n";
     const auto sweep = logSweepHz(20.f, 20000.f, 200);
     constexpr float freqHz = 1000.f;
     constexpr float gainDb = 12.f;
@@ -167,7 +167,7 @@ void writeChebyshevComparison(std::ofstream& out)
 
     const auto writeOne = [&](const size_t order, const float fc, const float rippleDb, const char* title)
     {
-        out << "@New plot: title=\"" << title << "\" logx=true\n";
+        out << "@New plot: title=\"" << title << "\" logx=true hzticks=true\n";
         AbacDsp::ChebyshevBiquad type1(kSampleRate);
         type1.computeType1(order, fc, rippleDb, true);
         out << "#Type1 (equiripple passband)\n";
@@ -229,7 +229,7 @@ void writeStabilityLimit(std::ofstream& out, const float xLow, const float xHigh
 void writeStability(std::ofstream& out)
 {
     out << "@New plot: title=\"Tail decay vs. frequency (Q=0.7071, gain=+12dB where used)\" "
-           "logx=true\n";
+           "logx=true hzticks=true\n";
     const auto sweep = logSweepHz(20.f, 20000.f, 500);
     const auto writeVsFreq = [&](const auto typeTag, const char* name)
     {
@@ -293,7 +293,7 @@ constexpr size_t kFftSize = 16384;
 void writePeakSymmetry(std::ofstream& out)
 {
     out << "@New plot: title=\"PeakBiquad: +12dB boost vs. mirrored -12dB cut (freq=1kHz, "
-           "Q=1)\" logx=true\n";
+           "Q=1)\" logx=true hzticks=true\n";
     constexpr float freqHz = 1000.f;
     constexpr float q = 1.f;
     const auto boost = measurePeakBiquadSpectrumDb(freqHz, 12.f, q);

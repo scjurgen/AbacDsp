@@ -45,7 +45,7 @@ void writeResponse(std::ofstream& out, const char* name, const float cutoffHz, c
 void writeResponses(std::ofstream& out)
 {
     out << "@New plot: title=\"OnePoleFilter: magnitude response, all four characteristics "
-           "(cutoff=1kHz)\" logx=true\n";
+           "(cutoff=1kHz)\" logx=true hzticks=true\n";
     const auto sweep = logSweepHz(20.f, 24000.f, 500);
     constexpr float cutoffHz = 1000.f;
     writeResponse<AbacDsp::OnePoleFilterCharacteristic::LowPass>(out, "LowPass", cutoffHz, sweep);
@@ -156,7 +156,7 @@ void writeAllPassPhase(std::ofstream& out)
     constexpr float cutoffHz = 1000.f;
 
     out << "@New plot: title=\"OnePoleFilter AllPass: magnitude stays flat (cutoff=1kHz)\" "
-           "logx=true\n#magnitude\n";
+           "logx=true hzticks=true\n#magnitude\n";
     AbacDsp::OnePoleFilter<AbacDsp::OnePoleFilterCharacteristic::AllPass> filter(kSampleRate, cutoffHz);
     for (const float hz : sweep)
     {
@@ -164,7 +164,7 @@ void writeAllPassPhase(std::ofstream& out)
     }
 
     out << "@New plot: title=\"OnePoleFilter AllPass: phase reaches 90 degrees at cutoff\" "
-           "logx=true\n#phase\n";
+           "logx=true hzticks=true\n#phase\n";
     for (const float hz : sweep)
     {
         out << hz << " " << measureAllPassPhaseDeg(hz, cutoffHz) << "\n";
