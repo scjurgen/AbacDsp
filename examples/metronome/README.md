@@ -19,6 +19,7 @@ mute feature for timing training.
 | BPM | 40 – 250 | Tempo |
 | Preset | see table below | Rhythm and subdivision feel |
 | Voicing | see table below | Click sound, or a drum-kit voicing for beats and subdivisions |
+| Drum Kit | 808 / Reggae / Pocket | Which `samples/drums/<kit>` sample set the voicing plays through |
 | Swing | 1.0 – 2.0 | Swing ratio (only shown for shuffle/swing presets) |
 | Drop Bars | see table below | Bars heard vs. bars silent |
 | Metro Volume | −60 – 0 dB | Click loudness |

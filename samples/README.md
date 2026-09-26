@@ -29,6 +29,10 @@ samples/drums/<kit-name>/<code>_<n>.wav
   `samples/drums/reggae`); point it at a different `<kit-name>` folder, or
   copy a kit's files into `samples/drums/reggae/`, to switch kits without
   touching C++.
+- The metronome example instead bakes the whole `samples/drums/` root
+  directory (`ABACDSP_DRUM_KITS_ROOT_DIR` in its `CMakeLists.txt`) and lets
+  its "Drum Kit" dropdown switch between `808`, `reggae` and `pocket` at
+  runtime - see `examples/metronome/README.md`.
 
 A kit does not need every code below - `GrooveNoteMap.h` resolves each groove
 note through a fallback chain of tags, most specific first (e.g. a missing

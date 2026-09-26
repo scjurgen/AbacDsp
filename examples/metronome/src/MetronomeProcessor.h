@@ -45,6 +45,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("analysisGrid", this);
         m_parameters.addParameterListener("preset", this);
         m_parameters.addParameterListener("voicing", this);
+        m_parameters.addParameterListener("drumKit", this);
         m_parameters.addParameterListener("swingRatio", this);
 
         for (size_t i = 0; i < 5; ++i)
@@ -68,6 +69,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("analysisGrid", this);
         m_parameters.removeParameterListener("preset", this);
         m_parameters.removeParameterListener("voicing", this);
+        m_parameters.removeParameterListener("drumKit", this);
         m_parameters.removeParameterListener("swingRatio", this);
     }
 
@@ -333,6 +335,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                               juce::String::fromUTF8("Tom"), juce::String::fromUTF8("Wood"),
                               juce::String::fromUTF8("Sticks"), juce::String::fromUTF8("Shaker offbeat")},
             0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("drumKit", 1), juce::String::fromUTF8("Drum Kit"),
+            juce::StringArray{juce::String::fromUTF8("808"), juce::String::fromUTF8("Reggae"),
+                              juce::String::fromUTF8("Pocket")},
+            0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("swingRatio", 1), juce::String::fromUTF8("Swing"),
             juce::NormalisableRange<float>(1.0, 2.0, 0.01, 1, false), 1.5,
@@ -417,6 +424,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setVoicing(static_cast<int>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::voicing, v);
+             }},
+            {"drumKit",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setDrumKit(static_cast<int>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::drumKit, v);
              }},
             {"swingRatio",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -517,6 +530,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("voicing");
             float normalized = range.convertTo0to1(static_cast<float>(params.voicing));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("drumKit"))
+        {
+            const auto& range = m_parameters.getParameterRange("drumKit");
+            float normalized = range.convertTo0to1(static_cast<float>(params.drumKit));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("swingRatio"))

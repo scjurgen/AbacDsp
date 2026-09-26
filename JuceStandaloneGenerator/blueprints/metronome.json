@@ -30,6 +30,8 @@
     {"short": "VOI",  "type": "drop",   "display": "Voicing",        "symbol": "voicing",     "default": 0,
       "listitems": ["Click", "Kick", "Kick + HH", "HH only", "Kick Snare HH", "Timbal", "Tom", "Wood", "Sticks",
         "Shaker offbeat"]},
+    {"short": "KIT",  "type": "drop",   "display": "Drum Kit",       "symbol": "drumKit",     "default": 0,
+      "listitems": ["808", "Reggae", "Pocket"]},
     {"short": "SWG",  "type": "dial",   "display": "Swing",          "symbol": "swingRatio",  "default": 1.5, "range": [1.0, 2.0, 0.01, 1, false],  "precision": 2, "unit": "",
      "visible_when": "processorRef.presetHasSwing(presetDrop.getSelectedItemIndex())",
      "depends_on": "preset",
@@ -53,7 +55,7 @@
     "WINDOW_WIDTH": "1200",
     "WINDOW_HEIGHT": "660",
     "type": "||",
-    "composition": "C=(1:5) A1=(PRE, VOI, DRP, SWG, ONF, SYNC, ANLZ, AGRD, BPM, SVOL, MVOL, IVOL) A2=(SIG%1, IRIS%2)"
+    "composition": "C=(1:5) A1=(PRE, VOI, KIT, DRP, SWG, ONF, SYNC, ANLZ, AGRD, BPM, SVOL, MVOL, IVOL) A2=(SIG%1, IRIS%2)"
   },
   "performance-page": {
     "type": "|||",

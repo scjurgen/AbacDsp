@@ -156,6 +156,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(drumKitDrop)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(dropBarsDrop)
                                   .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
@@ -320,6 +325,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             valueTreeState, "voicing", voicingDrop);
         voicingDrop.setTooltip(juce::String::fromUTF8(
             "Voicing (Click, Kick, Kick + HH, HH only, Kick Snare HH, Timbal, Tom, Wood, Sticks, Shaker offbeat)"));
+        addAndMakeVisible(drumKitDrop);
+        drumKitDrop.addItemList(valueTreeState.getParameter("drumKit")->getAllValueStrings(), 1);
+        drumKitDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "drumKit", drumKitDrop);
+        drumKitDrop.setTooltip(juce::String::fromUTF8("Drum Kit (808, Reggae, Pocket)"));
         addChildComponent(swingRatioDial);
         swingRatioDial.reset(valueTreeState, "swingRatio");
         swingRatioDial.setLabelText(juce::String::fromUTF8("Swing"));
@@ -366,6 +376,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             analysisGridDrop.setVisible(false);
             presetDrop.setVisible(false);
             voicingDrop.setVisible(false);
+            drumKitDrop.setVisible(false);
             signalGauge.setVisible(true);
             irisGauge.setVisible(true);
         }
@@ -382,6 +393,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             analysisGridDrop.setVisible(true);
             presetDrop.setVisible(true);
             voicingDrop.setVisible(true);
+            drumKitDrop.setVisible(true);
             signalGauge.setVisible(true);
             irisGauge.setVisible(true);
         }
@@ -881,6 +893,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> presetDropAttachment;
     juce::ComboBox voicingDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> voicingDropAttachment;
+    juce::ComboBox drumKitDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> drumKitDropAttachment;
     CustomRotaryDial swingRatioDial{this};
     CircularBeatDisplay signalGauge{};
     CircularSpectrogramDisplay irisGauge{};

@@ -57,7 +57,7 @@ class MetronomeImpl final : public EffectBase
         m_visualWavedata.resize(kVisualBufferSize, 0.f);
         m_inputSpectrogram.setSampleRate(sampleRate);
         updateWindowSizes();
-        m_drumVoiceKit.requestLoad(kAbacDspDrumSamplesDir);
+        setDrumKit(m_drumKitIndex);
     }
 
     void setBpm(const float value)
@@ -149,6 +149,16 @@ class MetronomeImpl final : public EffectBase
     void setVoicing(const int index)
     {
         m_voicingIndex = std::clamp(index, 0, static_cast<int>(kVoicings.size()) - 1);
+    }
+
+    // Same code vocabulary across all three kits (see samples/README.md), so
+    // switching just reloads DrumVoiceKit from the new directory.
+    void setDrumKit(const int index)
+    {
+        m_drumKitIndex = std::clamp(index, 0, static_cast<int>(kDrumKitDirNames.size()) - 1);
+        const std::string path = std::string(kAbacDspDrumKitsRootDir) + "/" +
+                                 std::string(kDrumKitDirNames[static_cast<size_t>(m_drumKitIndex)]);
+        m_drumVoiceKit.requestLoad(path);
     }
 
     void setSwingRatio(const float ratio)
@@ -368,7 +378,10 @@ class MetronomeImpl final : public EffectBase
         {"16th", kSi},
     });
 
-    // One 808-kit voicing: which sample code plays on the alternating strong-beat
+    // samples/drums subfolder names, in blueprint dropdown order.
+    static constexpr auto kDrumKitDirNames = std::to_array<std::string_view>({"808", "reggae", "pocket"});
+
+    // One drum-kit voicing: which sample code plays on the alternating strong-beat
     // slots (A = downbeat + even beat count, B = odd beat count - see
     // m_beatOccurrenceInBar) and on the subdivision grid. An empty code means
     // silence for that slot; index 0 ("Click") is the original damped-sine click
@@ -603,6 +616,7 @@ class MetronomeImpl final : public EffectBase
     size_t m_postWindow{0};
 
     int m_voicingIndex{kClickVoicingIndex};
+    int m_drumKitIndex{0};
     size_t m_beatOccurrenceInBar{0};
     uint64_t m_drumVoiceTriggerCounter{0};
     // Mirrors ClickGenerator's own defaults (see setMetroVolume()/setSubVolume()) so a

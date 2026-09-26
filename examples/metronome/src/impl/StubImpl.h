@@ -62,6 +62,10 @@ class StubImpl final : public EffectBase
     {
         m_voicing = value;
     }
+    void setDrumKit(const size_t value)
+    {
+        m_drumKit = value;
+    }
     void setSwingRatio(const float value)
     {
         m_swingRatio = value;
@@ -104,6 +108,7 @@ class StubImpl final : public EffectBase
     size_t m_analysisGrid{};
     size_t m_preset{};
     size_t m_voicing{};
+    size_t m_drumKit{};
     float m_swingRatio{};
 
 

@@ -5,6 +5,10 @@ Some of these rules get constantly broken by Claude: the discipline of claude is
 on how to comment code, and often going ahead with tasks without being explicitly asked. When the user asks a 
 question, Claude should answer the question, but NEVER go ahead implicitly; instead, wait for instructions.
 
+## Claude Conversational Style
+
+Do not use conversational filler, validation, or sycophantic phrases like 'good catch', 'you're right', or 'sharp eye'. When I correct a mistake, acknowledge it neutrally and provide the updated response immediately.
+
 ## Agents
 
 **Never** launch agents in this project.
