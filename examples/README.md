@@ -10,6 +10,8 @@ generates or overwrites it.
 
 | Name                      | Type       | Lua | Samples | Custom UI                  | DSP                                                                                                                            |
 |---------------------------|------------|-----|---------|-----------------------------|---------------------------------------------------------------------------------------------------------------------------------|
+| Ambientpad                | Instrument | x   |         |                             | two morphing wavetable layers, pole-mixing filter, four Ornstein-Uhlenbeck processes plus per-voice LFOs, distortion, phaser/chorus/FDN reverb bus |
+| Ambientsynth              | Instrument | x   |         |                             | two morphing wavetable layers, pole-mixing filter (LP4/LP2/LP1Notch/Notch/BP2/HP1LP3/AP4), Ornstein-Uhlenbeck + per-voice LFO modulation, phaser/chorus/FDN reverb bus |
 | Delay                     | Effect     |     |         |                             | modulated feedback delay, one-pole low/high/all-pass filters                                                                    |
 | Dronesequencer            | Instrument | x   |         |                             | Karplus-Strong string ensemble, Ornstein-Uhlenbeck excitation drift, ADS envelope, biquad, FDN reverb                           |
 | Groover                   | Effect     |     | x       |                             | sample-based drum kit playback (GrooveKit/GrooveDrumPlayer)                                                                     |
@@ -18,7 +20,9 @@ generates or overwrites it.
 | Maxdiffuser               | Effect     |     |         | processing-size displays   | series allpass diffuser chain, FDN reverb, pitch shifting, biquad, waveshaping distortion                                       |
 | Metronome                 | Effect     |     |         | beat/spectrogram displays  | beat sequencer, click generator, onset/timing analysis against the beat grid                                                    |
 | Minireverb                | Effect     |     |         |                             | order-32 FDN reverb (Walsh-Hadamard mix), two in-tank pitch shifters, per-line hi/lo-pass filtering, vibrato                     |
+| Morphexsynth              | Instrument | x   |         |                             | 3 wavetable oscillators, pole-mixing filter, amp/filter/pitch envelopes, LFO, distortion, 10-slot MPE routing matrix, phaser/chorus/reverb bus |
 | Organicchorus             | Effect     | x   |         |                             | multi-voice BBD-style chorus/flanger (variable-write-clock tape delay per voice), Ornstein-Uhlenbeck/Wow/Flutter modulation, one-pole tone filtering, saturation                |
+| Pathfinder                | Effect     | x   |         | Lua graph editor           | user-scripted signal graph (default: shared-stereo WobbleDelay tape vibrato per channel via UpDownSampler); presets for chorus/BBD-chorus/widener/resonant-feedback graphs |
 | Pingsynth                 | Instrument | x   |         |                             | modal resonator (ringing bandpass) bank, FDN reverb, pitch detection for Lua-side tuning                                        |
 | Plaingain                 | Effect     |     |         |                             | gain staging, biquad shelving filters, latency-compensation delay                                                               |
 | Resonik                   | Effect     | x   |         |                             | resonator bank (biquad + SVF bandpass), multi-tap delay, pitch detection                                                        |
@@ -29,6 +33,21 @@ generates or overwrites it.
 | Tapelooper                | Effect     | x   | x       | tape display                | variable-speed sinc-interpolated tape delay, tape hysteresis, compressor, ring modulator, tremolo, pole-mixing filter, multi-tap delay, FDN reverb, sample-based drum kit, beat-locked loop timekeeping |
 
 Here the list in alphabetical order.
+## Ambientpad
+A monophonic ambient-pad voice, times up to 16: two morphing wavetable layers through a
+resonant pole-mixing filter, a long attack/release amplitude envelope, a distortion stage, and
+a phaser/chorus/FDN reverb bus. Motion comes from four correlated Ornstein-Uhlenbeck (mean-
+reverting random walk) processes plus per-channel Lua LFOs, rather than a conventional LFO and
+ADSR envelopes; an optional Lua-scripted harmonic organism can drive voices autonomously through
+a palette of harmonic states.
+
+## Ambientsynth
+A real-time-performance sibling of Ambientpad: the same two-morphing-wavetable-layer voice
+through a resonant pole-mixing filter (LP4, LP2, LP1Notch, Notch, BP2, HP1LP3 or AP4), times up
+to 16, aimed at a human player on a MIDI keyboard instead of an autonomous harmonic organism.
+Cutoff, Resonance, Material, Breath and Pitch each carry their own Ornstein-Uhlenbeck wander plus
+an independent per-voice LFO; harmony (regions, chord sets, a bass pedal) lives entirely in Lua.
+
 ## Delay
 Feedback delay with host-synced or free time, low/high/all-pass filtering in
 the feedback path, and delay-time modulation.
@@ -68,6 +87,14 @@ Order-32 FDN reverb (`FdnTankBlockDelayWalshSIMD`/`FdnTankSpiced`) with
 Walsh-Hadamard mixing, two in-tank pitch shifters, and low/high-pass shaping
 per delay line.
 
+## Morphexsynth
+An MPE subtractive synth ported from modabacad's `NubuNiif`: three wavetable oscillators through
+a resonant pole-mixing filter, amp/filter/pitch envelopes, an LFO, a distortion stage, and a
+10-slot MPE routing matrix that lets X/Y/Z/velocity/note/envelope amount feed any of a dozen-plus
+destinations through a curve and depth. Only Vol, Cutoff and Reso are blueprint dials; everything
+else (oscillators, envelopes, filter type, LFO, distortion, the MPE matrix, and the phaser/
+chorus/reverb bus) is Lua-only.
+
 ## Organicchorus
 Multi-voice BBD-style chorus/flanger: each voice is a genuine variable-speed tape
 delay (not a read-position fake) whose write clock stays clean (baseline speed plus
@@ -75,6 +102,13 @@ an independent Ornstein-Uhlenbeck drift) while Wow and Flutter modulate the read
 head instead, wrapped in per-voice feedback and tone shaping. Four configurations
 (Classic, Wide, Tri Ensemble, Flanger) share six macros (Configuration, Tone, Speed,
 Depth, Feedback, Mix); two extra live-tweak knobs (Drift, Spread) are Lua-scripted.
+
+## Pathfinder
+A tape-modulation effect whose signal chain and controls are a Lua graph script, edited in the
+app itself: the script decides which nodes exist, how they are wired, and which knobs the plugin
+shows. It starts as a shared-stereo tape vibrato (one `WobbleDelay` read head per channel inside
+an `UpDownSampler`, wow/flutter modulated, 100% wet); ten ready-made template graphs cover
+chorus families, a BBD-style chorus, a widener and a resonant feedback loop.
 
 ## Pingsynth
 A Lua-scripted modal resonator synth: each voice is a bank of ringing bandpass resonators,
