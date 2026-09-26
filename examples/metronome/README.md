@@ -18,6 +18,7 @@ mute feature for timing training.
 |---|---|---|
 | BPM | 40 – 250 | Tempo |
 | Preset | see table below | Rhythm and subdivision feel |
+| Voicing | see table below | Click sound, or a drum-kit voicing for beats and subdivisions |
 | Swing | 1.0 – 2.0 | Swing ratio (only shown for shuffle/swing presets) |
 | Drop Bars | see table below | Bars heard vs. bars silent |
 | Metro Volume | −60 – 0 dB | Click loudness |
@@ -61,6 +62,39 @@ note; for 3/4 and 4/4 it is a quarter note.
 | 13/8 (3+4+3+3) | 13 | none | D·s·s·B·s·s·s·B·s·s·B·s·s |
 
 Legend: **D** = downbeat, **B** = beat, **s** = subdivision tick
+
+## Drum Voicings
+
+Voicing swaps the damped-sine click for real drum-kit hits from the synthesized,
+copyright-free 808 kit (`samples/drums/808`, see `documentation/DrumKit808`). Click is the
+default and unchanged; every other voicing replaces the click and subdivision tick with
+samples, played through the existing accent hierarchy (Downbeat 1.0, Beat 0.85, Sub 0.55
+gain) instead of a different sound.
+
+A single alternation idiom drives every voicing without any per-meter special case: a
+counter increments on every beat and resets each bar, so the downbeat is always count 0,
+even counts play "Beat A" and odd counts play "Beat B". For a two-instrument voicing on a
+4/4 preset that lands kick on 1 and 3, snare on 2 and 4, the way a real drummer plays it. On
+an odd-beats-per-bar preset the alternation still applies beat to beat, just without that
+clean 2-and-4 grouping; which beat opens on A vs. B then also flips from bar to bar.
+
+| Voicing | Beat A | Beat B | Subdivision |
+|---|---|---|---|
+| Click | - | - | - |
+| Kick | Kick | Kick | - |
+| Kick + HH | Kick | Kick | Closed hihat |
+| HH only | Closed hihat | Closed hihat | Ghost hihat |
+| Kick Snare HH | Kick | Snare | Closed hihat |
+| Timbal | Timbale 1 | Timbale 2 | Damped timbale |
+| Tom | Low tom | Mid tom | High tom |
+| Wood | Woodblock | Woodblock | Woodblock |
+| Sticks | Sidestick | Sidestick | Sidestick |
+| Shaker offbeat | - | - | Shaker |
+
+Each sample code round-robins through its own take pool on every trigger, so repeated hits
+don't sound mechanically identical. "Wood" and "Sticks" use the same instrument for Beat A
+and Beat B, so the alternation idiom has no audible effect for them. "Shaker offbeat" leaves
+the beat itself silent; only the subdivision grid sounds.
 
 ## Drop Bars
 

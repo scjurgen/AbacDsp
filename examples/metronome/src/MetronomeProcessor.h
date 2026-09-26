@@ -44,6 +44,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("analysisMode", this);
         m_parameters.addParameterListener("analysisGrid", this);
         m_parameters.addParameterListener("preset", this);
+        m_parameters.addParameterListener("voicing", this);
         m_parameters.addParameterListener("swingRatio", this);
 
         for (size_t i = 0; i < 5; ++i)
@@ -66,6 +67,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("analysisMode", this);
         m_parameters.removeParameterListener("analysisGrid", this);
         m_parameters.removeParameterListener("preset", this);
+        m_parameters.removeParameterListener("voicing", this);
         m_parameters.removeParameterListener("swingRatio", this);
     }
 
@@ -323,6 +325,14 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                               juce::String::fromUTF8("13/8 (3+3+3+2+2)"),
                               juce::String::fromUTF8("13/8 (3+4+3+3)")},
             6));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("voicing", 1), juce::String::fromUTF8("Voicing"),
+            juce::StringArray{juce::String::fromUTF8("Click"), juce::String::fromUTF8("Kick"),
+                              juce::String::fromUTF8("Kick + HH"), juce::String::fromUTF8("HH only"),
+                              juce::String::fromUTF8("Kick Snare HH"), juce::String::fromUTF8("Timbal"),
+                              juce::String::fromUTF8("Tom"), juce::String::fromUTF8("Wood"),
+                              juce::String::fromUTF8("Sticks"), juce::String::fromUTF8("Shaker offbeat")},
+            0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("swingRatio", 1), juce::String::fromUTF8("Swing"),
             juce::NormalisableRange<float>(1.0, 2.0, 0.01, 1, false), 1.5,
@@ -401,6 +411,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
              {
                  p.pluginRunner->setPreset(static_cast<int>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::preset, v);
+             }},
+            {"voicing",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setVoicing(static_cast<int>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::voicing, v);
              }},
             {"swingRatio",
              [](AudioPluginAudioProcessor& p, const float v)
@@ -495,6 +511,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("preset");
             float normalized = range.convertTo0to1(static_cast<float>(params.preset));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("voicing"))
+        {
+            const auto& range = m_parameters.getParameterRange("voicing");
+            float normalized = range.convertTo0to1(static_cast<float>(params.voicing));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("swingRatio"))

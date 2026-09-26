@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "Analysis/Spectrogram.h"
@@ -15,6 +16,9 @@
 #include "EffectBase.h"
 #include "Generators/BeatSequencer.h"
 #include "Generators/ClickGenerator.h"
+#include "MetronomeDrumPaths.h"
+#include "Sampler/DrumVoiceKit.h"
+#include "Sampler/SamplePlayerBasic.h"
 
 using AbacDsp::ClickAccent;
 using AbacDsp::SubdivType;
@@ -43,6 +47,7 @@ class MetronomeImpl final : public EffectBase
         , m_click(sampleRate)
         , m_seq(sampleRate)
         , m_onsetDetector(sampleRate)
+        , m_drumVoices(makeDrumVoicePool(sampleRate))
     {
         const auto& preset = kPresets[static_cast<size_t>(m_presetIndex)];
         m_seq.setBeatsPerBar(preset.barBeats);
@@ -52,6 +57,7 @@ class MetronomeImpl final : public EffectBase
         m_visualWavedata.resize(kVisualBufferSize, 0.f);
         m_inputSpectrogram.setSampleRate(sampleRate);
         updateWindowSizes();
+        m_drumVoiceKit.requestLoad(kAbacDspDrumSamplesDir);
     }
 
     void setBpm(const float value)
@@ -83,11 +89,13 @@ class MetronomeImpl final : public EffectBase
     void setMetroVolume(const float valueDb) noexcept
     {
         m_click.setVolumeDb(valueDb);
+        m_metroVolumeGain = dbToLinearGain(valueDb);
     }
 
     void setSubVolume(const float valueDb) noexcept
     {
         m_click.setSubVolumeDb(valueDb);
+        m_subVolumeGain = dbToLinearGain(valueDb);
     }
 
     void setInputVolume(const float valueDb) noexcept
@@ -135,6 +143,12 @@ class MetronomeImpl final : public EffectBase
         m_seq.setSubdivType(preset.subdivType);
         m_seq.resetBarPosition();
         m_barCount = 0;
+        m_beatOccurrenceInBar = 0;
+    }
+
+    void setVoicing(const int index)
+    {
+        m_voicingIndex = std::clamp(index, 0, static_cast<int>(kVoicings.size()) - 1);
     }
 
     void setSwingRatio(const float ratio)
@@ -168,6 +182,7 @@ class MetronomeImpl final : public EffectBase
             syncToHostTransport();
         }
         updateAnalysisMode();
+        m_drumVoiceKit.pollAndInstall();
 
         std::array<float, BlockSize> inMono{};
         for (size_t i = 0; i < BlockSize; ++i)
@@ -210,20 +225,34 @@ class MetronomeImpl final : public EffectBase
 
             if (event.subdivision && !isMuted)
             {
-                m_click.triggerSub();
+                triggerSubdivision();
             }
 
             const float click = m_click.step0();
-            const float output = effectiveRunning() && !isMuted ? click : 0.f;
+            float drumLeft = 0.f;
+            float drumRight = 0.f;
+            for (auto& slot : m_drumVoices)
+            {
+                float voiceLeft = 0.f;
+                float voiceRight = 0.f;
+                slot.player.processBlock(&voiceLeft, &voiceRight, 1);
+                drumLeft += voiceLeft * slot.gain;
+                drumRight += voiceRight * slot.gain;
+            }
 
-            out(i, 0) = in(i, 0) * m_inputGain + output;
-            out(i, 1) = in(i, 1) * m_inputGain + output;
+            const bool audible = effectiveRunning() && !isMuted;
+            const float leftOutput = audible ? (isVoicingClick() ? click : drumLeft) : 0.f;
+            const float rightOutput = audible ? (isVoicingClick() ? click : drumRight) : 0.f;
+
+            out(i, 0) = in(i, 0) * m_inputGain + leftOutput;
+            out(i, 1) = in(i, 1) * m_inputGain + rightOutput;
 
             writeToVisualWindow(event.beatSamplePos, in(i, 0) + in(i, 1));
 
             if (event.barWrapped)
             {
                 advanceDropBar(mode);
+                m_beatOccurrenceInBar = 0;
             }
         }
     }
@@ -339,9 +368,157 @@ class MetronomeImpl final : public EffectBase
         {"16th", kSi},
     });
 
+    // One 808-kit voicing: which sample code plays on the alternating strong-beat
+    // slots (A = downbeat + even beat count, B = odd beat count - see
+    // m_beatOccurrenceInBar) and on the subdivision grid. An empty code means
+    // silence for that slot; index 0 ("Click") is the original damped-sine click
+    // and is never resolved through the kit at all (see isVoicingClick()).
+    struct VoicingDef
+    {
+        std::string_view name;
+        std::string_view codeA;
+        std::string_view codeB;
+        std::string_view codeSub;
+    };
+    static constexpr int kClickVoicingIndex = 0;
+    // clang-format off
+    static constexpr auto kVoicings = std::to_array<VoicingDef>({
+        //  name                beat A     beat B     subdivision
+        {"Click",               "",        "",        ""},
+        {"Kick",                "bd",      "bd",      ""},
+        {"Kick + HH",           "bd",      "bd",      "hh"},
+        {"HH only",             "hh",      "hh",      "hhghost"},
+        {"Kick Snare HH",       "bd",      "sd",      "hh"},
+        {"Timbal",              "timb1",   "timb2",   "timbdmp"},
+        {"Tom",                 "tomlo",   "tom1",    "tom2"},
+        {"Wood",                "wood",    "wood",    "wood"},
+        {"Sticks",              "sstick",  "sstick",  "sstick"},
+        {"Shaker offbeat",      "",        "",        "shaker"},
+    });
+    // clang-format on
+
+    static constexpr float kDownbeatAccentGain = 1.0f;
+    static constexpr float kBeatAccentGain = 0.85f;
+    static constexpr float kSubAccentGain = 0.55f;
+
+    // Unlike ClickGenerator::dbToGain(), no kBoostDb: the click is a tiny damped
+    // sine that needs a large boost to be audible at all, while the drum-kit
+    // samples are already normalized to their own sensible peak levels.
+    [[nodiscard]] static float dbToLinearGain(const float valueDb) noexcept
+    {
+        return std::pow(10.f, valueDb / 20.f);
+    }
+
+    [[nodiscard]] static constexpr float accentGain(const ClickAccent level) noexcept
+    {
+        switch (level)
+        {
+            case ClickAccent::Downbeat:
+                return kDownbeatAccentGain;
+            case ClickAccent::Beat:
+                return kBeatAccentGain;
+            case ClickAccent::Sub:
+                return kSubAccentGain;
+            case ClickAccent::None:
+                return 0.f;
+        }
+        return 0.f;
+    }
+
+    [[nodiscard]] bool isVoicingClick() const noexcept
+    {
+        return m_voicingIndex == kClickVoicingIndex;
+    }
+
+    // One drum-voicing sample slot: a SamplePlayerBasic plus the trigger-time
+    // gain (from accentGain()) and allocation order for allocateDrumVoice()'s
+    // steal-oldest policy.
+    struct DrumVoiceSlot
+    {
+        explicit DrumVoiceSlot(const float sampleRate)
+            : player(sampleRate)
+        {
+        }
+        AbacDsp::SamplePlayerBasic player;
+        float gain{1.f};
+        uint64_t startOrder{0};
+    };
+    static constexpr size_t kNumDrumVoices = 4;
+    using DrumVoicePool = std::array<DrumVoiceSlot, kNumDrumVoices>;
+
+    template <size_t... I>
+    [[nodiscard]] static DrumVoicePool makeDrumVoicePoolImpl(const float sampleRate, std::index_sequence<I...>)
+    {
+        return DrumVoicePool{{(static_cast<void>(I), DrumVoiceSlot(sampleRate))...}};
+    }
+
+    [[nodiscard]] static DrumVoicePool makeDrumVoicePool(const float sampleRate)
+    {
+        return makeDrumVoicePoolImpl(sampleRate, std::make_index_sequence<kNumDrumVoices>{});
+    }
+
+    // Prefers an idle voice; if every voice is still playing, steals the one
+    // triggered longest ago (mirrors SlicePlayer::allocateVoice()).
+    [[nodiscard]] DrumVoiceSlot& allocateDrumVoice() noexcept
+    {
+        for (auto& slot : m_drumVoices)
+        {
+            if (slot.player.isDone())
+            {
+                return slot;
+            }
+        }
+        auto* oldest = &m_drumVoices.front();
+        for (auto& slot : m_drumVoices)
+        {
+            if (slot.startOrder < oldest->startOrder)
+            {
+                oldest = &slot;
+            }
+        }
+        return *oldest;
+    }
+
+    void triggerDrumVoice(const std::string_view code, const float gain) noexcept
+    {
+        if (code.empty())
+        {
+            return;
+        }
+        const auto sample = m_drumVoiceKit.nextTake(code);
+        if (!sample)
+        {
+            return;
+        }
+        auto& slot = allocateDrumVoice();
+        slot.player.runStereo(sample);
+        slot.player.setLoop(false);
+        slot.player.restart();
+        slot.gain = gain;
+        slot.startOrder = ++m_drumVoiceTriggerCounter;
+    }
+
     void triggerBeatAccent(const ClickAccent level) noexcept
     {
-        m_click.trigger(level);
+        if (isVoicingClick())
+        {
+            m_click.trigger(level);
+            return;
+        }
+        const auto& voicing = kVoicings[static_cast<size_t>(m_voicingIndex)];
+        const std::string_view code = (m_beatOccurrenceInBar % 2 == 0) ? voicing.codeA : voicing.codeB;
+        ++m_beatOccurrenceInBar;
+        triggerDrumVoice(code, accentGain(level) * m_metroVolumeGain);
+    }
+
+    void triggerSubdivision() noexcept
+    {
+        if (isVoicingClick())
+        {
+            m_click.triggerSub();
+            return;
+        }
+        triggerDrumVoice(kVoicings[static_cast<size_t>(m_voicingIndex)].codeSub, kSubAccentGain * m_subVolumeGain);
     }
 
     void advanceDropBar(const DropBarMode& mode) noexcept
@@ -425,11 +602,23 @@ class MetronomeImpl final : public EffectBase
     size_t m_preWindow{0};
     size_t m_postWindow{0};
 
+    int m_voicingIndex{kClickVoicingIndex};
+    size_t m_beatOccurrenceInBar{0};
+    uint64_t m_drumVoiceTriggerCounter{0};
+    // Mirrors ClickGenerator's own defaults (see setMetroVolume()/setSubVolume()) so a
+    // freshly constructed instance matches the blueprint's default dial values before
+    // the host attaches and applies its own parameter state.
+    float m_metroVolumeGain{dbToLinearGain(-6.f)};
+    float m_subVolumeGain{dbToLinearGain(-15.f)};
+
     AbacDsp::ClickGenerator m_click;
     AbacDsp::BeatSequencer m_seq;
     MetronomeAnalysis::OnsetDetector m_onsetDetector;
     MetronomeAnalysis::RawOnsetCollector m_rawOnsetCollector;
     std::atomic<bool> m_reportReady{false};
+
+    AbacDsp::DrumVoiceKit m_drumVoiceKit;
+    DrumVoicePool m_drumVoices;
 
     std::vector<float> m_visualWavedata;
     std::vector<float> m_preparedWavedata;

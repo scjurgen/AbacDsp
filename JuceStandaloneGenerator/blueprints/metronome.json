@@ -27,6 +27,9 @@
         "4/4 shuffle", "4/4 triplet", "4/4 swing", "5/4 (3+2)", "5/4 8th (3+2)", "5/4 (2+3)", "5/4 8th (2+3)",
         "6/8 in-2", "6/8 in-6", "7/8 (2+2+3)", "7/8 (2+3+2)", "7/8 (3+2+2)", "9/8 in-3", "9/8 in-9",
         "11/8 (3+3+3+2)", "11/8 (3+3+2+3)", "13/8 (3+3+3+2+2)", "13/8 (3+4+3+3)"]},
+    {"short": "VOI",  "type": "drop",   "display": "Voicing",        "symbol": "voicing",     "default": 0,
+      "listitems": ["Click", "Kick", "Kick + HH", "HH only", "Kick Snare HH", "Timbal", "Tom", "Wood", "Sticks",
+        "Shaker offbeat"]},
     {"short": "SWG",  "type": "dial",   "display": "Swing",          "symbol": "swingRatio",  "default": 1.5, "range": [1.0, 2.0, 0.01, 1, false],  "precision": 2, "unit": "",
      "visible_when": "processorRef.presetHasSwing(presetDrop.getSelectedItemIndex())",
      "depends_on": "preset",
@@ -47,14 +50,14 @@
       ]}
   ],
   "layout": {
-    "WINDOW_WIDTH": "960",
+    "WINDOW_WIDTH": "1200",
     "WINDOW_HEIGHT": "660",
     "type": "||",
-    "composition": "C=(1:5) A1=(PRE, DRP, SWG, ONF, SYNC, ANLZ, AGRD, BPM, SVOL, MVOL, IVOL) A2=(SIG%1, IRIS%2)"
+    "composition": "C=(1:5) A1=(PRE, VOI, DRP, SWG, ONF, SYNC, ANLZ, AGRD, BPM, SVOL, MVOL, IVOL) A2=(SIG%1, IRIS%2)"
   },
   "performance-page": {
-    "type": "-",
-    "composition": "A1=(SIG,IRIS)"
+    "type": "|||",
+    "composition": "C=(1:4:6) A1=(SWG, ONF, BPM, SVOL, MVOL, IVOL, ANLZ) A2=(SIG) A3=(IRIS)"
   },
   "extra_ui_includes": [
     "inc/CircularBeatDisplay.h",

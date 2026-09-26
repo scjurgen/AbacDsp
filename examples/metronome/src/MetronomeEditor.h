@@ -83,17 +83,52 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // auto generated
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
-            std::vector<juce::Rectangle<int>> areas(1);
-            areas[0] = area.reduced(Constants::Margins::small);
+            std::vector<juce::Rectangle<int>> areas(3);
+            const auto colWidth = area.getWidth() / 11;
+            areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
+            areas[1] = area.removeFromLeft(colWidth * 4).reduced(Constants::Margins::small);
+            areas[2] = area.reduced(Constants::Margins::small);
 
             {
                 juce::FlexBox box;
                 box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::row;
+                box.flexDirection = juce::FlexBox::Direction::column;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                if (swingRatioDial.isVisible())
+                {
+                    box.items.add(juce::FlexItem(swingRatioDial).withFlex(1).withMargin(knobMarginSmall));
+                }
+                box.items.add(juce::FlexItem(onOffSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(subVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(metroVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(inputVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(analysisModeSwitch)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.performLayout(areas[0].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::column;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
                 box.items.add(juce::FlexItem(signalGauge).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[1].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::column;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
                 box.items.add(juce::FlexItem(irisGauge).withFlex(1).withMargin(knobMarginSmall));
-                box.performLayout(areas[0].toFloat());
+                box.performLayout(areas[2].toFloat());
             }
         }
         else
@@ -112,6 +147,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.flexDirection = juce::FlexBox::Direction::column;
                 box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
                 box.items.add(juce::FlexItem(presetDrop)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(voicingDrop)
                                   .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
@@ -274,6 +314,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                    "in-9, 11/8 (3+3+3+2), 11/8 (3+3+2+3), 13/8 (3+3+3+2+2), 13/8 (3+4+3+3))"));
         presetDrop.onChange = [this] { updateSwingRatioVisibility(); };
         updateSwingRatioVisibility();
+        addAndMakeVisible(voicingDrop);
+        voicingDrop.addItemList(valueTreeState.getParameter("voicing")->getAllValueStrings(), 1);
+        voicingDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "voicing", voicingDrop);
+        voicingDrop.setTooltip(juce::String::fromUTF8(
+            "Voicing (Click, Kick, Kick + HH, HH only, Kick Snare HH, Timbal, Tom, Wood, Sticks, Shaker offbeat)"));
         addChildComponent(swingRatioDial);
         swingRatioDial.reset(valueTreeState, "swingRatio");
         swingRatioDial.setLabelText(juce::String::fromUTF8("Swing"));
@@ -309,16 +355,17 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         m_pageSettingsButton.setToggleState(page == Page::Settings, juce::dontSendNotification);
         if (page == Page::Performance)
         {
-            bpmDial.setVisible(false);
+            bpmDial.setVisible(true);
             dropBarsDrop.setVisible(false);
-            metroVolumeDial.setVisible(false);
-            inputVolumeDial.setVisible(false);
-            subVolumeDial.setVisible(false);
-            onOffSwitch.setVisible(false);
+            metroVolumeDial.setVisible(true);
+            inputVolumeDial.setVisible(true);
+            subVolumeDial.setVisible(true);
+            onOffSwitch.setVisible(true);
             hostSyncSwitch.setVisible(false);
-            analysisModeSwitch.setVisible(false);
+            analysisModeSwitch.setVisible(true);
             analysisGridDrop.setVisible(false);
             presetDrop.setVisible(false);
+            voicingDrop.setVisible(false);
             signalGauge.setVisible(true);
             irisGauge.setVisible(true);
         }
@@ -334,6 +381,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             analysisModeSwitch.setVisible(true);
             analysisGridDrop.setVisible(true);
             presetDrop.setVisible(true);
+            voicingDrop.setVisible(true);
             signalGauge.setVisible(true);
             irisGauge.setVisible(true);
         }
@@ -831,6 +879,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> analysisGridDropAttachment;
     juce::ComboBox presetDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> presetDropAttachment;
+    juce::ComboBox voicingDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> voicingDropAttachment;
     CustomRotaryDial swingRatioDial{this};
     CircularBeatDisplay signalGauge{};
     CircularSpectrogramDisplay irisGauge{};

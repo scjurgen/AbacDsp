@@ -58,6 +58,10 @@ class StubImpl final : public EffectBase
     {
         m_preset = value;
     }
+    void setVoicing(const size_t value)
+    {
+        m_voicing = value;
+    }
     void setSwingRatio(const float value)
     {
         m_swingRatio = value;
@@ -99,6 +103,7 @@ class StubImpl final : public EffectBase
     bool m_analysisMode{};
     size_t m_analysisGrid{};
     size_t m_preset{};
+    size_t m_voicing{};
     float m_swingRatio{};
 
 

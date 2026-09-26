@@ -141,6 +141,20 @@ target_compile_definitions(
         JUCE_MODAL_LOOPS_PERMITTED=1
 )
 
+# Drum voicing kit: the synthesized, copyright-free 808 kit (see
+# documentation/DrumKit808 and samples/README.md) - referenced by absolute path,
+# not bundled as binary data. Baked into a generated header (not a -D define),
+# matching examples/groover's own ABACDSP_DRUM_SAMPLES_DIR.
+set(ABACDSP_DRUM_SAMPLES_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../samples/drums/808"
+)
+configure_file(
+    src/impl/MetronomeDrumPaths.h.in
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/MetronomeDrumPaths.h"
+    @ONLY
+)
+include_directories("${CMAKE_CURRENT_BINARY_DIR}/generated")
+
 target_link_libraries(
     "${PROJECT_NAME}"
     PRIVATE MetronomeAssets ${JUCE_DEPENDENCIES} nlohmann_json::nlohmann_json

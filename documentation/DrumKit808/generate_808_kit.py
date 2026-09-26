@@ -74,6 +74,18 @@ def noise_click(n: int, hp_hz: float, rng: random.Random) -> list[float]:
     return one_pole_highpass([rng.uniform(-1.0, 1.0) for _ in range(n)], hp_hz)
 
 
+def square_ish(omega: float, i: int, phase: float, num_harmonics: int = 5) -> float:
+    """A band-limited square wave: a truncated odd-harmonic Fourier series, not a
+    hard sign() step. The 808's own hihat oscillator bank is square-ish, not
+    pure sine - metallic_voice() relies on this harmonic content reaching well
+    above its own highpass cutoff; a plain sine has none."""
+    value = 0.0
+    for k in range(num_harmonics):
+        n_harmonic = 2 * k + 1
+        value += math.sin(n_harmonic * (omega * i + phase)) / n_harmonic
+    return value
+
+
 def pitched_sine(n: int, start_freq: float, end_freq: float, pitch_decay_s: float) -> list[float]:
     tau = max(pitch_decay_s, 0.001) / LN1000
     phase = 0.0
@@ -126,7 +138,7 @@ def metallic_voice(partials_hz: tuple[float, ...], hp_hz: float, decay_s: float,
             omega = 2.0 * math.pi * base_freq * ratio * spread / SAMPLE_RATE
             phase = rng.uniform(0.0, 2.0 * math.pi)
             for i in range(n):
-                out[i] += amp * math.sin(omega * i + phase)
+                out[i] += amp * square_ish(omega, i, phase)
         out = one_pole_highpass(out, hp_hz)
         env = decay_envelope(n, decay)
         out = [out[i] * env[i] for i in range(n)]
