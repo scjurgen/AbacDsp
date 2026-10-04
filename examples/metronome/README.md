@@ -170,7 +170,7 @@ literal: the Swing control only affects the built-in subdivisions.
 Metro Volume control is the master on top of it; Sub Volume has no role for script patterns.
 
 `instrument` is one of these global constants. Each plays the like-named sample of the selected
-Drum Kit; a sample the kit lacks (ClickLow and ClickHigh in the Pocket kit) stays silent.
+Drum Kit; a sample the kit lacks stays silent.
 
 | Constant | Sample | Constant | Sample |
 |---|---|---|---|
