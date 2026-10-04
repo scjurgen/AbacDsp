@@ -5,6 +5,8 @@
     "✨ Metronome with settable BPM, start/stop and damped sine tick\n"
   ],
   "patches": true,
+  "use-lua": true,
+  "lua_manual": false,
   "ports-control":
   [
     {"short": "BPM",  "type": "dial",   "display": "BPM",           "symbol": "bpm",         "default": 120, "range": [40, 250, 0.1, 1, false],  "precision": 1, "unit": "BPM",
@@ -74,9 +76,15 @@
     "onOffSwitch.setEnabled(!processorRef.isHostSynced());",
     "signalGauge.setSamplesPerBeat(spb);",
     "irisGauge.setSamplesPerBeat(spb); }",
-    "processorRef.pollAnalysisReport();"
+    "processorRef.pollAnalysisReport();",
+    "processorRef.pollScriptReload();",
+    "pollScriptError();"
   ],
   "processor_forwards": [
+    {"name": "hasScriptError", "type": "bool"},
+    {"name": "scriptErrorMessage", "call": "scriptError", "type": "std::string"},
+    {"name": "getScriptSkeleton", "call": "scriptSkeleton", "type": "std::string"},
+    {"name": "getLuaUiParamSlots", "call": "uiParamSlots", "type": "MetronomeScriptEngine::UiParamSlots"},
     {"name": "getCurrentClickBpm", "call": "currentClickBpm", "type": "float", "default": "120.f"},
     {"name": "isHostSynced", "type": "bool"},
     {"name": "getWaveDataBeatIndex", "call": "getBeatIndex", "type": "size_t"},
@@ -85,6 +93,7 @@
     {"name": "getInputSpectrogram", "call": "getSpectrogramData", "type": "AbacDsp::SpectrumImageSet"}
   ],
   "extra_processor_methods": [
+    "void pollScriptReload() { if (pluginRunner) { pluginRunner->reloadScriptIfPending(); } }",
     "[[nodiscard]] bool presetHasSwing(int idx) const noexcept { return pluginRunner && pluginRunner->isPresetSwing(idx); }",
     "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }",
     "void pollAnalysisReport() {\n        if (!pluginRunner || !pluginRunner->consumeAnalysisReportReady())\n        {\n            return;\n        }\n        auto dir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile(\"Metronome Analysis\");\n        dir.createDirectory();\n        const auto file = dir.getChildFile(\"analysis-\" + juce::Time::getCurrentTime().formatted(\"%Y%m%d-%H%M%S\") + \".html\");\n        file.replaceWithText(pluginRunner->buildAnalysisReportHtml());\n        juce::URL(file).launchInDefaultBrowser();\n    }"

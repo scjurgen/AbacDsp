@@ -237,6 +237,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 irisGauge.setSamplesPerBeat(spb);
             }
             processorRef.pollAnalysisReport();
+            processorRef.pollScriptReload();
+            pollScriptError();
             processorRef.consumeLastLearnedCc();
         }
     }
@@ -439,6 +441,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         juce::StringArray names{"Theme"};
         names.add("Patches");
+        names.add("Scripts");
 
         names.add("About");
         return names;
@@ -453,6 +456,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         if (menuName == "Patches")
         {
             return buildPatchesMenu();
+        }
+        if (menuName == "Scripts")
+        {
+            return buildScriptsMenu();
         }
 
         if (menuName == "About")
@@ -503,7 +510,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             "\n\n"
             "Metronome with settable BPM, start/stop and damped sine tick\n\nPart of the AbacDsp project - core DSP "
             "library is MIT licensed.\n\nBuilt with JUCE, licensed under AGPLv3 (or a commercial JUCE "
-            "licence).\n\nFull third-party license details: THIRD-PARTY-LICENSES.md in the AbacDsp repository.";
+            "licence).\n\nScripting powered by Lua and sol2 (both MIT licensed).\n\nFull third-party license details: "
+            "THIRD-PARTY-LICENSES.md in the AbacDsp repository.";
 
         auto* aboutComponent = new AboutWindow();
         aboutComponent->setAboutText(body);
@@ -543,6 +551,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             return;
         }
         handlePatchMenuSelection(menuItemID);
+        handleScriptMenuSelection(menuItemID);
     }
 
     void applyTheme(GuiConstants::Theme preset)
@@ -840,6 +849,293 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     }
 
 
+    // Reuses buildGroupedMenu() from the PRESETBROWSER section above, same as
+    // LOOPBROWSER does - a blueprint with a script port but no patches would need that
+    // helper pulled out of its guard.
+    void openScriptEditor()
+    {
+        // Non-modal (see ScriptEditorDialogWindow), so this can already be open - just
+        // bring it forward rather than spawning a second editor.
+        if (m_scriptEditorWindow != nullptr)
+        {
+            m_scriptEditorWindow->toFront(true);
+            return;
+        }
+
+        juce::StringArray libraryScriptNames;
+        for (const auto& n : processorRef.getLibraryScriptNames())
+        {
+            libraryScriptNames.add(n);
+        }
+
+        auto* editorComponent = new ScriptEditorWindow();
+        editorComponent->setScriptText(processorRef.getScriptText());
+        // While Authoring Mode is active, a manual edit could race with (and silently
+        // lose to) a script an HTTP POST /script call applies - view-only instead of blocked.
+        editorComponent->setReadOnly(processorRef.isAuthoringModeEnabled());
+        editorComponent->setLibraryScripts(libraryScriptNames, [this](const juce::String& name)
+                                           { return processorRef.getLibraryScriptText(name); });
+        editorComponent->onApply = [this](const juce::String& text) -> juce::String
+        {
+            if (processorRef.applyScriptText(text))
+            {
+                m_statusBar.showMessage("Script applied");
+                return {};
+            }
+            return juce::String(processorRef.scriptErrorMessage());
+        };
+        editorComponent->onReset = [this] { return juce::String(processorRef.getScriptSkeleton()); };
+#ifdef METRONOME_SCRIPTING_DOCS_FILE
+        editorComponent->onOpenDocs = []
+        { juce::URL(juce::File(METRONOME_SCRIPTING_DOCS_FILE)).launchInDefaultBrowser(); };
+        editorComponent->setDocsAvailable(true);
+#endif
+
+        auto* dialogWindow =
+            new ScriptEditorDialogWindow("Edit Script", juce::Colour(GuiConstants::instance().colors.background));
+        dialogWindow->setContentOwned(editorComponent, true);
+        dialogWindow->setUsingNativeTitleBar(true);
+        dialogWindow->setResizable(true, false);
+        const auto savedBounds = AppSettings::loadScriptEditorBounds();
+        if (savedBounds)
+        {
+            dialogWindow->setBounds(*savedBounds);
+        }
+        else
+        {
+            dialogWindow->centreAroundComponent(nullptr, dialogWindow->getWidth(), dialogWindow->getHeight());
+        }
+        dialogWindow->setVisible(true);
+        // setVisible() can itself shift the window once the OS actually places it on
+        // screen - reapply so it lands exactly where it was left, not off by that shift.
+        if (savedBounds)
+        {
+            dialogWindow->setBounds(*savedBounds);
+        }
+        dialogWindow->armBoundsPersistence();
+        m_scriptEditorWindow = dialogWindow;
+        m_scriptEditorContent = editorComponent;
+    }
+
+    // Apply-time only catches errors the script hits while its top-level chunk runs
+    // (i.e. at load); a script that compiles fine but errors when NextNotes()/OnTiming()
+    // are actually called later (on the audio thread, once real data flows through it)
+    // has nowhere else to surface that - poll for it instead. Called every timer tick
+    // (see extra_timer_callbacks); tracks the last-shown message so a persistent error
+    // doesn't keep resetting the status bar's fade timer forever.
+    void pollScriptError()
+    {
+        if (!processorRef.hasScriptError())
+        {
+            m_lastScriptErrorShown.clear();
+            return;
+        }
+        const auto message = juce::String(processorRef.scriptErrorMessage());
+        if (message == m_lastScriptErrorShown)
+        {
+            return;
+        }
+        m_lastScriptErrorShown = message;
+        m_statusBar.showMessage("Script error: " + message);
+    }
+
+    juce::PopupMenu buildScriptsMenu()
+    {
+        m_scriptMenuNames = processorRef.listScriptNames();
+        const auto currentName = processorRef.getCurrentScriptName();
+
+        auto loadMenu = buildGroupedMenu(m_scriptMenuNames, kScriptLoadIdBase, currentName);
+        auto deleteMenu = buildGroupedMenu(m_scriptMenuNames, kScriptDeleteIdBase);
+        auto renameMenu = buildGroupedMenu(m_scriptMenuNames, kScriptRenameIdBase);
+
+        juce::PopupMenu scripts;
+        scripts.addItem(kScriptEditId, "Edit...");
+        scripts.addSubMenu("Load", loadMenu, !m_scriptMenuNames.empty());
+        scripts.addItem(kScriptSaveAsId, "Save As...");
+        scripts.addSubMenu("Delete", deleteMenu, !m_scriptMenuNames.empty());
+        scripts.addSubMenu("Rename", renameMenu, !m_scriptMenuNames.empty());
+        scripts.addSeparator();
+        scripts.addSubMenu("Authoring Mode", buildAuthoringModeMenu());
+        return scripts;
+    }
+
+    juce::PopupMenu buildAuthoringModeMenu()
+    {
+        const bool active = processorRef.isAuthoringModeEnabled();
+        juce::PopupMenu menu;
+        menu.addItem(kAuthoringModeToggleId, active ? "Enabled" : "Enable", true, active);
+        menu.addItem(kAuthoringModeOpenBrowserId, "Open in Browser", active);
+        return menu;
+    }
+
+    void handleScriptMenuSelection(int menuItemID)
+    {
+        if (menuItemID == kAuthoringModeToggleId)
+        {
+            toggleAuthoringMode();
+        }
+        else if (menuItemID == kAuthoringModeOpenBrowserId)
+        {
+            processorRef.authoringDashboardUrl().launchInDefaultBrowser();
+        }
+        else if (menuItemID == kScriptEditId)
+        {
+            openScriptEditor();
+        }
+        else if (menuItemID == kScriptSaveAsId)
+        {
+            promptSaveScriptAs();
+        }
+        else if (menuItemID >= kScriptLoadIdBase &&
+                 menuItemID < kScriptLoadIdBase + static_cast<int>(m_scriptMenuNames.size()))
+        {
+            const auto& name = m_scriptMenuNames[static_cast<size_t>(menuItemID - kScriptLoadIdBase)];
+            if (processorRef.requestLoadScript(name))
+            {
+                m_statusBar.showMessage("Loaded '" + name + "'");
+            }
+            else
+            {
+                m_statusBar.showMessage("Load failed");
+            }
+        }
+        else if (menuItemID >= kScriptDeleteIdBase &&
+                 menuItemID < kScriptDeleteIdBase + static_cast<int>(m_scriptMenuNames.size()))
+        {
+            confirmAndDeleteScript(m_scriptMenuNames[static_cast<size_t>(menuItemID - kScriptDeleteIdBase)]);
+        }
+        else if (menuItemID >= kScriptRenameIdBase &&
+                 menuItemID < kScriptRenameIdBase + static_cast<int>(m_scriptMenuNames.size()))
+        {
+            promptRenameScript(m_scriptMenuNames[static_cast<size_t>(menuItemID - kScriptRenameIdBase)]);
+        }
+    }
+
+    void promptSaveScriptAs()
+    {
+        m_scriptNameDialog =
+            std::make_unique<juce::AlertWindow>("Save Script", juce::String(), juce::MessageBoxIconType::NoIcon);
+        addFolderComboBox(*m_scriptNameDialog, m_scriptMenuNames, "");
+        m_scriptNameDialog->addTextEditor("name", "", "Name:");
+        m_scriptNameDialog->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
+        m_scriptNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+        m_scriptNameDialog->enterModalState(true,
+                                            juce::ModalCallbackFunction::create(
+                                                [this](int result)
+                                                {
+                                                    const auto folderText = readFolderComboBox(*m_scriptNameDialog);
+                                                    const auto nameText =
+                                                        m_scriptNameDialog->getTextEditorContents("name").trim();
+                                                    m_scriptNameDialog.reset();
+                                                    if (result != 1 || nameText.isEmpty())
+                                                    {
+                                                        return;
+                                                    }
+                                                    const auto fullName = combineFolderAndName(folderText, nameText);
+                                                    if (processorRef.saveCurrentScriptAs(fullName))
+                                                    {
+                                                        m_statusBar.showMessage("Saved '" + fullName + "'");
+                                                    }
+                                                    else
+                                                    {
+                                                        m_statusBar.showMessage("Save failed");
+                                                    }
+                                                }),
+                                            false);
+        focusNameEditor(*m_scriptNameDialog);
+    }
+
+    void promptRenameScript(const juce::String& oldName)
+    {
+        const auto [folder, name] = splitFolderAndName(oldName);
+        m_scriptNameDialog = std::make_unique<juce::AlertWindow>("Rename Script \"" + oldName + "\"", juce::String(),
+                                                                 juce::MessageBoxIconType::NoIcon);
+        addFolderComboBox(*m_scriptNameDialog, m_scriptMenuNames, folder);
+        m_scriptNameDialog->addTextEditor("name", name, "Name:");
+        m_scriptNameDialog->addButton("Rename", 1, juce::KeyPress(juce::KeyPress::returnKey));
+        m_scriptNameDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+        m_scriptNameDialog->enterModalState(true,
+                                            juce::ModalCallbackFunction::create(
+                                                [this, oldName](int result)
+                                                {
+                                                    const auto folderText = readFolderComboBox(*m_scriptNameDialog);
+                                                    const auto nameText =
+                                                        m_scriptNameDialog->getTextEditorContents("name").trim();
+                                                    m_scriptNameDialog.reset();
+                                                    if (result != 1 || nameText.isEmpty())
+                                                    {
+                                                        return;
+                                                    }
+                                                    const auto newName = combineFolderAndName(folderText, nameText);
+                                                    if (newName == oldName)
+                                                    {
+                                                        return;
+                                                    }
+                                                    if (processorRef.renameScript(oldName, newName))
+                                                    {
+                                                        m_statusBar.showMessage("Renamed to '" + newName + "'");
+                                                    }
+                                                    else
+                                                    {
+                                                        m_statusBar.showMessage("Rename failed");
+                                                    }
+                                                }),
+                                            false);
+        focusNameEditor(*m_scriptNameDialog);
+    }
+
+    void confirmAndDeleteScript(const juce::String& name)
+    {
+        juce::NativeMessageBox::showAsync(juce::MessageBoxOptions()
+                                              .withIconType(juce::MessageBoxIconType::WarningIcon)
+                                              .withTitle("Delete Script")
+                                              .withMessage("Delete script \"" + name + "\"?")
+                                              .withButton("Yes")
+                                              .withButton("No"),
+                                          [this, name](int result)
+                                          {
+                                              if (result != 0)
+                                              {
+                                                  return;
+                                              }
+                                              if (processorRef.deleteScriptNamed(name))
+                                              {
+                                                  m_statusBar.showMessage("Deleted '" + name + "'");
+                                              }
+                                              else
+                                              {
+                                                  m_statusBar.showMessage("Delete failed");
+                                              }
+                                          });
+    }
+
+    void toggleAuthoringMode()
+    {
+        const bool nowEnabled = processorRef.setAuthoringModeEnabled(!processorRef.isAuthoringModeEnabled());
+        if (nowEnabled)
+        {
+            const auto url = processorRef.authoringDashboardUrl();
+            m_statusBar.showMessage("Authoring Mode listening on 127.0.0.1:" + juce::String(url.getPort()));
+            url.launchInDefaultBrowser();
+        }
+        else
+        {
+            m_statusBar.showMessage("Authoring Mode disabled");
+        }
+        updateScriptEditorReadOnlyState();
+    }
+
+    // Pushed into an already-open editor whenever Authoring Mode toggles, so its
+    // read-only state always reflects whether an HTTP POST /script call could race an edit.
+    void updateScriptEditorReadOnlyState()
+    {
+        if (m_scriptEditorContent != nullptr)
+        {
+            m_scriptEditorContent->setReadOnly(processorRef.isAuthoringModeEnabled());
+        }
+    }
+
+
     void updateSwingRatioVisibility()
     {
         swingRatioDial.setVisible(processorRef.presetHasSwing(presetDrop.getSelectedItemIndex()));
@@ -873,6 +1169,24 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     static constexpr int kPatchRenameIdBase = 4000;
     std::unique_ptr<juce::AlertWindow> m_patchNameDialog;
     std::vector<juce::String> m_patchMenuNames;
+
+
+    static constexpr int kScriptEditId = 9004;
+    static constexpr int kScriptSaveAsId = 10000;
+    static constexpr int kScriptLoadIdBase = 11000;
+    static constexpr int kScriptDeleteIdBase = 12000;
+    static constexpr int kScriptRenameIdBase = 13000;
+    std::unique_ptr<juce::AlertWindow> m_scriptNameDialog;
+    std::vector<juce::String> m_scriptMenuNames;
+    juce::String m_lastScriptErrorShown;
+    // Non-modal; deletes itself on close (see ScriptEditorDialogWindow), hence SafePointer
+    // rather than an owning pointer here.
+    juce::Component::SafePointer<ScriptEditorDialogWindow> m_scriptEditorWindow;
+    // Points at the window's content component, so toggleAuthoringMode() can push a
+    // read-only update without reaching into ScriptEditorDialogWindow.
+    juce::Component::SafePointer<ScriptEditorWindow> m_scriptEditorContent;
+    static constexpr int kAuthoringModeToggleId = 15000;
+    static constexpr int kAuthoringModeOpenBrowserId = 15001;
 
 
     CustomRotaryDial bpmDial{this};

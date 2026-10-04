@@ -1,7 +1,9 @@
 # Metronome
 
 A JUCE standalone metronome with damped-sine click sounds, odd-meter support, and a drop-bars
-mute feature for timing training.
+mute feature for timing training. A Lua script can replace the played pattern (several
+instruments per beat, each with its own dB level) and the positions the timing analysis
+measures against; see Scripting below.
 
 ## Purpose
 
@@ -27,6 +29,8 @@ mute feature for timing training.
 | Input Volume | −60 – +12 dB | Pass-through instrument level |
 | Start | on/off | Starts or stops the metronome |
 | Analysis | on/off | Starts or stops a timing-analysis take (see below) |
+| Analysis Grid | Quarter / 8th / Triplet / Shuffle / 16th | Grid the analysis measures against (ignored while a script defines analysis positions) |
+| Scripts menu | - | Edit, load, save and manage the pattern script (see Scripting) |
 
 ## Rhythm Presets
 
@@ -135,3 +139,84 @@ The page's charts are plain inline SVG; its layout uses Bootstrap loaded from a 
 needs network access to render correctly.
 
 Reports are written to `~/Documents/Metronome Analysis/`, one timestamped file per take.
+
+## Scripting
+
+A script programs what the metronome plays and, independently, what the timing analysis
+measures against. The script runs once on every Apply and on every Preset change; its top-level
+code calls the four functions below. Nothing in a script runs on the audio thread. Edit scripts
+from the Scripts menu; the library dropdown of the editor offers the shipped examples
+(`base-scripts/`).
+
+Without a script, or with a script that calls none of these functions, the Preset, Voicing and
+Analysis Grid controls behave as described above. Calling `ClearPattern` or `AddInstrument`
+replaces the Preset/Voicing sound with the script's pattern; calling `ClearAnalysis` or
+`AddAnalysisPosition` replaces the Analysis Grid. An analysis grid left empty falls back to the
+Analysis Grid control.
+
+| Function | Meaning |
+|---|---|
+| `ClearPattern()` | Empties the played pattern; the metronome is silent until `AddInstrument` is called. |
+| `AddInstrument(position, instrument, levelDb)` | One drum hit. Several hits at one position play together (kick and hihat on 1). |
+| `ClearAnalysis()` | Empties the analysis positions. |
+| `AddAnalysisPosition(position)` | One bar position the played onsets are measured against. Duplicates are ignored. |
+
+`position` is in beats from the bar start: 0 is beat 1, 0.5 the "and" of 1, 1 is beat 2, 2.75 the
+last 16th of beat 3. The bar length is the Preset's beats per bar, available as the global
+`BarBeats`; a position outside `0 <= position < BarBeats` is a script error. Positions are
+literal: the Swing control only affects the built-in subdivisions.
+
+`levelDb` is relative to the sample's own level (0 = as stored) and limited to -96 .. +12. The
+Metro Volume control is the master on top of it; Sub Volume has no role for script patterns.
+
+`instrument` is one of these global constants. Each plays the like-named sample of the selected
+Drum Kit; a sample the kit lacks (ClickLow and ClickHigh in the Pocket kit) stays silent.
+
+| Constant | Sample | Constant | Sample |
+|---|---|---|---|
+| `Kick` | bd | `Tom3` | tom3 |
+| `Snare` | sd | `TomLow` | tomlo |
+| `Rimshot` | rs | `Timbale1` | timb1 |
+| `Sidestick` | sstick | `Timbale2` | timb2 |
+| `Hihat` | hh | `TimbaleDamp` | timbdmp |
+| `HihatOpen` | hhopen | `Ride` | ride |
+| `HihatGhost` | hhghost | `Crash` | crash |
+| `Wood` | wood | `ClickLow` | clicklow |
+| `Clap` | clap | `ClickHigh` | clickhigh |
+| `Shaker` | shaker | `Tom1`, `Tom2` | tom1, tom2 |
+| `Tamb` | tamb | | |
+
+```lua
+ClearPattern()
+for beat = 0, BarBeats - 1 do
+    AddInstrument(beat, Hihat, -6)
+    AddInstrument(beat + 0.5, Hihat, -12)
+end
+AddInstrument(0, Kick, 0)
+AddInstrument(2, Kick, -2)
+AddInstrument(1, Snare, -1)
+AddInstrument(3, Snare, -1)
+
+ClearAnalysis()
+for i = 0, BarBeats * 4 - 1 do
+    AddAnalysisPosition(i / 4)
+end
+```
+
+Rules and limits:
+
+- A pattern holds at most 256 hits, an analysis grid at most 128 positions; exceeding either is
+  a script error, as is an unknown instrument.
+- A new pattern starts at the next bar boundary while the metronome is running, immediately when
+  it is stopped. A script that fails to load leaves the previous pattern playing and shows its
+  error.
+- Drop Bars still mutes a script pattern. The beat and spectrogram displays stay driven by the
+  Preset.
+- Changing the Preset reloads the script for the new `BarBeats`. The reload is picked up while
+  the editor window is open.
+- The functions only work at the top level of the script, not from handlers or timers.
+- The report lists one row per analysis position (labelled "Beat 2 + 0.5" for a position inside
+  a beat) and measures each onset against its nearest position, wrapping at the bar end.
+
+Shipped scripts in `base-scripts/`: `rock-8th-groove`, `bossa-clave`, `five-over-four` and
+`quarters-analyse-16ths`.

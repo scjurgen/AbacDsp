@@ -5,6 +5,7 @@
  * Keep the file readonly
  */
 
+#include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "Analysis/EnvelopeFollower.h"
@@ -55,6 +56,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             m_ccActive[i].valueHigh.store(kDefaultCcMappings[i].valueHigh, std::memory_order_relaxed);
         }
         m_fileIo.initialize(m_patchIndex);
+        initAuthoringServer();
     }
     ~AudioPluginAudioProcessor() override
     {
@@ -76,6 +78,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     void prepareToPlay(const double sampleRate, const int samplesPerBlock) override
     {
         pluginRunner = std::make_unique<MetronomeImpl<NumSamplesPerBlock>>(RateNormalizer::kInternalSampleRate);
+        pluginRunner->setImportResolver([](const std::string_view name) { return FileIo::resolveLibraryScript(name); });
+        if (!m_fileIo.currentScript().empty())
+        {
+            pluginRunner->setScript(m_fileIo.currentScript());
+        }
 
         fixedRunner = std::make_unique<RateNormalizer>(static_cast<float>(sampleRate),
                                                        [this](const AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& input,
@@ -103,6 +110,9 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                 m_ccActive[i].valueHigh.store(clampToParamRange(i, entry.valueHigh), std::memory_order_relaxed);
             }
         }
+        m_authoringMidiCollector.reset(sampleRate);
+        m_authoringMidiCollector.ensureStorageAllocated(2048);
+        m_authoringRecorder.prepare(sampleRate, getTotalNumOutputChannels());
 
         juce::ignoreUnused(samplesPerBlock);
         m_fileIo.enable();
@@ -544,6 +554,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             float normalized = range.convertTo0to1(static_cast<float>(params.swingRatio));
             p->setValueNotifyingHost(normalized);
         }
+
+        if (pluginRunner != nullptr && !params.script.empty())
+        {
+            pluginRunner->setScript(params.script);
+        }
     }
 
     [[nodiscard]] std::vector<juce::String> listPatchNames() const
@@ -608,12 +623,219 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     }
 
 
+    [[nodiscard]] juce::String getScriptText() const
+    {
+        return juce::String(m_fileIo.currentScript());
+    }
+
+    bool applyScriptText(const juce::String& text)
+    {
+        if (pluginRunner == nullptr)
+        {
+            return false;
+        }
+        const bool ok = pluginRunner->setScript(text.toStdString());
+        if (ok)
+        {
+            m_fileIo.updateScript(text.toStdString());
+        }
+        return ok;
+    }
+
+    [[nodiscard]] std::vector<juce::String> listScriptNames() const
+    {
+        std::vector<juce::String> result;
+        for (const auto& n : m_fileIo.listScriptNames())
+        {
+            result.push_back(juce::String(n));
+        }
+        return result;
+    }
+
+    [[nodiscard]] juce::String getCurrentScriptName() const
+    {
+        return juce::String(m_fileIo.currentScriptName());
+    }
+
+    [[nodiscard]] std::vector<juce::String> getLibraryScriptNames() const
+    {
+        std::vector<juce::String> result;
+        for (const auto& n : FileIo::listLibraryScriptNames())
+        {
+            result.push_back(juce::String(n));
+        }
+        return result;
+    }
+
+    [[nodiscard]] juce::String getLibraryScriptText(const juce::String& name) const
+    {
+        const auto lookup = FileIo::resolveLibraryScript(name.toStdString());
+        return lookup.source ? juce::String(*lookup.source) : "-- not found: " + name;
+    }
+
+    bool requestLoadScript(const juce::String& name)
+    {
+        if (!m_fileIo.loadScriptNamed(name.toStdString()))
+        {
+            return false;
+        }
+        return applyScriptText(juce::String(m_fileIo.currentScript()));
+    }
+
+    bool saveCurrentScriptAs(const juce::String& name)
+    {
+        return m_fileIo.saveScriptNamed(name.toStdString());
+    }
+
+    bool deleteScriptNamed(const juce::String& name)
+    {
+        return m_fileIo.deleteScriptNamed(name.toStdString());
+    }
+
+    bool renameScript(const juce::String& oldName, const juce::String& newName)
+    {
+        return m_fileIo.renameScriptNamed(oldName.toStdString(), newName.toStdString());
+    }
+
+    bool saveUserLibraryScript(const juce::String& name, const juce::String& content)
+    {
+        return FileIo::saveUserLibraryScript(name.toStdString(), content.toStdString());
+    }
+
+    // Raw JSON of a saved named patch, for the Authoring HTTP API's GET /patches/{name}.
+    [[nodiscard]] std::optional<juce::String> getPatchJson(const juce::String& name) const
+    {
+        const auto json = m_fileIo.readPatchJson(name.toStdString());
+        return json ? std::optional<juce::String>(juce::String(*json)) : std::nullopt;
+    }
+
+    // Loads and applies a named patch directly, no "save unsaved changes first?" prompt -
+    // requestLoadPatch()'s modal dialog would otherwise block the HTTP request forever.
+    bool applyPatchNamed(const juce::String& name)
+    {
+        if (!m_fileIo.loadPatchNamed(name.toStdString()))
+        {
+            return false;
+        }
+        applyLoadedParametersToHost();
+        return true;
+    }
+
+    // Raw source of an installed library, for the Authoring HTTP API's GET /libraries/{name}
+    // - unlike getLibraryScriptText(), which returns a friendly placeholder comment on a
+    // miss (for the in-app dropdown), this reports a real 404 the HTTP layer can act on.
+    [[nodiscard]] std::optional<juce::String> getLibraryScriptSource(const juce::String& name) const
+    {
+        const auto lookup = FileIo::resolveLibraryScript(name.toStdString());
+        return lookup.source ? std::optional<juce::String>(juce::String(*lookup.source)) : std::nullopt;
+    }
+
+    // Mirrors the old LlmAssistWatcher's applyLibraryAndPull(): saves to Library/User/,
+    // then re-applies the current script so any import "{name}" is genuinely re-resolved
+    // and validated - compiled/error describe that re-apply, not the library file alone.
+    std::pair<bool, juce::String> applyLibraryScript(const juce::String& name, const juce::String& content)
+    {
+        if (!saveUserLibraryScript(name, content))
+        {
+            return {false, "failed to save library script (invalid name or write error)"};
+        }
+        const bool compiled = applyScriptText(getScriptText());
+        return {compiled, compiled ? juce::String{} : juce::String(scriptErrorMessage())};
+    }
+
+    // Cross-thread-safe by design (see juce_MidiMessageCollector.h) - AuthoringHttpServer
+    // calls this straight from its own worker thread, no message-thread hop needed.
+    void injectAuthoringMidi(const juce::MidiMessage& message)
+    {
+        m_authoringMidiCollector.addMessageToQueue(message);
+    }
+
+    // For the Authoring HTTP API's POST /record/start - see AuthoringHttpServer.h's
+    // authoringRecordingsDirectory() for why the target folder is shared, not chosen here.
+    AuthoringRecordStartResult startAuthoringRecording()
+    {
+        const auto file = authoringRecordingsDirectory(JucePlugin_Name)
+                              .getChildFile("rec-" + juce::String(currentProcessId()) + "-" +
+                                            juce::String(juce::Time::currentTimeMillis()) + ".wav");
+        return m_authoringRecorder.start(file);
+    }
+
+    AuthoringRecordStopResult stopAuthoringRecording()
+    {
+        return m_authoringRecorder.stop();
+    }
+
+    // Wires the callback surface AuthoringHttpServer needs to reach the running instance's
+    // script/patch state - same callbacks the old LlmAssistWatcher used, plus context reads.
+    void initAuthoringServer()
+    {
+        m_authoringServer.applyScriptText = [this](const juce::String& text) { return applyScriptText(text); };
+        m_authoringServer.scriptErrorMessage = [this] { return juce::String(scriptErrorMessage()); };
+        m_authoringServer.hasScriptError = [this] { return hasScriptError(); };
+        m_authoringServer.currentScriptText = [this] { return getScriptText(); };
+        m_authoringServer.currentScriptName = [this] { return getCurrentScriptName(); };
+        m_authoringServer.currentPatchName = [this] { return getCurrentPatchName(); };
+        m_authoringServer.libraryScriptNames = [this] { return getLibraryScriptNames(); };
+        m_authoringServer.uiParamSlots = [this]
+        {
+            const auto slots = getLuaUiParamSlots();
+            return std::vector<LuaUiParamSlot>(slots.begin(), slots.end());
+        };
+        m_authoringServer.cpuLoadPercent = [] { return 0.f; };
+        m_authoringServer.wrapperTypeDescription = [this]
+        { return juce::AudioProcessor::getWrapperTypeDescription(wrapperType); };
+        m_authoringServer.patchNames = [this] { return listPatchNames(); };
+        m_authoringServer.patchJson = [this](const juce::String& name) { return getPatchJson(name); };
+        m_authoringServer.savePatchNamed = [this](const juce::String& name) { return saveCurrentPatchAs(name); };
+        m_authoringServer.loadPatchNamed = [this](const juce::String& name) { return applyPatchNamed(name); };
+        m_authoringServer.deletePatchNamed = [this](const juce::String& name) { return deletePatchNamed(name); };
+        m_authoringServer.libraryScriptSource = [this](const juce::String& name)
+        { return getLibraryScriptSource(name); };
+        m_authoringServer.applyLibraryScript = [this](const juce::String& name, const juce::String& content)
+        { return applyLibraryScript(name, content); };
+        m_authoringServer.injectMidi = [this](const juce::MidiMessage& message) { injectAuthoringMidi(message); };
+        m_authoringServer.startRecording = [this] { return startAuthoringRecording(); };
+        m_authoringServer.stopRecording = [this] { return stopAuthoringRecording(); };
+        m_authoringServer.isRecordingActive = [this] { return m_authoringRecorder.isRecording(); };
+        m_authoringServer.recordingElapsedSeconds = [this] { return m_authoringRecorder.elapsedSeconds(); };
+    }
+
+    // Never auto-started from a saved setting - Authoring Mode requires an explicit
+    // toggle every session (see the Editor's Authoring menu), the same "always off on a
+    // fresh instance" guarantee the old LlmAssistWatcher's m_llmAssistActive already had.
+    bool setAuthoringModeEnabled(const bool enabled)
+    {
+        if (enabled)
+        {
+            return m_authoringServer.start(JucePlugin_Name);
+        }
+        m_authoringServer.stop();
+        return false;
+    }
+
+    [[nodiscard]] bool isAuthoringModeEnabled() const noexcept
+    {
+        return m_authoringServer.isRunning();
+    }
+
+    [[nodiscard]] juce::URL authoringDashboardUrl() const
+    {
+        return m_authoringServer.dashboardUrl();
+    }
+
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-conversion"
 
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override
     {
         juce::ScopedNoDenormals noDenormals;
+        // Merges HTTP-injected MIDI (POST /midi) into the real buffer below; gated on
+        // Authoring Mode so a normal shipped instance pays no cost when it's off.
+        if (isAuthoringModeEnabled())
+        {
+            m_authoringMidiCollector.removeNextBlockOfMessages(midiMessages, buffer.getNumSamples());
+        }
 
         if (!midiMessages.isEmpty())
         {
@@ -659,6 +881,13 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             fixedRunner->processBlock(buffer);
         }
+        // Feeds POST /record's WAV capture when a recording is in progress; pushBlock()
+        // itself is a no-op otherwise, and this whole call costs nothing when Authoring
+        // Mode is off.
+        if (isAuthoringModeEnabled())
+        {
+            m_authoringRecorder.pushBlock(buffer);
+        }
     }
 
 #pragma GCC diagnostic pop
@@ -667,6 +896,22 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     [[nodiscard]] const std::vector<float>& getWaveDataToShow()
     {
         return pluginRunner->visualizeWaveData();
+    }
+    [[nodiscard]] bool hasScriptError() const noexcept
+    {
+        return pluginRunner && pluginRunner->hasScriptError();
+    }
+    [[nodiscard]] std::string scriptErrorMessage() const
+    {
+        return pluginRunner ? pluginRunner->scriptError() : std::string{};
+    }
+    [[nodiscard]] std::string getScriptSkeleton() const
+    {
+        return pluginRunner ? pluginRunner->scriptSkeleton() : std::string{};
+    }
+    [[nodiscard]] MetronomeScriptEngine::UiParamSlots getLuaUiParamSlots() const
+    {
+        return pluginRunner ? pluginRunner->uiParamSlots() : MetronomeScriptEngine::UiParamSlots{};
     }
     [[nodiscard]] float getCurrentClickBpm() const noexcept
     {
@@ -691,6 +936,13 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     [[nodiscard]] AbacDsp::SpectrumImageSet getInputSpectrogram() const
     {
         return pluginRunner ? pluginRunner->getSpectrogramData() : AbacDsp::SpectrumImageSet{};
+    }
+    void pollScriptReload()
+    {
+        if (pluginRunner)
+        {
+            pluginRunner->reloadScriptIfPending();
+        }
     }
     [[nodiscard]] bool presetHasSwing(int idx) const noexcept
     {
@@ -840,5 +1092,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     }
     std::vector<int> m_patchIndex;
     FileIo m_fileIo;
+    AuthoringAudioRecorder m_authoringRecorder;
+    juce::MidiMessageCollector m_authoringMidiCollector;
+    // Declared last so it is destroyed first - its destructor blocks until every
+    // in-flight request finishes, and a handler reaches into this processor meanwhile.
+    AuthoringHttpServer m_authoringServer;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessor)
 };

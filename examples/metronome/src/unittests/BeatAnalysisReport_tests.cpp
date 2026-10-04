@@ -108,73 +108,169 @@ TEST(OnsetDetectorTest, ResetClearsArmedStateAndEnvelope)
     EXPECT_TRUE(fired);
 }
 
-TEST(DeviationCollectorTest, CollectsPushedHitsInOrder)
+TEST(RawOnsetCollectorTest, CollectsPushedHitsInOrder)
 {
-    DeviationCollector collector;
-    collector.push(1.5f, 0);
-    collector.push(-2.5f, 2);
+    RawOnsetCollector collector;
+    collector.push({1, 100, 24000});
+    collector.push({3, 200, 24000});
     ASSERT_EQ(collector.count(), 2u);
     const auto hits = collector.hits();
-    EXPECT_FLOAT_EQ(hits[0].deviationMs, 1.5f);
-    EXPECT_EQ(hits[0].role, 0u);
-    EXPECT_FLOAT_EQ(hits[1].deviationMs, -2.5f);
-    EXPECT_EQ(hits[1].role, 2u);
+    EXPECT_EQ(hits[0].beatIndexInBar, 1u);
+    EXPECT_EQ(hits[0].beatSamplePos, 100u);
+    EXPECT_EQ(hits[1].beatIndexInBar, 3u);
 }
 
-TEST(DeviationCollectorTest, ResetClearsCollectedValues)
+TEST(RawOnsetCollectorTest, ResetClearsCollectedHits)
 {
-    DeviationCollector collector;
-    collector.push(1.f, 0);
+    RawOnsetCollector collector;
+    collector.push({0, 0, 24000});
     collector.reset();
     EXPECT_EQ(collector.count(), 0u);
 }
 
-TEST(DeviationCollectorTest, StopsRecordingOnceAtCapacity)
+TEST(RawOnsetCollectorTest, StopsRecordingOnceAtCapacity)
 {
-    DeviationCollector collector;
-    for (size_t i = 0; i < DeviationCollector::kCapacity + 10; ++i)
+    RawOnsetCollector collector;
+    for (size_t i = 0; i < RawOnsetCollector::kCapacity + 10; ++i)
     {
-        collector.push(1.f, 0);
+        collector.push({0, 0, 24000});
     }
-    EXPECT_EQ(collector.count(), DeviationCollector::kCapacity);
+    EXPECT_EQ(collector.count(), RawOnsetCollector::kCapacity);
 }
 
-TEST(DeviationsForRoleTest, FiltersHitsByRole)
+TEST(SlotLabelsTest, LabelsBeatsThenASingleOffBeatSlot)
 {
-    DeviationCollector collector;
-    collector.push(1.f, 0);
-    collector.push(2.f, 1);
-    collector.push(3.f, 0);
-    const auto beat0 = deviationsForRole(collector.hits(), 0);
-    ASSERT_EQ(beat0.size(), 2u);
-    EXPECT_FLOAT_EQ(beat0[0], 1.f);
-    EXPECT_FLOAT_EQ(beat0[1], 3.f);
-    EXPECT_TRUE(deviationsForRole(collector.hits(), 5).empty());
-}
-
-TEST(RoleLabelsTest, LabelsBeatsThenASingleOffBeatSlot)
-{
-    const auto labels = roleLabels(4, 1);
-    ASSERT_EQ(labels.size(), 5u);
+    const auto labels = slotLabels(4, 1);
+    ASSERT_EQ(labels.size(), 8u);
     EXPECT_EQ(labels[0], "Beat 1");
-    EXPECT_EQ(labels[3], "Beat 4");
-    EXPECT_EQ(labels[4], "Off-beat");
+    EXPECT_EQ(labels[1], "Beat 1 - Off-beat");
+    EXPECT_EQ(labels[6], "Beat 4");
 }
 
-TEST(RoleLabelsTest, LabelsMultipleSubdivisionsNumerically)
+TEST(SlotLabelsTest, LabelsMultipleSubdivisionsNumerically)
 {
-    const auto labels = roleLabels(4, 3);
-    ASSERT_EQ(labels.size(), 7u);
-    EXPECT_EQ(labels[4], "Sub 1");
-    EXPECT_EQ(labels[5], "Sub 2");
-    EXPECT_EQ(labels[6], "Sub 3");
+    const auto labels = slotLabels(2, 3);
+    ASSERT_EQ(labels.size(), 8u);
+    EXPECT_EQ(labels[1], "Beat 1 - Sub 1");
+    EXPECT_EQ(labels[3], "Beat 1 - Sub 3");
+    EXPECT_EQ(labels[4], "Beat 2");
 }
 
-TEST(RoleLabelsTest, NoSubdivisionsYieldsOnlyBeatLabels)
+TEST(SlotLabelsTest, NoSubdivisionsYieldsOnlyBeatLabels)
 {
-    const auto labels = roleLabels(3, 0);
+    const auto labels = slotLabels(3, 0);
     ASSERT_EQ(labels.size(), 3u);
     EXPECT_EQ(labels[2], "Beat 3");
+}
+
+TEST(PositionLabelTest, WholeBeatAndFractionalPosition)
+{
+    EXPECT_EQ(positionLabel(0.f), "Beat 1");
+    EXPECT_EQ(positionLabel(2.f), "Beat 3");
+    EXPECT_EQ(positionLabel(1.5f), "Beat 2 + 0.5");
+    EXPECT_EQ(positionLabel(0.25f), "Beat 1 + 0.25");
+}
+
+TEST(BuiltInGridTest, EighthGridHasABeatAndAnOffBeatPerBeat)
+{
+    const auto grid = builtInGrid(AbacDsp::SubdivType::Eighth, "8th", 3, 1.5f);
+    ASSERT_EQ(grid.positions.size(), 6u);
+    EXPECT_FLOAT_EQ(grid.positions[0], 0.f);
+    EXPECT_NEAR(grid.positions[1], 0.5f, 1e-5f);
+    EXPECT_FLOAT_EQ(grid.positions[2], 1.f);
+    EXPECT_EQ(grid.labels.size(), grid.positions.size());
+    EXPECT_EQ(grid.name, "8th");
+}
+
+TEST(BuiltInGridTest, QuarterGridHasOnlyBeats)
+{
+    const auto grid = builtInGrid(AbacDsp::SubdivType::None, "Quarter", 4, 1.5f);
+    ASSERT_EQ(grid.positions.size(), 4u);
+    EXPECT_FLOAT_EQ(grid.positions[3], 3.f);
+}
+
+TEST(BuiltInGridTest, ShuffleGridPlacesTheOffBeatBySwingRatio)
+{
+    const auto grid = builtInGrid(AbacDsp::SubdivType::Shuffle, "Shuffle", 1, 2.f);
+    ASSERT_EQ(grid.positions.size(), 2u);
+    EXPECT_NEAR(grid.positions[1], 2.f / 3.f, 1e-4f);
+}
+
+TEST(ScriptGridTest, LabelsAndNameFollowThePositions)
+{
+    const std::vector<float> positions{0.f, 1.5f, 3.f};
+    const auto grid = scriptGrid(positions);
+    EXPECT_EQ(grid.name, "Script (3 positions)");
+    ASSERT_EQ(grid.labels.size(), 3u);
+    EXPECT_EQ(grid.labels[1], "Beat 2 + 0.5");
+}
+
+TEST(EvaluateHitsTest, HitOnAPositionHasZeroDeviationAndThatSlot)
+{
+    const std::vector<float> positions{0.f, 1.f, 2.f, 3.f};
+    const std::vector<RawOnsetHit> raw{{2, 0, 24000}};
+    const auto hits = evaluateHits(raw, positions, 4, 48000.f);
+    ASSERT_EQ(hits.size(), 1u);
+    EXPECT_EQ(hits[0].slot, 2u);
+    EXPECT_NEAR(hits[0].deviationMs, 0.f, 1e-3f);
+}
+
+TEST(EvaluateHitsTest, LateHitHasNegativeDeviationInMilliseconds)
+{
+    const std::vector<float> positions{0.f, 1.f};
+    const std::vector<RawOnsetHit> raw{{0, 480, 24000}};
+    const auto hits = evaluateHits(raw, positions, 2, 48000.f);
+    ASSERT_EQ(hits.size(), 1u);
+    EXPECT_EQ(hits[0].slot, 0u);
+    EXPECT_NEAR(hits[0].deviationMs, -10.f, 1e-3f);
+}
+
+TEST(EvaluateHitsTest, EarlyHitHasPositiveDeviation)
+{
+    const std::vector<float> positions{0.f, 1.f};
+    const std::vector<RawOnsetHit> raw{{0, 23520, 24000}};
+    const auto hits = evaluateHits(raw, positions, 2, 48000.f);
+    ASSERT_EQ(hits.size(), 1u);
+    EXPECT_EQ(hits[0].slot, 1u);
+    EXPECT_NEAR(hits[0].deviationMs, 10.f, 1e-3f);
+}
+
+TEST(EvaluateHitsTest, TheEndOfTheBarIsCloseToItsStart)
+{
+    const std::vector<float> positions{0.f, 1.f, 2.f, 3.f};
+    const std::vector<RawOnsetHit> raw{{3, 23520, 24000}};
+    const auto hits = evaluateHits(raw, positions, 4, 48000.f);
+    ASSERT_EQ(hits.size(), 1u);
+    EXPECT_EQ(hits[0].slot, 0u);
+    EXPECT_NEAR(hits[0].deviationMs, 10.f, 1e-3f);
+}
+
+TEST(EvaluateHitsTest, PositionsInsideABeatAreMatchedAcrossBeats)
+{
+    const std::vector<float> positions{0.f, 1.25f, 2.5f};
+    const std::vector<RawOnsetHit> raw{{1, 6000, 24000}};
+    const auto hits = evaluateHits(raw, positions, 4, 48000.f);
+    ASSERT_EQ(hits.size(), 1u);
+    EXPECT_EQ(hits[0].slot, 1u);
+    EXPECT_NEAR(hits[0].barPosition, 1.25f, 1e-5f);
+}
+
+TEST(EvaluateHitsTest, EmptyGridYieldsNoHits)
+{
+    const std::vector<RawOnsetHit> raw{{0, 0, 24000}};
+    EXPECT_TRUE(evaluateHits(raw, std::span<const float>{}, 4, 48000.f).empty());
+}
+
+TEST(EvaluateHitsTest, BuiltInEighthGridMatchesTheSequencerBehaviour)
+{
+    const auto grid = builtInGrid(AbacDsp::SubdivType::Eighth, "8th", 4, 1.5f);
+    const std::vector<RawOnsetHit> raw{{1, 12000, 24000}, {1, 12480, 24000}};
+    const auto hits = evaluateHits(raw, grid.positions, 4, 48000.f);
+    ASSERT_EQ(hits.size(), 2u);
+    EXPECT_EQ(hits[0].slot, 3u);
+    EXPECT_NEAR(hits[0].deviationMs, 0.f, 0.1f);
+    EXPECT_EQ(hits[1].slot, 3u);
+    EXPECT_NEAR(hits[1].deviationMs, -10.f, 0.1f);
 }
 
 TEST(ComputeStatsTest, EmptyInputYieldsZeroedStats)
@@ -226,22 +322,33 @@ TEST(ComputeHistogramTest, NonPositiveRangeYieldsNoBins)
 
 TEST(BuildReportHtmlTest, EmbedsBootstrapCdnAndSvgCharts)
 {
-    DeviationCollector collector;
-    collector.push(-5.f, roleForBeat(0));
-    collector.push(0.f, roleForBeat(1));
-    collector.push(5.f, roleForSubdivision(4, 0));
-    const auto html = buildReportHtml(collector.hits(), 4, 1, 120.f, "4/4 8th");
+    RawOnsetCollector collector;
+    collector.push({0, 100, 24000});
+    collector.push({1, 0, 24000});
+    collector.push({2, 12000, 24000});
+    const auto grid = builtInGrid(AbacDsp::SubdivType::Eighth, "8th", 4, 1.5f);
+    const auto html = buildReportHtml(collector.hits(), 4, grid, 120.f, 48000.f, "4/4 8th");
     EXPECT_NE(html.find("cdn.jsdelivr.net/npm/bootstrap"), std::string::npos);
-    EXPECT_EQ(std::count(html.begin(), html.end(), '<') > 0, true);
     EXPECT_NE(html.find("<svg"), std::string::npos);
     EXPECT_NE(html.find("4/4 8th"), std::string::npos);
     EXPECT_NE(html.find("Beat 1"), std::string::npos);
     EXPECT_NE(html.find("Off-beat"), std::string::npos);
 }
 
-TEST(BuildReportHtmlTest, OmitsRoleBreakdownWhenNoLabels)
+TEST(BuildReportHtmlTest, ShowsTheScriptGridNameAndPositionLabels)
 {
-    DeviationCollector collector;
-    const auto html = buildReportHtml(collector.hits(), 0, 0, 120.f, "none");
-    EXPECT_EQ(html.find("By beat / subdivision"), std::string::npos);
+    RawOnsetCollector collector;
+    collector.push({0, 6000, 24000});
+    const std::vector<float> positions{0.f, 0.25f, 0.5f};
+    const auto html = buildReportHtml(collector.hits(), 4, scriptGrid(positions), 120.f, 48000.f, "4/4");
+    EXPECT_NE(html.find("Script (3 positions)"), std::string::npos);
+    EXPECT_NE(html.find("Beat 1 + 0.25"), std::string::npos);
+}
+
+TEST(BuildReportHtmlTest, WithoutHitsStillListsEveryGridPosition)
+{
+    RawOnsetCollector collector;
+    const auto grid = builtInGrid(AbacDsp::SubdivType::None, "Quarter", 3, 1.5f);
+    const auto html = buildReportHtml(collector.hits(), 3, grid, 120.f, 48000.f, "3/4");
+    EXPECT_NE(html.find("Beat 3"), std::string::npos);
 }

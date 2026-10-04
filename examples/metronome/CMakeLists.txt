@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 set(PROJECT_NAME "Metronome")
 set(FORMATS AU VST3 AUv3 Standalone)
+set(METRONOME_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Check if we're building as part of main project or standalone
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../VERSION")
@@ -51,6 +52,49 @@ FetchContent_Declare(
     GIT_TAG v3.11.3
     GIT_SHALLOW TRUE
 )
+
+# Authoring Mode's embedded HTTP server (see AuthoringHttpServer.h). Loopback-only, HTTP
+# never HTTPS - explicitly off, not just left at cpp-httplib's own defaults, so the build
+# doesn't silently start linking OpenSSL/zlib/etc. just because they happen to be present
+# on whatever machine is building it.
+set(HTTPLIB_USE_OPENSSL_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_USE_ZLIB_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_USE_BROTLI_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_USE_ZSTD_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_INSTALL OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    httplib
+    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+    GIT_TAG v0.54.1
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(httplib)
+
+# Lua, compiled as C++ (not C): lua_error then propagates as a real C++ exception
+# instead of a longjmp that would skip destructors, which matters once Lua state
+# lives next to RAII C++ objects on the audio thread. SOL_USING_CXX_LUA=1 below keeps
+# sol2's declarations on the matching (non "extern C") linkage.
+set(LUA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../3rdparty/lua)
+set(SOL2_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../3rdparty/sol2)
+
+file(GLOB LUA_IMPL_SRCS ${LUA_DIR}/*.c)
+list(FILTER LUA_IMPL_SRCS EXCLUDE REGEX ".*/(lua|luac|onelua|ltests)\\.c$")
+set_source_files_properties(${LUA_IMPL_SRCS} PROPERTIES LANGUAGE CXX)
+
+add_library(metronome_lua STATIC ${LUA_IMPL_SRCS})
+target_include_directories(metronome_lua PUBLIC ${LUA_DIR})
+set_target_properties(
+    metronome_lua
+    PROPERTIES FOLDER "Examples/${PROJECT_NAME}"
+)
+
+if(APPLE)
+    target_compile_definitions(metronome_lua PUBLIC LUA_USE_MACOSX)
+elseif(UNIX)
+    target_compile_definitions(metronome_lua PUBLIC LUA_USE_LINUX)
+elseif(WIN32)
+    target_compile_definitions(metronome_lua PUBLIC LUA_USE_WINDOWS)
+endif()
 
 set(PLIST_EXTRAS_CONTENT
     [=[
@@ -102,6 +146,21 @@ list(FILTER SourceFiles EXCLUDE REGEX ".*StubImpl\\.h$")
 
 # Include directories for AbacDsp library (from main project)
 target_include_directories("${PROJECT_NAME}" PUBLIC ../../src/includes)
+
+target_include_directories("${PROJECT_NAME}" SYSTEM PRIVATE ${SOL2_DIR}/include)
+target_compile_definitions("${PROJECT_NAME}" PRIVATE SOL_USING_CXX_LUA=1)
+target_compile_definitions(
+    "${PROJECT_NAME}"
+    PRIVATE METRONOME_BASE_SCRIPTS_DIR="${METRONOME_DIR}/base-scripts"
+)
+target_compile_definitions(
+    "${PROJECT_NAME}"
+    PRIVATE METRONOME_FACTORY_PATCHES_DIR="${METRONOME_DIR}/factory-patches"
+)
+target_compile_definitions(
+    "${PROJECT_NAME}"
+    PRIVATE METRONOME_SCRIPTING_DOCS_FILE="${METRONOME_DIR}/scripting.html"
+)
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
 
@@ -157,7 +216,12 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 target_link_libraries(
     "${PROJECT_NAME}"
-    PRIVATE MetronomeAssets ${JUCE_DEPENDENCIES} nlohmann_json::nlohmann_json
+    PRIVATE
+        MetronomeAssets
+        ${JUCE_DEPENDENCIES}
+        nlohmann_json::nlohmann_json
+        metronome_lua
+        httplib::httplib
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
@@ -169,4 +233,11 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     add_compile_options(-fdiagnostics-color=always)
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     add_compile_options(-fcolor-diagnostics)
+endif()
+
+option(PACKAGE_TESTS "Build the tests" ON)
+if(PACKAGE_TESTS)
+    enable_testing()
+    include(GoogleTest)
+    add_subdirectory(src/unittests)
 endif()

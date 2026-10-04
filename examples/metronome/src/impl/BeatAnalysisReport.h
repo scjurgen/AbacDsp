@@ -154,37 +154,70 @@ struct EvaluatedHit
     return fractions;
 }
 
-// Which exact (beat, subdivision-within-that-beat) slot a grid point belongs to, as a flat
-// index: slot = beat * (subdivisionCount + 1) + (0 for the beat itself, else 1 + subdivision).
-[[nodiscard]] inline size_t slotForGridPoint(const AbacDsp::GridPoint& gridPoint, const size_t hitBeatIndexInBar,
-                                             const size_t subdivisionCount) noexcept
+// Where a raw hit sits in the bar, in beats from the bar start.
+[[nodiscard]] inline float barPositionOf(const RawOnsetHit& hit) noexcept
 {
-    const size_t owningBeat = gridPoint.isBeat ? gridPoint.beatIndexInBar : hitBeatIndexInBar;
-    const size_t withinBeat = gridPoint.isBeat ? 0 : 1 + gridPoint.subdivisionIndex;
-    return owningBeat * (subdivisionCount + 1) + withinBeat;
+    if (hit.samplesPerBeat == 0)
+    {
+        return static_cast<float>(hit.beatIndexInBar);
+    }
+    return static_cast<float>(hit.beatIndexInBar) +
+           static_cast<float>(hit.beatSamplePos) / static_cast<float>(hit.samplesPerBeat);
 }
 
-// Evaluates every raw hit against the given analysis grid - the only place grid-dependent
-// math (nearest-point search, ms conversion, slot assignment) happens in the whole report.
+// Index of the grid position nearest to barPosition and the signed distance to it in beats
+// (negative = that position already passed). The bar wraps: the end of a bar is close to its start.
+struct NearestPosition
+{
+    size_t index{0};
+    double distanceBeats{0.0};
+};
+
+[[nodiscard]] inline NearestPosition nearestGridPosition(const double barPosition,
+                                                         const std::span<const float> positions,
+                                                         const size_t beatsPerBar) noexcept
+{
+    const auto span = static_cast<double>(beatsPerBar);
+    NearestPosition best{0, std::numeric_limits<double>::max()};
+    for (size_t i = 0; i < positions.size(); ++i)
+    {
+        double distance = static_cast<double>(positions[i]) - barPosition;
+        if (span > 0.0)
+        {
+            distance -= span * std::round(distance / span);
+        }
+        const double magnitude = std::abs(distance);
+        const double bestMagnitude = std::abs(best.distanceBeats);
+        const bool closer = magnitude < bestMagnitude;
+        const bool tiePassed = !closer && !(bestMagnitude < magnitude) && distance <= 0.0;
+        if (closer || tiePassed)
+        {
+            best = {i, distance};
+        }
+    }
+    return best;
+}
+
+// Evaluates every raw hit against the given grid positions (beats from the bar start, ascending) -
+// the only place grid-dependent math (nearest-point search, ms conversion, slot assignment)
+// happens in the whole report. The slot of a hit is the index of its nearest position.
 [[nodiscard]] inline std::vector<EvaluatedHit> evaluateHits(const std::span<const RawOnsetHit> rawHits,
-                                                            const AbacDsp::SubdivType analysisMode,
-                                                            const size_t beatsPerBar, const float swingRatio,
-                                                            const float sampleRate)
+                                                            const std::span<const float> positions,
+                                                            const size_t beatsPerBar, const float sampleRate)
 {
     std::vector<EvaluatedHit> result;
+    if (positions.empty())
+    {
+        return result;
+    }
     result.reserve(rawHits.size());
     for (const auto& hit : rawHits)
     {
-        const auto subPositions = AbacDsp::computeSubPositions(analysisMode, hit.samplesPerBeat, swingRatio);
-        const auto gridPoint = AbacDsp::nearestGridPointOn(hit.beatSamplePos, hit.beatIndexInBar, beatsPerBar,
-                                                           hit.samplesPerBeat, subPositions);
-        const float deviationMs = static_cast<float>(gridPoint.distanceSamples) / sampleRate * 1000.f;
-        const size_t slot = slotForGridPoint(gridPoint, hit.beatIndexInBar, subPositions.size());
-        const float barPosition = hit.samplesPerBeat == 0 ? static_cast<float>(hit.beatIndexInBar)
-                                                          : static_cast<float>(hit.beatIndexInBar) +
-                                                                static_cast<float>(hit.beatSamplePos) /
-                                                                    static_cast<float>(hit.samplesPerBeat);
-        result.push_back({deviationMs, slot, barPosition});
+        const float barPosition = barPositionOf(hit);
+        const auto nearest = nearestGridPosition(static_cast<double>(barPosition), positions, beatsPerBar);
+        const double distanceSamples = nearest.distanceBeats * static_cast<double>(hit.samplesPerBeat);
+        const auto deviationMs = static_cast<float>(distanceSamples / static_cast<double>(sampleRate) * 1000.0);
+        result.push_back({deviationMs, nearest.index, barPosition});
     }
     return result;
 }
@@ -346,7 +379,7 @@ struct Histogram
     return out.str();
 }
 
-// One label per flat slot index (see slotForGridPoint()), in musical order: for each beat,
+// One label per grid position of a built-in grid (see builtInGrid()), in musical order: for each beat,
 // "Beat N" followed by its own subdivision slots ("Off-beat" for a single one, e.g.
 // straight/swung 8ths; "Sub 1", "Sub 2", ... for more, e.g. 16ths).
 [[nodiscard]] inline std::vector<std::string> slotLabels(const size_t beatsPerBar, const size_t subdivisionCount)
@@ -370,6 +403,64 @@ struct Histogram
         }
     }
     return labels;
+}
+
+inline constexpr float kWholeBeatTolerance{0.0005f};
+
+// "Beat 3" for a whole beat, "Beat 3 + 0.5" for a position inside it.
+[[nodiscard]] inline std::string positionLabel(const float barPosition)
+{
+    const float beat = std::floor(barPosition);
+    const float fraction = barPosition - beat;
+    std::ostringstream label;
+    label << "Beat " << static_cast<size_t>(beat) + 1;
+    if (fraction >= kWholeBeatTolerance)
+    {
+        label.precision(3);
+        label << " + " << fraction;
+    }
+    return label.str();
+}
+
+// What hits are measured against: bar positions in beats (ascending), one label per position,
+// and the name shown in the report. Every grid, built-in or scripted, goes through this.
+struct AnalysisGridSpec
+{
+    std::vector<float> positions;
+    std::vector<std::string> labels;
+    std::string name;
+};
+
+[[nodiscard]] inline AnalysisGridSpec builtInGrid(const AbacDsp::SubdivType type, const std::string_view name,
+                                                  const size_t beatsPerBar, const float swingRatio)
+{
+    const std::vector<float> fractions = subdivisionFractionsFor(type, swingRatio);
+    AnalysisGridSpec grid{};
+    grid.name = std::string(name);
+    grid.labels = slotLabels(beatsPerBar, fractions.size());
+    grid.positions.reserve(beatsPerBar * (fractions.size() + 1));
+    for (size_t beat = 0; beat < beatsPerBar; ++beat)
+    {
+        grid.positions.push_back(static_cast<float>(beat));
+        for (const float fraction : fractions)
+        {
+            grid.positions.push_back(static_cast<float>(beat) + fraction);
+        }
+    }
+    return grid;
+}
+
+[[nodiscard]] inline AnalysisGridSpec scriptGrid(const std::span<const float> positions)
+{
+    AnalysisGridSpec grid{};
+    grid.name = "Script (" + std::to_string(positions.size()) + " positions)";
+    grid.positions.assign(positions.begin(), positions.end());
+    grid.labels.reserve(positions.size());
+    for (const float position : positions)
+    {
+        grid.labels.push_back(positionLabel(position));
+    }
+    return grid;
 }
 
 // Perceived timing quality by |deviation|, from a drummer's-ear perspective rather than a
@@ -512,24 +603,6 @@ inline constexpr std::array<DirectionBand, 5> kDirectionBands{{
     return out.str();
 }
 
-// Every exact beat and subdivision marker across the whole bar, as a continuous [0,
-// beatsPerBar) axis position - the full-bar histogram's x-axis is this axis, not ms deviation.
-[[nodiscard]] inline std::vector<float> fullBarMarkerPositions(const size_t beatsPerBar,
-                                                               const std::span<const float> subdivisionFractions)
-{
-    std::vector<float> markers;
-    markers.reserve(beatsPerBar * (subdivisionFractions.size() + 1));
-    for (size_t beat = 0; beat < beatsPerBar; ++beat)
-    {
-        markers.push_back(static_cast<float>(beat));
-        for (const float fraction : subdivisionFractions)
-        {
-            markers.push_back(static_cast<float>(beat) + fraction);
-        }
-    }
-    return markers;
-}
-
 // A 16th note's worth of beats: the display axis starts this far before beat 1 rather than
 // exactly at it, so hits just before beat 1 (wrapping from the end of the bar) plot next to
 // it instead of splitting across the two edges of the graph.
@@ -584,12 +657,11 @@ inline void renderToleranceZones(std::ostringstream& svg, const float marker, co
 }
 
 // The report's visual centerpiece: hit density across the whole bar, with a solid line at
-// every beat, a dashed line at every subdivision of the analysis mode, and color-coded
-// timing-quality zones (see ToleranceBand) around each - on the lead-in-shifted axis above.
+// every beat, a dashed line at every grid position inside a beat, and color-coded
+// timing-quality zones (see ToleranceBand) around each grid position - on the lead-in-shifted axis above.
 [[nodiscard]] inline std::string renderFullBarHistogramSvg(const std::span<const EvaluatedHit> hits,
                                                            const size_t beatsPerBar,
-                                                           const std::span<const float> subdivisionFractions,
-                                                           const float bpm)
+                                                           const std::span<const float> gridPositions, const float bpm)
 {
     constexpr int kWidth{1200};
     constexpr int kHeight{240};
@@ -610,7 +682,7 @@ inline void renderToleranceZones(std::ostringstream& svg, const float marker, co
     svg << "<svg viewBox=\"0 0 " << kWidth << " " << kHeight
         << "\" style=\"width:100%;height:auto;display:block\" xmlns=\"http://www.w3.org/2000/svg\">";
 
-    for (const float marker : fullBarMarkerPositions(beatsPerBar, subdivisionFractions))
+    for (const float marker : gridPositions)
     {
         renderToleranceZones(svg, marker, axisMin, axisMax, msToBeats, kMargin, kPlotWidth, kPlotHeight);
     }
@@ -639,12 +711,16 @@ inline void renderToleranceZones(std::ostringstream& svg, const float marker, co
         const float x = toX(static_cast<float>(beat));
         svg << "<line x1=\"" << x << "\" y1=\"" << kMargin << "\" x2=\"" << x << "\" y2=\"" << (kHeight - kMargin)
             << "\" stroke=\"#212529\" stroke-width=\"1.5\"/>";
-        for (const float fraction : subdivisionFractions)
+    }
+    for (const float position : gridPositions)
+    {
+        if (position - std::floor(position) < kWholeBeatTolerance)
         {
-            const float sx = toX(static_cast<float>(beat) + fraction);
-            svg << "<line x1=\"" << sx << "\" y1=\"" << kMargin << "\" x2=\"" << sx << "\" y2=\"" << (kHeight - kMargin)
-                << "\" stroke=\"#6c757d\" stroke-dasharray=\"4 3\"/>";
+            continue;
         }
+        const float sx = toX(position);
+        svg << "<line x1=\"" << sx << "\" y1=\"" << kMargin << "\" x2=\"" << sx << "\" y2=\"" << (kHeight - kMargin)
+            << "\" stroke=\"#6c757d\" stroke-dasharray=\"4 3\"/>";
     }
 
     svg << "</svg>";
@@ -652,15 +728,13 @@ inline void renderToleranceZones(std::ostringstream& svg, const float marker, co
 }
 
 // Self-contained HTML report (Bootstrap via CDN for layout, plain inline SVG for the charts).
-// The analysis grid (which subdivisions raw hits are measured against) is whatever
-// analysisMode is at the moment this is called, not whatever it was during capture.
+// The analysis grid (which bar positions raw hits are measured against) is whatever grid is
+// passed at the moment this is called, not whatever it was during capture.
 [[nodiscard]] inline std::string buildReportHtml(const std::span<const RawOnsetHit> rawHits, const size_t beatsPerBar,
-                                                 const float swingRatio, const AbacDsp::SubdivType analysisMode,
-                                                 const std::string_view analysisModeName, const float bpm,
-                                                 const float sampleRate, const std::string_view presetName)
+                                                 const AnalysisGridSpec& grid, const float bpm, const float sampleRate,
+                                                 const std::string_view presetName)
 {
-    const std::vector<float> subdivisionFractions = subdivisionFractionsFor(analysisMode, swingRatio);
-    const std::vector<EvaluatedHit> hits = evaluateHits(rawHits, analysisMode, beatsPerBar, swingRatio, sampleRate);
+    const std::vector<EvaluatedHit> hits = evaluateHits(rawHits, grid.positions, beatsPerBar, sampleRate);
 
     std::vector<float> allDeviations;
     allDeviations.reserve(hits.size());
@@ -671,9 +745,8 @@ inline void renderToleranceZones(std::ostringstream& svg, const float marker, co
     const DeviationStats stats = computeStats(allDeviations);
     const float rangeMs = bpm > 0.f ? 30000.f / bpm : 200.f;
     const std::string overallHistogram = renderHistogramSvg(computeHistogram(allDeviations, 10.f, rangeMs));
-    const std::string fullBarHistogram = renderFullBarHistogramSvg(hits, beatsPerBar, subdivisionFractions, bpm);
-    const std::vector<std::string> labels = slotLabels(beatsPerBar, subdivisionFractions.size());
-    const std::string table = resultsTable(labels, hits);
+    const std::string fullBarHistogram = renderFullBarHistogramSvg(hits, beatsPerBar, grid.positions, bpm);
+    const std::string table = resultsTable(grid.labels, hits);
 
     std::ostringstream html;
     html << "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
@@ -688,8 +761,8 @@ inline void renderToleranceZones(std::ostringstream& svg, const float marker, co
          << statCard("Tempo / rhythm",
                      std::to_string(static_cast<int>(std::lround(bpm))) + " BPM, " + std::string(presetName))
          << "</div>"
-         << "<div class=\"row g-3 mb-2\">" << statCard("Analysis grid", std::string(analysisModeName)) << "</div>"
-         << toleranceLegend() << "<div class=\"row g-3 mb-4\">"
+         << "<div class=\"row g-3 mb-2\">" << statCard("Analysis grid", grid.name) << "</div>" << toleranceLegend()
+         << "<div class=\"row g-3 mb-4\">"
          << chartCard("col-12", "Full-bar hit distribution (10 ms bins, color-coded timing quality)", fullBarHistogram)
          << "</div>"
          << "<div class=\"row g-3 mb-4\">"

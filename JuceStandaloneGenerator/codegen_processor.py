@@ -555,6 +555,10 @@ def create_processor_script_methods(blueprint: Blueprint) -> str:
     upper = "Script"
     apply_defaults = bool(blueprint.get("lua_apply_slot_defaults", False))
     apply_call = "\n            applyUiSlotDefaults();" if apply_defaults else ""
+    # getCpuLoad() only exists when the blueprint has a cpuload gauge; without one report 0.
+    has_cpu_gauge = any(item["type"] == "gauge" and item.get("gaugetype") == "cpuload"
+                        for item in blueprint["ports-control"])
+    cpu_load_lambda = "[this] { return getCpuLoad(); }" if has_cpu_gauge else "[] { return 0.f; }"
     apply_method = ""
     if apply_defaults:
         apply_method = """
@@ -736,7 +740,7 @@ def create_processor_script_methods(blueprint: Blueprint) -> str:
             const auto slots = getLuaUiParamSlots();
             return std::vector<LuaUiParamSlot>(slots.begin(), slots.end());
         }};
-        m_authoringServer.cpuLoadPercent = [this] {{ return getCpuLoad(); }};
+        m_authoringServer.cpuLoadPercent = {cpu_load_lambda};
         m_authoringServer.wrapperTypeDescription = [this]
         {{ return juce::AudioProcessor::getWrapperTypeDescription(wrapperType); }};
         m_authoringServer.patchNames = [this] {{ return listPatchNames(); }};

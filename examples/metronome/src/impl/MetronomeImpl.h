@@ -17,6 +17,8 @@
 #include "Generators/BeatSequencer.h"
 #include "Generators/ClickGenerator.h"
 #include "MetronomeDrumPaths.h"
+#include "MetronomePattern.h"
+#include "MetronomeScriptEngine.h"
 #include "Sampler/DrumVoiceKit.h"
 #include "Sampler/SamplePlayerBasic.h"
 
@@ -113,6 +115,49 @@ class MetronomeImpl final : public EffectBase
         m_analysisMode = value;
     }
 
+    // Runs the pattern script for the current Preset's bar length. A failed script leaves
+    // the previously published pattern playing and the error readable via scriptError().
+    bool setScript(const std::string_view source)
+    {
+        m_scriptSource = std::string{source};
+        return applyScript();
+    }
+
+    void setImportResolver(MetronomeScriptEngine::ImportResolver resolver)
+    {
+        m_scriptEngine.setImportResolver(std::move(resolver));
+    }
+
+    [[nodiscard]] bool hasScriptError() const noexcept
+    {
+        return m_scriptEngine.hasError();
+    }
+
+    [[nodiscard]] const std::string& scriptError() const noexcept
+    {
+        return m_scriptEngine.lastError();
+    }
+
+    [[nodiscard]] static std::string scriptSkeleton()
+    {
+        return std::string{MetronomeScriptEngine::kSkeletonScript};
+    }
+
+    [[nodiscard]] const MetronomeScriptEngine::UiParamSlots& uiParamSlots() const noexcept
+    {
+        return m_scriptEngine.uiParamSlots();
+    }
+
+    // setPreset() may run on the audio thread (host automation) where loading Lua is not
+    // allowed, so it only raises a flag; the message thread calls this to do the reload.
+    void reloadScriptIfPending()
+    {
+        if (m_scriptReloadPending.exchange(false, std::memory_order_acq_rel) && !m_scriptSource.empty())
+        {
+            static_cast<void>(applyScript());
+        }
+    }
+
     // Only ever read when the report is built (see buildAnalysisReportHtml()), never during
     // capture - so it may be left set to anything, or changed mid-take, without effect until then.
     void setAnalysisGrid(const int index)
@@ -130,9 +175,8 @@ class MetronomeImpl final : public EffectBase
     [[nodiscard]] std::string buildAnalysisReportHtml() const
     {
         const auto& preset = kPresets[static_cast<size_t>(m_presetIndex)];
-        const auto& grid = kAnalysisGrids[static_cast<size_t>(m_analysisGridIndex)];
-        return MetronomeAnalysis::buildReportHtml(m_rawOnsetCollector.hits(), preset.barBeats, m_seq.swingRatio(),
-                                                  grid.type, grid.name, m_bpm, sampleRate(), preset.name);
+        return MetronomeAnalysis::buildReportHtml(m_rawOnsetCollector.hits(), preset.barBeats, currentAnalysisGrid(),
+                                                  m_bpm, sampleRate(), preset.name);
     }
 
     void setPreset(const int index)
@@ -144,6 +188,7 @@ class MetronomeImpl final : public EffectBase
         m_seq.resetBarPosition();
         m_barCount = 0;
         m_beatOccurrenceInBar = 0;
+        m_scriptReloadPending.store(true, std::memory_order_release);
     }
 
     void setVoicing(const int index)
@@ -193,6 +238,10 @@ class MetronomeImpl final : public EffectBase
         }
         updateAnalysisMode();
         m_drumVoiceKit.pollAndInstall();
+        if (!effectiveRunning())
+        {
+            adoptPendingPattern();
+        }
 
         std::array<float, BlockSize> inMono{};
         for (size_t i = 0; i < BlockSize; ++i)
@@ -204,6 +253,9 @@ class MetronomeImpl final : public EffectBase
         const size_t preWindow = m_preWindow;
         const size_t postWindow = m_postWindow;
         const size_t samplesPerBeat = m_seq.samplesPerBeat();
+
+        const auto triggerScriptedHit = [this](const MetronomePattern::Hit& hit) noexcept
+        { triggerDrumVoice(MetronomePattern::sampleCode(hit.instrument), hit.gain * m_metroVolumeGain); };
 
         auto writeToVisualWindow = [&](const size_t beatSamplePos, const float visSignal) noexcept
         {
@@ -228,12 +280,16 @@ class MetronomeImpl final : public EffectBase
             const auto& mode = kDropBarModes[static_cast<size_t>(m_dropModeIndex)];
             const bool isMuted = mode.playBars > 0 && m_barCount >= mode.playBars;
 
-            if (event.beatStart && !isMuted)
+            const bool scripted = m_patternScheduler.active();
+            if (scripted && !isMuted)
+            {
+                m_patternScheduler.step(event.beatIndexInBar, event.beatSamplePos, samplesPerBeat, triggerScriptedHit);
+            }
+            if (!scripted && event.beatStart && !isMuted)
             {
                 triggerBeatAccent(kPresets[static_cast<size_t>(m_presetIndex)].pattern[event.beatIndexInBar]);
             }
-
-            if (event.subdivision && !isMuted)
+            if (!scripted && event.subdivision && !isMuted)
             {
                 triggerSubdivision();
             }
@@ -251,8 +307,9 @@ class MetronomeImpl final : public EffectBase
             }
 
             const bool audible = effectiveRunning() && !isMuted;
-            const float leftOutput = audible ? (isVoicingClick() ? click : drumLeft) : 0.f;
-            const float rightOutput = audible ? (isVoicingClick() ? click : drumRight) : 0.f;
+            const bool useClick = isVoicingClick() && !scripted;
+            const float leftOutput = audible ? (useClick ? click : drumLeft) : 0.f;
+            const float rightOutput = audible ? (useClick ? click : drumRight) : 0.f;
 
             out(i, 0) = in(i, 0) * m_inputGain + leftOutput;
             out(i, 1) = in(i, 1) * m_inputGain + rightOutput;
@@ -263,6 +320,7 @@ class MetronomeImpl final : public EffectBase
             {
                 advanceDropBar(mode);
                 m_beatOccurrenceInBar = 0;
+                adoptPendingPattern();
             }
         }
     }
@@ -456,7 +514,7 @@ class MetronomeImpl final : public EffectBase
         float gain{1.f};
         uint64_t startOrder{0};
     };
-    static constexpr size_t kNumDrumVoices = 4;
+    static constexpr size_t kNumDrumVoices = 16;
     using DrumVoicePool = std::array<DrumVoiceSlot, kNumDrumVoices>;
 
     template <size_t... I>
@@ -532,6 +590,41 @@ class MetronomeImpl final : public EffectBase
             return;
         }
         triggerDrumVoice(kVoicings[static_cast<size_t>(m_voicingIndex)].codeSub, kSubAccentGain * m_subVolumeGain);
+    }
+
+    void adoptPendingPattern() noexcept
+    {
+        if (const auto* pending = m_patternMailbox.acquireNewest())
+        {
+            m_patternScheduler.setPattern(pending);
+        }
+    }
+
+    bool applyScript()
+    {
+        const auto barBeats = static_cast<size_t>(kPresets[static_cast<size_t>(m_presetIndex)].barBeats);
+        if (!m_scriptEngine.loadPattern(m_scriptSource, barBeats))
+        {
+            return false;
+        }
+        const auto& result = m_scriptEngine.result();
+        m_patternMailbox.backSlot() = result.pattern;
+        m_patternMailbox.publish();
+        m_scriptAnalysis = result.analysis;
+        return true;
+    }
+
+    // The script's positions when it defined any, else the Analysis Grid dropdown's grid.
+    [[nodiscard]] MetronomeAnalysis::AnalysisGridSpec currentAnalysisGrid() const
+    {
+        if (m_scriptAnalysis.active && m_scriptAnalysis.count > 0)
+        {
+            return MetronomeAnalysis::scriptGrid(
+                std::span<const float>{m_scriptAnalysis.positions.data(), m_scriptAnalysis.count});
+        }
+        const auto& grid = kAnalysisGrids[static_cast<size_t>(m_analysisGridIndex)];
+        const auto& preset = kPresets[static_cast<size_t>(m_presetIndex)];
+        return MetronomeAnalysis::builtInGrid(grid.type, grid.name, preset.barBeats, m_seq.swingRatio());
     }
 
     void advanceDropBar(const DropBarMode& mode) noexcept
@@ -633,6 +726,13 @@ class MetronomeImpl final : public EffectBase
 
     AbacDsp::DrumVoiceKit m_drumVoiceKit;
     DrumVoicePool m_drumVoices;
+
+    MetronomeScriptEngine m_scriptEngine;
+    std::string m_scriptSource;
+    std::atomic<bool> m_scriptReloadPending{false};
+    MetronomePattern::AnalysisPositions m_scriptAnalysis;
+    MetronomePattern::TripleBuffer<MetronomePattern::HitPattern> m_patternMailbox;
+    MetronomePattern::PatternScheduler m_patternScheduler;
 
     std::vector<float> m_visualWavedata;
     std::vector<float> m_preparedWavedata;

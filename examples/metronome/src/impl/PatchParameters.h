@@ -25,7 +25,8 @@ struct PatchParameters
         preset      , // drop
         voicing     , // drop
         drumKit     , // drop
-        swingRatio   // dial
+        swingRatio  , // dial
+        script       // script
     };
 float bpm{120.0f};
 size_t dropBars{0};
@@ -40,6 +41,7 @@ size_t preset{6};
 size_t voicing{0};
 size_t drumKit{0};
 float swingRatio{1.5f};
+std::string script{};
 
 
     static constexpr auto paramNames = std::to_array<std::string_view>({
@@ -87,6 +89,7 @@ float swingRatio{1.5f};
         else if constexpr (ParamId == Id::voicing) return voicing;
         else if constexpr (ParamId == Id::drumKit) return drumKit;
         else if constexpr (ParamId == Id::swingRatio) return swingRatio;
+        else if constexpr (ParamId == Id::script) return script;
 
     }
 
@@ -125,12 +128,14 @@ break;
 break;
  case Id::swingRatio: if (!isEqual(get<Id::swingRatio>(), value)) {get<Id::swingRatio>() = value;m_modified = true;}
 break;
+ case Id::script: break;
 
             default:
                 break;
         }
     }
 
+void updateScript(const std::string& value) { if (script != value) { script = value; m_modified = true; } }
 
 
     [[nodiscard]] bool isModified() const
@@ -177,5 +182,6 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         preset      , // drop
         voicing     , // drop
         drumKit     , // drop
-        swingRatio   // dial
+        swingRatio  , // dial
+        script       // script
 )
