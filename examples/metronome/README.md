@@ -140,6 +140,12 @@ needs network access to render correctly.
 
 Reports are written to `~/Documents/Metronome Analysis/`, one timestamped file per take.
 
+Only onsets within 70 ms of a grid position (a 140 ms window centered on it) are measured. Anything
+farther away, such as ghost notes or other material, is left out of all statistics and the deviation
+histogram and counted in the report's "Ignored" card instead. The full-bar hit distribution still
+shows those ignored onsets, in gray on top of the matched ones, so you can see where they happen. When grid positions are less than 140 ms apart
+(16ths at 120 BPM or faster), every onset is within the window and nothing is ignored.
+
 ## Scripting
 
 A script programs what the metronome plays and, independently, what the timing analysis
@@ -216,7 +222,7 @@ Rules and limits:
   the editor window is open.
 - The functions only work at the top level of the script, not from handlers or timers.
 - The report lists one row per analysis position (labelled "Beat 2 + 0.5" for a position inside
-  a beat) and measures each onset against its nearest position, wrapping at the bar end.
+  a beat) and measures each onset within 70 ms of its nearest position, wrapping at the bar end.
 
-Shipped scripts in `base-scripts/`: `rock-8th-groove`, `bossa-clave`, `five-over-four` and
-`quarters-analyse-16ths`.
+Shipped scripts in `base-scripts/`: `rock-8th-groove`, `bossa-clave`, `five-over-four`,
+`quarters-analyse-16ths` and `reggae`.

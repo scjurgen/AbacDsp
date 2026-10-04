@@ -209,7 +209,7 @@ TEST(EvaluateHitsTest, HitOnAPositionHasZeroDeviationAndThatSlot)
 {
     const std::vector<float> positions{0.f, 1.f, 2.f, 3.f};
     const std::vector<RawOnsetHit> raw{{2, 0, 24000}};
-    const auto hits = evaluateHits(raw, positions, 4, 48000.f);
+    const auto hits = evaluateHits(raw, positions, 4, 48000.f).matched;
     ASSERT_EQ(hits.size(), 1u);
     EXPECT_EQ(hits[0].slot, 2u);
     EXPECT_NEAR(hits[0].deviationMs, 0.f, 1e-3f);
@@ -219,7 +219,7 @@ TEST(EvaluateHitsTest, LateHitHasNegativeDeviationInMilliseconds)
 {
     const std::vector<float> positions{0.f, 1.f};
     const std::vector<RawOnsetHit> raw{{0, 480, 24000}};
-    const auto hits = evaluateHits(raw, positions, 2, 48000.f);
+    const auto hits = evaluateHits(raw, positions, 2, 48000.f).matched;
     ASSERT_EQ(hits.size(), 1u);
     EXPECT_EQ(hits[0].slot, 0u);
     EXPECT_NEAR(hits[0].deviationMs, -10.f, 1e-3f);
@@ -229,7 +229,7 @@ TEST(EvaluateHitsTest, EarlyHitHasPositiveDeviation)
 {
     const std::vector<float> positions{0.f, 1.f};
     const std::vector<RawOnsetHit> raw{{0, 23520, 24000}};
-    const auto hits = evaluateHits(raw, positions, 2, 48000.f);
+    const auto hits = evaluateHits(raw, positions, 2, 48000.f).matched;
     ASSERT_EQ(hits.size(), 1u);
     EXPECT_EQ(hits[0].slot, 1u);
     EXPECT_NEAR(hits[0].deviationMs, 10.f, 1e-3f);
@@ -239,7 +239,7 @@ TEST(EvaluateHitsTest, TheEndOfTheBarIsCloseToItsStart)
 {
     const std::vector<float> positions{0.f, 1.f, 2.f, 3.f};
     const std::vector<RawOnsetHit> raw{{3, 23520, 24000}};
-    const auto hits = evaluateHits(raw, positions, 4, 48000.f);
+    const auto hits = evaluateHits(raw, positions, 4, 48000.f).matched;
     ASSERT_EQ(hits.size(), 1u);
     EXPECT_EQ(hits[0].slot, 0u);
     EXPECT_NEAR(hits[0].deviationMs, 10.f, 1e-3f);
@@ -249,7 +249,7 @@ TEST(EvaluateHitsTest, PositionsInsideABeatAreMatchedAcrossBeats)
 {
     const std::vector<float> positions{0.f, 1.25f, 2.5f};
     const std::vector<RawOnsetHit> raw{{1, 6000, 24000}};
-    const auto hits = evaluateHits(raw, positions, 4, 48000.f);
+    const auto hits = evaluateHits(raw, positions, 4, 48000.f).matched;
     ASSERT_EQ(hits.size(), 1u);
     EXPECT_EQ(hits[0].slot, 1u);
     EXPECT_NEAR(hits[0].barPosition, 1.25f, 1e-5f);
@@ -258,14 +258,14 @@ TEST(EvaluateHitsTest, PositionsInsideABeatAreMatchedAcrossBeats)
 TEST(EvaluateHitsTest, EmptyGridYieldsNoHits)
 {
     const std::vector<RawOnsetHit> raw{{0, 0, 24000}};
-    EXPECT_TRUE(evaluateHits(raw, std::span<const float>{}, 4, 48000.f).empty());
+    EXPECT_TRUE(evaluateHits(raw, std::span<const float>{}, 4, 48000.f).matched.empty());
 }
 
 TEST(EvaluateHitsTest, BuiltInEighthGridMatchesTheSequencerBehaviour)
 {
     const auto grid = builtInGrid(AbacDsp::SubdivType::Eighth, "8th", 4, 1.5f);
     const std::vector<RawOnsetHit> raw{{1, 12000, 24000}, {1, 12480, 24000}};
-    const auto hits = evaluateHits(raw, grid.positions, 4, 48000.f);
+    const auto hits = evaluateHits(raw, grid.positions, 4, 48000.f).matched;
     ASSERT_EQ(hits.size(), 2u);
     EXPECT_EQ(hits[0].slot, 3u);
     EXPECT_NEAR(hits[0].deviationMs, 0.f, 0.1f);
@@ -320,6 +320,80 @@ TEST(ComputeHistogramTest, NonPositiveRangeYieldsNoBins)
     EXPECT_TRUE(computeHistogram(deviations, 1.f, 0.f).bins.empty());
 }
 
+TEST(EvaluateHitsTest, HitFartherThanTheMatchWindowIsIgnored)
+{
+    const std::vector<float> positions{0.f, 1.f};
+    const std::vector<RawOnsetHit> raw{{0, 6000, 24000}};
+    EXPECT_TRUE(evaluateHits(raw, positions, 2, 48000.f).matched.empty());
+}
+
+TEST(EvaluateHitsTest, MatchWindowIsSeventyMillisecondsEachSide)
+{
+    const std::vector<float> positions{0.f, 1.f};
+    const std::vector<RawOnsetHit> raw{{0, 3355, 24000}, {0, 3365, 24000}, {1, 24000 - 3355, 24000}};
+    const auto hits = evaluateHits(raw, positions, 2, 48000.f).matched;
+    ASSERT_EQ(hits.size(), 2u);
+    EXPECT_NEAR(hits[0].deviationMs, -69.9f, 0.05f);
+    EXPECT_NEAR(hits[1].deviationMs, 69.9f, 0.05f);
+}
+
+TEST(EvaluateHitsTest, ExplicitMatchWindowOverridesTheDefault)
+{
+    const std::vector<float> positions{0.f, 1.f};
+    const std::vector<RawOnsetHit> raw{{0, 6000, 24000}};
+    EXPECT_EQ(evaluateHits(raw, positions, 2, 48000.f, 200.f).matched.size(), 1u);
+    EXPECT_TRUE(evaluateHits(raw, positions, 2, 48000.f, 100.f).matched.empty());
+}
+
+TEST(EvaluateHitsTest, IgnoredHitsDoNotShiftTheSlotsOfKeptHits)
+{
+    const std::vector<float> positions{0.f, 1.f, 2.f};
+    const std::vector<RawOnsetHit> raw{{0, 12000, 24000}, {2, 0, 24000}};
+    const auto hits = evaluateHits(raw, positions, 3, 48000.f).matched;
+    ASSERT_EQ(hits.size(), 1u);
+    EXPECT_EQ(hits[0].slot, 2u);
+}
+
+TEST(EvaluateHitsTest, IgnoredHitsKeepTheirBarPosition)
+{
+    const std::vector<float> positions{0.f, 1.f};
+    const std::vector<RawOnsetHit> raw{{0, 100, 24000}, {1, 12000, 24000}, {1, 6000, 24000}};
+    const auto evaluated = evaluateHits(raw, positions, 2, 48000.f);
+    ASSERT_EQ(evaluated.matched.size(), 1u);
+    ASSERT_EQ(evaluated.ignoredBarPositions.size(), 2u);
+    EXPECT_NEAR(evaluated.ignoredBarPositions[0], 1.5f, 1e-5f);
+    EXPECT_NEAR(evaluated.ignoredBarPositions[1], 1.25f, 1e-5f);
+}
+
+TEST(FullBarHistogramBinsTest, CountsPositionsOnTheLeadInShiftedAxis)
+{
+    const std::vector<float> positions{0.f, 0.f, 3.9f};
+    const auto bins = fullBarHistogramBins(positions, 4.f, -0.25f, 0.25f);
+    ASSERT_EQ(bins.size(), 16u);
+    EXPECT_EQ(bins[1], 2u);
+    EXPECT_EQ(bins[0], 1u);
+}
+
+TEST(RenderFullBarHistogramTest, DrawsIgnoredHitsInGrayStackedOnTheMatchedBars)
+{
+    EvaluatedHits hits;
+    hits.matched.push_back({0.f, 0, 1.f});
+    hits.ignoredBarPositions.push_back(1.f);
+    const std::vector<float> positions{0.f, 1.f};
+    const auto svg = renderFullBarHistogramSvg(hits, 2, positions, 120.f);
+    EXPECT_NE(svg.find(kIgnoredBarColor), std::string::npos);
+    EXPECT_NE(svg.find(kMatchedBarColor), std::string::npos);
+}
+
+TEST(RenderFullBarHistogramTest, WithoutIgnoredHitsNoGrayBarIsDrawn)
+{
+    EvaluatedHits hits;
+    hits.matched.push_back({0.f, 0, 1.f});
+    const std::vector<float> positions{0.f, 1.f};
+    const auto svg = renderFullBarHistogramSvg(hits, 2, positions, 120.f);
+    EXPECT_EQ(svg.find(kIgnoredBarColor), std::string::npos);
+}
+
 TEST(BuildReportHtmlTest, EmbedsBootstrapCdnAndSvgCharts)
 {
     RawOnsetCollector collector;
@@ -351,4 +425,26 @@ TEST(BuildReportHtmlTest, WithoutHitsStillListsEveryGridPosition)
     const auto grid = builtInGrid(AbacDsp::SubdivType::None, "Quarter", 3, 1.5f);
     const auto html = buildReportHtml(collector.hits(), 3, grid, 120.f, 48000.f, "3/4");
     EXPECT_NE(html.find("Beat 3"), std::string::npos);
+}
+
+TEST(BuildReportHtmlTest, ShowsHowManyHitsFellOutsideTheMatchWindow)
+{
+    RawOnsetCollector collector;
+    collector.push({0, 100, 24000});
+    collector.push({0, 6000, 24000});
+    collector.push({0, 12000, 24000});
+    const std::vector<float> positions{0.f, 1.f};
+    const auto html = buildReportHtml(collector.hits(), 2, scriptGrid(positions), 120.f, 48000.f, "2/4");
+    EXPECT_NE(html.find("Ignored (> 70 ms)</h6><p class=\"fs-3 mb-0\">2</p>"), std::string::npos);
+    EXPECT_NE(html.find("Hits</h6><p class=\"fs-3 mb-0\">1</p>"), std::string::npos);
+}
+
+TEST(BuildReportHtmlTest, LegendNamesMatchedAndIgnoredHits)
+{
+    RawOnsetCollector collector;
+    collector.push({0, 100, 24000});
+    const std::vector<float> positions{0.f, 1.f};
+    const auto html = buildReportHtml(collector.hits(), 2, scriptGrid(positions), 120.f, 48000.f, "2/4");
+    EXPECT_NE(html.find("Matched hits"), std::string::npos);
+    EXPECT_NE(html.find("ignored hits in gray"), std::string::npos);
 }

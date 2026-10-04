@@ -198,26 +198,46 @@ struct NearestPosition
     return best;
 }
 
+// The outcome of matching raw hits to a grid. Statistics read only the matched hits; the
+// ignored ones keep just their bar position, for charts that show where outliers happen.
+struct EvaluatedHits
+{
+    std::vector<EvaluatedHit> matched;
+    std::vector<float> ignoredBarPositions;
+};
+
+// Onsets farther than this from their nearest grid position are ghost notes or other
+// material, not attempts at that position, and are left out of every statistic.
+inline constexpr float kDefaultMatchWindowMs{70.f};
+
 // Evaluates every raw hit against the given grid positions (beats from the bar start, ascending) -
 // the only place grid-dependent math (nearest-point search, ms conversion, slot assignment)
-// happens in the whole report. The slot of a hit is the index of its nearest position.
-[[nodiscard]] inline std::vector<EvaluatedHit> evaluateHits(const std::span<const RawOnsetHit> rawHits,
+// happens in the whole report. A hit farther than matchWindowMs from its nearest position is ignored.
+[[nodiscard]] inline EvaluatedHits evaluateHits(const std::span<const RawOnsetHit> rawHits,
                                                             const std::span<const float> positions,
-                                                            const size_t beatsPerBar, const float sampleRate)
+                                                            const size_t beatsPerBar, const float sampleRate,
+                                                            const float matchWindowMs = kDefaultMatchWindowMs)
 {
-    std::vector<EvaluatedHit> result;
+    EvaluatedHits result;
     if (positions.empty())
     {
         return result;
     }
-    result.reserve(rawHits.size());
+    result.matched.reserve(rawHits.size());
     for (const auto& hit : rawHits)
     {
         const float barPosition = barPositionOf(hit);
         const auto nearest = nearestGridPosition(static_cast<double>(barPosition), positions, beatsPerBar);
         const double distanceSamples = nearest.distanceBeats * static_cast<double>(hit.samplesPerBeat);
         const auto deviationMs = static_cast<float>(distanceSamples / static_cast<double>(sampleRate) * 1000.0);
-        result.push_back({deviationMs, nearest.index, barPosition});
+        if (std::abs(deviationMs) <= matchWindowMs)
+        {
+            result.matched.push_back({deviationMs, nearest.index, barPosition});
+        }
+        else
+        {
+            result.ignoredBarPositions.push_back(barPosition);
+        }
     }
     return result;
 }
@@ -617,7 +637,7 @@ inline constexpr float kAxisLeadInBeats = 0.25f;
 }
 
 // Hit density across the display axis, binned at a fixed 10 ms (tempo-converted) resolution.
-[[nodiscard]] inline std::vector<size_t> fullBarHistogramBins(const std::span<const EvaluatedHit> hits,
+[[nodiscard]] inline std::vector<size_t> fullBarHistogramBins(const std::span<const float> barPositions,
                                                               const float axisSpan, const float axisMin,
                                                               const float binWidthBeats)
 {
@@ -628,9 +648,9 @@ inline constexpr float kAxisLeadInBeats = 0.25f;
     const float axisMax = axisMin + axisSpan;
     const auto binCount = std::max<size_t>(1, static_cast<size_t>(std::lround(axisSpan / binWidthBeats)));
     std::vector<size_t> bins(binCount, 0);
-    for (const auto& hit : hits)
+    for (const float barPosition : barPositions)
     {
-        const float display = wrapToDisplayAxis(hit.barPosition, axisSpan, axisMin);
+        const float display = wrapToDisplayAxis(barPosition, axisSpan, axisMin);
         const float clamped = std::clamp(display, axisMin, std::nextafter(axisMax, axisMin));
         auto idx = static_cast<size_t>((clamped - axisMin) / binWidthBeats);
         idx = std::min(idx, binCount - 1);
@@ -656,11 +676,33 @@ inline void renderToleranceZones(std::ostringstream& svg, const float marker, co
     }
 }
 
+inline constexpr const char* kMatchedBarColor{"#0d6efd"};
+inline constexpr const char* kIgnoredBarColor{"#868e96"};
+
+[[nodiscard]] inline std::string ignoredHitsLabel()
+{
+    return "Ignored (> " + std::to_string(static_cast<int>(kDefaultMatchWindowMs)) + " ms)";
+}
+
+// Names the two bar colors of the full-bar chart.
+[[nodiscard]] inline std::string hitColorLegend()
+{
+    const auto entry = [](const char* color, const std::string_view label)
+    {
+        std::ostringstream out;
+        out << "<span style=\"display:inline-flex;align-items:center;gap:.35rem;font-size:.85rem;\">"
+            << "<span style=\"width:.9rem;height:.9rem;border-radius:.2rem;background:" << color
+            << ";display:inline-block;\"></span>" << label << "</span>";
+        return out.str();
+    };
+    return "<div class=\"d-flex flex-wrap gap-3 mb-2\">" + entry(kMatchedBarColor, "Matched hits") +
+           entry(kIgnoredBarColor, ignoredHitsLabel()) + "</div>";
+}
+
 // The report's visual centerpiece: hit density across the whole bar, with a solid line at
 // every beat, a dashed line at every grid position inside a beat, and color-coded
 // timing-quality zones (see ToleranceBand) around each grid position - on the lead-in-shifted axis above.
-[[nodiscard]] inline std::string renderFullBarHistogramSvg(const std::span<const EvaluatedHit> hits,
-                                                           const size_t beatsPerBar,
+[[nodiscard]] inline std::string renderFullBarHistogramSvg(const EvaluatedHits& hits, const size_t beatsPerBar,
                                                            const std::span<const float> gridPositions, const float bpm)
 {
     constexpr int kWidth{1200};
@@ -690,19 +732,39 @@ inline void renderToleranceZones(std::ostringstream& svg, const float marker, co
     svg << "<line x1=\"" << kMargin << "\" y1=\"" << (kHeight - kMargin) << "\" x2=\"" << (kWidth - kMargin)
         << "\" y2=\"" << (kHeight - kMargin) << "\" stroke=\"#adb5bd\"/>";
 
-    const auto bins = fullBarHistogramBins(hits, axisSpan, axisMin, binWidthBeats);
+    std::vector<float> matchedPositions;
+    matchedPositions.reserve(hits.matched.size());
+    for (const auto& hit : hits.matched)
+    {
+        matchedPositions.push_back(hit.barPosition);
+    }
+    const auto bins = fullBarHistogramBins(matchedPositions, axisSpan, axisMin, binWidthBeats);
+    const auto ignoredBins = fullBarHistogramBins(hits.ignoredBarPositions, axisSpan, axisMin, binWidthBeats);
     if (!bins.empty())
     {
-        const size_t peak = *std::max_element(bins.begin(), bins.end());
-        const float barWidth = kPlotWidth / static_cast<float>(bins.size());
+        size_t peak = 0;
         for (size_t i = 0; i < bins.size(); ++i)
         {
-            const float barHeight =
-                peak == 0 ? 0.f : kPlotHeight * static_cast<float>(bins[i]) / static_cast<float>(peak);
-            const float x = static_cast<float>(kMargin) + static_cast<float>(i) * barWidth;
-            const float y = static_cast<float>(kHeight - kMargin) - barHeight;
-            svg << "<rect x=\"" << x << "\" y=\"" << y << "\" width=\"" << std::max(0.5f, barWidth - 0.5f)
-                << "\" height=\"" << barHeight << "\" fill=\"#0d6efd\"/>";
+            peak = std::max(peak, bins[i] + ignoredBins[i]);
+        }
+        const float barWidth = kPlotWidth / static_cast<float>(bins.size());
+        const auto heightOf = [&](const size_t count) noexcept
+        { return peak == 0 ? 0.f : kPlotHeight * static_cast<float>(count) / static_cast<float>(peak); };
+        const auto drawBar = [&](const size_t index, const float bottom, const float height, const char* fill)
+        {
+            const float x = static_cast<float>(kMargin) + static_cast<float>(index) * barWidth;
+            svg << "<rect x=\"" << x << "\" y=\"" << (bottom - height) << "\" width=\""
+                << std::max(0.5f, barWidth - 0.5f) << "\" height=\"" << height << "\" fill=\"" << fill << "\"/>";
+        };
+        for (size_t i = 0; i < bins.size(); ++i)
+        {
+            const float base = static_cast<float>(kHeight - kMargin);
+            const float matchedHeight = heightOf(bins[i]);
+            drawBar(i, base, matchedHeight, kMatchedBarColor);
+            if (ignoredBins[i] > 0)
+            {
+                drawBar(i, base - matchedHeight, heightOf(ignoredBins[i]), kIgnoredBarColor);
+            }
         }
     }
 
@@ -734,7 +796,8 @@ inline void renderToleranceZones(std::ostringstream& svg, const float marker, co
                                                  const AnalysisGridSpec& grid, const float bpm, const float sampleRate,
                                                  const std::string_view presetName)
 {
-    const std::vector<EvaluatedHit> hits = evaluateHits(rawHits, grid.positions, beatsPerBar, sampleRate);
+    const EvaluatedHits evaluated = evaluateHits(rawHits, grid.positions, beatsPerBar, sampleRate);
+    const std::vector<EvaluatedHit>& hits = evaluated.matched;
 
     std::vector<float> allDeviations;
     allDeviations.reserve(hits.size());
@@ -745,7 +808,7 @@ inline void renderToleranceZones(std::ostringstream& svg, const float marker, co
     const DeviationStats stats = computeStats(allDeviations);
     const float rangeMs = bpm > 0.f ? 30000.f / bpm : 200.f;
     const std::string overallHistogram = renderHistogramSvg(computeHistogram(allDeviations, 10.f, rangeMs));
-    const std::string fullBarHistogram = renderFullBarHistogramSvg(hits, beatsPerBar, grid.positions, bpm);
+    const std::string fullBarHistogram = renderFullBarHistogramSvg(evaluated, beatsPerBar, grid.positions, bpm);
     const std::string table = resultsTable(grid.labels, hits);
 
     std::ostringstream html;
@@ -761,9 +824,11 @@ inline void renderToleranceZones(std::ostringstream& svg, const float marker, co
          << statCard("Tempo / rhythm",
                      std::to_string(static_cast<int>(std::lround(bpm))) + " BPM, " + std::string(presetName))
          << "</div>"
-         << "<div class=\"row g-3 mb-2\">" << statCard("Analysis grid", grid.name) << "</div>" << toleranceLegend()
+         << "<div class=\"row g-3 mb-2\">" << statCard("Analysis grid", grid.name)
+         << statCard(ignoredHitsLabel(), std::to_string(evaluated.ignoredBarPositions.size())) << "</div>"
+         << toleranceLegend() << hitColorLegend()
          << "<div class=\"row g-3 mb-4\">"
-         << chartCard("col-12", "Full-bar hit distribution (10 ms bins, color-coded timing quality)", fullBarHistogram)
+         << chartCard("col-12", "Full-bar hit distribution (10 ms bins, color-coded timing quality, ignored hits in gray)", fullBarHistogram)
          << "</div>"
          << "<div class=\"row g-3 mb-4\">"
          << chartCard("col-12",
