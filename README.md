@@ -68,12 +68,16 @@ Lua loops, not different C++ code paths. See `examples/pingsynth/README.md`.
 
 ![Metronome settings and spectrum iris](docs/assets/metronome/settings-analysis.webp)
 
-A JUCE standalone metronome with damped-sine click sounds, odd-meter support, and a
-drop-bars mute feature for timing training: lock to the click and use the waveform
-display to see how tightly you land on the beat, switch to a shuffle/swing preset to work
-on feel, or use drop-bar mode to test internal time. Its timing-analysis mode records a
-real playing session against the click and reports per-beat timing deviation (mean/std
-deviation, a histogram, a hit timeline) as a standalone HTML report:
+A JUCE standalone metronome with 26 rhythm presets (odd meters and swing included), a
+damped-sine click or real drum-kit voicings (808, Reggae, Pocket kits), and a drop-bars
+mute feature for timing training: lock to the click and use the waveform display to see how
+tightly you land on the beat, switch to a shuffle/swing preset to work on feel, or use
+drop-bar mode to test internal time. Its timing-analysis mode records a real playing session
+against the beat grid and reports the timing deviation per position (mean/std deviation, a
+histogram, a full-bar hit distribution) as a standalone HTML report; onsets more than 70 ms
+from any grid position are ignored as ghost notes and shown in gray. A Lua script can program
+the played pattern (several instruments per beat, each at its own dB level) and the positions
+the analysis measures against. A timing-analysis report:
 
 ![Metronome timing-analysis report](docs/assets/metronome/timing-analysis-report.webp)
 

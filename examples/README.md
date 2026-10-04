@@ -18,7 +18,7 @@ generates or overwrites it.
 | Guisandbox                | Effect     |     |         | widget sandbox              | none (passthrough, UI-only)                                                                                                     |
 | Looper                    | Effect     |     | x       | slice/loop clock displays  | transient slicing (FFT-based), beat/click sequencer, loop recorder, MIDI/pattern sequencer, sample-based drum kit for the click |
 | Maxdiffuser               | Effect     |     |         | processing-size displays   | series allpass diffuser chain, FDN reverb, pitch shifting, biquad, waveshaping distortion                                       |
-| Metronome                 | Effect     | x   |         | beat/spectrogram displays  | beat sequencer, click generator, sample-based drum voicings, onset/timing analysis against the beat grid; Lua-scripted pattern and analysis positions |
+| Metronome                 | Effect     | x   | x       | beat/spectrogram displays  | beat sequencer, click generator, sample-based drum voicings, onset/timing analysis against the beat grid; Lua-scripted pattern and analysis positions |
 | Minireverb                | Effect     |     |         |                             | order-32 FDN reverb (Walsh-Hadamard mix), two in-tank pitch shifters, per-line hi/lo-pass filtering, vibrato                     |
 | Morphexsynth              | Instrument | x   |         |                             | 3 wavetable oscillators, pole-mixing filter, amp/filter/pitch envelopes, LFO, distortion, 10-slot MPE routing matrix, phaser/chorus/reverb bus |
 | Organicchorus             | Effect     | x   |         |                             | multi-voice BBD-style chorus/flanger (variable-write-clock tape delay per voice), Ornstein-Uhlenbeck/Wow/Flutter modulation, one-pole tone filtering, saturation                |
@@ -77,12 +77,15 @@ Diffuser delay chain: up to 100 modulated allpass delays in series, with
 pre-delay, pitching, bulge size distribution and damping.
 
 ## Metronome
-Settable-BPM click generator with a damped-sine tick, swing, bar-drop
-patterns, host sync, and circular beat/spectrogram displays. An Analysis mode
-listens to the input for onsets, measures their timing against the beat/subdivision
-grid, and exports an HTML report (histograms per beat/subdivision, a hit timeline). A Lua
-script can program the played pattern (several instruments per beat, each at its own dB level)
-and the analysis positions independently of each other.
+Settable-BPM metronome with 26 rhythm presets (simple, compound and odd meters, swing),
+bar-drop patterns, host sync and circular beat/spectrogram displays. Besides the damped-sine
+click, ten voicings play real drum-kit hits (kick, snare, hihat, toms, shaker, ...) from the
+selectable 808, Reggae and Pocket kits. An Analysis mode listens to the input for onsets, measures
+their timing against the beat/subdivision grid, ignoring onsets more than 70 ms from any grid
+position, and exports an HTML report (an overall deviation histogram, a full-bar hit distribution
+with the ignored onsets in gray, a per-position table). A Lua script can program the played
+pattern (several instruments per beat, each at its own dB level) and the analysis positions
+independently of each other.
 
 ## Minireverb
 Order-32 FDN reverb (`FdnTankBlockDelayWalshSIMD`/`FdnTankSpiced`) with
@@ -135,6 +138,13 @@ Sample player with independent pitch/time-stretching: position and playback
 advance are controlled separately from pitch.
 
 ## Tanpura
+## Spectraltap
+A Lua-scripted multitap delay: up to 24 taps share one delay buffer, each independently timed,
+panned and shaped by one of eight spectral voice types (bandpass, lowpass, highpass, notch,
+resonator, formant, comb resonator or ring modulator), plus a bypass tap. A patch's script owns
+the tap topology and every tap's targets; the engine owns Hz-to-coefficient mapping, smoothing
+and DSP safety. A tempo-synced feedback loop and an FDN reverb tail sit behind the tap bank.
+
 Plucked-string simulation of the Indian drone instrument: a Karplus-Strong
 string ensemble with a fixed pattern sequencer, per-string filter envelope,
 and send reverb.

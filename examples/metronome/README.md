@@ -118,33 +118,41 @@ The cycle always restarts on the downbeat of the next heard bar.
 ## Timing Analysis
 
 Switching Analysis on starts listening to the input signal for onsets and measures each
-onset's distance to the nearest beat or subdivision, in milliseconds (negative = early,
-positive = late). Onset detection uses a hysteresis (two-threshold) envelope: a hit fires when
-the level rises past the upper threshold, and it only re-arms once the level has since dropped
-past a lower one. This keeps a held or strummed chord's rippling sustain from re-triggering as
-several hits, at the cost of a known tradeoff: a genuinely new attack played while the previous
-one is still loud (within the hysteresis band) will not register as a separate hit.
+onset's distance to the nearest grid position, in milliseconds (negative = late, positive =
+early). The grid is the Analysis Grid control (quarters, 8ths, triplets, shuffle or 16ths of the
+Preset's bar) or, when a script defines them, the script's analysis positions. Onset detection
+uses a hysteresis (two-threshold) envelope: a hit fires when the level rises past the upper
+threshold, and it only re-arms once the level has since dropped past a lower one. This keeps a
+held or strummed chord's rippling sustain from re-triggering as several hits, at the cost of a
+known tradeoff: a genuinely new attack played while the previous one is still loud (within the
+hysteresis band) will not register as a separate hit.
+
+Only onsets within 70 ms of a grid position (a 140 ms window centered on it) are measured.
+Anything farther away, such as ghost notes or other material, is left out of all statistics and
+the deviation histogram and is counted in the report's "Ignored" card instead. When grid
+positions are less than 140 ms apart (16ths at 120 BPM or faster), every onset is within the
+window and nothing is ignored.
 
 Switching Analysis back off writes an HTML report and opens it in the default browser. The
-report shows hit count, mean and standard deviation of the collected deviations, an overall
-10 ms-bin histogram, a breakdown of that same histogram per beat (Beat 1, Beat 2, ...) and per
-subdivision slot (Off-beat for a single 8th/shuffle subdivision, Sub 1/Sub 2/... for presets
-with more than one, e.g. 16ths) so uneven timing on a specific beat or the off-beat shows up on
-its own, and a timeline of every hit across the take. Every histogram shares the same fixed
-x-axis, +/- half a beat at the take's tempo (e.g. +/-333 ms at 90 BPM), so the charts are
-directly comparable to each other and never auto-zoom to whatever range a particular beat
-happened to land in. Each Analysis toggle resets the collected data, so one on/off cycle is
-one take (up to 4096 hits; further hits are not recorded once that many have been collected).
-The page's charts are plain inline SVG; its layout uses Bootstrap loaded from a CDN, so it
-needs network access to render correctly.
+report contains:
 
-Reports are written to `~/Documents/Metronome Analysis/`, one timestamped file per take.
+- Summary cards: hit count, mean and standard deviation of the measured deviations, tempo and
+  preset, the analysis grid, and the number of ignored onsets.
+- A full-bar hit distribution: onset density in 10 ms bins across the whole bar, with a solid line
+  at every beat, a dashed line at every other grid position, and color-coded timing-quality zones
+  (Locked, Very tight, Tight, Loose, Off) around each position. The ignored onsets are drawn in
+  gray on top of the measured ones, so you can see where they happen.
+- An overall deviation histogram in 10 ms bins. Its x-axis is fixed at +/- half a beat at the
+  take's tempo (e.g. +/-333 ms at 90 BPM), so it never auto-zooms to the data.
+- A table with one row per grid position (Beat 1, Beat 1 - Off-beat or Sub 1, Sub 2 for the
+  built-in grids, Beat 2 + 0.5 for script positions): hit count, mean and standard deviation, and
+  a comment combining tightness (spread) and direction (dragging, laid-back, pushing, rushing),
+  so uneven timing on one beat or off-beat shows up on its own.
 
-Only onsets within 70 ms of a grid position (a 140 ms window centered on it) are measured. Anything
-farther away, such as ghost notes or other material, is left out of all statistics and the deviation
-histogram and counted in the report's "Ignored" card instead. The full-bar hit distribution still
-shows those ignored onsets, in gray on top of the matched ones, so you can see where they happen. When grid positions are less than 140 ms apart
-(16ths at 120 BPM or faster), every onset is within the window and nothing is ignored.
+Each Analysis toggle resets the collected data, so one on/off cycle is one take (up to 4096 hits;
+further hits are not recorded once that many have been collected). The page's charts are plain
+inline SVG; its layout uses Bootstrap loaded from a CDN, so it needs network access to render
+correctly. Reports are written to `~/Documents/Metronome Analysis/`, one timestamped file per take.
 
 ## Scripting
 
