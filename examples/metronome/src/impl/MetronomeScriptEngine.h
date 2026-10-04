@@ -14,11 +14,11 @@
 #include "MetronomePattern.h"
 
 /**
- * Runs a pattern script: its top-level code calls ClearPattern(), AddInstrument(),
- * ClearAnalysis() and AddAnalysisPosition(), which fill a staging result that the
- * caller publishes after a successful load. Positions are beats from the bar start,
- * levels are dB; the global BarBeats holds the bar length the script is loaded for.
- * The four functions only work while loadPattern() runs, never from a handler or timer.
+ * Runs a pattern script: its top-level code calls SetBeatsPerBar(), ClearPattern(),
+ * AddInstrument(), ClearAnalysis() and AddAnalysisPosition(), which fill a staging result
+ * that the caller publishes after a successful load. Positions are beats from the bar
+ * start, levels are dB; the global BarBeats holds the current bar length.
+ * The functions only work while loadPattern() runs, never from a handler or timer.
  */
 class MetronomeScriptEngine : public LuaScriptEngineBase<MetronomeScriptEngine>
 {
@@ -36,8 +36,10 @@ class MetronomeScriptEngine : public LuaScriptEngineBase<MetronomeScriptEngine>
 
     static constexpr std::string_view kSkeletonScript =
 "-- Metronome pattern script. Top-level code runs on every Apply and Preset change.\n"
-"-- BarBeats is the bar length (beats) of the selected Preset.\n"
+"-- BarBeats is the bar length (beats): the selected Preset's, or the one set by SetBeatsPerBar.\n"
 "--\n"
+"-- SetBeatsPerBar(beats)                   bar length 1 .. 16; replaces the Preset's and\n"
+"--                                         silences the Preset/Voicing sound\n"
 "-- ClearPattern()                          start the played pattern from scratch\n"
 "-- AddInstrument(position, instrument, db) one hit; several hits may share a position\n"
 "-- ClearAnalysis()                         start the analysis positions from scratch\n"
@@ -50,7 +52,7 @@ class MetronomeScriptEngine : public LuaScriptEngineBase<MetronomeScriptEngine>
 "--   Kick Snare Rimshot Sidestick Hihat HihatOpen HihatGhost Wood Clap Shaker Tamb\n"
 "--   Tom1 Tom2 Tom3 TomLow Timbale1 Timbale2 TimbaleDamp Ride Crash ClickLow ClickHigh\n"
 "--\n"
-"-- Calling ClearPattern or AddInstrument replaces the Preset/Voicing sound; calling\n"
+"-- Calling SetBeatsPerBar, ClearPattern or AddInstrument replaces the Preset/Voicing sound; calling\n"
 "-- ClearAnalysis or AddAnalysisPosition replaces the Analysis Grid. Example:\n"
 "--\n"
 "-- ClearPattern()\n"
@@ -83,6 +85,7 @@ class MetronomeScriptEngine : public LuaScriptEngineBase<MetronomeScriptEngine>
 
     void bindPatternApi();
     void requireLoading(std::string_view function) const;
+    void luaSetBeatsPerBar(double beats);
     void luaClearPattern();
     void luaAddInstrument(double position, long long instrument, double levelDb);
     void luaClearAnalysis();
@@ -102,6 +105,7 @@ inline MetronomeScriptEngine::MetronomeScriptEngine(const size_t poolBytes)
 
 inline void MetronomeScriptEngine::bindPatternApi()
 {
+    m_lua.set_function("SetBeatsPerBar", [this](const double beats) { luaSetBeatsPerBar(beats); });
     m_lua.set_function("ClearPattern", [this] { luaClearPattern(); });
     m_lua.set_function("AddInstrument", [this](const double position, const long long instrument, const double levelDb)
                        { luaAddInstrument(position, instrument, levelDb); });
@@ -146,10 +150,37 @@ inline float MetronomeScriptEngine::checkedPosition(const std::string_view funct
     return static_cast<float>(position);
 }
 
+inline void MetronomeScriptEngine::luaSetBeatsPerBar(const double beats)
+{
+    using namespace MetronomePattern;
+    requireLoading("SetBeatsPerBar");
+    if (!std::isfinite(beats) || beats != std::floor(beats) || beats < 1.0 ||
+        beats > static_cast<double>(kMaxBeatsPerBar))
+    {
+        throw std::runtime_error("SetBeatsPerBar: beats must be a whole number from 1 to " +
+                                 std::to_string(kMaxBeatsPerBar));
+    }
+    const auto count = static_cast<size_t>(beats);
+    const auto& hits = m_result.pattern.hits;
+    const auto& positions = m_result.analysis.positions;
+    const bool hitOutside = m_result.pattern.hitCount > 0 && hits[m_result.pattern.hitCount - 1].positionBeats >= beats;
+    const bool analysisOutside = m_result.analysis.count > 0 && positions[m_result.analysis.count - 1] >= beats;
+    if (hitOutside || analysisOutside)
+    {
+        throw std::runtime_error("SetBeatsPerBar: positions already added lie outside the new bar length");
+    }
+    m_barBeats = count;
+    m_lua["BarBeats"] = static_cast<long long>(count);
+    m_result.pattern.beatsPerBar = count;
+    m_result.pattern.active = true;
+}
+
 inline void MetronomeScriptEngine::luaClearPattern()
 {
     requireLoading("ClearPattern");
+    const size_t beatsPerBar = m_result.pattern.beatsPerBar;
     m_result.pattern = MetronomePattern::HitPattern{};
+    m_result.pattern.beatsPerBar = beatsPerBar;
     m_result.pattern.active = true;
 }
 

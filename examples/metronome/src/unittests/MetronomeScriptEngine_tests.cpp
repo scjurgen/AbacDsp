@@ -92,6 +92,77 @@ TEST(MetronomeScriptEngineTest, BarBeatsGlobalReflectsTheRequestedBarLength)
     EXPECT_EQ(engine.result().pattern.hitCount, 3u);
 }
 
+TEST(MetronomeScriptEngineTest, SetBeatsPerBarRecordsTheLengthAndActivatesASilentPattern)
+{
+    MetronomeScriptEngine engine;
+    ASSERT_TRUE(engine.loadPattern("SetBeatsPerBar(7)\n", kBarBeats));
+    EXPECT_EQ(engine.result().pattern.beatsPerBar, 7u);
+    EXPECT_TRUE(engine.result().pattern.active);
+    EXPECT_EQ(engine.result().pattern.hitCount, 0u);
+}
+
+TEST(MetronomeScriptEngineTest, SetBeatsPerBarUpdatesTheBarBeatsGlobal)
+{
+    MetronomeScriptEngine engine;
+    const std::string script = "SetBeatsPerBar(5)\nfor beat = 0, BarBeats - 1 do AddInstrument(beat, Kick, 0) end\n";
+    ASSERT_TRUE(engine.loadPattern(script, kBarBeats));
+    EXPECT_EQ(engine.result().pattern.hitCount, 5u);
+}
+
+TEST(MetronomeScriptEngineTest, SetBeatsPerBarWidensTheAllowedPositions)
+{
+    MetronomeScriptEngine engine;
+    EXPECT_TRUE(engine.loadPattern("SetBeatsPerBar(7)\nAddInstrument(6.5, Kick, 0)\n", kBarBeats));
+    EXPECT_FALSE(engine.loadPattern("SetBeatsPerBar(2)\nAddInstrument(2, Kick, 0)\n", kBarBeats));
+}
+
+TEST(MetronomeScriptEngineTest, ClearPatternKeepsTheBarLengthSetBefore)
+{
+    MetronomeScriptEngine engine;
+    ASSERT_TRUE(engine.loadPattern("SetBeatsPerBar(6)\nClearPattern()\n", kBarBeats));
+    EXPECT_EQ(engine.result().pattern.beatsPerBar, 6u);
+}
+
+TEST(MetronomeScriptEngineTest, ScriptWithoutSetBeatsPerBarLeavesTheBarLengthToThePreset)
+{
+    MetronomeScriptEngine engine;
+    ASSERT_TRUE(engine.loadPattern("AddInstrument(0, Kick, 0)\n", kBarBeats));
+    EXPECT_EQ(engine.result().pattern.beatsPerBar, 0u);
+}
+
+TEST(MetronomeScriptEngineTest, SetBeatsPerBarRejectsLengthsOutsideOneToSixteen)
+{
+    MetronomeScriptEngine engine;
+    EXPECT_FALSE(engine.loadPattern("SetBeatsPerBar(0)\n", kBarBeats));
+    EXPECT_THAT(engine.lastError(), ::testing::HasSubstr("whole number from 1 to 16"));
+    EXPECT_FALSE(engine.loadPattern("SetBeatsPerBar(17)\n", kBarBeats));
+    EXPECT_TRUE(engine.loadPattern("SetBeatsPerBar(16)\n", kBarBeats));
+    EXPECT_TRUE(engine.loadPattern("SetBeatsPerBar(1)\n", kBarBeats));
+}
+
+TEST(MetronomeScriptEngineTest, SetBeatsPerBarRejectsFractionalLengths)
+{
+    MetronomeScriptEngine engine;
+    EXPECT_FALSE(engine.loadPattern("SetBeatsPerBar(3.5)\n", kBarBeats));
+    EXPECT_FALSE(engine.loadPattern("SetBeatsPerBar(0/0)\n", kBarBeats));
+}
+
+TEST(MetronomeScriptEngineTest, SetBeatsPerBarRejectsAShorterBarThanThePositionsAlreadyAdded)
+{
+    MetronomeScriptEngine engine;
+    EXPECT_FALSE(engine.loadPattern("SetBeatsPerBar(8)\nAddInstrument(6, Kick, 0)\nSetBeatsPerBar(4)\n", kBarBeats));
+    EXPECT_THAT(engine.lastError(), ::testing::HasSubstr("already added"));
+    EXPECT_FALSE(engine.loadPattern("SetBeatsPerBar(8)\nAddAnalysisPosition(6)\nSetBeatsPerBar(4)\n", kBarBeats));
+}
+
+TEST(MetronomeScriptEngineTest, SetBeatsPerBarCalledFromATimerIsRejected)
+{
+    MetronomeScriptEngine engine;
+    ASSERT_TRUE(engine.loadPattern("Timer.After(1, function() SetBeatsPerBar(5) end)\n", kBarBeats));
+    engine.tickBlock(100000);
+    EXPECT_EQ(engine.result().pattern.beatsPerBar, 0u);
+}
+
 TEST(MetronomeScriptEngineTest, AnalysisPositionsAreSortedAndDeduplicated)
 {
     MetronomeScriptEngine engine;

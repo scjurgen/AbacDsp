@@ -233,6 +233,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                     bpmDial.setValue(bpm);
                 }
                 onOffSwitch.setEnabled(!processorRef.isHostSynced());
+                presetDrop.setEnabled(!processorRef.scriptSetsBeatsPerBar());
                 signalGauge.setSamplesPerBeat(spb);
                 irisGauge.setSamplesPerBeat(spb);
             }

@@ -166,6 +166,80 @@ TEST(MetronomeImplTest, EmptyScriptAnalysisFallsBackToTheDropdownGrid)
     EXPECT_THAT(impl.buildAnalysisReportHtml(), ::testing::HasSubstr("Quarter"));
 }
 
+TEST(MetronomeImplTest, ScriptBarLengthReplacesThePresetBarLength)
+{
+    Impl impl(kSampleRate);
+    ASSERT_EQ(impl.getBarBeats(), 4);
+    EXPECT_FALSE(impl.scriptSetsBeatsPerBar());
+    ASSERT_TRUE(impl.setScript("SetBeatsPerBar(7)\n"));
+    EXPECT_TRUE(impl.scriptSetsBeatsPerBar());
+    EXPECT_EQ(impl.getBarBeats(), 7);
+}
+
+TEST(MetronomeImplTest, ScriptBarLengthIsAdoptedByTheSequencer)
+{
+    Impl impl(kSampleRate);
+    ASSERT_TRUE(impl.setScript("SetBeatsPerBar(2)\n"));
+    static_cast<void>(runSeconds(impl, 0.76f));
+    EXPECT_NEAR(impl.getBarPhase(), 0.75f, 0.05f);
+}
+
+TEST(MetronomeImplTest, SetBeatsPerBarSilencesTheBuiltInClick)
+{
+    Impl impl(kSampleRate);
+    ASSERT_TRUE(impl.setScript("SetBeatsPerBar(7)\n"));
+    static_cast<void>(runSeconds(impl, 0.01f));
+    impl.setOnOff(true);
+    EXPECT_EQ(runSeconds(impl, 2.f), 0.f);
+}
+
+TEST(MetronomeImplTest, PresetChangeDoesNotOverrideAScriptBarLength)
+{
+    Impl impl(kSampleRate);
+    ASSERT_TRUE(impl.setScript("SetBeatsPerBar(7)\n"));
+    impl.setPreset(kPresetThreeFour);
+    EXPECT_EQ(impl.getBarBeats(), 7);
+    impl.reloadScriptIfPending();
+    EXPECT_FALSE(impl.hasScriptError());
+    EXPECT_EQ(impl.getBarBeats(), 7);
+}
+
+TEST(MetronomeImplTest, ScriptWithoutSetBeatsPerBarFallsBackToThePresetBarLength)
+{
+    Impl impl(kSampleRate);
+    ASSERT_TRUE(impl.setScript("SetBeatsPerBar(7)\n"));
+    ASSERT_TRUE(impl.setScript("-- nothing\n"));
+    EXPECT_FALSE(impl.scriptSetsBeatsPerBar());
+    EXPECT_EQ(impl.getBarBeats(), 4);
+    impl.setPreset(kPresetThreeFour);
+    EXPECT_EQ(impl.getBarBeats(), 3);
+}
+
+TEST(MetronomeImplTest, FailedScriptKeepsThePreviousScriptBarLength)
+{
+    Impl impl(kSampleRate);
+    ASSERT_TRUE(impl.setScript("SetBeatsPerBar(7)\n"));
+    ASSERT_FALSE(impl.setScript("SetBeatsPerBar(9)\nthis is not lua\n"));
+    EXPECT_EQ(impl.getBarBeats(), 7);
+}
+
+TEST(MetronomeImplTest, ScriptGlobalBarBeatsStartsAtThePresetLength)
+{
+    Impl impl(kSampleRate);
+    impl.setPreset(kPresetThreeFour);
+    EXPECT_TRUE(impl.setScript("if BarBeats ~= 3 then error('wrong bar length') end\n"));
+    EXPECT_FALSE(impl.scriptSetsBeatsPerBar());
+}
+
+TEST(MetronomeImplTest, ReportUsesTheScriptBarLength)
+{
+    Impl impl(kSampleRate);
+    ASSERT_TRUE(impl.setScript("SetBeatsPerBar(7)\n"));
+    const std::string html = impl.buildAnalysisReportHtml();
+    EXPECT_THAT(html, ::testing::HasSubstr("Beat 7"));
+    EXPECT_THAT(html, ::testing::Not(::testing::HasSubstr("Beat 8")));
+}
+
 TEST(MetronomeImplTest, SkeletonScriptCompilesAndDefinesNoPattern)
 {
     Impl impl(kSampleRate);

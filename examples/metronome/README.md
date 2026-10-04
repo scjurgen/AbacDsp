@@ -158,26 +158,30 @@ correctly. Reports are written to `~/Documents/Metronome Analysis/`, one timesta
 
 A script programs what the metronome plays and, independently, what the timing analysis
 measures against. The script runs once on every Apply and on every Preset change; its top-level
-code calls the four functions below. Nothing in a script runs on the audio thread. Edit scripts
+code calls the functions below. Nothing in a script runs on the audio thread. Edit scripts
 from the Scripts menu; the library dropdown of the editor offers the shipped examples
 (`base-scripts/`).
 
 Without a script, or with a script that calls none of these functions, the Preset, Voicing and
-Analysis Grid controls behave as described above. Calling `ClearPattern` or `AddInstrument`
-replaces the Preset/Voicing sound with the script's pattern; calling `ClearAnalysis` or
+Analysis Grid controls behave as described above. Calling `SetBeatsPerBar`, `ClearPattern` or
+`AddInstrument` replaces the Preset/Voicing sound with the script's pattern (silent until
+`AddInstrument` adds hits); calling `ClearAnalysis` or
 `AddAnalysisPosition` replaces the Analysis Grid. An analysis grid left empty falls back to the
 Analysis Grid control.
 
 | Function | Meaning |
 |---|---|
+| `SetBeatsPerBar(beats)` | Sets the bar length, a whole number from 1 to 16, instead of the Preset's. The Preset dropdown is disabled while a script sets it. |
 | `ClearPattern()` | Empties the played pattern; the metronome is silent until `AddInstrument` is called. |
 | `AddInstrument(position, instrument, levelDb)` | One drum hit. Several hits at one position play together (kick and hihat on 1). |
 | `ClearAnalysis()` | Empties the analysis positions. |
 | `AddAnalysisPosition(position)` | One bar position the played onsets are measured against. Duplicates are ignored. |
 
 `position` is in beats from the bar start: 0 is beat 1, 0.5 the "and" of 1, 1 is beat 2, 2.75 the
-last 16th of beat 3. The bar length is the Preset's beats per bar, available as the global
-`BarBeats`; a position outside `0 <= position < BarBeats` is a script error. Positions are
+last 16th of beat 3. The bar length is the Preset's beats per bar unless the script calls
+`SetBeatsPerBar`; either way it is available as the global `BarBeats`, which `SetBeatsPerBar`
+updates. Call `SetBeatsPerBar` before adding positions, and it must not shorten the bar below a
+position already added. A position outside `0 <= position < BarBeats` is a script error. Positions are
 literal: the Swing control only affects the built-in subdivisions.
 
 `levelDb` is relative to the sample's own level (0 = as stored) and limited to -96 .. +12. The
@@ -224,8 +228,12 @@ Rules and limits:
 - A new pattern starts at the next bar boundary while the metronome is running, immediately when
   it is stopped. A script that fails to load leaves the previous pattern playing and shows its
   error.
-- Drop Bars still mutes a script pattern. The beat and spectrogram displays stay driven by the
-  Preset.
+- Drop Bars still mutes a script pattern. The beat and spectrogram displays follow the bar
+  length; their subdivision ticks stay driven by the Preset.
+- A new bar length takes effect with the new pattern, at the next bar boundary while running.
+  Removing the `SetBeatsPerBar` call from the script hands the bar length back to the Preset
+  and re-enables the dropdown. The analysis report names the take "Script" while a script sets
+  the bar length.
 - Changing the Preset reloads the script for the new `BarBeats`. The reload is picked up while
   the editor window is open.
 - The functions only work at the top level of the script, not from handlers or timers.
@@ -233,4 +241,4 @@ Rules and limits:
   a beat) and measures each onset within 70 ms of its nearest position, wrapping at the bar end.
 
 Shipped scripts in `base-scripts/`: `rock-8th-groove`, `bossa-clave`, `five-over-four`,
-`quarters-analyse-16ths` and `reggae`.
+`quarters-analyse-16ths`, `reggae` and `seven-eight-2-2-3` (which sets its own bar length).

@@ -174,16 +174,19 @@ class MetronomeImpl final : public EffectBase
 
     [[nodiscard]] std::string buildAnalysisReportHtml() const
     {
-        const auto& preset = kPresets[static_cast<size_t>(m_presetIndex)];
-        return MetronomeAnalysis::buildReportHtml(m_rawOnsetCollector.hits(), preset.barBeats, currentAnalysisGrid(),
-                                                  m_bpm, sampleRate(), preset.name);
+        const std::string_view name = scriptSetsBeatsPerBar() ? "Script" : kPresets[presetSlot()].name;
+        return MetronomeAnalysis::buildReportHtml(m_rawOnsetCollector.hits(), effectiveBeatsPerBar(),
+                                                  currentAnalysisGrid(), m_bpm, sampleRate(), name);
     }
 
     void setPreset(const int index)
     {
         m_presetIndex = std::clamp(index, 0, static_cast<int>(kPresets.size()) - 1);
-        const auto& preset = kPresets[static_cast<size_t>(m_presetIndex)];
-        m_seq.setBeatsPerBar(preset.barBeats);
+        const auto& preset = kPresets[presetSlot()];
+        if (!scriptSetsBeatsPerBar())
+        {
+            m_seq.setBeatsPerBar(preset.barBeats);
+        }
         m_seq.setSubdivType(preset.subdivType);
         m_seq.resetBarPosition();
         m_barCount = 0;
@@ -345,7 +348,12 @@ class MetronomeImpl final : public EffectBase
 
     [[nodiscard]] int getBarBeats() const noexcept
     {
-        return static_cast<int>(kPresets[static_cast<size_t>(m_presetIndex)].barBeats);
+        return static_cast<int>(effectiveBeatsPerBar());
+    }
+
+    [[nodiscard]] bool scriptSetsBeatsPerBar() const noexcept
+    {
+        return m_scriptBeatsPerBar.load(std::memory_order_relaxed) != 0;
     }
 
     [[nodiscard]] float getBarPhase() const noexcept
@@ -592,24 +600,44 @@ class MetronomeImpl final : public EffectBase
         triggerDrumVoice(kVoicings[static_cast<size_t>(m_voicingIndex)].codeSub, kSubAccentGain * m_subVolumeGain);
     }
 
+    [[nodiscard]] size_t presetSlot() const noexcept
+    {
+        return static_cast<size_t>(m_presetIndex);
+    }
+
+    [[nodiscard]] size_t effectiveBeatsPerBar() const noexcept
+    {
+        const size_t scripted = m_scriptBeatsPerBar.load(std::memory_order_relaxed);
+        return scripted != 0 ? scripted : kPresets[presetSlot()].barBeats;
+    }
+
     void adoptPendingPattern() noexcept
     {
-        if (const auto* pending = m_patternMailbox.acquireNewest())
+        const auto* pending = m_patternMailbox.acquireNewest();
+        if (pending == nullptr)
         {
-            m_patternScheduler.setPattern(pending);
+            return;
+        }
+        m_patternScheduler.setPattern(pending);
+        const size_t beatsPerBar = pending->beatsPerBar != 0 ? pending->beatsPerBar : kPresets[presetSlot()].barBeats;
+        if (beatsPerBar != m_seq.beatsPerBar())
+        {
+            m_seq.setBeatsPerBar(beatsPerBar);
+            m_seq.resetBarPosition();
         }
     }
 
     bool applyScript()
     {
-        const auto barBeats = static_cast<size_t>(kPresets[static_cast<size_t>(m_presetIndex)].barBeats);
-        if (!m_scriptEngine.loadPattern(m_scriptSource, barBeats))
+        const size_t presetBeats = kPresets[presetSlot()].barBeats;
+        if (!m_scriptEngine.loadPattern(m_scriptSource, presetBeats))
         {
             return false;
         }
         const auto& result = m_scriptEngine.result();
         m_patternMailbox.backSlot() = result.pattern;
         m_patternMailbox.publish();
+        m_scriptBeatsPerBar.store(result.pattern.beatsPerBar, std::memory_order_relaxed);
         m_scriptAnalysis = result.analysis;
         return true;
     }
@@ -623,8 +651,7 @@ class MetronomeImpl final : public EffectBase
                 std::span<const float>{m_scriptAnalysis.positions.data(), m_scriptAnalysis.count});
         }
         const auto& grid = kAnalysisGrids[static_cast<size_t>(m_analysisGridIndex)];
-        const auto& preset = kPresets[static_cast<size_t>(m_presetIndex)];
-        return MetronomeAnalysis::builtInGrid(grid.type, grid.name, preset.barBeats, m_seq.swingRatio());
+        return MetronomeAnalysis::builtInGrid(grid.type, grid.name, effectiveBeatsPerBar(), m_seq.swingRatio());
     }
 
     void advanceDropBar(const DropBarMode& mode) noexcept
@@ -647,7 +674,7 @@ class MetronomeImpl final : public EffectBase
         return m_hostSync ? hostTransport().isPlaying : m_running;
     }
 
-    // Bar length uses the preset's own barBeats (via the sequencer), not the host time
+    // Bar length uses the effective barBeats (via the sequencer), not the host time
     // signature. Only resync on a fresh transport sample; advance() carries phase between.
     void syncToHostTransport()
     {
@@ -730,6 +757,7 @@ class MetronomeImpl final : public EffectBase
     MetronomeScriptEngine m_scriptEngine;
     std::string m_scriptSource;
     std::atomic<bool> m_scriptReloadPending{false};
+    std::atomic<size_t> m_scriptBeatsPerBar{0};
     MetronomePattern::AnalysisPositions m_scriptAnalysis;
     MetronomePattern::TripleBuffer<MetronomePattern::HitPattern> m_patternMailbox;
     MetronomePattern::PatternScheduler m_patternScheduler;

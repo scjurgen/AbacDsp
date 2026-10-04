@@ -921,6 +921,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner && pluginRunner->isHostSynced();
     }
+    [[nodiscard]] bool scriptSetsBeatsPerBar() const noexcept
+    {
+        return pluginRunner && pluginRunner->scriptSetsBeatsPerBar();
+    }
     [[nodiscard]] size_t getWaveDataBeatIndex() const noexcept
     {
         return pluginRunner ? pluginRunner->getBeatIndex() : 0u;

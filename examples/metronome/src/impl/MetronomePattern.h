@@ -91,6 +91,7 @@ static_assert(kInstruments.size() == static_cast<size_t>(Instrument::ClickHigh) 
 
 inline constexpr size_t kMaxHits{256};
 inline constexpr size_t kMaxAnalysisPositions{128};
+inline constexpr size_t kMaxBeatsPerBar{16};
 inline constexpr float kMinLevelDb{-96.f};
 inline constexpr float kMaxLevelDb{12.f};
 
@@ -103,10 +104,12 @@ struct Hit
 };
 
 // The scripted pattern, hits sorted by position. Inactive means the script never defined one.
+// beatsPerBar 0 means the script left the bar length to the Preset.
 struct HitPattern
 {
     std::array<Hit, kMaxHits> hits{};
     size_t hitCount{0};
+    size_t beatsPerBar{0};
     bool active{false};
 };
 
