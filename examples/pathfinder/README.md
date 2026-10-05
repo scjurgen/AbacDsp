@@ -1,7 +1,9 @@
 # Pathfinder
 
-A tape-modulation effect whose signal chain and controls are a Lua graph script you can edit
-in the app. It starts as a shared-stereo tape vibrato: one delay read head per channel,
+A general-purpose audio-graph host: the signal chain, controls and modulation are a Lua script
+you write and edit inside the app, compiled into a real-time DSP graph from a library of routing,
+filter, control/modulation and feedback nodes (see the node reference below). It starts as a
+shared-stereo tape vibrato: one delay read head per channel,
 modulated by tape-like wow and flutter, 100% wet. Both channels are seeded identically, so the
 wobble stays coherent across the stereo image. The samplers around each delay add a
 ratio-dependent latency, about 1.4 ms at nominal speed (see `documentation/OverSampling/`).

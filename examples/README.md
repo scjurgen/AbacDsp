@@ -22,7 +22,7 @@ generates or overwrites it.
 | Minireverb                | Effect     |     |         |                             | order-32 FDN reverb (Walsh-Hadamard mix), two in-tank pitch shifters, per-line hi/lo-pass filtering, vibrato                     |
 | Morphexsynth              | Instrument | x   |         |                             | 3 wavetable oscillators, pole-mixing filter, amp/filter/pitch envelopes, LFO, distortion, 10-slot MPE routing matrix, phaser/chorus/reverb bus |
 | Organicchorus             | Effect     | x   |         |                             | multi-voice BBD-style chorus/flanger (variable-write-clock tape delay per voice), Ornstein-Uhlenbeck/Wow/Flutter modulation, one-pole tone filtering, saturation                |
-| Pathfinder                | Effect     | x   |         | Lua graph editor           | user-scripted signal graph (default: shared-stereo WobbleDelay tape vibrato per channel via UpDownSampler); presets for chorus/BBD-chorus/widener/resonant-feedback graphs |
+| Pathfinder                | Effect     | x   |         | Lua graph editor           | general-purpose Lua-scripted DSP graph host (routing, filter, control/modulation, feedback nodes); default graph: shared-stereo WobbleDelay tape vibrato via UpDownSampler; presets for chorus/BBD-chorus/widener/resonant-feedback graphs |
 | Pingsynth                 | Instrument | x   |         |                             | modal resonator (ringing bandpass) bank, FDN reverb, pitch detection for Lua-side tuning                                        |
 | Plaingain                 | Effect     |     |         |                             | gain staging, biquad shelving filters, latency-compensation delay                                                               |
 | Resonik                   | Effect     | x   |         |                             | resonator bank (biquad + SVF bandpass), multi-tap delay, pitch detection                                                        |
@@ -109,11 +109,12 @@ head instead, wrapped in per-voice feedback and tone shaping. Four configuration
 Depth, Feedback, Mix); two extra live-tweak knobs (Drift, Spread) are Lua-scripted.
 
 ## Pathfinder
-A tape-modulation effect whose signal chain and controls are a Lua graph script, edited in the
-app itself: the script decides which nodes exist, how they are wired, and which knobs the plugin
-shows. It starts as a shared-stereo tape vibrato (one `WobbleDelay` read head per channel inside
-an `UpDownSampler`, wow/flutter modulated, 100% wet); ten ready-made template graphs cover
-chorus families, a BBD-style chorus, a widener and a resonant feedback loop.
+A general-purpose audio-graph host: the signal chain, controls and modulation are a Lua script
+edited in the app itself, compiled into a real-time DSP graph from a library of routing, filter,
+control/modulation and feedback nodes. It starts as a shared-stereo tape vibrato (one
+`WobbleDelay` read head per channel inside an `UpDownSampler`, wow/flutter modulated, 100% wet);
+ten ready-made template graphs cover chorus families, a BBD-style chorus, a widener and a
+resonant feedback loop.
 
 ## Pingsynth
 A Lua-scripted modal resonator synth: each voice is a bank of ringing bandpass resonators,
@@ -137,7 +138,6 @@ reverb send with decay/shimmer controls.
 Sample player with independent pitch/time-stretching: position and playback
 advance are controlled separately from pitch.
 
-## Tanpura
 ## Spectraltap
 A Lua-scripted multitap delay: up to 24 taps share one delay buffer, each independently timed,
 panned and shaped by one of eight spectral voice types (bandpass, lowpass, highpass, notch,
@@ -145,6 +145,7 @@ resonator, formant, comb resonator or ring modulator), plus a bypass tap. A patc
 the tap topology and every tap's targets; the engine owns Hz-to-coefficient mapping, smoothing
 and DSP safety. A tempo-synced feedback loop and an FDN reverb tail sit behind the tap bank.
 
+## Tanpura
 Plucked-string simulation of the Indian drone instrument: a Karplus-Strong
 string ensemble with a fixed pattern sequencer, per-string filter envelope,
 and send reverb.
