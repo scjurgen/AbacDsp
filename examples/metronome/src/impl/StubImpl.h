@@ -54,6 +54,10 @@ class StubImpl final : public EffectBase
     {
         m_analysisGrid = value;
     }
+    void setAnalysisBars(const size_t value)
+    {
+        m_analysisBars = value;
+    }
     void setPreset(const size_t value)
     {
         m_preset = value;
@@ -106,6 +110,7 @@ class StubImpl final : public EffectBase
     bool m_hostSync{};
     bool m_analysisMode{};
     size_t m_analysisGrid{};
+    size_t m_analysisBars{};
     size_t m_preset{};
     size_t m_voicing{};
     size_t m_drumKit{};

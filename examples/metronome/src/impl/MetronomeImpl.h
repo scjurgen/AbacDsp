@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <format>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -112,7 +113,41 @@ class MetronomeImpl final : public EffectBase
 
     void setAnalysisMode(const bool value) noexcept
     {
-        m_analysisMode = value;
+        m_analysisMode.store(value, std::memory_order_relaxed);
+    }
+
+    void setAnalysisBars(const size_t index) noexcept
+    {
+        m_analysisBarsIndex.store(std::min(index, kAnalysisBarCounts.size() - 1), std::memory_order_relaxed);
+    }
+
+    // True once per take that stopped itself at its bar count; the message thread then flips the
+    // Analysis switch off to match.
+    [[nodiscard]] bool consumeAnalysisAutoStopped() noexcept
+    {
+        return m_analysisAutoStopped.exchange(false, std::memory_order_acq_rel);
+    }
+
+    // Empty while no take is active.
+    [[nodiscard]] std::string analysisStatusText() const
+    {
+        const uint64_t packed = m_analysisProgress.load(std::memory_order_relaxed);
+        const auto phase = static_cast<AnalysisPhase>(packed & 0xFFu);
+        const size_t bar = static_cast<size_t>((packed >> 8) & 0xFFFFu) + 1;
+        const size_t total = static_cast<size_t>((packed >> 24) & 0xFFFFu);
+        switch (phase)
+        {
+            case AnalysisPhase::Idle:
+                return {};
+            case AnalysisPhase::Waiting:
+                return "Analysis: waiting for the next bar";
+            case AnalysisPhase::CountIn:
+                return std::format("Analysis: count-in bar {}/{}", bar, kAnalysisCountInBars);
+            case AnalysisPhase::Capturing:
+                return total == 0 ? std::format("Analysis: bar {}", bar)
+                                  : std::format("Analysis: bar {}/{}", bar, total);
+        }
+        return {};
     }
 
     // Runs the pattern script for the current Preset's bar length. A failed script leaves
@@ -274,14 +309,15 @@ class MetronomeImpl final : public EffectBase
 
         for (size_t i = 0; i < BlockSize; ++i)
         {
-            if (m_analysisMode && m_onsetDetector.step(inMono[i]))
+            if (m_analysisPhase == AnalysisPhase::Capturing && m_onsetDetector.step(inMono[i]))
             {
                 m_rawOnsetCollector.push({m_seq.beatIndexInBar(), m_seq.beatSamplePos(), m_seq.samplesPerBeat()});
             }
 
             const auto event = m_seq.advance();
             const auto& mode = kDropBarModes[static_cast<size_t>(m_dropModeIndex)];
-            const bool isMuted = mode.playBars > 0 && m_barCount >= mode.playBars;
+            const bool countingIn = isAnalysisCountingIn();
+            const bool isMuted = !countingIn && mode.playBars > 0 && m_barCount >= mode.playBars;
 
             const bool scripted = m_patternScheduler.active();
             if (scripted && !isMuted)
@@ -309,7 +345,7 @@ class MetronomeImpl final : public EffectBase
                 drumRight += voiceRight * slot.gain;
             }
 
-            const bool audible = effectiveRunning() && !isMuted;
+            const bool audible = (effectiveRunning() || countingIn) && !isMuted;
             const bool useClick = isVoicingClick() && !scripted;
             const float leftOutput = audible ? (useClick ? click : drumLeft) : 0.f;
             const float rightOutput = audible ? (useClick ? click : drumRight) : 0.f;
@@ -324,6 +360,7 @@ class MetronomeImpl final : public EffectBase
                 advanceDropBar(mode);
                 m_beatOccurrenceInBar = 0;
                 adoptPendingPattern();
+                advanceAnalysisBar();
             }
         }
     }
@@ -443,6 +480,18 @@ class MetronomeImpl final : public EffectBase
         {"Shuffle", kSh},
         {"16th", kSi},
     });
+
+    // Bars captured per take, in blueprint dropdown order; 0 is open end.
+    static constexpr auto kAnalysisBarCounts = std::to_array<size_t>({0, 4, 8, 12, 16, 24, 32, 64});
+    static constexpr size_t kAnalysisCountInBars = 2;
+
+    enum class AnalysisPhase : uint8_t
+    {
+        Idle,
+        Waiting,
+        CountIn,
+        Capturing
+    };
 
     // samples/drums subfolder names, in blueprint dropdown order.
     static constexpr auto kDrumKitDirNames = std::to_array<std::string_view>({"808", "reggae", "pocket"});
@@ -698,24 +747,112 @@ class MetronomeImpl final : public EffectBase
         m_postWindow = m_seq.samplesPerBeat() - m_preWindow;
     }
 
-    // Detects the analysis on/off edge: activating resets the collector fresh for this take,
-    // deactivating raises the flag the message thread polls to build and export the report.
-    void updateAnalysisMode() noexcept
+    [[nodiscard]] bool isAnalysisCountingIn() const noexcept
     {
-        if (m_analysisMode == m_prevAnalysisMode)
+        return m_analysisPhase == AnalysisPhase::Waiting || m_analysisPhase == AnalysisPhase::CountIn;
+    }
+
+    void setAnalysisPhase(const AnalysisPhase phase) noexcept
+    {
+        m_analysisPhase = phase;
+        publishAnalysisProgress();
+    }
+
+    void publishAnalysisProgress() noexcept
+    {
+        const uint64_t packed =
+            static_cast<uint64_t>(m_analysisPhase) | (uint64_t{m_analysisBar} << 8) | (uint64_t{m_takeBars} << 24);
+        m_analysisProgress.store(packed, std::memory_order_relaxed);
+    }
+
+    // Free-running takes restart the bar so the count-in begins on a downbeat; under host sync the
+    // bar position belongs to the host, so the count-in waits for the next bar wrap instead.
+    void beginTake() noexcept
+    {
+        m_takeBars = static_cast<uint32_t>(kAnalysisBarCounts[m_analysisBarsIndex.load(std::memory_order_relaxed)]);
+        m_analysisBar = 0;
+        if (m_hostSync)
         {
+            setAnalysisPhase(AnalysisPhase::Waiting);
             return;
         }
-        if (m_analysisMode)
-        {
-            m_rawOnsetCollector.reset();
-            m_onsetDetector.reset();
-        }
-        else
+        m_seq.reset();
+        m_beatOccurrenceInBar = 0;
+        setAnalysisPhase(AnalysisPhase::CountIn);
+    }
+
+    // A take stopped during the count-in has captured nothing, so it gets no report.
+    void endTake() noexcept
+    {
+        if (m_analysisPhase == AnalysisPhase::Capturing)
         {
             m_reportReady.store(true, std::memory_order_release);
         }
-        m_prevAnalysisMode = m_analysisMode;
+        setAnalysisPhase(AnalysisPhase::Idle);
+    }
+
+    void beginCapture() noexcept
+    {
+        m_rawOnsetCollector.reset();
+        m_onsetDetector.reset();
+        m_barCount = 0;
+        m_analysisBar = 0;
+        setAnalysisPhase(AnalysisPhase::Capturing);
+    }
+
+    void finishTake() noexcept
+    {
+        m_analysisMode.store(false, std::memory_order_relaxed);
+        m_prevAnalysisMode = false;
+        endTake();
+        m_analysisAutoStopped.store(true, std::memory_order_release);
+    }
+
+    void advanceAnalysisBar() noexcept
+    {
+        switch (m_analysisPhase)
+        {
+            case AnalysisPhase::Idle:
+                return;
+            case AnalysisPhase::Waiting:
+                m_analysisBar = 0;
+                setAnalysisPhase(AnalysisPhase::CountIn);
+                return;
+            case AnalysisPhase::CountIn:
+                if (++m_analysisBar >= kAnalysisCountInBars)
+                {
+                    beginCapture();
+                    return;
+                }
+                break;
+            case AnalysisPhase::Capturing:
+                if (++m_analysisBar >= m_takeBars && m_takeBars > 0)
+                {
+                    finishTake();
+                    return;
+                }
+                break;
+        }
+        publishAnalysisProgress();
+    }
+
+    // Detects the analysis on/off edge made by the switch.
+    void updateAnalysisMode() noexcept
+    {
+        const bool requested = m_analysisMode.load(std::memory_order_relaxed);
+        if (requested == m_prevAnalysisMode)
+        {
+            return;
+        }
+        m_prevAnalysisMode = requested;
+        if (requested)
+        {
+            beginTake();
+        }
+        else
+        {
+            endTake();
+        }
     }
 
     static constexpr float kDefaultSwingRatio = 1.5f;
@@ -724,8 +861,14 @@ class MetronomeImpl final : public EffectBase
     float m_inputGain{1.f};
     bool m_running{false};
     bool m_hostSync{false};
-    bool m_analysisMode{false};
+    std::atomic<bool> m_analysisMode{false};
     bool m_prevAnalysisMode{false};
+    std::atomic<size_t> m_analysisBarsIndex{0};
+    std::atomic<bool> m_analysisAutoStopped{false};
+    std::atomic<uint64_t> m_analysisProgress{0};
+    AnalysisPhase m_analysisPhase{AnalysisPhase::Idle};
+    uint32_t m_analysisBar{0};
+    uint32_t m_takeBars{0};
     uint64_t m_lastSyncedUpdateCount{0};
     int m_dropModeIndex{0};
     int m_barCount{0};

@@ -190,6 +190,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(analysisBarsDrop)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(subVolumeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(metroVolumeDial).withFlex(1).withMargin(knobMarginSmall));
@@ -237,7 +242,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 signalGauge.setSamplesPerBeat(spb);
                 irisGauge.setSamplesPerBeat(spb);
             }
+            processorRef.pollAnalysisAutoStop();
             processorRef.pollAnalysisReport();
+            if (const auto status = processorRef.pollAnalysisStatus())
+            {
+                m_statusBar.showMessage(*status, status->isNotEmpty());
+            }
             processorRef.pollScriptReload();
             pollScriptError();
             processorRef.consumeLastLearnedCc();
@@ -311,6 +321,12 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         analysisGridDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             valueTreeState, "analysisGrid", analysisGridDrop);
         analysisGridDrop.setTooltip(juce::String::fromUTF8("Analysis Grid (Quarter, 8th, Triplet, Shuffle, 16th)"));
+        addAndMakeVisible(analysisBarsDrop);
+        analysisBarsDrop.addItemList(valueTreeState.getParameter("analysisBars")->getAllValueStrings(), 1);
+        analysisBarsDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "analysisBars", analysisBarsDrop);
+        analysisBarsDrop.setTooltip(juce::String::fromUTF8(
+            "Analysis Bars (Open end, 4 Bars, 8 Bars, 12 Bars, 16 Bars, 24 Bars, 32 Bars, 64 Bars)"));
         addAndMakeVisible(presetDrop);
         presetDrop.addItemList(valueTreeState.getParameter("preset")->getAllValueStrings(), 1);
         presetDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
@@ -377,6 +393,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             hostSyncSwitch.setVisible(false);
             analysisModeSwitch.setVisible(true);
             analysisGridDrop.setVisible(false);
+            analysisBarsDrop.setVisible(false);
             presetDrop.setVisible(false);
             voicingDrop.setVisible(false);
             drumKitDrop.setVisible(false);
@@ -394,6 +411,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             hostSyncSwitch.setVisible(true);
             analysisModeSwitch.setVisible(true);
             analysisGridDrop.setVisible(true);
+            analysisBarsDrop.setVisible(true);
             presetDrop.setVisible(true);
             voicingDrop.setVisible(true);
             drumKitDrop.setVisible(true);
@@ -1204,6 +1222,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> analysisModeSwitchAttachment;
     juce::ComboBox analysisGridDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> analysisGridDropAttachment;
+    juce::ComboBox analysisBarsDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> analysisBarsDropAttachment;
     juce::ComboBox presetDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> presetDropAttachment;
     juce::ComboBox voicingDrop{};

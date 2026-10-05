@@ -47,6 +47,34 @@ float runUntilAudible(Impl& impl, const float barSeconds)
     }
     return peak;
 }
+
+// Feeds a loud burst on every beat at the default 120 BPM, so each beat yields one onset.
+void runWithBeatBursts(Impl& impl, const float seconds, size_t& samplePos)
+{
+    constexpr size_t kBeatSamples{24000};
+    constexpr size_t kBurstSamples{200};
+    Buffer in{};
+    Buffer out{};
+    const auto numBlocks = static_cast<size_t>(seconds * kSampleRate) / kBlock;
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        for (size_t i = 0; i < kBlock; ++i)
+        {
+            const float value = (samplePos % kBeatSamples) < kBurstSamples ? 0.5f : 0.f;
+            in(i, 0) = value;
+            in(i, 1) = value;
+            ++samplePos;
+        }
+        impl.processBlock(in, out);
+    }
+}
+
+size_t reportedHits(const std::string& html)
+{
+    const std::string marker{"Hits</h6><p class=\"fs-3 mb-0\">"};
+    const auto pos = html.find(marker);
+    return pos == std::string::npos ? std::string::npos : std::stoul(html.substr(pos + marker.size()));
+}
 }
 
 TEST(MetronomeImplTest, BuiltInClickSoundsWhenRunningWithoutAScript)
@@ -246,4 +274,91 @@ TEST(MetronomeImplTest, SkeletonScriptCompilesAndDefinesNoPattern)
     EXPECT_TRUE(impl.setScript(Impl::scriptSkeleton()));
     impl.setOnOff(true);
     EXPECT_GT(runSeconds(impl, 1.f), 0.001f);
+}
+
+TEST(MetronomeImplTest, AnalysisIgnoresOnsetsDuringTheTwoBarCountIn)
+{
+    Impl impl(kSampleRate);
+    size_t samplePos{0};
+    impl.setAnalysisMode(true);
+    runWithBeatBursts(impl, 6.f, samplePos);
+    impl.setAnalysisMode(false);
+    runWithBeatBursts(impl, 0.01f, samplePos);
+    ASSERT_TRUE(impl.consumeAnalysisReportReady());
+    EXPECT_EQ(reportedHits(impl.buildAnalysisReportHtml()), 4u);
+}
+
+TEST(MetronomeImplTest, AnalysisStopsItselfAfterTheChosenBarCount)
+{
+    Impl impl(kSampleRate);
+    size_t samplePos{0};
+    impl.setAnalysisBars(1);
+    impl.setAnalysisMode(true);
+    runWithBeatBursts(impl, 11.9f, samplePos);
+    EXPECT_FALSE(impl.consumeAnalysisAutoStopped());
+    runWithBeatBursts(impl, 0.3f, samplePos);
+    EXPECT_TRUE(impl.consumeAnalysisAutoStopped());
+    EXPECT_FALSE(impl.consumeAnalysisAutoStopped());
+    EXPECT_TRUE(impl.consumeAnalysisReportReady());
+    EXPECT_EQ(reportedHits(impl.buildAnalysisReportHtml()), 16u);
+    EXPECT_TRUE(impl.analysisStatusText().empty());
+}
+
+TEST(MetronomeImplTest, AnalysisWithOpenEndKeepsCapturingUntilSwitchedOff)
+{
+    Impl impl(kSampleRate);
+    size_t samplePos{0};
+    impl.setAnalysisMode(true);
+    runWithBeatBursts(impl, 21.f, samplePos);
+    EXPECT_FALSE(impl.consumeAnalysisAutoStopped());
+    EXPECT_FALSE(impl.consumeAnalysisReportReady());
+    EXPECT_EQ(impl.analysisStatusText(), "Analysis: bar 9");
+}
+
+TEST(MetronomeImplTest, AnalysisStatusTextFollowsCountInAndCapture)
+{
+    Impl impl(kSampleRate);
+    size_t samplePos{0};
+    EXPECT_TRUE(impl.analysisStatusText().empty());
+    impl.setAnalysisBars(2);
+    impl.setAnalysisMode(true);
+    runWithBeatBursts(impl, 1.f, samplePos);
+    EXPECT_EQ(impl.analysisStatusText(), "Analysis: count-in bar 1/2");
+    runWithBeatBursts(impl, 2.f, samplePos);
+    EXPECT_EQ(impl.analysisStatusText(), "Analysis: count-in bar 2/2");
+    runWithBeatBursts(impl, 2.f, samplePos);
+    EXPECT_EQ(impl.analysisStatusText(), "Analysis: bar 1/8");
+}
+
+TEST(MetronomeImplTest, AnalysisCountInIsAudibleWithStartOffAndCaptureIsNot)
+{
+    Impl impl(kSampleRate);
+    impl.setAnalysisMode(true);
+    EXPECT_GT(runSeconds(impl, 1.f), 0.001f);
+    static_cast<void>(runSeconds(impl, 3.2f));
+    EXPECT_EQ(runSeconds(impl, 1.f), 0.f);
+}
+
+TEST(MetronomeImplTest, SwitchingAnalysisOffDuringTheCountInWritesNoReport)
+{
+    Impl impl(kSampleRate);
+    size_t samplePos{0};
+    impl.setAnalysisMode(true);
+    runWithBeatBursts(impl, 1.f, samplePos);
+    impl.setAnalysisMode(false);
+    runWithBeatBursts(impl, 0.01f, samplePos);
+    EXPECT_FALSE(impl.consumeAnalysisReportReady());
+    EXPECT_TRUE(impl.analysisStatusText().empty());
+}
+
+TEST(MetronomeImplTest, AnalysisUnderHostSyncWaitsForTheNextBarBeforeTheCountIn)
+{
+    Impl impl(kSampleRate);
+    size_t samplePos{0};
+    impl.setHostSync(true);
+    impl.setAnalysisMode(true);
+    runWithBeatBursts(impl, 0.5f, samplePos);
+    EXPECT_EQ(impl.analysisStatusText(), "Analysis: waiting for the next bar");
+    runWithBeatBursts(impl, 2.f, samplePos);
+    EXPECT_EQ(impl.analysisStatusText(), "Analysis: count-in bar 1/2");
 }

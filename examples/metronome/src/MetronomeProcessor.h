@@ -44,6 +44,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("hostSync", this);
         m_parameters.addParameterListener("analysisMode", this);
         m_parameters.addParameterListener("analysisGrid", this);
+        m_parameters.addParameterListener("analysisBars", this);
         m_parameters.addParameterListener("preset", this);
         m_parameters.addParameterListener("voicing", this);
         m_parameters.addParameterListener("drumKit", this);
@@ -69,6 +70,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("hostSync", this);
         m_parameters.removeParameterListener("analysisMode", this);
         m_parameters.removeParameterListener("analysisGrid", this);
+        m_parameters.removeParameterListener("analysisBars", this);
         m_parameters.removeParameterListener("preset", this);
         m_parameters.removeParameterListener("voicing", this);
         m_parameters.removeParameterListener("drumKit", this);
@@ -309,6 +311,13 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                               juce::String::fromUTF8("16th")},
             0));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("analysisBars", 1), juce::String::fromUTF8("Analysis Bars"),
+            juce::StringArray{juce::String::fromUTF8("Open end"), juce::String::fromUTF8("4 Bars"),
+                              juce::String::fromUTF8("8 Bars"), juce::String::fromUTF8("12 Bars"),
+                              juce::String::fromUTF8("16 Bars"), juce::String::fromUTF8("24 Bars"),
+                              juce::String::fromUTF8("32 Bars"), juce::String::fromUTF8("64 Bars")},
+            0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID("preset", 1), juce::String::fromUTF8("Preset"),
             juce::StringArray{juce::String::fromUTF8("3/4"),
                               juce::String::fromUTF8("3/4 8th"),
@@ -423,6 +432,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                  p.pluginRunner->setAnalysisGrid(static_cast<int>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::analysisGrid, v);
              }},
+            {"analysisBars",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setAnalysisBars(static_cast<size_t>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::analysisBars, v);
+             }},
             {"preset",
              [](AudioPluginAudioProcessor& p, const float v)
              {
@@ -528,6 +543,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("analysisGrid");
             float normalized = range.convertTo0to1(static_cast<float>(params.analysisGrid));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("analysisBars"))
+        {
+            const auto& range = m_parameters.getParameterRange("analysisBars");
+            float normalized = range.convertTo0to1(static_cast<float>(params.analysisBars));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("preset"))
@@ -941,6 +962,27 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner ? pluginRunner->getSpectrogramData() : AbacDsp::SpectrumImageSet{};
     }
+    void pollAnalysisAutoStop()
+    {
+        if (!pluginRunner || !pluginRunner->consumeAnalysisAutoStopped())
+        {
+            return;
+        }
+        if (auto* p = m_parameters.getParameter("analysisMode"))
+        {
+            p->setValueNotifyingHost(0.f);
+        }
+    }
+    [[nodiscard]] std::optional<juce::String> pollAnalysisStatus()
+    {
+        const std::string text = pluginRunner ? pluginRunner->analysisStatusText() : std::string{};
+        if (text == m_lastAnalysisStatus)
+        {
+            return std::nullopt;
+        }
+        m_lastAnalysisStatus = text;
+        return juce::String(text);
+    }
     void pollScriptReload()
     {
         if (pluginRunner)
@@ -1036,6 +1078,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
 
     std::unique_ptr<RateNormalizer> fixedRunner;
     std::unique_ptr<MetronomeImpl<NumSamplesPerBlock>> pluginRunner;
+    std::string m_lastAnalysisStatus;
 
     juce::AudioProcessorValueTreeState m_parameters;
     struct CcSlot

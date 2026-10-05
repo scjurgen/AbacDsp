@@ -28,8 +28,9 @@ measures against; see Scripting below.
 | Sub Volume | −60 – 0 dB | Subdivision tick loudness |
 | Input Volume | −60 – +12 dB | Pass-through instrument level |
 | Start | on/off | Starts or stops the metronome |
-| Analysis | on/off | Starts or stops a timing-analysis take (see below) |
+| Analysis | on/off | Starts or stops a timing-analysis take (see below); a take with a bar count stops itself |
 | Analysis Grid | Quarter / 8th / Triplet / Shuffle / 16th | Grid the analysis measures against (ignored while a script defines analysis positions) |
+| Analysis Bars | Open end / 4 / 8 / 12 / 16 / 24 / 32 / 64 | Bars captured after the count-in before the take stops by itself |
 | Scripts menu | - | Edit, load, save and manage the pattern script (see Scripting) |
 
 ## Rhythm Presets
@@ -117,7 +118,10 @@ The cycle always restarts on the downbeat of the next heard bar.
 
 ## Timing Analysis
 
-Switching Analysis on starts listening to the input signal for onsets and measures each
+Switching Analysis on first plays a count-in of two bars, always audible even when Start is off
+or Drop Bars would mute that bar. Nothing is collected during the count-in. The bottom status
+bar shows the progress ("Analysis: count-in bar 1/2", then "Analysis: bar 3/8"). Capture then
+starts on the next downbeat and listens to the input signal for onsets, measuring each
 onset's distance to the nearest grid position, in milliseconds (negative = late, positive =
 early). The grid is the Analysis Grid control (quarters, 8ths, triplets, shuffle or 16ths of the
 Preset's bar) or, when a script defines them, the script's analysis positions. Onset detection
@@ -133,8 +137,14 @@ the deviation histogram and is counted in the report's "Ignored" card instead. W
 positions are less than 140 ms apart (16ths at 120 BPM or faster), every onset is within the
 window and nothing is ignored.
 
-Switching Analysis back off writes an HTML report and opens it in the default browser. The
-report contains:
+Analysis Bars sets how many bars are captured after the count-in. When that many bars have
+been played the Analysis switch turns itself off, which ends the take. With Open end the take
+runs until Analysis is switched off by hand. Either way the end of a take writes an HTML report
+and opens it in the default browser; switching off during the count-in ends the take without a
+report, since nothing was captured. The count length is read when the take starts, so changing
+Analysis Bars mid-take only affects the next one. Under Host Sync the metronome's bar position
+belongs to the host, so the count-in begins at the next bar wrap and the status bar reads
+"waiting for the next bar" until then. The report contains:
 
 - Summary cards: hit count, mean and standard deviation of the measured deviations, tempo and
   preset, the analysis grid, and the number of ignored onsets.
@@ -149,7 +159,7 @@ report contains:
   a comment combining tightness (spread) and direction (dragging, laid-back, pushing, rushing),
   so uneven timing on one beat or off-beat shows up on its own.
 
-Each Analysis toggle resets the collected data, so one on/off cycle is one take (up to 4096 hits;
+Each Analysis start resets the collected data, so one on/off cycle is one take (up to 4096 hits;
 further hits are not recorded once that many have been collected). The page's charts are plain
 inline SVG; its layout uses Bootstrap loaded from a CDN, so it needs network access to render
 correctly. Reports are written to `~/Documents/Metronome Analysis/`, one timestamped file per take.
