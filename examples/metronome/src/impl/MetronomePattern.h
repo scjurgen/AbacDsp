@@ -92,6 +92,7 @@ static_assert(kInstruments.size() == static_cast<size_t>(Instrument::ClickHigh) 
 inline constexpr size_t kMaxHits{256};
 inline constexpr size_t kMaxAnalysisPositions{128};
 inline constexpr size_t kMaxBeatsPerBar{16};
+inline constexpr size_t kMaxNameBytes{64};
 inline constexpr float kMinLevelDb{-96.f};
 inline constexpr float kMaxLevelDb{12.f};
 

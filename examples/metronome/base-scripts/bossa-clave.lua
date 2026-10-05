@@ -1,5 +1,6 @@
 -- Bossa nova 3-2 clave on wood, shaker on every 8th, kick on beats 1 and 3 (needs a bar of
 -- at least 4 beats). Positions are 16ths: 0, 0.75, 1.5, 2.5, 3.25 beats.
+SetName("Bossa Nova Clave")
 ClearPattern()
 local clave = { 0, 0.75, 1.5, 2.5, 3.25 }
 for _, position in ipairs(clave) do

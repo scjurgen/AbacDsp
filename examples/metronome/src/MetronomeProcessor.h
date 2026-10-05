@@ -973,6 +973,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             p->setValueNotifyingHost(0.f);
         }
     }
+    [[nodiscard]] juce::String windowTitle() const
+    {
+        return pluginRunner ? "Metronome - " + juce::String::fromUTF8(pluginRunner->displayName().c_str())
+                            : juce::String("Metronome");
+    }
     [[nodiscard]] std::optional<juce::String> pollAnalysisStatus()
     {
         const std::string text = pluginRunner ? pluginRunner->analysisStatusText() : std::string{};
@@ -1008,8 +1013,9 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         auto dir =
             juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("Metronome Analysis");
         dir.createDirectory();
-        const auto file =
-            dir.getChildFile("analysis-" + juce::Time::getCurrentTime().formatted("%Y%m%d-%H%M%S") + ".html");
+        const auto stem = pluginRunner->analysisFileStem();
+        const auto prefix = stem.empty() ? juce::String("analysis-") : "analysis-" + juce::String(stem) + "-";
+        const auto file = dir.getChildFile(prefix + juce::Time::getCurrentTime().formatted("%Y%m%d-%H%M%S") + ".html");
         file.replaceWithText(pluginRunner->buildAnalysisReportHtml());
         juce::URL(file).launchInDefaultBrowser();
     }

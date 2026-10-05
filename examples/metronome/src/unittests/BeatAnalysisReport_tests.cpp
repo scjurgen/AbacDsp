@@ -448,3 +448,51 @@ TEST(BuildReportHtmlTest, LegendNamesMatchedAndIgnoredHits)
     EXPECT_NE(html.find("Matched hits"), std::string::npos);
     EXPECT_NE(html.find("ignored hits in gray"), std::string::npos);
 }
+
+TEST(BuildReportHtmlTest, NamedScriptAppearsInTheTitleAndAsASubtitle)
+{
+    RawOnsetCollector collector;
+    collector.push({0, 100, 24000});
+    const auto grid = builtInGrid(AbacDsp::SubdivType::None, "Quarter", 4, 1.5f);
+    const auto html = buildReportHtml(collector.hits(), 4, grid, 120.f, 48000.f, "4/4", "Bossa Nova");
+    EXPECT_THAT(html, ::testing::HasSubstr("<title>Metronome Timing Analysis - Bossa Nova</title>"));
+    EXPECT_THAT(html, ::testing::HasSubstr("text-muted mb-4\">Bossa Nova</p>"));
+}
+
+TEST(BuildReportHtmlTest, UnnamedScriptKeepsThePlainTitleAndNoSubtitle)
+{
+    RawOnsetCollector collector;
+    const auto grid = builtInGrid(AbacDsp::SubdivType::None, "Quarter", 4, 1.5f);
+    const auto html = buildReportHtml(collector.hits(), 4, grid, 120.f, 48000.f, "4/4");
+    EXPECT_THAT(html, ::testing::HasSubstr("<title>Metronome Timing Analysis</title>"));
+    EXPECT_THAT(html, ::testing::Not(::testing::HasSubstr("fs-4 text-muted")));
+}
+
+TEST(BuildReportHtmlTest, ScriptNameIsHtmlEscaped)
+{
+    RawOnsetCollector collector;
+    const auto grid = builtInGrid(AbacDsp::SubdivType::None, "Quarter", 4, 1.5f);
+    const auto html = buildReportHtml(collector.hits(), 4, grid, 120.f, 48000.f, "4/4", "<b>R&B</b>");
+    EXPECT_THAT(html, ::testing::HasSubstr("&lt;b&gt;R&amp;B&lt;/b&gt;"));
+    EXPECT_THAT(html, ::testing::Not(::testing::HasSubstr("<b>R&B</b>")));
+}
+
+TEST(EscapeHtmlTest, EscapesTheFiveSpecialCharacters)
+{
+    EXPECT_EQ(escapeHtml("<a href=\"x\">'&'</a>"), "&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;");
+}
+
+TEST(FileNameStemTest, LowercasesAndReplacesRunsOfUnsafeCharactersWithOneDash)
+{
+    EXPECT_EQ(fileNameStem("Bossa Nova"), "bossa-nova");
+    EXPECT_EQ(fileNameStem("7/8 (2+2+3)"), "7-8-2-2-3");
+    EXPECT_EQ(fileNameStem("  Rock -- 8th!  "), "rock-8th");
+    EXPECT_EQ(fileNameStem("a/b\\c"), "a-b-c");
+}
+
+TEST(FileNameStemTest, NameWithNothingUsableGivesAnEmptyStem)
+{
+    EXPECT_EQ(fileNameStem(""), "");
+    EXPECT_EQ(fileNameStem("***"), "");
+    EXPECT_EQ(fileNameStem("\xC3\xA4\xC3\xB6"), "");
+}

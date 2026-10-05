@@ -211,7 +211,28 @@ class MetronomeImpl final : public EffectBase
     {
         const std::string_view name = scriptSetsBeatsPerBar() ? "Script" : kPresets[presetSlot()].name;
         return MetronomeAnalysis::buildReportHtml(m_rawOnsetCollector.hits(), effectiveBeatsPerBar(),
-                                                  currentAnalysisGrid(), m_bpm, sampleRate(), name);
+                                                  currentAnalysisGrid(), m_bpm, sampleRate(), name, m_scriptName);
+    }
+
+    // Message thread only, like applyScript() which writes it.
+    [[nodiscard]] const std::string& scriptName() const noexcept
+    {
+        return m_scriptName;
+    }
+
+    // The script's own name, else the Preset's ("Script" when a script sets the bar length).
+    [[nodiscard]] std::string displayName() const
+    {
+        if (!m_scriptName.empty())
+        {
+            return m_scriptName;
+        }
+        return std::string{scriptSetsBeatsPerBar() ? "Script" : kPresets[presetSlot()].name};
+    }
+
+    [[nodiscard]] std::string analysisFileStem() const
+    {
+        return MetronomeAnalysis::fileNameStem(m_scriptName);
     }
 
     void setPreset(const int index)
@@ -688,6 +709,7 @@ class MetronomeImpl final : public EffectBase
         m_patternMailbox.publish();
         m_scriptBeatsPerBar.store(result.pattern.beatsPerBar, std::memory_order_relaxed);
         m_scriptAnalysis = result.analysis;
+        m_scriptName = result.name;
         return true;
     }
 
@@ -899,6 +921,7 @@ class MetronomeImpl final : public EffectBase
 
     MetronomeScriptEngine m_scriptEngine;
     std::string m_scriptSource;
+    std::string m_scriptName;
     std::atomic<bool> m_scriptReloadPending{false};
     std::atomic<size_t> m_scriptBeatsPerBar{0};
     MetronomePattern::AnalysisPositions m_scriptAnalysis;

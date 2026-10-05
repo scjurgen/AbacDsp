@@ -82,6 +82,7 @@
     "processorRef.pollAnalysisAutoStop();",
     "processorRef.pollAnalysisReport();",
     "if (const auto status = processorRef.pollAnalysisStatus()) { m_statusBar.showMessage(*status, status->isNotEmpty()); }",
+    "if (auto* top = getTopLevelComponent()) { top->setName(processorRef.windowTitle()); }",
     "processorRef.pollScriptReload();",
     "pollScriptError();"
   ],
@@ -103,11 +104,12 @@
   ],
   "extra_processor_methods": [
     "void pollAnalysisAutoStop() {\n        if (!pluginRunner || !pluginRunner->consumeAnalysisAutoStopped())\n        {\n            return;\n        }\n        if (auto* p = m_parameters.getParameter(\"analysisMode\"))\n        {\n            p->setValueNotifyingHost(0.f);\n        }\n    }",
+    "[[nodiscard]] juce::String windowTitle() const { return pluginRunner ? \"Metronome - \" + juce::String::fromUTF8(pluginRunner->displayName().c_str()) : juce::String(\"Metronome\"); }",
     "[[nodiscard]] std::optional<juce::String> pollAnalysisStatus() {\n        const std::string text = pluginRunner ? pluginRunner->analysisStatusText() : std::string{};\n        if (text == m_lastAnalysisStatus)\n        {\n            return std::nullopt;\n        }\n        m_lastAnalysisStatus = text;\n        return juce::String(text);\n    }",
     "void pollScriptReload() { if (pluginRunner) { pluginRunner->reloadScriptIfPending(); } }",
     "[[nodiscard]] bool presetHasSwing(int idx) const noexcept { return pluginRunner && pluginRunner->isPresetSwing(idx); }",
     "[[nodiscard]] const std::vector<size_t>& getSubdivisionPositions() const noexcept { static const std::vector<size_t> empty{}; return pluginRunner ? pluginRunner->getSubdivisionPositions() : empty; }",
-    "void pollAnalysisReport() {\n        if (!pluginRunner || !pluginRunner->consumeAnalysisReportReady())\n        {\n            return;\n        }\n        auto dir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile(\"Metronome Analysis\");\n        dir.createDirectory();\n        const auto file = dir.getChildFile(\"analysis-\" + juce::Time::getCurrentTime().formatted(\"%Y%m%d-%H%M%S\") + \".html\");\n        file.replaceWithText(pluginRunner->buildAnalysisReportHtml());\n        juce::URL(file).launchInDefaultBrowser();\n    }"
+    "void pollAnalysisReport() {\n        if (!pluginRunner || !pluginRunner->consumeAnalysisReportReady())\n        {\n            return;\n        }\n        auto dir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile(\"Metronome Analysis\");\n        dir.createDirectory();\n        const auto stem = pluginRunner->analysisFileStem();\n        const auto prefix = stem.empty() ? juce::String(\"analysis-\") : \"analysis-\" + juce::String(stem) + \"-\";\n        const auto file = dir.getChildFile(prefix + juce::Time::getCurrentTime().formatted(\"%Y%m%d-%H%M%S\") + \".html\");\n        file.replaceWithText(pluginRunner->buildAnalysisReportHtml());\n        juce::URL(file).launchInDefaultBrowser();\n    }"
   ],
   "protected_files": [],
   "host_transport": true,

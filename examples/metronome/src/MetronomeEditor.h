@@ -248,6 +248,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             {
                 m_statusBar.showMessage(*status, status->isNotEmpty());
             }
+            if (auto* top = getTopLevelComponent())
+            {
+                top->setName(processorRef.windowTitle());
+            }
             processorRef.pollScriptReload();
             pollScriptError();
             processorRef.consumeLastLearnedCc();

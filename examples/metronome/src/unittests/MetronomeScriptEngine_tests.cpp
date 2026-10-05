@@ -297,8 +297,49 @@ TEST(MetronomeBaseScriptsTest, EveryShippedScriptLoadsForCommonBarLengths)
             EXPECT_TRUE(engine.result().pattern.active) << entry.path().filename();
             EXPECT_GT(engine.result().pattern.hitCount, 0u) << entry.path().filename();
             EXPECT_GT(engine.result().analysis.count, 0u) << entry.path().filename();
+            EXPECT_FALSE(engine.result().name.empty()) << entry.path().filename();
         }
         ++scriptCount;
     }
     EXPECT_GE(scriptCount, 4u);
+}
+
+TEST(MetronomeScriptEngineTest, SetNameStoresTheNameAndLeavesThePatternInactive)
+{
+    MetronomeScriptEngine engine;
+    ASSERT_TRUE(engine.loadPattern("SetName('Bossa Nova')\n", kBarBeats));
+    EXPECT_EQ(engine.result().name, "Bossa Nova");
+    EXPECT_FALSE(engine.result().pattern.active);
+}
+
+TEST(MetronomeScriptEngineTest, EachRunStartsWithAnEmptyName)
+{
+    MetronomeScriptEngine engine;
+    ASSERT_TRUE(engine.loadPattern("SetName('Rock')\n", kBarBeats));
+    ASSERT_TRUE(engine.loadPattern("x = 1\n", kBarBeats));
+    EXPECT_TRUE(engine.result().name.empty());
+}
+
+TEST(MetronomeScriptEngineTest, LastSetNameCallWins)
+{
+    MetronomeScriptEngine engine;
+    ASSERT_TRUE(engine.loadPattern("SetName('A')\nSetName('B')\n", kBarBeats));
+    EXPECT_EQ(engine.result().name, "B");
+}
+
+TEST(MetronomeScriptEngineTest, SetNameRejectsEmptyOverlongAndControlCharacterNames)
+{
+    MetronomeScriptEngine engine;
+    EXPECT_FALSE(engine.loadPattern("SetName('')\n", kBarBeats));
+    EXPECT_THAT(engine.lastError(), ::testing::HasSubstr("1 to 64 bytes"));
+    EXPECT_FALSE(engine.loadPattern("SetName(string.rep('x', 65))\n", kBarBeats));
+    EXPECT_FALSE(engine.loadPattern("SetName('a\\nb')\n", kBarBeats));
+    EXPECT_TRUE(engine.loadPattern("SetName(string.rep('x', 64))\n", kBarBeats));
+}
+
+TEST(MetronomeScriptEngineTest, FailedLoadLeavesNoName)
+{
+    MetronomeScriptEngine engine;
+    ASSERT_FALSE(engine.loadPattern("SetName('Rock')\nthis is not lua\n", kBarBeats));
+    EXPECT_TRUE(engine.result().name.empty());
 }

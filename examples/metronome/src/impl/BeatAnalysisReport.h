@@ -214,9 +214,9 @@ inline constexpr float kDefaultMatchWindowMs{70.f};
 // the only place grid-dependent math (nearest-point search, ms conversion, slot assignment)
 // happens in the whole report. A hit farther than matchWindowMs from its nearest position is ignored.
 [[nodiscard]] inline EvaluatedHits evaluateHits(const std::span<const RawOnsetHit> rawHits,
-                                                            const std::span<const float> positions,
-                                                            const size_t beatsPerBar, const float sampleRate,
-                                                            const float matchWindowMs = kDefaultMatchWindowMs)
+                                                const std::span<const float> positions, const size_t beatsPerBar,
+                                                const float sampleRate,
+                                                const float matchWindowMs = kDefaultMatchWindowMs)
 {
     EvaluatedHits result;
     if (positions.empty())
@@ -379,6 +379,62 @@ struct Histogram
     out.precision(1);
     out << std::fixed << std::abs(valueMs) << " ms " << (valueMs < 0.f ? "late" : "early");
     return out.str();
+}
+
+[[nodiscard]] inline std::string escapeHtml(const std::string_view text)
+{
+    std::string out;
+    out.reserve(text.size());
+    for (const char c : text)
+    {
+        switch (c)
+        {
+            case '&':
+                out += "&amp;";
+                break;
+            case '<':
+                out += "&lt;";
+                break;
+            case '>':
+                out += "&gt;";
+                break;
+            case '"':
+                out += "&quot;";
+                break;
+            case '\'':
+                out += "&#39;";
+                break;
+            default:
+                out += c;
+        }
+    }
+    return out;
+}
+
+// Lowercase letters, digits, '.' and '_' are kept; every other run of characters becomes one '-'.
+[[nodiscard]] inline std::string fileNameStem(const std::string_view name)
+{
+    std::string stem;
+    for (const char c : name)
+    {
+        if (c >= 'A' && c <= 'Z')
+        {
+            stem += static_cast<char>(c - 'A' + 'a');
+        }
+        else if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '_')
+        {
+            stem += c;
+        }
+        else if (!stem.empty() && stem.back() != '-')
+        {
+            stem += '-';
+        }
+    }
+    while (!stem.empty() && stem.back() == '-')
+    {
+        stem.pop_back();
+    }
+    return stem;
 }
 
 [[nodiscard]] inline std::string statCard(const std::string_view label, const std::string_view value)
@@ -794,7 +850,8 @@ inline constexpr const char* kIgnoredBarColor{"#868e96"};
 // passed at the moment this is called, not whatever it was during capture.
 [[nodiscard]] inline std::string buildReportHtml(const std::span<const RawOnsetHit> rawHits, const size_t beatsPerBar,
                                                  const AnalysisGridSpec& grid, const float bpm, const float sampleRate,
-                                                 const std::string_view presetName)
+                                                 const std::string_view presetName,
+                                                 const std::string_view scriptName = {})
 {
     const EvaluatedHits evaluated = evaluateHits(rawHits, grid.positions, beatsPerBar, sampleRate);
     const std::vector<EvaluatedHit>& hits = evaluated.matched;
@@ -813,11 +870,13 @@ inline constexpr const char* kIgnoredBarColor{"#868e96"};
 
     std::ostringstream html;
     html << "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
-         << "<title>Metronome Timing Analysis</title>"
+         << "<title>Metronome Timing Analysis" << (scriptName.empty() ? "" : " - ") << escapeHtml(scriptName)
+         << "</title>"
          << "<link href=\"https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css\" "
             "rel=\"stylesheet\"></head>"
          << "<body class=\"bg-light\"><div class=\"container py-4\">"
-         << "<h1 class=\"mb-4\">Metronome Timing Analysis</h1>"
+         << "<h1 class=\"" << (scriptName.empty() ? "mb-4" : "mb-1") << "\">Metronome Timing Analysis</h1>"
+         << (scriptName.empty() ? "" : "<p class=\"fs-4 text-muted mb-4\">" + escapeHtml(scriptName) + "</p>")
          << "<div class=\"row g-3 mb-4\">" << statCard("Hits", std::to_string(stats.count))
          << statCard("Mean deviation", signedMsLabel(stats.meanMs))
          << statCard("Std deviation", msLabel(stats.stdDevMs))
@@ -826,9 +885,10 @@ inline constexpr const char* kIgnoredBarColor{"#868e96"};
          << "</div>"
          << "<div class=\"row g-3 mb-2\">" << statCard("Analysis grid", grid.name)
          << statCard(ignoredHitsLabel(), std::to_string(evaluated.ignoredBarPositions.size())) << "</div>"
-         << toleranceLegend() << hitColorLegend()
-         << "<div class=\"row g-3 mb-4\">"
-         << chartCard("col-12", "Full-bar hit distribution (10 ms bins, color-coded timing quality, ignored hits in gray)", fullBarHistogram)
+         << toleranceLegend() << hitColorLegend() << "<div class=\"row g-3 mb-4\">"
+         << chartCard("col-12",
+                      "Full-bar hit distribution (10 ms bins, color-coded timing quality, ignored hits in gray)",
+                      fullBarHistogram)
          << "</div>"
          << "<div class=\"row g-3 mb-4\">"
          << chartCard("col-12",

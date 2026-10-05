@@ -14,7 +14,7 @@
 #include "MetronomePattern.h"
 
 /**
- * Runs a pattern script: its top-level code calls SetBeatsPerBar(), ClearPattern(),
+ * Runs a pattern script: its top-level code calls SetName(), SetBeatsPerBar(), ClearPattern(),
  * AddInstrument(), ClearAnalysis() and AddAnalysisPosition(), which fill a staging result
  * that the caller publishes after a successful load. Positions are beats from the bar
  * start, levels are dB; the global BarBeats holds the current bar length.
@@ -27,6 +27,7 @@ class MetronomeScriptEngine : public LuaScriptEngineBase<MetronomeScriptEngine>
     {
         MetronomePattern::HitPattern pattern;
         MetronomePattern::AnalysisPositions analysis;
+        std::string name;
     };
 
     // clang-format off
@@ -38,6 +39,8 @@ class MetronomeScriptEngine : public LuaScriptEngineBase<MetronomeScriptEngine>
 "-- Metronome pattern script. Top-level code runs on every Apply and Preset change.\n"
 "-- BarBeats is the bar length (beats): the selected Preset's, or the one set by SetBeatsPerBar.\n"
 "--\n"
+"-- SetName(name)                           names the script; shown in the analysis report and\n"
+"--                                         the window title (at most 64 bytes)\n"
 "-- SetBeatsPerBar(beats)                   bar length 1 .. 16; replaces the Preset's and\n"
 "--                                         silences the Preset/Voicing sound\n"
 "-- ClearPattern()                          start the played pattern from scratch\n"
@@ -85,6 +88,7 @@ class MetronomeScriptEngine : public LuaScriptEngineBase<MetronomeScriptEngine>
 
     void bindPatternApi();
     void requireLoading(std::string_view function) const;
+    void luaSetName(const std::string& name);
     void luaSetBeatsPerBar(double beats);
     void luaClearPattern();
     void luaAddInstrument(double position, long long instrument, double levelDb);
@@ -105,6 +109,7 @@ inline MetronomeScriptEngine::MetronomeScriptEngine(const size_t poolBytes)
 
 inline void MetronomeScriptEngine::bindPatternApi()
 {
+    m_lua.set_function("SetName", [this](const std::string& name) { luaSetName(name); });
     m_lua.set_function("SetBeatsPerBar", [this](const double beats) { luaSetBeatsPerBar(beats); });
     m_lua.set_function("ClearPattern", [this] { luaClearPattern(); });
     m_lua.set_function("AddInstrument", [this](const double position, const long long instrument, const double levelDb)
@@ -148,6 +153,18 @@ inline float MetronomeScriptEngine::checkedPosition(const std::string_view funct
                                  " is outside the bar (0 <= position < " + std::to_string(m_barBeats) + ")");
     }
     return static_cast<float>(position);
+}
+
+inline void MetronomeScriptEngine::luaSetName(const std::string& name)
+{
+    requireLoading("SetName");
+    const auto isControl = [](const char c) { return static_cast<unsigned char>(c) < 0x20 || c == 0x7F; };
+    if (name.empty() || name.size() > MetronomePattern::kMaxNameBytes || std::ranges::any_of(name, isControl))
+    {
+        throw std::runtime_error("SetName: the name must be 1 to " + std::to_string(MetronomePattern::kMaxNameBytes) +
+                                 " bytes without control characters");
+    }
+    m_result.name = name;
 }
 
 inline void MetronomeScriptEngine::luaSetBeatsPerBar(const double beats)

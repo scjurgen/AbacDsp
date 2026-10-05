@@ -162,7 +162,10 @@ belongs to the host, so the count-in begins at the next bar wrap and the status 
 Each Analysis start resets the collected data, so one on/off cycle is one take (up to 4096 hits;
 further hits are not recorded once that many have been collected). The page's charts are plain
 inline SVG; its layout uses Bootstrap loaded from a CDN, so it needs network access to render
-correctly. Reports are written to `~/Documents/Metronome Analysis/`, one timestamped file per take.
+correctly. Reports are written to `~/Documents/Metronome Analysis/`, one timestamped file per take. A script
+that calls `SetName` puts its name in the report: in the page title, as a subtitle under the
+heading, and in the file name (`analysis-bossa-nova-<timestamp>.html`, lowercased, other
+characters replaced by `-`). Without a name the report and file name are as before.
 
 ## Scripting
 
@@ -181,6 +184,7 @@ Analysis Grid control.
 
 | Function | Meaning |
 |---|---|
+| `SetName(name)` | Names the script, for example `SetName("Bossa Nova")`: 1 to 64 bytes, no control characters. It is shown in the analysis report and in the window title. |
 | `SetBeatsPerBar(beats)` | Sets the bar length, a whole number from 1 to 16, instead of the Preset's. The Preset dropdown is disabled while a script sets it. |
 | `ClearPattern()` | Empties the played pattern; the metronome is silent until `AddInstrument` is called. |
 | `AddInstrument(position, instrument, levelDb)` | One drum hit. Several hits at one position play together (kick and hihat on 1). |
@@ -193,6 +197,12 @@ last 16th of beat 3. The bar length is the Preset's beats per bar unless the scr
 updates. Call `SetBeatsPerBar` before adding positions, and it must not shorten the bar below a
 position already added. A position outside `0 <= position < BarBeats` is a script error. Positions are
 literal: the Swing control only affects the built-in subdivisions.
+
+The name lives in the script text, so it travels with the script file and with patches. Every
+run starts without a name, so a script that does not call `SetName` is unnamed. The window title
+reads "Metronome - <name>", or "Metronome - <Preset>" when unnamed ("Script" when a script sets
+the bar length); it is only visible where the host shows a window title for the plugin, such as
+the Standalone app. All shipped `base-scripts/` set a name.
 
 `levelDb` is relative to the sample's own level (0 = as stored) and limited to -96 .. +12. The
 Metro Volume control is the master on top of it; Sub Volume has no role for script patterns.

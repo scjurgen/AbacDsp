@@ -362,3 +362,40 @@ TEST(MetronomeImplTest, AnalysisUnderHostSyncWaitsForTheNextBarBeforeTheCountIn)
     runWithBeatBursts(impl, 2.f, samplePos);
     EXPECT_EQ(impl.analysisStatusText(), "Analysis: count-in bar 1/2");
 }
+
+TEST(MetronomeImplTest, ScriptNameAppearsInTheReportAndTheFileStem)
+{
+    Impl impl(kSampleRate);
+    ASSERT_TRUE(impl.setScript("SetName('Bossa Nova')\n"));
+    EXPECT_EQ(impl.scriptName(), "Bossa Nova");
+    EXPECT_EQ(impl.analysisFileStem(), "bossa-nova");
+    EXPECT_THAT(impl.buildAnalysisReportHtml(),
+                ::testing::HasSubstr("<title>Metronome Timing Analysis - Bossa Nova</title>"));
+}
+
+TEST(MetronomeImplTest, DisplayNameFallsBackToThePresetThenToScript)
+{
+    Impl impl(kSampleRate);
+    EXPECT_EQ(impl.displayName(), "4/4 8th");
+    EXPECT_TRUE(impl.analysisFileStem().empty());
+    ASSERT_TRUE(impl.setScript("SetBeatsPerBar(7)\n"));
+    EXPECT_EQ(impl.displayName(), "Script");
+    ASSERT_TRUE(impl.setScript("SetName('Seven')\nSetBeatsPerBar(7)\n"));
+    EXPECT_EQ(impl.displayName(), "Seven");
+}
+
+TEST(MetronomeImplTest, ScriptWithoutSetNameClearsThePreviousName)
+{
+    Impl impl(kSampleRate);
+    ASSERT_TRUE(impl.setScript("SetName('Rock')\n"));
+    ASSERT_TRUE(impl.setScript("-- nothing\n"));
+    EXPECT_TRUE(impl.scriptName().empty());
+}
+
+TEST(MetronomeImplTest, FailedScriptKeepsThePreviousName)
+{
+    Impl impl(kSampleRate);
+    ASSERT_TRUE(impl.setScript("SetName('Rock')\n"));
+    ASSERT_FALSE(impl.setScript("SetName('Jazz')\nthis is not lua\n"));
+    EXPECT_EQ(impl.scriptName(), "Rock");
+}

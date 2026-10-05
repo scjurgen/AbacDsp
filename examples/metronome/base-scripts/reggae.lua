@@ -1,5 +1,6 @@
 -- Reggae-style one-drop feel: kick on every beat, snare on beat 3, 8th hihat accented on the
 -- heavy beats (1 and 3). Timing is measured on beats 2 and 4 only.
+SetName("Reggae One-Drop")
 ClearPattern()
 for beat = 0, math.min(4, BarBeats) - 1 do
     AddInstrument(beat, Kick, 0)
