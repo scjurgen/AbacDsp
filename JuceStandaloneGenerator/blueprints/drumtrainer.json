@@ -1,0 +1,97 @@
+{
+  "name": "drumtrainer",
+  "plugintype": "DrumTrainer",
+  "description": [
+    "Drum trainer: practise scripted patterns on an electronic kit, timing analysed from MIDI\n"
+  ],
+  "patches": true,
+  "use-lua": true,
+  "lua_manual": false,
+  "midi-input": true,
+  "midi-output": true,
+  "ports-control":
+  [
+    {"short": "BPM",  "type": "dial",   "display": "BPM",           "symbol": "bpm",         "default": 120, "range": [40, 250, 0.1, 1, false],  "precision": 1, "unit": "BPM",
+      "cc": {"controller": 20, "valueLow": 60, "valueHigh": 180}},
+    {"short": "DRP",  "type": "drop",   "display": "Drop Bars",      "symbol": "dropBars",   "default": 0, "signed": false,
+      "listitems": ["Drop none", "Play 1 Drop 1", "Play 3 Drop 1", "Play 2 Drop 2", "Play 1 Drop 3"]},
+    {"short": "MVOL", "type": "dial",   "display": "Metro Volume",   "symbol": "metroVolume", "default": -6,  "range": [-60, 0, 0.1, 1, false],   "precision": 1, "unit": "dB",
+      "cc": {"controller": 21, "valueLow": -20, "valueHigh": -10}},
+    {"short": "IVOL", "type": "dial",   "display": "Input Volume",   "symbol": "inputVolume", "default": 0,   "range": [-60, 12, 0.1, 1, false],   "precision": 1, "unit": "dB",
+      "cc": {"controller": 22}},
+    {"short": "SVOL", "type": "dial",   "display": "Sub Volume",     "symbol": "subVolume",   "default": -15, "range": [-60, 0, 0.1, 1, false],   "precision": 1, "unit": "dB",
+      "cc": {"controller": 23}},
+    {"short": "ONF",  "type": "switch", "display": "Start",          "symbol": "onOff",       "default": 0},
+    {"short": "SYNC", "type": "switch", "display": "Host Sync",      "symbol": "hostSync",    "default": 0},
+    {"short": "ANLZ", "type": "switch", "display": "Analysis",       "symbol": "analysisMode", "default": 0},
+    {"short": "ABRS", "type": "drop",   "display": "Analysis Bars",  "symbol": "analysisBars", "default": 0, "signed": false,
+      "listitems": ["Open end", "4 Bars", "8 Bars", "12 Bars", "16 Bars", "24 Bars", "32 Bars", "64 Bars"]},
+    {"short": "PRE",  "type": "drop",   "display": "Preset",         "symbol": "preset",      "default": 6,
+      "listitems": ["3/4", "3/4 8th", "3/4 16th", "3/4 shuffle", "3/4 triplet", "4/4", "4/4 8th", "4/4 16th",
+        "4/4 shuffle", "4/4 triplet", "4/4 swing", "5/4 (3+2)", "5/4 8th (3+2)", "5/4 (2+3)", "5/4 8th (2+3)",
+        "6/8 in-2", "6/8 in-6", "7/8 (2+2+3)", "7/8 (2+3+2)", "7/8 (3+2+2)", "9/8 in-3", "9/8 in-9",
+        "11/8 (3+3+3+2)", "11/8 (3+3+2+3)", "13/8 (3+3+3+2+2)", "13/8 (3+4+3+3)"]},
+    {"short": "VOI",  "type": "drop",   "display": "Voicing",        "symbol": "voicing",     "default": 0,
+      "listitems": ["Click", "Kick", "Kick + HH", "HH only", "Kick Snare HH", "Timbal", "Tom", "Wood", "Sticks",
+        "Shaker offbeat"]},
+    {"short": "KIT",  "type": "drop",   "display": "Drum Kit",       "symbol": "drumKit",     "default": 0,
+      "listitems": ["808", "Reggae", "Pocket"]},
+    {"short": "SWG",  "type": "dial",   "display": "Swing",          "symbol": "swingRatio",  "default": 1.5, "range": [1.0, 2.0, 0.01, 1, false],  "precision": 2, "unit": "",
+     "visible_when": "processorRef.presetHasSwing(presetDrop.getSelectedItemIndex())",
+     "depends_on": "preset",
+     "cc": {"controller": 24}}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1200",
+    "WINDOW_HEIGHT": "660",
+    "type": "||",
+    "composition": "C=(1:1:1) A1=(PRE, VOI, KIT, DRP, SWG) A2=(ONF, SYNC, ANLZ, ABRS) A3=(BPM, SVOL, MVOL, IVOL)"
+  },
+  "performance-page": {
+    "type": "||",
+    "composition": "C=(1:1) A1=(ONF, BPM, ANLZ) A2=(SWG, SVOL, MVOL, IVOL)"
+  },
+  "extra_timer_callbacks": [
+    "{ const float bpm = processorRef.getCurrentClickBpm();",
+    "bpmDial.setEnabled(!processorRef.isHostSynced());",
+    "if (processorRef.isHostSynced()) { bpmDial.setValue(bpm); }",
+    "onOffSwitch.setEnabled(!processorRef.isHostSynced());",
+    "presetDrop.setEnabled(!processorRef.scriptSetsBeatsPerBar()); }",
+    "processorRef.pollAnalysisMetronome();",
+    "processorRef.pollAnalysisAutoStop();",
+    "if (const auto status = processorRef.pollAnalysisStatus()) { m_statusBar.showMessage(*status, status->isNotEmpty()); }",
+    "if (auto* top = getTopLevelComponent()) { top->setName(processorRef.windowTitle()); }",
+    "processorRef.pollScriptReload();",
+    "pollScriptError();"
+  ],
+  "processor_forwards": [
+    {"name": "hasScriptError", "type": "bool"},
+    {"name": "scriptErrorMessage", "call": "scriptError", "type": "std::string"},
+    {"name": "getScriptSkeleton", "call": "scriptSkeleton", "type": "std::string"},
+    {"name": "getLuaUiParamSlots", "call": "uiParamSlots", "type": "DrumTrainerScriptEngine::UiParamSlots"},
+    {"name": "getCurrentClickBpm", "call": "currentClickBpm", "type": "float", "default": "120.f"},
+    {"name": "isHostSynced", "type": "bool"},
+    {"name": "scriptSetsBeatsPerBar", "type": "bool"}
+  ],
+  "extra_processor_members": [
+    "std::string m_lastAnalysisStatus;",
+    "bool m_prevAnalysisOn{false};",
+    "bool m_analysisStartedMetronome{false};"
+  ],
+  "extra_processor_methods": [
+    "void pollAnalysisMetronome() {\n        const auto isOn = [this](const char* id) { const auto* v = m_parameters.getRawParameterValue(id); return v != nullptr && v->load() > 0.5f; };\n        const bool analysisOn = isOn(\"analysisMode\");\n        const bool metronomeOn = isOn(\"onOff\");\n        const auto setMetronome = [this](const bool on) { if (auto* p = m_parameters.getParameter(\"onOff\")) { p->setValueNotifyingHost(on ? 1.f : 0.f); } };\n        if (m_analysisStartedMetronome && !metronomeOn)\n        {\n            m_analysisStartedMetronome = false;\n        }\n        if (analysisOn == m_prevAnalysisOn)\n        {\n            return;\n        }\n        m_prevAnalysisOn = analysisOn;\n        if (analysisOn && pluginRunner && !pluginRunner->isHostSynced() && !metronomeOn)\n        {\n            m_analysisStartedMetronome = true;\n            setMetronome(true);\n        }\n        else if (!analysisOn && m_analysisStartedMetronome)\n        {\n            m_analysisStartedMetronome = false;\n            setMetronome(false);\n        }\n    }",
+    "void pollAnalysisAutoStop() {\n        if (!pluginRunner || !pluginRunner->consumeAnalysisAutoStopped())\n        {\n            return;\n        }\n        if (auto* p = m_parameters.getParameter(\"analysisMode\"))\n        {\n            p->setValueNotifyingHost(0.f);\n        }\n    }",
+    "[[nodiscard]] juce::String windowTitle() const { return pluginRunner ? \"DrumTrainer - \" + juce::String::fromUTF8(pluginRunner->displayName().c_str()) : juce::String(\"DrumTrainer\"); }",
+    "[[nodiscard]] std::optional<juce::String> pollAnalysisStatus() {\n        const std::string text = pluginRunner ? pluginRunner->analysisStatusText() : std::string{};\n        if (text == m_lastAnalysisStatus)\n        {\n            return std::nullopt;\n        }\n        m_lastAnalysisStatus = text;\n        return juce::String(text);\n    }",
+    "void pollScriptReload() { if (pluginRunner) { pluginRunner->reloadScriptIfPending(); } }",
+    "[[nodiscard]] bool presetHasSwing(int idx) const noexcept { return pluginRunner && pluginRunner->isPresetSwing(idx); }"
+  ],
+  "protected_files": [],
+  "host_transport": true,
+  "CPP":
+  {
+    "CLASS_NAME": "DrumTrainerImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/DrumTrainerImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}
