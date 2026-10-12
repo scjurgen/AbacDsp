@@ -53,6 +53,10 @@ class StubImpl final : public EffectBase
     {
         m_analysisBars = value;
     }
+    void setLatencyComp(const float value)
+    {
+        m_latencyComp = value;
+    }
     void setPreset(const size_t value)
     {
         m_preset = value;
@@ -89,6 +93,7 @@ class StubImpl final : public EffectBase
     bool m_hostSync{};
     bool m_analysisMode{};
     size_t m_analysisBars{};
+    float m_latencyComp{};
     size_t m_preset{};
     size_t m_voicing{};
     size_t m_drumKit{};

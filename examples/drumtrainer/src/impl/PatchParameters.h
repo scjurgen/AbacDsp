@@ -22,6 +22,7 @@ struct PatchParameters
         hostSync    , // switch
         analysisMode, // switch
         analysisBars, // drop
+        latencyComp , // dial
         preset      , // drop
         voicing     , // drop
         drumKit     , // drop
@@ -37,6 +38,7 @@ bool onOff{false};
 bool hostSync{false};
 bool analysisMode{false};
 size_t analysisBars{0};
+float latencyComp{0.0f};
 size_t preset{6};
 size_t voicing{0};
 size_t drumKit{0};
@@ -54,6 +56,7 @@ std::string script{};
 "hostSync",
 "analysisMode",
 "analysisBars",
+"latencyComp",
 "preset",
 "voicing",
 "drumKit",
@@ -85,6 +88,7 @@ std::string script{};
         else if constexpr (ParamId == Id::hostSync) return hostSync;
         else if constexpr (ParamId == Id::analysisMode) return analysisMode;
         else if constexpr (ParamId == Id::analysisBars) return analysisBars;
+        else if constexpr (ParamId == Id::latencyComp) return latencyComp;
         else if constexpr (ParamId == Id::preset) return preset;
         else if constexpr (ParamId == Id::voicing) return voicing;
         else if constexpr (ParamId == Id::drumKit) return drumKit;
@@ -119,6 +123,8 @@ break;
  case Id::analysisMode: if (!isEqual(get<Id::analysisMode>(), value)) {get<Id::analysisMode>() = static_cast<bool>(value) ;m_modified = true;}
 break;
  case Id::analysisBars: if (!isEqual(get<Id::analysisBars>(), value)) {get<Id::analysisBars>() = static_cast<size_t>(value) ;m_modified = true;}
+break;
+ case Id::latencyComp: if (!isEqual(get<Id::latencyComp>(), value)) {get<Id::latencyComp>() = value;m_modified = true;}
 break;
  case Id::preset: if (!isEqual(get<Id::preset>(), value)) {get<Id::preset>() = static_cast<size_t>(value) ;m_modified = true;}
 break;
@@ -179,6 +185,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
         hostSync    , // switch
         analysisMode, // switch
         analysisBars, // drop
+        latencyComp , // dial
         preset      , // drop
         voicing     , // drop
         drumKit     , // drop

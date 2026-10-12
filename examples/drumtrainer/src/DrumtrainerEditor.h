@@ -187,6 +187,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(latencyCompDial).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[1].toFloat());
             }
         }
@@ -209,6 +210,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             }
             processorRef.pollAnalysisMetronome();
             processorRef.pollAnalysisAutoStop();
+            processorRef.pollAnalysisReport();
             if (const auto status = processorRef.pollStatusText())
             {
                 m_statusBar.showMessage(*status, status->isNotEmpty());
@@ -291,6 +293,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             valueTreeState, "analysisBars", analysisBarsDrop);
         analysisBarsDrop.setTooltip(juce::String::fromUTF8(
             "Analysis Bars (Open end, 4 Bars, 8 Bars, 12 Bars, 16 Bars, 24 Bars, 32 Bars, 64 Bars)"));
+        addAndMakeVisible(latencyCompDial);
+        latencyCompDial.reset(valueTreeState, "latencyComp");
+        latencyCompDial.setLabelText(juce::String::fromUTF8("Latency Comp"));
+        latencyCompDial.setTooltip(juce::String::fromUTF8("Latency Comp (-50 to 150 ms)"));
         addAndMakeVisible(presetDrop);
         presetDrop.addItemList(valueTreeState.getParameter("preset")->getAllValueStrings(), 1);
         presetDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
@@ -353,6 +359,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             hostSyncSwitch.setVisible(false);
             analysisModeSwitch.setVisible(true);
             analysisBarsDrop.setVisible(false);
+            latencyCompDial.setVisible(false);
             presetDrop.setVisible(false);
             voicingDrop.setVisible(false);
             drumKitDrop.setVisible(false);
@@ -368,6 +375,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             hostSyncSwitch.setVisible(true);
             analysisModeSwitch.setVisible(true);
             analysisBarsDrop.setVisible(true);
+            latencyCompDial.setVisible(true);
             presetDrop.setVisible(true);
             voicingDrop.setVisible(true);
             drumKitDrop.setVisible(true);
@@ -1212,6 +1220,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> analysisModeSwitchAttachment;
     juce::ComboBox analysisBarsDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> analysisBarsDropAttachment;
+    CustomRotaryDial latencyCompDial{this};
     juce::ComboBox presetDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> presetDropAttachment;
     juce::ComboBox voicingDrop{};

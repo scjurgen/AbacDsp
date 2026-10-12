@@ -45,6 +45,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("hostSync", this);
         m_parameters.addParameterListener("analysisMode", this);
         m_parameters.addParameterListener("analysisBars", this);
+        m_parameters.addParameterListener("latencyComp", this);
         m_parameters.addParameterListener("preset", this);
         m_parameters.addParameterListener("voicing", this);
         m_parameters.addParameterListener("drumKit", this);
@@ -70,6 +71,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("hostSync", this);
         m_parameters.removeParameterListener("analysisMode", this);
         m_parameters.removeParameterListener("analysisBars", this);
+        m_parameters.removeParameterListener("latencyComp", this);
         m_parameters.removeParameterListener("preset", this);
         m_parameters.removeParameterListener("voicing", this);
         m_parameters.removeParameterListener("drumKit", this);
@@ -311,6 +313,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                               juce::String::fromUTF8("16 Bars"), juce::String::fromUTF8("24 Bars"),
                               juce::String::fromUTF8("32 Bars"), juce::String::fromUTF8("64 Bars")},
             0));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("latencyComp", 1), juce::String::fromUTF8("Latency Comp"),
+            juce::NormalisableRange<float>(-50, 150, 0.1, 1, false), 0,
+            juce::AudioParameterFloatAttributes{}.withLabel("ms").withStringFromValueFunction(
+                [](float value, int) { return juce::String(value, 1) + " ms"; })));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID("preset", 1), juce::String::fromUTF8("Preset"),
             juce::StringArray{juce::String::fromUTF8("3/4"),
@@ -426,6 +433,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                  p.pluginRunner->setAnalysisBars(static_cast<size_t>(v));
                  p.m_fileIo.updateParameter(PatchParameters::Id::analysisBars, v);
              }},
+            {"latencyComp",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setLatencyComp(v);
+                 p.m_fileIo.updateParameter(PatchParameters::Id::latencyComp, v);
+             }},
             {"preset",
              [](AudioPluginAudioProcessor& p, const float v)
              {
@@ -531,6 +544,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("analysisBars");
             float normalized = range.convertTo0to1(static_cast<float>(params.analysisBars));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("latencyComp"))
+        {
+            const auto& range = m_parameters.getParameterRange("latencyComp");
+            float normalized = range.convertTo0to1(static_cast<float>(params.latencyComp));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("preset"))
@@ -1053,6 +1072,21 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     [[nodiscard]] juce::File drumMapBrowseStart() const
     {
         return DrumMapStore::browseStartDirectory(m_drumMapPath);
+    }
+    void pollAnalysisReport()
+    {
+        if (!pluginRunner || !pluginRunner->consumeAnalysisReportReady())
+        {
+            return;
+        }
+        auto dir =
+            juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("DrumTrainer Analysis");
+        dir.createDirectory();
+        const auto stem = pluginRunner->analysisFileStem();
+        const auto prefix = stem.empty() ? juce::String("analysis-") : "analysis-" + juce::String(stem) + "-";
+        const auto file = dir.getChildFile(prefix + juce::Time::getCurrentTime().formatted("%Y%m%d-%H%M%S") + ".html");
+        file.replaceWithText(pluginRunner->buildAnalysisReportHtml());
+        juce::URL(file).launchInDefaultBrowser();
     }
     void pollScriptReload()
     {

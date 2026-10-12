@@ -4,6 +4,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <string>
+#include <vector>
 
 #include "impl/DrumTrainerImpl.h"
 
@@ -388,4 +389,129 @@ TEST(DrumTrainerImplTest, CaptureStartsOnTheFirstPatternBar)
     static_cast<void>(runSeconds(impl, 4.5f));
     ASSERT_EQ(impl.analysisStatusText(), "Analysis: bar 1");
     EXPECT_EQ(impl.patternBarIndex(), 0u);
+}
+
+namespace
+{
+struct TimedMidi
+{
+    size_t sample{0};
+    std::array<uint8_t, 3> bytes{};
+};
+
+constexpr size_t kBarSamples{96000};
+constexpr size_t kBeatSamples{24000};
+constexpr std::array<uint8_t, 3> kKick{0x99, 74, 100};
+constexpr std::array<uint8_t, 3> kSnare{0x99, 60, 100};
+
+// Sample of a beat in the captured bars, counted from the moment Analysis is switched on
+// (120 BPM, 4/4, two count-in bars).
+size_t captureSample(const size_t bar, const size_t beat)
+{
+    return (2 + bar) * kBarSamples + beat * kBeatSamples;
+}
+
+// Switches Analysis on and runs `seconds`, handing each event over in the block it falls into.
+void runTake(Impl& impl, std::vector<TimedMidi> events, const float seconds)
+{
+    std::ranges::sort(events, {}, &TimedMidi::sample);
+    impl.setAnalysisMode(true);
+    const Buffer silence{};
+    Buffer out{};
+    auto next = events.begin();
+    const auto numBlocks = static_cast<size_t>(seconds * kSampleRate) / kBlock;
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        const size_t start = block * kBlock;
+        for (; next != events.end() && next->sample < start + kBlock; ++next)
+        {
+            impl.processMidiEvent(next->bytes, static_cast<int>(next->sample - start));
+        }
+        impl.processBlock(silence, out);
+    }
+}
+
+std::string reportCard(const std::string& label, const std::string& value)
+{
+    return label + "</h6><p class=\"fs-3 mb-0\">" + value + "</p>";
+}
+
+Impl& prepareKickTake(Impl& impl)
+{
+    EXPECT_TRUE(impl.setScript("AddHit(0, Kick)\nAddHit(2, Kick)\n"));
+    static_cast<void>(runSeconds(impl, 0.01f));
+    impl.setAnalysisBars(1);
+    return impl;
+}
+}
+
+TEST(DrumTrainerImplTest, ATakeIsMatchedAgainstThePattern)
+{
+    Impl impl(kSampleRate);
+    std::vector<TimedMidi> events;
+    for (size_t bar = 0; bar < 4; ++bar)
+    {
+        events.push_back({captureSample(bar, 0) + (bar == 1 ? 480u : 0u), kKick});
+        if (bar != 3)
+        {
+            events.push_back({captureSample(bar, 2), kKick});
+        }
+    }
+    events.push_back({captureSample(2, 1), kSnare});
+    runTake(prepareKickTake(impl), events, 12.1f);
+    ASSERT_TRUE(impl.consumeAnalysisReportReady());
+    const std::string html = impl.buildAnalysisReportHtml();
+    EXPECT_THAT(html, ::testing::HasSubstr(reportCard("Hit", "7 / 8")));
+    EXPECT_THAT(html, ::testing::HasSubstr(reportCard("Missed", "1")));
+    EXPECT_THAT(html, ::testing::HasSubstr(reportCard("Extra", "1")));
+    EXPECT_THAT(html, ::testing::HasSubstr(reportCard("Bars", "4")));
+    EXPECT_THAT(html, ::testing::HasSubstr("<td>Beat 1</td><td>Kick</td><td>4</td><td>0</td>"));
+    EXPECT_THAT(html, ::testing::HasSubstr("2.5 ms late"));
+    EXPECT_THAT(html, ::testing::HasSubstr("<td>Beat 3</td><td>Kick</td><td>3</td><td>1</td>"));
+}
+
+TEST(DrumTrainerImplTest, LatencyCompensationShiftsEveryCapturedHit)
+{
+    Impl impl(kSampleRate);
+    impl.setLatencyComp(10.f);
+    std::vector<TimedMidi> events;
+    for (size_t bar = 0; bar < 4; ++bar)
+    {
+        events.push_back({captureSample(bar, 0) + 480, kKick});
+        events.push_back({captureSample(bar, 2) + 480, kKick});
+    }
+    runTake(prepareKickTake(impl), events, 12.1f);
+    ASSERT_TRUE(impl.consumeAnalysisReportReady());
+    const std::string html = impl.buildAnalysisReportHtml();
+    EXPECT_THAT(html, ::testing::HasSubstr(reportCard("Hit", "8 / 8")));
+    EXPECT_THAT(html, ::testing::HasSubstr(reportCard("Mean deviation", "on beat")));
+}
+
+TEST(DrumTrainerImplTest, AnEarlyFirstHitInTheCountInCounts)
+{
+    Impl impl(kSampleRate);
+    std::vector<TimedMidi> events{{captureSample(0, 0) - 480, kKick}, {kBarSamples, kSnare}};
+    runTake(prepareKickTake(impl), events, 12.1f);
+    ASSERT_TRUE(impl.consumeAnalysisReportReady());
+    const std::string html = impl.buildAnalysisReportHtml();
+    EXPECT_THAT(html, ::testing::HasSubstr(reportCard("Hit", "1 / 8")));
+    EXPECT_THAT(html, ::testing::HasSubstr(reportCard("Extra", "0")));
+    EXPECT_THAT(html, ::testing::HasSubstr("10.0 ms early"));
+}
+
+TEST(DrumTrainerImplTest, SwitchingOffDuringTheCountInWritesNoReport)
+{
+    Impl impl(kSampleRate);
+    runTake(prepareKickTake(impl), {}, 1.f);
+    impl.setAnalysisMode(false);
+    static_cast<void>(runSeconds(impl, 0.01f));
+    EXPECT_FALSE(impl.consumeAnalysisReportReady());
+}
+
+TEST(DrumTrainerImplTest, ReportNamesTheScriptInTheFileStem)
+{
+    Impl impl(kSampleRate);
+    ASSERT_TRUE(impl.setScript("SetName('Two-Bar Fill')\nAddHit(0, Kick)\n"));
+    EXPECT_EQ(impl.analysisFileStem(), "two-bar-fill");
+    EXPECT_THAT(impl.buildAnalysisReportHtml(), ::testing::HasSubstr("DrumTrainer Timing Analysis - Two-Bar Fill"));
 }

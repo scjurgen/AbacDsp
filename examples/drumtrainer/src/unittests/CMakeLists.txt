@@ -39,6 +39,8 @@ package_add_test(DrumtrainerTests
         DrumMap_tests.cpp
         HihatClassifier_tests.cpp
         DrumMidiDecoder_tests.cpp
+        DrumHitMatcher_tests.cpp
+        DrumAnalysisReport_tests.cpp
 )
 
 target_compile_definitions(

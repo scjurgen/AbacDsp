@@ -17,6 +17,8 @@
 #include "EffectBase.h"
 #include "Generators/BeatSequencer.h"
 #include "Generators/ClickGenerator.h"
+#include "DrumAnalysisReport.h"
+#include "DrumHitMatcher.h"
 #include "DrumMap.h"
 #include "DrumMidiDecoder.h"
 #include "DrumPattern.h"
@@ -94,6 +96,31 @@ class DrumTrainerImpl final : public EffectBase
     {
         m_click.setSubVolumeDb(valueDb);
         m_subVolumeGain = dbToLinearGain(valueDb);
+    }
+
+    // How much later than the engine's clock a hit arrives because of audio output and MIDI
+    // latency; subtracted from every captured hit.
+    void setLatencyComp(const float valueMs) noexcept
+    {
+        m_latencySamples = static_cast<int64_t>(std::lround(valueMs * 0.001f * sampleRate()));
+    }
+
+    // Consumes the "a report is waiting" flag set on the audio thread when a take that captured
+    // something ends; the message thread then builds and exports the report.
+    [[nodiscard]] bool consumeAnalysisReportReady() noexcept
+    {
+        return m_reportReady.exchange(false, std::memory_order_acq_rel);
+    }
+
+    [[nodiscard]] std::string buildAnalysisReportHtml() const
+    {
+        const std::string_view name = scriptSetsBeatsPerBar() ? "Script" : kPresets[presetSlot()].name;
+        return DrumAnalysis::buildReportHtml(m_takeSetup, m_capturedHits.hits(), name, m_scriptName);
+    }
+
+    [[nodiscard]] std::string analysisFileStem() const
+    {
+        return DrumAnalysis::fileNameStem(m_scriptName);
     }
 
     void setInputVolume(const float valueDb) noexcept
@@ -754,6 +781,7 @@ class DrumTrainerImpl final : public EffectBase
     {
         m_takeBars = static_cast<uint32_t>(kAnalysisBarCounts[m_analysisBarsIndex.load(std::memory_order_relaxed)]);
         m_analysisBar = 0;
+        m_capturedHits.reset();
         if (m_hostSync)
         {
             setAnalysisPhase(AnalysisPhase::Waiting);
@@ -764,13 +792,23 @@ class DrumTrainerImpl final : public EffectBase
         setAnalysisPhase(AnalysisPhase::CountIn);
     }
 
+    // A take stopped during the count-in has captured nothing, so it gets no report.
     void endTake() noexcept
     {
+        if (m_analysisPhase == AnalysisPhase::Capturing)
+        {
+            m_takeSetup.capturedBars = m_analysisBar;
+            m_reportReady.store(true, std::memory_order_release);
+        }
         setAnalysisPhase(AnalysisPhase::Idle);
     }
 
     void beginCapture() noexcept
     {
+        m_takeSetup.pattern = m_pattern != nullptr ? *m_pattern : DrumPattern::HitPattern{};
+        m_takeSetup.beatsPerBar = m_seq.beatsPerBar();
+        m_takeSetup.bpm = m_bpm;
+        m_takeSetup.capturedBars = 0;
         m_barCount = 0;
         m_patternBar.store(0, std::memory_order_relaxed);
         m_analysisBar = 0;
@@ -863,8 +901,31 @@ class DrumTrainerImpl final : public EffectBase
         }
     }
 
+    // Hits of the last count-in bar are kept (with negative beats) so that an early first hit
+    // of the take still counts.
+    [[nodiscard]] std::optional<float> takeBeatsAt(const int64_t time) const noexcept
+    {
+        const bool lastCountInBar =
+            m_analysisPhase == AnalysisPhase::CountIn && m_analysisBar + 1 == kAnalysisCountInBars;
+        if (m_analysisPhase != AnalysisPhase::Capturing && !lastCountInBar)
+        {
+            return std::nullopt;
+        }
+        const auto samplesPerBeat = static_cast<double>(std::max<size_t>(m_seq.samplesPerBeat(), 1));
+        const double barsSinceCapture = lastCountInBar ? -1.0 : static_cast<double>(m_analysisBar);
+        const double beatInBar = static_cast<double>(m_seq.beatIndexInBar()) +
+                                 static_cast<double>(m_seq.beatSamplePos()) / samplesPerBeat;
+        const double offsetBeats = static_cast<double>(time - m_latencySamples - m_sampleClock) / samplesPerBeat;
+        return static_cast<float>(barsSinceCapture * static_cast<double>(m_seq.beatsPerBar()) + beatInBar +
+                                  offsetBeats);
+    }
+
     void onDrumHit(const DrumInput::DrumHit& hit) noexcept
     {
+        if (const auto takeBeats = takeBeatsAt(hit.time))
+        {
+            m_capturedHits.push({*takeBeats, hit.voice, hit.velocity, hit.pedal});
+        }
         m_lastDrumHit.store(static_cast<uint32_t>(hit.voice) | (uint32_t{hit.velocity} << 8) |
                                 (uint32_t{hit.pedal} << 16) | kMonitorValidBit,
                             std::memory_order_relaxed);
@@ -948,6 +1009,10 @@ class DrumTrainerImpl final : public EffectBase
     int64_t m_sampleClock{0};
     std::atomic<uint32_t> m_lastMidiEvent{0};
     std::atomic<uint32_t> m_lastDrumHit{0};
+    int64_t m_latencySamples{0};
+    DrumAnalysis::CapturedHitCollector m_capturedHits;
+    DrumAnalysis::TakeSetup m_takeSetup;
+    std::atomic<bool> m_reportReady{false};
 
     DrumTrainerScriptEngine m_scriptEngine;
     std::string m_scriptSource;

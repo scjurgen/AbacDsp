@@ -26,6 +26,7 @@
     {"short": "ANLZ", "type": "switch", "display": "Analysis",       "symbol": "analysisMode", "default": 0},
     {"short": "ABRS", "type": "drop",   "display": "Analysis Bars",  "symbol": "analysisBars", "default": 0, "signed": false,
       "listitems": ["Open end", "4 Bars", "8 Bars", "12 Bars", "16 Bars", "24 Bars", "32 Bars", "64 Bars"]},
+    {"short": "LAT",  "type": "dial",   "display": "Latency Comp",   "symbol": "latencyComp", "default": 0,   "range": [-50, 150, 0.1, 1, false],  "precision": 1, "unit": "ms"},
     {"short": "PRE",  "type": "drop",   "display": "Preset",         "symbol": "preset",      "default": 6,
       "listitems": ["3/4", "3/4 8th", "3/4 16th", "3/4 shuffle", "3/4 triplet", "4/4", "4/4 8th", "4/4 16th",
         "4/4 shuffle", "4/4 triplet", "4/4 swing", "5/4 (3+2)", "5/4 8th (3+2)", "5/4 (2+3)", "5/4 8th (2+3)",
@@ -45,7 +46,7 @@
     "WINDOW_WIDTH": "1200",
     "WINDOW_HEIGHT": "660",
     "type": "||",
-    "composition": "C=(1:1:1) A1=(PRE, VOI, KIT, DRP, SWG) A2=(ONF, SYNC, ANLZ, ABRS) A3=(BPM, SVOL, MVOL, IVOL)"
+    "composition": "C=(1:1:1) A1=(PRE, VOI, KIT, DRP, SWG) A2=(ONF, SYNC, ANLZ, ABRS, LAT) A3=(BPM, SVOL, MVOL, IVOL)"
   },
   "performance-page": {
     "type": "||",
@@ -73,6 +74,7 @@
     "presetDrop.setEnabled(!processorRef.scriptSetsBeatsPerBar()); }",
     "processorRef.pollAnalysisMetronome();",
     "processorRef.pollAnalysisAutoStop();",
+    "processorRef.pollAnalysisReport();",
     "if (const auto status = processorRef.pollStatusText()) { m_statusBar.showMessage(*status, status->isNotEmpty()); }",
     "if (auto* top = getTopLevelComponent()) { top->setName(processorRef.windowTitle()); }",
     "processorRef.pollScriptReload();",
@@ -106,6 +108,7 @@
     "[[nodiscard]] bool hasDrumMapFile() const { return m_drumMapPath != juce::File{}; }",
     "[[nodiscard]] juce::String drumMapName() const { return pluginRunner ? juce::String::fromUTF8(pluginRunner->drumMapName().c_str()) : juce::String{}; }",
     "[[nodiscard]] juce::File drumMapBrowseStart() const { return DrumMapStore::browseStartDirectory(m_drumMapPath); }",
+    "void pollAnalysisReport() {\n        if (!pluginRunner || !pluginRunner->consumeAnalysisReportReady())\n        {\n            return;\n        }\n        auto dir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile(\"DrumTrainer Analysis\");\n        dir.createDirectory();\n        const auto stem = pluginRunner->analysisFileStem();\n        const auto prefix = stem.empty() ? juce::String(\"analysis-\") : \"analysis-\" + juce::String(stem) + \"-\";\n        const auto file = dir.getChildFile(prefix + juce::Time::getCurrentTime().formatted(\"%Y%m%d-%H%M%S\") + \".html\");\n        file.replaceWithText(pluginRunner->buildAnalysisReportHtml());\n        juce::URL(file).launchInDefaultBrowser();\n    }",
     "void pollScriptReload() { if (pluginRunner) { pluginRunner->reloadScriptIfPending(); } }",
     "[[nodiscard]] bool presetHasSwing(int idx) const noexcept { return pluginRunner && pluginRunner->isPresetSwing(idx); }"
   ],
