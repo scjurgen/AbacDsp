@@ -40,20 +40,28 @@
     {"short": "SWG",  "type": "dial",   "display": "Swing",          "symbol": "swingRatio",  "default": 1.5, "range": [1.0, 2.0, 0.01, 1, false],  "precision": 2, "unit": "",
      "visible_when": "processorRef.presetHasSwing(presetDrop.getSelectedItemIndex())",
      "depends_on": "preset",
-     "cc": {"controller": 24}}
+     "cc": {"controller": 24}},
+    {"short": "ROLL", "type": "gauge",  "gaugetype": "drumroll",     "display": "Drum Roll",  "symbol": "roll", "customtype": "CircularDrumRollDisplay",
+      "bindings": [
+        {"call": "setBpm", "from": "getCurrentClickBpm"},
+        {"call": "setPattern", "from": "getDisplayPattern"},
+        {"call": "addHits", "from": "takeDisplayHits"},
+        {"call": "setPatternPosition", "from": "getPatternPosition"}
+      ]}
   ],
   "layout": {
     "WINDOW_WIDTH": "1200",
     "WINDOW_HEIGHT": "660",
     "type": "||",
-    "composition": "C=(1:1:1) A1=(PRE, VOI, KIT, DRP, SWG) A2=(ONF, SYNC, ANLZ, ABRS, LAT) A3=(BPM, SVOL, MVOL, IVOL)"
+    "composition": "C=(1:5) A1=(PRE, VOI, KIT, DRP, SWG, ONF, SYNC, ANLZ, ABRS, LAT, BPM, SVOL, MVOL, IVOL) A2=(ROLL)"
   },
   "performance-page": {
     "type": "||",
-    "composition": "C=(1:1) A1=(ONF, BPM, ANLZ) A2=(SWG, SVOL, MVOL, IVOL)"
+    "composition": "C=(1:5) A1=(ONF, BPM, ANLZ, SWG, SVOL, MVOL, IVOL) A2=(ROLL)"
   },
   "extra_ui_includes": [
-    "inc/DrumMapStore.h"
+    "inc/DrumMapStore.h",
+    "inc/CircularDrumRollDisplay.h"
   ],
   "extra_menus": [
     {
@@ -87,14 +95,16 @@
     {"name": "getLuaUiParamSlots", "call": "uiParamSlots", "type": "DrumTrainerScriptEngine::UiParamSlots"},
     {"name": "getCurrentClickBpm", "call": "currentClickBpm", "type": "float", "default": "120.f"},
     {"name": "isHostSynced", "type": "bool"},
-    {"name": "scriptSetsBeatsPerBar", "type": "bool"}
+    {"name": "scriptSetsBeatsPerBar", "type": "bool"},
+    {"name": "getPatternPosition", "call": "patternPosition", "type": "DrumDisplay::PatternPosition"}
   ],
   "extra_processor_members": [
     "std::string m_lastAnalysisStatus;",
     "bool m_prevAnalysisOn{false};",
     "bool m_analysisStartedMetronome{false};",
     "juce::File m_drumMapPath;",
-    "std::string m_drumMapError;"
+    "std::string m_drumMapError;",
+    "uint32_t m_displayReadIndex{0};"
   ],
   "extra_processor_methods": [
     "void pollAnalysisMetronome() {\n        const auto isOn = [this](const char* id) { const auto* v = m_parameters.getRawParameterValue(id); return v != nullptr && v->load() > 0.5f; };\n        const bool analysisOn = isOn(\"analysisMode\");\n        const bool metronomeOn = isOn(\"onOff\");\n        const auto setMetronome = [this](const bool on) { if (auto* p = m_parameters.getParameter(\"onOff\")) { p->setValueNotifyingHost(on ? 1.f : 0.f); } };\n        if (m_analysisStartedMetronome && !metronomeOn)\n        {\n            m_analysisStartedMetronome = false;\n        }\n        if (analysisOn == m_prevAnalysisOn)\n        {\n            return;\n        }\n        m_prevAnalysisOn = analysisOn;\n        if (analysisOn && pluginRunner && !pluginRunner->isHostSynced() && !metronomeOn)\n        {\n            m_analysisStartedMetronome = true;\n            setMetronome(true);\n        }\n        else if (!analysisOn && m_analysisStartedMetronome)\n        {\n            m_analysisStartedMetronome = false;\n            setMetronome(false);\n        }\n    }",
@@ -109,6 +119,8 @@
     "[[nodiscard]] juce::String drumMapName() const { return pluginRunner ? juce::String::fromUTF8(pluginRunner->drumMapName().c_str()) : juce::String{}; }",
     "[[nodiscard]] juce::File drumMapBrowseStart() const { return DrumMapStore::browseStartDirectory(m_drumMapPath); }",
     "void pollAnalysisReport() {\n        if (!pluginRunner || !pluginRunner->consumeAnalysisReportReady())\n        {\n            return;\n        }\n        auto dir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile(\"DrumTrainer Analysis\");\n        dir.createDirectory();\n        const auto stem = pluginRunner->analysisFileStem();\n        const auto prefix = stem.empty() ? juce::String(\"analysis-\") : \"analysis-\" + juce::String(stem) + \"-\";\n        const auto file = dir.getChildFile(prefix + juce::Time::getCurrentTime().formatted(\"%Y%m%d-%H%M%S\") + \".html\");\n        file.replaceWithText(pluginRunner->buildAnalysisReportHtml());\n        juce::URL(file).launchInDefaultBrowser();\n    }",
+    "[[nodiscard]] const DrumDisplay::DisplayPattern& getDisplayPattern() { static const DrumDisplay::DisplayPattern empty{}; return pluginRunner ? pluginRunner->displayPattern() : empty; }",
+    "[[nodiscard]] std::vector<DrumDisplay::DisplayHit> takeDisplayHits() {\n        std::vector<DrumDisplay::DisplayHit> hits;\n        if (pluginRunner)\n        {\n            pluginRunner->readDisplayHits(m_displayReadIndex, [&hits](const DrumDisplay::DisplayHit& hit) { hits.push_back(hit); });\n        }\n        return hits;\n    }",
     "void pollScriptReload() { if (pluginRunner) { pluginRunner->reloadScriptIfPending(); } }",
     "[[nodiscard]] bool presetHasSwing(int idx) const noexcept { return pluginRunner && pluginRunner->isPresetSwing(idx); }"
   ],

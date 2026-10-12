@@ -515,3 +515,81 @@ TEST(DrumTrainerImplTest, ReportNamesTheScriptInTheFileStem)
     EXPECT_EQ(impl.analysisFileStem(), "two-bar-fill");
     EXPECT_THAT(impl.buildAnalysisReportHtml(), ::testing::HasSubstr("DrumTrainer Timing Analysis - Two-Bar Fill"));
 }
+
+namespace
+{
+std::vector<DrumDisplay::DisplayHit> drainDisplayHits(const Impl& impl, uint32_t& readIndex)
+{
+    std::vector<DrumDisplay::DisplayHit> hits;
+    impl.readDisplayHits(readIndex, [&](const DrumDisplay::DisplayHit& hit) { hits.push_back(hit); });
+    return hits;
+}
+}
+
+TEST(DrumTrainerImplTest, PatternPositionReportsPhaseAndRunning)
+{
+    Impl impl(kSampleRate);
+    static_cast<void>(runSeconds(impl, 1.f));
+    EXPECT_FALSE(impl.patternPosition().running);
+    impl.setOnOff(true);
+    static_cast<void>(runSeconds(impl, 0.5f));
+    const auto position = impl.patternPosition();
+    EXPECT_TRUE(position.running);
+    EXPECT_NEAR(position.phase, 0.75f, 0.01f);
+}
+
+TEST(DrumTrainerImplTest, DisplayHitsArePlacedInTheMultiBarPattern)
+{
+    Impl impl(kSampleRate);
+    uint32_t readIndex = 0;
+    ASSERT_TRUE(impl.setScript("SetPatternBars(2)\nAddHit(0, Kick)\n"));
+    static_cast<void>(runSeconds(impl, 2.5f));
+    sendMidi(impl, kKick);
+    auto hits = drainDisplayHits(impl, readIndex);
+    ASSERT_EQ(hits.size(), 1u);
+    EXPECT_NEAR(hits[0].patternBeats, 5.f, 0.01f);
+    const uint32_t firstRevolution = hits[0].revolution;
+    EXPECT_EQ(impl.patternPosition().revolution, firstRevolution);
+
+    static_cast<void>(runSeconds(impl, 1.6f));
+    sendMidi(impl, kSnare);
+    hits = drainDisplayHits(impl, readIndex);
+    ASSERT_EQ(hits.size(), 1u);
+    EXPECT_NEAR(hits[0].patternBeats, 0.2f, 0.01f);
+    EXPECT_EQ(hits[0].revolution, firstRevolution + 1);
+    EXPECT_EQ(hits[0].voice, DrumInput::PlayedVoice::Snare);
+}
+
+TEST(DrumTrainerImplTest, LatencyCompensationCanMoveAHitIntoThePreviousRevolution)
+{
+    Impl impl(kSampleRate);
+    uint32_t readIndex = 0;
+    ASSERT_TRUE(impl.setScript("AddHit(0, Kick)\n"));
+    static_cast<void>(runSeconds(impl, 2.01f));
+    const uint32_t revolution = impl.patternPosition().revolution;
+    impl.setLatencyComp(50.f);
+    sendMidi(impl, kKick);
+    const auto hits = drainDisplayHits(impl, readIndex);
+    ASSERT_EQ(hits.size(), 1u);
+    EXPECT_EQ(hits[0].revolution + 1, revolution);
+    EXPECT_NEAR(hits[0].patternBeats, 3.92f, 0.01f);
+}
+
+TEST(DrumTrainerImplTest, DisplayPatternFollowsScriptAndBarLength)
+{
+    Impl impl(kSampleRate);
+    const uint64_t initial = impl.displayPattern().version;
+    EXPECT_FALSE(impl.displayPattern().pattern.active);
+    ASSERT_TRUE(impl.setScript("SetPatternBars(2)\nAddHit(1, Snare)\n"));
+    const auto& afterScript = impl.displayPattern();
+    EXPECT_GT(afterScript.version, initial);
+    EXPECT_EQ(afterScript.pattern.patternBars, 2u);
+    EXPECT_EQ(afterScript.beatsPerBar, 4u);
+    const uint64_t scripted = afterScript.version;
+    ASSERT_FALSE(impl.setScript("AddHit(99, Kick)\n"));
+    EXPECT_EQ(impl.displayPattern().version, scripted);
+    EXPECT_EQ(impl.displayPattern().pattern.hitCount, 1u);
+    impl.setPreset(kPresetThreeFour);
+    EXPECT_EQ(impl.displayPattern().beatsPerBar, 3u);
+    EXPECT_GT(impl.displayPattern().version, scripted);
+}

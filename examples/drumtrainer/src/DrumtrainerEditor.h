@@ -84,7 +84,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
             std::vector<juce::Rectangle<int>> areas(2);
-            const auto colWidth = area.getWidth() / 2;
+            const auto colWidth = area.getWidth() / 6;
             areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
             areas[1] = area.reduced(Constants::Margins::small);
 
@@ -104,13 +104,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withHeight(Constants::Text::labelHeight)
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
-                box.performLayout(areas[0].toFloat());
-            }
-            {
-                juce::FlexBox box;
-                box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::column;
-                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
                 if (swingRatioDial.isVisible())
                 {
                     box.items.add(juce::FlexItem(swingRatioDial).withFlex(1).withMargin(knobMarginSmall));
@@ -118,6 +111,14 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 box.items.add(juce::FlexItem(subVolumeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(metroVolumeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(inputVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[0].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::column;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(rollGauge).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[1].toFloat());
             }
         }
@@ -127,7 +128,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
             const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);
             std::vector<juce::Rectangle<int>> areas(2);
-            const auto colWidth = area.getWidth() / 3;
+            const auto colWidth = area.getWidth() / 6;
             areas[0] = area.removeFromLeft(colWidth * 1).reduced(Constants::Margins::small);
             areas[1] = area.reduced(Constants::Margins::small);
 
@@ -160,13 +161,6 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 {
                     box.items.add(juce::FlexItem(swingRatioDial).withFlex(1).withMargin(knobMarginSmall));
                 }
-                box.performLayout(areas[0].toFloat());
-            }
-            {
-                juce::FlexBox box;
-                box.flexWrap = juce::FlexBox::Wrap::noWrap;
-                box.flexDirection = juce::FlexBox::Direction::column;
-                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
                 box.items.add(juce::FlexItem(onOffSwitch)
                                   .withFlex(0)
                                   .withHeight(Constants::Text::labelHeight)
@@ -188,6 +182,18 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(latencyCompDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(subVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(metroVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(inputVolumeDial).withFlex(1).withMargin(knobMarginSmall));
+                box.performLayout(areas[0].toFloat());
+            }
+            {
+                juce::FlexBox box;
+                box.flexWrap = juce::FlexBox::Wrap::noWrap;
+                box.flexDirection = juce::FlexBox::Direction::column;
+                box.justifyContent = juce::FlexBox::JustifyContent::spaceAround;
+                box.items.add(juce::FlexItem(rollGauge).withFlex(1).withMargin(knobMarginSmall));
                 box.performLayout(areas[1].toFloat());
             }
         }
@@ -198,6 +204,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     {
         if (processorRef.hasRunner())
         {
+            rollGauge.setBpm(processorRef.getCurrentClickBpm());
+            rollGauge.setPattern(processorRef.getDisplayPattern());
+            rollGauge.addHits(processorRef.takeDisplayHits());
+            rollGauge.setPatternPosition(processorRef.getPatternPosition());
+
             {
                 const float bpm = processorRef.getCurrentClickBpm();
                 bpmDial.setEnabled(!processorRef.isHostSynced());
@@ -329,6 +340,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                             { processorRef.setCcRange(CcTarget::swingRatio, lo, hi); },
                                             [this] { processorRef.clearCcAssignment(CcTarget::swingRatio); },
                                             [this] { return processorRef.getCcController(CcTarget::swingRatio); }});
+        addAndMakeVisible(rollGauge);
+        rollGauge.setLabelText(juce::String::fromUTF8("Drum Roll"));
 
         addAndMakeVisible(m_pagePerformanceButton);
         addAndMakeVisible(m_pageSettingsButton);
@@ -363,6 +376,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             presetDrop.setVisible(false);
             voicingDrop.setVisible(false);
             drumKitDrop.setVisible(false);
+            rollGauge.setVisible(true);
         }
         else
         {
@@ -379,6 +393,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             presetDrop.setVisible(true);
             voicingDrop.setVisible(true);
             drumKitDrop.setVisible(true);
+            rollGauge.setVisible(true);
         }
         resized();
     }
@@ -1228,6 +1243,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::ComboBox drumKitDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> drumKitDropAttachment;
     CustomRotaryDial swingRatioDial{this};
+    CircularDrumRollDisplay rollGauge{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
 };

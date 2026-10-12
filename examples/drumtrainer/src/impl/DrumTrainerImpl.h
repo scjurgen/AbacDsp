@@ -18,6 +18,7 @@
 #include "Generators/BeatSequencer.h"
 #include "Generators/ClickGenerator.h"
 #include "DrumAnalysisReport.h"
+#include "DrumDisplayData.h"
 #include "DrumHitMatcher.h"
 #include "DrumMap.h"
 #include "DrumMidiDecoder.h"
@@ -395,6 +396,7 @@ class DrumTrainerImpl final : public EffectBase
             }
         }
         m_sampleClock += static_cast<int64_t>(BlockSize);
+        publishPatternPosition();
     }
 
     [[nodiscard]] int getBarBeats() const noexcept
@@ -409,6 +411,30 @@ class DrumTrainerImpl final : public EffectBase
 
     // The bar of the target pattern being played, 0-based; restarts with a new pattern and
     // when an analysis take starts capturing.
+    [[nodiscard]] DrumDisplay::PatternPosition patternPosition() const noexcept
+    {
+        return DrumDisplay::PatternPosition::unpack(m_patternPosition.load(std::memory_order_relaxed));
+    }
+
+    // Any thread; readIndex belongs to the one reader.
+    template <typename Visit>
+    void readDisplayHits(uint32_t& readIndex, Visit&& visit) const
+    {
+        m_displayHits.read(readIndex, visit);
+    }
+
+    // Message thread: the last successfully loaded pattern, with the current bar length.
+    [[nodiscard]] const DrumDisplay::DisplayPattern& displayPattern()
+    {
+        const size_t beatsPerBar = effectiveBeatsPerBar();
+        if (beatsPerBar != m_displayPattern.beatsPerBar)
+        {
+            m_displayPattern.beatsPerBar = beatsPerBar;
+            ++m_displayPattern.version;
+        }
+        return m_displayPattern;
+    }
+
     [[nodiscard]] size_t patternBarIndex() const noexcept
     {
         return m_patternBar.load(std::memory_order_relaxed);
@@ -684,7 +710,64 @@ class DrumTrainerImpl final : public EffectBase
     void advancePatternBar() noexcept
     {
         const size_t next = m_patternBar.load(std::memory_order_relaxed) + 1;
-        m_patternBar.store(next < patternBars() ? next : 0, std::memory_order_relaxed);
+        if (next < patternBars())
+        {
+            m_patternBar.store(next, std::memory_order_relaxed);
+            return;
+        }
+        restartPattern();
+    }
+
+    void restartPattern() noexcept
+    {
+        m_patternBar.store(0, std::memory_order_relaxed);
+        ++m_patternRevolution;
+    }
+
+    [[nodiscard]] double patternBeats() const noexcept
+    {
+        return static_cast<double>(patternBars() * m_seq.beatsPerBar());
+    }
+
+    [[nodiscard]] double samplesPerBeat() const noexcept
+    {
+        return static_cast<double>(std::max<size_t>(m_seq.samplesPerBeat(), 1));
+    }
+
+    [[nodiscard]] double beatsIntoPattern() const noexcept
+    {
+        return static_cast<double>(m_patternBar.load(std::memory_order_relaxed) * m_seq.beatsPerBar() +
+                                   m_seq.beatIndexInBar()) +
+               static_cast<double>(m_seq.beatSamplePos()) / samplesPerBeat();
+    }
+
+    // Hits may be stamped slightly ahead of or behind the block being processed, so they can
+    // fall into the neighbouring revolution.
+    [[nodiscard]] DrumDisplay::DisplayHit displayHitAt(const DrumInput::DrumHit& hit) const noexcept
+    {
+        const double total = patternBeats();
+        double beats = beatsIntoPattern() + static_cast<double>(hit.time - m_latencySamples - m_sampleClock) /
+                                                samplesPerBeat();
+        uint32_t revolution = m_patternRevolution;
+        if (beats < 0.0)
+        {
+            beats += total;
+            --revolution;
+        }
+        else if (beats >= total)
+        {
+            beats -= total;
+            ++revolution;
+        }
+        return {static_cast<float>(beats), revolution, hit.voice, hit.velocity};
+    }
+
+    void publishPatternPosition() noexcept
+    {
+        const auto phase = static_cast<float>(beatsIntoPattern() / patternBeats());
+        const DrumDisplay::PatternPosition position{phase, m_patternRevolution,
+                                                    effectiveRunning() || isAnalysisCountingIn()};
+        m_patternPosition.store(position.pack(), std::memory_order_relaxed);
     }
 
     void adoptPendingPattern() noexcept
@@ -696,7 +779,7 @@ class DrumTrainerImpl final : public EffectBase
         }
         m_pattern = pending;
         m_patternBars.store(pending->active ? pending->patternBars : 1, std::memory_order_relaxed);
-        m_patternBar.store(0, std::memory_order_relaxed);
+        restartPattern();
         const size_t beatsPerBar = pending->beatsPerBar != 0 ? pending->beatsPerBar : kPresets[presetSlot()].barBeats;
         if (beatsPerBar != m_seq.beatsPerBar())
         {
@@ -717,6 +800,8 @@ class DrumTrainerImpl final : public EffectBase
         m_patternMailbox.publish();
         m_scriptBeatsPerBar.store(result.pattern.beatsPerBar, std::memory_order_relaxed);
         m_scriptName = result.name;
+        m_displayPattern.pattern = result.pattern;
+        ++m_displayPattern.version;
         return true;
     }
 
@@ -810,7 +895,7 @@ class DrumTrainerImpl final : public EffectBase
         m_takeSetup.bpm = m_bpm;
         m_takeSetup.capturedBars = 0;
         m_barCount = 0;
-        m_patternBar.store(0, std::memory_order_relaxed);
+        restartPattern();
         m_analysisBar = 0;
         setAnalysisPhase(AnalysisPhase::Capturing);
     }
@@ -926,6 +1011,7 @@ class DrumTrainerImpl final : public EffectBase
         {
             m_capturedHits.push({*takeBeats, hit.voice, hit.velocity, hit.pedal});
         }
+        m_displayHits.push(displayHitAt(hit));
         m_lastDrumHit.store(static_cast<uint32_t>(hit.voice) | (uint32_t{hit.velocity} << 8) |
                                 (uint32_t{hit.pedal} << 16) | kMonitorValidBit,
                             std::memory_order_relaxed);
@@ -1023,4 +1109,8 @@ class DrumTrainerImpl final : public EffectBase
     const DrumPattern::HitPattern* m_pattern{nullptr};
     std::atomic<size_t> m_patternBars{1};
     std::atomic<size_t> m_patternBar{0};
+    uint32_t m_patternRevolution{0};
+    std::atomic<uint64_t> m_patternPosition{0};
+    DrumDisplay::DisplayHitRing m_displayHits;
+    DrumDisplay::DisplayPattern m_displayPattern;
 };

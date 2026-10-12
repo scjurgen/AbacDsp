@@ -951,6 +951,10 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner && pluginRunner->scriptSetsBeatsPerBar();
     }
+    [[nodiscard]] DrumDisplay::PatternPosition getPatternPosition() const
+    {
+        return pluginRunner ? pluginRunner->patternPosition() : DrumDisplay::PatternPosition{};
+    }
     void pollAnalysisMetronome()
     {
         const auto isOn = [this](const char* id)
@@ -1088,6 +1092,21 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         file.replaceWithText(pluginRunner->buildAnalysisReportHtml());
         juce::URL(file).launchInDefaultBrowser();
     }
+    [[nodiscard]] const DrumDisplay::DisplayPattern& getDisplayPattern()
+    {
+        static const DrumDisplay::DisplayPattern empty{};
+        return pluginRunner ? pluginRunner->displayPattern() : empty;
+    }
+    [[nodiscard]] std::vector<DrumDisplay::DisplayHit> takeDisplayHits()
+    {
+        std::vector<DrumDisplay::DisplayHit> hits;
+        if (pluginRunner)
+        {
+            pluginRunner->readDisplayHits(m_displayReadIndex,
+                                          [&hits](const DrumDisplay::DisplayHit& hit) { hits.push_back(hit); });
+        }
+        return hits;
+    }
     void pollScriptReload()
     {
         if (pluginRunner)
@@ -1182,6 +1201,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     bool m_analysisStartedMetronome{false};
     juce::File m_drumMapPath;
     std::string m_drumMapError;
+    uint32_t m_displayReadIndex{0};
 
     juce::AudioProcessorValueTreeState m_parameters;
     struct CcSlot

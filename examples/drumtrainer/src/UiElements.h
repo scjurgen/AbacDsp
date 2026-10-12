@@ -33,5 +33,6 @@
 #include "inc/LuaScriptMemoryPool.h"
 #include "inc/ScriptEditorWindow.h"
 #include "inc/DrumMapStore.h"
+#include "inc/CircularDrumRollDisplay.h"
 
 #include "inc/LookAndFeel.h"
