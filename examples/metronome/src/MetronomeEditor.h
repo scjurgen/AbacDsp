@@ -242,6 +242,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                 signalGauge.setSamplesPerBeat(spb);
                 irisGauge.setSamplesPerBeat(spb);
             }
+            processorRef.pollAnalysisMetronome();
             processorRef.pollAnalysisAutoStop();
             processorRef.pollAnalysisReport();
             if (const auto status = processorRef.pollAnalysisStatus())

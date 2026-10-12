@@ -962,6 +962,42 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return pluginRunner ? pluginRunner->getSpectrogramData() : AbacDsp::SpectrumImageSet{};
     }
+    void pollAnalysisMetronome()
+    {
+        const auto isOn = [this](const char* id)
+        {
+            const auto* v = m_parameters.getRawParameterValue(id);
+            return v != nullptr && v->load() > 0.5f;
+        };
+        const bool analysisOn = isOn("analysisMode");
+        const bool metronomeOn = isOn("onOff");
+        const auto setMetronome = [this](const bool on)
+        {
+            if (auto* p = m_parameters.getParameter("onOff"))
+            {
+                p->setValueNotifyingHost(on ? 1.f : 0.f);
+            }
+        };
+        if (m_analysisStartedMetronome && !metronomeOn)
+        {
+            m_analysisStartedMetronome = false;
+        }
+        if (analysisOn == m_prevAnalysisOn)
+        {
+            return;
+        }
+        m_prevAnalysisOn = analysisOn;
+        if (analysisOn && pluginRunner && !pluginRunner->isHostSynced() && !metronomeOn)
+        {
+            m_analysisStartedMetronome = true;
+            setMetronome(true);
+        }
+        else if (!analysisOn && m_analysisStartedMetronome)
+        {
+            m_analysisStartedMetronome = false;
+            setMetronome(false);
+        }
+    }
     void pollAnalysisAutoStop()
     {
         if (!pluginRunner || !pluginRunner->consumeAnalysisAutoStopped())
@@ -1085,6 +1121,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     std::unique_ptr<RateNormalizer> fixedRunner;
     std::unique_ptr<MetronomeImpl<NumSamplesPerBlock>> pluginRunner;
     std::string m_lastAnalysisStatus;
+    bool m_prevAnalysisOn{false};
+    bool m_analysisStartedMetronome{false};
 
     juce::AudioProcessorValueTreeState m_parameters;
     struct CcSlot

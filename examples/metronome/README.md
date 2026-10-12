@@ -118,8 +118,10 @@ The cycle always restarts on the downbeat of the next heard bar.
 
 ## Timing Analysis
 
-Switching Analysis on first plays a count-in of two bars, always audible even when Start is off
-or Drop Bars would mute that bar. Nothing is collected during the count-in. The bottom status
+Switching Analysis on also switches Start on when the metronome is stopped (not under Host
+Sync); switching Analysis off then stops it again, unless Start was turned off by hand in
+between. Each take first plays a count-in of two bars, always audible even when Drop Bars would
+mute that bar. Nothing is collected during the count-in. The bottom status
 bar shows the progress ("Analysis: count-in bar 1/2", then "Analysis: bar 3/8"). Capture then
 starts on the next downbeat and listens to the input signal for onsets, measuring each
 onset's distance to the nearest grid position, in milliseconds (negative = late, positive =

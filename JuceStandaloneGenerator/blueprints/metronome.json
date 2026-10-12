@@ -79,6 +79,7 @@
     "presetDrop.setEnabled(!processorRef.scriptSetsBeatsPerBar());",
     "signalGauge.setSamplesPerBeat(spb);",
     "irisGauge.setSamplesPerBeat(spb); }",
+    "processorRef.pollAnalysisMetronome();",
     "processorRef.pollAnalysisAutoStop();",
     "processorRef.pollAnalysisReport();",
     "if (const auto status = processorRef.pollAnalysisStatus()) { m_statusBar.showMessage(*status, status->isNotEmpty()); }",
@@ -100,9 +101,12 @@
     {"name": "getInputSpectrogram", "call": "getSpectrogramData", "type": "AbacDsp::SpectrumImageSet"}
   ],
   "extra_processor_members": [
-    "std::string m_lastAnalysisStatus;"
+    "std::string m_lastAnalysisStatus;",
+    "bool m_prevAnalysisOn{false};",
+    "bool m_analysisStartedMetronome{false};"
   ],
   "extra_processor_methods": [
+    "void pollAnalysisMetronome() {\n        const auto isOn = [this](const char* id) { const auto* v = m_parameters.getRawParameterValue(id); return v != nullptr && v->load() > 0.5f; };\n        const bool analysisOn = isOn(\"analysisMode\");\n        const bool metronomeOn = isOn(\"onOff\");\n        const auto setMetronome = [this](const bool on) { if (auto* p = m_parameters.getParameter(\"onOff\")) { p->setValueNotifyingHost(on ? 1.f : 0.f); } };\n        if (m_analysisStartedMetronome && !metronomeOn)\n        {\n            m_analysisStartedMetronome = false;\n        }\n        if (analysisOn == m_prevAnalysisOn)\n        {\n            return;\n        }\n        m_prevAnalysisOn = analysisOn;\n        if (analysisOn && pluginRunner && !pluginRunner->isHostSynced() && !metronomeOn)\n        {\n            m_analysisStartedMetronome = true;\n            setMetronome(true);\n        }\n        else if (!analysisOn && m_analysisStartedMetronome)\n        {\n            m_analysisStartedMetronome = false;\n            setMetronome(false);\n        }\n    }",
     "void pollAnalysisAutoStop() {\n        if (!pluginRunner || !pluginRunner->consumeAnalysisAutoStopped())\n        {\n            return;\n        }\n        if (auto* p = m_parameters.getParameter(\"analysisMode\"))\n        {\n            p->setValueNotifyingHost(0.f);\n        }\n    }",
     "[[nodiscard]] juce::String windowTitle() const { return pluginRunner ? \"Metronome - \" + juce::String::fromUTF8(pluginRunner->displayName().c_str()) : juce::String(\"Metronome\"); }",
     "[[nodiscard]] std::optional<juce::String> pollAnalysisStatus() {\n        const std::string text = pluginRunner ? pluginRunner->analysisStatusText() : std::string{};\n        if (text == m_lastAnalysisStatus)\n        {\n            return std::nullopt;\n        }\n        m_lastAnalysisStatus = text;\n        return juce::String(text);\n    }",
