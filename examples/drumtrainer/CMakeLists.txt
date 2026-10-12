@@ -161,6 +161,10 @@ target_compile_definitions(
     "${PROJECT_NAME}"
     PRIVATE DRUMTRAINER_SCRIPTING_DOCS_FILE="${DRUMTRAINER_DIR}/scripting.html"
 )
+target_compile_definitions(
+    "${PROJECT_NAME}"
+    PRIVATE DRUMTRAINER_DRUM_MAPS_DIR="${DRUMTRAINER_DIR}/drum-maps"
+)
 
 target_sources("${PROJECT_NAME}" PRIVATE ${SourceFiles})
 

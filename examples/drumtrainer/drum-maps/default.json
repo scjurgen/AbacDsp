@@ -1,0 +1,26 @@
+{
+  "name": "Default kit",
+  "inputChannel": 0,
+  "middleCOctave": 4,
+  "notes": {
+    "kick": "D5",
+    "snare": "C4",
+    "hihat": "E4",
+    "hihatPedal": "E5",
+    "crash": "Bb4",
+    "tomHigh": "D#4",
+    "tomLow": "D4",
+    "tomFloor": "C5"
+  },
+  "hihat": {
+    "pedalCc": 4,
+    "halfOpenAbove": 120,
+    "closedAbove": 125,
+    "ccGraceMs": 3
+  },
+  "click": {
+    "outputChannel": 10,
+    "downbeat": "Bb3",
+    "beat": "B3"
+  }
+}

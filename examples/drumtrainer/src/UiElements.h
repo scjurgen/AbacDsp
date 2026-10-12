@@ -32,5 +32,6 @@
 #include "inc/LuaScriptEngineBase.h"
 #include "inc/LuaScriptMemoryPool.h"
 #include "inc/ScriptEditorWindow.h"
+#include "inc/DrumMapStore.h"
 
 #include "inc/LookAndFeel.h"

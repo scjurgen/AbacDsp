@@ -51,6 +51,20 @@
     "type": "||",
     "composition": "C=(1:1) A1=(ONF, BPM, ANLZ) A2=(SWG, SVOL, MVOL, IVOL)"
   },
+  "extra_ui_includes": [
+    "inc/DrumMapStore.h"
+  ],
+  "extra_menus": [
+    {
+      "name": "Drum Map",
+      "id_count": 10,
+      "build_method": "juce::PopupMenu buildDrumMapMenu()\n    {\n        juce::PopupMenu menu;\n        menu.addItem({ID_BASE} + 1, \"Load Drum Map...\");\n        menu.addItem({ID_BASE} + 2, \"Reload\", processorRef.hasDrumMapFile());\n        menu.addItem({ID_BASE} + 3, \"Use Built-in Default\");\n        menu.addSeparator();\n        menu.addItem({ID_BASE} + 4, \"Current: \" + processorRef.drumMapName(), false);\n        return menu;\n    }",
+      "select_method": "void handleDrumMapMenuSelection(const int menuItemID)\n    {\n        if (menuItemID == {ID_BASE} + 1)\n        {\n            juce::FileChooser chooser(\"Load Drum Map\", processorRef.drumMapBrowseStart(), \"*.json\");\n            if (chooser.browseForFileToOpen())\n            {\n                processorRef.loadDrumMapFile(chooser.getResult());\n            }\n        }\n        else if (menuItemID == {ID_BASE} + 2)\n        {\n            processorRef.reloadDrumMap();\n        }\n        else if (menuItemID == {ID_BASE} + 3)\n        {\n            processorRef.useDefaultDrumMap();\n        }\n    }"
+    }
+  ],
+  "extra_prepare_calls": [
+    "restoreDrumMap();"
+  ],
   "extra_timer_callbacks": [
     "{ const float bpm = processorRef.getCurrentClickBpm();",
     "bpmDial.setEnabled(!processorRef.isHostSynced());",
@@ -59,7 +73,7 @@
     "presetDrop.setEnabled(!processorRef.scriptSetsBeatsPerBar()); }",
     "processorRef.pollAnalysisMetronome();",
     "processorRef.pollAnalysisAutoStop();",
-    "if (const auto status = processorRef.pollAnalysisStatus()) { m_statusBar.showMessage(*status, status->isNotEmpty()); }",
+    "if (const auto status = processorRef.pollStatusText()) { m_statusBar.showMessage(*status, status->isNotEmpty()); }",
     "if (auto* top = getTopLevelComponent()) { top->setName(processorRef.windowTitle()); }",
     "processorRef.pollScriptReload();",
     "pollScriptError();"
@@ -76,13 +90,22 @@
   "extra_processor_members": [
     "std::string m_lastAnalysisStatus;",
     "bool m_prevAnalysisOn{false};",
-    "bool m_analysisStartedMetronome{false};"
+    "bool m_analysisStartedMetronome{false};",
+    "juce::File m_drumMapPath;",
+    "std::string m_drumMapError;"
   ],
   "extra_processor_methods": [
     "void pollAnalysisMetronome() {\n        const auto isOn = [this](const char* id) { const auto* v = m_parameters.getRawParameterValue(id); return v != nullptr && v->load() > 0.5f; };\n        const bool analysisOn = isOn(\"analysisMode\");\n        const bool metronomeOn = isOn(\"onOff\");\n        const auto setMetronome = [this](const bool on) { if (auto* p = m_parameters.getParameter(\"onOff\")) { p->setValueNotifyingHost(on ? 1.f : 0.f); } };\n        if (m_analysisStartedMetronome && !metronomeOn)\n        {\n            m_analysisStartedMetronome = false;\n        }\n        if (analysisOn == m_prevAnalysisOn)\n        {\n            return;\n        }\n        m_prevAnalysisOn = analysisOn;\n        if (analysisOn && pluginRunner && !pluginRunner->isHostSynced() && !metronomeOn)\n        {\n            m_analysisStartedMetronome = true;\n            setMetronome(true);\n        }\n        else if (!analysisOn && m_analysisStartedMetronome)\n        {\n            m_analysisStartedMetronome = false;\n            setMetronome(false);\n        }\n    }",
     "void pollAnalysisAutoStop() {\n        if (!pluginRunner || !pluginRunner->consumeAnalysisAutoStopped())\n        {\n            return;\n        }\n        if (auto* p = m_parameters.getParameter(\"analysisMode\"))\n        {\n            p->setValueNotifyingHost(0.f);\n        }\n    }",
     "[[nodiscard]] juce::String windowTitle() const { return pluginRunner ? \"DrumTrainer - \" + juce::String::fromUTF8(pluginRunner->displayName().c_str()) : juce::String(\"DrumTrainer\"); }",
-    "[[nodiscard]] std::optional<juce::String> pollAnalysisStatus() {\n        const std::string text = pluginRunner ? pluginRunner->analysisStatusText() : std::string{};\n        if (text == m_lastAnalysisStatus)\n        {\n            return std::nullopt;\n        }\n        m_lastAnalysisStatus = text;\n        return juce::String(text);\n    }",
+    "[[nodiscard]] std::optional<juce::String> pollStatusText() {\n        std::string text = pluginRunner ? pluginRunner->analysisStatusText() : std::string{};\n        if (text.empty())\n        {\n            text = !m_drumMapError.empty() ? m_drumMapError : (pluginRunner ? pluginRunner->midiMonitorText() : std::string{});\n        }\n        if (text == m_lastAnalysisStatus)\n        {\n            return std::nullopt;\n        }\n        m_lastAnalysisStatus = text;\n        return juce::String(text);\n    }",
+    "void loadDrumMapFile(const juce::File& file) {\n        if (!pluginRunner)\n        {\n            return;\n        }\n        m_drumMapPath = file;\n        if (!file.existsAsFile())\n        {\n            m_drumMapError = \"Drum map not found: \" + file.getFullPathName().toStdString();\n            return;\n        }\n        const auto error = pluginRunner->setDrumMapJson(file.loadFileAsString().toStdString());\n        m_drumMapError = error ? \"Drum map \" + file.getFileName().toStdString() + \": \" + *error : std::string{};\n        if (!error)\n        {\n            DrumMapStore::saveFile(file);\n        }\n    }",
+    "void restoreDrumMap() { if (const auto file = DrumMapStore::savedFile()) { loadDrumMapFile(*file); } }",
+    "void reloadDrumMap() { if (hasDrumMapFile()) { loadDrumMapFile(m_drumMapPath); } }",
+    "void useDefaultDrumMap() {\n        if (pluginRunner)\n        {\n            pluginRunner->useDefaultDrumMap();\n        }\n        m_drumMapPath = juce::File{};\n        m_drumMapError.clear();\n        DrumMapStore::clear();\n    }",
+    "[[nodiscard]] bool hasDrumMapFile() const { return m_drumMapPath != juce::File{}; }",
+    "[[nodiscard]] juce::String drumMapName() const { return pluginRunner ? juce::String::fromUTF8(pluginRunner->drumMapName().c_str()) : juce::String{}; }",
+    "[[nodiscard]] juce::File drumMapBrowseStart() const { return DrumMapStore::browseStartDirectory(m_drumMapPath); }",
     "void pollScriptReload() { if (pluginRunner) { pluginRunner->reloadScriptIfPending(); } }",
     "[[nodiscard]] bool presetHasSwing(int idx) const noexcept { return pluginRunner && pluginRunner->isPresetSwing(idx); }"
   ],

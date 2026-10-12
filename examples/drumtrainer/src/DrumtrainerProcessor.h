@@ -84,6 +84,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             pluginRunner->setScript(m_fileIo.currentScript());
         }
+        restoreDrumMap();
 
         fixedRunner = std::make_unique<RateNormalizer>(static_cast<float>(sampleRate),
                                                        [this](const AbacDsp::AudioBuffer<2, NumSamplesPerBlock>& input,
@@ -273,7 +274,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID("bpm", 1), juce::String::fromUTF8("BPM"),
-            juce::NormalisableRange<float>(40, 250, 0.1, 1, false), 100,
+            juce::NormalisableRange<float>(40, 250, 0.1, 1, false), 120,
             juce::AudioParameterFloatAttributes{}.withLabel("BPM").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " BPM"; })));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
@@ -921,7 +922,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     }
     [[nodiscard]] float getCurrentClickBpm() const noexcept
     {
-        return pluginRunner ? pluginRunner->currentClickBpm() : 100.f;
+        return pluginRunner ? pluginRunner->currentClickBpm() : 120.f;
     }
     [[nodiscard]] bool isHostSynced() const noexcept
     {
@@ -983,15 +984,75 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         return pluginRunner ? "DrumTrainer - " + juce::String::fromUTF8(pluginRunner->displayName().c_str())
                             : juce::String("DrumTrainer");
     }
-    [[nodiscard]] std::optional<juce::String> pollAnalysisStatus()
+    [[nodiscard]] std::optional<juce::String> pollStatusText()
     {
-        const std::string text = pluginRunner ? pluginRunner->analysisStatusText() : std::string{};
+        std::string text = pluginRunner ? pluginRunner->analysisStatusText() : std::string{};
+        if (text.empty())
+        {
+            text = !m_drumMapError.empty() ? m_drumMapError
+                                           : (pluginRunner ? pluginRunner->midiMonitorText() : std::string{});
+        }
         if (text == m_lastAnalysisStatus)
         {
             return std::nullopt;
         }
         m_lastAnalysisStatus = text;
         return juce::String(text);
+    }
+    void loadDrumMapFile(const juce::File& file)
+    {
+        if (!pluginRunner)
+        {
+            return;
+        }
+        m_drumMapPath = file;
+        if (!file.existsAsFile())
+        {
+            m_drumMapError = "Drum map not found: " + file.getFullPathName().toStdString();
+            return;
+        }
+        const auto error = pluginRunner->setDrumMapJson(file.loadFileAsString().toStdString());
+        m_drumMapError = error ? "Drum map " + file.getFileName().toStdString() + ": " + *error : std::string{};
+        if (!error)
+        {
+            DrumMapStore::saveFile(file);
+        }
+    }
+    void restoreDrumMap()
+    {
+        if (const auto file = DrumMapStore::savedFile())
+        {
+            loadDrumMapFile(*file);
+        }
+    }
+    void reloadDrumMap()
+    {
+        if (hasDrumMapFile())
+        {
+            loadDrumMapFile(m_drumMapPath);
+        }
+    }
+    void useDefaultDrumMap()
+    {
+        if (pluginRunner)
+        {
+            pluginRunner->useDefaultDrumMap();
+        }
+        m_drumMapPath = juce::File{};
+        m_drumMapError.clear();
+        DrumMapStore::clear();
+    }
+    [[nodiscard]] bool hasDrumMapFile() const
+    {
+        return m_drumMapPath != juce::File{};
+    }
+    [[nodiscard]] juce::String drumMapName() const
+    {
+        return pluginRunner ? juce::String::fromUTF8(pluginRunner->drumMapName().c_str()) : juce::String{};
+    }
+    [[nodiscard]] juce::File drumMapBrowseStart() const
+    {
+        return DrumMapStore::browseStartDirectory(m_drumMapPath);
     }
     void pollScriptReload()
     {
@@ -1085,6 +1146,8 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     std::string m_lastAnalysisStatus;
     bool m_prevAnalysisOn{false};
     bool m_analysisStartedMetronome{false};
+    juce::File m_drumMapPath;
+    std::string m_drumMapError;
 
     juce::AudioProcessorValueTreeState m_parameters;
     struct CcSlot

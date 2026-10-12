@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <gmock/gmock.h>
@@ -313,4 +314,79 @@ TEST(DrumTrainerImplTest, FailedScriptKeepsThePreviousName)
     ASSERT_TRUE(impl.setScript("SetName('Rock')\n"));
     ASSERT_FALSE(impl.setScript("SetName('Jazz')\nthis is not lua\n"));
     EXPECT_EQ(impl.scriptName(), "Rock");
+}
+
+namespace
+{
+void sendMidi(Impl& impl, const std::array<uint8_t, 3> bytes, const int sampleOffset = 0)
+{
+    impl.processMidiEvent(bytes, sampleOffset);
+}
+}
+
+TEST(DrumTrainerImplTest, MonitorWaitsForInputWithTheBuiltInMap)
+{
+    Impl impl(kSampleRate);
+    EXPECT_EQ(impl.midiMonitorText(), "Drum map: Built-in default | waiting for MIDI input");
+}
+
+TEST(DrumTrainerImplTest, MonitorShowsTheMappedNoteAndTheDecodedHit)
+{
+    Impl impl(kSampleRate);
+    sendMidi(impl, {0x99, 60, 100});
+    EXPECT_EQ(impl.midiMonitorText(),
+              "Drum map: Built-in default | MIDI in: note 60 (C4) vel 100 ch 10 = Snare | Last hit: Snare vel 100");
+}
+
+TEST(DrumTrainerImplTest, MonitorShowsTheHihatArticulationAfterTheGraceWindow)
+{
+    Impl impl(kSampleRate);
+    sendMidi(impl, {0xB9, 4, 0});
+    sendMidi(impl, {0x99, 64, 90}, 5);
+    EXPECT_THAT(impl.midiMonitorText(), ::testing::Not(::testing::HasSubstr("Last hit")));
+    static_cast<void>(runSeconds(impl, 0.01f));
+    EXPECT_THAT(impl.midiMonitorText(), ::testing::HasSubstr("Last hit: Hihat open vel 90, pedal 0"));
+}
+
+TEST(DrumTrainerImplTest, MonitorFlagsUnmappedNotesAndThePedalCc)
+{
+    Impl impl(kSampleRate);
+    sendMidi(impl, {0x99, 61, 100});
+    EXPECT_THAT(impl.midiMonitorText(), ::testing::HasSubstr("note 61 (C#4) vel 100 ch 10 (not mapped)"));
+    sendMidi(impl, {0xB9, 4, 127});
+    EXPECT_THAT(impl.midiMonitorText(), ::testing::HasSubstr("CC 4 = 127 ch 10 (hihat pedal)"));
+    sendMidi(impl, {0xA9, 64, 50});
+    EXPECT_THAT(impl.midiMonitorText(), ::testing::HasSubstr("CC 4 = 127"));
+}
+
+TEST(DrumTrainerImplTest, LoadedDrumMapReplacesTheNoteMapping)
+{
+    Impl impl(kSampleRate);
+    ASSERT_FALSE(impl.setDrumMapJson(R"({"name": "GM", "inputChannel": 10, "notes": {"snare": 38}})").has_value());
+    EXPECT_EQ(impl.drumMapName(), "GM");
+    sendMidi(impl, {0x99, 38, 100});
+    EXPECT_THAT(impl.midiMonitorText(), ::testing::HasSubstr("note 38 (D2) vel 100 ch 10 = Snare | Last hit: Snare"));
+    sendMidi(impl, {0x91, 38, 100});
+    EXPECT_THAT(impl.midiMonitorText(), ::testing::HasSubstr("ch 2 (channel ignored)"));
+}
+
+TEST(DrumTrainerImplTest, InvalidDrumMapKeepsTheCurrentOne)
+{
+    Impl impl(kSampleRate);
+    const auto error = impl.setDrumMapJson(R"({"notes": {"bass": 36}})");
+    ASSERT_TRUE(error.has_value());
+    EXPECT_THAT(*error, ::testing::HasSubstr("unknown key \"bass\""));
+    EXPECT_EQ(impl.drumMapName(), "Built-in default");
+    sendMidi(impl, {0x99, 74, 100});
+    EXPECT_THAT(impl.midiMonitorText(), ::testing::HasSubstr("Last hit: Kick vel 100"));
+}
+
+TEST(DrumTrainerImplTest, UseDefaultDrumMapRestoresTheBuiltInMap)
+{
+    Impl impl(kSampleRate);
+    ASSERT_FALSE(impl.setDrumMapJson(R"({"name": "GM", "notes": {"kick": 36}})").has_value());
+    impl.useDefaultDrumMap();
+    EXPECT_EQ(impl.drumMapName(), "Built-in default");
+    sendMidi(impl, {0x99, 74, 100});
+    EXPECT_THAT(impl.midiMonitorText(), ::testing::HasSubstr("= Kick"));
 }

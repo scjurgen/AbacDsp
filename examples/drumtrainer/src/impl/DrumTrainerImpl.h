@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <format>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -16,6 +17,8 @@
 #include "EffectBase.h"
 #include "Generators/BeatSequencer.h"
 #include "Generators/ClickGenerator.h"
+#include "DrumMap.h"
+#include "DrumMidiDecoder.h"
 #include "DrumPattern.h"
 #include "DrumTrainerDrumPaths.h"
 #include "DrumTrainerScriptEngine.h"
@@ -52,6 +55,7 @@ class DrumTrainerImpl final : public EffectBase
         m_seq.setSwingRatio(kDefaultSwingRatio);
         m_seq.setBpm(m_bpm);
         setDrumKit(m_drumKitIndex);
+        m_midiDecoder.setMap(m_drumMapFile.map, sampleRate);
     }
 
     void setBpm(const float value)
@@ -249,9 +253,53 @@ class DrumTrainerImpl final : public EffectBase
         return kPresets[static_cast<size_t>(index)].hasSwing;
     }
 
-    void processMidiEvent([[maybe_unused]] const std::span<const uint8_t> bytes,
-                          [[maybe_unused]] const int sampleOffset) noexcept
+    // Message thread. A map that fails to parse leaves the current one active; returns the error.
+    [[nodiscard]] std::optional<std::string> setDrumMapJson(const std::string_view json)
     {
+        auto load = DrumInput::parseDrumMap(json);
+        if (!load.file)
+        {
+            return std::move(load.error);
+        }
+        installDrumMap(*load.file);
+        return std::nullopt;
+    }
+
+    void useDefaultDrumMap()
+    {
+        installDrumMap(DrumInput::defaultDrumMapFile());
+    }
+
+    // Message thread only, like setDrumMapJson() which writes it.
+    [[nodiscard]] const std::string& drumMapName() const noexcept
+    {
+        return m_drumMapFile.name;
+    }
+
+    // Message thread: the last note-on or CC received (before channel filtering) and the last
+    // drum hit decoded, for checking a drum map against the module.
+    [[nodiscard]] std::string midiMonitorText() const
+    {
+        const uint32_t event = m_lastMidiEvent.load(std::memory_order_relaxed);
+        if ((event & kMonitorValidBit) == 0)
+        {
+            return std::format("Drum map: {} | waiting for MIDI input", m_drumMapFile.name);
+        }
+        std::string text = std::format("Drum map: {} | MIDI in: {}", m_drumMapFile.name, describeMidiEvent(event));
+        const uint32_t hit = m_lastDrumHit.load(std::memory_order_relaxed);
+        if ((hit & kMonitorValidBit) != 0)
+        {
+            text += " | Last hit: " + describeDrumHit(hit);
+        }
+        return text;
+    }
+
+    void processMidiEvent(const std::span<const uint8_t> bytes, const int sampleOffset) noexcept
+    {
+        adoptPendingDrumMap();
+        recordMonitorEvent(bytes);
+        m_midiDecoder.process(bytes, m_sampleClock + sampleOffset, [this](const DrumInput::DrumHit& hit) noexcept
+                              { onDrumHit(hit); });
     }
 
     template <typename Emit>
@@ -267,6 +315,8 @@ class DrumTrainerImpl final : public EffectBase
         }
         updateAnalysisMode();
         m_drumVoiceKit.pollAndInstall();
+        adoptPendingDrumMap();
+        m_midiDecoder.advance(m_sampleClock, [this](const DrumInput::DrumHit& hit) noexcept { onDrumHit(hit); });
         if (!effectiveRunning())
         {
             adoptPendingPattern();
@@ -326,6 +376,7 @@ class DrumTrainerImpl final : public EffectBase
                 advanceAnalysisBar();
             }
         }
+        m_sampleClock += static_cast<int64_t>(BlockSize);
     }
 
     [[nodiscard]] int getBarBeats() const noexcept
@@ -759,6 +810,80 @@ class DrumTrainerImpl final : public EffectBase
         }
     }
 
+    void installDrumMap(const DrumInput::DrumMapFile& file)
+    {
+        m_drumMapFile = file;
+        m_drumMapMailbox.backSlot() = file.map;
+        m_drumMapMailbox.publish();
+    }
+
+    void adoptPendingDrumMap() noexcept
+    {
+        if (const auto* map = m_drumMapMailbox.acquireNewest())
+        {
+            m_midiDecoder.setMap(*map, sampleRate());
+        }
+    }
+
+    static constexpr uint32_t kMonitorValidBit{1u << 24};
+
+    void recordMonitorEvent(const std::span<const uint8_t> bytes) noexcept
+    {
+        if (bytes.size() < 3)
+        {
+            return;
+        }
+        const auto type = static_cast<uint8_t>(bytes[0] & 0xF0);
+        if ((type == 0x90 && bytes[2] > 0) || type == 0xB0)
+        {
+            m_lastMidiEvent.store(bytes[0] | (uint32_t{bytes[1]} << 8) | (uint32_t{bytes[2]} << 16) | kMonitorValidBit,
+                                  std::memory_order_relaxed);
+        }
+    }
+
+    void onDrumHit(const DrumInput::DrumHit& hit) noexcept
+    {
+        m_lastDrumHit.store(static_cast<uint32_t>(hit.voice) | (uint32_t{hit.velocity} << 8) |
+                                (uint32_t{hit.pedal} << 16) | kMonitorValidBit,
+                            std::memory_order_relaxed);
+    }
+
+    [[nodiscard]] std::string describeMidiEvent(const uint32_t event) const
+    {
+        const auto status = static_cast<uint8_t>(event & 0xFF);
+        const auto data1 = static_cast<uint8_t>((event >> 8) & 0xFF);
+        const auto data2 = static_cast<uint8_t>((event >> 16) & 0xFF);
+        const auto channel = static_cast<uint8_t>((status & 0x0F) + 1);
+        const auto& map = m_drumMapFile.map;
+        const bool accepted = map.acceptsChannel(channel);
+        if ((status & 0xF0) == 0xB0)
+        {
+            const bool isPedal = accepted && data1 == map.hihat.pedalCc;
+            return std::format("CC {} = {} ch {}{}", data1, data2, channel,
+                               !accepted ? " (channel ignored)" : (isPedal ? " (hihat pedal)" : ""));
+        }
+        std::string text = std::format("note {} ({}) vel {} ch {}", data1, DrumInput::noteName(data1, map.middleCOctave),
+                                       data2, channel);
+        if (!accepted)
+        {
+            return text + " (channel ignored)";
+        }
+        const auto pad = map.padForNote(data1);
+        return text + (pad ? std::format(" = {}", DrumInput::kPads[static_cast<size_t>(*pad)].label) : " (not mapped)");
+    }
+
+    [[nodiscard]] static std::string describeDrumHit(const uint32_t packed)
+    {
+        const auto voice = static_cast<DrumInput::PlayedVoice>(packed & 0xFF);
+        const auto velocity = (packed >> 8) & 0xFF;
+        const auto pedal = (packed >> 16) & 0xFF;
+        if (DrumInput::isHihat(voice))
+        {
+            return std::format("{} vel {}, pedal {}", DrumInput::label(voice), velocity, pedal);
+        }
+        return std::format("{} vel {}", DrumInput::label(voice), velocity);
+    }
+
     static constexpr float kDefaultSwingRatio = 1.5f;
 
     float m_bpm{120.f};
@@ -794,6 +919,13 @@ class DrumTrainerImpl final : public EffectBase
 
     AbacDsp::DrumVoiceKit m_drumVoiceKit;
     DrumVoicePool m_drumVoices;
+
+    DrumInput::DrumMapFile m_drumMapFile{DrumInput::defaultDrumMapFile()};
+    DrumPattern::TripleBuffer<DrumInput::DrumMap> m_drumMapMailbox;
+    DrumInput::DrumMidiDecoder m_midiDecoder;
+    int64_t m_sampleClock{0};
+    std::atomic<uint32_t> m_lastMidiEvent{0};
+    std::atomic<uint32_t> m_lastDrumHit{0};
 
     DrumTrainerScriptEngine m_scriptEngine;
     std::string m_scriptSource;

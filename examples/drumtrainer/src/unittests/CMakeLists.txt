@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 include(GoogleTest)
 macro(package_add_test TESTNAME)
     add_executable(${TESTNAME} ${ARGN})
-    target_link_libraries(${TESTNAME} gtest gmock gtest_main drumtrainer_lua)
+    target_link_libraries(${TESTNAME} gtest gmock gtest_main drumtrainer_lua nlohmann_json::nlohmann_json)
     target_include_directories(${TESTNAME} PRIVATE ${SOL2_DIR}/include)
     target_compile_definitions(${TESTNAME} PRIVATE SOL_USING_CXX_LUA=1)
     gtest_discover_tests(
@@ -36,9 +36,13 @@ package_add_test(DrumtrainerTests
         DrumTrainer_tests.cpp
         DrumPattern_tests.cpp
         DrumTrainerScriptEngine_tests.cpp
+        DrumMap_tests.cpp
+        HihatClassifier_tests.cpp
+        DrumMidiDecoder_tests.cpp
 )
 
 target_compile_definitions(
     DrumtrainerTests
     PRIVATE DRUMTRAINER_BASE_SCRIPTS_DIR="${DRUMTRAINER_DIR}/base-scripts"
+            DRUMTRAINER_DRUM_MAPS_DIR="${DRUMTRAINER_DIR}/drum-maps"
 )

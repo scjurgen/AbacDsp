@@ -28,7 +28,7 @@ struct PatchParameters
         swingRatio  , // dial
         script       // script
     };
-float bpm{100.0f};
+float bpm{120.0f};
 size_t dropBars{0};
 float metroVolume{-6.0f};
 float inputVolume{0.0f};

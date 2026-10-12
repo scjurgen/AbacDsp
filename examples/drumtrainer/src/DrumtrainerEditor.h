@@ -209,7 +209,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             }
             processorRef.pollAnalysisMetronome();
             processorRef.pollAnalysisAutoStop();
-            if (const auto status = processorRef.pollAnalysisStatus())
+            if (const auto status = processorRef.pollStatusText())
             {
                 m_statusBar.showMessage(*status, status->isNotEmpty());
             }
@@ -415,6 +415,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         juce::StringArray names{"Theme"};
         names.add("Patches");
         names.add("Scripts");
+        names.add("Drum Map");
 
         names.add("About");
         return names;
@@ -433,6 +434,10 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         if (menuName == "Scripts")
         {
             return buildScriptsMenu();
+        }
+        if (menuName == "Drum Map")
+        {
+            return buildDrumMapMenu();
         }
 
         if (menuName == "About")
@@ -525,6 +530,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         }
         handlePatchMenuSelection(menuItemID);
         handleScriptMenuSelection(menuItemID);
+        handleDrumMapMenuSelection(menuItemID);
     }
 
     void applyTheme(GuiConstants::Theme preset)
@@ -1103,6 +1109,38 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         if (m_scriptEditorContent != nullptr)
         {
             m_scriptEditorContent->setReadOnly(processorRef.isAuthoringModeEnabled());
+        }
+    }
+
+
+    juce::PopupMenu buildDrumMapMenu()
+    {
+        juce::PopupMenu menu;
+        menu.addItem(20000 + 1, "Load Drum Map...");
+        menu.addItem(20000 + 2, "Reload", processorRef.hasDrumMapFile());
+        menu.addItem(20000 + 3, "Use Built-in Default");
+        menu.addSeparator();
+        menu.addItem(20000 + 4, "Current: " + processorRef.drumMapName(), false);
+        return menu;
+    }
+
+    void handleDrumMapMenuSelection(const int menuItemID)
+    {
+        if (menuItemID == 20000 + 1)
+        {
+            juce::FileChooser chooser("Load Drum Map", processorRef.drumMapBrowseStart(), "*.json");
+            if (chooser.browseForFileToOpen())
+            {
+                processorRef.loadDrumMapFile(chooser.getResult());
+            }
+        }
+        else if (menuItemID == 20000 + 2)
+        {
+            processorRef.reloadDrumMap();
+        }
+        else if (menuItemID == 20000 + 3)
+        {
+            processorRef.useDefaultDrumMap();
         }
     }
 
