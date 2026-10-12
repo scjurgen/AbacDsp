@@ -1,6 +1,8 @@
-#include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <sstream>
 #include <string>
 
 #include "impl/DrumTrainerScriptEngine.h"
@@ -11,188 +13,196 @@ namespace
 {
 constexpr size_t kBarBeats{4};
 
-float dbToLinear(const float db)
+bool loads(DrumTrainerScriptEngine& engine, const std::string& script)
 {
-    return std::pow(10.f, db / 20.f);
+    return engine.loadPattern(script, kBarBeats);
 }
 }
 
 TEST(DrumTrainerScriptEngineTest, ScriptWithoutPatternCallsLeavesThePatternInactive)
 {
     DrumTrainerScriptEngine engine;
-    ASSERT_TRUE(engine.loadPattern("x = 1\n", kBarBeats));
+    ASSERT_TRUE(loads(engine, "x = 1\n"));
     EXPECT_FALSE(engine.result().pattern.active);
 }
 
-TEST(DrumTrainerScriptEngineTest, ClearPatternAloneYieldsActiveSilentPattern)
+TEST(DrumTrainerScriptEngineTest, ClearPatternAloneYieldsAnActiveEmptyPattern)
 {
     DrumTrainerScriptEngine engine;
-    ASSERT_TRUE(engine.loadPattern("ClearPattern()\n", kBarBeats));
+    ASSERT_TRUE(loads(engine, "ClearPattern()\n"));
     EXPECT_TRUE(engine.result().pattern.active);
     EXPECT_EQ(engine.result().pattern.hitCount, 0u);
+    EXPECT_EQ(engine.result().pattern.patternBars, 1u);
 }
 
-TEST(DrumTrainerScriptEngineTest, AddInstrumentRecordsPositionInstrumentAndLinearGain)
+TEST(DrumTrainerScriptEngineTest, AddHitRecordsPositionInstrumentAndVelocity)
 {
     DrumTrainerScriptEngine engine;
-    ASSERT_TRUE(engine.loadPattern("AddInstrument(1.5, Snare, -6)\n", kBarBeats));
+    ASSERT_TRUE(loads(engine, "AddHit(1.5, Snare)\nAddHit(2, TomFloor, 42)\n"));
     const auto& pattern = engine.result().pattern;
     ASSERT_TRUE(pattern.active);
-    ASSERT_EQ(pattern.hitCount, 1u);
+    ASSERT_EQ(pattern.hitCount, 2u);
     EXPECT_FLOAT_EQ(pattern.hits[0].positionBeats, 1.5f);
     EXPECT_EQ(pattern.hits[0].instrument, Instrument::Snare);
-    EXPECT_NEAR(pattern.hits[0].gain, dbToLinear(-6.f), 1e-6f);
+    EXPECT_EQ(pattern.hits[0].velocity, kDefaultVelocity);
+    EXPECT_EQ(pattern.hits[1].instrument, Instrument::TomFloor);
+    EXPECT_EQ(pattern.hits[1].velocity, 42);
 }
 
-TEST(DrumTrainerScriptEngineTest, HitsAreKeptSortedAndStackedHitsKeepCallOrder)
+TEST(DrumTrainerScriptEngineTest, EveryInstrumentConstantIsDefined)
 {
     DrumTrainerScriptEngine engine;
-    const std::string script = "AddInstrument(2, Snare, 0)\n"
-                               "AddInstrument(0, Kick, 0)\n"
-                               "AddInstrument(2, Hihat, 0)\n"
-                               "AddInstrument(1, Wood, 0)\n";
-    ASSERT_TRUE(engine.loadPattern(script, kBarBeats));
+    ASSERT_TRUE(loads(engine, "AddHit(0, Kick)\nAddHit(0, Snare)\nAddHit(0, HihatClosed)\nAddHit(1, HihatOpen)\n"
+                              "AddHit(0, Crash)\nAddHit(0, TomHigh)\nAddHit(0, TomLow)\nAddHit(0, TomFloor)\n"));
+    EXPECT_EQ(engine.result().pattern.hitCount, 8u);
+}
+
+TEST(DrumTrainerScriptEngineTest, HitsAreKeptSortedAndSamePositionHitsKeepCallOrder)
+{
+    DrumTrainerScriptEngine engine;
+    ASSERT_TRUE(loads(engine, "AddHit(3, Snare)\nAddHit(0, Kick)\nAddHit(0, HihatClosed)\nAddHit(1, Snare)\n"));
     const auto& pattern = engine.result().pattern;
     ASSERT_EQ(pattern.hitCount, 4u);
     EXPECT_EQ(pattern.hits[0].instrument, Instrument::Kick);
-    EXPECT_EQ(pattern.hits[1].instrument, Instrument::Wood);
-    EXPECT_EQ(pattern.hits[2].instrument, Instrument::Snare);
-    EXPECT_EQ(pattern.hits[3].instrument, Instrument::Hihat);
+    EXPECT_EQ(pattern.hits[1].instrument, Instrument::HihatClosed);
+    EXPECT_FLOAT_EQ(pattern.hits[2].positionBeats, 1.f);
+    EXPECT_FLOAT_EQ(pattern.hits[3].positionBeats, 3.f);
 }
 
-TEST(DrumTrainerScriptEngineTest, LevelIsClampedToTheSupportedRange)
+TEST(DrumTrainerScriptEngineTest, VelocityMustBeAWholeNumberFromOneTo127)
 {
+    for (const auto* velocity : {"0", "128", "64.5", "0/0"})
+    {
+        DrumTrainerScriptEngine engine;
+        EXPECT_FALSE(loads(engine, std::string{"AddHit(0, Kick, "} + velocity + ")\n")) << velocity;
+        EXPECT_THAT(engine.lastError(), ::testing::HasSubstr("velocity")) << velocity;
+    }
     DrumTrainerScriptEngine engine;
-    ASSERT_TRUE(engine.loadPattern("AddInstrument(0, Kick, -500)\nAddInstrument(1, Kick, 40)\n", kBarBeats));
-    const auto& pattern = engine.result().pattern;
-    EXPECT_NEAR(pattern.hits[0].gain, dbToLinear(kMinLevelDb), 1e-7f);
-    EXPECT_NEAR(pattern.hits[1].gain, dbToLinear(kMaxLevelDb), 1e-4f);
+    EXPECT_TRUE(loads(engine, "AddHit(0, Kick, 1)\nAddHit(1, Kick, 127)\n"));
 }
 
-TEST(DrumTrainerScriptEngineTest, ClearPatternDiscardsEarlierHits)
+TEST(DrumTrainerScriptEngineTest, AnInstrumentMayAppearOnlyOncePerPosition)
 {
     DrumTrainerScriptEngine engine;
-    ASSERT_TRUE(
-        engine.loadPattern("AddInstrument(0, Kick, 0)\nClearPattern()\nAddInstrument(1, Snare, 0)\n", kBarBeats));
-    ASSERT_EQ(engine.result().pattern.hitCount, 1u);
-    EXPECT_EQ(engine.result().pattern.hits[0].instrument, Instrument::Snare);
+    EXPECT_FALSE(loads(engine, "AddHit(1, Snare)\nAddHit(1, Snare, 50)\n"));
+    EXPECT_THAT(engine.lastError(), ::testing::HasSubstr("clashes with Snare"));
 }
 
-TEST(DrumTrainerScriptEngineTest, BarBeatsGlobalReflectsTheRequestedBarLength)
+TEST(DrumTrainerScriptEngineTest, ClosedAndOpenHihatCannotShareAPosition)
 {
     DrumTrainerScriptEngine engine;
-    const std::string script = "for beat = 0, BarBeats - 1 do AddInstrument(beat, Kick, 0) end\n";
-    ASSERT_TRUE(engine.loadPattern(script, 7));
-    EXPECT_EQ(engine.result().pattern.hitCount, 7u);
-    ASSERT_TRUE(engine.loadPattern(script, 3));
+    EXPECT_FALSE(loads(engine, "AddHit(1.5, HihatClosed)\nAddHit(1.5, HihatOpen)\n"));
+    EXPECT_THAT(engine.lastError(), ::testing::HasSubstr("HihatOpen at position 1.5 clashes with HihatClosed"));
+}
+
+TEST(DrumTrainerScriptEngineTest, DifferentLimbsMayShareAPosition)
+{
+    DrumTrainerScriptEngine engine;
+    ASSERT_TRUE(loads(engine, "AddHit(0, Kick)\nAddHit(0, Crash)\nAddHit(0, HihatOpen)\n"));
     EXPECT_EQ(engine.result().pattern.hitCount, 3u);
 }
 
-TEST(DrumTrainerScriptEngineTest, SetBeatsPerBarRecordsTheLengthAndActivatesASilentPattern)
+TEST(DrumTrainerScriptEngineTest, PositionOutsideThePatternRaisesAScriptError)
 {
-    DrumTrainerScriptEngine engine;
-    ASSERT_TRUE(engine.loadPattern("SetBeatsPerBar(7)\n", kBarBeats));
-    EXPECT_EQ(engine.result().pattern.beatsPerBar, 7u);
-    EXPECT_TRUE(engine.result().pattern.active);
-    EXPECT_EQ(engine.result().pattern.hitCount, 0u);
-}
-
-TEST(DrumTrainerScriptEngineTest, SetBeatsPerBarUpdatesTheBarBeatsGlobal)
-{
-    DrumTrainerScriptEngine engine;
-    const std::string script = "SetBeatsPerBar(5)\nfor beat = 0, BarBeats - 1 do AddInstrument(beat, Kick, 0) end\n";
-    ASSERT_TRUE(engine.loadPattern(script, kBarBeats));
-    EXPECT_EQ(engine.result().pattern.hitCount, 5u);
-}
-
-TEST(DrumTrainerScriptEngineTest, SetBeatsPerBarWidensTheAllowedPositions)
-{
-    DrumTrainerScriptEngine engine;
-    EXPECT_TRUE(engine.loadPattern("SetBeatsPerBar(7)\nAddInstrument(6.5, Kick, 0)\n", kBarBeats));
-    EXPECT_FALSE(engine.loadPattern("SetBeatsPerBar(2)\nAddInstrument(2, Kick, 0)\n", kBarBeats));
-}
-
-TEST(DrumTrainerScriptEngineTest, ClearPatternKeepsTheBarLengthSetBefore)
-{
-    DrumTrainerScriptEngine engine;
-    ASSERT_TRUE(engine.loadPattern("SetBeatsPerBar(6)\nClearPattern()\n", kBarBeats));
-    EXPECT_EQ(engine.result().pattern.beatsPerBar, 6u);
-}
-
-TEST(DrumTrainerScriptEngineTest, ScriptWithoutSetBeatsPerBarLeavesTheBarLengthToThePreset)
-{
-    DrumTrainerScriptEngine engine;
-    ASSERT_TRUE(engine.loadPattern("AddInstrument(0, Kick, 0)\n", kBarBeats));
-    EXPECT_EQ(engine.result().pattern.beatsPerBar, 0u);
-}
-
-TEST(DrumTrainerScriptEngineTest, SetBeatsPerBarRejectsLengthsOutsideOneToSixteen)
-{
-    DrumTrainerScriptEngine engine;
-    EXPECT_FALSE(engine.loadPattern("SetBeatsPerBar(0)\n", kBarBeats));
-    EXPECT_THAT(engine.lastError(), ::testing::HasSubstr("whole number from 1 to 16"));
-    EXPECT_FALSE(engine.loadPattern("SetBeatsPerBar(17)\n", kBarBeats));
-    EXPECT_TRUE(engine.loadPattern("SetBeatsPerBar(16)\n", kBarBeats));
-    EXPECT_TRUE(engine.loadPattern("SetBeatsPerBar(1)\n", kBarBeats));
-}
-
-TEST(DrumTrainerScriptEngineTest, SetBeatsPerBarRejectsFractionalLengths)
-{
-    DrumTrainerScriptEngine engine;
-    EXPECT_FALSE(engine.loadPattern("SetBeatsPerBar(3.5)\n", kBarBeats));
-    EXPECT_FALSE(engine.loadPattern("SetBeatsPerBar(0/0)\n", kBarBeats));
-}
-
-TEST(DrumTrainerScriptEngineTest, SetBeatsPerBarRejectsAShorterBarThanThePositionsAlreadyAdded)
-{
-    DrumTrainerScriptEngine engine;
-    EXPECT_FALSE(engine.loadPattern("SetBeatsPerBar(8)\nAddInstrument(6, Kick, 0)\nSetBeatsPerBar(4)\n", kBarBeats));
-    EXPECT_THAT(engine.lastError(), ::testing::HasSubstr("already added"));
-}
-
-TEST(DrumTrainerScriptEngineTest, SetBeatsPerBarCalledFromATimerIsRejected)
-{
-    DrumTrainerScriptEngine engine;
-    ASSERT_TRUE(engine.loadPattern("Timer.After(1, function() SetBeatsPerBar(5) end)\n", kBarBeats));
-    engine.tickBlock(100000);
-    EXPECT_EQ(engine.result().pattern.beatsPerBar, 0u);
-}
-
-TEST(DrumTrainerScriptEngineTest, PositionOutsideTheBarRaisesAScriptError)
-{
-    DrumTrainerScriptEngine engine;
-    EXPECT_FALSE(engine.loadPattern("AddInstrument(4, Kick, 0)\n", kBarBeats));
-    EXPECT_TRUE(engine.hasError());
-    EXPECT_THAT(engine.lastError(), ::testing::HasSubstr("outside the bar"));
-    EXPECT_FALSE(engine.result().pattern.active);
+    for (const auto* position : {"4", "-0.5", "1/0"})
+    {
+        DrumTrainerScriptEngine engine;
+        EXPECT_FALSE(loads(engine, std::string{"AddHit("} + position + ", Kick)\n")) << position;
+        EXPECT_THAT(engine.lastError(), ::testing::HasSubstr("outside the pattern")) << position;
+    }
 }
 
 TEST(DrumTrainerScriptEngineTest, UnknownInstrumentRaisesAScriptError)
 {
     DrumTrainerScriptEngine engine;
-    EXPECT_FALSE(engine.loadPattern("AddInstrument(0, 999, 0)\n", kBarBeats));
+    EXPECT_FALSE(loads(engine, "AddHit(0, 8)\n"));
     EXPECT_THAT(engine.lastError(), ::testing::HasSubstr("unknown instrument"));
 }
 
 TEST(DrumTrainerScriptEngineTest, UndefinedInstrumentNameRaisesAScriptError)
 {
     DrumTrainerScriptEngine engine;
-    EXPECT_FALSE(engine.loadPattern("AddInstrument(0, Cowbell, 0)\n", kBarBeats));
+    EXPECT_FALSE(loads(engine, "AddHit(0, Hihat)\n"));
     EXPECT_TRUE(engine.hasError());
+}
+
+TEST(DrumTrainerScriptEngineTest, LengthGlobalsStartAtThePresetBarAndOneBar)
+{
+    DrumTrainerScriptEngine engine;
+    ASSERT_TRUE(engine.loadPattern("if BarBeats ~= 7 or PatternBars ~= 1 then error('wrong length') end\n", 7));
+}
+
+TEST(DrumTrainerScriptEngineTest, SetPatternBarsWidensThePatternAndUpdatesTheGlobal)
+{
+    DrumTrainerScriptEngine engine;
+    ASSERT_TRUE(loads(engine, "SetPatternBars(2)\nif PatternBars ~= 2 then error('no') end\nAddHit(7.5, Crash)\n"));
+    const auto& pattern = engine.result().pattern;
+    EXPECT_TRUE(pattern.active);
+    EXPECT_EQ(pattern.patternBars, 2u);
+    EXPECT_EQ(pattern.beatsPerBar, 0u);
+    EXPECT_EQ(pattern.hitCount, 1u);
+}
+
+TEST(DrumTrainerScriptEngineTest, SetPatternBarsRejectsCountsOutsideOneToEight)
+{
+    for (const auto* bars : {"0", "9", "1.5"})
+    {
+        DrumTrainerScriptEngine engine;
+        EXPECT_FALSE(loads(engine, std::string{"SetPatternBars("} + bars + ")\n")) << bars;
+        EXPECT_THAT(engine.lastError(), ::testing::HasSubstr("1 to 8")) << bars;
+    }
+}
+
+TEST(DrumTrainerScriptEngineTest, ShorteningThePatternBelowAddedHitsIsAnError)
+{
+    DrumTrainerScriptEngine engine;
+    EXPECT_FALSE(loads(engine, "SetPatternBars(2)\nAddHit(5, Kick)\nSetPatternBars(1)\n"));
+    EXPECT_THAT(engine.lastError(), ::testing::HasSubstr("outside the new pattern length"));
+    EXPECT_FALSE(loads(engine, "SetPatternBars(2)\nAddHit(7, Kick)\nSetBeatsPerBar(3)\n"));
+    EXPECT_THAT(engine.lastError(), ::testing::HasSubstr("outside the new pattern length"));
+    EXPECT_TRUE(loads(engine, "SetPatternBars(2)\nAddHit(5, Kick)\nSetBeatsPerBar(3)\n"));
+}
+
+TEST(DrumTrainerScriptEngineTest, SetBeatsPerBarRecordsTheLengthAndUpdatesTheGlobal)
+{
+    DrumTrainerScriptEngine engine;
+    ASSERT_TRUE(loads(engine, "SetBeatsPerBar(7)\nif BarBeats ~= 7 then error('no') end\nAddHit(6.5, Snare)\n"));
+    EXPECT_TRUE(engine.result().pattern.active);
+    EXPECT_EQ(engine.result().pattern.beatsPerBar, 7u);
+}
+
+TEST(DrumTrainerScriptEngineTest, SetBeatsPerBarRejectsLengthsOutsideOneToSixteen)
+{
+    for (const auto* beats : {"0", "17", "3.5", "0/0"})
+    {
+        DrumTrainerScriptEngine engine;
+        EXPECT_FALSE(loads(engine, std::string{"SetBeatsPerBar("} + beats + ")\n")) << beats;
+    }
+}
+
+TEST(DrumTrainerScriptEngineTest, ClearPatternKeepsTheLengthsSetBefore)
+{
+    DrumTrainerScriptEngine engine;
+    ASSERT_TRUE(loads(engine, "SetBeatsPerBar(5)\nSetPatternBars(2)\nAddHit(0, Kick)\nClearPattern()\n"));
+    const auto& pattern = engine.result().pattern;
+    EXPECT_EQ(pattern.hitCount, 0u);
+    EXPECT_EQ(pattern.beatsPerBar, 5u);
+    EXPECT_EQ(pattern.patternBars, 2u);
 }
 
 TEST(DrumTrainerScriptEngineTest, PatternCapacityIsEnforced)
 {
     DrumTrainerScriptEngine engine;
-    const std::string script = "for i = 1, " + std::to_string(kMaxHits + 1) + " do AddInstrument(0, Kick, 0) end\n";
-    EXPECT_FALSE(engine.loadPattern(script, kBarBeats));
+    const std::string count = std::to_string(kMaxHits);
+    const std::string script = "for i = 0, " + count + " do AddHit(i * 4 / (" + count + " + 1), Kick) end\n";
+    EXPECT_FALSE(loads(engine, script));
     EXPECT_THAT(engine.lastError(), ::testing::HasSubstr("at most"));
 }
 
 TEST(DrumTrainerScriptEngineTest, SyntaxErrorFailsTheLoadAndEmptiesTheResult)
 {
     DrumTrainerScriptEngine engine;
-    EXPECT_FALSE(engine.loadPattern("AddInstrument(0, Kick, 0)\nthis is not lua\n", kBarBeats));
+    EXPECT_FALSE(loads(engine, "AddHit(0, Kick)\nthis is not lua\n"));
     EXPECT_TRUE(engine.hasError());
     EXPECT_FALSE(engine.result().pattern.active);
     EXPECT_EQ(engine.result().pattern.hitCount, 0u);
@@ -201,15 +211,15 @@ TEST(DrumTrainerScriptEngineTest, SyntaxErrorFailsTheLoadAndEmptiesTheResult)
 TEST(DrumTrainerScriptEngineTest, ASuccessfulLoadClearsThePreviousError)
 {
     DrumTrainerScriptEngine engine;
-    ASSERT_FALSE(engine.loadPattern("AddInstrument(9, Kick, 0)\n", kBarBeats));
-    ASSERT_TRUE(engine.loadPattern("AddInstrument(1, Kick, 0)\n", kBarBeats));
+    ASSERT_FALSE(loads(engine, "AddHit(9, Kick)\n"));
+    ASSERT_TRUE(loads(engine, "AddHit(1, Kick)\n"));
     EXPECT_FALSE(engine.hasError());
 }
 
 TEST(DrumTrainerScriptEngineTest, PatternFunctionsCalledFromATimerAreRejected)
 {
     DrumTrainerScriptEngine engine;
-    ASSERT_TRUE(engine.loadPattern("Timer.After(1, function() AddInstrument(0, Kick, 0) end)\n", kBarBeats));
+    ASSERT_TRUE(loads(engine, "Timer.After(1, function() AddHit(0, Kick) SetPatternBars(2) end)\n"));
     engine.tickBlock(100000);
     EXPECT_FALSE(engine.result().pattern.active);
     EXPECT_EQ(engine.result().pattern.hitCount, 0u);
@@ -218,10 +228,55 @@ TEST(DrumTrainerScriptEngineTest, PatternFunctionsCalledFromATimerAreRejected)
 TEST(DrumTrainerScriptEngineTest, StubAndSkeletonScriptsLoadWithoutDefiningAPattern)
 {
     DrumTrainerScriptEngine engine;
-    ASSERT_TRUE(engine.loadPattern(std::string{DrumTrainerScriptEngine::kStubScript}, kBarBeats));
+    ASSERT_TRUE(loads(engine, std::string{DrumTrainerScriptEngine::kStubScript}));
     EXPECT_FALSE(engine.result().pattern.active);
-    ASSERT_TRUE(engine.loadPattern(std::string{DrumTrainerScriptEngine::kSkeletonScript}, kBarBeats));
+    ASSERT_TRUE(loads(engine, std::string{DrumTrainerScriptEngine::kSkeletonScript}));
     EXPECT_FALSE(engine.result().pattern.active);
+}
+
+TEST(DrumTrainerScriptEngineTest, SkeletonExampleRunsWhenUncommented)
+{
+    std::string example;
+    std::istringstream lines{std::string{DrumTrainerScriptEngine::kSkeletonScript}};
+    bool inExample = false;
+    for (std::string line; std::getline(lines, line);)
+    {
+        inExample = inExample || line.starts_with("-- SetName('");
+        if (inExample && line.size() > 3)
+        {
+            example += line.substr(3) + "\n";
+        }
+    }
+    DrumTrainerScriptEngine engine;
+    ASSERT_TRUE(loads(engine, example)) << engine.lastError() << "\n" << example;
+    EXPECT_EQ(engine.result().name, "Rock beat");
+    EXPECT_EQ(engine.result().pattern.hitCount, 12u);
+}
+
+TEST(DrumTrainerBaseScriptsTest, EveryShippedScriptLoadsForCommonBarLengths)
+{
+    size_t scriptCount = 0;
+    for (const auto& entry : std::filesystem::directory_iterator{DRUMTRAINER_BASE_SCRIPTS_DIR})
+    {
+        if (entry.path().extension() != ".lua")
+        {
+            continue;
+        }
+        std::ifstream file{entry.path()};
+        std::stringstream source;
+        source << file.rdbuf();
+        for (const size_t barBeats : {3u, 4u, 7u})
+        {
+            DrumTrainerScriptEngine engine;
+            EXPECT_TRUE(engine.loadPattern(source.str(), barBeats))
+                << entry.path().filename() << " with " << barBeats << " beats: " << engine.lastError();
+            EXPECT_TRUE(engine.result().pattern.active) << entry.path().filename();
+            EXPECT_GT(engine.result().pattern.hitCount, 0u) << entry.path().filename();
+            EXPECT_FALSE(engine.result().name.empty()) << entry.path().filename();
+        }
+        ++scriptCount;
+    }
+    EXPECT_GE(scriptCount, 5u);
 }
 
 TEST(DrumTrainerScriptEngineTest, SetNameStoresTheNameAndLeavesThePatternInactive)

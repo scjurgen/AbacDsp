@@ -1,11 +1,9 @@
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cmath>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <string>
-#include <thread>
 
 #include "impl/DrumTrainerImpl.h"
 
@@ -37,18 +35,6 @@ float runSeconds(Impl& impl, const float seconds)
     return peak;
 }
 
-// The drum kit loads on a background thread; keep playing bars until a hit is audible.
-float runUntilAudible(Impl& impl, const float barSeconds)
-{
-    float peak = 0.f;
-    for (int attempt = 0; attempt < 100 && peak < 0.001f; ++attempt)
-    {
-        peak = runSeconds(impl, barSeconds);
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    }
-    return peak;
-}
-
 }
 
 TEST(DrumTrainerImplTest, BuiltInClickSoundsWhenRunningWithoutAScript)
@@ -66,46 +52,24 @@ TEST(DrumTrainerImplTest, EmptyScriptKeepsTheBuiltInClick)
     EXPECT_GT(runSeconds(impl, 1.f), 0.001f);
 }
 
-TEST(DrumTrainerImplTest, ClearPatternSilencesTheBuiltInClick)
+TEST(DrumTrainerImplTest, ScriptPatternIsNotPlayedAndKeepsTheClick)
 {
-    Impl impl(kSampleRate);
-    ASSERT_TRUE(impl.setScript("ClearPattern()\n"));
-    static_cast<void>(runSeconds(impl, 0.01f));
-    impl.setOnOff(true);
-    EXPECT_EQ(runSeconds(impl, 2.f), 0.f);
-}
-
-TEST(DrumTrainerImplTest, ScriptedKickIsAudible)
-{
-    Impl impl(kSampleRate);
-    ASSERT_TRUE(impl.setScript("AddInstrument(0, Kick, 0)\nAddInstrument(2, Kick, 0)\n"));
-    static_cast<void>(runSeconds(impl, 0.01f));
-    impl.setOnOff(true);
-    EXPECT_GT(runUntilAudible(impl, 2.f), 0.001f);
-}
-
-TEST(DrumTrainerImplTest, ScriptedLevelScalesTheOutput)
-{
-    Impl loud(kSampleRate);
-    Impl quiet(kSampleRate);
-    ASSERT_TRUE(loud.setScript("AddInstrument(0, Kick, 0)\n"));
-    ASSERT_TRUE(quiet.setScript("AddInstrument(0, Kick, -20)\n"));
-    static_cast<void>(runSeconds(loud, 0.01f));
-    static_cast<void>(runSeconds(quiet, 0.01f));
-    loud.setOnOff(true);
-    quiet.setOnOff(true);
-    const float loudPeak = runUntilAudible(loud, 2.f);
-    const float quietPeak = runUntilAudible(quiet, 2.f);
-    ASSERT_GT(quietPeak, 0.f);
-    EXPECT_NEAR(loudPeak / quietPeak, 10.f, 1.f);
+    Impl withPattern(kSampleRate);
+    Impl withoutPattern(kSampleRate);
+    ASSERT_TRUE(withPattern.setScript("ClearPattern()\nAddHit(0.25, Crash, 127)\n"));
+    static_cast<void>(runSeconds(withPattern, 0.01f));
+    static_cast<void>(runSeconds(withoutPattern, 0.01f));
+    withPattern.setOnOff(true);
+    withoutPattern.setOnOff(true);
+    EXPECT_FLOAT_EQ(runSeconds(withPattern, 2.f), runSeconds(withoutPattern, 2.f));
 }
 
 TEST(DrumTrainerImplTest, FailedScriptReportsAnErrorAndReturnsFalse)
 {
     Impl impl(kSampleRate);
-    EXPECT_FALSE(impl.setScript("AddInstrument(99, Kick, 0)\n"));
+    EXPECT_FALSE(impl.setScript("AddHit(99, Kick)\n"));
     EXPECT_TRUE(impl.hasScriptError());
-    EXPECT_THAT(impl.scriptError(), ::testing::HasSubstr("outside the bar"));
+    EXPECT_THAT(impl.scriptError(), ::testing::HasSubstr("outside the pattern"));
 }
 
 TEST(DrumTrainerImplTest, FailedScriptDoesNotSilenceTheBuiltInClick)
@@ -121,7 +85,7 @@ TEST(DrumTrainerImplTest, PresetChangeReloadsTheScriptForTheNewBarLength)
 {
     Impl impl(kSampleRate);
     impl.setPreset(kPresetFourFourEighth);
-    ASSERT_TRUE(impl.setScript("AddInstrument(3.5, Kick, 0)\n"));
+    ASSERT_TRUE(impl.setScript("AddHit(3.5, Kick)\n"));
     impl.setPreset(kPresetThreeFour);
     impl.reloadScriptIfPending();
     EXPECT_TRUE(impl.hasScriptError());
@@ -130,7 +94,7 @@ TEST(DrumTrainerImplTest, PresetChangeReloadsTheScriptForTheNewBarLength)
 TEST(DrumTrainerImplTest, ReloadDoesNothingWithoutAPresetChange)
 {
     Impl impl(kSampleRate);
-    ASSERT_TRUE(impl.setScript("AddInstrument(1, Kick, 0)\n"));
+    ASSERT_TRUE(impl.setScript("AddHit(1, Kick)\n"));
     impl.reloadScriptIfPending();
     EXPECT_FALSE(impl.hasScriptError());
 }
@@ -138,7 +102,7 @@ TEST(DrumTrainerImplTest, ReloadDoesNothingWithoutAPresetChange)
 TEST(DrumTrainerImplTest, ReloadSucceedsWhenTheScriptFitsTheNewBar)
 {
     Impl impl(kSampleRate);
-    ASSERT_TRUE(impl.setScript("AddInstrument(BarBeats - 1, Kick, 0)\n"));
+    ASSERT_TRUE(impl.setScript("AddHit(BarBeats - 1, Kick)\n"));
     impl.setPreset(kPresetThreeFour);
     impl.reloadScriptIfPending();
     EXPECT_FALSE(impl.hasScriptError());
@@ -162,13 +126,15 @@ TEST(DrumTrainerImplTest, ScriptBarLengthIsAdoptedByTheSequencer)
     EXPECT_NEAR(impl.getBarPhase(), 0.75f, 0.05f);
 }
 
-TEST(DrumTrainerImplTest, SetBeatsPerBarSilencesTheBuiltInClick)
+TEST(DrumTrainerImplTest, ScriptBarLengthClicksOnBeatsBeyondThePresetBar)
 {
     Impl impl(kSampleRate);
+    impl.setPreset(kPresetThreeFour);
     ASSERT_TRUE(impl.setScript("SetBeatsPerBar(7)\n"));
     static_cast<void>(runSeconds(impl, 0.01f));
     impl.setOnOff(true);
-    EXPECT_EQ(runSeconds(impl, 2.f), 0.f);
+    static_cast<void>(runSeconds(impl, 2.4f));
+    EXPECT_GT(runSeconds(impl, 0.2f), 0.001f);
 }
 
 TEST(DrumTrainerImplTest, PresetChangeDoesNotOverrideAScriptBarLength)
@@ -389,4 +355,37 @@ TEST(DrumTrainerImplTest, UseDefaultDrumMapRestoresTheBuiltInMap)
     EXPECT_EQ(impl.drumMapName(), "Built-in default");
     sendMidi(impl, {0x99, 74, 100});
     EXPECT_THAT(impl.midiMonitorText(), ::testing::HasSubstr("= Kick"));
+}
+
+TEST(DrumTrainerImplTest, PatternBarsComeFromTheAdoptedScript)
+{
+    Impl impl(kSampleRate);
+    EXPECT_EQ(impl.patternBars(), 1u);
+    ASSERT_TRUE(impl.setScript("SetPatternBars(3)\nAddHit(8, Snare)\n"));
+    static_cast<void>(runSeconds(impl, 0.01f));
+    EXPECT_EQ(impl.patternBars(), 3u);
+    EXPECT_EQ(impl.patternBarIndex(), 0u);
+}
+
+TEST(DrumTrainerImplTest, PatternBarIndexAdvancesEveryBarAndWraps)
+{
+    Impl impl(kSampleRate);
+    ASSERT_TRUE(impl.setScript("SetPatternBars(2)\nAddHit(0, Kick)\n"));
+    static_cast<void>(runSeconds(impl, 0.01f));
+    impl.setOnOff(true);
+    static_cast<void>(runSeconds(impl, 2.1f));
+    EXPECT_EQ(impl.patternBarIndex(), 1u);
+    static_cast<void>(runSeconds(impl, 2.f));
+    EXPECT_EQ(impl.patternBarIndex(), 0u);
+}
+
+TEST(DrumTrainerImplTest, CaptureStartsOnTheFirstPatternBar)
+{
+    Impl impl(kSampleRate);
+    ASSERT_TRUE(impl.setScript("SetPatternBars(3)\nAddHit(0, Kick)\n"));
+    static_cast<void>(runSeconds(impl, 0.01f));
+    impl.setAnalysisMode(true);
+    static_cast<void>(runSeconds(impl, 4.5f));
+    ASSERT_EQ(impl.analysisStatusText(), "Analysis: bar 1");
+    EXPECT_EQ(impl.patternBarIndex(), 0u);
 }

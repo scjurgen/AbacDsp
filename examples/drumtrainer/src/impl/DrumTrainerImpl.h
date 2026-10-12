@@ -322,11 +322,6 @@ class DrumTrainerImpl final : public EffectBase
             adoptPendingPattern();
         }
 
-        const size_t samplesPerBeat = m_seq.samplesPerBeat();
-
-        const auto triggerScriptedHit = [this](const DrumPattern::Hit& hit) noexcept
-        { triggerDrumVoice(DrumPattern::sampleCode(hit.instrument), hit.gain * m_metroVolumeGain); };
-
         for (size_t i = 0; i < BlockSize; ++i)
         {
             const auto event = m_seq.advance();
@@ -334,16 +329,11 @@ class DrumTrainerImpl final : public EffectBase
             const bool countingIn = isAnalysisCountingIn();
             const bool isMuted = !countingIn && mode.playBars > 0 && m_barCount >= mode.playBars;
 
-            const bool scripted = m_patternScheduler.active();
-            if (scripted && !isMuted)
+            if (event.beatStart && !isMuted)
             {
-                m_patternScheduler.step(event.beatIndexInBar, event.beatSamplePos, samplesPerBeat, triggerScriptedHit);
+                triggerBeatAccent(beatAccent(event.beatIndexInBar));
             }
-            if (!scripted && event.beatStart && !isMuted)
-            {
-                triggerBeatAccent(kPresets[static_cast<size_t>(m_presetIndex)].pattern[event.beatIndexInBar]);
-            }
-            if (!scripted && event.subdivision && !isMuted)
+            if (event.subdivision && !isMuted)
             {
                 triggerSubdivision();
             }
@@ -361,7 +351,7 @@ class DrumTrainerImpl final : public EffectBase
             }
 
             const bool audible = (effectiveRunning() || countingIn) && !isMuted;
-            const bool useClick = isVoicingClick() && !scripted;
+            const bool useClick = isVoicingClick();
             const float leftOutput = audible ? (useClick ? click : drumLeft) : 0.f;
             const float rightOutput = audible ? (useClick ? click : drumRight) : 0.f;
 
@@ -372,6 +362,7 @@ class DrumTrainerImpl final : public EffectBase
             {
                 advanceDropBar(mode);
                 m_beatOccurrenceInBar = 0;
+                advancePatternBar();
                 adoptPendingPattern();
                 advanceAnalysisBar();
             }
@@ -382,6 +373,18 @@ class DrumTrainerImpl final : public EffectBase
     [[nodiscard]] int getBarBeats() const noexcept
     {
         return static_cast<int>(effectiveBeatsPerBar());
+    }
+
+    [[nodiscard]] size_t patternBars() const noexcept
+    {
+        return m_patternBars.load(std::memory_order_relaxed);
+    }
+
+    // The bar of the target pattern being played, 0-based; restarts with a new pattern and
+    // when an analysis take starts capturing.
+    [[nodiscard]] size_t patternBarIndex() const noexcept
+    {
+        return m_patternBar.load(std::memory_order_relaxed);
     }
 
     [[nodiscard]] bool scriptSetsBeatsPerBar() const noexcept
@@ -641,6 +644,22 @@ class DrumTrainerImpl final : public EffectBase
         return scripted != 0 ? scripted : kPresets[presetSlot()].barBeats;
     }
 
+    // A script bar length can exceed the Preset's accent table, so it gets plain accents.
+    [[nodiscard]] ClickAccent beatAccent(const size_t beatIndexInBar) const noexcept
+    {
+        if (m_pattern != nullptr && m_pattern->beatsPerBar != 0)
+        {
+            return beatIndexInBar == 0 ? ClickAccent::Downbeat : ClickAccent::Beat;
+        }
+        return kPresets[presetSlot()].pattern[beatIndexInBar];
+    }
+
+    void advancePatternBar() noexcept
+    {
+        const size_t next = m_patternBar.load(std::memory_order_relaxed) + 1;
+        m_patternBar.store(next < patternBars() ? next : 0, std::memory_order_relaxed);
+    }
+
     void adoptPendingPattern() noexcept
     {
         const auto* pending = m_patternMailbox.acquireNewest();
@@ -648,7 +667,9 @@ class DrumTrainerImpl final : public EffectBase
         {
             return;
         }
-        m_patternScheduler.setPattern(pending);
+        m_pattern = pending;
+        m_patternBars.store(pending->active ? pending->patternBars : 1, std::memory_order_relaxed);
+        m_patternBar.store(0, std::memory_order_relaxed);
         const size_t beatsPerBar = pending->beatsPerBar != 0 ? pending->beatsPerBar : kPresets[presetSlot()].barBeats;
         if (beatsPerBar != m_seq.beatsPerBar())
         {
@@ -751,6 +772,7 @@ class DrumTrainerImpl final : public EffectBase
     void beginCapture() noexcept
     {
         m_barCount = 0;
+        m_patternBar.store(0, std::memory_order_relaxed);
         m_analysisBar = 0;
         setAnalysisPhase(AnalysisPhase::Capturing);
     }
@@ -933,5 +955,7 @@ class DrumTrainerImpl final : public EffectBase
     std::atomic<bool> m_scriptReloadPending{false};
     std::atomic<size_t> m_scriptBeatsPerBar{0};
     DrumPattern::TripleBuffer<DrumPattern::HitPattern> m_patternMailbox;
-    DrumPattern::PatternScheduler m_patternScheduler;
+    const DrumPattern::HitPattern* m_pattern{nullptr};
+    std::atomic<size_t> m_patternBars{1};
+    std::atomic<size_t> m_patternBar{0};
 };
