@@ -19,6 +19,8 @@ python3 generate-juce-standalone.py <name>
 | `description` | yes | Array of strings joined with `\n` for the about text |
 | `patches` | no | `true` enables the named-patch browser (save/load/rename dialogs, `Settings > Patches` menu) |
 | `host_transport` | no | `true` enables host-transport sync support (`HOSTTRANSPORT` template section) |
+| `midi-input` | no | `true` accepts MIDI input and hands each event to the impl with its position: `processMidiEvent(std::span<const uint8_t> bytes, int sampleOffset)`, offset in internal-rate samples from the start of the host block (replaces the untimed `processMidi`) |
+| `midi-output` | no | `true` declares MIDI output; incoming events are not passed through, the impl supplies the output via `drainMidiOutput(emit)`, calling `emit(std::span<const uint8_t> bytes, int sampleOffset)` per event after each host block |
 | `protected_files` | no | Array of relative paths the generator must not overwrite (e.g. already-customised files) |
 | `extra_ui_includes` | no | Array of `#include` paths injected into the Editor header |
 | `extra_timer_callbacks` | no | Array of C++ statement strings appended to the 60 Hz UI timer callback |

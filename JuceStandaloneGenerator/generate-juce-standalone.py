@@ -374,6 +374,13 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
         blueprint["CPP"]["GAUGES"].append("GROOVEBROWSER")
     if blueprint.get("host_transport", False):
         blueprint["CPP"]["GAUGES"].append("HOSTTRANSPORT")
+    midi_input = blueprint.get("midi-input", False)
+    midi_output = blueprint.get("midi-output", False)
+    blueprint["CPP"]["GAUGES"].append("MIDITIMED" if midi_input else "MIDIUNTIMED")
+    if midi_output:
+        blueprint["CPP"]["GAUGES"].append("MIDIOUTPUT")
+    if midi_input or midi_output:
+        blueprint["CPP"]["GAUGES"].append("MIDIEVENTS")
     if has_performance_page:
         blueprint["CPP"]["GAUGES"].append("PERFORMANCEPAGE")
 
@@ -399,8 +406,9 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
 
     blueprint["CPP"]["PluginCode"] = blueprint["plugintype"][0] + digest[1:4].upper()
     blueprint["CPP"]['IsSynth'] = "TRUE" if blueprint["plugintype"] == "InstrumentPlugin" else "FALSE"
-    blueprint["CPP"]['NeedsMidiInput'] = "TRUE" if int(blueprint["CPP"]["NUM_CC_TARGETS"]) > 0 else "FALSE"
-    blueprint["CPP"]['NeedsMidiOutput'] = "FALSE"
+    needs_midi_input = int(blueprint["CPP"]["NUM_CC_TARGETS"]) > 0 or blueprint.get("midi-input", False)
+    blueprint["CPP"]['NeedsMidiInput'] = "TRUE" if needs_midi_input else "FALSE"
+    blueprint["CPP"]['NeedsMidiOutput'] = "TRUE" if blueprint.get("midi-output", False) else "FALSE"
     blueprint["CPP"]['IsMidiEffect'] = "FALSE"
     blueprint["CPP"]['EditorWantsKeyboardFocus'] = "FALSE"
     blueprint["CPP"]['VersionString'] = blueprint['VersionString']

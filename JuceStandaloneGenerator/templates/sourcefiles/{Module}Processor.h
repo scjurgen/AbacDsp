@@ -6,6 +6,9 @@
  */
 
 #include <juce_audio_processors/juce_audio_processors.h>
+/*START_MIDIEVENTS*/
+#include <span>
+/*END_MIDIEVENTS*/
 /*START_SCRIPTBROWSER*/
 #include <juce_audio_devices/juce_audio_devices.h>
 /*END_SCRIPTBROWSER*/
@@ -449,7 +452,13 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             for (const auto& msg : midiMessages)
             {
+                /*START_MIDIUNTIMED*/
                 pluginRunner->processMidi(msg.data);
+                /*END_MIDIUNTIMED*/
+                /*START_MIDITIMED*/
+                pluginRunner->processMidiEvent(std::span{msg.data, static_cast<size_t>(msg.numBytes)},
+                                               toInternalSampleOffset(msg.samplePosition));
+                /*END_MIDITIMED*/
                 /*START_MIDICC*/
                 if ((msg.data[0] & 0xF0) == 0xB0)
                 {
@@ -500,6 +509,15 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             fixedRunner->processBlock(buffer);
         }
+        /*START_MIDIOUTPUT*/
+        midiMessages.clear();
+        pluginRunner->drainMidiOutput(
+            [this, &midiMessages, &buffer](const std::span<const uint8_t> bytes, const int sampleOffset)
+            {
+                midiMessages.addEvent(bytes.data(), static_cast<int>(bytes.size()),
+                                      toHostSampleOffset(sampleOffset, buffer.getNumSamples()));
+            });
+        /*END_MIDIOUTPUT*/
         /*START_SCRIPTBROWSER*/
         // Feeds POST /record's WAV capture when a recording is in progress; pushBlock()
         // itself is a no-op otherwise, and this whole call costs nothing when Authoring
@@ -624,6 +642,23 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
     {
         return std::abs(a - b) > 1E-8f;
     }
+    /*START_MIDITIMED*/
+    // The runner works at the internal rate; the resampler's constant FIFO delay is not included
+    // here and is left to the runner's latency compensation.
+    [[nodiscard]] int toInternalSampleOffset(const int hostOffset) const noexcept
+    {
+        return static_cast<int>(
+            std::lround(static_cast<double>(hostOffset) * RateNormalizer::kInternalSampleRate / getSampleRate()));
+    }
+    /*END_MIDITIMED*/
+    /*START_MIDIOUTPUT*/
+    [[nodiscard]] int toHostSampleOffset(const int internalOffset, const int numHostSamples) const noexcept
+    {
+        const auto hostOffset = static_cast<int>(
+            std::lround(static_cast<double>(internalOffset) * getSampleRate() / RateNormalizer::kInternalSampleRate));
+        return std::clamp(hostOffset, 0, std::max(0, numHostSamples - 1));
+    }
+    /*END_MIDIOUTPUT*/
 
     int m_program{0};
 
