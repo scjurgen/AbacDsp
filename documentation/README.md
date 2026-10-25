@@ -35,6 +35,7 @@ all. See `TODO.md` for folders and algorithms still missing plots.
 | `KarplusStrong/` | documentation | `KarplusStrongString`/`KarplusStrongVoice`: spectral brightness loss, decay-time accuracy, pitch bend behavior |
 | `Metronome/` | generation | Click samples and MIDI pattern library for tapelooper's built-in groove, not a library-algorithm write-up |
 | `Modulation/` | documentation | `Wow`/`Flutter` LFO character (timeline, spectrum, Poincare orbit plot), `Tremolo` drive morph, `RingModulator` sidebands |
+| `NoteSegmenter/` | documentation | `Analysis/NoteSegmenter`: onset, pitch and level of plucked notes against what was played, accuracy against noise, and the limit for a repeated note that rings on; `Analysis/NoteVerifier`: a real guitar recording checked against its score, with the onset, pitch and unexpected-sound results and how to add a recording |
 | `Numbers/` | generation | Sollya setup for the minimax sin/cos polynomials in `src/includes/Numbers/Approximation.h` |
 | `OrnsteinUhlenbeck/` | documentation | `OrnsteinUhlenbeckProcess`: mean-reverting noise timelines across `sigma` speeds |
 | `OverSampling/` | documentation | `UpDownSampler` wrapping `WobbleDelay`: swept-tone spectrograms at oversampling and undersampling ratios, delay time and latency vs. ratio, abrupt vs. slow ratio changes |

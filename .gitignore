@@ -23,6 +23,9 @@ samples/*
 MidiDrums/*
 !MidiDrums/README.md
 
+# Local instrument recordings for the NoteSegmenter documentation
+guitar-samples
+
 # Misc
 tmp
 *venv

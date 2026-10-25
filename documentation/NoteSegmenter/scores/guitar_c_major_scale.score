@@ -1,0 +1,19 @@
+# Guitar, C major scale, ascending, quarter notes at 120 BPM.
+# C3 to C4 from bar 1, C4 to C5 from bar 4 (4/4). Columns of a note: MIDI note, beat from bar 1, length in beats.
+bpm 120
+note 48 0 1
+note 50 1 1
+note 52 2 1
+note 53 3 1
+note 55 4 1
+note 57 5 1
+note 59 6 1
+note 60 7 1
+note 60 12 1
+note 62 13 1
+note 64 14 1
+note 65 15 1
+note 67 16 1
+note 69 17 1
+note 71 18 1
+note 72 19 1

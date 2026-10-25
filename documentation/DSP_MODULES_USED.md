@@ -17,6 +17,8 @@ Scope: only `documentation/*/*.cpp` (and nested) files that `#include` a
 | Analysis/FftMisc.h | KarplusStrong/KarplusStrongExplore.cpp, Filters/PoleMixing/PoleMixingExplore.cpp, Wavetables/WavetablesExplore.cpp | KarplusStrongExplore, PoleMixingExplore, WavetablesExplore | yes |
 | Analysis/Spectrogram.h | Wavetables/WavetablesExplore.cpp | WavetablesExplore | yes |
 | Analysis/SimpleStats.h | Filters/BandpassImpulses/BpImpulseExplore.cpp, ResoVoiceExplore.cpp | BandpassImpulseExplore, ResoVoiceExplore | yes |
+| Analysis/NoteSegmenter.h | NoteSegmenter/NoteSegmenterExplore.cpp | NoteSegmenterExplore | yes |
+| Analysis/NoteVerifier.h | NoteSegmenter/NoteVerifierExplore.cpp | NoteVerifierExplore | yes |
 | Analysis/Slicer.h | Slicer/SlicerExplore.cpp | SlicerExplore | yes |
 | Analysis/ZeroCrossings.h | Filters/BandpassImpulses/BpImpulseExplore.cpp | BandpassImpulseExplore | yes |
 | Filters/BiquadResoBP.h | Filters/BandpassImpulses/BpImpulseExplore.cpp, BpParallelPerformance.cpp | BandpassImpulseExplore, BandpassImpulsePerformance | yes |
