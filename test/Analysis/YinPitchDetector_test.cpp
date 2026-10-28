@@ -7,6 +7,7 @@
 
 #include "Analysis/YinPitchDetector.h"
 #include "NaiveGenerators/Generator.h"
+#include "Numbers/Random.h"
 
 namespace AbacDsp::Test
 {
@@ -304,6 +305,46 @@ TEST_F(YinPitchDetectorTest, DetectedPitchNeverEscapesTheConfiguredRange)
         m_detector = std::make_unique<YinPitchDetector>(kSampleRate, 80.0f, 1000.0f, 50.f);
         Generator<Wave::Triangle> triangle(kSampleRate, targetFreq);
         sweep(triangle, "triangle");
+    }
+}
+
+TEST_F(YinPitchDetectorTest, QuietNoiseIsNotReadAsPitched)
+{
+    for (const float amplitude : {1e-2f, 1e-3f, 1e-4f})
+    {
+        SCOPED_TRACE("amplitude " + std::to_string(amplitude));
+        m_detector = std::make_unique<YinPitchDetector>(kSampleRate, 80.0f, 1000.0f, 50.f);
+        Random random(5);
+        int readings = 0;
+        int pitched = 0;
+        for (size_t i = 0; i < 96000; ++i)
+        {
+            const float pitch = m_detector->step(amplitude * (2.0f * random.uniform() - 1.0f));
+            if (m_detector->hasNewPitch() && i > 4800)
+            {
+                ++readings;
+                pitched += pitch > 0.0f ? 1 : 0;
+            }
+        }
+        ASSERT_GT(readings, 50);
+        EXPECT_LE(pitched, readings / 20);
+    }
+}
+
+TEST_F(YinPitchDetectorTest, QuietSineKeepsItsPitch)
+{
+    for (const float amplitude : {1e-2f, 1e-3f, 1e-4f})
+    {
+        SCOPED_TRACE("amplitude " + std::to_string(amplitude));
+        m_detector = std::make_unique<YinPitchDetector>(kSampleRate, 80.0f, 1000.0f, 50.f);
+        float pitch = 0.0f;
+        for (size_t i = 0; i < 48000; ++i)
+        {
+            pitch = m_detector->step(amplitude *
+                                     std::sin(2.0f * 3.14159265f * 220.0f * static_cast<float>(i) / kSampleRate));
+        }
+        EXPECT_NEAR(pitch, 220.0f, 0.5f);
+        EXPECT_GT(m_detector->getLastConfidence(), 0.99f);
     }
 }
 

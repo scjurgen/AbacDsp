@@ -12,6 +12,7 @@ endif()
 include_directories(../../src/includes)
 
 add_executable(OrnsteinUhlenbeckTimeline OrnsteinUhlenbeckTimeline.cpp)
+add_executable(ExactOrnsteinUhlenbeckExplore ExactOrnsteinUhlenbeckExplore.cpp)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)

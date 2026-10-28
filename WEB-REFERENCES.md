@@ -29,13 +29,14 @@ Stable, broad, and worth knowing about independently of any one class.
 
 | Reference | Cited from |
 | --- | --- |
-| [One-pole filters (JOS)](https://ccrma.stanford.edu/~jos/filters/One_Pole.html) | `OnePoleFilter.h`, and by delegation `BlockProcLowpass.h`, `BlockProcHighpass.h` |
+| [One-pole filters (JOS)](https://ccrma.stanford.edu/~jos/filters/One_Pole.html) | `OnePoleFilter.h`, `OnePoleSmoother.h`, and by delegation `BlockProcLowpass.h`, `BlockProcHighpass.h` |
 | [Transposed direct forms (JOS)](https://ccrma.stanford.edu/~jos/filters/Transposed_Direct_Forms.html) | `Biquad.h` |
 | [Audio EQ Cookbook](https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html) | `Biquad.h`, `PeakBiquad` |
 | [Chebyshev filter](https://en.wikipedia.org/wiki/Chebyshev_filter) | `ChebyshevBiquad` |
 | [Cytomic SVF, linear trapezoidal optimised](https://cytomic.com/files/dsp/SvfLinearTrapOptimised2.pdf) | `SvfResoBP.h`. Andrew Simper's derivation of the zero-delay-feedback state variable filter. |
-| [Electronotes EN85, voltage controlled filters](http://electronotes.netfirms.com/EN85VCF.pdf) | `PoleMixingFilter.h`, the original pole-mixing writeup |
-| [Expedition Electronics, pole mixing](https://expeditionelectronics.com/Diy/Polemixing) | `PoleMixingFilter.h` |
+| [Electronotes EN85, voltage controlled filters](http://electronotes.netfirms.com/EN85VCF.pdf) | `PoleMixingFilter.h`, `PeakTunedPoleMixing.h`, the original pole-mixing writeup |
+| [Expedition Electronics, pole mixing](https://expeditionelectronics.com/Diy/Polemixing) | `PoleMixingFilter.h`, `PeakTunedPoleMixing.h` |
+| [Electric Druid, multimode filters part 2: pole mixing](https://electricdruid.net/multimode-filters-part-2-pole-mixing-filters) | `PeakTunedPoleMixing.h`, source of the Oberheim Xpander / Matrix-12 mode table |
 | [Pink noise filter (musicdsp)](https://www.musicdsp.org/en/latest/Filters/76-pink-noise-filter.html) | `PinkFilter.h`, Paul Kellett's pole sets |
 | [Pink noise](https://en.wikipedia.org/wiki/Pink_noise) | `PinkFilter.h` |
 | [Memoryless nonlinearities (JOS)](https://ccrma.stanford.edu/~jos/pasp/Memoryless_Nonlinearities.html) | `Distortion.h` |
@@ -78,7 +79,8 @@ Stable, broad, and worth knowing about independently of any one class.
 Cited by author and year rather than URL, being paywalled or journal-hosted:
 
 - de Cheveigne and Kawahara, "YIN, a fundamental frequency estimator for speech
-  and music", JASA 111(4), 2002 - `YinPitchDetector.h`
+  and music", JASA 111(4), 2002 - `YinPitchDetector.h`,
+  `StampedYinPitchDetector.h`
 - Bello et al., "A Tutorial on Onset Detection in Music Signals", IEEE Trans.
   Speech and Audio Processing 13(5), 2005 - `Slicer.h`
 - Valimaki, Holm-Rasmussen, Alary, Lehtonen, "Late Reverberation Synthesis Using
@@ -91,7 +93,9 @@ Cited by author and year rather than URL, being paywalled or journal-hosted:
 | [A wavetable oscillator (earlevel)](https://www.earlevel.com/main/2012/05/04/a-wavetable-oscillator-part-1/) | `WaveTableStorage.h`, `WaveTableOscillator.h` |
 | [Aliasing](https://en.wikipedia.org/wiki/Aliasing) | `NaiveGenerators/Generator.h` |
 | [Additive synthesis](https://en.wikipedia.org/wiki/Additive_synthesis) | `HarmonicGenerator.h` |
-| [Ornstein-Uhlenbeck process](https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process) | `OrnsteinUhlenbeckProcess.h` |
+| [Ornstein-Uhlenbeck process](https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process) | `OrnsteinUhlenbeckProcess.h`, `ExactOrnsteinUhlenbeck.h`. The exact transition over a step is D. T. Gillespie, "Exact numerical simulation of the Ornstein-Uhlenbeck process and its integral", Physical Review E 54(2), 1996. |
+| [xoshiro / xoroshiro generators (Vigna)](https://prng.di.unimi.it/) | `Random.h`. xoshiro256** is D. Blackman, S. Vigna, "Scrambled Linear Pseudorandom Number Generators", ACM Transactions on Mathematical Software 47(4), 2021; splitmix64 seeding as recommended there. |
+| [Box-Muller transform](https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform) | `Random.h` |
 | [Julia set](https://en.wikipedia.org/wiki/Julia_set) | `JuliaWalk.h` |
 | [Elephant, polynomial interpolators (Niemitalo)](https://yehar.com/blog/wp-content/uploads/2009/08/deip.pdf) | `Interpolation.h`, `MultichannelInterpolation.h`. Source of the optimal least-squares kernels. |
 | [Decibel](https://en.wikipedia.org/wiki/Decibel) | `Convert.h` |

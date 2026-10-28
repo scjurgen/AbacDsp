@@ -14,6 +14,10 @@ This folder is also where `src/includes/Filters/PoleMixingCorrections_generated.
 uncorrected filter directly, fit a correction from that measurement, emit it as C++. See
 "Regenerating the cutoff correction" below.
 
+Two pole-mixing headers exist, with different jobs: `PoleMixingFilter.h` (the family this folder
+mostly documents) and `PeakTunedPoleMixing.h`, whose resonance peak is placed analytically. Which
+to use, and why neither replaces the other, is in "Two pole-mixing variants" at the end of this file.
+
 `pm_response.png`, `pm_resonance.png`, `pm_overdrive.png`, `pm_cutoff_accuracy.png`,
 `pm_realtime.png` and `pm_topology.png` in this folder are checked-in samples of all six
 plots, produced by the pipeline described here.
@@ -288,3 +292,83 @@ at DC, so raising resonance measurably pulls the DC/low-end gain down through ne
 feedback, on top of whatever the preset's own low-end shape already does. This matches the
 class's own doc comment that the bandpass tap "peaks the response without dragging the
 cutoff" - it also, as a direct consequence, does not drag the low end either.
+
+## Two pole-mixing variants, and why both exist
+
+`PoleMixingFilter.h` and `PeakTunedPoleMixing.h` share one topology: four cascaded one-pole
+lowpass stages, and an output that is a weighted mix of the input and the stage outputs. They
+differ in what the controls mean, in what the loop does when it is driven hard, and in how the
+cutoff becomes a pole. Neither is a newer version of the other.
+
+| | `PoleMixingFilter.h` (`FourStageFilter` family, `Filter1Pole4StageSmooth`) | `PeakTunedPoleMixing.h` (`PeakTunedPoleMixingFilter`) |
+|---|---|---|
+| Feedback tap | last stage with `atan` (`FourStageFilter`), second-difference band tap with `x/sqrt(1+x^2)` (`Filter1Pole4StageSmooth`) | last stage, one sample delayed, no saturator |
+| Limiting | smooth saturator in the loop | every stage state clamped to [-1, 1] |
+| Cutoff to pole | fits to measured resonance peaks: a cubic per sample rate for 44.1, 48, 96, 192 and 384 kHz, other rates uncorrected (`FourStageFilter`); a degree 7 fit over 20 to 8564 Hz (`Filter1Pole4StageSmooth`) | closed form from the loop phase, any sample rate |
+| What the frequency means | requested cutoff, corrected so the peak lands near it | the frequency of the resonance peak, by construction |
+| Resonance | raw amount, or normalised to a measured critical value | raw amount r, with the edge of oscillation `r * a = poleMixingOscillationThreshold()` in closed form |
+| Presets | five weights by name (`poleMixingList`), or fixed at compile time | 35 rows, each with its own feedback scale and input gain |
+| Smoothing of pole and resonance | built in | none; the caller smooths if it wants to |
+| Analysis | `FourStageFilterTheoretical` for plotting | `poleMixingResponse()`, the exact small-signal transfer function with the loop delay |
+
+Why two. The first family is part of the sound of existing instruments (`MorphexsynthVoice`,
+`AmbientPadVoice`, `AmbientSynthVoice`, `KarplusStrongVoice`, the drone sequencer and tanpura
+examples use it). Moving its feedback, its limiter or its cutoff mapping would change what those
+sound like, so the family is left as it is. The second exists for a use the first cannot serve
+without such a change: a control that is the pitch of the resonance, exact up to near Nyquist and at
+any sample rate, with an edge of self-oscillation that is known, so that "95 percent of
+self-oscillation" means the same at every frequency and in every preset. A scripted filter that
+sets notes is the typical case.
+
+Which to use. For a filter with a character of its own and smoothed controls, use the first
+family. For a filter that is played by pitch and has to land on the note, use
+`PeakTunedPoleMixingFilter`. They can run side by side; they share no state and no names.
+
+The charts below were made by `PeakTunedExplore.cpp` (`./generate-peaktuned.sh`; by hand from the
+repo root: `EXPLORE_OUT_DIR=$PWD/documentation/Filters/PoleMixing/generated
+./dev-scripts/dev-explore.sh documentation/Filters/PoleMixing/PeakTunedExplore.cpp`).
+
+### Where the peak lands
+
+![Response peak over requested frequency at 85 and 95 percent of the threshold](pt_tuning.png)
+
+`poleMixingTuningForPeak()` makes the filter self-oscillate exactly at the requested frequency;
+below the threshold the response peak sits a little lower. The chart is the peak of
+`poleMixingResponse()` for the `4 pole lp` preset at 48 kHz, divided by the requested frequency: at
+95 percent of the threshold 0.987 at 100 Hz, 0.986 at 1 kHz and 0.982 at 8 kHz; at 85 percent 0.959,
+0.957 and 0.945. Towards Nyquist the peak falls further below the request.
+
+### Same request, two filters
+
+![Self-oscillation frequency over requested frequency for both variants](pt_pitch.png)
+
+Both filters driven to 1.01 times their own edge of oscillation, the oscillation frequency measured
+from zero crossings and divided by the requested frequency. `PeakTunedPoleMixingFilter` stays within
+0.4 percent from 100 Hz to 19 kHz. `FixedFourStageFilter`, whose cutoff correction is fitted to
+measurements, is within 0.5 percent up to 4 kHz and then drifts: 2.5 percent sharp at 6.7 kHz, 4.9
+at 7.7 kHz, and 80 percent at a request of 13.3 kHz. This is the behaviour of the fitted
+correction, which the "Cutoff-frequency correctness" section above describes; it is the reason for
+the second variant and not a defect of the first, whose controls are cutoffs inside the range the fit
+was made for.
+
+![Self-oscillation waveforms of both variants at 1 kHz](pt_waveform.png)
+
+The same two filters at 1 kHz, three times over their edge. The pitch is the same; the amplitude
+differs (0.30 for `PeakTunedPoleMixingFilter`, 0.36 for `FixedFourStageFilter`), and both waves are
+close to sine. The limiting is different in kind (a clamp on each stage against `atan` in the loop),
+which shows in the amplitude and in how the filter behaves with strong input rather than in the
+shape of a steady oscillation.
+
+### Glide
+
+![A glide in semitones with a retarget in the middle](pt_glide_note.png)
+
+![The same glide as frequency](pt_glide_hz.png)
+
+`CutoffTrajectory` (`Parameters/CutoffTrajectory.h`) glides a value linearly in a number of samples
+and retargets from where it is. The first chart is 57 to 81 over 4800 samples, retargeted to 45 over
+4800 samples at sample 2400, with no jump; the second is the same value as a frequency
+(`440 * 2^((note - 69) / 12)`), which is why a glide that is linear in semitones is an exponential
+sweep in Hz. `LinearSmoothing` ramps the same way but counts in seconds, so a length in samples
+passes through a rounding there; the unit test shows a 2400 sample glide that ends on the 2400th
+sample.

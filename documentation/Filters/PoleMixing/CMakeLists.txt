@@ -12,6 +12,7 @@ endif()
 include_directories(../../../src/includes)
 
 add_executable(PoleMixingExplore PoleMixingExplore.cpp)
+add_executable(PeakTunedExplore PeakTunedExplore.cpp)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)

@@ -138,3 +138,44 @@ the corrected stationary standard deviation actually used in `OrnsteinUhlenbeckT
 curves line up closely for all four speeds, confirming both that the distribution really is
 Gaussian and that its width matches theory once the class's actual noise scale is accounted
 for - not just something that resembles a bell curve by eye.
+
+## ExactOrnsteinUhlenbeck
+
+`AbacDsp::ExactOrnsteinUhlenbeck` (`src/includes/Generators/ExactOrnsteinUhlenbeck.h`) has the same parameters as
+`OrnsteinUhlenbeckProcess` but steps with the exact transition over `dt = 1 / stepRate` instead of an Euler-Maruyama
+step, so it is correct at any step rate, down to a few steps per second. `./generate-exact.sh` runs
+`ExactOrnsteinUhlenbeckExplore.cpp` through `dev-scripts/dev-explore.sh` and renders three plots; by hand, from the
+repo root:
+
+```bash
+EXPLORE_OUT_DIR=$PWD/documentation/OrnsteinUhlenbeck/generated \
+    ./dev-scripts/dev-explore.sh documentation/OrnsteinUhlenbeck/ExactOrnsteinUhlenbeckExplore.cpp
+```
+
+The program is also a target (`ExactOrnsteinUhlenbeckExplore`) behind `EXPLORE_STUFF`.
+
+### Autocorrelation
+
+![Autocorrelation at 7, 100 and 2000 Hz against exp(-theta*tau)](ou_exact_autocorr.png)
+
+Thirty independent runs per step rate at `sigma` = 0.5 (`theta` = 11), each 20000 steps, against `exp(-theta * tau)`.
+At 7 Hz `theta * dt` is 1.57 and the points exist only at multiples of `dt`; they lie on the curve all the same, because
+the exact transition has the correlation `exp(-theta dt)` between consecutive steps whatever the rate. The spread
+around the curve grows with the lag and, at the same number of steps, with the step rate (fewer correlation times).
+
+### Distribution
+
+![Stationary distribution at 7, 100 and 2000 Hz against the Gaussian](ou_exact_distribution.png)
+
+A histogram of two million steps per rate against the Gaussian with mean `mu` and standard deviation
+`sigma / 2.33 / sqrt(2 theta)`, the value `getStationaryDeviation()` returns. The three rates agree with it.
+
+### Stability
+
+![Stationary deviation over theory against step rate, exact and Euler-Maruyama](ou_exact_stability.png)
+
+The measured stationary deviation divided by the theoretical one for `sigma` = 1 (`theta` = 21), at 25 step rates from
+4 Hz to 5 kHz, each point a run of 50000 correlation times with its own seed. The exact transition stays on 1 within
+the sampling error of about 0.5 %. A textbook Euler-Maruyama step on the same noise source has the stationary variance
+`sigma_w^2 / (theta (2 - theta dt))`: 57 % too wide at 18 Hz, diverging for `theta dt` above 2 (below 10.5 Hz here,
+drawn at the ceiling of 5), and correct only when the step is much shorter than the reversion time.

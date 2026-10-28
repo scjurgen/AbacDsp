@@ -24,6 +24,11 @@ Scope: only `documentation/*/*.cpp` (and nested) files that `#include` a
 | Filters/BiquadResoBP.h | Filters/BandpassImpulses/BpImpulseExplore.cpp, BpParallelPerformance.cpp | BandpassImpulseExplore, BandpassImpulsePerformance | yes |
 | Filters/BiquadResoBPParallelSIMD.h | same two files | same two targets | yes |
 | Filters/BiquadResoBandPassParallel.h | same two files | same two targets | yes |
+| Analysis/PitchNoteTracker.h | YinPitch/StampedYinExplore.cpp, YinPitch/StampedYinGuitarExplore.cpp | StampedYinExplore, StampedYinGuitarExplore | yes |
+| Analysis/StampedYinPitchDetector.h | YinPitch/StampedYinExplore.cpp, YinPitch/StampedYinGuitarExplore.cpp | StampedYinExplore, StampedYinGuitarExplore | yes |
+| Analysis/YinPitchDetector.h | YinPitch/StampedYinExplore.cpp (noise comparison) | StampedYinExplore | yes |
+| Filters/OnePoleFilter.h | Filters/OnePoleFilter/OnePoleExplore.cpp, Parameters/OnePoleSmootherExplore.cpp | OnePoleExplore, OnePoleSmootherExplore | yes |
+| Filters/PeakTunedPoleMixing.h | Filters/PoleMixing/PeakTunedExplore.cpp | PeakTunedExplore | yes |
 | Filters/PoleMixingFilter.h | Filters/PoleMixing/PoleMixingExplore.cpp | PoleMixingExplore | yes |
 | Filters/SvfResoBP.h | Filters/BandpassImpulses/BpImpulseExplore.cpp | BandpassImpulseExplore | yes |
 | Generators/ExcitationTechnique.h | KarplusStrong/KarplusStrongExplore.cpp | KarplusStrongExplore | yes |
@@ -32,6 +37,10 @@ Scope: only `documentation/*/*.cpp` (and nested) files that `#include` a
 | Generators/RandomStyle/VelvetCrackle.h | VelvetNoise/VelvetNoise.cpp | VelvetNoise | yes |
 | Generators/ResoGenerator.h | Filters/BandpassImpulses/BpImpulseExplore.cpp, ResoVoiceExplore.cpp | BandpassImpulseExplore, ResoVoiceExplore | yes |
 | Generators/OrnsteinUhlenbeckProcess.h | OrnsteinUhlenbeck/OrnsteinUhlenbeckTimeline.cpp | OrnsteinUhlenbeckTimeline | yes |
+| Generators/ExactOrnsteinUhlenbeck.h | OrnsteinUhlenbeck/ExactOrnsteinUhlenbeckExplore.cpp | ExactOrnsteinUhlenbeckExplore | yes |
+| Numbers/Random.h | OrnsteinUhlenbeck/ExactOrnsteinUhlenbeckExplore.cpp (and through Generators/ExactOrnsteinUhlenbeck.h) | ExactOrnsteinUhlenbeckExplore | yes |
+| Parameters/CutoffTrajectory.h | Filters/PoleMixing/PeakTunedExplore.cpp | PeakTunedExplore | yes |
+| Parameters/OnePoleSmoother.h | Parameters/OnePoleSmootherExplore.cpp | OnePoleSmootherExplore | yes |
 | Numbers/Convert.h | KarplusStrongExplore.cpp, BpImpulseExplore.cpp, ResoVoiceExplore.cpp | KarplusStrongExplore, BandpassImpulseExplore, ResoVoiceExplore | yes |
 | Wavetables/WaveTableOscillator.h | Wavetables/WavetablesExplore.cpp | WavetablesExplore | yes |
 | Wavetables/WaveTableStorage.h | Wavetables/WavetablesExplore.cpp | WavetablesExplore | yes |

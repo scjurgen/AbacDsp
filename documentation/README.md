@@ -30,18 +30,20 @@ all. See `TODO.md` for folders and algorithms still missing plots.
 | `Filters/Biquads/` | documentation | `Biquad<type>` family magnitude/phase response, `ChebyshevBiquad` Type1/Type2, empirical stability under frequency/Q stress, `PeakBiquad` boost/cut symmetry |
 | `Filters/OnePoleFilter/` | documentation | `OnePoleFilter`: magnitude response across all four characteristics, `setDecayTime()` exact timing, `AllPass` flat magnitude/90-degree-at-cutoff phase |
 | `Filters/PinkFilter/` | documentation | `PinkFilter`: measured PSD vs. ideal -3dB/octave slope, 3-pole vs. 7-pole accuracy (Welch-averaged white-noise PSD) |
-| `Filters/PoleMixing/` | generation, documentation, exploration | `PoleMixingFilter`: `fitPoleMixingCorrections.py` generates `src/includes/Filters/PoleMixingCorrections_generated.h`; `PoleMixingExplore.cpp` plots magnitude/phase, resonance, saturator overdrive behavior |
+| `Filters/PoleMixing/` | generation, documentation, exploration | `PoleMixingFilter`: `fitPoleMixingCorrections.py` generates `src/includes/Filters/PoleMixingCorrections_generated.h`; `PoleMixingExplore.cpp` plots magnitude/phase, resonance, saturator overdrive behavior; `PeakTunedExplore.cpp` and the section "Two pole-mixing variants, and why both exist" in its README compare `PoleMixingFilter.h` with `PeakTunedPoleMixing.h` and show `CutoffTrajectory` |
 | `Filters/SincFilterDesign/` | generation | Regenerates the windowed-sinc FIR tables in `src/includes/Filters/Sinc/` |
 | `KarplusStrong/` | documentation | `KarplusStrongString`/`KarplusStrongVoice`: spectral brightness loss, decay-time accuracy, pitch bend behavior |
 | `Metronome/` | generation | Click samples and MIDI pattern library for tapelooper's built-in groove, not a library-algorithm write-up |
 | `Modulation/` | documentation | `Wow`/`Flutter` LFO character (timeline, spectrum, Poincare orbit plot), `Tremolo` drive morph, `RingModulator` sidebands |
 | `NoteSegmenter/` | documentation | `Analysis/NoteSegmenter`: onset, pitch and level of plucked notes against what was played, accuracy against noise, and the limit for a repeated note that rings on; `Analysis/NoteVerifier`: a real guitar recording checked against its score, with the onset, pitch and unexpected-sound results and how to add a recording |
 | `Numbers/` | generation | Sollya setup for the minimax sin/cos polynomials in `src/includes/Numbers/Approximation.h` |
-| `OrnsteinUhlenbeck/` | documentation | `OrnsteinUhlenbeckProcess`: mean-reverting noise timelines across `sigma` speeds |
+| `OrnsteinUhlenbeck/` | documentation | `OrnsteinUhlenbeckProcess`: mean-reverting noise timelines across `sigma` speeds; `ExactOrnsteinUhlenbeck`: autocorrelation and stationary distribution from 7 Hz to 2 kHz step rate, stability against an Euler-Maruyama step |
 | `OverSampling/` | documentation | `UpDownSampler` wrapping `WobbleDelay`: swept-tone spectrograms at oversampling and undersampling ratios, delay time and latency vs. ratio, abrupt vs. slow ratio changes |
+| `Parameters/` | documentation | `OnePoleSmoother`: step response against `1 - exp(-t / tau)`, and the distance to the target against `OnePoleFilter<LowPass>`, which stalls short of it |
 | `Plot/` | shared tooling | `PyConPlot.py` - the matplotlib wrapper most other folders' plots are rendered with |
 | `Reverbs/FDN/` | generation | Hadamard-matrix coefficients via SageMath, used to regenerate `src/includes/Reverbs/HadamardWalsh{4,8,16,32}.h` |
 | `Reverbs/Tanks/` | documentation | `FdnTankGlide`/`FdnTankSpicedBase`/`FdnTankBlockDelayWalshSIMD`: late-tail spectral flatness, RT60 vs. frequency band, Schroeder energy decay curves |
 | `Slicer/` | exploration | Offline harness for tuning `Analysis::Slicer` against hand-labelled audio |
 | `VelvetNoise/` | exploration | `Generators/RandomStyle/VelvetCrackle.h` explore program; no README yet - see `TODO.md` |
 | `Wavetables/` | documentation | `WaveTableOscillator`/`WaveTableStorage`: mipmap band-limiting across the pitch range, at a mip-table boundary, under PWM and morph; `changeFrequency()` vs. `setFrequency()` aliasing comparison |
+| `YinPitch/` | documentation | `StampedYinPitchDetector` and `PitchNoteTracker` over 40 Hz to 2 kHz: pitch error, time to the first note, noise, a guitar scale against its score; why `YinPitchDetector` and `StampedYinPitchDetector` both exist; the quiet-noise defect of `YinPitchDetector` |

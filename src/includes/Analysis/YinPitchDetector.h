@@ -18,6 +18,10 @@ namespace AbacDsp
  * difference function by its own running mean suppresses the later peak, so the
  * first minimum below threshold is the true period.
  *
+ * The cumulative sum starts at lag 1, as in the paper. A constant added to it
+ * (the convention d(0) = 1 is for the normalised function only) would dominate
+ * for quiet signals and make noise look periodic.
+ *
  * Pitch is recomputed once per hop, not per sample; step() returns the last
  * estimate in between. The analysis buffer holds several periods of the lowest
  * detectable frequency, which sets the latency.
@@ -186,7 +190,7 @@ class YinPitchDetector
     void computeCMNDF()
     {
         m_cmndf[0] = 1.0f;
-        float cumulativeSum = m_differenceFunction[0];
+        float cumulativeSum = 0.0f;
 
         for (size_t tau = 1; tau < m_cmndf.size(); ++tau)
         {
