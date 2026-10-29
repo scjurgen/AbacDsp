@@ -46,6 +46,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.addParameterListener("analysisMode", this);
         m_parameters.addParameterListener("analysisBars", this);
         m_parameters.addParameterListener("latencyComp", this);
+        m_parameters.addParameterListener("clickOut", this);
         m_parameters.addParameterListener("preset", this);
         m_parameters.addParameterListener("voicing", this);
         m_parameters.addParameterListener("drumKit", this);
@@ -72,6 +73,7 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         m_parameters.removeParameterListener("analysisMode", this);
         m_parameters.removeParameterListener("analysisBars", this);
         m_parameters.removeParameterListener("latencyComp", this);
+        m_parameters.removeParameterListener("clickOut", this);
         m_parameters.removeParameterListener("preset", this);
         m_parameters.removeParameterListener("voicing", this);
         m_parameters.removeParameterListener("drumKit", this);
@@ -319,6 +321,11 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
             juce::AudioParameterFloatAttributes{}.withLabel("ms").withStringFromValueFunction(
                 [](float value, int) { return juce::String(value, 1) + " ms"; })));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID("clickOut", 1), juce::String::fromUTF8("Click Out"),
+            juce::StringArray{juce::String::fromUTF8("Audio"), juce::String::fromUTF8("MIDI"),
+                              juce::String::fromUTF8("Both")},
+            0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID("preset", 1), juce::String::fromUTF8("Preset"),
             juce::StringArray{juce::String::fromUTF8("3/4"),
                               juce::String::fromUTF8("3/4 8th"),
@@ -439,6 +446,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
                  p.pluginRunner->setLatencyComp(v);
                  p.m_fileIo.updateParameter(PatchParameters::Id::latencyComp, v);
              }},
+            {"clickOut",
+             [](AudioPluginAudioProcessor& p, const float v)
+             {
+                 p.pluginRunner->setClickOut(static_cast<int>(v));
+                 p.m_fileIo.updateParameter(PatchParameters::Id::clickOut, v);
+             }},
             {"preset",
              [](AudioPluginAudioProcessor& p, const float v)
              {
@@ -550,6 +563,12 @@ class AudioPluginAudioProcessor : public juce::AudioProcessor, public juce::Audi
         {
             const auto& range = m_parameters.getParameterRange("latencyComp");
             float normalized = range.convertTo0to1(static_cast<float>(params.latencyComp));
+            p->setValueNotifyingHost(normalized);
+        }
+        if (auto* p = m_parameters.getParameter("clickOut"))
+        {
+            const auto& range = m_parameters.getParameterRange("clickOut");
+            float normalized = range.convertTo0to1(static_cast<float>(params.clickOut));
             p->setValueNotifyingHost(normalized);
         }
         if (auto* p = m_parameters.getParameter("preset"))

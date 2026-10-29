@@ -79,6 +79,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         m_pagePerformanceButton.setBounds(pageSwitchArea.removeFromLeft(pageSwitchArea.getWidth() / 2));
         m_pageSettingsButton.setBounds(pageSwitchArea);
         /*END_PERFORMANCEPAGE*/
+        /*START_PAGES*/
+        auto pageSwitchArea = area.removeFromTop(static_cast<int>(Constants::Text::labelHeight));
+        const int pageButtonWidth = pageSwitchArea.getWidth() / static_cast<int>(m_pageButtons.size());
+        for (size_t i = 0; i < m_pageButtons.size(); ++i)
+        {
+            const bool isLast = i + 1 == m_pageButtons.size();
+            m_pageButtons[i].setBounds(isLast ? pageSwitchArea : pageSwitchArea.removeFromLeft(pageButtonWidth));
+        }
+        /*END_PAGES*/
         area = area.reduced(static_cast<int>(Constants::Margins::big));
         /*START_PERFORMANCEPAGE*/
         if (m_currentPage == Page::Performance)
@@ -111,6 +120,15 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         m_pageSettingsButton.onClick = [this] { switchPage(Page::Settings); };
         switchPage(Page::Performance);
         /*END_PERFORMANCEPAGE*/
+        /*START_PAGES*/
+        for (size_t i = 0; i < m_pageButtons.size(); ++i)
+        {
+            m_pageButtons[i].setButtonText(kPageNames[i]);
+            m_pageButtons[i].onClick = [this, i] { switchPage(i); };
+            addAndMakeVisible(m_pageButtons[i]);
+        }
+        switchPage(0);
+        /*END_PAGES*/
     }
 
     /*START_PERFORMANCEPAGE*/
@@ -136,6 +154,18 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         resized();
     }
     /*END_PERFORMANCEPAGE*/
+    /*START_PAGES*/
+    void switchPage(const size_t page)
+    {
+        m_currentPage = page;
+        for (size_t i = 0; i < m_pageButtons.size(); ++i)
+        {
+            m_pageButtons[i].setToggleState(i == page, juce::dontSendNotification);
+        }
+        /*PAGE_SHOW_PAGES*/
+        resized();
+    }
+    /*END_PAGES*/
 
     void parentHierarchyChanged() override
     {
@@ -1181,6 +1211,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::TextButton m_pagePerformanceButton{"Performance"};
     juce::TextButton m_pageSettingsButton{"Settings"};
     /*END_PERFORMANCEPAGE*/
+    /*START_PAGES*/
+    static constexpr auto kPageNames = std::to_array<const char*>({/*PAGE_NAMES*/});
+    std::array<juce::TextButton, kPageNames.size()> m_pageButtons;
+    size_t m_currentPage{0};
+    /*END_PAGES*/
     static constexpr int kThemeModeLightId = 9000;
     static constexpr int kThemeModeDarkId = 9001;
     static constexpr int kThemeBaseBichromaticId = 9002;

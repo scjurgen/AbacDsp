@@ -35,6 +35,9 @@ explore
 JuceStandaloneGenerator/theme-review/output
 JuceStandaloneGenerator/.gm_scratch
 
+# OpenSpec
+/openspec/
+
 # Temp
 TEMP_TODO.md
 

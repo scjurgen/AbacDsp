@@ -25,6 +25,7 @@
 #include "DrumPattern.h"
 #include "DrumTrainerDrumPaths.h"
 #include "DrumTrainerScriptEngine.h"
+#include "MidiClickOut.h"
 #include "Sampler/DrumVoiceKit.h"
 #include "Sampler/SamplePlayerBasic.h"
 
@@ -59,6 +60,7 @@ class DrumTrainerImpl final : public EffectBase
         m_seq.setBpm(m_bpm);
         setDrumKit(m_drumKitIndex);
         m_midiDecoder.setMap(m_drumMapFile.map, sampleRate);
+        m_midiClick.configure(m_drumMapFile.map.click, sampleRate);
     }
 
     void setBpm(const float value)
@@ -330,9 +332,18 @@ class DrumTrainerImpl final : public EffectBase
                               { onDrumHit(hit); });
     }
 
-    template <typename Emit>
-    void drainMidiOutput([[maybe_unused]] Emit&& emit) noexcept
+    // 0 audio, 1 MIDI, 2 both, in blueprint dropdown order.
+    void setClickOut(const int index) noexcept
     {
+        m_clickOut = static_cast<ClickOut>(std::clamp(index, 0, 2));
+    }
+
+    // Called once after every host block; offsets count from that block's first sample.
+    template <typename Emit>
+    void drainMidiOutput(Emit&& emit)
+    {
+        m_midiClick.drain(m_drainClock, emit);
+        m_drainClock = m_sampleClock;
     }
 
     void processBlock(const AbacDsp::AudioBuffer<2, BlockSize>& in, AbacDsp::AudioBuffer<2, BlockSize>& out)
@@ -345,6 +356,7 @@ class DrumTrainerImpl final : public EffectBase
         m_drumVoiceKit.pollAndInstall();
         adoptPendingDrumMap();
         m_midiDecoder.advance(m_sampleClock, [this](const DrumInput::DrumHit& hit) noexcept { onDrumHit(hit); });
+        m_midiClick.advance(m_sampleClock + static_cast<int64_t>(BlockSize));
         if (!effectiveRunning())
         {
             adoptPendingPattern();
@@ -357,13 +369,25 @@ class DrumTrainerImpl final : public EffectBase
             const bool countingIn = isAnalysisCountingIn();
             const bool isMuted = !countingIn && mode.playBars > 0 && m_barCount >= mode.playBars;
 
+            const bool clickRunning = (effectiveRunning() || countingIn) && !isMuted;
+            const bool midiClick = clickRunning && m_clickOut != ClickOut::Audio;
+            const int64_t now = m_sampleClock + static_cast<int64_t>(i);
             if (event.beatStart && !isMuted)
             {
-                triggerBeatAccent(beatAccent(event.beatIndexInBar));
+                const auto accent = beatAccent(event.beatIndexInBar);
+                triggerBeatAccent(accent);
+                if (midiClick)
+                {
+                    m_midiClick.trigger(accent, now);
+                }
             }
             if (event.subdivision && !isMuted)
             {
                 triggerSubdivision();
+                if (midiClick)
+                {
+                    m_midiClick.trigger(ClickAccent::Sub, now);
+                }
             }
 
             const float click = m_click.step0();
@@ -378,7 +402,7 @@ class DrumTrainerImpl final : public EffectBase
                 drumRight += voiceRight * slot.gain;
             }
 
-            const bool audible = (effectiveRunning() || countingIn) && !isMuted;
+            const bool audible = clickRunning && m_clickOut != ClickOut::Midi;
             const bool useClick = isVoicingClick();
             const float leftOutput = audible ? (useClick ? click : drumLeft) : 0.f;
             const float rightOutput = audible ? (useClick ? click : drumRight) : 0.f;
@@ -967,6 +991,7 @@ class DrumTrainerImpl final : public EffectBase
         if (const auto* map = m_drumMapMailbox.acquireNewest())
         {
             m_midiDecoder.setMap(*map, sampleRate());
+            m_midiClick.configure(map->click, sampleRate());
         }
     }
 
@@ -1096,6 +1121,15 @@ class DrumTrainerImpl final : public EffectBase
     std::atomic<uint32_t> m_lastMidiEvent{0};
     std::atomic<uint32_t> m_lastDrumHit{0};
     int64_t m_latencySamples{0};
+    enum class ClickOut : uint8_t
+    {
+        Audio,
+        Midi,
+        Both
+    };
+    ClickOut m_clickOut{ClickOut::Audio};
+    DrumOutput::MidiClickOut m_midiClick;
+    int64_t m_drainClock{0};
     DrumAnalysis::CapturedHitCollector m_capturedHits;
     DrumAnalysis::TakeSetup m_takeSetup;
     std::atomic<bool> m_reportReady{false};

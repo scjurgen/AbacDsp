@@ -269,6 +269,29 @@ Example: `A1=(LVL*500, CPU*200, BPM)` — LVL gets 500 px, CPU gets 200 px, BPM 
 
 ---
 
+## `pages`
+
+Optional. Replaces the single `layout` composition with N named pages, selected by a row of
+buttons above the content. Each page has its own `type` and `composition` (same syntax as
+`layout`); `layout` then only supplies `WINDOW_WIDTH` / `WINDOW_HEIGHT`.
+
+```json
+"layout": {"WINDOW_WIDTH": "1000", "WINDOW_HEIGHT": "640"},
+"pages": [
+  {"name": "Levels",   "type": "||", "composition": "C=(1:4) A1=(PFAL, RMSW, THRU) A2=(LVL)"},
+  {"name": "Spectrum", "type": "||", "composition": "C=(1:4) A1=(FFTS, FFAL, THRU) A2=(FFT)"}
+]
+```
+
+- A widget may appear on several pages; it is visible on exactly the pages that list it.
+- Widgets listed on no page stay hidden.
+- Widgets with `visible_when` keep managing their own visibility and are not page-switched.
+- The first page is shown at start. The Editor's `m_currentPage` (`size_t`, page index) can be
+  read from `extra_timer_callbacks`, e.g. to tell the processor which page is shown.
+- Mutually exclusive with `performance-page` (the fixed Performance/Settings pair).
+
+---
+
 ## `CPP` block
 
 ```json

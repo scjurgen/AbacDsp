@@ -57,6 +57,10 @@ class StubImpl final : public EffectBase
     {
         m_latencyComp = value;
     }
+    void setClickOut(const size_t value)
+    {
+        m_clickOut = value;
+    }
     void setPreset(const size_t value)
     {
         m_preset = value;
@@ -94,6 +98,7 @@ class StubImpl final : public EffectBase
     bool m_analysisMode{};
     size_t m_analysisBars{};
     float m_latencyComp{};
+    size_t m_clickOut{};
     size_t m_preset{};
     size_t m_voicing{};
     size_t m_drumKit{};

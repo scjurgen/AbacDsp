@@ -83,8 +83,10 @@ def parse_box_structure(input_str: str):
     return columns, rows, areas
 
 
-def construct_boxes(m: dict, section: str = 'layout'):
-    columns, rows, areas = parse_box_structure(m[section]['composition'])
+def construct_boxes(m: dict, section: str = 'layout', layout: dict | None = None):
+    if layout is None:
+        layout = m[section]
+    columns, rows, areas = parse_box_structure(layout['composition'])
     result = ""
 
     def findShortEntry(short: str):
@@ -184,7 +186,7 @@ def construct_boxes(m: dict, section: str = 'layout'):
         // const juce::FlexItem::Margin knobMargin = juce::FlexItem::Margin(Constants::Margins::small);
         const juce::FlexItem::Margin knobMarginSmall = juce::FlexItem::Margin(Constants::Margins::medium);        
         """
-    match m[section]['type']:
+    match layout['type']:
         case '-':
             result += f"""std::vector<juce::Rectangle<int>> areas(1);
                     areas[0] = area.reduced(Constants::Margins::small);\n\n"""
@@ -354,6 +356,6 @@ def construct_boxes(m: dict, section: str = 'layout'):
             rowCnt = 7
             result += saveoneColumnMultiRows(rowCnt)
         case _:
-            raise ValueError(f"Unsupported layout type: {m['layout']['type']}")
+            raise ValueError(f"Unsupported layout type: {layout['type']}")
 
     return result

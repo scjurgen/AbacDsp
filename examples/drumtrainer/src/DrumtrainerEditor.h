@@ -182,6 +182,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                   .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
                                   .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(latencyCompDial).withFlex(1).withMargin(knobMarginSmall));
+                box.items.add(juce::FlexItem(clickOutDrop)
+                                  .withFlex(0)
+                                  .withHeight(Constants::Text::labelHeight)
+                                  .withAlignSelf(juce::FlexItem::AlignSelf::stretch)
+                                  .withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(bpmDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(subVolumeDial).withFlex(1).withMargin(knobMarginSmall));
                 box.items.add(juce::FlexItem(metroVolumeDial).withFlex(1).withMargin(knobMarginSmall));
@@ -308,6 +313,11 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
         latencyCompDial.reset(valueTreeState, "latencyComp");
         latencyCompDial.setLabelText(juce::String::fromUTF8("Latency Comp"));
         latencyCompDial.setTooltip(juce::String::fromUTF8("Latency Comp (-50 to 150 ms)"));
+        addAndMakeVisible(clickOutDrop);
+        clickOutDrop.addItemList(valueTreeState.getParameter("clickOut")->getAllValueStrings(), 1);
+        clickOutDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            valueTreeState, "clickOut", clickOutDrop);
+        clickOutDrop.setTooltip(juce::String::fromUTF8("Click Out (Audio, MIDI, Both)"));
         addAndMakeVisible(presetDrop);
         presetDrop.addItemList(valueTreeState.getParameter("preset")->getAllValueStrings(), 1);
         presetDropAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
@@ -373,6 +383,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             analysisModeSwitch.setVisible(true);
             analysisBarsDrop.setVisible(false);
             latencyCompDial.setVisible(false);
+            clickOutDrop.setVisible(false);
             presetDrop.setVisible(false);
             voicingDrop.setVisible(false);
             drumKitDrop.setVisible(false);
@@ -390,6 +401,7 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
             analysisModeSwitch.setVisible(true);
             analysisBarsDrop.setVisible(true);
             latencyCompDial.setVisible(true);
+            clickOutDrop.setVisible(true);
             presetDrop.setVisible(true);
             voicingDrop.setVisible(true);
             drumKitDrop.setVisible(true);
@@ -1236,6 +1248,8 @@ class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
     juce::ComboBox analysisBarsDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> analysisBarsDropAttachment;
     CustomRotaryDial latencyCompDial{this};
+    juce::ComboBox clickOutDrop{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> clickOutDropAttachment;
     juce::ComboBox presetDrop{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> presetDropAttachment;
     juce::ComboBox voicingDrop{};

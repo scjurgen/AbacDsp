@@ -1,0 +1,109 @@
+{
+  "name": "listenandplay",
+  "plugintype": "ListenAndPlay",
+  "description": [
+    "Listen and play: repeat a played phrase on your instrument, scored on notes, rhythm and dynamics\n"
+  ],
+  "patches": true,
+  "use-lua": true,
+  "lua_manual": false,
+  "midi-input": true,
+  "ports-control":
+  [
+    {"short": "BPM",  "type": "dial",   "display": "BPM",          "symbol": "bpm",          "default": 100, "range": [40, 200, 0.1, 1, false],  "precision": 1, "unit": "BPM"},
+    {"short": "CLK",  "type": "switch", "display": "Click",        "symbol": "clickOn",      "default": 1},
+    {"short": "LAT",  "type": "dial",   "display": "Latency Comp", "symbol": "latencyComp",  "default": 0,   "range": [-50, 150, 0.1, 1, false], "precision": 1, "unit": "ms"},
+    {"short": "INST", "type": "drop",   "display": "Instrument",   "symbol": "instrument",   "default": 0, "signed": false,
+      "listitems": ["Guitar", "Bass", "Harp", "Nylon", "Ukulele", "Music box"]},
+    {"short": "INP",  "type": "drop",   "display": "Input",        "symbol": "input",        "default": 0, "signed": false,
+      "listitems": ["Audio", "MIDI"]},
+    {"short": "VOL",  "type": "dial",   "display": "Volume",       "symbol": "outputVolume", "default": 0,   "range": [-60, 12, 0.1, 1, false],  "precision": 1, "unit": "dB"},
+    {"short": "GAIN", "type": "dial",   "display": "Input Gain",   "symbol": "inputGain",    "default": 0,   "range": [-24, 24, 0.1, 1, false],  "precision": 1, "unit": "dB"},
+    {"short": "ILVL", "type": "dial",   "display": "Instr. Level", "symbol": "instrumentLevel", "default": 0, "range": [-24, 12, 0.1, 1, false], "precision": 1, "unit": "dB"},
+    {"short": "CLVL", "type": "dial",   "display": "Click Level",  "symbol": "clickLevel",   "default": 0,   "range": [-24, 12, 0.1, 1, false],  "precision": 1, "unit": "dB"},
+    {"short": "LIS",  "type": "switch", "display": "Listen",       "symbol": "listen",       "default": 0, "momentary": true},
+    {"short": "PLAY", "type": "switch", "display": "Play",         "symbol": "play",         "default": 0, "momentary": true},
+    {"short": "REP",  "type": "switch", "display": "Replay Take",  "symbol": "replay",       "default": 0, "momentary": true},
+    {"short": "STOP", "type": "switch", "display": "Stop",         "symbol": "stop",         "default": 0, "momentary": true},
+    {"short": "NEXT", "type": "switch", "display": "Next Phrase",  "symbol": "next",         "default": 0, "momentary": true},
+    {"short": "REF",  "type": "switch", "display": "Reference",    "symbol": "reference",    "default": 0, "momentary": true},
+    {"short": "SAVE", "type": "switch", "display": "Save Takes",   "symbol": "saveTakes",    "default": 0},
+    {"short": "ROLL", "type": "gauge", "gaugetype": "listenroll",    "display": "Phrase", "symbol": "roll",
+      "customtype": "PianoRollDisplay", "bindings": [{"call": "setSnapshot", "from": "getPianoRollSnapshot"}]},
+    {"short": "SCORE", "type": "gauge", "gaugetype": "listenscore",  "display": "Result", "symbol": "score",
+      "customtype": "ScoreDisplay", "bindings": [{"call": "setScore", "from": "getScoreSnapshot"}]},
+    {"short": "LSN",  "type": "gauge", "gaugetype": "listenlessons", "display": "Lessons", "symbol": "lessons",
+      "customtype": "LessonBrowserDisplay"}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1000",
+    "WINDOW_HEIGHT": "620"
+  },
+  "pages": [
+    {"name": "Lessons",  "type": "=",  "composition": "R=(1:9) A1=(INST) A2=(LSN)"},
+    {"name": "Practice", "type": "||", "composition": "C=(1:4) A1=(INST, BPM, CLK, ILVL, CLVL, SAVE, PLAY, REF, STOP, NEXT) A2=(ROLL)"},
+    {"name": "Result",   "type": "||", "composition": "C=(1:4) A1=(PLAY, LIS, REP, REF, NEXT, STOP, SAVE) A2=(SCORE*230, ROLL)"},
+    {"name": "Settings", "type": "||", "composition": "C=(1:1) A1=(INP, CLK, GAIN) A2=(LAT, VOL, ILVL, CLVL)"}
+  ],
+  "extra_ui_includes": [
+    "inc/PianoRollDisplay.h",
+    "inc/ScoreDisplay.h",
+    "inc/LessonBrowserDisplay.h",
+    "inc/ProgressStore.h"
+  ],
+  "extra_menus": [
+    {
+      "name": "Lessons",
+      "id_count": 10,
+      "build_method": "juce::PopupMenu buildLessonsMenu()\n    {\n        juce::PopupMenu menu;\n        menu.addItem({ID_BASE} + 1, \"Open next suggested lesson\");\n        menu.addItem({ID_BASE} + 2, \"Reload lessons\");\n        menu.addSeparator();\n        menu.addItem({ID_BASE} + 3, \"Open last take report in browser\");\n        return menu;\n    }",
+      "select_method": "void handleLessonsMenuSelection(const int menuItemID)\n    {\n        if (menuItemID == {ID_BASE} + 1)\n        {\n            if (processorRef.loadRecommendedLesson())\n            {\n                switchPage(1);\n            }\n        }\n        else if (menuItemID == {ID_BASE} + 2)\n        {\n            processorRef.reloadLessons();\n        }\n        else if (menuItemID == {ID_BASE} + 3)\n        {\n            processorRef.openLastReport();\n        }\n    }"
+    }
+  ],
+  "extra_prepare_calls": [
+    "restoreProgress();"
+  ],
+  "extra_timer_callbacks": [
+    "processorRef.pollLesson();",
+    "processorRef.pollResult();",
+    "if (processorRef.consumeResultArrived()) { switchPage(2); }",
+    "lessonsGauge.setRows(processorRef.lessonRowsVersion(), [this] { return processorRef.lessonRows(); });",
+    "if (!lessonsGauge.onLoad) { lessonsGauge.onLoad = [this](const juce::String& stem) { if (processorRef.loadLesson(stem)) { switchPage(1); } }; }",
+    "if (const auto status = processorRef.pollStatusText()) { m_statusBar.showMessage(*status, status->isNotEmpty()); }",
+    "pollScriptError();"
+  ],
+  "processor_forwards": [
+    {"name": "hasScriptError", "type": "bool"},
+    {"name": "scriptErrorMessage", "call": "scriptError", "type": "std::string"},
+    {"name": "getScriptSkeleton", "call": "scriptSkeleton", "type": "std::string"},
+    {"name": "getLuaUiParamSlots", "call": "uiParamSlots", "type": "ListenAndPlayScriptEngine::UiParamSlots"},
+    {"name": "getPianoRollSnapshot", "call": "pianoRollSnapshot", "type": "ListenPlayDisplay::PianoRollSnapshot"},
+    {"name": "getScoreSnapshot", "call": "scoreSnapshot", "type": "ListenPlayDisplay::ScoreSnapshot"},
+    {"name": "lessonRowsVersion", "type": "uint64_t"}
+  ],
+  "extra_processor_members": [
+    "std::string m_lastStatus;",
+    "std::string m_lastReportHtml;",
+    "std::atomic<bool> m_resultArrived{false};"
+  ],
+  "extra_processor_methods": [
+    "void pollLesson() { if (pluginRunner) { pluginRunner->poll(); } }",
+    "[[nodiscard]] std::optional<juce::String> pollStatusText() {\n        const std::string text = pluginRunner ? pluginRunner->statusText() : std::string{};\n        if (text == m_lastStatus)\n        {\n            return std::nullopt;\n        }\n        m_lastStatus = text;\n        return juce::String(text);\n    }",
+    "void pollResult() {\n        if (!pluginRunner)\n        {\n            return;\n        }\n        if (const auto result = pluginRunner->takeNewResult())\n        {\n            m_lastReportHtml = result->reportHtml;\n            m_resultArrived = true;\n            if (pluginRunner->saveTakes())\n            {\n                saveTake(*result);\n            }\n        }\n        saveProgress();\n    }",
+    "void saveTake(const TakeAnalysis::TakeResult& result) {\n        const auto root = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile(\"ListenAndPlay Recordings\");\n        const auto stamp = juce::Time::getCurrentTime().formatted(\"%Y%m%d-%H%M%S\").toStdString();\n        static_cast<void>(TakeExport::writeTake(std::filesystem::path{root.getFullPathName().toStdString()}, stamp, result, pluginRunner->takeExportContext()));\n    }",
+    "[[nodiscard]] bool consumeResultArrived() { return m_resultArrived.exchange(false); }",
+    "[[nodiscard]] std::vector<ListenPlayDisplay::LessonRow> lessonRows() { return pluginRunner ? pluginRunner->lessonRows() : std::vector<ListenPlayDisplay::LessonRow>{}; }",
+    "bool loadLesson(const juce::String& stem) {\n        if (!pluginRunner)\n        {\n            return false;\n        }\n        const auto lookup = FileIo::resolveLibraryScript(stem.toStdString());\n        if (!lookup.source)\n        {\n            return false;\n        }\n        pluginRunner->prepareLesson(stem.toStdString());\n        const bool loaded = applyScriptText(juce::String::fromUTF8(lookup.source->c_str()));\n        saveProgress();\n        return loaded;\n    }",
+    "bool loadRecommendedLesson() {\n        const auto stem = pluginRunner ? pluginRunner->recommendedLesson() : std::nullopt;\n        return stem && loadLesson(juce::String(*stem));\n    }",
+    "void reloadLessons() { if (pluginRunner) { pluginRunner->refreshLessons(); } }",
+    "void saveProgress() { if (pluginRunner && pluginRunner->consumeProgressDirty()) { ProgressStore::save(pluginRunner->progressJson()); } }",
+    "void restoreProgress() {\n        if (!pluginRunner)\n        {\n            return;\n        }\n        pluginRunner->setLessonLister([] { return FileIo::listLibraryScriptNames(); });\n        pluginRunner->loadProgress(ProgressStore::load());\n        const std::string last = pluginRunner->lastLessonStem();\n        if (last.empty())\n        {\n            return;\n        }\n        const auto lookup = FileIo::resolveLibraryScript(last);\n        if (lookup.source && (m_fileIo.currentScript().empty() || *lookup.source == m_fileIo.currentScript()))\n        {\n            loadLesson(juce::String(last));\n        }\n    }",
+    "void openLastReport() {\n        if (m_lastReportHtml.empty())\n        {\n            return;\n        }\n        auto dir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile(\"ListenAndPlay Analysis\");\n        dir.createDirectory();\n        const auto file = dir.getChildFile(\"take-\" + juce::Time::getCurrentTime().formatted(\"%Y%m%d-%H%M%S\") + \".html\");\n        file.replaceWithText(juce::String::fromUTF8(m_lastReportHtml.c_str()));\n        juce::URL(file).launchInDefaultBrowser();\n    }"
+  ],
+  "protected_files": [],
+  "CPP":
+  {
+    "CLASS_NAME": "ListenAndPlayImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/ListenAndPlayImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

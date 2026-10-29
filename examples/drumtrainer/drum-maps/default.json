@@ -14,13 +14,13 @@
   },
   "hihat": {
     "pedalCc": 4,
-    "halfOpenAbove": 120,
-    "closedAbove": 125,
+    "halfOpenAbove": 60,
+    "closedAbove": 120,
     "ccGraceMs": 3
   },
   "click": {
     "outputChannel": 10,
-    "downbeat": "Bb3",
-    "beat": "B3"
+    "downbeat": "C#4",
+    "beat": "F#4"
   }
 }

@@ -27,6 +27,8 @@
     {"short": "ABRS", "type": "drop",   "display": "Analysis Bars",  "symbol": "analysisBars", "default": 0, "signed": false,
       "listitems": ["Open end", "4 Bars", "8 Bars", "12 Bars", "16 Bars", "24 Bars", "32 Bars", "64 Bars"]},
     {"short": "LAT",  "type": "dial",   "display": "Latency Comp",   "symbol": "latencyComp", "default": 0,   "range": [-50, 150, 0.1, 1, false],  "precision": 1, "unit": "ms"},
+    {"short": "COUT", "type": "drop",   "display": "Click Out",      "symbol": "clickOut",    "default": 0,
+      "listitems": ["Audio", "MIDI", "Both"]},
     {"short": "PRE",  "type": "drop",   "display": "Preset",         "symbol": "preset",      "default": 6,
       "listitems": ["3/4", "3/4 8th", "3/4 16th", "3/4 shuffle", "3/4 triplet", "4/4", "4/4 8th", "4/4 16th",
         "4/4 shuffle", "4/4 triplet", "4/4 swing", "5/4 (3+2)", "5/4 8th (3+2)", "5/4 (2+3)", "5/4 8th (2+3)",
@@ -53,7 +55,7 @@
     "WINDOW_WIDTH": "1200",
     "WINDOW_HEIGHT": "660",
     "type": "||",
-    "composition": "C=(1:5) A1=(PRE, VOI, KIT, DRP, SWG, ONF, SYNC, ANLZ, ABRS, LAT, BPM, SVOL, MVOL, IVOL) A2=(ROLL)"
+    "composition": "C=(1:5) A1=(PRE, VOI, KIT, DRP, SWG, ONF, SYNC, ANLZ, ABRS, LAT, COUT, BPM, SVOL, MVOL, IVOL) A2=(ROLL)"
   },
   "performance-page": {
     "type": "||",

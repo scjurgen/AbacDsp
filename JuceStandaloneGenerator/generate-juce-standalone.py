@@ -41,6 +41,7 @@ from codegen_widgets import (
     gauge_present, create_gauge_callbacks, create_theme_callbacks,
     create_widgets_decl, create_init_widgets, create_extra_private_methods,
     performance_page_shorts, create_page_switch_methods,
+    uses_pages, create_pages_methods,
     create_extra_menu_names, create_extra_menu_dispatch,
     create_extra_menu_selection_dispatch, create_extra_menu_methods,
 )
@@ -146,6 +147,8 @@ CPP_JUCE_FILE_VARS = [
     "RESIZED_AREA_PERFORMANCE",
     "PAGE_SHOW_PERFORMANCE",
     "PAGE_SHOW_SETTINGS",
+    "PAGE_NAMES",
+    "PAGE_SHOW_PAGES",
     "TIMER_CALLBACKS",
     "APPLY_THEME_CALLBACKS",
     "EXTRA_PRIVATE_METHODS",
@@ -277,8 +280,15 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
 
     blueprint["CPP"]["INIT_WIDGETS"] = create_init_widgets(blueprint)
     blueprint["CPP"]["WIDGETS_DECL"] = create_widgets_decl(blueprint)
-    blueprint["CPP"]["RESIZED_AREA"] = construct_boxes(blueprint)
     has_performance_page = bool(performance_page_shorts(blueprint))
+    if uses_pages(blueprint) and has_performance_page:
+        raise GeneratorError(f"{blueprint['module']}: \"pages\" and \"performance-page\" are mutually exclusive")
+    pages_methods = create_pages_methods(blueprint)
+    blueprint["CPP"]["PAGE_NAMES"] = pages_methods["PAGE_NAMES"]
+    blueprint["CPP"]["PAGE_SHOW_PAGES"] = pages_methods["PAGE_SHOW_PAGES"]
+    blueprint["CPP"]["RESIZED_AREA"] = (
+        pages_methods["RESIZED_AREA_PAGES"] if uses_pages(blueprint) else construct_boxes(blueprint)
+    )
     blueprint["CPP"]["RESIZED_AREA_PERFORMANCE"] = (
         construct_boxes(blueprint, section="performance-page") if has_performance_page else ""
     )
@@ -383,6 +393,8 @@ def create_package_from_json_dict(blueprint: Blueprint) -> None:
         blueprint["CPP"]["GAUGES"].append("MIDIEVENTS")
     if has_performance_page:
         blueprint["CPP"]["GAUGES"].append("PERFORMANCEPAGE")
+    if uses_pages(blueprint):
+        blueprint["CPP"]["GAUGES"].append("PAGES")
 
     if any(item["type"] == "luacontrolarea" for item in blueprint["ports-control"]) and not uses_lua(blueprint):
         raise GeneratorError(f"{blueprint['module']}: a luacontrolarea port requires \"use-lua\": true")

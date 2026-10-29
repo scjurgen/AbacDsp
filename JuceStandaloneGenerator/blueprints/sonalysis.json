@@ -1,0 +1,75 @@
+{
+  "name": "sonalysis",
+  "plugintype": "Analyzer",
+  "description": [
+    "Measurement tool for musicians: levels, spectrum, tuner, XY scope and beat finder.\n"
+  ],
+  "ports-control":
+  [
+    {"short": "PFAL", "type": "drop",   "display": "Peak Fall",    "symbol": "peakFall",    "default": 1, "signed": false,
+      "listitems": ["6 dB/s", "11.8 dB/s (PPM)", "24 dB/s", "48 dB/s"]},
+    {"short": "RMSW", "type": "drop",   "display": "RMS Window",   "symbol": "rmsWindow",   "default": 1, "signed": false,
+      "listitems": ["50 ms", "300 ms (VU)", "1 s"]},
+    {"short": "HOLD", "type": "drop",   "display": "Peak Hold",    "symbol": "peakHold",    "default": 2, "signed": false,
+      "listitems": ["Off", "1 s", "3 s", "Infinite"]},
+    {"short": "HRST", "type": "switch", "display": "Reset Hold",   "symbol": "holdReset",   "default": 0, "momentary": true},
+    {"short": "FFTS", "type": "drop",   "display": "FFT Size",     "symbol": "fftSize",     "default": 2, "signed": false,
+      "listitems": ["2048", "4096", "8192", "16384"]},
+    {"short": "FFAL", "type": "drop",   "display": "FFT Fall",     "symbol": "fftFall",     "default": 2, "signed": false,
+      "listitems": ["Instant", "12 dB/s", "24 dB/s", "48 dB/s"]},
+    {"short": "SPKH", "type": "switch", "display": "Peak Curve",   "symbol": "spectrumPeakHold", "default": 0},
+    {"short": "A4",   "type": "dial",   "display": "A4",           "symbol": "referencePitch", "default": 440, "range": [415, 466, 0.1, 1, false], "precision": 1, "unit": "Hz"},
+    {"short": "PSRC", "type": "drop",   "display": "Pitch Source", "symbol": "pitchSource", "default": 0, "signed": false,
+      "listitems": ["L+R", "L", "R"]},
+    {"short": "BRST", "type": "switch", "display": "Reset Beat",   "symbol": "beatReset",   "default": 0, "momentary": true},
+    {"short": "THRU", "type": "switch", "display": "Thru",         "symbol": "thru",        "default": 0},
+    {"short": "LVL",  "type": "gauge", "gaugetype": "sonalysislevels",   "display": "Levels",   "symbol": "levelMeter",
+      "customtype": "LevelMeterDisplay", "bindings": [{"call": "setLevels", "from": "getLevelSnapshot"}]},
+    {"short": "FFT",  "type": "gauge", "gaugetype": "sonalysisspectrum", "display": "Spectrum", "symbol": "spectrum",
+      "customtype": "SpectrumDisplay", "bindings": [{"call": "setSpectrum", "from": "getSpectrumSnapshot"}]},
+    {"short": "TUNE", "type": "gauge", "gaugetype": "sonalysistuner",    "display": "Tuner",    "symbol": "tuner",
+      "customtype": "TunerDisplay", "bindings": [{"call": "setPitch", "from": "getPitchSnapshot"}]},
+    {"short": "XY",   "type": "gauge", "gaugetype": "sonalysisxy",       "display": "XY",       "symbol": "xyScope",
+      "customtype": "XyScopeDisplay", "bindings": [{"call": "setPoints", "from": "getXySnapshot"}]},
+    {"short": "BEAT", "type": "gauge", "gaugetype": "sonalysisbeat",     "display": "Beat",     "symbol": "beat",
+      "customtype": "BeatDisplay", "bindings": [{"call": "setBeat", "from": "getBeatSnapshot"}]}
+  ],
+  "layout": {
+    "WINDOW_WIDTH": "1100",
+    "WINDOW_HEIGHT": "680"
+  },
+  "pages": [
+    {"name": "Levels",   "type": "||", "composition": "C=(1:3) A1=(PFAL, RMSW, HOLD, HRST, THRU) A2=(LVL)"},
+    {"name": "Spectrum", "type": "||", "composition": "C=(1:5) A1=(FFTS, FFAL, SPKH, THRU) A2=(FFT)"},
+    {"name": "Tuner",    "type": "||", "composition": "C=(1:3) A1=(A4, PSRC, THRU) A2=(TUNE)"},
+    {"name": "XY",       "type": "||", "composition": "C=(1:5) A1=(THRU) A2=(XY)"},
+    {"name": "Beat",     "type": "||", "composition": "C=(1:3) A1=(BRST, THRU) A2=(BEAT)"}
+  ],
+  "extra_ui_includes": [
+    "inc/LevelMeterDisplay.h",
+    "inc/SpectrumDisplay.h",
+    "inc/TunerDisplay.h",
+    "inc/XyScopeDisplay.h",
+    "inc/BeatDisplay.h"
+  ],
+  "extra_timer_callbacks": [
+    "processorRef.setPitchTrackingEnabled(juce::String(kPageNames[m_currentPage]) == \"Tuner\");"
+  ],
+  "extra_processor_methods": [
+    "void setPitchTrackingEnabled(const bool enabled) noexcept { if (pluginRunner) { pluginRunner->setPitchTrackingEnabled(enabled); } }"
+  ],
+  "processor_forwards": [
+    {"name": "getLevelSnapshot",    "call": "levelSnapshot",    "type": "Sonalysis::LevelSnapshot"},
+    {"name": "getSpectrumSnapshot", "call": "spectrumSnapshot", "type": "Sonalysis::SpectrumSnapshot"},
+    {"name": "getPitchSnapshot",    "call": "pitchSnapshot",    "type": "Sonalysis::PitchSnapshot"},
+    {"name": "getXySnapshot",       "call": "xySnapshot",       "type": "Sonalysis::XySnapshot"},
+    {"name": "getBeatSnapshot",     "call": "beatSnapshot",     "type": "Sonalysis::BeatSnapshot"},
+    {"name": "getDroppedFrames",    "call": "droppedFrames",    "type": "uint64_t"}
+  ],
+  "CPP":
+  {
+    "CLASS_NAME": "SonalysisImpl<NumSamplesPerBlock>",
+    "INCLUDE_PEDAL": "impl/SonalysisImpl.h",
+    "PROCMODE": "Stereo-Stereo"
+  }
+}

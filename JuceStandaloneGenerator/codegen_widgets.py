@@ -1,6 +1,6 @@
 from blueprint import Blueprint
 from codegen_processor import cc_enabled_controls
-from parseboxstructure import parse_box_structure
+from parseboxstructure import parse_box_structure, construct_boxes
 
 _WIDGET_SUFFIX = {
     "dial": "Dial",
@@ -250,6 +250,42 @@ def create_page_switch_methods(blueprint: Blueprint) -> dict[str, str]:
         performance_visible = "true" if item["short"] in perf_shorts else "false"
         show_performance += f"{varname}.setVisible({performance_visible});\n"
     return {"PAGE_SHOW_PERFORMANCE": show_performance, "PAGE_SHOW_SETTINGS": show_settings}
+
+
+def uses_pages(blueprint: Blueprint) -> bool:
+    return bool(blueprint.get("pages"))
+
+
+def create_pages_methods(blueprint: Blueprint) -> dict[str, str]:
+    if not uses_pages(blueprint):
+        return {"PAGE_NAMES": "", "PAGE_SHOW_PAGES": "", "RESIZED_AREA_PAGES": ""}
+    pages = blueprint["pages"]
+    page_names = ", ".join(f'"{page["name"]}"' for page in pages)
+
+    page_shorts = []
+    for page in pages:
+        _, _, areas = parse_box_structure(page["composition"])
+        page_shorts.append({entry["symbol"] for area in areas for entry in area})
+
+    # visible_when widgets own their visibility, same as on the two-page path
+    show_pages = ""
+    for item in blueprint["ports-control"]:
+        if "visible_when" in item:
+            continue
+        on_pages = [idx for idx, shorts in enumerate(page_shorts) if item["short"] in shorts]
+        if len(on_pages) == len(pages):
+            condition = "true"
+        elif not on_pages:
+            condition = "false"
+        else:
+            condition = " || ".join(f"page == {idx}" for idx in on_pages)
+        show_pages += f"{widget_varname(item)}.setVisible({condition});\n"
+
+    resized = "switch (m_currentPage)\n{\n"
+    for idx, page in enumerate(pages):
+        resized += f"case {idx}:\n{{\n{construct_boxes(blueprint, layout=page)}break;\n}}\n"
+    resized += "default:\nbreak;\n}\n"
+    return {"PAGE_NAMES": page_names, "PAGE_SHOW_PAGES": show_pages, "RESIZED_AREA_PAGES": resized}
 
 
 def create_extra_private_methods(blueprint: Blueprint) -> str:

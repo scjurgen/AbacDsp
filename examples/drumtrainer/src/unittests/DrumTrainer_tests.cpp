@@ -1,6 +1,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <iterator>
+#include <span>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <string>
@@ -592,4 +594,130 @@ TEST(DrumTrainerImplTest, DisplayPatternFollowsScriptAndBarLength)
     impl.setPreset(kPresetThreeFour);
     EXPECT_EQ(impl.displayPattern().beatsPerBar, 3u);
     EXPECT_GT(impl.displayPattern().version, scripted);
+}
+
+namespace
+{
+struct SentMidi
+{
+    std::array<uint8_t, 3> bytes{};
+    size_t sample{0};
+};
+
+// Runs block by block, draining the MIDI output after each block like the host would; the
+// peak of the audio output is returned through audioPeak.
+std::vector<SentMidi> runCollectingMidi(Impl& impl, const float seconds, float& audioPeak)
+{
+    std::vector<SentMidi> sent;
+    const Buffer silence{};
+    Buffer out{};
+    audioPeak = 0.f;
+    const auto numBlocks = static_cast<size_t>(seconds * kSampleRate) / kBlock;
+    for (size_t block = 0; block < numBlocks; ++block)
+    {
+        impl.processBlock(silence, out);
+        for (size_t i = 0; i < kBlock; ++i)
+        {
+            audioPeak = std::max({audioPeak, std::abs(out(i, 0)), std::abs(out(i, 1))});
+        }
+        impl.drainMidiOutput([&](const std::span<const uint8_t> bytes, const int offset)
+                             { sent.push_back({{bytes[0], bytes[1], bytes[2]}, block * kBlock + static_cast<size_t>(offset)}); });
+    }
+    return sent;
+}
+
+std::vector<SentMidi> noteOns(const std::vector<SentMidi>& sent)
+{
+    std::vector<SentMidi> ons;
+    std::ranges::copy_if(sent, std::back_inserter(ons), [](const SentMidi& m) { return (m.bytes[0] & 0xF0) == 0x90; });
+    return ons;
+}
+
+constexpr int kClickOutAudio{0};
+constexpr int kClickOutMidi{1};
+constexpr int kClickOutBoth{2};
+constexpr int kPresetFourFour{5};
+}
+
+TEST(DrumTrainerImplTest, AudioClickOutSendsNoMidi)
+{
+    Impl impl(kSampleRate);
+    impl.setClickOut(kClickOutAudio);
+    impl.setOnOff(true);
+    float peak = 0.f;
+    EXPECT_TRUE(runCollectingMidi(impl, 2.f, peak).empty());
+    EXPECT_GT(peak, 0.001f);
+}
+
+TEST(DrumTrainerImplTest, MidiClickOutPlaysTheBarOnTheModuleInsteadOfAudio)
+{
+    Impl impl(kSampleRate);
+    impl.setPreset(kPresetFourFour);
+    impl.setClickOut(kClickOutMidi);
+    impl.setOnOff(true);
+    float peak = 0.f;
+    const auto sent = runCollectingMidi(impl, 2.f, peak);
+    EXPECT_EQ(peak, 0.f);
+    const auto ons = noteOns(sent);
+    ASSERT_EQ(ons.size(), 4u);
+    EXPECT_EQ(ons[0].bytes, (std::array<uint8_t, 3>{0x99, 58, DrumOutput::MidiClickOut::kDownbeatVelocity}));
+    EXPECT_EQ(ons[1].bytes, (std::array<uint8_t, 3>{0x99, 59, DrumOutput::MidiClickOut::kBeatVelocity}));
+    EXPECT_EQ(ons[1].sample - ons[0].sample, kBeatSamples);
+    EXPECT_EQ(sent.size(), 8u);
+    EXPECT_EQ(sent[1].bytes[0], 0x89);
+    EXPECT_EQ(sent[1].sample - sent[0].sample, 1440u);
+}
+
+TEST(DrumTrainerImplTest, BothClickOutPlaysAudioAndMidiWithSubdivisions)
+{
+    Impl impl(kSampleRate);
+    impl.setPreset(kPresetFourFourEighth);
+    impl.setClickOut(kClickOutBoth);
+    impl.setOnOff(true);
+    float peak = 0.f;
+    const auto ons = noteOns(runCollectingMidi(impl, 2.f, peak));
+    EXPECT_GT(peak, 0.001f);
+    ASSERT_EQ(ons.size(), 8u);
+    EXPECT_EQ(ons[1].bytes[2], DrumOutput::MidiClickOut::kSubVelocity);
+}
+
+TEST(DrumTrainerImplTest, MidiClickIsSilentWhileStoppedAndDuringDroppedBars)
+{
+    Impl impl(kSampleRate);
+    impl.setPreset(kPresetFourFour);
+    impl.setClickOut(kClickOutMidi);
+    float peak = 0.f;
+    EXPECT_TRUE(runCollectingMidi(impl, 2.f, peak).empty());
+    impl.setDropBars(1);
+    impl.setOnOff(true);
+    const auto ons = noteOns(runCollectingMidi(impl, 3.99f, peak));
+    ASSERT_FALSE(ons.empty());
+    EXPECT_TRUE(std::ranges::all_of(ons, [](const SentMidi& m) { return m.sample < kBarSamples; }));
+}
+
+TEST(DrumTrainerImplTest, MidiClickPlaysTheCountInWithStartOff)
+{
+    Impl impl(kSampleRate);
+    impl.setPreset(kPresetFourFour);
+    impl.setClickOut(kClickOutMidi);
+    impl.setAnalysisMode(true);
+    float peak = 0.f;
+    EXPECT_EQ(noteOns(runCollectingMidi(impl, 3.99f, peak)).size(), 8u);
+    EXPECT_TRUE(noteOns(runCollectingMidi(impl, 2.f, peak)).empty());
+}
+
+TEST(DrumTrainerImplTest, MidiClickUsesTheDrumMapClickSettings)
+{
+    Impl impl(kSampleRate);
+    ASSERT_FALSE(
+        impl.setDrumMapJson(R"({"notes": {"kick": 36}, "click": {"outputChannel": 2, "downbeat": "C4", "beat": 61}})")
+            .has_value());
+    impl.setPreset(kPresetFourFour);
+    impl.setClickOut(kClickOutMidi);
+    impl.setOnOff(true);
+    float peak = 0.f;
+    const auto ons = noteOns(runCollectingMidi(impl, 1.f, peak));
+    ASSERT_EQ(ons.size(), 2u);
+    EXPECT_EQ(ons[0].bytes, (std::array<uint8_t, 3>{0x91, 60, DrumOutput::MidiClickOut::kDownbeatVelocity}));
+    EXPECT_EQ(ons[1].bytes[1], 61);
 }

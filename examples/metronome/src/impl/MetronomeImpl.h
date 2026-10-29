@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "Analysis/OnsetDetector.h"
 #include "Analysis/Spectrogram.h"
 #include "Audio/AudioBuffer.h"
 #include "BeatAnalysisReport.h"
@@ -912,7 +913,7 @@ class MetronomeImpl final : public EffectBase
 
     AbacDsp::ClickGenerator m_click;
     AbacDsp::BeatSequencer m_seq;
-    MetronomeAnalysis::OnsetDetector m_onsetDetector;
+    AbacDsp::OnsetDetector m_onsetDetector;
     MetronomeAnalysis::RawOnsetCollector m_rawOnsetCollector;
     std::atomic<bool> m_reportReady{false};
 

@@ -42,6 +42,7 @@ package_add_test(DrumtrainerTests
         DrumHitMatcher_tests.cpp
         DrumAnalysisReport_tests.cpp
         DrumDisplayData_tests.cpp
+        MidiClickOut_tests.cpp
 )
 
 target_compile_definitions(
