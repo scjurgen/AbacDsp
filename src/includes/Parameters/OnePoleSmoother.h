@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <functional>
 
 namespace AbacDsp
 {
@@ -57,7 +58,8 @@ class OnePoleSmoother
     {
         const float distance = m_current - m_target;
         const float stepped = m_target + distance * m_coefficient;
-        m_current = (stepped == m_current || std::fabs(distance) < kSnapDistance) ? m_target : stepped;
+        m_current =
+            (std::equal_to<float>{}(stepped, m_current) || std::fabs(distance) < kSnapDistance) ? m_target : stepped;
         return m_current;
     }
 
@@ -73,7 +75,7 @@ class OnePoleSmoother
 
     [[nodiscard]] bool isSettled() const noexcept
     {
-        return m_current == m_target;
+        return std::equal_to<float>{}(m_current, m_target);
     }
 
     [[nodiscard]] float getCoefficient() const noexcept
