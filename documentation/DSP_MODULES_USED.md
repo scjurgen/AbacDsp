@@ -27,6 +27,7 @@ Scope: only `documentation/*/*.cpp` (and nested) files that `#include` a
 | Analysis/PitchNoteTracker.h | YinPitch/StampedYinExplore.cpp, YinPitch/StampedYinGuitarExplore.cpp | StampedYinExplore, StampedYinGuitarExplore | yes |
 | Analysis/StampedYinPitchDetector.h | YinPitch/StampedYinExplore.cpp, YinPitch/StampedYinGuitarExplore.cpp | StampedYinExplore, StampedYinGuitarExplore | yes |
 | Analysis/YinPitchDetector.h | YinPitch/StampedYinExplore.cpp (noise comparison) | StampedYinExplore | yes |
+| Filters/LinkwitzRileySplit.h | Filters/LinkwitzRileySplit/LinkwitzRileySplitExplore.cpp | LinkwitzRileySplitExplore | yes |
 | Filters/OnePoleFilter.h | Filters/OnePoleFilter/OnePoleExplore.cpp, Parameters/OnePoleSmootherExplore.cpp | OnePoleExplore, OnePoleSmootherExplore | yes |
 | Filters/PeakTunedPoleMixing.h | Filters/PoleMixing/PeakTunedExplore.cpp | PeakTunedExplore | yes |
 | Filters/PoleMixingFilter.h | Filters/PoleMixing/PoleMixingExplore.cpp | PoleMixingExplore | yes |

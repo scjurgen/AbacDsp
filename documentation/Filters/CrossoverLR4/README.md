@@ -20,6 +20,10 @@ exactly -180 degrees at the crossover frequency. `lowOut + highOut == in` is
 therefore not a property of a Linkwitz-Riley crossover and is not tested.
 The correct check is against an `AllPass` biquad at the same frequency and Q.
 
+`AbacDsp::LinkwitzRileySplit` (`src/includes/Filters/LinkwitzRileySplit.h`) is the same filter
+with a per-sample `step()` that returns both bands; its unit tests check the -6 dB crossing, the 24 dB/octave slope,
+the flat sum and that the sum equals the allpass biquad.
+
 ## Quick start
 
 `./generate.sh` runs the whole pipeline in one step: configures/builds
