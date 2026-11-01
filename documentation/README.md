@@ -33,6 +33,7 @@ all. See `TODO.md` for folders and algorithms still missing plots.
 | `Filters/PinkFilter/` | documentation | `PinkFilter`: measured PSD vs. ideal -3dB/octave slope, 3-pole vs. 7-pole accuracy (Welch-averaged white-noise PSD) |
 | `Filters/PoleMixing/` | generation, documentation, exploration | `PoleMixingFilter`: `fitPoleMixingCorrections.py` generates `src/includes/Filters/PoleMixingCorrections_generated.h`; `PoleMixingExplore.cpp` plots magnitude/phase, resonance, saturator overdrive behavior; `PeakTunedExplore.cpp` and the section "Two pole-mixing variants, and why both exist" in its README compare `PoleMixingFilter.h` with `PeakTunedPoleMixing.h` and show `CutoffTrajectory` |
 | `Filters/SincFilterDesign/` | generation | Regenerates the windowed-sinc FIR tables in `src/includes/Filters/Sinc/` |
+| `Generators/` | documentation | `Envelope` segment shapes: the polynomial `CurvedValue` against the exponential `ExponentialApproach` (best polynomial fit and its overshoot per number of time constants), and a pitch envelope in MIDI notes against the closed form |
 | `KarplusStrong/` | documentation | `KarplusStrongString`/`KarplusStrongVoice`: spectral brightness loss, decay-time accuracy, pitch bend behavior |
 | `Metronome/` | generation | Click samples and MIDI pattern library for tapelooper's built-in groove, not a library-algorithm write-up |
 | `Modulation/` | documentation | `Wow`/`Flutter` LFO character (timeline, spectrum, Poincare orbit plot), `Tremolo` drive morph, `RingModulator` sidebands |

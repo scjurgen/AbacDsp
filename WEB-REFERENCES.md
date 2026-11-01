@@ -92,6 +92,7 @@ Cited by author and year rather than URL, being paywalled or journal-hosted:
 | --- | --- |
 | [A wavetable oscillator (earlevel)](https://www.earlevel.com/main/2012/05/04/a-wavetable-oscillator-part-1/) | `WaveTableStorage.h`, `WaveTableOscillator.h` |
 | [Aliasing](https://en.wikipedia.org/wiki/Aliasing) | `NaiveGenerators/Generator.h` |
+| [Exponential decay](https://en.wikipedia.org/wiki/Exponential_decay) | `AdsEnvelope.h` (`ExponentialApproach`) |
 | [Additive synthesis](https://en.wikipedia.org/wiki/Additive_synthesis) | `HarmonicGenerator.h` |
 | [Ornstein-Uhlenbeck process](https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process) | `OrnsteinUhlenbeckProcess.h`, `ExactOrnsteinUhlenbeck.h`. The exact transition over a step is D. T. Gillespie, "Exact numerical simulation of the Ornstein-Uhlenbeck process and its integral", Physical Review E 54(2), 1996. |
 | [xoshiro / xoroshiro generators (Vigna)](https://prng.di.unimi.it/) | `Random.h`. xoshiro256** is D. Blackman, S. Vigna, "Scrambled Linear Pseudorandom Number Generators", ACM Transactions on Mathematical Software 47(4), 2021; splitmix64 seeding as recommended there. |

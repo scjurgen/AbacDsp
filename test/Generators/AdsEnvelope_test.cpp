@@ -1,5 +1,7 @@
+#include <algorithm>
 #include <cmath>
 #include <tuple>
+#include <vector>
 
 #include "gtest/gtest.h"
 
@@ -180,6 +182,168 @@ TEST(Envelope, modifyTargetIfActiveKeepsRemainingTimeButChangesDestination)
     }
     EXPECT_NEAR(v, 0.8f, 1e-3f);
     EXPECT_EQ(env.currentSegmentIndex(), 1u);
+}
+
+namespace
+{
+constexpr float kSegmentMs = 100.f;
+
+/// Runs a one-segment envelope from `start` to `target` and returns the value after each step of the segment.
+std::vector<float> runSegment(const float start, const float target, const float curve, const SegmentShape shape)
+{
+    Envelope<2> env{kSampleRate};
+    env.setSegment(0, kSegmentMs, target, curve, shape);
+    env.setSegmentHoldPreviousValue(1, 0.f);
+    env.markSustainAt(1);
+    env.triggerFrom(start);
+    const auto samples = static_cast<size_t>(kSegmentMs * kSampleRate / 1000.f);
+    std::vector<float> values;
+    values.reserve(samples);
+    for (size_t i = 0; i < samples; ++i)
+    {
+        values.push_back(env.step());
+    }
+    return values;
+}
+}
+
+TEST(ExponentialApproach, followsTheClosedFormAndLandsOnTheTarget)
+{
+    for (const float k : {-3.f, 0.5f, 1.f, 3.f, 5.f, 7.f})
+    {
+        ExponentialApproach curve;
+        curve.setTimeConstants(k);
+        EXPECT_FLOAT_EQ(curve.get(0.f), 0.f) << "k=" << k;
+        EXPECT_FLOAT_EQ(curve.get(1.f), 1.f) << "k=" << k;
+        for (const float x : {0.1f, 0.25f, 0.5f, 0.75f})
+        {
+            const double expected =
+                (1.0 - std::exp(-static_cast<double>(k) * x)) / (1.0 - std::exp(-static_cast<double>(k)));
+            EXPECT_NEAR(curve.get(x), static_cast<float>(expected), 1e-6f) << "k=" << k << " x=" << x;
+        }
+    }
+}
+
+TEST(ExponentialApproach, zeroTimeConstantsIsAStraightLine)
+{
+    ExponentialApproach curve;
+    curve.setTimeConstants(0.f);
+    for (const float x : {0.f, 0.1f, 0.5f, 1.f})
+    {
+        EXPECT_FLOAT_EQ(curve.get(x), x);
+    }
+    curve.setTimeConstants(5e-5f);
+    EXPECT_FLOAT_EQ(curve.get(0.3f), 0.3f) << "below the threshold the curve is straight";
+}
+
+TEST(ExponentialApproach, positiveStartsFastNegativeStartsSlowAndBothStayWithinTheSegment)
+{
+    ExponentialApproach fast;
+    fast.setTimeConstants(5.f);
+    ExponentialApproach slow;
+    slow.setTimeConstants(-5.f);
+    float lastFast = 0.f;
+    float lastSlow = 0.f;
+    for (int i = 1; i <= 1000; ++i)
+    {
+        const float x = static_cast<float>(i) / 1000.f;
+        EXPECT_GT(fast.get(x), x - 1e-6f);
+        EXPECT_LT(slow.get(x), x + 1e-6f);
+        EXPECT_GE(fast.get(x), lastFast);
+        EXPECT_GE(slow.get(x), lastSlow);
+        EXPECT_LE(fast.get(x), 1.f);
+        EXPECT_LE(slow.get(x), 1.f);
+        lastFast = fast.get(x);
+        lastSlow = slow.get(x);
+    }
+}
+
+TEST(ExponentialApproach, extremeValuesStayFiniteAndLandOnTheTarget)
+{
+    for (const float k : {1e9f, -1e9f, 200.f, -200.f})
+    {
+        ExponentialApproach curve;
+        curve.setTimeConstants(k);
+        for (const float x : {0.f, 1e-6f, 0.5f, 1.f, 1.0000001f})
+        {
+            ASSERT_TRUE(std::isfinite(curve.get(x))) << "k=" << k << " x=" << x;
+        }
+        EXPECT_NEAR(curve.get(1.f), 1.f, 1e-5f) << "k=" << k;
+    }
+}
+
+TEST(Envelope, exponentialSegmentFollowsTheClosedFormBetweenStartAndTarget)
+{
+    constexpr float start = 48.f;
+    constexpr float target = 84.f;
+    constexpr float k = 4.f;
+    const auto values = runSegment(start, target, k, SegmentShape::Exponential);
+    const auto n = static_cast<double>(values.size());
+    for (size_t i = 0; i < values.size(); ++i)
+    {
+        const double x = static_cast<double>(i + 1) / n;
+        const double expected = static_cast<double>(start) + (1.0 - std::exp(-static_cast<double>(k) * x)) /
+                                                                 (1.0 - std::exp(-static_cast<double>(k))) *
+                                                                 static_cast<double>(target - start);
+        ASSERT_NEAR(values[i], static_cast<float>(expected), 1e-3f) << "step " << i;
+    }
+    EXPECT_NEAR(values.back(), target, 1e-3f);
+}
+
+TEST(Envelope, exponentialSegmentFallingToALowerTargetNeverUndershootsIt)
+{
+    const auto values = runSegment(84.f, 52.f, 5.f, SegmentShape::Exponential);
+    float last = 84.f;
+    for (const float v : values)
+    {
+        ASSERT_LE(v, last + 1e-4f);
+        ASSERT_GE(v, 52.f - 1e-3f);
+        last = v;
+    }
+    EXPECT_NEAR(values.back(), 52.f, 1e-3f);
+}
+
+TEST(Envelope, segmentShapeDefaultsToPolynomial)
+{
+    for (const float curve : {-1.f, 0.f, 0.5f})
+    {
+        const auto implicitShape = runSegment(0.f, 1.f, curve, SegmentShape::Polynomial);
+        Envelope<2> env{kSampleRate};
+        env.setSegment(0, kSegmentMs, 1.f, curve);
+        env.setSegmentHoldPreviousValue(1, 0.f);
+        env.markSustainAt(1);
+        env.triggerFrom(0.f);
+        for (const float v : implicitShape)
+        {
+            ASSERT_EQ(env.step(), v) << "curve=" << curve;
+        }
+    }
+}
+
+TEST(Envelope, exponentialAttackDecayWithSustainRunsInNotesAndRetriggersFromTheStart)
+{
+    Envelope<3> env{kSampleRate};
+    env.setSegment(0, 5.f, 84.f, 0.f, SegmentShape::Exponential);
+    env.setSegment(1, 400.f, 52.f, 5.f, SegmentShape::Exponential);
+    env.setSegmentHoldPreviousValue(2, 0.f);
+    env.markSustainAt(2);
+    env.triggerFrom(48.f);
+
+    float peak = 0.f;
+    float low = 1000.f;
+    for (int i = 0; i < static_cast<int>(0.5f * kSampleRate); ++i)
+    {
+        const float v = env.step();
+        peak = std::max(peak, v);
+        low = std::min(low, v);
+    }
+    EXPECT_NEAR(peak, 84.f, 1e-2f);
+    EXPECT_GE(low, 48.f - 1e-3f);
+    EXPECT_NEAR(env.step(), 52.f, 1e-3f) << "the sustain value holds";
+
+    env.triggerFrom(48.f);
+    EXPECT_NEAR(env.step(), 48.f, 0.5f) << "a retrigger starts from the start value, not from the sustain";
+    EXPECT_EQ(env.currentSegmentIndex(), 0u);
 }
 
 }

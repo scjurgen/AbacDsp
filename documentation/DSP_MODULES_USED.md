@@ -40,6 +40,7 @@ Scope: only `documentation/*/*.cpp` (and nested) files that `#include` a
 | Generators/OrnsteinUhlenbeckProcess.h | OrnsteinUhlenbeck/OrnsteinUhlenbeckTimeline.cpp | OrnsteinUhlenbeckTimeline | yes |
 | Generators/ExactOrnsteinUhlenbeck.h | OrnsteinUhlenbeck/ExactOrnsteinUhlenbeckExplore.cpp | ExactOrnsteinUhlenbeckExplore | yes |
 | Numbers/Random.h | OrnsteinUhlenbeck/ExactOrnsteinUhlenbeckExplore.cpp (and through Generators/ExactOrnsteinUhlenbeck.h) | ExactOrnsteinUhlenbeckExplore | yes |
+| Generators/AdsEnvelope.h | Generators/EnvelopeCurveExplore.cpp | EnvelopeCurveExplore | yes |
 | Parameters/CutoffTrajectory.h | Filters/PoleMixing/PeakTunedExplore.cpp | PeakTunedExplore | yes |
 | Parameters/OnePoleSmoother.h | Parameters/OnePoleSmootherExplore.cpp | OnePoleSmootherExplore | yes |
 | Numbers/Convert.h | KarplusStrongExplore.cpp, BpImpulseExplore.cpp, ResoVoiceExplore.cpp | KarplusStrongExplore, BandpassImpulseExplore, ResoVoiceExplore | yes |
