@@ -162,7 +162,8 @@ function OnEnabledChanged(value) end -- value is 0 or 1
 
 Calling `UICreateParameterSet` again on a script reload replaces the previous set entirely -
 a parameter not re-declared is unclaimed and disappears from the UI. There are only
-`kMaxLuaParams` (8) slots in the underlying pool shared by every script; requesting more than
+`kMaxLuaParams` (8 by default; a host can set `ABACDSP_LUA_MAX_PARAMS` before including the engine base) slots in
+the underlying pool shared by every script; requesting more than
 that, a duplicate `id`, or a malformed descriptor rejects the whole script at Apply time with
 an error, the same as any other script error - the previously running script keeps playing
 underneath.

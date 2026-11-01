@@ -25,6 +25,12 @@
 #include "LuaParamRangeMath.h"
 #include "LuaScriptMemoryPool.h"
 
+/// The number of controls a script can declare with UICreateParameterSet. A host that needs more defines it before
+/// the include (or on the command line); the default stays 8.
+#ifndef ABACDSP_LUA_MAX_PARAMS
+#define ABACDSP_LUA_MAX_PARAMS 8
+#endif
+
 // Fixed, always-copied shared component (CPP_SOURCE_FILES_FIXED) - must stay JUCE-free
 // so any example can pull it in without depending on the GUI layer.
 
@@ -109,7 +115,7 @@ template <typename Derived>
 class LuaScriptEngineBase
 {
   public:
-    static constexpr size_t kMaxLuaParams{8};
+    static constexpr size_t kMaxLuaParams{ABACDSP_LUA_MAX_PARAMS};
     using UiParamSlots = std::array<LuaUiParamSlot, kMaxLuaParams>;
 
     static constexpr float kDefaultPitchGranularityMs{100.f};
