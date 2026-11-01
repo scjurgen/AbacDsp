@@ -530,6 +530,67 @@ TEST(StampedYinPitchDetector, AStepOfPitchShowsWhenItsWindowHasLeftTheOldTone)
     }
 }
 
+// --- refinePeriods ---
+
+TEST(StampedYinPitchDetector, RefinePeriodsFollowASemitoneStepWhenThreePeriodsOfTheNewToneHaveSounded)
+{
+    constexpr size_t stepAt = 24000;
+    const double after = 196.0 * std::pow(2.0, 1.0 / 12.0);
+    std::vector<float> signal = sine(196.0, stepAt);
+    const std::vector<float> newTone = sine(after, 24000);
+    signal.insert(signal.end(), newTone.begin(), newTone.end());
+    const auto centsAt = [&](const size_t refinePeriods)
+    {
+        StampedYinPitchDetector detector = makeDetector({2, refinePeriods}, 29.0f, 2000.0f, 200.0f);
+        for (const Reading& r : readingsOf(detector, signal))
+        {
+            if (r.windowEnd >= stepAt + 1440)
+            {
+                return centsBetween(r.pitch, static_cast<float>(after));
+            }
+        }
+        return 9999.0f;
+    };
+    EXPECT_LT(std::abs(centsAt(3)), 10.0f) << "30 ms after the step the refined pitch is the new one";
+    EXPECT_GT(std::abs(centsAt(0)), 50.0f) << "the window of YIN still holds the old tone";
+}
+
+TEST(StampedYinPitchDetector, RefinePeriodsKeepTheAccuracyOfSteadyTonesAndImproveTheHighOnes)
+{
+    for (const double frequency : {29.5, 41.2, 110.0, 440.0, 880.0, 1500.0})
+    {
+        SCOPED_TRACE(frequency);
+        StampedYinPitchDetector plain = makeDetector({2, 0}, 29.0f, 2000.0f, 200.0f);
+        StampedYinPitchDetector refined = makeDetector({2, 3}, 29.0f, 2000.0f, 200.0f);
+        const std::vector<float> signal = sine(frequency, 24000);
+        float plainPitch{0.0f};
+        float refinedPitch{0.0f};
+        float confidence{0.0f};
+        measure(plain, signal, plainPitch, confidence);
+        measure(refined, signal, refinedPitch, confidence);
+        EXPECT_LT(std::abs(centsBetween(refinedPitch, static_cast<float>(frequency))), 0.5f);
+        EXPECT_LE(std::abs(centsBetween(refinedPitch, static_cast<float>(frequency))),
+                  std::abs(centsBetween(plainPitch, static_cast<float>(frequency))) + 0.05f);
+    }
+}
+
+TEST(StampedYinPitchDetector, RefinePeriodsLeaveTheConfidenceAndTheStampsAlone)
+{
+    const std::vector<float> signal = harmonicTone(110.0, {0.5, 0.3, 0.2}, 24000);
+    StampedYinPitchDetector plain = makeDetector({2, 0}, 29.0f, 2000.0f, 200.0f);
+    StampedYinPitchDetector refined = makeDetector({2, 3}, 29.0f, 2000.0f, 200.0f);
+    const std::vector<Reading> a = readingsOf(plain, signal);
+    const std::vector<Reading> b = readingsOf(refined, signal);
+    ASSERT_EQ(a.size(), b.size());
+    for (size_t i = 0; i < a.size(); ++i)
+    {
+        EXPECT_EQ(a[i].confidence, b[i].confidence) << i;
+        EXPECT_EQ(a[i].level, b[i].level) << i;
+        EXPECT_EQ(a[i].windowEnd, b[i].windowEnd) << i;
+        EXPECT_EQ(a[i].pitch > 0.0f, b[i].pitch > 0.0f) << i;
+    }
+}
+
 // --- contract: stamps, hops, blocks, reset, slicing, reference ---
 
 TEST(StampedYinPitchDetector, ReadingsComeOncePerHopAndCarryTheirWindowEnd)

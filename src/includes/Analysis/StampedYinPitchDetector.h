@@ -16,7 +16,8 @@ namespace AbacDsp
 /// @brief Cost option of StampedYinPitchDetector.
 struct StampedYinOptions
 {
-    size_t decimation{1}; ///< 1 or a larger integer; the cost falls with its square
+    size_t decimation{1};    ///< 1 or a larger integer; the cost falls with its square
+    size_t refinePeriods{0}; ///< 0 off; else the pitch is refined over this many periods (3 is a good value)
 };
 
 /**
@@ -53,6 +54,12 @@ struct StampedYinOptions
  * the result one window plus one hop later. A reading is made once per hop and counted in input samples, so the
  * result does not depend on how the input is cut into blocks.
  *
+ * With refinePeriods the pitch YIN found is refined by the normalised autocorrelation (peak within 12 percent of the
+ * lag, parabolic interpolation) over the newest refinePeriods periods only. YIN integrates over maxLag samples, which
+ * for a low range still hold the previous note and the pluck when a new note has sounded for three periods, so its
+ * pitch converges slowly (a bass window is 69 ms); a window of the newest periods does not have that history. The
+ * refinement is skipped when less than one period of history is left or the correlation is below 0.8.
+ *
  * Decimation puts a 4th-order Butterworth lowpass at 0.4 of the decimated rate in front and keeps every n-th sample;
  * the lowpass removes broadband noise that would lift the dips above the threshold, at the price of resolution (n = 4
  * gives 12 samples per period at 1 kHz) and of a group delay of a few input samples that is not counted. All buffers
@@ -66,11 +73,14 @@ class StampedYinPitchDetector
     static constexpr float kMinimumQuality{0.8f};
     static constexpr float kSilenceRms{1e-6f};
     static constexpr float kMinCumulativeSum{1e-10f};
+    static constexpr float kRefineSpan{0.12f};
+    static constexpr float kRefineMinCorrelation{0.8f};
 
     explicit StampedYinPitchDetector(const float sampleRate, const float minFreq = 80.0f, const float maxFreq = 1000.0f,
                                      const float hopFrequency = 50.0f, const StampedYinOptions options = {})
         : m_sampleRate(sampleRate)
         , m_decimation(std::max<size_t>(options.decimation, 1))
+        , m_refinePeriods(options.refinePeriods)
         , m_decimatedRate(sampleRate / static_cast<float>(m_decimation))
         , m_minLag(std::max<size_t>(2, static_cast<size_t>(m_decimatedRate / maxFreq)))
         , m_maxLag(std::max<size_t>(m_minLag + 3, static_cast<size_t>(m_decimatedRate / minFreq) + 2))
@@ -282,7 +292,62 @@ class StampedYinPitchDetector
     void finish(const size_t lag) noexcept
     {
         const float confidence = std::clamp(1.0f - m_cmndf[lag], 0.0f, 1.0f);
-        publish(m_decimatedRate / interpolate(lag), confidence);
+        const float yinLag = interpolate(lag);
+        publish(m_decimatedRate / (m_refinePeriods > 0 ? refineLag(yinLag) : yinLag), confidence);
+    }
+
+    /// The peak of the normalised autocorrelation of the newest samples near `lag`; `lag` when the window has too
+    /// little history for it or the correlation is weak.
+    [[nodiscard]] float refineLag(const float lag) const noexcept
+    {
+        const auto low = static_cast<size_t>(std::max(static_cast<float>(m_minLag), lag * (1.0f - kRefineSpan)));
+        const auto high = std::min(m_maxLag - 1, static_cast<size_t>(std::ceil(lag * (1.0f + kRefineSpan))));
+        const size_t length =
+            std::min(static_cast<size_t>(static_cast<float>(m_refinePeriods) * lag), m_windowSize - high - 1);
+        if (low < 2 || high < low + 2 || static_cast<float>(length) < lag)
+        {
+            return lag;
+        }
+        float energy = 0.0f;
+        const float* newest = m_source + m_windowSize - length;
+        for (size_t j = 0; j < length; ++j)
+        {
+            energy += newest[j] * newest[j];
+        }
+        size_t bestLag = low;
+        float best = -2.0f;
+        for (size_t candidate = low; candidate <= high; ++candidate)
+        {
+            const float r = correlationAt(candidate, length, energy);
+            if (r > best)
+            {
+                best = r;
+                bestLag = candidate;
+            }
+        }
+        if (best < kRefineMinCorrelation || bestLag == low || bestLag == high)
+        {
+            return best >= kRefineMinCorrelation ? static_cast<float>(bestLag) : lag;
+        }
+        const float y1 = correlationAt(bestLag - 1, length, energy);
+        const float y3 = correlationAt(bestLag + 1, length, energy);
+        const float a = (y1 - 2.0f * best + y3) / 2.0f;
+        const float b = (y3 - y1) / 2.0f;
+        return static_cast<float>(bestLag) + (std::abs(a) < 1e-9f ? 0.0f : std::clamp(-b / (2.0f * a), -0.5f, 0.5f));
+    }
+
+    [[nodiscard]] float correlationAt(const size_t lag, const size_t length, const float energy) const noexcept
+    {
+        const float* a = m_source + m_windowSize - length;
+        const float* b = a - lag;
+        float product = 0.0f;
+        float delayedEnergy = 0.0f;
+        for (size_t j = 0; j < length; ++j)
+        {
+            product += a[j] * b[j];
+            delayedEnergy += b[j] * b[j];
+        }
+        return energy > 0.0f && delayedEnergy > 0.0f ? product / std::sqrt(energy * delayedEnergy) : 0.0f;
     }
 
     /// Parabolic interpolation of the minimum, clamped to half a sample: a flat curve around the lag would otherwise
@@ -314,6 +379,7 @@ class StampedYinPitchDetector
 
     const float m_sampleRate;
     const size_t m_decimation;
+    const size_t m_refinePeriods;
     const float m_decimatedRate;
     const size_t m_minLag;
     const size_t m_maxLag;

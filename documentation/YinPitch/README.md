@@ -135,3 +135,36 @@ Butterworth at 600 Hz, 1 kHz or 2 kHz left the guitar figures as they were (600 
 bass it was worse (31 of 40 exact against 33). The harmonics a lowpass would remove are what carries the pitch of a
 weak fundamental, and the transient is not only high-frequency noise.
 
+## Refining the pitch
+
+YIN integrates over the first half of its window, `maxLag` samples. For a bass range (29 Hz, window 69 ms) that region
+still holds the previous note and the pluck when the new note has sounded for three periods, so the reading converges
+slowly towards the new pitch: after a step of one semitone at 61.7 Hz the reading is 85 cents off after 30 ms and still
+8 cents off after 60 ms. With `StampedYinOptions::refinePeriods` (3) the pitch YIN found is refined by the normalised
+autocorrelation over the newest periods only, with its peak searched within 12 percent of the YIN lag and interpolated
+(a parabola through three lags). The refinement is skipped when less than one period of history is left or the
+correlation is below 0.8, and confidence and stamps stay those of YIN.
+
+Cents against the new pitch, after a hard cut from one sine to the sine a semitone higher (lowest note 29 Hz, decimated
+by 2):
+
+| Step | refinePeriods | 10 ms | 20 ms | 30 ms | 40 ms | 60 ms |
+|---|---|---|---|---|---|---|
+| 110 Hz to 116.5 Hz | 0 | -100 | -100 | -96 | -68 | -14 |
+| | 3 | -77 | -41 | -8 | 0 | 0 |
+| 196 Hz to 207.7 Hz | 0 | -100 | -100 | -100 | -75 | -17 |
+| | 3 | -49 | 0 | 0 | 0 | 0 |
+| 330 Hz to 349.6 Hz | 0 | -100 | -100 | -100 | -79 | -21 |
+| | 3 | -8 | 0 | 0 | 0 | 0 |
+
+Two periods are faster still and a little more sensitive to noise, four are slower. Near the lowest note of the range
+the buffer holds less than three periods and the refinement helps little: at 41.2 Hz it is 32 cents off after 40 ms
+against 54 without. For a steady sine it is also more accurate: the error at 1500 Hz is 0.06 cent instead of 3.25 cents
+(decimated by 2).
+
+On the recordings (hop 5 ms, four readings, three ignored after an attack, attack rule on) the guitars were already
+exact (142 of 144, 2 missed), and on the 5-string bass 38 of the 40 notes are exact instead of 35 with `refinePeriods`
+3 (37 with 2 or 4). The other two bass notes lie within 31 cents of the rounding boundary to the next semitone, and are
+no detector errors. The latency does not change. The refinement costs time: 24 ms per second of audio for the bass range
+(13 ms without), 5 ms for the guitars (3 ms without), single thread, decimated by 2.
+
