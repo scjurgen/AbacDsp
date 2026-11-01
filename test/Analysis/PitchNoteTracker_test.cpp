@@ -357,6 +357,86 @@ TEST(PitchNoteTracker, ANoteAfterAReleaseDoesNotNeedAnAttackWhenAnAttackIsRequir
     EXPECT_EQ(run.tracker.getNote(), 60);
 }
 
+namespace
+{
+/// Quiet readings without a pitch, so that the level of a later attack has something to rise from.
+void feedQuiet(Feed& run, const size_t count)
+{
+    run.feed({0.0f, 0.0f, 0.01f, 0}, count);
+}
+
+PitchNoteTrackerSettings settling(const size_t hops, const bool needsAttack = false)
+{
+    PitchNoteTrackerSettings settings;
+    settings.attackSettleHops = hops;
+    settings.changeNeedsAttack = needsAttack;
+    return settings;
+}
+}
+
+TEST(PitchNoteTracker, TheReadingsRightAfterAnAttackDoNotCountWhenAttackSettleHopsIsSet)
+{
+    Feed plain;
+    feedQuiet(plain, 10);
+    plain.feed(voiced(60.0f, 0.2f), 3);
+    ASSERT_EQ(plain.events.size(), 1u);
+    EXPECT_EQ(plain.events.front().first, 12u);
+
+    Feed run{settling(3)};
+    feedQuiet(run, 10);
+    run.feed(voiced(60.0f, 0.2f), 6);
+    ASSERT_EQ(run.events.size(), 1u);
+    EXPECT_EQ(run.events.front().first, 15u) << "three readings of the attack are skipped, then three confirm";
+    EXPECT_EQ(run.events.front().second.note, 60);
+}
+
+TEST(PitchNoteTracker, AWrongPitchRightAfterAnAttackIsNeverANoteWhenAttackSettleHopsIsSet)
+{
+    Feed plain;
+    feedQuiet(plain, 10);
+    plain.feed(voiced(72.0f, 0.2f), 3);
+    plain.feed(voiced(60.0f, 0.2f), 3);
+    EXPECT_EQ(plain.events.size(), 2u) << "the transient makes a note of its own";
+
+    Feed run{settling(3)};
+    feedQuiet(run, 10);
+    run.feed(voiced(72.0f, 0.2f), 3);
+    run.feed(voiced(60.0f, 0.2f), 3);
+    ASSERT_EQ(run.events.size(), 1u);
+    EXPECT_EQ(run.events.front().second.note, 60);
+}
+
+TEST(PitchNoteTracker, AttackSettleHopsAndChangeNeedsAttackWorkTogether)
+{
+    Feed run{settling(3, true)};
+    run.feed(voiced(57.0f, 0.02f), 30);
+    ASSERT_EQ(run.events.size(), 1u);
+    run.feed(voiced(69.0f, 0.2f), 3);
+    run.feed(voiced(60.0f, 0.2f), 3);
+    ASSERT_EQ(run.events.size(), 2u);
+    EXPECT_EQ(run.events[1].second.note, 60) << "the glitch after the attack is skipped, the new note is accepted";
+}
+
+TEST(PitchNoteTracker, AttackSettleHopsDoNotDelayTheReleaseOfANote)
+{
+    Feed run{settling(3)};
+    run.feed(voiced(57.0f), 30);
+    ASSERT_EQ(run.events.size(), 1u);
+    run.feed(unvoiced(), 3);
+    ASSERT_EQ(run.events.size(), 2u);
+    EXPECT_TRUE(run.events[1].second.released);
+}
+
+TEST(PitchNoteTracker, ResetForgetsTheAttackThatIsBeingSettled)
+{
+    Feed run{settling(3)};
+    feedQuiet(run, 10);
+    run.feed(voiced(60.0f, 0.2f), 1);
+    run.tracker.reset();
+    run.feed(voiced(60.0f, 0.2f), 3);
+    EXPECT_EQ(run.events.size(), 1u) << "after the reset nothing is skipped any more";
+}
+
 TEST(PitchNoteTracker, ResetForgetsTheNoteAndTheCandidate)
 {
     Feed run;

@@ -114,3 +114,24 @@ Without the rule 63 of the extra note-ons of the guitars come from the bends and
 notes, one of 24 readings leaves 7 extra note-ons on the bass instead of 5. The first note-on of a pluck is still wrong by
 one to three semitones for about 3 percent of the notes: that is the pluck transient and not an extra note.
 
+## The first readings after an attack
+
+The first 25 ms of a pluck are the part of a note that a detector reads wrongly. With `attackSettleHops` the tracker
+ignores that many readings from the attack on (found as for `changeNeedsAttack`): they neither confirm a candidate
+nor break one, and do not count towards a release. A note cannot be reported before the readings are reliable at
+about 25 to 30 ms, so ignoring the first 15 ms does not delay it. On the recordings above (three readings, 15 ms at a
+hop of 5 ms):
+
+| | Notes | Exact | Off by up to 3 semitones or an octave | Missed | Extra note-ons | Median latency |
+|---|---|---|---|---|---|---|
+| guitars, `attackSettleHops` 0 | 144 | 137 | 5 | 2 | 15 | 52 ms |
+| guitars, 2 (10 ms) | 144 | 141 | 1 | 2 | 7 | 52 ms |
+| guitars, 3 (15 ms) | 144 | 142 | 0 | 2 | 6 | 52 ms |
+| 5-string bass, 0 | 40 | 33 | 7 | 0 | 5 | 79 ms |
+| 5-string bass, 3 | 40 | 35 | 5 | 0 | 3 | 79 ms |
+
+Four readings (20 ms) give the same figures as three. A lowpass in front of the detector did not help: a 4th-order
+Butterworth at 600 Hz, 1 kHz or 2 kHz left the guitar figures as they were (600 Hz added 3 ms), and at 300 Hz on the
+bass it was worse (31 of 40 exact against 33). The harmonics a lowpass would remove are what carries the pitch of a
+weak fundamental, and the transient is not only high-frequency noise.
+

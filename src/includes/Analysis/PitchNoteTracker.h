@@ -49,9 +49,10 @@ struct PitchNoteTrackerSettings
     size_t releaseHops{3};            ///< unvoiced readings that end a note
     float attackRiseDb{6.0f};         ///< rise over the lowest level since the onset that counts as a new attack
     bool changeNeedsAttack{false};    ///< a pitch away from the playing note starts a note only with a recent attack
-    float changeAttackRiseDb{4.0f};   ///< rise over the lowest of the last attackLookbackHops readings
-    size_t attackLookbackHops{8};     ///< readings the level is compared with, at most 16
-    size_t changeAttackHops{16};      ///< readings after an attack during which a new pitch may start a note
+    float changeAttackRiseDb{4.0f}; ///< rise over the lowest of the last attackLookbackHops readings that is an attack
+    size_t attackLookbackHops{8};   ///< readings the level is compared with, at most 16
+    size_t changeAttackHops{16};    ///< readings after an attack during which a new pitch may start a note
+    size_t attackSettleHops{0};     ///< readings after an attack that are ignored (0: none)
 };
 
 /**
@@ -75,6 +76,12 @@ struct PitchNoteTrackerSettings
  * finger pressing the next fret and a bend do not, so one pluck stays one note. The note that follows a release needs
  * no attack, and the playing note goes on while such readings are ignored. Legato notes without a rise in level
  * (hammer-ons, pull-offs) are ignored too until the first note is released.
+ *
+ * With attackSettleHops the first readings after an attack (found as above) are ignored, as if they had not been made:
+ * the pick and the inharmonic start of a string make a detector answer with octaves and harmonics for about the first
+ * 25 ms, and a few readings that agree on a wrong pitch would be a note. They neither confirm nor break a candidate
+ * and do not count towards a release, and they take no part in the attack rule of the playing note. A note cannot
+ * be reported earlier than the readings become reliable, so the delay of the note is unchanged.
  *
  * Plain logic on one reading at a time, no allocation; time is counted in hops and the stamp of the reading that
  * completes an event is passed through to it. Real-time safe.
@@ -119,6 +126,11 @@ class PitchNoteTracker
     [[nodiscard]] std::optional<PitchNote> update(const PitchObservation& reading) noexcept
     {
         trackAttack(reading.level);
+        if (m_sinceAttack < m_settings.attackSettleHops)
+        {
+            m_candidateCount = 0;
+            return std::nullopt;
+        }
         const bool voiced =
             reading.hz > 0.0f && reading.confidence >= m_settings.minConfidence && reading.level >= m_minLevel;
         if (!voiced)
