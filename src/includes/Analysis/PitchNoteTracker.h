@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -47,6 +48,10 @@ struct PitchNoteTrackerSettings
     float hysteresisSemitones{0.65f}; ///< distance from the playing note beyond which a reading is a new candidate
     size_t releaseHops{3};            ///< unvoiced readings that end a note
     float attackRiseDb{6.0f};         ///< rise over the lowest level since the onset that counts as a new attack
+    bool changeNeedsAttack{false};    ///< a pitch away from the playing note starts a note only with a recent attack
+    float changeAttackRiseDb{4.0f};   ///< rise over the lowest of the last attackLookbackHops readings
+    size_t attackLookbackHops{8};     ///< readings the level is compared with, at most 16
+    size_t changeAttackHops{16};      ///< readings after an attack during which a new pitch may start a note
 };
 
 /**
@@ -64,6 +69,13 @@ struct PitchNoteTrackerSettings
  * after a release, or while it plays when the level rises by attackRiseDb over the lowest level seen since the onset
  * (or the last strike), which a decaying string never does by itself.
  *
+ * With changeNeedsAttack a reading away from the playing note is ignored unless the level rose by changeAttackRiseDb
+ * over the lowest of the last attackLookbackHops readings no more than changeAttackHops readings ago. A plucked
+ * string starts every note with such a rise; an octave glitch of the detector, a harmonic in the tail of a low note, a
+ * finger pressing the next fret and a bend do not, so one pluck stays one note. The note that follows a release needs
+ * no attack, and the playing note goes on while such readings are ignored. Legato notes without a rise in level
+ * (hammer-ons, pull-offs) are ignored too until the first note is released.
+ *
  * Plain logic on one reading at a time, no allocation; time is counted in hops and the stamp of the reading that
  * completes an event is passed through to it. Real-time safe.
  */
@@ -74,6 +86,7 @@ class PitchNoteTracker
         : m_settings(settings)
         , m_minLevel(Convert::dbToGain(settings.minLevelDb))
         , m_attackRatio(Convert::dbToGain(settings.attackRiseDb))
+        , m_changeAttackRatio(Convert::dbToGain(settings.changeAttackRiseDb))
     {
     }
 
@@ -85,6 +98,10 @@ class PitchNoteTracker
         m_candidateSum = 0.0f;
         m_unvoiced = 0;
         m_lowestLevel = 0.0f;
+        m_levelCount = 0;
+        m_levelNext = 0;
+        m_sinceAttack = kNoAttack;
+        m_rising = false;
     }
 
     [[nodiscard]] bool isPlaying() const noexcept
@@ -101,6 +118,7 @@ class PitchNoteTracker
     /// Takes the next reading; returns the event it completes, if any.
     [[nodiscard]] std::optional<PitchNote> update(const PitchObservation& reading) noexcept
     {
+        trackAttack(reading.level);
         const bool voiced =
             reading.hz > 0.0f && reading.confidence >= m_settings.minConfidence && reading.level >= m_minLevel;
         if (!voiced)
@@ -114,10 +132,35 @@ class PitchNoteTracker
             m_candidateCount = 0;
             return playingNote(reading);
         }
+        if (m_playing && m_settings.changeNeedsAttack && m_sinceAttack > m_settings.changeAttackHops)
+        {
+            m_candidateCount = 0;
+            return std::nullopt;
+        }
         return candidate(reading, pitch);
     }
 
   private:
+    static constexpr size_t kMaxLookback{16};
+    static constexpr size_t kNoAttack{~size_t{0} / 2};
+
+    /// Remembers how many readings ago the level began to rise over the lowest of the readings before it.
+    void trackAttack(const float level) noexcept
+    {
+        const size_t look = std::min({m_settings.attackLookbackHops, m_levelCount, kMaxLookback});
+        float lowest = level;
+        for (size_t i = 0; i < look; ++i)
+        {
+            lowest = std::min(lowest, m_levels[(m_levelNext + kMaxLookback - 1 - i) % kMaxLookback]);
+        }
+        const bool rising = look > 0 && level > 0.0f && level >= lowest * m_changeAttackRatio;
+        m_sinceAttack = rising && !m_rising ? 0 : std::min(m_sinceAttack + 1, kNoAttack);
+        m_rising = rising;
+        m_levels[m_levelNext] = level;
+        m_levelNext = (m_levelNext + 1) % kMaxLookback;
+        m_levelCount = std::min(m_levelCount + 1, kMaxLookback);
+    }
+
     [[nodiscard]] std::optional<PitchNote> unvoiced(const PitchObservation& reading) noexcept
     {
         m_candidateCount = 0;
@@ -180,12 +223,18 @@ class PitchNoteTracker
     PitchNoteTrackerSettings m_settings;
     float m_minLevel;
     float m_attackRatio;
+    float m_changeAttackRatio;
     bool m_playing{false};
     int m_note{0};
     size_t m_candidateCount{0};
     float m_candidateSum{0.0f};
     size_t m_unvoiced{0};
     float m_lowestLevel{0.0f};
+    std::array<float, kMaxLookback> m_levels{};
+    size_t m_levelCount{0};
+    size_t m_levelNext{0};
+    size_t m_sinceAttack{kNoAttack};
+    bool m_rising{false};
 };
 
 }

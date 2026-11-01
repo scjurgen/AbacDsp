@@ -270,6 +270,93 @@ TEST(PitchNoteTracker, TheStampOfTheCompletingReadingIsCarried)
     EXPECT_EQ(run.events.back().second.stamp, 3880u) << "a release carries the stamp of its own reading";
 }
 
+namespace
+{
+PitchNoteTrackerSettings gated()
+{
+    PitchNoteTrackerSettings settings;
+    settings.changeNeedsAttack = true;
+    return settings;
+}
+}
+
+TEST(PitchNoteTracker, AChangeOfPitchWithoutAnAttackIsAnotherNoteUnlessAnAttackIsRequired)
+{
+    Feed plain;
+    plain.feed(voiced(57.0f), 30);
+    plain.feed(voiced(69.0f), 40);
+    EXPECT_EQ(plain.events.size(), 2u) << "the octave becomes a note, as it always did";
+
+    Feed run{gated()};
+    run.feed(voiced(57.0f), 30);
+    run.feed(voiced(69.0f), 40);
+    EXPECT_EQ(run.events.size(), 1u);
+    EXPECT_EQ(run.tracker.getNote(), 57);
+    EXPECT_TRUE(run.tracker.isPlaying());
+}
+
+TEST(PitchNoteTracker, AChangeOfPitchWithAnAttackIsANoteWhenAnAttackIsRequired)
+{
+    Feed run{gated()};
+    run.feed(voiced(57.0f, 0.02f), 30);
+    run.feed(voiced(60.0f, 0.2f), 6);
+    ASSERT_EQ(run.events.size(), 2u);
+    EXPECT_EQ(run.events[1].second.note, 60);
+    EXPECT_EQ(run.tracker.getNote(), 60);
+}
+
+TEST(PitchNoteTracker, AnAttackAllowsANewPitchOnlyForTheChangeAttackHopsAfterIt)
+{
+    PitchNoteTrackerSettings settings = gated();
+    settings.changeAttackHops = 8;
+    Feed late{settings};
+    late.feed(voiced(57.0f, 0.02f), 30);
+    late.feed(voiced(57.0f, 0.2f), 1);
+    const size_t afterAttack = late.events.size();
+    late.feed(voiced(57.0f, 0.2f), 11);
+    late.feed(voiced(60.0f, 0.2f), 10);
+    EXPECT_EQ(late.events.size(), afterAttack) << "12 readings after the attack is too late";
+
+    Feed soon{settings};
+    soon.feed(voiced(57.0f, 0.02f), 30);
+    soon.feed(voiced(57.0f, 0.2f), 1);
+    soon.feed(voiced(60.0f, 0.2f), 4);
+    EXPECT_EQ(soon.tracker.getNote(), 60) << "4 readings after the attack is in time";
+}
+
+TEST(PitchNoteTracker, ASlowBendWithoutAnAttackStaysOneNoteWhenAnAttackIsRequired)
+{
+    Feed run{gated()};
+    run.feed(voiced(60.0f, 0.1f), 30);
+    for (int i = 0; i < 80; ++i)
+    {
+        run.feed(voiced(60.0f + 0.04f * static_cast<float>(i), 0.1f * std::pow(0.995f, static_cast<float>(i))));
+    }
+    EXPECT_EQ(run.events.size(), 1u) << "a bend of three semitones is not a series of notes";
+    EXPECT_EQ(run.tracker.getNote(), 60);
+}
+
+TEST(PitchNoteTracker, TheAttackThatAllowsAChangeIsThatOfTheLastReadingsAndResetForgetsIt)
+{
+    Feed run{gated()};
+    run.feed(voiced(57.0f, 0.02f), 30);
+    run.feed(voiced(57.0f, 0.2f), 1);
+    run.tracker.reset();
+    run.feed(voiced(57.0f, 0.2f), 5);
+    run.feed(voiced(60.0f, 0.2f), 40);
+    EXPECT_EQ(run.tracker.getNote(), 57) << "the attack before the reset is forgotten";
+}
+
+TEST(PitchNoteTracker, ANoteAfterAReleaseDoesNotNeedAnAttackWhenAnAttackIsRequired)
+{
+    Feed run{gated()};
+    run.feed(voiced(57.0f), 30);
+    run.feed(unvoiced(), 3);
+    EXPECT_FALSE(run.tracker.isPlaying());
+    run.feed(voiced(60.0f), 4);
+    EXPECT_EQ(run.tracker.getNote(), 60);
+}
+
 TEST(PitchNoteTracker, ResetForgetsTheNoteAndTheCandidate)
 {
     Feed run;

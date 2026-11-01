@@ -23,6 +23,7 @@ The first is used by analysis and effects with thresholds tuned to its window; t
 note events needs a level and a time stamp with every reading, a bounded cost on a small CPU, and a low range. `PitchNoteTracker`
 is the streaming counterpart of `NoteSegmenter`: it takes one reading at a time and reports a note after three steady readings, a
 release after three unvoiced ones, and a new strike when the level rises by 6 dB.
+With `changeNeedsAttack` a pitch away from the playing note starts a note only after a rise in level (see "One pluck, one note").
 
 ## Quick start
 
@@ -77,3 +78,39 @@ The recording of a guitar scale (C3 to C4, then C4 to C5, quarter notes at 120 B
 tracker: all 16 notes are heard with the right note number and nothing else is reported, 80 to 140 ms after the expected onset
 (the first note is played 43 ms late, see the `NoteVerifier` section). The blue line joins the times of the reports. There is no
 annotated bass recording in the repository; the 41.2 Hz tone of the tests stands in for a low E.
+
+## One pluck, one note
+
+A fast setting (a reading every 5 ms, a note after four steady readings) reports more than one note for some plucks.
+Logging every reading of the 7-string and the 5-string bass recordings shows where they come from:
+
+- The first 25 ms after a pluck are unreliable: readings jump between octaves and harmonics and are unvoiced or have a
+  confidence of 0.3 to 0.7. A stable run starts at about 25 to 30 ms, confidence 0.7 rising to 0.99.
+- Inside a ringing note the detector can answer with the octave for 20 ms at a confidence of 0.91 to 0.94. Four
+  readings of 5 ms agree, so the tracker starts a note; 60 ms of agreement (three readings of 20 ms) would have ignored it.
+- In the tail of a low note (a fundamental of 31 Hz at -29 dB) the detector reads the fourth harmonic at a confidence of
+  0.97 and the tracker starts a note just before the next pluck.
+- A finger pressing the next fret before the pluck, and a bend, move the pitch by more than the hysteresis.
+
+None of these comes with a rise in level, and a pluck always does. `PitchNoteTrackerSettings::changeNeedsAttack` makes
+the tracker ignore a reading away from the playing note unless the level rose by `changeAttackRiseDb` (4 dB) over the
+lowest of the last `attackLookbackHops` readings no more than `changeAttackHops` readings ago (16, 80 ms at 5 ms). The
+note after a release needs no attack. A hammer-on or pull-off without a rise in level is ignored until the first note
+is released.
+
+Measured on recordings of the author (a 7-string guitar, a 5-string bass, palm muted notes, bends, and the scale above;
+120 BPM; the folder `guitar-samples` is not in the repository), hop 5 ms, four readings, release after twelve, lowest
+note at the instrument's lowest string:
+
+| | Notes | Exact | Off by up to 3 semitones or an octave | Missed | Extra note-ons | Median latency |
+|---|---|---|---|---|---|---|
+| guitars, without the rule | 144 | 133 | 9 | 2 | 104 | 50 ms |
+| guitars, with the rule | 144 | 137 | 5 | 2 | 15 | 52 ms |
+| 5-string bass, without | 40 | 32 | 8 | 0 | 27 | 79 ms |
+| 5-string bass, with | 40 | 33 | 7 | 0 | 5 | 79 ms |
+
+Without the rule 63 of the extra note-ons of the guitars come from the bends and 28 from the 7-string recording; with it
+6 and 4 remain. A rise of 3 to 6 dB makes no difference to these figures. A memory of 12 readings loses 3 of the 40 bass
+notes, one of 24 readings leaves 7 extra note-ons on the bass instead of 5. The first note-on of a pluck is still wrong by
+one to three semitones for about 3 percent of the notes: that is the pluck transient and not an extra note.
+
