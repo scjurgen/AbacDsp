@@ -170,7 +170,7 @@ TEST(WaveTableRingModulator, theDefaultWavesHaveNoDcAtAnyMorph)
     }
 }
 
-TEST(WaveTableRingModulator, theMorphWalksFromTheSineToTheSquareToTheSaw)
+TEST(WaveTableRingModulator, theMorphWalksFromTheSineToTheSquareToTheSharkFin)
 {
     constexpr size_t cycles{20};
     constexpr size_t period{480};
@@ -187,14 +187,17 @@ TEST(WaveTableRingModulator, theMorphWalksFromTheSineToTheSquareToTheSaw)
         }
         return amplitudes;
     };
+    const auto& fin = WaveTableStore::getTableSet(BasicWave::SharkFin).tables[0].data;
+    const std::vector<float> finCycle(fin.begin(), fin.begin() + WaveTableSize);
     const auto sine = harmonics(0.f);
     const auto square = harmonics(0.5f);
-    const auto saw = harmonics(1.f);
+    const auto sharkFin = harmonics(1.f);
     for (size_t k = 2; k < sine.size(); ++k)
     {
         EXPECT_LT(sine[k], 1e-3) << "sine, harmonic " << k;
         EXPECT_NEAR(k % 2 == 1 ? 1.0 / static_cast<double>(k) : 0.0, square[k], 0.01) << "square, harmonic " << k;
-        EXPECT_NEAR(1.0 / static_cast<double>(k), saw[k], 0.01) << "saw, harmonic " << k;
+        EXPECT_NEAR(harmonicAmplitude(finCycle, 1, k) / harmonicAmplitude(finCycle, 1, 1), sharkFin[k], 0.01)
+            << "shark fin, harmonic " << k;
     }
 }
 
@@ -298,13 +301,13 @@ TEST(WaveTableRingModulator, theWavesHaveTheirTextbookPolarity)
     };
     const auto sine = cycle(0.f);
     const auto square = cycle(0.5f);
-    const auto saw = cycle(1.f);
+    const auto sharkFin = cycle(1.f);
     EXPECT_GT(sine[period / 4], 0.5f);
     EXPECT_LT(sine[3 * period / 4], -0.5f);
     EXPECT_GT(square[period / 4], 0.3f);
     EXPECT_LT(square[3 * period / 4], -0.3f);
-    EXPECT_LT(saw[period / 10], saw[period / 4]);
-    EXPECT_LT(saw[period / 4], saw[2 * period / 5]);
+    EXPECT_GT(sharkFin[period / 10], sharkFin[period / 4]);
+    EXPECT_GT(sharkFin[period / 4], sharkFin[2 * period / 5]);
 }
 
 TEST(WaveTableRingModulator, replacingAWaveKeepsTheRequestedRms)

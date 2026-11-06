@@ -47,5 +47,6 @@ all. See `TODO.md` for folders and algorithms still missing plots.
 | `Reverbs/Tanks/` | documentation | `FdnTankGlide`/`FdnTankSpicedBase`/`FdnTankBlockDelayWalshSIMD`: late-tail spectral flatness, RT60 vs. frequency band, Schroeder energy decay curves |
 | `Slicer/` | exploration | Offline harness for tuning `Analysis::Slicer` against hand-labelled audio |
 | `VelvetNoise/` | exploration | `Generators/RandomStyle/VelvetCrackle.h` explore program; no README yet - see `TODO.md` |
+| `WaveTableRingModulator/` | documentation | `WaveTableRingModulator`: carrier level against morph and pitch before and after the compensation, the sideband lines, carrier harmonics against theory, the harmonics against the morph, aliasing with the input lowpass open and closed, the response of that lowpass |
 | `Wavetables/` | documentation | `WaveTableOscillator`/`WaveTableStorage`: mipmap band-limiting across the pitch range, at a mip-table boundary, under PWM and morph; `changeFrequency()` vs. `setFrequency()` aliasing comparison |
 | `YinPitch/` | documentation | `StampedYinPitchDetector` and `PitchNoteTracker` over 40 Hz to 2 kHz: pitch error, time to the first note, noise, a guitar scale against its score; why `YinPitchDetector` and `StampedYinPitchDetector` both exist; the quiet-noise defect of `YinPitchDetector` |

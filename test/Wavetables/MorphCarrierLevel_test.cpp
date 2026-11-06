@@ -108,6 +108,23 @@ TEST(MorphCarrierLevel, replacingASlotChangesThePairsThatUseIt)
     EXPECT_NE(before, level.rms(0.5f, increment));
 }
 
+TEST(MorphCarrierLevel, aSawNextToASquareNullsTheFundamentalAndASharkFinDoesNot)
+{
+    constexpr float increment = 100.f / 48000.f;
+    const auto worstDipDb = [&](const std::array<BasicWave, 3>& waves)
+    {
+        const MorphCarrierLevel level{waves};
+        float lowest{1.f};
+        for (int step = 0; step <= 100; ++step)
+        {
+            lowest = std::min(lowest, level.rms(0.02f * static_cast<float>(step) - 1.f, increment) / 0.5f);
+        }
+        return 20.f * std::log10(lowest);
+    };
+    EXPECT_LT(worstDipDb({BasicWave::Sine, BasicWave::Square, BasicWave::Saw}), -10.f);
+    EXPECT_GT(worstDipDb({BasicWave::Sine, BasicWave::Square, BasicWave::SharkFin}), -0.5f);
+}
+
 TEST(MorphCarrierLevel, everyLevelOfTheLadderIsCovered)
 {
     const MorphCarrierLevel level{defaultWaves};

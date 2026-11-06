@@ -20,8 +20,10 @@ namespace AbacDsp
  *
  * The output is the input times the carrier. The tables of the store have no DC, so the input does not survive,
  * only sums and differences of its partials with the partials of the carrier. The carrier is WaveTableOscillator over
- * three slots, Sine, Square and Saw by default, morphed from 0 (slot 0) through 0.5 (slot 1) to 1 (slot 2), with the
- * polarity of the textbook waves (a sine rises first, a saw rises).
+ * three slots, Sine, Square and SharkFin by default, morphed from 0 (slot 0) through 0.5 (slot 1) to 1 (slot 2), with
+ * the polarity of the textbook waves (a sine rises first, a shark fin falls after its short rise). Neighbouring slots
+ * should have their fundamentals in phase: a Saw next to a Square is in antiphase, the fundamental nulls near 0.75 and
+ * the level compensation then lifts a carrier without its fundamental.
  *
  * The carrier level is held at carrierRms for every morph and pitch (MorphCarrierLevel): the tables lose harmonics
  * with pitch and a crossfade of correlated waves dips, which would make the product louder and quieter by up to a
@@ -45,10 +47,11 @@ class WaveTableRingModulator
     explicit WaveTableRingModulator(const float sampleRate, const float carrierRms = kDefaultCarrierRms)
         : m_sampleRate(sampleRate)
         , m_carrierRms(carrierRms)
-        , m_level({BasicWave::Sine, BasicWave::Square, BasicWave::Saw})
+        , m_level({BasicWave::Sine, BasicWave::Square, BasicWave::SharkFin})
         , m_carrier(sampleRate)
         , m_prefilter(sampleRate)
     {
+        m_carrier.setWaveset(2, BasicWave::SharkFin);
         m_prefilter.setRampSamples(kControlBlock);
         m_prefilter.set(Chebyshev4Lowpass::kOpenCutoff, kInputRippleDb, true);
         setFrequency(kDefaultFrequency);

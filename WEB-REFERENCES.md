@@ -32,7 +32,7 @@ Stable, broad, and worth knowing about independently of any one class.
 | [One-pole filters (JOS)](https://ccrma.stanford.edu/~jos/filters/One_Pole.html) | `OnePoleFilter.h`, `OnePoleSmoother.h`, and by delegation `BlockProcLowpass.h`, `BlockProcHighpass.h` |
 | [Transposed direct forms (JOS)](https://ccrma.stanford.edu/~jos/filters/Transposed_Direct_Forms.html) | `Biquad.h` |
 | [Audio EQ Cookbook](https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html) | `Biquad.h`, `PeakBiquad` |
-| [Chebyshev filter](https://en.wikipedia.org/wiki/Chebyshev_filter) | `ChebyshevBiquad` |
+| [Chebyshev filter](https://en.wikipedia.org/wiki/Chebyshev_filter) | `ChebyshevBiquad`, `Chebyshev4Lowpass.h` |
 | [Cytomic SVF, linear trapezoidal optimised](https://cytomic.com/files/dsp/SvfLinearTrapOptimised2.pdf) | `SvfResoBP.h`. Andrew Simper's derivation of the zero-delay-feedback state variable filter. |
 | [Electronotes EN85, voltage controlled filters](http://electronotes.netfirms.com/EN85VCF.pdf) | `PoleMixingFilter.h`, `PeakTunedPoleMixing.h`, the original pole-mixing writeup |
 | [Expedition Electronics, pole mixing](https://expeditionelectronics.com/Diy/Polemixing) | `PoleMixingFilter.h`, `PeakTunedPoleMixing.h` |
@@ -52,6 +52,7 @@ Stable, broad, and worth knowing about independently of any one class.
 | [Vibrato simulation (JOS)](https://ccrma.stanford.edu/~jos/pasp/Vibrato_Simulation.html) | `BlockProcVibrato.h` |
 | [Dispersion (JOS)](https://ccrma.stanford.edu/~jos/pasp/Dispersion.html) | `DispersionDelay.h`, allpass-induced frequency-dependent delay |
 | [Wow and flutter](https://en.wikipedia.org/wiki/Wow_and_flutter) | `VariSpeedTapeDelay.h`, `Flutter.h`, `Wow.h` |
+| [Ring modulation](https://en.wikipedia.org/wiki/Ring_modulation) | `RingModulator.h`, `WaveTableRingModulator.h` |
 
 ## Diffusion and reverb
 
@@ -104,6 +105,10 @@ Cited by author and year rather than URL, being paywalled or journal-hosted:
 | [vorbisfile API](https://xiph.org/vorbis/doc/vorbisfile/) | `LoadOgg.h` |
 
 ## Notes on link rot
+
+- `earlevel.com/main/2012/05/04/a-wavetable-oscillator-part-1/` is a personal site, cited from `WaveTableStorage.h` and
+  `WaveTableOscillator.h`. Snapshot:
+  `web.archive.org/web/20260418094159/https://www.earlevel.com/main/2012/05/04/a-wavetable-oscillator-part-1/`.
 
 - `ccrma.stanford.edu/~jos/pasp/Vibrato.html` - 404. Use `Vibrato_Simulation.html`.
 - `ccrma.stanford.edu/~jos/pasp/Feedback_Delay_Networks.html` - 404. Use
