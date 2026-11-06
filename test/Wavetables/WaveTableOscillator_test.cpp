@@ -597,4 +597,35 @@ TEST(WaveTableOscillator, aMorphChangeAfterTheFrequencyIsSetPicksTheTablesOfTheN
     }
 }
 
+TEST(WaveTableOscillator, resetPhaseRestartsTheCycleLikeANewOscillator)
+{
+    constexpr float sampleRate{48000.f};
+    WaveTableOscillator fresh{sampleRate};
+    WaveTableOscillator used{sampleRate};
+    fresh.setFrequency(1234.f);
+    used.setFrequency(1234.f);
+    std::vector<float> skipped(37);
+    used.processBlock(skipped.data(), skipped.size());
+    used.resetPhase();
+    std::vector<float> a(256);
+    std::vector<float> b(256);
+    fresh.processBlock(a.data(), a.size());
+    used.processBlock(b.data(), b.size());
+    EXPECT_EQ(a, b);
+}
+
+TEST(WaveTableOscillator, resetPhaseAlsoRestartsTheSampleBySampleOutput)
+{
+    constexpr float sampleRate{48000.f};
+    WaveTableOscillator osc{sampleRate};
+    osc.setFrequency(997.f);
+    const float first = osc.process();
+    for (int i = 0; i < 50; ++i)
+    {
+        static_cast<void>(osc.process());
+    }
+    osc.resetPhase();
+    EXPECT_FLOAT_EQ(first, osc.process());
+}
+
 }

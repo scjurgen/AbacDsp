@@ -50,6 +50,13 @@ class WaveTableOscillator
         m_random.seed(seedValue);
     }
 
+    /// @brief Restarts the cycle at phase 0, also the offset phase that pulse-width modulation reads.
+    void resetPhase() noexcept
+    {
+        m_phasor = 0.f;
+        m_phasorWithOffset = 0.f;
+    }
+
     void setWaveset(const size_t targetIndex, const BasicWave waveIndex)
     {
         m_set[targetIndex] = &WaveTableStore::getTableSet(waveIndex);
