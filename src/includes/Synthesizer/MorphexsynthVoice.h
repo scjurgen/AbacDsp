@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <memory>
-#include <random>
 #include <string_view>
 
 #include "Filters/OnePoleFilter.h"
@@ -12,6 +11,7 @@
 #include "Generators/SynthLfo.h"
 #include "NonLinear/WaveShaperTables.h"
 #include "Numbers/Convert.h"
+#include "Numbers/Random.h"
 #include "Synthesizer/MpeCurveMap.h"
 #include "Synthesizer/PitchQuantize.h"
 #include "Synthesizer/ValueConnector.h"
@@ -180,6 +180,7 @@ class MorphexsynthVoice
             osc.oscillator->setMorph(-1.f);
             osc.oscillator->setWaveset(0, BasicWave::Triangle);
         }
+        seed(Random::kDefaultSeed);
         setFilterType("LP4");
         m_lp4Index = m_filterIndex;
         m_filter.setResonance(0.f);
@@ -196,6 +197,12 @@ class MorphexsynthVoice
         static constexpr std::array<BasicWave, 5> kWaveforms{BasicWave::Triangle, BasicWave::SharkFin, BasicWave::Saw,
                                                              BasicWave::Square, BasicWave::White};
         m_oscillators[oscillatorIndex].oscillator->setWaveset(0, kWaveforms[std::min(index, kWaveforms.size() - 1)]);
+    }
+
+    /// @brief Crossfades the oscillator from its chosen waveform (-1) through a square (0) to a saw (+1).
+    void setWaveMorph(const size_t oscillatorIndex, const float value) noexcept
+    {
+        m_oscillators[oscillatorIndex].oscillator->setMorph(std::clamp(value, -1.f, 1.f));
     }
 
     void setOsc3KeyFollow(const float octaves) noexcept
@@ -356,6 +363,18 @@ class MorphexsynthVoice
         m_quantizePitchbend = quantize;
     }
 
+    /// @brief Restarts every random source of the voice (detune, LFO noise, oscillator noise) from this seed, each
+    /// from its own derived seed, so two voices with different seeds do not play the same noise.
+    void seed(const uint64_t seedValue) noexcept
+    {
+        m_random.seed(seedValue);
+        m_lfo.seed(seedValue + 1U);
+        for (size_t i = 0; i < m_oscillators.size(); ++i)
+        {
+            m_oscillators[i].oscillator->seed(seedValue + 2U + i);
+        }
+    }
+
     void setRandomDetune(const float detuneCents) noexcept
     {
         m_randDetune = detuneCents;
@@ -498,8 +517,7 @@ class MorphexsynthVoice
                                                                                          m_lfoKeyFollowFactor)));
         m_connectors.oscFrequency.setForced(CtrlSource::BaseValue, static_cast<float>(note));
 
-        std::normal_distribution<float> detuneDistribution{0.f, m_randDetune / 100.f};
-        const auto detuneCents = m_randDetune != 0.f ? detuneDistribution(m_randGenerator) : 0.f;
+        const auto detuneCents = m_randDetune != 0.f ? m_random.gaussian() * (m_randDetune / 100.f) : 0.f;
         const auto f = Convert::noteToFrequency<float>(static_cast<float>(note)) *
                        Convert::noteIntervalToRatio(detuneCents * 100.f);
 
@@ -884,7 +902,7 @@ class MorphexsynthVoice
     float m_gainDistortionReciprocal{0.5f};
 
     float m_randDetune{0.f};
-    std::mt19937 m_randGenerator{std::random_device{}()};
+    Random m_random{};
 
     std::array<float, kFGranularity> m_tmp{};
     size_t m_tmpRead{0};

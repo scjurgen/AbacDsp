@@ -6,10 +6,10 @@
 #include <mutex>
 #include <numbers>
 #include <numeric>
-#include <random>
 #include <vector>
 
 #include "Analysis/FftMisc.h"
+#include "Numbers/Random.h"
 
 namespace AbacDsp
 {
@@ -203,9 +203,8 @@ class WaveTableStore
             case BasicWave::NoiseFloor:
             case BasicWave::White: // we fake the white table
             {
-                std::mt19937 gen{std::random_device{}()};
-                std::uniform_real_distribution<float> dist(-1.f, 1.f);
-                std::ranges::generate(waveData, [&dist, &gen]() mutable { return dist(gen); });
+                Random random{Random::kDefaultSeed + static_cast<uint64_t>(wave)};
+                std::ranges::generate(waveData, [&random]() { return random.uniform() * 2.f - 1.f; });
                 break;
             }
             case BasicWave::Last: // count marker only, never a real waveform

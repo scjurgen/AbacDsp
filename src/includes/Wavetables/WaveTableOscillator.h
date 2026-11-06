@@ -1,9 +1,12 @@
 #pragma once
 
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <functional>
 #include <vector>
 
+#include "Numbers/Random.h"
 #include "Parameters/SmoothingParameter.h"
 #include "WaveTableStorage.h"
 
@@ -36,19 +39,27 @@ class WaveTableOscillator
     explicit WaveTableOscillator(const float sampleRate)
         : m_sampleRate(sampleRate)
     {
-        setWaveset(0, BasicWave::Sine);
-        setWaveset(1, BasicWave::Square);
-        setWaveset(2, BasicWave::Saw);
+        m_set = {&WaveTableStore::getTableSet(BasicWave::Sine), &WaveTableStore::getTableSet(BasicWave::Square),
+                 &WaveTableStore::getTableSet(BasicWave::Saw)};
+        applyMorph();
+    }
+
+    /// @brief Restarts the added noise from this seed; a seed gives the same sequence on every platform.
+    void seed(const uint64_t seedValue) noexcept
+    {
+        m_random.seed(seedValue);
     }
 
     void setWaveset(const size_t targetIndex, const BasicWave waveIndex)
     {
-        m_set[targetIndex] = WaveTableStore::getTableSet(waveIndex);
+        m_set[targetIndex] = &WaveTableStore::getTableSet(waveIndex);
         applyMorph();
     }
 
-    void changeFrequency(const float frequency) noexcept
+    /// @brief Sets the frequency without choosing new mip levels; limited to just below Nyquist.
+    void changeFrequency(const float requested) noexcept
     {
+        const auto frequency = limitFrequency(requested);
         if (std::equal_to<float>{}(m_frequency, frequency))
         {
             return;
@@ -58,8 +69,10 @@ class WaveTableOscillator
         m_invPhaseInc = m_sampleRate / frequency;
     }
 
-    void setFrequency(const float frequency) noexcept
+    /// @brief Sets the frequency and the mip levels; limited to just below Nyquist.
+    void setFrequency(const float requested) noexcept
     {
+        const auto frequency = limitFrequency(requested);
         if (std::equal_to<float>{}(m_frequency, frequency))
         {
             return;
@@ -169,12 +182,18 @@ class WaveTableOscillator
     }
 
   private:
+    /// A bend, an envelope and an LFO together can ask for more than the table can serve.
+    [[nodiscard]] float limitFrequency(const float frequency) const noexcept
+    {
+        return std::min(frequency, m_sampleRate * 0.49f);
+    }
+
     void updateWaveTableIndices() noexcept
     {
         // keep save against aliasing if we pitch up (we loose very high frequencies only>12k)
         // factor 2 seems to be a good guess (hearing estimated)
-        m_curTableIdx[0] = m_set[m_tblSubIdx].getIndexByFrequency(m_phaseInc * 2);
-        m_curTableIdx[1] = m_set[m_tblSubIdx + 1].getIndexByFrequency(m_phaseInc * 2);
+        m_curTableIdx[0] = m_set[m_tblSubIdx]->getIndexByFrequency(m_phaseInc * 2);
+        m_curTableIdx[1] = m_set[m_tblSubIdx + 1]->getIndexByFrequency(m_phaseInc * 2);
     }
 
     void applyMorph()
@@ -188,12 +207,13 @@ class WaveTableOscillator
             m_morph = 0.999999f;
         }
         handleNoise();
+        updateWaveTableIndices();
     }
 
     void handleNoise()
     {
-        const bool isWhite0 = m_set[m_tblSubIdx].wave == BasicWave::White;
-        const bool isWhite1 = m_set[m_tblSubIdx + 1].wave == BasicWave::White;
+        const bool isWhite0 = m_set[m_tblSubIdx]->wave == BasicWave::White;
+        const bool isWhite1 = m_set[m_tblSubIdx + 1]->wave == BasicWave::White;
 
         m_hasNoise = isWhite0 || isWhite1;
 
@@ -217,8 +237,8 @@ class WaveTableOscillator
 
     [[nodiscard]] float getOutput() const noexcept
     {
-        const auto& wt1 = m_set[m_tblSubIdx].tables[m_curTableIdx[0]];
-        const auto& wt2 = m_set[m_tblSubIdx + 1].tables[m_curTableIdx[1]];
+        const auto& wt1 = m_set[m_tblSubIdx]->tables[m_curTableIdx[0]];
+        const auto& wt2 = m_set[m_tblSubIdx + 1]->tables[m_curTableIdx[1]];
         const float pos = m_phasor * static_cast<float>(TableSize);
         const auto idx = static_cast<size_t>(pos);
         const float frac = pos - static_cast<float>(idx);
@@ -229,8 +249,8 @@ class WaveTableOscillator
 
     [[nodiscard]] float getOutputOffset() const noexcept
     {
-        const auto& wt1 = m_set[m_tblSubIdx].tables[m_curTableIdx[0]];
-        const auto& wt2 = m_set[m_tblSubIdx + 1].tables[m_curTableIdx[1]];
+        const auto& wt1 = m_set[m_tblSubIdx]->tables[m_curTableIdx[0]];
+        const auto& wt2 = m_set[m_tblSubIdx + 1]->tables[m_curTableIdx[1]];
         const float pos = m_phasorWithOffset * static_cast<float>(TableSize);
         const auto idx = static_cast<size_t>(pos);
         const float frac = pos - static_cast<float>(idx);
@@ -267,7 +287,7 @@ class WaveTableOscillator
         std::transform(target, target + numSamples, target,
                        [this, noiseRatio](const float in)
                        {
-                           const float v = m_dist(m_rng) * noiseRatio;
+                           const float v = (m_random.uniform() * 4.0f - 2.0f) * noiseRatio;
                            return in + v;
                        });
     }
@@ -332,7 +352,7 @@ class WaveTableOscillator
 
     size_t m_tblSubIdx{0};
     std::array<size_t, 2> m_curTableIdx{0, 0};
-    std::array<WaveTableSet, 3> m_set{};
+    std::array<const WaveTableSet*, 3> m_set{};
     bool m_hasNoise{false};
     float m_noiseRatio{0.f};
     PwmMode m_pwmMode{PwmMode::Off};
@@ -340,7 +360,6 @@ class WaveTableOscillator
 
     float m_morph{0.f};
 
-    std::mt19937 m_rng{std::random_device{}()};
-    std::uniform_real_distribution<float> m_dist{-2.0f, 2.0f};
+    Random m_random{};
 };
 }

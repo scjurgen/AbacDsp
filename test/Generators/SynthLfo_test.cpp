@@ -1,5 +1,7 @@
+#include <algorithm>
 #include <cmath>
 #include <tuple>
+#include <vector>
 
 #include "gtest/gtest.h"
 
@@ -157,6 +159,62 @@ TEST(SynthLfo, smoothedValueDoesNotJumpAsSharplyAsRawStep)
         previous = v;
     }
     EXPECT_LT(maxDelta, 2.0f);
+}
+
+namespace
+{
+std::vector<float> noiseRun(LfoGenerators& lfo, const LfoType type)
+{
+    lfo.setWaveForm(type);
+    lfo.setFrequency(50.0f);
+    std::vector<float> values(2000);
+    std::ranges::generate(values, [&lfo]() { return lfo.step(); });
+    return values;
+}
+}
+
+TEST(SynthLfo, noiseWaveformsRepeatWithTheDefaultSeed)
+{
+    for (const auto type : {LfoType::Noise, LfoType::SampleHoldNoise, LfoType::SampleHoldFlipFlop, LfoType::BrownNoise})
+    {
+        LfoGenerators a{kSampleRate};
+        LfoGenerators b{kSampleRate};
+        EXPECT_EQ(noiseRun(a, type), noiseRun(b, type)) << "type " << static_cast<int>(type);
+    }
+}
+
+TEST(SynthLfo, noiseWaveformsFollowTheSeed)
+{
+    for (const auto type : {LfoType::Noise, LfoType::SampleHoldNoise, LfoType::BrownNoise})
+    {
+        LfoGenerators a{kSampleRate};
+        LfoGenerators b{kSampleRate};
+        LfoGenerators c{kSampleRate};
+        a.seed(7);
+        b.seed(7);
+        c.seed(8);
+        const auto first = noiseRun(a, type);
+        EXPECT_EQ(first, noiseRun(b, type)) << "type " << static_cast<int>(type);
+        EXPECT_NE(first, noiseRun(c, type)) << "type " << static_cast<int>(type);
+    }
+}
+
+TEST(SynthLfo, whiteNoiseStaysInRangeAndHasZeroMean)
+{
+    LfoGenerators lfo{kSampleRate};
+    lfo.setWaveForm(LfoType::Noise);
+    lfo.setFrequency(1000.0f);
+
+    double sum = 0.0;
+    constexpr int count = 100000;
+    for (int i = 0; i < count; ++i)
+    {
+        const auto v = lfo.step();
+        ASSERT_GE(v, -1.0f);
+        ASSERT_LE(v, 1.0f);
+        sum += v;
+    }
+    EXPECT_NEAR(sum / count, 0.0, 0.02);
 }
 
 }

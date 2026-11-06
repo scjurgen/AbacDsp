@@ -1,4 +1,5 @@
 
+#include <cmath>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -44,4 +45,22 @@ TEST(WaveTableStorageTest, checkLevels)
         EXPECT_NEAR(expected[idx], absMax, 1E-4f);
     }
 }
+
+TEST(WaveTableStorageTest, noiseFloorAndWhiteTablesAreNotTheSameNoise)
+{
+    const auto& floorTable = WaveTableStore::getTableSet(BasicWave::NoiseFloor).tables.front().data;
+    const auto& whiteTable = WaveTableStore::getTableSet(BasicWave::White).tables.front().data;
+
+    double dot = 0.0;
+    double energyFloor = 0.0;
+    double energyWhite = 0.0;
+    for (size_t i = 0; i < floorTable.size(); ++i)
+    {
+        dot += static_cast<double>(floorTable[i]) * static_cast<double>(whiteTable[i]);
+        energyFloor += static_cast<double>(floorTable[i]) * static_cast<double>(floorTable[i]);
+        energyWhite += static_cast<double>(whiteTable[i]) * static_cast<double>(whiteTable[i]);
+    }
+    EXPECT_LT(std::abs(dot) / std::sqrt(energyFloor * energyWhite), 0.2);
+}
+
 }

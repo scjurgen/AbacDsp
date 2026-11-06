@@ -1,4 +1,6 @@
 #include <cmath>
+#include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -177,6 +179,76 @@ TEST_F(MorphexsynthVoiceTest, distortionStagePassesThroughFiniteOutput)
     {
         ASSERT_TRUE(std::isfinite(left[i]));
     }
+}
+
+namespace
+{
+std::vector<float> randomDetuneRun(const WaveShaperTableStore& shapers, const MpeCurveMap& curves,
+                                   const std::optional<uint64_t> seed)
+{
+    MorphexsynthVoice voice{kSampleRate, shapers, curves};
+    if (seed)
+    {
+        voice.seed(*seed);
+    }
+    voice.setLevelOscillator(0, 1.f);
+    voice.setEnvelopeSustainLevel(1.f);
+    voice.setRandomDetune(50.f);
+    voice.setLfoWaveForm(LfoType::Noise);
+    voice.setLfoPitchFactor(4.f);
+    voice.setLfoOscModulationDepth(0.5f);
+    voice.triggerVoice(60, 100, 0);
+
+    std::vector<float> measured;
+    std::array<float, 512> left{};
+    std::array<float, 512> right{};
+    for (int block = 0; block < 40; ++block)
+    {
+        voice.processBlock(left.data(), right.data(), left.size());
+        measured.insert(measured.end(), left.begin(), left.end());
+    }
+    return measured;
+}
+}
+
+TEST_F(MorphexsynthVoiceTest, randomDetuneAndNoiseRepeatWithTheDefaultSeed)
+{
+    EXPECT_EQ(randomDetuneRun(waveShaperTables, curveMap, std::nullopt),
+              randomDetuneRun(waveShaperTables, curveMap, std::nullopt));
+}
+
+TEST_F(MorphexsynthVoiceTest, randomDetuneAndNoiseRepeatWithTheSameSeedAndDifferWithAnother)
+{
+    const auto first = randomDetuneRun(waveShaperTables, curveMap, 11);
+    EXPECT_EQ(first, randomDetuneRun(waveShaperTables, curveMap, 11));
+    EXPECT_NE(first, randomDetuneRun(waveShaperTables, curveMap, 12));
+}
+
+TEST_F(MorphexsynthVoiceTest, waveMorphMovesTheOscillatorFromItsWaveformToTheSaw)
+{
+    const auto run = [this](const float morph)
+    {
+        MorphexsynthVoice voice{kSampleRate, waveShaperTables, curveMap};
+        voice.setLevelOscillator(0, 1.f);
+        voice.setEnvelopeSustainLevel(1.f);
+        voice.setWaveForm(0, 0);
+        voice.setWaveMorph(0, morph);
+        voice.triggerVoice(60, 100, 0);
+        std::vector<float> measured;
+        std::array<float, 512> left{};
+        std::array<float, 512> right{};
+        for (int block = 0; block < 10; ++block)
+        {
+            voice.processBlock(left.data(), right.data(), left.size());
+            measured.insert(measured.end(), left.begin(), left.end());
+        }
+        return measured;
+    };
+    const auto triangle = run(-1.f);
+    const auto saw = run(1.f);
+    EXPECT_NE(triangle, saw);
+    EXPECT_EQ(triangle, run(-5.f));
+    EXPECT_EQ(saw, run(5.f));
 }
 
 }

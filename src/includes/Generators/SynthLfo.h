@@ -3,10 +3,11 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstdint>
 #include <numbers>
-#include <random>
 
 #include "Generators/BrownModulation.h"
+#include "Numbers/Random.h"
 
 namespace AbacDsp
 {
@@ -37,6 +38,14 @@ class LfoGenerators
         : m_invSampleRate(1.0f / sampleRate)
         , m_brown(sampleRate)
     {
+        seed(Random::kDefaultSeed);
+    }
+
+    /// @brief Restarts the noise waveforms from this seed; a seed gives the same sequence on every platform.
+    void seed(const uint64_t seedValue) noexcept
+    {
+        m_random.seed(seedValue);
+        m_brown.seed(static_cast<uint32_t>(seedValue ^ (seedValue >> 32U)));
     }
 
     void setWaveForm(const LfoType type) noexcept
@@ -105,7 +114,7 @@ class LfoGenerators
                 break;
             case LfoType::Noise:
                 randomProgress(4);
-                m_lastValue = m_randDist(m_randEngine);
+                m_lastValue = nextNoise();
                 break;
             case LfoType::SampleHoldNoise:
                 randomProgress(2);
@@ -145,9 +154,14 @@ class LfoGenerators
         while (m_noisePhase >= 1.0f)
         {
             m_noisePhase -= 1.0f;
-            m_lastValue = m_randDist(m_randEngine);
+            m_lastValue = nextNoise();
             m_sampleHoldFlipper = (m_sampleHoldFlipper + 1) % factor;
         }
+    }
+
+    [[nodiscard]] float nextNoise() noexcept
+    {
+        return m_random.uniform() * 2.0f - 1.0f;
     }
 
     LfoType m_type{LfoType::Sine};
@@ -159,8 +173,7 @@ class LfoGenerators
     size_t m_sampleHoldFlipper{0};
     bool m_playing{true};
 
-    std::mt19937 m_randEngine{std::random_device{}()};
-    std::uniform_real_distribution<float> m_randDist{-1.0f, 1.0f};
+    Random m_random{};
     BrownModulation m_brown;
 };
 

@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -497,5 +498,103 @@ static std::vector testParamsOscTestParams{
 
 INSTANTIATE_TEST_SUITE_P(WaveTableOscillatorTests, WaveTableOscillatorParamTest,
                          ::testing::ValuesIn(testParamsOscTestParams));
+
+namespace
+{
+std::vector<float> whiteNoiseBlock(const uint64_t seed)
+{
+    WaveTableOscillator osc{48000.f};
+    osc.seed(seed);
+    osc.setWaveset(0, BasicWave::White);
+    osc.setWaveset(1, BasicWave::White);
+    osc.setMorph(-0.5f);
+    osc.setFrequency(220.f);
+    std::vector<float> buf(256);
+    osc.processBlock(buf.data(), buf.size());
+    return buf;
+}
+}
+
+TEST(WaveTableOscillator, addedNoiseRepeatsWithTheSameSeed)
+{
+    EXPECT_EQ(whiteNoiseBlock(5), whiteNoiseBlock(5));
+}
+
+TEST(WaveTableOscillator, addedNoiseDiffersWithAnotherSeed)
+{
+    EXPECT_NE(whiteNoiseBlock(5), whiteNoiseBlock(6));
+}
+
+TEST(WaveTableOscillator, addedNoiseRepeatsWithTheDefaultSeed)
+{
+    WaveTableOscillator a{48000.f};
+    WaveTableOscillator b{48000.f};
+    for (auto* osc : {&a, &b})
+    {
+        osc->setWaveset(0, BasicWave::White);
+        osc->setWaveset(1, BasicWave::White);
+        osc->setMorph(-0.5f);
+        osc->setFrequency(220.f);
+    }
+    std::vector<float> bufA(256);
+    std::vector<float> bufB(256);
+    a.processBlock(bufA.data(), bufA.size());
+    b.processBlock(bufB.data(), bufB.size());
+    EXPECT_EQ(bufA, bufB);
+}
+
+TEST(WaveTableOscillator, aFrequencyFarAboveNyquistStaysInsideTheTables)
+{
+    for (const bool useSet : {true, false})
+    {
+        WaveTableOscillator osc{48000.f};
+        osc.setMorph(-1.f);
+        osc.setWaveset(0, BasicWave::Saw);
+        useSet ? osc.setFrequency(2.0e6f) : osc.changeFrequency(2.0e6f);
+        std::vector<float> buf(512);
+        osc.processBlock(buf.data(), buf.size());
+        for (const auto v : buf)
+        {
+            ASSERT_TRUE(std::isfinite(v));
+            ASSERT_LT(std::abs(v), 4.f);
+        }
+    }
+}
+
+TEST(WaveTableOscillator, theFrequencyLimitLeavesNormalFrequenciesAlone)
+{
+    WaveTableOscillator limited{48000.f};
+    WaveTableOscillator plain{48000.f};
+    for (auto* osc : {&limited, &plain})
+    {
+        osc->setMorph(-1.f);
+        osc->setWaveset(0, BasicWave::Saw);
+    }
+    limited.setFrequency(2.0e6f);
+    limited.setFrequency(440.f);
+    plain.setFrequency(440.f);
+    std::vector<float> a(256);
+    std::vector<float> b(256);
+    limited.processBlock(a.data(), a.size());
+    plain.processBlock(b.data(), b.size());
+    EXPECT_EQ(a, b);
+}
+
+TEST(WaveTableOscillator, aMorphChangeAfterTheFrequencyIsSetPicksTheTablesOfTheNewPair)
+{
+    WaveTableOscillator osc{48000.f};
+    osc.setWaveset(0, BasicWave::Sine);
+    osc.setWaveset(1, BasicWave::Sine);
+    osc.setWaveset(2, BasicWave::Saw);
+    osc.setMorph(-1.f);
+    osc.setFrequency(8000.f);
+    osc.setMorph(1.f);
+    std::vector<float> buf(512);
+    osc.processBlock(buf.data(), buf.size());
+    for (const auto v : buf)
+    {
+        ASSERT_TRUE(std::isfinite(v));
+    }
+}
 
 }
