@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <span>
 #include <thread>
@@ -419,11 +420,14 @@ class SpectrogramBase
             }
             else
             {
-                std::this_thread::yield();
+                std::this_thread::sleep_for(idleSleep);
             }
         }
     }
 
+    /// Short against the hop of a frame (10 ms at 1024 samples, hop 1/3 at 48 kHz), so a frame waits at most this
+    /// long, and long enough that an idle worker uses no measurable CPU.
+    static constexpr std::chrono::milliseconds idleSleep{1};
     static constexpr size_t QUEUE_SIZE = 4;
     std::array<std::vector<float>, QUEUE_SIZE> m_fftQueue;
     std::atomic<size_t> m_queueHead{0};

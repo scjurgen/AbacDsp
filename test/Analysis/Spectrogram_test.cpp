@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <ctime>
 #include <gtest/gtest.h>
 #include <thread>
 #include <vector>
@@ -164,6 +165,17 @@ TEST(FloatingHorizonFFTImage, workerAccumulatesAndPlotsHorizon)
                                                                   [](const float v) { return v != 0.0f; });
                                            });
     EXPECT_TRUE(plotted);
+}
+
+// A worker that waits for frames must not spin: process CPU time (all threads) over an idle stretch stays far below
+// the wall time.
+TEST(Spectrogram, anIdleWorkerDoesNotSpinACore)
+{
+    SimpleSpectrogram spec;
+    const auto cpuBefore = std::clock();
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    const double cpuSeconds = static_cast<double>(std::clock() - cpuBefore) / CLOCKS_PER_SEC;
+    EXPECT_LT(cpuSeconds, 0.1) << "idle for 0.5 s";
 }
 
 }
