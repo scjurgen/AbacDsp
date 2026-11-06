@@ -35,6 +35,7 @@ all. See `TODO.md` for folders and algorithms still missing plots.
 | `Filters/SincFilterDesign/` | generation | Regenerates the windowed-sinc FIR tables in `src/includes/Filters/Sinc/` |
 | `Generators/` | documentation | `Envelope` segment shapes: the polynomial `CurvedValue` against the exponential `ExponentialApproach` (best polynomial fit and its overshoot per number of time constants), and a pitch envelope in MIDI notes against the closed form |
 | `KarplusStrong/` | documentation | `KarplusStrongString`/`KarplusStrongVoice`: spectral brightness loss, decay-time accuracy, pitch bend behavior |
+| `MelColumns/` | documentation | `MelColumns`: the level of a tone against its frequency between band centres, the dB scale against the amplitude, the level of white noise per band against the triangle area |
 | `Metronome/` | generation | Click samples and MIDI pattern library for tapelooper's built-in groove, not a library-algorithm write-up |
 | `Modulation/` | documentation | `Wow`/`Flutter` LFO character (timeline, spectrum, Poincare orbit plot), `Tremolo` drive morph, `RingModulator` sidebands |
 | `NoteSegmenter/` | documentation | `Analysis/NoteSegmenter`: onset, pitch and level of plucked notes against what was played, accuracy against noise, and the limit for a repeated note that rings on; `Analysis/NoteVerifier`: a real guitar recording checked against its score, with the onset, pitch and unexpected-sound results and how to add a recording |

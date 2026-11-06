@@ -71,8 +71,8 @@ Stable, broad, and worth knowing about independently of any one class.
 | [Short-time Fourier transform (JOS)](https://ccrma.stanford.edu/~jos/sasp/Short_Time_Fourier_Transform.html) | `SpectrogramBase` |
 | [Mathematics of the DFT (JOS)](https://ccrma.stanford.edu/~jos/mdft/) | `BasicFFT` |
 | [Welch's method](https://en.wikipedia.org/wiki/Welch%27s_method) | `FFTResponse` |
-| [Window function](https://en.wikipedia.org/wiki/Window_function) | `Excitation.h` |
-| [Mel scale](https://en.wikipedia.org/wiki/Mel_scale) | `MelSpectroGram` |
+| [Window function](https://en.wikipedia.org/wiki/Window_function) | `Excitation.h`, `MelColumns.h` |
+| [Mel scale](https://en.wikipedia.org/wiki/Mel_scale) | `MelSpectroGram`, `MelColumns.h` |
 | [Constant-Q transform](https://en.wikipedia.org/wiki/Constant-Q_transform) | `OctaveBandAnalyzer.h` |
 | [Hidden-line removal](https://en.wikipedia.org/wiki/Hidden-line_removal) | `FloatingHorizonFFTImage` |
 | [kissfft](https://github.com/mborgerding/kissfft) | `KissFft` |

@@ -15,6 +15,7 @@ Scope: only `documentation/*/*.cpp` (and nested) files that `#include` a
 | Header | Used by | CMake target | Built? |
 |---|---|---|---|
 | Analysis/FftMisc.h | KarplusStrong/KarplusStrongExplore.cpp, Filters/PoleMixing/PoleMixingExplore.cpp, Wavetables/WavetablesExplore.cpp | KarplusStrongExplore, PoleMixingExplore, WavetablesExplore | yes |
+| Analysis/MelColumns.h | MelColumns/MelColumnsExplore.cpp | MelColumnsExplore | yes |
 | Analysis/Spectrogram.h | Wavetables/WavetablesExplore.cpp | WavetablesExplore | yes |
 | Analysis/SimpleStats.h | Filters/BandpassImpulses/BpImpulseExplore.cpp, ResoVoiceExplore.cpp | BandpassImpulseExplore, ResoVoiceExplore | yes |
 | Analysis/NoteSegmenter.h | NoteSegmenter/NoteSegmenterExplore.cpp | NoteSegmenterExplore | yes |
