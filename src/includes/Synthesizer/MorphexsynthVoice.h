@@ -581,6 +581,18 @@ class MorphexsynthVoice
         return !m_envAmplitude.isDone();
     }
 
+    /// The amplitude envelope at the last processed sample, 0..1, before velocity gain, panning and effects.
+    [[nodiscard]] float envelopeLevel() const noexcept
+    {
+        return m_lastEnvelopeAmplitude;
+    }
+
+    /// The pitch of the oscillators in semitones relative to the triggered note: bend, pitch envelope, glide, LFO.
+    [[nodiscard]] float pitchOffsetSemitones() const noexcept
+    {
+        return 12.f * std::log2(std::max(m_oscillators[0].bend, 1e-6f));
+    }
+
     void processBlock(float* left, float* right, const size_t numSamples)
     {
         for (size_t s = 0; s < numSamples; ++s)

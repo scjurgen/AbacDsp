@@ -251,4 +251,57 @@ TEST_F(MorphexsynthVoiceTest, waveMorphMovesTheOscillatorFromItsWaveformToTheSaw
     EXPECT_EQ(saw, run(5.f));
 }
 
+TEST_F(MorphexsynthVoiceTest, envelopeLevelRisesWithTheAttackAndFallsToZeroAfterTheRelease)
+{
+    voice->setEnvelopeAttack(5.f);
+    voice->setEnvelopeDecay(5.f);
+    voice->setEnvelopeSustainLevel(0.6f);
+    voice->setEnvelopeRelease(5.f);
+    EXPECT_FLOAT_EQ(0.f, voice->envelopeLevel());
+
+    voice->triggerVoice(60, 100, 0);
+    std::array<float, 512> left{};
+    std::array<float, 512> right{};
+    voice->processBlock(left.data(), right.data(), left.size());
+    voice->processBlock(left.data(), right.data(), left.size());
+    EXPECT_GT(voice->envelopeLevel(), 0.1f);
+    EXPECT_LE(voice->envelopeLevel(), 1.f);
+
+    voice->stopVoice();
+    for (int block = 0; block < 20; ++block)
+    {
+        voice->processBlock(left.data(), right.data(), left.size());
+    }
+    EXPECT_FALSE(voice->isPlaying());
+    EXPECT_NEAR(0.f, voice->envelopeLevel(), 1e-3f);
+}
+
+TEST_F(MorphexsynthVoiceTest, pitchOffsetFollowsThePerNoteBendInBothDirections)
+{
+    voice->setCtrlDimension(0, CtrlDimension::X);
+    voice->setCtrlTarget(0, CtrlTarget::PitchBend);
+    voice->setCtrlCurve(0, CtrlCurve::Linear);
+    voice->setCtrlType(0, CtrlValueType::BiPolar);
+    voice->setCtrlDepth(0, 1.f);
+    voice->triggerVoice(60, 100, 0);
+    std::array<float, 512> left{};
+    std::array<float, 512> right{};
+    voice->processBlock(left.data(), right.data(), left.size());
+    EXPECT_NEAR(0.f, voice->pitchOffsetSemitones(), 0.05f);
+
+    voice->mpeX(16383);
+    for (int block = 0; block < 20; ++block)
+    {
+        voice->processBlock(left.data(), right.data(), left.size());
+    }
+    EXPECT_NEAR(12.f, voice->pitchOffsetSemitones(), 0.5f);
+
+    voice->mpeX(0);
+    for (int block = 0; block < 20; ++block)
+    {
+        voice->processBlock(left.data(), right.data(), left.size());
+    }
+    EXPECT_NEAR(-12.f, voice->pitchOffsetSemitones(), 0.5f);
+}
+
 }
