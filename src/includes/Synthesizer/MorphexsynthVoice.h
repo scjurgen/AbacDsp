@@ -593,6 +593,21 @@ class MorphexsynthVoice
         return 12.f * std::log2(std::max(m_oscillators[0].bend, 1e-6f));
     }
 
+    /// The frequency in Hz that oscillator `index` (0 to 2) was last given: pitch factor, detune, key follow, bend,
+    /// pitch envelope, glide and LFO included.
+    [[nodiscard]] float oscillatorFrequency(const size_t index) const noexcept
+    {
+        const auto& osc = m_oscillators[index];
+        return osc.baseFrequency * osc.bend * osc.detune;
+    }
+
+    /// The level that oscillator `index` (0 to 2) had in the last block of its output, level slots included. It is
+    /// the value the mix used, not the connector's smoothing state, which reading would advance.
+    [[nodiscard]] float oscillatorLevel(const size_t index) const noexcept
+    {
+        return m_lastOscillatorLevel[index];
+    }
+
     void processBlock(float* left, float* right, const size_t numSamples)
     {
         for (size_t s = 0; s < numSamples; ++s)
@@ -799,11 +814,14 @@ class MorphexsynthVoice
             m_tmpRead = 0;
             std::array<std::array<float, kFGranularity>, kNumOscillators> tmpSum{};
             m_oscillators[0].oscillator->processBlock(tmpSum[0].data(), kFGranularity);
-            blockScale(m_connectors.osc1Level.get(), tmpSum[0].data(), kFGranularity);
+            m_lastOscillatorLevel[0] = m_connectors.osc1Level.get();
+            blockScale(m_lastOscillatorLevel[0], tmpSum[0].data(), kFGranularity);
             m_oscillators[1].oscillator->processBlock(tmpSum[1].data(), kFGranularity);
-            blockScale(m_connectors.osc2Level.get(), tmpSum[1].data(), kFGranularity);
+            m_lastOscillatorLevel[1] = m_connectors.osc2Level.get();
+            blockScale(m_lastOscillatorLevel[1], tmpSum[1].data(), kFGranularity);
             m_oscillators[2].oscillator->processBlock(tmpSum[2].data(), kFGranularity);
-            blockScale(m_connectors.osc3Level.get(), tmpSum[2].data(), kFGranularity);
+            m_lastOscillatorLevel[2] = m_connectors.osc3Level.get();
+            blockScale(m_lastOscillatorLevel[2], tmpSum[2].data(), kFGranularity);
             for (size_t i = 0; i < kFGranularity; ++i)
             {
                 m_tmp[i] = tmpSum[0][i] + tmpSum[1][i] + tmpSum[2][i];
@@ -894,6 +912,7 @@ class MorphexsynthVoice
     float m_osc3KeyFollowFactor{1.f};
 
     std::array<Oscillator, kNumOscillators> m_oscillators;
+    std::array<float, kNumOscillators> m_lastOscillatorLevel{};
     SynthLfo m_lfo;
     AdsrTimes m_adsrAmplitude{};
     AdsrTimes m_adsrFilter{0.f, 1.f, 1.f, 50.f};

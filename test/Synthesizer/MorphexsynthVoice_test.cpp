@@ -304,4 +304,85 @@ TEST_F(MorphexsynthVoiceTest, pitchOffsetFollowsThePerNoteBendInBothDirections)
     EXPECT_NEAR(-12.f, voice->pitchOffsetSemitones(), 0.5f);
 }
 
+TEST_F(MorphexsynthVoiceTest, oscillatorFrequencyFollowsPitchFactorDetuneAndBend)
+{
+    voice->setPitchFactor(1, 2.f);
+    voice->triggerVoice(69, 100, 0);
+    EXPECT_NEAR(440.f, voice->oscillatorFrequency(0), 0.5f);
+    EXPECT_NEAR(880.f, voice->oscillatorFrequency(1), 1.f);
+
+    voice->setDetune(2, 12.f);
+    EXPECT_NEAR(880.f, voice->oscillatorFrequency(2), 1.f);
+
+    voice->setCtrlDimension(0, CtrlDimension::X);
+    voice->setCtrlTarget(0, CtrlTarget::PitchBend);
+    voice->setCtrlCurve(0, CtrlCurve::Linear);
+    voice->setCtrlType(0, CtrlValueType::BiPolar);
+    voice->setCtrlDepth(0, 1.f);
+    voice->mpeX(16383);
+    std::array<float, 512> left{};
+    std::array<float, 512> right{};
+    for (int block = 0; block < 20; ++block)
+    {
+        voice->processBlock(left.data(), right.data(), left.size());
+    }
+    EXPECT_NEAR(880.f, voice->oscillatorFrequency(0), 15.f);
+    EXPECT_NEAR(1760.f, voice->oscillatorFrequency(1), 30.f);
+}
+
+TEST_F(MorphexsynthVoiceTest, oscillatorLevelFollowsTheLevelAndTheLevelSlots)
+{
+    voice->setLevelOscillator(0, 0.6f);
+    voice->setLevelOscillator(1, 0.3f);
+    voice->triggerVoice(60, 100, 0);
+    std::array<float, 512> left{};
+    std::array<float, 512> right{};
+    EXPECT_FLOAT_EQ(0.f, voice->oscillatorLevel(2));
+    for (int block = 0; block < 4; ++block)
+    {
+        voice->processBlock(left.data(), right.data(), left.size());
+    }
+    EXPECT_NEAR(0.6f, voice->oscillatorLevel(0), 1e-3f);
+    EXPECT_NEAR(0.3f, voice->oscillatorLevel(1), 1e-3f);
+    EXPECT_NEAR(0.f, voice->oscillatorLevel(2), 1e-3f);
+
+    voice->setCtrlDimension(1, CtrlDimension::Y);
+    voice->setCtrlTarget(1, CtrlTarget::OscLevel3);
+    voice->setCtrlCurve(1, CtrlCurve::Linear);
+    voice->setCtrlType(1, CtrlValueType::Abs);
+    voice->setCtrlDepth(1, 1.f);
+    voice->mpeY(16383);
+    for (int block = 0; block < 20; ++block)
+    {
+        voice->processBlock(left.data(), right.data(), left.size());
+    }
+    EXPECT_GT(voice->oscillatorLevel(2), 0.5f);
+}
+
+TEST_F(MorphexsynthVoiceTest, readingTheOscillatorValuesDoesNotChangeTheOutput)
+{
+    const auto render = [this](const bool reading)
+    {
+        voice->setLevelOscillator(0, 0.5f);
+        voice->triggerVoice(60, 100, 0);
+        std::array<float, 512> left{};
+        std::array<float, 512> right{};
+        std::vector<float> out;
+        for (int block = 0; block < 4; ++block)
+        {
+            voice->processBlock(left.data(), right.data(), left.size());
+            if (reading)
+            {
+                (void) voice->oscillatorLevel(0);
+                (void) voice->oscillatorFrequency(0);
+            }
+            out.insert(out.end(), left.begin(), left.end());
+        }
+        return out;
+    };
+    const auto plain = render(false);
+    SetUp();
+    EXPECT_EQ(plain, render(true));
+}
+
 }
